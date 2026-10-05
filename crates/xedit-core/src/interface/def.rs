@@ -42,6 +42,7 @@ use super::globals::{
     collapse_benign_array, hide_unused, is_internal_edit, make_unknown_elements_unique, report_mode, report_unknown,
 };
 use super::integer::{IntegerDefFormater, IntegerDefInterface};
+use super::len_string::LenStringDef;
 use super::misc::{Variant, shorten_text};
 use super::string::{StringDef, StringDefFormater};
 use super::types::{
@@ -289,6 +290,10 @@ pub trait Def: Send + Sync + 'static {
     }
 
     fn as_string_def(&self) -> Option<&StringDef> {
+        None
+    }
+
+    fn as_len_string_def(&self) -> Option<&LenStringDef> {
         None
     }
 
