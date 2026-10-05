@@ -13,7 +13,7 @@ The harness is not built yet. Until it exists, run the oracle by hand and compar
 
 ## Running the oracle
 
-`XEDIT_ORACLE_DIR` points at the unpacked release (on the development machine: `M:\projectsíit-upstream-srcíit 4.1.5q`). The game is selected with a switch such as `-FO4` or `-SSE`. Masters are read from the directory of the input file.
+`XEDIT_ORACLE_DIR` points at the unpacked release archive of the baseline tag. The game is selected with a switch such as `-FO4` or `-SSE`. Masters are read from the directory of the input file.
 
 ```
 "$XEDIT_ORACLE_DIR/xDump.exe" -FO4 -q "<game>/Data/<plugin>" > dump.txt 2> dump.log
