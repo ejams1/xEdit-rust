@@ -468,6 +468,7 @@ dependencies = [
  "anyhow",
  "regex",
  "serde",
+ "serde_json",
  "toml",
  "walkdir",
 ]

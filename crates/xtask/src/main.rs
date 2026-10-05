@@ -11,6 +11,10 @@
 //! checkout. It adds new units and new GUI actions, switches, modes and script
 //! functions as `pending`, keeps every existing entry, and lists entries that
 //! upstream no longer has.
+//!
+//! `cargo xtask parity dump` compares the port with the oracle. See `parity`.
+
+mod parity;
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -111,7 +115,15 @@ fn main() -> Result<()> {
             std::env::set_current_dir(&root)?;
             sync(&upstream, rest.first().copied())
         }
-        _ => bail!("usage: cargo xtask check | cargo xtask sync <upstream checkout> [commit]"),
+        ["parity", rest @ ..] => {
+            let root = fs::canonicalize(&root)?;
+            std::env::set_current_dir(&root)?;
+            let map: UpstreamMap = load(MAP_FILE)?;
+            parity::run(&root, &map.upstream.tag, rest)
+        }
+        _ => bail!(
+            "usage: cargo xtask check | cargo xtask sync <upstream checkout> [commit] | cargo xtask parity dump [options]"
+        ),
     }
 }
 
