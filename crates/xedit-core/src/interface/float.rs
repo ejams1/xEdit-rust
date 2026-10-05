@@ -274,6 +274,16 @@ impl NamedDef for FloatDef {
 impl ValueDef for FloatDef {
     value_def_plumbing!(ValueDef);
 
+    /// Port of the override of `SetDefaultNativeValue`, which sets `fdDefault`.
+    fn apply_default_native_value(&self, value: Variant) {
+        // Upstream fails for a value that is not a number.
+        let default = match &value {
+            Variant::Float(float) => *float,
+            other => other.as_ordinal().unwrap_or(0) as f64,
+        };
+        self.fd_default.store(default.to_bits(), Ordering::Relaxed);
+    }
+
     fn to_string(&self, data: DataPtr, element: ElementArg) -> String {
         let mut result = self.to_string_internal(data, element, true);
         if let Some(to_str) = self.nd.nd_to_str.load().as_deref() {
