@@ -28,7 +28,8 @@ status = "pending"
 status = "pending"
 
 [units."Core/MSHeap.pas"]
-status = "pending"
+status = "not-ported"
+note = "Delphi memory manager override; Rust uses its own allocator."
 
 [units."Core/wbBSA.pas"]
 status = "pending"
@@ -115,7 +116,8 @@ status = "pending"
 status = "pending"
 
 [units."Core/wbHalfFloat.pas"]
-status = "pending"
+status = "replaced"
+note = "Use a Rust half-float crate."
 
 [units."Core/wbHardcoded.pas"]
 status = "pending"
