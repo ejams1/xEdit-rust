@@ -77,9 +77,44 @@ pub fn wb_lgdi_rank_slot_array_should_include(_a_base_ptr: DataPtr, _a_array: El
     todo!("port wbLGDIRankSlotArrayShouldInclude from wbDefinitionsCommon.pas line 170")
 }
 
+/// Upstream `anonymous routine in wb_lgdi_slot_def`, line 7802 of `wbDefinitionsCommon.pas`.
+pub fn wb_lgdi_slot_def_anonymous_7802(_a_base_ptr: DataPtr, _a_element: ElementArg) -> bool {
+    todo!("port anonymous routine in wb_lgdi_slot_def from wbDefinitionsCommon.pas line 7802")
+}
+
 /// Upstream `wbMHDTColumnsCounter`, line 73 of `wbDefinitionsCommon.pas`.
 pub fn wb_mhdt_columns_counter(_a_base_ptr: DataPtr, _a_element: ElementArg) -> u32 {
     todo!("port wbMHDTColumnsCounter from wbDefinitionsCommon.pas line 73")
+}
+
+/// Upstream `anonymous routine in wb_model_info`, line 8545 of `wbDefinitionsCommon.pas`.
+pub fn wb_model_info_anonymous_8545(_a_element: ElementArg) -> Option<ElementRef> {
+    todo!("port anonymous routine in wb_model_info from wbDefinitionsCommon.pas line 8545")
+}
+
+/// Upstream `anonymous routine in wb_model_info`, line 8585 of `wbDefinitionsCommon.pas`.
+pub fn wb_model_info_anonymous_8585(
+    _a_value: &mut String,
+    _a_base_ptr: DataPtr,
+    _a_element: ElementArg,
+    _a_type: CallbackType,
+) {
+    todo!("port anonymous routine in wb_model_info from wbDefinitionsCommon.pas line 8585")
+}
+
+/// Upstream `wbModelInfoDecider`, line 272 of `wbDefinitionsCommon.pas`.
+pub fn wb_model_info_decider(_a_base_ptr: DataPtr, _a_element: ElementArg) -> i32 {
+    todo!("port wbModelInfoDecider from wbDefinitionsCommon.pas line 272")
+}
+
+/// Upstream `wbModelInfoDontShow`, line 104 of `wbDefinitionsCommon.pas`.
+pub fn wb_model_info_dont_show(_a_element: ElementArg) -> bool {
+    todo!("port wbModelInfoDontShow from wbDefinitionsCommon.pas line 104")
+}
+
+/// Upstream `wbModelInfoGetCP`, line 129 of `wbDefinitionsCommon.pas`.
+pub fn wb_model_info_get_cp(_a_element: ElementArg, _a_conflict_priority: &mut ConflictPriority) {
+    todo!("port wbModelInfoGetCP from wbDefinitionsCommon.pas line 129")
 }
 
 /// Upstream `wbNoFlagsDecider`, line 273 of `wbDefinitionsCommon.pas`.
@@ -120,6 +155,16 @@ pub fn wb_str_to_lgdi_filter(_a_string: &str, _a_element: ElementArg) -> i64 {
 /// Upstream `wbTemplateActorDontShow`, line 114 of `wbDefinitionsCommon.pas`.
 pub fn wb_template_actor_dont_show(_a_element: ElementArg) -> bool {
     todo!("port wbTemplateActorDontShow from wbDefinitionsCommon.pas line 114")
+}
+
+/// Upstream `wbToStringFromLinksToMainRecordName`, line 250 of `wbDefinitionsCommon.pas`.
+pub fn wb_to_string_from_links_to_main_record_name(
+    _a_value: &mut String,
+    _a_base_ptr: DataPtr,
+    _a_element: ElementArg,
+    _a_type: CallbackType,
+) {
+    todo!("port wbToStringFromLinksToMainRecordName from wbDefinitionsCommon.pas line 250")
 }
 
 /// Upstream `wbVTXTPosition`, line 226 of `wbDefinitionsCommon.pas`.

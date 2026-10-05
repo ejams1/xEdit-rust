@@ -74,9 +74,9 @@ impl LenStringDef {
     }
 
     /// Port of `OverrideEncoding`.
-    pub fn override_encoding(self: Arc<Self>, encoding: Option<Encoding>) -> Arc<Self> {
+    pub fn override_encoding(self: Arc<Self>, encoding: Encoding) -> Arc<Self> {
         let this = self.unlocked();
-        this.bsd_encoding_override.set(encoding);
+        this.bsd_encoding_override.set(Some(encoding));
         this
     }
 

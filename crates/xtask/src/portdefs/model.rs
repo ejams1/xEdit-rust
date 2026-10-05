@@ -50,6 +50,8 @@ pub enum TypeKind {
     Set(String),
     /// `^T` with the name of `T` as declared.
     Pointer(String),
+    /// A record with its fields in order.
+    Record(Vec<(String, TypeRef)>),
     Other,
 }
 
@@ -85,6 +87,8 @@ pub struct Symbols {
     pub consts: HashSet<String>,
     /// Lower-case name of a value to the lower-case name of its unit.
     pub value_units: HashMap<String, String>,
+    /// Lower-case name of a type to the lower-case name of its unit.
+    pub type_units: HashMap<String, String>,
     /// Lower-case name of a value to the declaration, for the unit
     /// variables that become statics.
     pub value_decls: HashMap<String, VarDecl>,
@@ -107,6 +111,7 @@ impl Symbols {
         ) {
             if let Decl::Type(type_decl) = decl {
                 self.add_type(type_decl);
+                self.type_units.insert(lower(&type_decl.name), lower(&unit.name));
             }
         }
         for decl in &unit.interface {
@@ -212,6 +217,11 @@ impl Symbols {
                 Some(element) => TypeKind::Alias(Ty::Array(Box::new(self.ty_of_name(element)))),
                 None => TypeKind::Other,
             }
+        } else if word(0, "record") {
+            match record_fields(tokens) {
+                Some(fields) => TypeKind::Record(fields),
+                None => TypeKind::Other,
+            }
         } else if symbol(0, "^") && tokens.len() == 2 && tokens[1].ident().is_some() {
             TypeKind::Pointer(tokens[1].ident().unwrap_or_default().to_owned())
         } else if word(0, "set") && word(1, "of") && tokens.len() == 3 && tokens[2].ident().is_some() {
@@ -276,6 +286,16 @@ impl Symbols {
             TypeRef::ArrayOfConst => Ty::ArrayOfConst,
             TypeRef::Generic { name, args } if name.eq_ignore_ascii_case("TArray") && args.len() == 1 => {
                 Ty::Array(Box::new(self.ty_of_type_ref(&args[0])))
+            }
+            // `array[lo..hi] of T`
+            TypeRef::Other(tokens) if tokens.first().is_some_and(|token| token.is_word("array")) => {
+                let of = tokens.iter().position(|token| token.is_word("of"));
+                match of.and_then(|of| tokens.get(of + 1)).and_then(Token::ident) {
+                    Some(element) if tokens.len() == of.unwrap_or(0) + 2 => {
+                        Ty::Array(Box::new(self.ty_of_name(element)))
+                    }
+                    _ => Ty::Unknown,
+                }
             }
             TypeRef::Generic { .. } | TypeRef::Other(_) => Ty::Unknown,
         }
@@ -408,6 +428,49 @@ fn scan_members(tokens: &[Token]) -> HashMap<String, String> {
         index = cursor;
     }
     members
+}
+
+/// The fields of `record ... end`. `None` for a record with a nested record,
+/// a variant part or anything else that is not `name: type;`.
+fn record_fields(tokens: &[Token]) -> Option<Vec<(String, TypeRef)>> {
+    let mut fields = Vec::new();
+    let mut index = 1;
+    while index < tokens.len() && !tokens[index].is_word("end") {
+        let mut names = Vec::new();
+        loop {
+            names.push(tokens.get(index)?.ident()?.to_owned());
+            index += 1;
+            if tokens.get(index)?.is_symbol(",") {
+                index += 1;
+            } else {
+                break;
+            }
+        }
+        if !tokens.get(index)?.is_symbol(":") {
+            return None;
+        }
+        index += 1;
+        let start = index;
+        while index < tokens.len() && !tokens[index].is_symbol(";") && !tokens[index].is_word("end") {
+            if tokens[index].is_word("record") || tokens[index].is_word("case") {
+                return None;
+            }
+            index += 1;
+        }
+        let mut header = tokens[start..index].to_vec();
+        header.push(Token {
+            kind: TokenKind::Eof,
+            line: tokens[start].line,
+        });
+        let type_ref = Parser::new(header).type_ref().ok()?;
+        for name in names {
+            fields.push((name, type_ref.clone()));
+        }
+        if tokens.get(index)?.is_symbol(";") {
+            index += 1;
+        }
+    }
+    Some(fields)
 }
 
 /// The methods and constructors in the tokens of an interface or class body.

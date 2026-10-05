@@ -40,6 +40,11 @@ pub const ARRAY_COUNT_COUNTER: i32 = -254;
 /// `arCount`: no elements.
 pub const ARRAY_COUNT_NONE: i32 = -255;
 
+/// The upstream names of the array counts, for the generated definitions.
+pub const ARC_U32: i32 = ARRAY_COUNT_U32;
+pub const ARC_U16: i32 = ARRAY_COUNT_U16;
+pub const ARC_U8: i32 = ARRAY_COUNT_U8;
+
 /// The constructor arguments of `TwbArrayDef` after those of `TwbNamedDef`.
 pub struct ArrayDefArgs {
     pub element: Arc<dyn ValueDef>,

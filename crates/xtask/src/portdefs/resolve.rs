@@ -56,6 +56,9 @@ impl<'a> Resolver<'a> {
                 if lower == "true" || lower == "false" {
                     return Ty::Bool;
                 }
+                if lower == "pi" {
+                    return Ty::Float;
+                }
                 if let Some(ty) = scope.get(name) {
                     return ty.clone();
                 }

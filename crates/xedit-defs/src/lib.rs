@@ -10,4 +10,5 @@
 
 pub mod callbacks;
 pub mod common;
+pub mod fo4;
 pub mod signatures;

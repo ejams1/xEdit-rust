@@ -202,24 +202,3 @@ pub fn wb_record_size_decider_sizes(a_sizes: &[i32]) -> Option<UnionDecider> {
         sizes.len() as i32
     }))
 }
-
-/// Upstream `wbLGDISlotDef`. Not ported yet: it builds a definition with an
-/// anonymous callback.
-pub fn wb_lgdi_slot_def(_a_name: &str, _a_enum_def: Option<Arc<EnumDef>>) -> Option<Arc<dyn ValueDef>> {
-    todo!("port wbLGDISlotDef from wbDefinitionsCommon.pas line 7797")
-}
-
-/// Upstream `wbModelInfo`. Not ported yet: it builds a definition with an
-/// anonymous callback.
-pub fn wb_model_info(_a_signature: Signature, _a_name: &str) -> Option<Arc<dyn RecordMemberDef>> {
-    todo!("port wbModelInfo from wbDefinitionsCommon.pas line 8480")
-}
-
-/// Upstream `wbModelInfos`. Not ported yet: it raises on a bad signature count.
-pub fn wb_model_infos(
-    _a_signature: Signature,
-    _a_name: &str,
-    _a_dont_show: Option<DontShowCallback>,
-) -> Option<Arc<dyn RecordMemberDef>> {
-    todo!("port wbModelInfos from wbDefinitionsCommon.pas line 8603")
-}

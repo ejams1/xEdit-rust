@@ -119,6 +119,16 @@ pub trait IntegerDefInterface: ValueDef {
 
     /// Upstream `IwbIntegerDefInternal.ReplaceFormater`.
     fn replace_formater(&self, formater: Option<Arc<dyn IntegerDefFormater>>);
+
+    /// Port of `AddOverlay`, for a definition behind the interface.
+    fn add_overlay_dyn(self: Arc<Self>, callback: Option<IntOverlayCallback>) -> Arc<dyn IntegerDefInterface>;
+}
+
+impl dyn IntegerDefInterface {
+    /// Port of `AddOverlay`.
+    pub fn add_overlay(self: Arc<Self>, callback: Option<IntOverlayCallback>) -> Arc<dyn IntegerDefInterface> {
+        self.add_overlay_dyn(callback)
+    }
 }
 
 /// Upstream `TwbIntegerDef`.
@@ -572,6 +582,10 @@ impl ValueDef for IntegerDef {
 }
 
 impl IntegerDefInterface for IntegerDef {
+    fn add_overlay_dyn(self: Arc<Self>, callback: Option<IntOverlayCallback>) -> Arc<dyn IntegerDefInterface> {
+        IntegerDef::add_overlay(self, callback)
+    }
+
     fn replace_formater(&self, formater: Option<Arc<dyn IntegerDefFormater>>) {
         IntegerDef::replace_formater(self, formater);
     }

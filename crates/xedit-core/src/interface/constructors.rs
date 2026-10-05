@@ -94,18 +94,18 @@ fn sparse_names(has_summary: bool, sparse: &[VarRec]) -> Vec<SparseName> {
     sparse
         .chunks(step)
         .map(|group| {
-            let VarRec::Int(index) = group[0] else {
+            let VarRec::Int(index) = &group[0] else {
                 panic!("the index of a sparse name is an integer")
             };
-            let VarRec::Str(name) = group[1] else {
+            let VarRec::Str(name) = &group[1] else {
                 panic!("the name of a sparse name is a string")
             };
             let summary = match group.get(2) {
-                Some(VarRec::Str(summary)) => summary,
+                Some(VarRec::Str(summary)) => summary.as_str(),
                 Some(_) => panic!("the summary of a sparse name is a string"),
                 None => "",
             };
-            SparseName::with_summary(index, name, summary)
+            SparseName::with_summary(*index, name, summary)
         })
         .collect()
 }
@@ -1108,6 +1108,56 @@ pub fn wb_vci1_to_str_after_fo4(
     c >>= 8;
     let index = c & 0xFF;
     *a_value = format!("{year:04}-{month:02}-{day:02} User: {user} Index: {index}");
+}
+
+/// Upstream `wbFlagsList`: the 32 flag names of the record flags from sparse
+/// enumeration names, with `Deleted` and `Ignored` at their fixed positions.
+pub fn wb_flags_list(a_flags: &[VarRec], a_deleted: bool, a_unknowns: bool) -> Vec<String> {
+    let e = EnumDef::create(EnumClass::Enum, false, &[], &sparse_names(false, a_flags));
+    (0..32)
+        .map(|i| {
+            if i == 12 {
+                "Ignored".to_owned()
+            } else if a_deleted && i == 5 {
+                "Deleted".to_owned()
+            } else {
+                let s = IntegerDefFormater::to_string(&*e, i64::from(i), None, false);
+                if !s.starts_with('<') {
+                    s
+                } else if a_unknowns {
+                    format!("Unknown {i}")
+                } else {
+                    String::new()
+                }
+            }
+        })
+        .collect()
+}
+
+/// Upstream `wbTimeStampToString`: the date in a file header.
+pub fn wb_time_stamp_to_string(
+    a_value: &mut String,
+    a_base_ptr: DataPtr,
+    _a_element: ElementArg,
+    a_type: CallbackType,
+) {
+    if a_type != CallbackType::ctToStr {
+        return;
+    }
+    let Some(bytes) = a_base_ptr.and_then(|data| data.get(..2)) else {
+        return;
+    };
+    let mut c = u32::from(u16::from_le_bytes([bytes[0], bytes[1]]));
+    if c == 0 {
+        *a_value = "None".to_owned();
+        return;
+    }
+    let day = c & 0x1F;
+    c >>= 5;
+    let month = c & 0x0F;
+    c >>= 4;
+    let year = (c & 0x7F) + 2000;
+    *a_value = format!("{year:04}-{month:02}-{day:02}");
 }
 
 /// Upstream `wbSparseFlags`: the flag names from sparse enumeration names.
