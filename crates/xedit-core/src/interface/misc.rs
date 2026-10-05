@@ -102,6 +102,45 @@ pub fn read_integer_counter(data: Option<&[u8]>) -> i64 {
     raw >> 2
 }
 
+/// Delphi `ToUpperInvariant` for one character. Characters whose upper case
+/// is more than one character stay as they are.
+fn to_upper_invariant(text: &str) -> String {
+    text.chars()
+        .map(|character| {
+            let mut upper = character.to_uppercase();
+            match (upper.next(), upper.next()) {
+                (Some(single), None) => single,
+                _ => character,
+            }
+        })
+        .collect()
+}
+
+/// Port of `wbGetUnknownIntString`: `<Unknown: 5 $5>`. A value of eight
+/// hexadecimal digits that reads as an upper-case signature also shows the
+/// signature.
+pub fn get_unknown_int_string(int: i64) -> String {
+    let mut result = format!("<Unknown: {int}");
+    if super::globals::extended_int_unknowns() {
+        let hex = int_to_hex64(int, 16);
+        let hex = hex.trim_start_matches('0');
+        if !hex.is_empty() {
+            result.push_str(" $");
+            result.push_str(hex);
+        }
+        if hex.len() == 8 {
+            let signature = super::types::Signature::from_int(int as u32).to_string();
+            let upper = to_upper_invariant(&signature);
+            if signature == upper {
+                result.push(' ');
+                result.push_str(&upper);
+            }
+        }
+    }
+    result.push('>');
+    result
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -124,6 +163,26 @@ mod tests {
         assert_eq!(text, "aé");
         truncate(&mut text, 0);
         assert_eq!(text, "");
+    }
+
+    #[test]
+    fn unknown_int_string() {
+        let _guard = super::super::globals::test_lock();
+        assert_eq!(get_unknown_int_string(0), "<Unknown: 0>");
+        assert_eq!(get_unknown_int_string(5), "<Unknown: 5 $5>");
+        assert_eq!(get_unknown_int_string(-1), "<Unknown: -1 $FFFFFFFFFFFFFFFF>");
+        assert_eq!(
+            get_unknown_int_string(i64::from(u32::from_le_bytes(*b"EDID"))),
+            "<Unknown: 1145652293 $44494445 EDID>"
+        );
+        assert_eq!(
+            get_unknown_int_string(i64::from(u32::from_le_bytes(*b"edid"))),
+            "<Unknown: 1684628581 $64696465>"
+        );
+        // The signature text ends at a zero byte.
+        assert_eq!(get_unknown_int_string(0x4100_0000), "<Unknown: 1090519040 $41000000 >");
+        super::super::globals::set_extended_int_unknowns(false);
+        assert_eq!(get_unknown_int_string(5), "<Unknown: 5>");
     }
 
     #[test]

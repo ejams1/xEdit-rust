@@ -26,7 +26,7 @@ pub type StrToIntCallback = Arc<dyn Fn(&str, ElementArg) -> i64 + Send + Sync>;
 /// class implements in the same way. The class has the fields `self_ref`,
 /// `def` and `nd` and a `clone_from` constructor.
 macro_rules! formater_plumbing {
-    ($class_name:literal) => {
+    () => {
         fn def_base(&self) -> &DefBase {
             &self.def
         }
@@ -52,10 +52,15 @@ macro_rules! formater_plumbing {
         fn into_integer_def_formater(self: Arc<Self>) -> Option<Arc<dyn IntegerDefFormater>> {
             Some(self)
         }
+    };
+}
+pub(crate) use formater_plumbing;
 
-        /// Upstream `ClassName`.
-        fn get_def_type_name(&self) -> &'static str {
-            $class_name
+/// `GetDefTypeName` of a formater: upstream `ClassName`.
+macro_rules! formater_type_name {
+    ($class_name:literal) => {
+        fn get_def_type_name(&self) -> String {
+            $class_name.to_owned()
         }
     };
 }
@@ -76,9 +81,10 @@ macro_rules! formater_impls {
         }
     };
 }
+pub(crate) use formater_impls;
 
 /// `GetIsEditable` of the formaters that are always editable.
-fn editable_unless_internal_only(def: &DefBase) -> bool {
+pub(crate) fn editable_unless_internal_only(def: &DefBase) -> bool {
     !(def.def_internal_edit_only() && !is_internal_edit())
 }
 
@@ -136,7 +142,8 @@ impl IntegerDefFormaterUnion {
 }
 
 impl Def for IntegerDefFormaterUnion {
-    formater_plumbing!("TwbIntegerDefFormaterUnion");
+    formater_plumbing!();
+    formater_type_name!("TwbIntegerDefFormaterUnion");
 
     fn get_def_type(&self) -> DefType {
         DefType::dtIntegerFormaterUnion
@@ -259,7 +266,8 @@ macro_rules! plain_formater {
         }
 
         impl Def for $class {
-            formater_plumbing!($class_name);
+            formater_plumbing!();
+            formater_type_name!($class_name);
 
             fn get_def_type(&self) -> DefType {
                 DefType::dtIntegerFormater
@@ -389,7 +397,8 @@ macro_rules! div_formater {
         }
 
         impl Def for $class {
-            formater_plumbing!($class_name);
+            formater_plumbing!();
+            formater_type_name!($class_name);
 
             fn get_def_type(&self) -> DefType {
                 DefType::dtIntegerFormater
@@ -466,7 +475,8 @@ impl MulDef {
 }
 
 impl Def for MulDef {
-    formater_plumbing!("TwbMulDef");
+    formater_plumbing!();
+    formater_type_name!("TwbMulDef");
 
     fn get_def_type(&self) -> DefType {
         DefType::dtIntegerFormater
@@ -535,7 +545,8 @@ impl CallbackDef {
 }
 
 impl Def for CallbackDef {
-    formater_plumbing!("TwbCallbackDef");
+    formater_plumbing!();
+    formater_type_name!("TwbCallbackDef");
 
     fn get_def_type(&self) -> DefType {
         DefType::dtIntegerFormater

@@ -273,11 +273,11 @@ impl Def for IntegerDef {
         DefType::dtInteger
     }
 
-    fn get_def_type_name(&self) -> &'static str {
+    fn get_def_type_name(&self) -> String {
         if let Some(formater) = self.in_formater.load().as_deref() {
             return formater.get_def_type_name();
         }
-        match self.in_type {
+        let name = match self.in_type {
             IntType::itS8 => "Signed Byte",
             IntType::itU16 => "Unsigned Word",
             IntType::itS16 => "Signed Word",
@@ -288,7 +288,8 @@ impl Def for IntegerDef {
             IntType::itS64 => "Signed QWord",
             IntType::itU6to30 => "Counter",
             IntType::it0 | IntType::itU8 => "Unsigned Byte",
-        }
+        };
+        name.to_owned()
     }
 
     fn as_integer_def(&self) -> Option<&dyn IntegerDefInterface> {
@@ -664,8 +665,8 @@ mod tests {
             DefType::dtIntegerFormater
         }
 
-        fn get_def_type_name(&self) -> &'static str {
-            "TwbBrackets"
+        fn get_def_type_name(&self) -> String {
+            "TwbBrackets".to_owned()
         }
 
         fn duplicate(&self) -> DefRef {
