@@ -1,0 +1,17 @@
+[package]
+name = "xedit-io"
+version = "0.1.0"
+description = "Memory-mapped files, compression and string encodings for xEdit"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+encoding_rs = "0.8.42"
+libdeflater = "1.26.1"
+lz4_flex = "0.14.0"
+memmap2 = "0.9.11"
+thiserror = "2.0.21"
+
+[target."cfg(windows)".dependencies]
+windows-sys = { version = "0.61.2", features = ["Win32_Globalization", "Win32_Foundation"] }

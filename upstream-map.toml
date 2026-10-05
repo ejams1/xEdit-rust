@@ -45,6 +45,8 @@ status = "pending"
 
 [units."Core/wbCompression.pas"]
 status = "pending"
+rust = "crates/xedit-io/src/compression.rs"
+note = "Decompression is ported. Compression comes with the write path in phase 3."
 
 [units."Core/wbDDS.pas"]
 status = "pending"
