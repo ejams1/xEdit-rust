@@ -47,10 +47,42 @@ fn scans_the_structure_of_a_skyrim_plugin() {
         );
         assert!(record.def().is_some(), "no definition for {}", record.get_name());
     }
+    // The game settings have their subrecords grouped by the definition.
+    for record in records
+        .iter()
+        .filter(|record| record.get_signature() == Signature::new(b"GMST"))
+    {
+        assert!(
+            record.get_element_count() >= 2,
+            "{} has {} subrecords",
+            record.get_name(),
+            record.get_element_count()
+        );
+    }
     let compressed = records
         .iter()
         .find(|record| record.header_struct().flags.is_compressed())
         .expect("a compressed record");
     assert!(compressed.data().is_some_and(|data| !data.is_empty()));
+    clear_record_defs();
+}
+
+/// Every record of the plugin builds its subrecords. Ignored until the
+/// values and the deciders that need them are ported.
+#[test]
+#[ignore]
+fn initializes_every_record_of_a_skyrim_plugin() {
+    let _guard = test_lock();
+    let Some(path) = plugin("XEDIT_SSE_DATA", "Update.esm") else {
+        return;
+    };
+    clear_record_defs();
+    set_game_mode(GameMode::gmSSE);
+    xedit_defs::tes5::define_tes5();
+    reset_load_order_slots();
+    let file = wb_file(&path, 0, FileStates::empty()).unwrap();
+    for record in file.records() {
+        record.get_element_count();
+    }
     clear_record_defs();
 }

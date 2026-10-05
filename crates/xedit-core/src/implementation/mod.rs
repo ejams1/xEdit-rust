@@ -8,9 +8,80 @@
 //!
 //! State: the binary scan of a file into its header record, group records
 //! and main records, with the record data kept as ranges of the mapped
-//! file. The subrecords and their values come next.
+//! file, and the subrecords of a record grouped by its definition on first
+//! use. The values come next.
 
 pub mod structs;
+
+fn not_ported(what: &str) -> ! {
+    unimplemented!("{what}: the values of the element tree are not ported yet")
+}
+
+macro_rules! element_common {
+    () => {
+        fn get_element_id(&self) -> usize {
+            std::ptr::from_ref(self) as *const () as usize
+        }
+
+        fn get_masters_updated(&self) -> bool {
+            false
+        }
+
+        fn add_referenced_from_id(&self, _form_id: FormID) {}
+
+        fn get_links_to(&self) -> Option<ElementRef> {
+            None
+        }
+
+        fn get_value_def(&self) -> Option<Arc<dyn ValueDef>> {
+            None
+        }
+
+        fn get_native_value(&self) -> Variant {
+            Variant::Empty
+        }
+
+        fn get_edit_value(&self) -> String {
+            String::new()
+        }
+
+        fn get_container(&self) -> Option<ElementRef> {
+            self.base.container()
+        }
+
+        fn get_full_path(&self) -> String {
+            match self.base.container() {
+                Some(container) => format!("{} \\ {}", container.get_full_path(), self.get_name()),
+                None => self.get_name(),
+            }
+        }
+
+        fn get_path(&self) -> String {
+            match self.base.container() {
+                Some(container) => format!("{} \\ {}", container.get_path(), self.get_name()),
+                None => self.get_name(),
+            }
+        }
+
+        fn get_localized(&self) -> TriBool {
+            TriBool::tbUnknown
+        }
+
+        fn get_conflict_priority(&self) -> ConflictPriority {
+            ConflictPriority::cpNormal
+        }
+
+        fn get_dont_show(&self) -> bool {
+            false
+        }
+
+        fn as_element_impl(&self) -> Option<&dyn ElementImpl> {
+            Some(self)
+        }
+    };
+}
+
+pub mod sub_record;
 
 use std::path::Path;
 use std::sync::atomic::{AtomicI32, Ordering};
@@ -68,6 +139,11 @@ impl ElementBase {
     fn container(&self) -> Option<ElementRef> {
         self.e_container.read().unwrap().as_ref().and_then(Weak::upgrade)
     }
+
+    /// Port of `SetContainer`.
+    pub(crate) fn set_container(&self, container: &ElementRef) {
+        *self.e_container.write().unwrap() = Some(Arc::downgrade(container));
+    }
 }
 
 /// The fields of `TwbContainer`.
@@ -77,11 +153,21 @@ pub struct ContainerBase {
 }
 
 impl ContainerBase {
-    fn add_element(&self, element: ElementRef) {
+    pub(crate) fn add_element(&self, element: ElementRef) {
         self.cnt_elements.write().unwrap().push(element);
     }
 
-    fn elements(&self) -> Vec<ElementRef> {
+    /// Port of `InsertElement`.
+    pub(crate) fn insert_element(&self, index: usize, element: ElementRef) {
+        self.cnt_elements.write().unwrap().insert(index, element);
+    }
+
+    /// Port of `RemoveElement` by position.
+    pub(crate) fn remove_element(&self, index: usize) -> ElementRef {
+        self.cnt_elements.write().unwrap().remove(index)
+    }
+
+    pub(crate) fn elements(&self) -> Vec<ElementRef> {
         self.cnt_elements.read().unwrap().clone()
     }
 }
@@ -401,6 +487,9 @@ pub struct MainRecordImpl {
     dc_data_end: usize,
     /// The decompressed data of a compressed record, decompressed on first use.
     mr_data_storage: OnceLock<Option<Vec<u8>>>,
+    /// Port of `DoInit`: the subrecords are built on first use.
+    mr_init: OnceLock<()>,
+    mr_editor_id: RwLock<String>,
 }
 
 impl MainRecordImpl {
@@ -441,6 +530,8 @@ impl MainRecordImpl {
             dc_data_base,
             dc_data_end,
             mr_data_storage: OnceLock::new(),
+            mr_init: OnceLock::new(),
+            mr_editor_id: RwLock::new(String::new()),
         });
         if let Some(parent) = container.as_container_base() {
             parent.add_element(record.clone());
@@ -464,6 +555,31 @@ impl MainRecordImpl {
 
     pub fn def(&self) -> Option<&Arc<MainRecordDef>> {
         self.mr_def.as_ref()
+    }
+
+    /// The offset of the record data in the bytes of the file. The data of
+    /// a compressed record starts at 0 in its own storage.
+    pub(crate) fn data_start(&self) -> usize {
+        if self.mr_struct.flags.is_compressed() {
+            0
+        } else {
+            self.dc_data_base
+        }
+    }
+
+    pub(crate) fn set_editor_id(&self, editor_id: String) {
+        *self.mr_editor_id.write().unwrap() = editor_id;
+    }
+
+    /// Port of `DoInit`: builds the subrecords once.
+    pub fn do_init(self: &Arc<Self>) {
+        self.mr_init.get_or_init(|| sub_record::init_main_record(self));
+    }
+
+    fn self_arc(&self) -> Arc<Self> {
+        self.self_ref
+            .upgrade()
+            .expect("a main record is alive while it is used")
     }
 
     /// Port of `DecompressIfNeeded`: the record data, decompressed when the
@@ -500,12 +616,28 @@ impl MainRecordImpl {
 
 /// The casts between the element objects of this module.
 pub trait ElementImpl: Element {
+    fn element_base(&self) -> &ElementBase;
+
     fn container_base(&self) -> Option<&ContainerBase> {
         None
     }
 
     fn main_record_impl(&self) -> Option<Arc<MainRecordImpl>> {
         None
+    }
+
+    fn sub_record_impl(&self) -> Option<&sub_record::SubRecordImpl> {
+        None
+    }
+
+    fn sub_record_array_impl(&self) -> Option<&sub_record::SubRecordArrayImpl> {
+        None
+    }
+
+    /// Port of `SetSortOrder` and `SetMemoryOrder` with the same value.
+    fn set_sort_and_memory_order(&self, order: i32) {
+        self.element_base().e_sort_order.store(order, Ordering::Relaxed);
+        self.element_base().e_memory_order.store(order, Ordering::Relaxed);
     }
 }
 
@@ -522,76 +654,6 @@ impl ElementImplCasts for ElementRef {
     fn into_main_record_impl(self) -> Option<Arc<MainRecordImpl>> {
         self.as_element_impl()?.main_record_impl()
     }
-}
-
-// ----- the element traits -----
-
-fn not_ported(what: &str) -> ! {
-    unimplemented!("{what}: the values of the element tree are not ported yet")
-}
-
-macro_rules! element_common {
-    () => {
-        fn get_element_id(&self) -> usize {
-            std::ptr::from_ref(self) as *const () as usize
-        }
-
-        fn get_masters_updated(&self) -> bool {
-            false
-        }
-
-        fn add_referenced_from_id(&self, _form_id: FormID) {}
-
-        fn get_links_to(&self) -> Option<ElementRef> {
-            None
-        }
-
-        fn get_value_def(&self) -> Option<Arc<dyn ValueDef>> {
-            None
-        }
-
-        fn get_native_value(&self) -> Variant {
-            Variant::Empty
-        }
-
-        fn get_edit_value(&self) -> String {
-            String::new()
-        }
-
-        fn get_container(&self) -> Option<ElementRef> {
-            self.base.container()
-        }
-
-        fn get_full_path(&self) -> String {
-            match self.base.container() {
-                Some(container) => format!("{} \\ {}", container.get_full_path(), self.get_name()),
-                None => self.get_name(),
-            }
-        }
-
-        fn get_path(&self) -> String {
-            match self.base.container() {
-                Some(container) => format!("{} \\ {}", container.get_path(), self.get_name()),
-                None => self.get_name(),
-            }
-        }
-
-        fn get_localized(&self) -> TriBool {
-            TriBool::tbUnknown
-        }
-
-        fn get_conflict_priority(&self) -> ConflictPriority {
-            ConflictPriority::cpNormal
-        }
-
-        fn get_dont_show(&self) -> bool {
-            false
-        }
-
-        fn as_element_impl(&self) -> Option<&dyn ElementImpl> {
-            Some(self)
-        }
-    };
 }
 
 impl Element for FileImpl {
@@ -627,6 +689,10 @@ impl Element for FileImpl {
 }
 
 impl ElementImpl for FileImpl {
+    fn element_base(&self) -> &ElementBase {
+        &self.base
+    }
+
     fn container_base(&self) -> Option<&ContainerBase> {
         Some(&self.container)
     }
@@ -755,6 +821,10 @@ impl Element for GroupRecordImpl {
 }
 
 impl ElementImpl for GroupRecordImpl {
+    fn element_base(&self) -> &ElementBase {
+        &self.base
+    }
+
     fn container_base(&self) -> Option<&ContainerBase> {
         Some(&self.container)
     }
@@ -848,6 +918,10 @@ impl Element for MainRecordImpl {
 }
 
 impl ElementImpl for MainRecordImpl {
+    fn element_base(&self) -> &ElementBase {
+        &self.base
+    }
+
     fn container_base(&self) -> Option<&ContainerBase> {
         Some(&self.container)
     }
@@ -862,19 +936,25 @@ impl Container for MainRecordImpl {
         not_ported("ElementNativeValues of a main record")
     }
 
-    fn get_element_by_name(&self, _name: &str) -> Option<ElementRef> {
-        not_ported("ElementByName of a main record")
+    fn get_element_by_name(&self, name: &str) -> Option<ElementRef> {
+        self.self_arc().do_init();
+        self.container
+            .elements()
+            .into_iter()
+            .find(|element| element.get_name() == name)
     }
 
-    fn get_element_by_path(&self, _path: &str) -> Option<ElementRef> {
-        not_ported("ElementByPath of a main record")
+    fn get_element_by_path(&self, path: &str) -> Option<ElementRef> {
+        self.get_element_by_name(path)
     }
 
     fn get_element_count(&self) -> i32 {
+        self.self_arc().do_init();
         self.container.elements().len() as i32
     }
 
     fn get_element(&self, index: i32) -> Option<ElementRef> {
+        self.self_arc().do_init();
         self.container.elements().get(usize::try_from(index).ok()?).cloned()
     }
 
@@ -907,7 +987,8 @@ impl MainRecord for MainRecordImpl {
     }
 
     fn get_editor_id(&self) -> String {
-        not_ported("EditorID")
+        self.self_arc().do_init();
+        self.mr_editor_id.read().unwrap().clone()
     }
 
     fn get_short_name(&self) -> String {
