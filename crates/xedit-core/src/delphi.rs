@@ -91,6 +91,121 @@ pub fn float_to_str_f_fixed(value: f64, digits: usize) -> String {
     result
 }
 
+/// Port of `FloatToStr`: up to 15 significant digits, in scientific notation
+/// when the value is below 0.00001 or has more than 15 digits before the point.
+pub fn float_to_str(value: f64) -> String {
+    if value.is_nan() {
+        return "NAN".to_owned();
+    }
+    if value.is_infinite() {
+        return if value < 0.0 { "-INF" } else { "INF" }.to_owned();
+    }
+    if value == 0.0 {
+        return "0".to_owned();
+    }
+    let formatted = format!("{:.14e}", value.abs());
+    let (mantissa, exponent) = formatted.split_once('e').expect("exponent format has an exponent");
+    let exponent: i32 = exponent.parse().expect("exponent is a number");
+    let digits: String = mantissa.chars().filter(char::is_ascii_digit).collect();
+    let digits = digits.trim_end_matches('0');
+    let digits = if digits.is_empty() { "0" } else { digits };
+    let mut result = String::new();
+    if value < 0.0 {
+        result.push('-');
+    }
+    if (-5..15).contains(&exponent) {
+        if exponent < 0 {
+            result.push_str("0.");
+            result.push_str(&"0".repeat((-exponent - 1) as usize));
+            result.push_str(digits);
+        } else {
+            let point = exponent as usize + 1;
+            if digits.len() <= point {
+                result.push_str(digits);
+                result.push_str(&"0".repeat(point - digits.len()));
+            } else {
+                result.push_str(&digits[..point]);
+                result.push('.');
+                result.push_str(&digits[point..]);
+            }
+        }
+    } else {
+        result.push_str(&digits[..1]);
+        if digits.len() > 1 {
+            result.push('.');
+            result.push_str(&digits[1..]);
+        }
+        result.push('E');
+        result.push_str(&exponent.to_string());
+    }
+    result
+}
+
+/// Upstream `HalfMaxValue`: the bits of the largest finite half-float.
+pub const HALF_MAX_VALUE: u16 = 0x7BFF;
+/// Upstream `HalfMinValue`.
+pub const HALF_MIN_VALUE: u16 = 0x0400;
+/// Delphi `MaxSingle`.
+pub const MAX_SINGLE: f64 = f32::MAX as f64;
+/// Delphi `MaxDouble`.
+pub const MAX_DOUBLE: f64 = f64::MAX;
+
+/// Port of `HalfToFloat`: the exact value of an IEEE half-float.
+pub fn half_to_float(bits: u16) -> f32 {
+    let sign = u32::from(bits >> 15) << 31;
+    let exponent = u32::from(bits >> 10) & 0x1F;
+    let mantissa = u32::from(bits) & 0x3FF;
+    let single = match (exponent, mantissa) {
+        (0, 0) => sign,
+        (0, _) => {
+            // Subnormal: shift the mantissa up until its leading bit is implicit.
+            let shift = mantissa.leading_zeros() - 21;
+            let mantissa = (mantissa << shift) & 0x3FF;
+            sign | ((113 - shift) << 23) | (mantissa << 13)
+        }
+        (0x1F, _) => sign | 0x7F80_0000 | (mantissa << 13),
+        _ => sign | ((exponent + 112) << 23) | (mantissa << 13),
+    };
+    f32::from_bits(single)
+}
+
+/// Port of `IntPower`.
+pub fn int_power(base: f64, exponent: i32) -> f64 {
+    let mut y = exponent.unsigned_abs();
+    let mut base = base;
+    let mut result = 1.0;
+    while y > 0 {
+        while y & 1 == 0 {
+            y >>= 1;
+            base *= base;
+        }
+        y -= 1;
+        result *= base;
+    }
+    if exponent < 0 { 1.0 / result } else { result }
+}
+
+/// Port of xEdit `RoundToEx`: rounds to the decimal position `digit`, where -6
+/// keeps six decimals. `None` when the scaled value does not fit an `Int64`,
+/// which raises a floating point exception in Delphi.
+pub fn round_to_ex(value: f64, digit: i32) -> Option<f64> {
+    let factor = int_power(10.0, digit);
+    let scaled = value / factor;
+    // 2^63. NaN does not fit either.
+    if scaled.is_nan() || scaled.abs() >= 9_223_372_036_854_775_808.0 {
+        return None;
+    }
+    Some(round(scaled) as f64 * factor)
+}
+
+/// Port of xEdit `SingleSameValue`: compares as single precision floats with a
+/// relative resolution of 0.0000005.
+pub fn single_same_value(a: f64, b: f64) -> bool {
+    const SINGLE_RESOLUTION: f32 = 0.000_000_5;
+    let (a, b) = (a as f32, b as f32);
+    (a - b).abs() <= (a.abs().min(b.abs()) * SINGLE_RESOLUTION).max(SINGLE_RESOLUTION)
+}
+
 /// Port of `Round`: rounds half to even, as the default FPU rounding mode does.
 pub fn round(value: f64) -> i64 {
     value.round_ties_even() as i64
@@ -145,6 +260,45 @@ mod tests {
         assert_eq!(float_to_str_f_fixed(f64::NAN, 6), "NAN");
         assert_eq!(float_to_str_f_fixed(f64::INFINITY, 6), "INF");
         assert_eq!(float_to_str_f_fixed(f64::NEG_INFINITY, 6), "-INF");
+    }
+
+    #[test]
+    fn general_format() {
+        assert_eq!(float_to_str(0.0), "0");
+        assert_eq!(float_to_str(1.5), "1.5");
+        assert_eq!(float_to_str(-100.0), "-100");
+        assert_eq!(float_to_str(0.1), "0.1");
+        assert_eq!(float_to_str(0.00001), "0.00001");
+        assert_eq!(float_to_str(0.000001), "1E-6");
+        assert_eq!(float_to_str(1e20), "1E20");
+        assert_eq!(float_to_str(1.5e-10), "1.5E-10");
+        assert_eq!(float_to_str(123456789012345.0), "123456789012345");
+        assert_eq!(float_to_str(1234567890123456.0), "1.23456789012346E15");
+    }
+
+    #[test]
+    fn halves() {
+        assert_eq!(half_to_float(0x3C00), 1.0);
+        assert_eq!(half_to_float(0xC000), -2.0);
+        assert_eq!(half_to_float(0x7BFF), 65504.0);
+        assert_eq!(half_to_float(0x0001), 5.960_464_5e-8);
+        assert_eq!(half_to_float(0x03FF), 6.097_555e-5);
+        assert_eq!(half_to_float(0x0400), 6.103_515_6e-5);
+        assert!(half_to_float(0x7C00).is_infinite());
+        assert!(half_to_float(0x7FFF).is_nan());
+        assert_eq!(half_to_float(0x8000).to_bits(), 0x8000_0000);
+    }
+
+    #[test]
+    fn rounding_helpers() {
+        assert_eq!(int_power(10.0, 3), 1000.0);
+        assert_eq!(int_power(10.0, -6), 1.0 / 1_000_000.0);
+        assert_eq!(int_power(2.0, 0), 1.0);
+        assert_eq!(round_to_ex(1.2345678, -3), Some(1.235));
+        assert_eq!(round_to_ex(1e20, -6), None);
+        assert_eq!(round_to_ex(-0.0, -6), Some(0.0));
+        assert!(single_same_value(4.0e-7, 0.0));
+        assert!(!single_same_value(6.0e-7, 0.0));
     }
 
     #[test]

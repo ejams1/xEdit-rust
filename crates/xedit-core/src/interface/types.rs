@@ -165,7 +165,7 @@ macro_rules! pascal_enum {
             $($(#[$value_meta])* $value,)+
         }
 
-        impl PascalEnum for $name {
+        impl $crate::interface::types::PascalEnum for $name {
             const ALL: &'static [Self] = &[$($name::$value,)+];
 
             fn ord(self) -> usize {
