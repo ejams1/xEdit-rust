@@ -101,6 +101,11 @@ pub trait Element: Send + Sync {
     fn as_container(&self) -> Option<&dyn Container> {
         None
     }
+
+    /// The object of `wbImplementation`, for the casts between its types.
+    fn as_element_impl(&self) -> Option<&dyn crate::implementation::ElementImpl> {
+        None
+    }
 }
 
 /// Upstream `IwbFile`.

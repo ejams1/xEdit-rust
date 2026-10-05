@@ -140,6 +140,8 @@ status = "pending"
 
 [units."Core/wbImplementation.pas"]
 status = "pending"
+rust = "crates/xedit-core/src/implementation"
+note = "The structure scan of a file (TwbFile.Scan, TwbGroupRecord, TwbMainRecord headers and data, decompression) is ported. The subrecords, values and everything else are pending."
 
 [units."Core/wbInterface.pas"]
 status = "pending"

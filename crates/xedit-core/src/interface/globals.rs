@@ -448,6 +448,17 @@ static wbToolMode: AtomicU8 = AtomicU8::new(ToolMode::tmView as u8);
 #[allow(non_upper_case_globals)]
 static wbToolSource: AtomicU8 = AtomicU8::new(ToolSource::tsPlugins as u8);
 
+static HEADER_SIGNATURE: RwLock<Signature> = RwLock::new(Signature::new(b"TES4"));
+
+/// Upstream `wbHeaderSignature`: the signature of the file header record.
+pub fn header_signature() -> Signature {
+    *HEADER_SIGNATURE.read().unwrap()
+}
+
+pub fn set_header_signature(value: Signature) {
+    *HEADER_SIGNATURE.write().unwrap() = value;
+}
+
 static HEDR_VERSION: RwLock<f64> = RwLock::new(1.0);
 
 /// Upstream `wbHEDRVersion`: the version the file header of the game has.
