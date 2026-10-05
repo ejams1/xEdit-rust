@@ -273,6 +273,12 @@ impl SubRecordArrayImpl {
         }
         // UPSTREAM-QUIRK: the sorted flag is only set under wbSortSubRecords.
         let _ = sort_sub_records();
+        // Port of `UpdateNameSuffixes`: the elements are numbered.
+        for (index, element) in self.container.elements().iter().enumerate() {
+            if let Some(element) = element.as_element_impl() {
+                element.element_base().set_name_suffix(&format!("#{index}"));
+            }
+        }
     }
 }
 
@@ -498,6 +504,8 @@ pub(super) fn init_main_record(record: &Arc<MainRecordImpl>) {
                 let known = mr_def.known_sub_record_signatures();
                 if signature == known[0] {
                     record.set_editor_id(mr_def.get_editor_id(element));
+                } else if signature == known[1] {
+                    record.set_full_name(element.get_edit_value());
                 }
             }
             DefType::dtSubRecordArray => {
@@ -595,6 +603,21 @@ impl Element for SubRecordImpl {
 
     fn get_value_def(&self) -> Option<Arc<dyn ValueDef>> {
         self.value_def()
+    }
+
+    /// Port of `TwbSubRecord.GetDisplayName`: the signature with the name of
+    /// the resolved value, or of the definition.
+    fn get_display_name(&self, use_suffix: bool) -> String {
+        let mut result = self.get_display_signature();
+        if let Some(value_def) = self.value_def()
+            && !value_def.get_name().is_empty()
+        {
+            return format!("{result} - {}", value_def.get_name());
+        }
+        if let Some(def) = self.def() {
+            result = format!("{result} - {}", def.get_name());
+        }
+        self.base.display_name(result, use_suffix)
     }
 
     fn get_record_signature(&self) -> Option<Signature> {
@@ -715,6 +738,7 @@ impl Container for SubRecordImpl {
 
 impl Element for SubRecordArrayImpl {
     element_common!(element_base);
+    element_display_name!(element_base);
 
     fn get_name(&self) -> String {
         self.arc_def.get_name().to_owned()
@@ -773,6 +797,7 @@ impl Container for SubRecordArrayImpl {
 
 impl Element for SubRecordStructImpl {
     element_common!(element_base);
+    element_display_name!(element_base);
 
     fn get_name(&self) -> String {
         self.src_def.get_name().to_owned()

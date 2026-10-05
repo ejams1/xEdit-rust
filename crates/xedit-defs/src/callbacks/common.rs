@@ -13,7 +13,7 @@
 
 use std::sync::Arc;
 
-use xedit_core::interface::globals::{GameMode, game_mode};
+use xedit_core::interface::globals::{GameMode, game_mode, is_fallout3, is_oblivion, is_skyrim};
 use xedit_core::interface::*;
 
 pub use super::common_stubs::*;
@@ -236,4 +236,153 @@ pub fn wb_gmst_union_decider(_a_base_ptr: DataPtr, a_element: ElementArg) -> i32
         Some('u') if matches!(game_mode(), GameMode::gmFO76 | GameMode::gmSF1) => 4,
         _ => 1,
     }
+}
+
+/// Upstream `ElementEditValues[aPath]` on a main record.
+fn element_edit_value(main_record: &MainRecordRef, path: &str) -> String {
+    main_record
+        .get_element_by_path(path)
+        .map(|element| element.get_edit_value())
+        .unwrap_or_default()
+}
+
+/// Upstream `ElementValues[aPath]` on a main record.
+fn element_value(main_record: &MainRecordRef, path: &str) -> String {
+    main_record
+        .get_element_by_path(path)
+        .map(|element| element.get_value())
+        .unwrap_or_default()
+}
+
+fn in_container(value: String) -> String {
+    if value.is_empty() {
+        value
+    } else {
+        format!(" in {value}")
+    }
+}
+
+/// Upstream `wbCellAddInfo`: the worldspace and the grid of a cell.
+pub fn wb_cell_add_info(a_main_record: &MainRecordRef) -> String {
+    let mut result = in_container(element_edit_value(a_main_record, "Worldspace"));
+    if !a_main_record.get_is_persistent()
+        && let Some(xclc) = a_main_record.get_record_by_signature(Signature::new(b"XCLC"))
+        && let Some(container) = xclc.as_container()
+        && let (Some(x), Some(y)) = (container.get_element(0), container.get_element(1))
+    {
+        result = format!("{result} at {},{}", x.get_value(), y.get_value());
+    }
+    result
+}
+
+/// Upstream `wbDIALAddInfo`: the quest of a topic.
+pub fn wb_dial_add_info(a_main_record: &MainRecordRef) -> String {
+    let path = if is_skyrim() { "QNAM" } else { "Quest" };
+    in_container(element_edit_value(a_main_record, path))
+}
+
+/// Upstream `wbDLBRAddInfo`: the quest of a dialog branch.
+pub fn wb_dlbr_add_info(a_main_record: &MainRecordRef) -> String {
+    let path = if is_skyrim() { "QNAM" } else { "Quest" };
+    in_container(element_edit_value(a_main_record, path))
+}
+
+/// Upstream `wbINFOAddInfo`: the response text and the topic of a response.
+pub fn wb_info_add_info(a_main_record: &MainRecordRef) -> String {
+    let mut result = in_container(element_edit_value(a_main_record, "Topic"));
+    if is_oblivion() || is_fallout3() {
+        result = format!("{result} in {}", element_edit_value(a_main_record, "QSTI"));
+    }
+    if !result.is_empty() {
+        let response = element_value(a_main_record, r"Responses\Response\NAM1");
+        let response = response.trim();
+        if !response.is_empty() {
+            result = format!("''{response}''{result}");
+        }
+    }
+    result
+}
+
+/// Upstream `wbLANDAddInfo`: the cell of a landscape.
+pub fn wb_land_add_info(a_main_record: &MainRecordRef) -> String {
+    in_container(element_edit_value(a_main_record, "Cell"))
+}
+
+/// Upstream `wbNAVMAddInfo`: the cell of a navmesh.
+pub fn wb_navm_add_info(a_main_record: &MainRecordRef) -> String {
+    in_container(element_edit_value(a_main_record, "Cell"))
+}
+
+/// Upstream `wbPGRDAddInfo`: the cell of a path grid.
+pub fn wb_pgrd_add_info(a_main_record: &MainRecordRef) -> String {
+    in_container(element_edit_value(a_main_record, "Cell"))
+}
+
+/// Upstream `wbPositionToGridCell` with `wbCellSizeFactor` of 4096.
+fn position_to_grid_cell(x: f64, y: f64) -> (i32, i32) {
+    let cell = |value: f64| {
+        let scaled = value / 4096.0;
+        let mut result = scaled.trunc() as i32;
+        if value < 0.0 && scaled.fract() != 0.0 {
+            result -= 1;
+        }
+        result
+    };
+    (cell(x), cell(y))
+}
+
+/// Upstream `TwbMainRecord.GetPosition`: the position of a placed record.
+fn record_position(main_record: &MainRecordRef) -> Option<(f64, f64, f64)> {
+    let data = main_record.get_record_by_signature(Signature::new(b"DATA"))?;
+    let data = data.as_container()?;
+    if data.get_element_count() != 2 {
+        return None;
+    }
+    let position = data.get_element(0)?;
+    let position = position.as_container()?;
+    if position.get_element_count() != 3 {
+        return None;
+    }
+    let coordinate = |index| match position.get_element(index)?.get_native_value() {
+        Variant::Float(value) => Some(value),
+        Variant::Int(value) => Some(value as f64),
+        _ => None,
+    };
+    Some((coordinate(0)?, coordinate(1)?, coordinate(2)?))
+}
+
+/// Upstream `wbPlacedAddInfo`: what a placed record places and where. The
+/// precombined mesh of Fallout 4 is not ported yet.
+pub fn wb_placed_add_info(a_main_record: &MainRecordRef) -> String {
+    let mut result = in_container(element_edit_value(a_main_record, "Cell"));
+    if !a_main_record.get_is_deleted() {
+        let name = a_main_record
+            .get_record_by_signature(Signature::new(b"NAME"))
+            .map(|name| name.get_value())
+            .unwrap_or_default();
+        result = format!("Places {}{result}", name.trim());
+        let cell = a_main_record
+            .get_container()
+            .and_then(|group| group.as_element_impl()?.group_record_impl())
+            .and_then(|group| group.children_of());
+        if let Some(cell) = cell
+            && cell.get_is_persistent()
+            && let Some((x, y, _)) = record_position(a_main_record)
+        {
+            let (grid_x, grid_y) = position_to_grid_cell(x, y);
+            result = format!("{result} at {grid_x},{grid_y}");
+        }
+    }
+    result
+}
+
+/// Upstream `wbROADAddInfo`: the worldspace of a road.
+pub fn wb_road_add_info(a_main_record: &MainRecordRef) -> String {
+    in_container(element_edit_value(a_main_record, "Worldspace"))
+}
+
+/// Upstream `wbSCENAddInfo`: the quest of a scene.
+pub fn wb_scen_add_info(a_main_record: &MainRecordRef) -> String {
+    let path = if is_skyrim() { "PNAM" } else { "Quest" };
+    in_container(element_edit_value(a_main_record, path))
 }

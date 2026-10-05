@@ -87,11 +87,6 @@ pub fn wb_book_teaches_dont_s_how(_a_element: ElementArg) -> bool {
     todo!("port wbBookTeachesDontSHow from wbDefinitionsTES5.pas line 94")
 }
 
-/// Upstream `wbCellAddInfo`, line 27 of `wbDefinitionsTES5.pas`.
-pub fn wb_cell_add_info(_a_main_record: &MainRecordRef) -> String {
-    todo!("port wbCellAddInfo from wbDefinitionsTES5.pas line 27")
-}
-
 /// Upstream `wbCELLAfterLoad`, line 1773 of `wbDefinitionsTES5.pas`.
 pub fn wb_cell_after_load(_a_element: &ElementRef) {
     todo!("port wbCELLAfterLoad from wbDefinitionsTES5.pas line 1773")
@@ -237,11 +232,6 @@ pub fn wb_condition_vats_value_param_decider(_a_base_ptr: DataPtr, _a_element: E
     todo!("port wbConditionVATSValueParamDecider from wbDefinitionsTES5.pas line 864")
 }
 
-/// Upstream `wbDIALAddInfo`, line 28 of `wbDefinitionsTES5.pas`.
-pub fn wb_dial_add_info(_a_main_record: &MainRecordRef) -> String {
-    todo!("port wbDIALAddInfo from wbDefinitionsTES5.pas line 28")
-}
-
 /// Upstream `wbDIALQuestToStr`, line 239 of `wbDefinitionsTES5.pas`.
 pub fn wb_dial_quest_to_str(
     _a_value: &mut String,
@@ -260,11 +250,6 @@ pub fn wb_dialogue_text_after_load(_a_element: &ElementRef) {
 /// Upstream `wbDialogueTextAfterSet`, line 58 of `wbDefinitionsTES5.pas`.
 pub fn wb_dialogue_text_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
     todo!("port wbDialogueTextAfterSet from wbDefinitionsTES5.pas line 58")
-}
-
-/// Upstream `wbDLBRAddInfo`, line 29 of `wbDefinitionsTES5.pas`.
-pub fn wb_dlbr_add_info(_a_main_record: &MainRecordRef) -> String {
-    todo!("port wbDLBRAddInfo from wbDefinitionsTES5.pas line 29")
 }
 
 /// Upstream `wbDOBJObjectsAfterLoad`, line 42 of `wbDefinitionsTES5.pas`.
@@ -387,19 +372,9 @@ pub fn wb_hide_ffff(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) 
     todo!("port wbHideFFFF from wbDefinitionsTES5.pas line 210")
 }
 
-/// Upstream `wbINFOAddInfo`, line 30 of `wbDefinitionsTES5.pas`.
-pub fn wb_info_add_info(_a_main_record: &MainRecordRef) -> String {
-    todo!("port wbINFOAddInfo from wbDefinitionsTES5.pas line 30")
-}
-
 /// Upstream `wbINFOPNAMAfterSet`, line 997 of `wbDefinitionsTES5.pas`.
 pub fn wb_infopnam_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
     todo!("port wbINFOPNAMAfterSet from wbDefinitionsTES5.pas line 997")
-}
-
-/// Upstream `wbLANDAddInfo`, line 31 of `wbDefinitionsTES5.pas`.
-pub fn wb_land_add_info(_a_main_record: &MainRecordRef) -> String {
-    todo!("port wbLANDAddInfo from wbDefinitionsTES5.pas line 31")
 }
 
 /// Upstream `wbLCTNCellDontShow`, line 105 of `wbDefinitionsTES5.pas`.
@@ -482,11 +457,6 @@ pub fn wb_navi_parent_decider(_a_base_ptr: DataPtr, _a_element: ElementArg) -> i
     todo!("port wbNAVIParentDecider from wbDefinitionsTES5.pas line 276")
 }
 
-/// Upstream `wbNAVMAddInfo`, line 32 of `wbDefinitionsTES5.pas`.
-pub fn wb_navm_add_info(_a_main_record: &MainRecordRef) -> String {
-    todo!("port wbNAVMAddInfo from wbDefinitionsTES5.pas line 32")
-}
-
 /// Upstream `wbNavmeshGridCounter`, line 74 of `wbDefinitionsTES5.pas`.
 pub fn wb_navmesh_grid_counter(_a_base_ptr: DataPtr, _a_element: ElementArg) -> u32 {
     todo!("port wbNavmeshGridCounter from wbDefinitionsTES5.pas line 74")
@@ -559,11 +529,6 @@ pub fn wb_perk_data_quest_stage_to_str(_a_int: i64, _a_element: ElementArg, _a_t
 /// Upstream `wbPERKPRKETypeAfterSet`, line 63 of `wbDefinitionsTES5.pas`.
 pub fn wb_perkprke_type_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
     todo!("port wbPERKPRKETypeAfterSet from wbDefinitionsTES5.pas line 63")
-}
-
-/// Upstream `wbPlacedAddInfo`, line 34 of `wbDefinitionsTES5.pas`.
-pub fn wb_placed_add_info(_a_main_record: &MainRecordRef) -> String {
-    todo!("port wbPlacedAddInfo from wbDefinitionsTES5.pas line 34")
 }
 
 /// Upstream `wbPubPackCNAMDecider`, line 1893 of `wbDefinitionsTES5.pas`.
@@ -649,11 +614,6 @@ pub fn wb_regn_objects_dont_show(_a_element: ElementArg) -> bool {
 /// Upstream `wbREGNWeatherDontShow`, line 113 of `wbDefinitionsTES5.pas`.
 pub fn wb_regn_weather_dont_show(_a_element: ElementArg) -> bool {
     todo!("port wbREGNWeatherDontShow from wbDefinitionsTES5.pas line 113")
-}
-
-/// Upstream `wbSCENAddInfo`, line 36 of `wbDefinitionsTES5.pas`.
-pub fn wb_scen_add_info(_a_main_record: &MainRecordRef) -> String {
-    todo!("port wbSCENAddInfo from wbDefinitionsTES5.pas line 36")
 }
 
 /// Upstream `wbSCENAliasLinksTo`, line 156 of `wbDefinitionsTES5.pas`.
