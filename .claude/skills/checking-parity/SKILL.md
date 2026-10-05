@@ -16,7 +16,8 @@ The harness is not built yet. Until it exists, run the oracle by hand and compar
 `XEDIT_ORACLE_DIR` points at the unpacked release archive of the baseline tag. The game is selected with a switch such as `-FO4` or `-SSE`. Masters are read from the directory of the input file.
 
 ```
-"$XEDIT_ORACLE_DIR/xDump.exe" -FO4 -q "<game>/Data/<plugin>" > dump.txt 2> dump.log
+"$XEDIT_ORACLE_DIR/xDump.exe" -FO4 -q "$XEDIT_FO4_DATA/<plugin>" > dump.txt 2> dump.log
+"$XEDIT_ORACLE_DIR/xDump.exe" -SSE -q "$XEDIT_SSE_DATA/<plugin>" > dump.txt 2> dump.log
 ```
 
 The dump goes to stdout and progress goes to stderr. `xDump.exe -FO4 -?` lists the options.
@@ -25,7 +26,7 @@ The `xEdit-llm` automation build is a secondary oracle for conflict, reference a
 
 ## Inputs
 
-- **Corpus:** vanilla master files from the local game installs. Never commit game files. Small synthetic plugins live in `tests/fixtures` and are committed.
+- **Corpus:** vanilla master files from the local game installs, found through `XEDIT_FO4_DATA` and `XEDIT_SSE_DATA` (each is the game's `Data` directory). Never commit game files. Small synthetic plugins live in `tests/fixtures` and are committed.
 - **Oracle output:** produced by the release binaries (xDump, xEdit tool modes, BSArch, Sniff) and cached outside the repository, keyed by release tag and input file hash.
 
 ## Checks

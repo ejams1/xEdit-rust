@@ -54,7 +54,7 @@ Upstream uses three thread classes in total. Loading, reference building and con
 
 - **Oracle:** the official xEdit release binaries of the baseline tag (`xDump.exe`, `xFOEdit.exe`, `xTESEdit.exe`, `xSFEdit.exe`, `BSArch.exe`, `BSArchPro.exe`, `Sniff.exe`). The project has no Delphi compiler, so the oracle cannot be rebuilt and the port source must match the release tag exactly. The harness finds the binaries through the `XEDIT_ORACLE_DIR` environment variable.
 - **Secondary oracle:** the `xEdit-llm` automation build returns conflict, reference and cleaning results as JSON, which is easier to compare than GUI state. It is a fork at a different upstream commit, so it is used only to cross-check and never to close a gate.
-- **Corpus:** vanilla masters for each game from the local game installs (never committed), plus small synthetic plugins committed under `tests/fixtures`.
+- **Corpus:** vanilla masters for each game from the local game installs (never committed), plus small synthetic plugins committed under `tests/fixtures`. The harness finds each game's `Data` directory through an environment variable (`XEDIT_FO4_DATA`, `XEDIT_SSE_DATA`, and one per later game). Fallout 4 and Skyrim Special Edition are installed on the development machine; every other game needs its masters before its gate can close.
 - **Checks:** full element dump equality, byte-identical round-trip save, conflict status equality, reference index equality, script output equality, archive listing and extraction equality.
 - **Coverage ledger:** `coverage/ledger.toml` lists every GUI event binding, game mode, tool mode, command-line switch and script host function with its status and the command that covers it. `cargo xtask sync <upstream checkout>` generates it from the upstream source and adds new upstream entries as `pending`. `cargo xtask check` validates it in CI. The `xEdit-llm` inventory (`Tools/AgentCoverage`) is a reference for which actions are presentation-only.
 
@@ -68,7 +68,7 @@ Each phase lists the port work, the CLI surface it adds, the agent skill work, a
 - **CLI:** `xedit --version`, `xedit schema`, `xedit call <command>`, global `--json` and error code conventions.
 - **Skills:** `porting-pascal-unit` (the procedure for porting one unit: headers, naming, map entry, parity test). `checking-parity` (run the harness and read its report).
 - **Gate:** CI green. Oracle produces a dump of one vanilla master.
-- **Status:** Done except the harness. The 4.1.5q `xDump.exe` dumps a vanilla Fallout 4 master on the development machine.
+- **Status:** Done except the harness. The 4.1.5q `xDump.exe` dumps a vanilla Fallout 4 master (`-FO4`) and a vanilla Skyrim Special Edition master (`-SSE`) on the development machine.
 
 ### Phase 1: Read path for the first games
 
@@ -76,7 +76,7 @@ Each phase lists the port work, the CLI surface it adds, the agent skill work, a
 - **CLI:** `xedit session info`, `xedit files list`, `xedit records get|find|list`, `xedit elements get`, `xedit dump` (xDump equivalent).
 - **Skills:** `using-xedit-cli` version 1, covering read-only inspection. `porting-definitions` (run the transpiler, port callbacks, verify).
 - **Performance:** Memory-map files. Parse files in parallel with rayon. Add criterion benchmarks for load time and dump time against the Delphi numbers.
-- **Gate:** Dump of every vanilla FO4 and SSE master equals the oracle dump.
+- **Gate:** Dump of every vanilla Fallout 4 master and every vanilla Skyrim Special Edition master equals the oracle dump. Both games close the gate together; neither is a follow-up.
 
 ### Phase 2: All games and saves
 
