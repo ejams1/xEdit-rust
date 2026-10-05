@@ -593,6 +593,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "xedit-core"
+version = "0.1.0"
+dependencies = [
+ "thiserror",
+ "xedit-io",
+]
+
+[[package]]
 name = "xedit-io"
 version = "0.1.0"
 dependencies = [

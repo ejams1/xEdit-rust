@@ -1,0 +1,11 @@
+[package]
+name = "xedit-core"
+version = "0.1.0"
+description = "Element tree, definition model, records, groups, files and FormIDs of xEdit"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+thiserror = "2.0.21"
+xedit-io = { path = "../xedit-io" }
