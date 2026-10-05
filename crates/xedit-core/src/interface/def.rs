@@ -37,6 +37,7 @@ use super::element::{DataPtr, ElementArg, ElementRef};
 use super::globals::{
     collapse_benign_array, hide_unused, is_internal_edit, make_unknown_elements_unique, report_mode, report_unknown,
 };
+use super::integer::{IntegerDefFormater, IntegerDefInterface};
 use super::misc::{Variant, shorten_text};
 use super::types::{
     CallbackType, ConflictPriority, DefFlag, DefFlags, DefType, EditType, EnumSet, PascalEnum, def_flags_dont_clone,
@@ -133,7 +134,7 @@ impl<T: PascalEnum> Default for AtomicEnumSet<T> {
 
 /// The fields of `TwbDef`.
 pub struct DefBase {
-    def_source: OnceLock<DefRef>,
+    def_source: DefCell<DefRef>,
     def_parent: OnceLock<Weak<dyn Def>>,
     pub def_priority: ConflictPriority,
     pub def_get_cp: Option<GetConflictPriority>,
@@ -161,7 +162,7 @@ impl DefBase {
             priority = ConflictPriority::cpNormal;
         }
         Self {
-            def_source: OnceLock::new(),
+            def_source: DefCell::default(),
             def_parent: OnceLock::new(),
             def_priority: priority,
             def_get_cp: get_cp,
@@ -180,7 +181,7 @@ impl DefBase {
 
     /// Port of `TwbDef.AfterClone`.
     pub fn after_clone(&self, source: &dyn Def) {
-        let _ = self.def_source.set(source.def_ref());
+        self.def_source.set(Some(source.def_ref()));
         self.def_flags
             .set(source.def_base().def_flags.get() - def_flags_dont_clone());
     }
@@ -198,6 +199,11 @@ impl DefBase {
         {
             base.def_flags.include(DefFlag::dfCollapsed);
         }
+    }
+
+    /// Forgets the definition this one was cloned from.
+    pub fn clear_def_source(&self) {
+        self.def_source.set(None);
     }
 
     pub fn def_parent(&self) -> Option<DefRef> {
@@ -254,6 +260,14 @@ pub trait Def: Send + Sync + 'static {
     }
 
     fn as_empty_def(&self) -> Option<&dyn EmptyDefInterface> {
+        None
+    }
+
+    fn as_integer_def(&self) -> Option<&dyn IntegerDefInterface> {
+        None
+    }
+
+    fn into_integer_def_formater(self: Arc<Self>) -> Option<Arc<dyn IntegerDefFormater>> {
         None
     }
 
@@ -443,7 +457,7 @@ pub fn def_init_from_parent_after_children(def: &dyn Def) {
 
 /// Port of `TwbDef.GetRoot`: the definition this one was cloned from, transitively.
 pub fn get_root(def: &DefRef) -> DefRef {
-    match def.def_base().def_source.get() {
+    match def.def_base().def_source.load().as_deref() {
         Some(source) => get_root(source),
         None => def.clone(),
     }
@@ -1104,6 +1118,7 @@ macro_rules! value_def_plumbing {
         }
     };
 }
+pub(crate) use value_def_plumbing;
 
 /// Upstream `IwbEmptyDef`.
 pub trait EmptyDefInterface: ValueDef {

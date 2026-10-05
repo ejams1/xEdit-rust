@@ -60,6 +60,48 @@ pub fn shorten_text_to(text: &str, width: usize, placeholder: &str) -> String {
     result
 }
 
+/// Port of `IntToHex64`: the 64-bit two's complement of `value` in upper-case
+/// hexadecimal with at least `digits` digits.
+pub fn int_to_hex64(value: i64, digits: usize) -> String {
+    format!("{:0digits$X}", value as u64)
+}
+
+/// Port of `wbReadInteger24`: three bytes, most significant first.
+// UPSTREAM-QUIRK: upstream copies eight bytes from a four-byte buffer into the
+// result, so its upper half is whatever follows the buffer on the stack. The
+// port returns the value with a zero upper half.
+pub fn read_integer24(data: &[u8]) -> i64 {
+    (i64::from(data[0]) << 16) | (i64::from(data[1]) << 8) | i64::from(data[2])
+}
+
+/// Port of `ReadIntegerCounterSize`. The two least significant bits of the
+/// first byte give the length of the counter.
+pub fn read_integer_counter_size(data: Option<&[u8]>) -> i64 {
+    match data.and_then(|data| data.first()) {
+        Some(first) => match first & 3 {
+            1 => 2,
+            2 => 4,
+            _ => 1,
+        },
+        None => 1,
+    }
+}
+
+/// Port of `ReadIntegerCounter`: a count of 6, 14 or 30 bits.
+pub fn read_integer_counter(data: Option<&[u8]>) -> i64 {
+    let Some(data) = data.filter(|data| !data.is_empty()) else {
+        return 0;
+    };
+    let raw = match data[0] & 3 {
+        0 => i64::from(data[0]),
+        1 => i64::from(u16::from_le_bytes([data[0], data[1]])),
+        2 => i64::from(u32::from_le_bytes([data[0], data[1], data[2], data[3]])),
+        // Not supposed to exist: zeroed out by the engine.
+        _ => 0,
+    };
+    raw >> 2
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -82,6 +124,19 @@ mod tests {
         assert_eq!(text, "aé");
         truncate(&mut text, 0);
         assert_eq!(text, "");
+    }
+
+    #[test]
+    fn integer_helpers() {
+        assert_eq!(int_to_hex64(-1, 4), "FFFFFFFFFFFFFFFF");
+        assert_eq!(int_to_hex64(0x1AB, 5), "001AB");
+        assert_eq!(int_to_hex64(0x1AB, 1), "1AB");
+        assert_eq!(read_integer24(&[0x01, 0x02, 0x03]), 0x01_0203);
+        assert_eq!(read_integer_counter_size(None), 1);
+        assert_eq!(read_integer_counter_size(Some(&[0b11])), 1);
+        assert_eq!(read_integer_counter(Some(&[0b11, 0xFF])), 0);
+        assert_eq!(read_integer_counter(Some(&[0b0101, 0x01])), 0x41);
+        assert_eq!(read_integer_counter(None), 0);
     }
 
     #[test]
