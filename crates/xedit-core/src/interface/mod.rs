@@ -10,6 +10,7 @@
 pub mod def;
 pub mod element;
 pub mod form_id;
+pub mod formaters;
 pub mod globals;
 pub mod integer;
 pub mod misc;
@@ -18,6 +19,7 @@ pub mod types;
 pub use def::*;
 pub use element::{DataPtr, Element, ElementArg, ElementRef};
 pub use form_id::{CRC32, FileID, FormID, ModuleType, ObjectIDOutOfBounds, SlotCounts};
+pub use formaters::*;
 pub use globals::{GameMode, ToolMode, ToolSource};
 pub use integer::*;
 pub use misc::Variant;

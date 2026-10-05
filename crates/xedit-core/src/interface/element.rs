@@ -26,5 +26,7 @@ pub type DataPtr<'a> = Option<&'a [u8]>;
 pub trait Element: Send + Sync {
     fn get_full_path(&self) -> String;
 
+    fn get_edit_value(&self) -> String;
+
     fn get_links_to(&self) -> Option<ElementRef>;
 }
