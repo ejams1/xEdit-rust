@@ -13,8 +13,12 @@
 //! upstream no longer has.
 //!
 //! `cargo xtask parity dump` compares the port with the oracle. See `parity`.
+//!
+//! `cargo xtask pascal-check <file>...` parses upstream Pascal units with the
+//! reader of the definition transpiler and reports the files that fail.
 
 mod parity;
+mod pascal;
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -114,6 +118,10 @@ fn main() -> Result<()> {
             let upstream = fs::canonicalize(upstream).with_context(|| format!("opening {upstream}"))?;
             std::env::set_current_dir(&root)?;
             sync(&upstream, rest.first().copied())
+        }
+        ["pascal-check", files @ ..] if !files.is_empty() => {
+            let files: Vec<String> = files.iter().map(|file| (*file).to_owned()).collect();
+            pascal::parser::check_files(&files)
         }
         ["parity", rest @ ..] => {
             let root = fs::canonicalize(&root)?;
