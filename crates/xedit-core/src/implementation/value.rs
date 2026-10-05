@@ -232,6 +232,24 @@ impl ValueImpl {
     }
 }
 
+/// Port of `TwbContainedInElement.Create`: a value over the label of the
+/// group that holds the record, with the definition of the group type.
+pub(super) fn create_contained_in_element(
+    container: &ElementRef,
+    file: &Weak<super::FileImpl>,
+    value_def: Arc<dyn ValueDef>,
+    label: u32,
+) -> Arc<ValueImpl> {
+    let block = DataBlock::Buffer(Arc::new(label.to_le_bytes().to_vec()));
+    let element = Arc::new_cyclic(|self_ref: &Weak<ValueImpl>| ValueImpl {
+        self_ref: self_ref.clone(),
+        vb: ValueBase::new(container, file, &block, Some((0, 4)), value_def, ""),
+        kind: ValueKind::Value,
+    });
+    element.set_sort_and_memory_order(-2);
+    element
+}
+
 /// Port of `StructDoInit`: one child per member of the structure.
 pub(super) fn struct_do_init(
     value_def: &Arc<dyn ValueDef>,
@@ -399,6 +417,7 @@ pub(super) fn union_do_init(
 
 impl Element for ValueImpl {
     element_common!(vb_base, own_values);
+    element_display_name!(vb_base);
 
     fn get_name(&self) -> String {
         self.vb.name()
