@@ -327,10 +327,10 @@ pascal_enum! {
 }
 
 /// Upstream `TVarRec`: one value of an `array of const` argument.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum VarRec<'a> {
+#[derive(Debug, Clone, PartialEq)]
+pub enum VarRec {
     Int(i64),
-    Str(&'a str),
+    Str(String),
     Bool(bool),
 }
 

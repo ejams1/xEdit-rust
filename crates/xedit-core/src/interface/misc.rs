@@ -26,6 +26,23 @@ impl<T: Clone + Default> Global<T> {
     }
 }
 
+impl<T: Clone + Default> Global<Vec<T>> {
+    /// Upstream `SetLength` on the variable.
+    pub fn set_length(&self, length: i32) {
+        let mut guard = self.0.write().unwrap();
+        guard
+            .get_or_insert_with(Vec::new)
+            .resize(usize::try_from(length).unwrap_or(0), T::default());
+    }
+
+    /// Upstream `variable[index] := value`.
+    pub fn set_at(&self, index: i32, value: T) {
+        let mut guard = self.0.write().unwrap();
+        let index = usize::try_from(index).expect("a non-negative index");
+        guard.get_or_insert_with(Vec::new)[index] = value;
+    }
+}
+
 impl<T: Clone + Default> Default for Global<T> {
     fn default() -> Self {
         Self::new()

@@ -20,7 +20,7 @@ use super::element::{ElementArg, ElementRef, MainRecordRef};
 use super::form_id::FormID;
 use super::form_id_formater::FormIDDefFormater;
 use super::globals::{copy_is_running, report_mode, report_required};
-use super::integer::{IntegerDef, IntegerDefFormater};
+use super::integer::{IntegerDefFormater, IntegerDefInterface};
 use super::struct_def::{StructDef, set_array_entry};
 use super::sub_record::{RecordMemberDef, SignatureDef, signature_def_get_full_name};
 use super::sub_record_group::{RecordDef, struct_keys_to_summary};
@@ -37,6 +37,16 @@ pub type MainRecordGetEditorIDCallback = Arc<dyn Fn(&ElementRef) -> String + Sen
 /// Gives the grid cell from the subrecord that holds it.
 pub type MainRecordGetGridCellCallback = Arc<dyn Fn(&ElementRef) -> Option<GridCell> + Send + Sync>;
 
+/// Upstream `TwbIndexKeys`. The index keys are not ported yet; the
+/// definitions set their callbacks and nothing calls them.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct IndexKeys {
+    pub keys: Vec<String>,
+}
+
+/// Upstream `TwbBuildIndexKeysCallback`.
+pub type BuildIndexKeysCallback = Arc<dyn Fn(&MainRecordRef, &mut IndexKeys) + Send + Sync>;
+
 /// Upstream `TwbGridCell`: the position of a cell in the grid of a worldspace.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct GridCell {
@@ -45,7 +55,7 @@ pub struct GridCell {
 }
 
 static MAIN_RECORD_HEADER: RwLock<Option<Arc<dyn ValueDef>>> = RwLock::new(None);
-static RECORD_FLAGS: RwLock<Option<Arc<IntegerDef>>> = RwLock::new(None);
+static RECORD_FLAGS: RwLock<Option<Arc<dyn IntegerDefInterface>>> = RwLock::new(None);
 static REF_RECORD_DEFS: RwLock<Vec<Arc<MainRecordDef>>> = RwLock::new(Vec::new());
 
 /// Sets upstream `wbMainRecordHeader`: the structure of the header of every main record.
@@ -59,12 +69,12 @@ pub fn main_record_header() -> Option<Arc<dyn ValueDef>> {
 }
 
 /// Sets upstream `wbRecordFlags`: the record flags member of the header.
-pub fn set_record_flags(flags: Option<Arc<IntegerDef>>) {
+pub fn set_record_flags(flags: Option<Arc<dyn IntegerDefInterface>>) {
     *RECORD_FLAGS.write().unwrap() = flags;
 }
 
 /// Upstream `wbRecordFlags`.
-pub fn record_flags() -> Option<Arc<IntegerDef>> {
+pub fn record_flags() -> Option<Arc<dyn IntegerDefInterface>> {
     RECORD_FLAGS.read().unwrap().clone()
 }
 
@@ -119,6 +129,7 @@ pub struct MainRecordDef {
     /// members have, the last one, as the sorted list upstream finds it.
     rec_signatures: BTreeMap<Signature, usize>,
     rec_add_info_callback: DefCell<AddInfoCallback>,
+    rec_build_index_keys: DefCell<BuildIndexKeysCallback>,
     rec_quick_init_limit: i32,
     rec_allow_unordered: bool,
     rec_is_reference: bool,
@@ -248,6 +259,7 @@ impl MainRecordDef {
                 rec_members,
                 rec_signatures,
                 rec_add_info_callback: DefCell::new(args.add_info_callback),
+                rec_build_index_keys: DefCell::new(None),
                 rec_quick_init_limit,
                 rec_allow_unordered: args.allow_unordered,
                 rec_is_reference: args.is_reference,
@@ -502,6 +514,14 @@ impl MainRecordDef {
         } else {
             self
         }
+    }
+
+    /// Port of `SetBuildIndexKeys`. The callback is kept for the index keys,
+    /// which are not ported yet.
+    pub fn set_build_index_keys(self: Arc<Self>, callback: Option<BuildIndexKeysCallback>) -> Arc<Self> {
+        let this = self.unlocked();
+        this.rec_build_index_keys.set(callback);
+        this
     }
 
     pub fn set_add_info(self: Arc<Self>, add_info: Option<AddInfoCallback>) -> Arc<Self> {
@@ -760,6 +780,7 @@ mod tests {
     use super::super::def::NamedDefSetters;
     use super::super::flags::FlagsDef;
     use super::super::globals::test_lock;
+    use super::super::integer::IntegerDef;
     use super::super::struct_def::StructDefArgs;
     use super::super::sub_record::SubRecordDef;
     use super::super::types::IntType;

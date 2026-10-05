@@ -18,6 +18,8 @@ use std::sync::{Mutex, MutexGuard, RwLock};
 
 use xedit_io::Encoding;
 
+use super::types::Signature;
+
 macro_rules! atomic_type {
     (bool) => {
         AtomicBool
@@ -125,6 +127,7 @@ globals! {
     align_array_elements, set_align_array_elements, wbAlignArrayElements: bool = true;
     align_array_limit, set_align_array_limit, wbAlignArrayLimit: i32 = 5000;
     copy_is_running, set_copy_is_running, wbCopyIsRunning: i32 = 0;
+    size_of_main_record_struct, set_size_of_main_record_struct, wbSizeOfMainRecordStruct: i32 = 0;
     ignore_light, set_ignore_light, wbIgnoreLight: bool = false;
     pseudo_light, set_pseudo_light, wbPseudoLight: bool = false;
     ignore_medium, set_ignore_medium, wbIgnoreMedium: bool = false;
@@ -306,6 +309,8 @@ string_globals! {
     /// Name of the exe, usually also name of the game master.
     game_name, set_game_name, wbGameName;
     game_exe_name, set_game_exe_name, wbGameExeName;
+    creation_club_content_file_name, set_creation_club_content_file_name, wbCreationClubContentFileName;
+    nexus_mods_url, set_nexus_mods_url, wbNexusModsUrl;
     /// Name of the game master, usually `game_name` plus `.esm`, different for Fallout 76.
     game_master_esm, set_game_master_esm, wbGameMasterEsm;
     /// Game title name used for the AppData and My Games folders.
@@ -442,6 +447,70 @@ static wbGameMode: AtomicU8 = AtomicU8::new(GameMode::gmTES3 as u8);
 static wbToolMode: AtomicU8 = AtomicU8::new(ToolMode::tmView as u8);
 #[allow(non_upper_case_globals)]
 static wbToolSource: AtomicU8 = AtomicU8::new(ToolSource::tsPlugins as u8);
+
+static HEDR_VERSION: RwLock<f64> = RwLock::new(1.0);
+
+/// Upstream `wbHEDRVersion`: the version the file header of the game has.
+pub fn hedr_version() -> f64 {
+    *HEDR_VERSION.read().unwrap()
+}
+
+pub fn set_hedr_version(value: f64) {
+    *HEDR_VERSION.write().unwrap() = value;
+}
+
+static GROUP_ORDER: RwLock<Vec<Signature>> = RwLock::new(Vec::new());
+
+/// Upstream `wbAddGroupOrder`: the next group signature in the order of the groups of a file.
+pub fn wb_add_group_order(a_signature: Signature) {
+    GROUP_ORDER.write().unwrap().push(a_signature);
+}
+
+/// Upstream `wbGetGroupOrder`: the position of the group, or -1.
+pub fn wb_get_group_order(a_signature: Signature) -> i32 {
+    GROUP_ORDER
+        .read()
+        .unwrap()
+        .iter()
+        .position(|signature| *signature == a_signature)
+        .map_or(-1, |position| position as i32)
+}
+
+/// Empties the group order, for the tests.
+pub fn clear_group_order() {
+    GROUP_ORDER.write().unwrap().clear();
+}
+
+static IGNORE_RECORDS: RwLock<Vec<Signature>> = RwLock::new(Vec::new());
+static OFFICIAL_DLC: RwLock<Vec<String>> = RwLock::new(Vec::new());
+
+/// Upstream `wbIgnoreRecords`: the signatures of the records that are skipped.
+pub fn ignore_records() -> Vec<Signature> {
+    IGNORE_RECORDS.read().unwrap().clone()
+}
+
+/// Upstream `wbIgnoreRecords.Add`.
+pub fn ignore_records_add(signature: Signature) {
+    IGNORE_RECORDS.write().unwrap().push(signature);
+}
+
+/// Upstream `wbOfficialDLC`: the file names of the official DLC of the game.
+pub fn official_dlc() -> Vec<String> {
+    OFFICIAL_DLC.read().unwrap().clone()
+}
+
+/// Upstream `SetLength(wbOfficialDLC, ...)`.
+pub fn set_official_dlc_length(length: i32) {
+    OFFICIAL_DLC
+        .write()
+        .unwrap()
+        .resize(usize::try_from(length).unwrap_or(0), String::new());
+}
+
+/// Upstream `wbOfficialDLC[aIndex] := ...`.
+pub fn set_official_dlc_at(index: i32, value: &str) {
+    OFFICIAL_DLC.write().unwrap()[usize::try_from(index).expect("a non-negative index")] = value.to_owned();
+}
 
 /// Upstream `wbGameMode`.
 #[inline]

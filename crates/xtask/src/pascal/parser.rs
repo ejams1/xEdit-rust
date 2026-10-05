@@ -540,7 +540,7 @@ impl Parser {
     }
 
     /// A type in a parameter, variable or result position.
-    fn type_ref(&mut self) -> Result<TypeRef> {
+    pub fn type_ref(&mut self) -> Result<TypeRef> {
         if self.at_word("array") && self.peek_at(1).is_word("of") {
             self.advance();
             self.advance();

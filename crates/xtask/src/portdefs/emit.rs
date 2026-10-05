@@ -18,7 +18,9 @@ use anyhow::{Result, anyhow, bail};
 
 use super::model::{RoutineSig, Symbols, Ty, TypeKind};
 use super::resolve::{Resolver, Scope};
-use crate::pascal::ast::{Decl, Expr, Param, Routine, Stmt, TypeRef};
+use crate::pascal::ast::{Decl, Expr, Param, Routine, Stmt, TypeRef, VarDecl};
+use crate::pascal::lexer::{Token, TokenKind};
+use crate::pascal::parser::Parser;
 
 /// The Rust types of the interfaces that are not the struct with the name
 /// without its `Iwb` prefix: the traits, and the interfaces whose classes
@@ -123,6 +125,10 @@ const CALLBACKS: &[(&str, &str)] = &[
     (
         "twbmainrecordgetgridcellcallback",
         "(a_sub_record: &ElementRef) -> Option<GridCell>",
+    ),
+    (
+        "twbbuildindexkeyscallback",
+        "(a_main_record: &MainRecordRef, a_index_keys: &mut IndexKeys)",
     ),
 ];
 
@@ -249,6 +255,11 @@ struct Context {
     scope: Scope,
     locals: HashMap<String, Local>,
     result: Option<Target>,
+    /// The Rust name of the routine, for naming its anonymous routines.
+    routine: String,
+    /// The anonymous routines assigned to inline variables: lower-case name
+    /// to the signature.
+    closures: HashMap<String, RoutineSig>,
 }
 
 pub struct Emitter<'a> {
@@ -285,6 +296,9 @@ impl<'a> Emitter<'a> {
         if lower == "variant" {
             return Ok("Variant".to_owned());
         }
+        if lower == "tvarrec" {
+            return Ok("VarRec".to_owned());
+        }
         let Some(info) = self.symbols.types.get(&lower) else {
             bail!("type {name} is not known");
         };
@@ -297,7 +311,7 @@ impl<'a> Emitter<'a> {
                 .to_owned()
         };
         Ok(match &info.kind {
-            TypeKind::Enum(_) | TypeKind::Set(_) => stripped(),
+            TypeKind::Enum(_) | TypeKind::Set(_) | TypeKind::Record(_) => stripped(),
             TypeKind::Callback(_) => format!("Option<{}>", stripped()),
             TypeKind::Pointer(pointee) => {
                 format!("Option<&'static {}>", pointee.strip_prefix("Twb").unwrap_or(pointee))
@@ -382,6 +396,16 @@ impl<'a> Emitter<'a> {
 
     // ----- routines -----
 
+    /// The Rust name of the overload that a routine implements.
+    pub fn rust_name(&self, routine: &Routine) -> Option<String> {
+        let lower = routine.name.to_ascii_lowercase();
+        let overloads = self.symbols.routines.get(&lower)?;
+        let index = overloads
+            .iter()
+            .position(|sig| same_params(&sig.params, &routine.params))?;
+        self.names.get(&(lower, index)).cloned()
+    }
+
     /// The Rust signature of a routine that is written by hand, with the
     /// Rust name of its overload.
     pub fn hand_signature(&self, routine: &Routine) -> Result<String> {
@@ -442,6 +466,8 @@ impl<'a> Emitter<'a> {
             scope: super::routine_scope(routine, self.symbols),
             locals: HashMap::new(),
             result: None,
+            routine: name.clone(),
+            closures: HashMap::new(),
         };
         let mut params = Vec::new();
         // The defaults are in the declaration, the names in the implementation.
@@ -562,8 +588,32 @@ impl<'a> Emitter<'a> {
                 {
                     let decl = &self.symbols.value_decls[&name.to_ascii_lowercase()];
                     let type_ref = decl.type_ref.as_ref().ok_or_else(|| anyhow!("{name} has no type"))?;
-                    let target = self.target(type_ref, true);
+                    // The setters of the `wbInterface` globals borrow strings.
+                    let target = self.target(type_ref, !setter.starts_with("set_"));
                     out.push_str(&format!("{pad}{setter}({});\n", self.expr_to(value, &target, cx)?));
+                    return Ok(());
+                }
+                if let Expr::Index { base, args } = target
+                    && let [index] = args.as_slice()
+                    && let Expr::Ident(name) = &**base
+                    && let Some(setter) = self.unit_var_setter(name, cx)
+                {
+                    let decl = &self.symbols.value_decls[&name.to_ascii_lowercase()];
+                    let type_ref = decl.type_ref.as_ref().ok_or_else(|| anyhow!("{name} has no type"))?;
+                    let Ty::Array(element) = self.symbols.ty_of_type_ref(type_ref) else {
+                        bail!("index into {name}, which is not an array")
+                    };
+                    let element = Target {
+                        ty: *element,
+                        owned: false,
+                        num: None,
+                    };
+                    let index = self.expr(index, cx)?;
+                    out.push_str(&format!(
+                        "{pad}{setter}_at({}, {});\n",
+                        index.code,
+                        self.expr_to(value, &element, cx)?
+                    ));
                     return Ok(());
                 }
                 // The index is computed before the element is borrowed.
@@ -621,8 +671,14 @@ impl<'a> Emitter<'a> {
                 }
                 Expr::Call { callee, args } if matches!(&**callee, Expr::Ident(name) if name.eq_ignore_ascii_case("setlength")) =>
                 {
-                    let (place, _) = self.place(&args[0], cx)?;
                     let length = self.expr(&args[1], cx)?;
+                    if let Expr::Ident(name) = &args[0]
+                        && let Some(setter) = self.unit_var_setter(name, cx)
+                    {
+                        out.push_str(&format!("{pad}{setter}_length({});\n", length.code));
+                        return Ok(());
+                    }
+                    let (place, _) = self.place(&args[0], cx)?;
                     out.push_str(&format!(
                         "{pad}{place}.resize(({}) as usize, Default::default());\n",
                         length.code
@@ -686,9 +742,57 @@ impl<'a> Emitter<'a> {
                 self.statement(body, depth + 1, cx, out)?;
                 out.push_str(&format!("{pad}}}\n"));
             }
+            Stmt::Var(var) if matches!(&var.value, Some(Expr::Anonymous(_))) => {
+                let Some(Expr::Anonymous(routine)) = &var.value else {
+                    unreachable!()
+                };
+                let [name] = var.names.as_slice() else {
+                    bail!("inline variable with several names")
+                };
+                let closure = self.closure(routine, cx, depth)?;
+                out.push_str(&format!("{pad}let {} = {closure};\n", snake(name)));
+                cx.closures.insert(
+                    name.to_ascii_lowercase(),
+                    RoutineSig {
+                        name: name.clone(),
+                        params: routine.params.clone(),
+                        return_type: routine.return_type.clone(),
+                        unit: String::new(),
+                        line: routine.line,
+                    },
+                );
+            }
+            Stmt::Raise(exception) => {
+                // `raise Exception.Create('message')`
+                let message = match exception.as_ref() {
+                    Some(Expr::Call { callee, args }) if matches!(&**callee, Expr::Member { name, .. } if name.eq_ignore_ascii_case("create")) => {
+                        match args.first() {
+                            Some(Expr::Str(text)) => format!("{text:?}"),
+                            _ => "\"exception\"".to_owned(),
+                        }
+                    }
+                    _ => "\"exception\"".to_owned(),
+                };
+                out.push_str(&format!("{pad}panic!({message});\n"));
+            }
             Stmt::Var(var) => {
                 let target = match (&var.type_ref, &var.value) {
                     (Some(type_ref), _) => self.target(type_ref, true),
+                    (None, Some(Expr::List(items))) if !items.is_empty() => {
+                        let types = items
+                            .iter()
+                            .map(|item| self.expr(item, cx).map(|value| value.ty))
+                            .collect::<Result<Vec<_>>>()?;
+                        let element = match self.common_interface(&types) {
+                            Some(common) => Ty::Named(common),
+                            None => types[0].clone(),
+                        };
+                        Target {
+                            ty: Ty::Array(Box::new(element)),
+                            owned: true,
+                            num: None,
+                        }
+                    }
                     (None, Some(value)) => {
                         let value = self.expr(value, cx)?;
                         Target {
@@ -743,9 +847,30 @@ impl<'a> Emitter<'a> {
                     .insert(code.clone(), format!("setter of {name}"));
                 code
             } else {
-                format!("{}.set", static_name(name))
+                format!("{}.set", static_name(&self.declared_name(name)))
             },
         )
+    }
+
+    /// The nearest interface that all of the interface types descend from.
+    fn common_interface(&self, types: &[Ty]) -> Option<String> {
+        let names: Vec<&str> = types
+            .iter()
+            .map(|ty| match ty {
+                Ty::Named(name) if self.is_interface(name) => Some(name.as_str()),
+                _ => None,
+            })
+            .collect::<Option<Vec<_>>>()?;
+        let mut candidate = names[0].to_owned();
+        loop {
+            if names.iter().all(|name| self.symbols.descends_from(name, &candidate)) {
+                return Some(candidate);
+            }
+            match self.symbols.types.get(&candidate).map(|info| &info.kind) {
+                Some(TypeKind::Interface(Some(parent))) => candidate = parent.clone(),
+                _ => return None,
+            }
+        }
     }
 
     /// The value of a variable before the body assigns it.
@@ -757,6 +882,84 @@ impl<'a> Emitter<'a> {
             return Ok(format!("{}::{first}", self.named(name)?));
         }
         Ok("Default::default()".to_owned())
+    }
+
+    /// A Rust closure for an anonymous routine, with the locals of the
+    /// enclosing routine in scope.
+    fn closure(&self, routine: &Routine, outer: &Context, depth: usize) -> Result<String> {
+        let body = routine
+            .body
+            .as_ref()
+            .ok_or_else(|| anyhow!("anonymous routine without body"))?;
+        let mut cx = Context {
+            scope: outer.scope.clone(),
+            locals: outer.locals.clone(),
+            result: None,
+            routine: outer.routine.clone(),
+            closures: outer.closures.clone(),
+        };
+        let mut params = Vec::new();
+        for param in &routine.params {
+            if !matches!(param.modifier.as_str(), "" | "const") {
+                bail!("{} parameter {}", param.modifier, param.name);
+            }
+            let type_ref = param
+                .type_ref
+                .as_ref()
+                .ok_or_else(|| anyhow!("untyped parameter {}", param.name))?;
+            let target = self.target(type_ref, false);
+            cx.scope.insert(&param.name, target.ty.clone());
+            params.push(format!("{}: {}", snake(&param.name), self.rust_ty(&target)?));
+            cx.locals.insert(
+                param.name.to_ascii_lowercase(),
+                Local {
+                    target,
+                    is_param: true,
+                    rust: snake(&param.name),
+                },
+            );
+        }
+        let pad = "    ".repeat(depth);
+        let mut out = format!("|{}|", params.join(", "));
+        if let Some(return_type) = &routine.return_type {
+            let target = self.target(return_type, true);
+            out.push_str(&format!(" -> {}", self.rust_ty(&target)?));
+            cx.result = Some(target);
+        }
+        out.push_str(" {\n");
+        for decl in &body.decls {
+            let Decl::Var(var) = decl else {
+                bail!("local declaration that is not a variable")
+            };
+            let type_ref = var.type_ref.as_ref().ok_or_else(|| anyhow!("variable without type"))?;
+            let target = self.target(type_ref, true);
+            let rust_ty = self.rust_ty(&target)?;
+            let initial = self.initial_value(&target)?;
+            for name in &var.names {
+                out.push_str(&format!("{pad}    let mut {}: {rust_ty} = {initial};\n", snake(name)));
+                cx.scope.insert(name, target.ty.clone());
+                cx.locals.insert(
+                    name.to_ascii_lowercase(),
+                    Local {
+                        target: target.clone(),
+                        is_param: false,
+                        rust: snake(name),
+                    },
+                );
+            }
+        }
+        if let Some(result) = &cx.result {
+            out.push_str(&format!(
+                "{pad}    let mut result: {} = Default::default();\n",
+                self.rust_ty(result)?
+            ));
+        }
+        self.statements(&body.statements, depth + 1, &mut cx, &mut out)?;
+        if cx.result.is_some() {
+            out.push_str(&format!("{pad}    result\n"));
+        }
+        out.push_str(&format!("{pad}}}"));
+        Ok(out)
     }
 
     fn condition(&self, condition: &Expr, cx: &Context) -> Result<String> {
@@ -835,8 +1038,8 @@ impl<'a> Emitter<'a> {
                     let value = self.expr(item, cx)?;
                     out.push(match value.ty {
                         Ty::Int => format!("VarRec::Int(({}) as i64)", value.code),
-                        Ty::Str if value.owned => format!("VarRec::Str(&{})", value.code),
-                        Ty::Str => format!("VarRec::Str({})", value.code),
+                        Ty::Str if value.owned => format!("VarRec::Str({})", value.code),
+                        Ty::Str => format!("VarRec::Str({}.to_owned())", value.code),
                         Ty::Bool => format!("VarRec::Bool({})", value.code),
                         other => bail!("{other:?} in an array of const"),
                     });
@@ -857,6 +1060,19 @@ impl<'a> Emitter<'a> {
                     .map(|item| self.expr_to(item, &element, cx))
                     .collect::<Result<Vec<_>>>()?;
                 return Ok(format!("EnumSet::of(&[{}])", items.join(", ")));
+            }
+            // An anonymous routine is a function that is written by hand.
+            (Expr::Anonymous(routine), Ty::Named(callback)) if self.is_callback(callback) => {
+                let function = format!("{}_anonymous_{}", cx.routine, routine.line);
+                self.callbacks.borrow_mut().insert(
+                    function.clone(),
+                    (
+                        format!("anonymous routine in {}", cx.routine),
+                        callback.to_ascii_lowercase(),
+                        routine.line,
+                    ),
+                );
+                return Ok(format!("Some(Arc::new({function}))"));
             }
             // A routine that is named where a callback is expected.
             (Expr::Ident(name), Ty::Named(callback)) if self.is_callback(callback) && cx.scope.get(name).is_none() => {
@@ -882,7 +1098,9 @@ impl<'a> Emitter<'a> {
         self.references
             .borrow_mut()
             .insert(function.clone(), format!("callback {}", overloads[index].name));
-        if overloads[index].unit.eq_ignore_ascii_case(self.unit) {
+        if overloads[index].unit.eq_ignore_ascii_case(self.unit)
+            || overloads[index].unit.eq_ignore_ascii_case("wbDefinitionsCommon")
+        {
             self.callbacks.borrow_mut().insert(
                 function.clone(),
                 (
@@ -910,6 +1128,126 @@ impl<'a> Emitter<'a> {
             "/// Upstream `{pascal}`, line {line} of `{unit}.pas`.\npub fn {rust}{} {{\n    todo!(\"port {pascal} from {unit}.pas line {line}\")\n}}\n",
             signature.replace("a_", "_a_")
         ))
+    }
+
+    /// The Rust type for an enumeration or record type of a definition unit.
+    pub fn unit_type(&self, name: &str) -> Result<Option<String>> {
+        let lower = name.to_ascii_lowercase();
+        let info = self
+            .symbols
+            .types
+            .get(&lower)
+            .ok_or_else(|| anyhow!("{name} is not a type"))?;
+        if !matches!(info.kind, TypeKind::Enum(_) | TypeKind::Record(_)) {
+            return Ok(None);
+        }
+        let rust = self.named(name)?;
+        Ok(match &info.kind {
+            TypeKind::Enum(values) => {
+                let mut text = format!(
+                    "/// Upstream `{name}`.\n#[allow(non_camel_case_types)]\n#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]\npub enum {rust} {{\n"
+                );
+                for (index, value) in values.iter().enumerate() {
+                    if index == 0 {
+                        text.push_str("    #[default]\n");
+                    }
+                    text.push_str(&format!("    {value},\n"));
+                }
+                text.push_str("}\n");
+                Some(text)
+            }
+            TypeKind::Record(fields) => {
+                let mut text = format!(
+                    "/// Upstream `{name}`.\n#[derive(Debug, Clone, PartialEq, Default)]\npub struct {rust} {{\n"
+                );
+                for (field, type_ref) in fields {
+                    let target = self.target(type_ref, true);
+                    let rust_ty = match self.rust_ty(&target)?.as_str() {
+                        "String" => "&'static str".to_owned(),
+                        other => other.to_owned(),
+                    };
+                    text.push_str(&format!("    pub {}: {rust_ty},\n", snake(field)));
+                }
+                text.push_str("}\n");
+                Some(text)
+            }
+            _ => None,
+        })
+    }
+
+    /// The constant for a typed constant of a definition unit: a value or an
+    /// array of records.
+    pub fn unit_const(&self, name: &str, decl: &VarDecl) -> Result<Option<String>> {
+        let Some(type_ref) = &decl.type_ref else {
+            // An untyped constant is inlined where it is used.
+            return Ok(None);
+        };
+        let rust_name = snake(name).to_ascii_uppercase();
+        let cx = Context::empty();
+        if let Some(value) = &decl.value {
+            let target = self.target(type_ref, false);
+            let rust_ty = self.rust_ty(&target)?;
+            let code = self.expr_to(value, &target, &cx)?;
+            return Ok(Some(format!(
+                "/// Upstream `{name}`.\npub const {rust_name}: {rust_ty} = {code};\n"
+            )));
+        }
+        // `array[lo..hi] of TRecord = ((Field: value; ...), ...)`
+        let Ty::Array(element) = self.symbols.ty_of_type_ref(type_ref) else {
+            bail!("constant {name} is not an expression and not an array");
+        };
+        let Ty::Named(record_name) = &*element else {
+            bail!("constant {name} is not an array of records");
+        };
+        let Some(TypeKind::Record(fields)) = self.symbols.types.get(record_name).map(|info| &info.kind) else {
+            bail!("constant {name} is not an array of records");
+        };
+        let record_rust = self.named(record_name)?;
+        let mut text = format!("/// Upstream `{name}`.\npub const {rust_name}: &[{record_rust}] = &[\n");
+        for entry in record_entries(&decl.value_tokens)? {
+            text.push_str(&format!("    {record_rust} {{ "));
+            let mut parts = Vec::new();
+            for (field, field_type) in fields {
+                let target = self.target(field_type, false);
+                let code = match entry.iter().find(|(given, _)| given.eq_ignore_ascii_case(field)) {
+                    Some((_, tokens)) => {
+                        let mut tokens = tokens.clone();
+                        tokens.push(Token {
+                            kind: TokenKind::Eof,
+                            line: 0,
+                        });
+                        let expr = Parser::new(tokens).expr()?;
+                        self.expr_to(&expr, &target, &cx)?
+                    }
+                    None => self.zero_value(&target)?,
+                };
+                parts.push(format!("{}: {code}", snake(field)));
+            }
+            text.push_str(&parts.join(", "));
+            text.push_str(" },\n");
+        }
+        text.push_str("];\n");
+        Ok(Some(text))
+    }
+
+    /// The value of a field that a record constant leaves out.
+    fn zero_value(&self, target: &Target) -> Result<String> {
+        Ok(match &target.ty {
+            Ty::Int => "0".to_owned(),
+            Ty::Float => "0.0".to_owned(),
+            Ty::Bool => "false".to_owned(),
+            Ty::Str => "\"\"".to_owned(),
+            Ty::Named(name) => {
+                if let Some(TypeKind::Enum(values)) = self.symbols.types.get(name).map(|info| &info.kind)
+                    && let Some(first) = values.first()
+                {
+                    format!("{}::{first}", self.named(name)?)
+                } else {
+                    bail!("no constant zero value for {name}")
+                }
+            }
+            other => bail!("no constant zero value for {other:?}"),
+        })
     }
 
     /// The static for a variable of a definition unit.
@@ -961,6 +1299,14 @@ impl<'a> Emitter<'a> {
             },
             (Ty::EmptyList, Ty::Array(_)) if target.owned => "Vec::new()".to_owned(),
             (Ty::EmptyList, Ty::Array(_) | Ty::ArrayOfConst) => "&[]".to_owned(),
+            // A `TVarRecs` value is passed where `array of const` is expected.
+            (Ty::Array(element), Ty::ArrayOfConst) if matches!(&**element, Ty::Named(name) if name == "tvarrec") => {
+                if value.owned {
+                    format!("&{code}")
+                } else {
+                    code
+                }
+            }
             (Ty::EmptyList, Ty::Named(name)) if self.is_set(name) => "EnumSet::empty()".to_owned(),
             (Ty::Array(from), Ty::Array(to)) => {
                 let same = from == to || self.rust_element(from) == self.rust_element(to);
@@ -1093,7 +1439,10 @@ impl<'a> Emitter<'a> {
                     "not" => Val::new(format!("!({})", operand.code), operand.ty).num(operand.num),
                     "-" => Val::new(format!("-({})", operand.code), operand.ty).num(operand.num),
                     "+" => operand,
-                    "@" => Val::new(format!("Some(&{})", operand.code), Ty::Unknown),
+                    "@" => Val::new(
+                        format!("Some(&{})", operand.code.trim_end_matches(".clone()")),
+                        Ty::Unknown,
+                    ),
                     other => bail!("operator {other}"),
                 }
             }
@@ -1120,6 +1469,9 @@ impl<'a> Emitter<'a> {
         let lower = name.to_ascii_lowercase();
         if lower == "true" || lower == "false" {
             return Ok(Val::new(lower, Ty::Bool));
+        }
+        if lower == "pi" {
+            return Ok(Val::new("std::f64::consts::PI", Ty::Float).num(Some("f64")));
         }
         if lower == "result" {
             let result = cx.result.clone().ok_or_else(|| anyhow!("Result in a procedure"))?;
@@ -1151,7 +1503,7 @@ impl<'a> Emitter<'a> {
                         .insert(code.clone(), format!("constant {name}"));
                     return Ok(Val::new(code, ty.clone()));
                 }
-                return Ok(Val::new(format!("{}.get()", static_name(name)), ty.clone()).owned());
+                return Ok(Val::new(format!("{}.get()", static_name(&self.declared_name(name))), ty.clone()).owned());
             }
             // The globals of `wbInterface` lose their `wb` prefix on the Rust side.
             let name = strip_wb(name);
@@ -1321,6 +1673,17 @@ impl<'a> Emitter<'a> {
                 return Ok(Val::new(format!("({}.len() as i32 - 1)", value.code), Ty::Int).num(Some("i32")));
             }
             ("low", [_]) => return Ok(Val::new("0", Ty::Int)),
+            ("ord", [Expr::Str(text)]) if text.chars().count() == 1 => {
+                return Ok(Val::new(
+                    format!("({} as i32)", u32::from(text.chars().next().unwrap_or_default())),
+                    Ty::Int,
+                )
+                .num(Some("i32")));
+            }
+            ("ord", [value]) => {
+                let value = self.expr(value, cx)?;
+                return Ok(Val::new(format!("(({}) as i32)", value.code), Ty::Int).num(Some("i32")));
+            }
             ("sametext", [a, b]) => {
                 let a = self.expr(a, cx)?;
                 let b = self.expr(b, cx)?;
@@ -1369,6 +1732,11 @@ impl<'a> Emitter<'a> {
             let value = self.expr(value, cx)?;
             let ty = if num.starts_with('f') { Ty::Float } else { Ty::Int };
             return Ok(Val::new(format!("(({}) as {num})", value.code), ty).num(Some(num)));
+        }
+        // A closure of the routine.
+        if let Some(sig) = cx.closures.get(&lower) {
+            let sig = sig.clone();
+            return self.call_sig(&snake(name), &sig, args, cx);
         }
         // A cast to an interface that is the same type on the Rust side.
         if let [value] = args
@@ -1456,10 +1824,63 @@ impl<'a> Emitter<'a> {
             value.ty = Ty::Named(class_lower);
             return Ok(value);
         }
-        let receiver = self.expr(base, cx)?;
+        // A method of a list variable of `wbInterface` is a free function.
+        if let Expr::Ident(variable) = base
+            && cx.scope.get(variable).is_none()
+            && let Some(ty) = self.symbols.values.get(&variable.to_ascii_lowercase())
+            && !matches!(ty, Ty::Named(type_name) if self.is_interface(type_name))
+            && self
+                .symbols
+                .value_units
+                .get(&variable.to_ascii_lowercase())
+                .map(String::as_str)
+                == Some("wbinterface")
+        {
+            let function = format!("{}_{}", snake(strip_wb(variable)), snake(name));
+            self.references
+                .borrow_mut()
+                .insert(function.clone(), format!("method {name} of {variable}"));
+            let args = args
+                .iter()
+                .map(|arg| self.expr(arg, cx).map(|value| value.code))
+                .collect::<Result<Vec<_>>>()?;
+            return Ok(Val::new(format!("{function}({})", args.join(", ")), Ty::Unknown));
+        }
+        let mut receiver = self.expr(base, cx)?;
+        // A function without arguments that is called without parentheses.
+        if let Ty::Routine(routine) = &receiver.ty {
+            receiver = self.call(&routine.clone(), &[], cx)?;
+        }
         let Ty::Named(type_name) = &receiver.ty else {
             bail!("member {name} of a value of type {:?}", receiver.ty)
         };
+        // A field of a record, through a pointer or not.
+        let record = match self.symbols.types.get(type_name).map(|info| &info.kind) {
+            Some(TypeKind::Record(fields)) => Some((fields, false)),
+            Some(TypeKind::Pointer(pointee)) => match self.symbols.types.get(&pointee.to_ascii_lowercase()) {
+                Some(info) => match &info.kind {
+                    TypeKind::Record(fields) => Some((fields, true)),
+                    _ => None,
+                },
+                None => None,
+            },
+            _ => None,
+        };
+        if let Some((fields, through_pointer)) = record {
+            let (_, field_type) = fields
+                .iter()
+                .find(|(field, _)| field.eq_ignore_ascii_case(name))
+                .ok_or_else(|| anyhow!("{type_name} has no field {name}"))?;
+            let target = self.target(field_type, false);
+            let base_code = if through_pointer {
+                format!("{}.expect(\"nil\")", receiver.code)
+            } else {
+                receiver.code
+            };
+            let mut value = Val::new(format!("{base_code}.{}", snake(name)), target.ty).num(target.num);
+            value.owned = false;
+            return Ok(value);
+        }
         if !self.is_interface(type_name) {
             bail!("member {name} of {type_name}");
         }
@@ -1513,6 +1934,8 @@ impl Context {
             scope: Scope::default(),
             locals: HashMap::new(),
             result: None,
+            routine: String::new(),
+            closures: HashMap::new(),
         }
     }
 }
@@ -1695,9 +2118,84 @@ pub fn byte_string(text: &str) -> String {
         .collect()
 }
 
+/// The entries of `((Field: value; ...), (...))`: each entry is the fields
+/// it gives, with the tokens of each value.
+/// One entry of a record constant: the fields it gives with their tokens.
+type RecordEntry = Vec<(String, Vec<Token>)>;
+
+fn record_entries(tokens: &[Token]) -> Result<Vec<RecordEntry>> {
+    let mut entries = Vec::new();
+    let mut index = 0;
+    let expect = |index: &mut usize, symbol: &str| -> Result<()> {
+        if tokens.get(*index).is_some_and(|token| token.is_symbol(symbol)) {
+            *index += 1;
+            Ok(())
+        } else {
+            bail!("expected `{symbol}` in a record constant at token {}", *index)
+        }
+    };
+    expect(&mut index, "(")?;
+    while index < tokens.len() && !tokens[index].is_symbol(")") {
+        expect(&mut index, "(")?;
+        let mut entry = Vec::new();
+        while index < tokens.len() && !tokens[index].is_symbol(")") {
+            let field = tokens[index]
+                .ident()
+                .ok_or_else(|| anyhow!("expected a field name in a record constant"))?
+                .to_owned();
+            index += 1;
+            expect(&mut index, ":")?;
+            let start = index;
+            let mut depth = 0;
+            while index < tokens.len() {
+                let token = &tokens[index];
+                if token.is_symbol("(") || token.is_symbol("[") {
+                    depth += 1;
+                } else if token.is_symbol(")") || token.is_symbol("]") {
+                    if depth == 0 {
+                        break;
+                    }
+                    depth -= 1;
+                } else if token.is_symbol(";") && depth == 0 {
+                    break;
+                }
+                index += 1;
+            }
+            entry.push((field, tokens[start..index].to_vec()));
+            if tokens.get(index).is_some_and(|token| token.is_symbol(";")) {
+                index += 1;
+            }
+        }
+        expect(&mut index, ")")?;
+        entries.push(entry);
+        if tokens.get(index).is_some_and(|token| token.is_symbol(",")) {
+            index += 1;
+        }
+    }
+    Ok(entries)
+}
+
 /// The static of a unit variable: `wbFoo` is `WB_FOO`.
 fn static_name(name: &str) -> String {
     snake(name).to_ascii_uppercase()
+}
+
+impl Emitter<'_> {
+    /// The name of a unit value as it is declared. Pascal ignores case, so a
+    /// use may spell it differently.
+    fn declared_name<'n>(&self, name: &'n str) -> std::borrow::Cow<'n, str> {
+        let lower = name.to_ascii_lowercase();
+        match self.symbols.value_decls.get(&lower) {
+            Some(decl) => decl
+                .names
+                .iter()
+                .find(|declared| declared.eq_ignore_ascii_case(name))
+                .map_or(std::borrow::Cow::Borrowed(name), |declared| {
+                    std::borrow::Cow::Owned(declared.clone())
+                }),
+            None => std::borrow::Cow::Borrowed(name),
+        }
+    }
 }
 
 /// `wbFoo` is `Foo`.

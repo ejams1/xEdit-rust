@@ -456,17 +456,51 @@ fn emit_unit(upstream: &Path, unit_name: &str, out: &Path, stubs: &Path, ported:
     let emitter = emit::Emitter::new(&symbols, unit_name);
     let mut failures = Vec::new();
     // The functions of the file that is written by hand need no stub.
-    let ported: HashSet<String> = match ported {
-        Some(path) => std::fs::read_to_string(path)
-            .with_context(|| format!("reading {}", path.display()))?
-            .lines()
-            .filter_map(|line| line.strip_prefix("pub fn ")?.split('(').next().map(str::to_owned))
-            .collect(),
-        None => HashSet::new(),
-    };
+    // The functions of the file that is written by hand, and for a game
+    // unit the functions and stubs of Common, need no stub.
+    let mut ported_files: Vec<std::path::PathBuf> = ported.map(Path::to_path_buf).into_iter().collect();
+    if unit_name != "wbDefinitionsCommon"
+        && let Some(dir) = stubs.parent()
+    {
+        ported_files.push(dir.join("common.rs"));
+        ported_files.push(dir.join("common_stubs.rs"));
+    }
+    let mut ported: HashSet<String> = HashSet::new();
+    for path in &ported_files {
+        let text = std::fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
+        ported.extend(
+            text.lines()
+                .filter_map(|line| line.strip_prefix("pub fn ")?.split('(').next().map(str::to_owned)),
+        );
+    }
 
     let mut text = format!("{GENERATED_UNIT_HEADER}\n// Ported from xEdit: Core/{unit_name}.pas\n\n");
     text.push_str(&unit_imports(unit_name));
+    for decl in unit.interface.iter().chain(&unit.implementation) {
+        match decl {
+            Decl::Type(type_decl) => match emitter.unit_type(&type_decl.name) {
+                Ok(Some(item)) => {
+                    text.push('\n');
+                    text.push_str(&item);
+                }
+                Ok(None) => {}
+                Err(error) => failures.push(format!("{} (line {}): {error}", type_decl.name, type_decl.line)),
+            },
+            Decl::Const(var) => {
+                for name in &var.names {
+                    match emitter.unit_const(name, var) {
+                        Ok(Some(item)) => {
+                            text.push('\n');
+                            text.push_str(&item);
+                        }
+                        Ok(None) => {}
+                        Err(error) => failures.push(format!("{name} (line {}): {error}", var.line)),
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
     for decl in unit.interface.iter().chain(&unit.implementation) {
         let Decl::Var(var) = decl else { continue };
         for name in &var.names {
@@ -483,6 +517,10 @@ fn emit_unit(upstream: &Path, unit_name: &str, out: &Path, stubs: &Path, ported:
     for decl in &unit.implementation {
         let Decl::Routine(routine) = decl else { continue };
         if !is_definition_routine(routine, &symbols) {
+            continue;
+        }
+        // A routine that is written by hand is not generated.
+        if emitter.rust_name(routine).is_some_and(|name| ported.contains(&name)) {
             continue;
         }
         match emitter.routine(routine) {
@@ -538,6 +576,7 @@ fn emit_unit(upstream: &Path, unit_name: &str, out: &Path, stubs: &Path, ported:
             && !written.contains(name.as_str())
             && !ported.contains(name)
             && !what.starts_with("wbInterface:")
+            && !(what.starts_with("wbDefinitionsCommon:") && unit_name != "wbDefinitionsCommon")
         {
             println!("  {name}: {what}");
         }
