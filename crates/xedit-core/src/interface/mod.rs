@@ -9,6 +9,7 @@
 
 pub mod def;
 pub mod element;
+pub mod enum_def;
 pub mod form_id;
 pub mod formaters;
 pub mod globals;
@@ -18,6 +19,7 @@ pub mod types;
 
 pub use def::*;
 pub use element::{DataPtr, Element, ElementArg, ElementRef};
+pub use enum_def::*;
 pub use form_id::{CRC32, FileID, FormID, ModuleType, ObjectIDOutOfBounds, SlotCounts};
 pub use formaters::*;
 pub use globals::{GameMode, ToolMode, ToolSource};

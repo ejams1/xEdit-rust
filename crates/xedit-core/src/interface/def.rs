@@ -34,6 +34,7 @@ use std::sync::{Arc, Mutex, OnceLock, Weak};
 use arc_swap::{ArcSwapOption, Guard};
 
 use super::element::{DataPtr, ElementArg, ElementRef};
+use super::enum_def::EnumDef;
 use super::globals::{
     collapse_benign_array, hide_unused, is_internal_edit, make_unknown_elements_unique, report_mode, report_unknown,
 };
@@ -242,7 +243,7 @@ pub trait Def: Send + Sync + 'static {
 
     fn get_def_type(&self) -> DefType;
 
-    fn get_def_type_name(&self) -> &'static str;
+    fn get_def_type_name(&self) -> String;
 
     /// Port of `TwbDef.Duplicate`: calls the `Clone` constructor of the class.
     fn duplicate(&self) -> DefRef;
@@ -264,6 +265,10 @@ pub trait Def: Send + Sync + 'static {
     }
 
     fn as_integer_def(&self) -> Option<&dyn IntegerDefInterface> {
+        None
+    }
+
+    fn as_enum_def(&self) -> Option<&EnumDef> {
         None
     }
 
@@ -1169,8 +1174,8 @@ impl Def for EmptyDef {
         DefType::dtEmpty
     }
 
-    fn get_def_type_name(&self) -> &'static str {
-        "Place holder for optional elements"
+    fn get_def_type_name(&self) -> String {
+        "Place holder for optional elements".to_owned()
     }
 
     fn as_empty_def(&self) -> Option<&dyn EmptyDefInterface> {
