@@ -65,6 +65,23 @@ pub trait Element: Send + Sync {
 
     fn get_edit_value(&self) -> String;
 
+    /// Upstream `IwbRecord.Signature`: the signature of a record or
+    /// subrecord, `None` for the other elements.
+    fn get_record_signature(&self) -> Option<Signature> {
+        None
+    }
+
+    /// Upstream `Value`: the value as the dump shows it. Empty for an
+    /// element without a value.
+    fn get_value(&self) -> String {
+        String::new()
+    }
+
+    /// Upstream `DisplayName[aUseSuffix]`.
+    fn get_display_name(&self, _use_suffix: bool) -> String {
+        self.get_name()
+    }
+
     fn get_links_to(&self) -> Option<ElementRef>;
 
     fn get_element_type(&self) -> ElementType;
@@ -247,6 +264,14 @@ pub trait Container: Element {
 
     /// Number of elements before the ones of the definition, such as a record header.
     fn get_additional_element_count(&self) -> i32;
+
+    /// Upstream `RecordBySignature[aSignature]`: the subrecord with the
+    /// signature among the elements.
+    fn get_record_by_signature(&self, signature: Signature) -> Option<ElementRef> {
+        (0..self.get_element_count())
+            .filter_map(|index| self.get_element(index))
+            .find(|element| element.get_record_signature() == Some(signature))
+    }
 }
 
 /// Upstream `IwbDataContainer`: a container that owns a range of data.

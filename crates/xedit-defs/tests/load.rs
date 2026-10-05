@@ -47,7 +47,9 @@ fn scans_the_structure_of_a_skyrim_plugin() {
         );
         assert!(record.def().is_some(), "no definition for {}", record.get_name());
     }
-    // The game settings have their subrecords grouped by the definition.
+    // The game settings have their subrecords grouped by the definition,
+    // their editor ID read, and their value shown by the definition.
+    let mut values = Vec::new();
     for record in records
         .iter()
         .filter(|record| record.get_signature() == Signature::new(b"GMST"))
@@ -58,7 +60,17 @@ fn scans_the_structure_of_a_skyrim_plugin() {
             record.get_name(),
             record.get_element_count()
         );
+        assert!(
+            !record.get_editor_id().is_empty(),
+            "{} has no editor ID",
+            record.get_name()
+        );
+        let data = record.get_element_by_name("DATA - Value").expect("a DATA subrecord");
+        values.push(format!("{} = {}", record.get_editor_id(), data.get_value()));
     }
+    // The strings of a localized file need the string tables, which are not ported yet.
+    assert!(values.contains(&"fDiffMultHPToPCL = 3.000000".to_owned()), "{values:?}");
+    assert!(values.contains(&"iUpdateESMVersion = 8".to_owned()), "{values:?}");
     let compressed = records
         .iter()
         .find(|record| record.header_struct().flags.is_compressed())

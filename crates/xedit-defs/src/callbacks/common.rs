@@ -13,6 +13,7 @@
 
 use std::sync::Arc;
 
+use xedit_core::interface::globals::{GameMode, game_mode};
 use xedit_core::interface::*;
 
 pub use super::common_stubs::*;
@@ -211,4 +212,28 @@ pub fn wb_combine_var_recs(a: &[VarRec], b: &[VarRec]) -> Vec<VarRec> {
 /// Upstream `wbMakeVarRecs`.
 pub fn wb_make_var_recs(a: &[VarRec]) -> Vec<VarRec> {
     a.to_vec()
+}
+
+/// Upstream `wbGMSTUnionDecider`: the type of a game setting from the first
+/// letter of its editor ID.
+pub fn wb_gmst_union_decider(_a_base_ptr: DataPtr, a_element: ElementArg) -> i32 {
+    let Some(editor_id) = a_element
+        .and_then(|element| element.get_container())
+        .and_then(|container| {
+            container
+                .as_container()?
+                .get_record_by_signature(Signature::new(b"EDID"))
+        })
+        .map(|edid| edid.get_value())
+    else {
+        return 1;
+    };
+    match editor_id.chars().next() {
+        Some('s') => 0,
+        Some('i') => 1,
+        Some('f') => 2,
+        Some('b') if game_mode() >= GameMode::gmTES5 => 3,
+        Some('u') if matches!(game_mode(), GameMode::gmFO76 | GameMode::gmSF1) => 4,
+        _ => 1,
+    }
 }
