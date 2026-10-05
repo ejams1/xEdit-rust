@@ -48,6 +48,18 @@ impl<T: PascalEnum> EnumSet<T> {
         result
     }
 
+    /// The set as a bit mask: bit `n` is the value with ordinal `n`.
+    pub const fn bits(self) -> u64 {
+        self.bits
+    }
+
+    pub const fn from_bits(bits: u64) -> Self {
+        Self {
+            bits,
+            marker: PhantomData,
+        }
+    }
+
     /// Pascal `value in set`.
     pub fn contains(self, value: T) -> bool {
         self.bits & (1 << value.ord()) != 0
@@ -168,6 +180,7 @@ macro_rules! pascal_enum {
         }
     };
 }
+pub(crate) use pascal_enum;
 
 pascal_enum! {
     ConflictAll {
