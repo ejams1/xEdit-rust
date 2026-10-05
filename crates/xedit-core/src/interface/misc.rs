@@ -6,6 +6,10 @@
 
 //! Free functions of `wbInterface.pas` and helpers for Delphi string semantics.
 
+use std::sync::{Arc, RwLock};
+
+use super::element::ElementArg;
+
 /// A value that upstream passes as a Delphi `Variant`.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub enum Variant {
@@ -19,6 +23,46 @@ pub enum Variant {
     Str(String),
     /// A byte array (`TBytes`).
     Bytes(Vec<u8>),
+}
+
+/// The receiver of progress messages, upstream `_wbProgressCallback`.
+pub type ProgressCallback = Arc<dyn Fn(&str) + Send + Sync>;
+
+static PROGRESS_CALLBACK: RwLock<Option<ProgressCallback>> = RwLock::new(None);
+
+pub fn set_progress_callback(callback: Option<ProgressCallback>) {
+    *PROGRESS_CALLBACK.write().unwrap() = callback;
+}
+
+/// Port of `wbProgress`: sends a status message to the progress callback.
+pub fn progress(status: &str) {
+    let callback = PROGRESS_CALLBACK.read().unwrap().clone();
+    if let Some(callback) = callback {
+        callback(status);
+    }
+}
+
+/// The lookup of localized strings, upstream `wbLocalizationHandler`. The
+/// implementation is the port of `wbLocalization.pas`.
+pub trait LocalizationHandler: Send + Sync {
+    /// Port of `GetValue`: whether the string `id` was found, and its text or
+    /// the error text to show in its place.
+    fn get_value(&self, id: u32, element: ElementArg) -> (bool, String);
+}
+
+static LOCALIZATION_HANDLER: RwLock<Option<Arc<dyn LocalizationHandler>>> = RwLock::new(None);
+
+pub fn set_localization_handler(handler: Option<Arc<dyn LocalizationHandler>>) {
+    *LOCALIZATION_HANDLER.write().unwrap() = handler;
+}
+
+/// `wbLocalizationHandler.GetValue`. Nothing is found while no handler is set.
+pub fn localization_get_value(id: u32, element: ElementArg) -> (bool, String) {
+    let handler = LOCALIZATION_HANDLER.read().unwrap().clone();
+    match handler {
+        Some(handler) => handler.get_value(id, element),
+        None => (false, String::new()),
+    }
 }
 
 impl Variant {
