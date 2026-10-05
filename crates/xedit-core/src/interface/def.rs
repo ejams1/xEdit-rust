@@ -35,6 +35,7 @@ use arc_swap::{ArcSwapOption, Guard};
 
 use super::element::{DataPtr, ElementArg, ElementRef};
 use super::enum_def::EnumDef;
+use super::flags::{FlagDef, FlagsDef};
 use super::globals::{
     collapse_benign_array, hide_unused, is_internal_edit, make_unknown_elements_unique, report_mode, report_unknown,
 };
@@ -269,6 +270,18 @@ pub trait Def: Send + Sync + 'static {
     }
 
     fn as_enum_def(&self) -> Option<&EnumDef> {
+        None
+    }
+
+    fn as_flags_def(&self) -> Option<&FlagsDef> {
+        None
+    }
+
+    fn into_flags_def(self: Arc<Self>) -> Option<Arc<FlagsDef>> {
+        None
+    }
+
+    fn as_flag_def(&self) -> Option<&FlagDef> {
         None
     }
 

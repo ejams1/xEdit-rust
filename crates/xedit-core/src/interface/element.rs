@@ -12,6 +12,10 @@
 
 use std::sync::Arc;
 
+use super::def::{NamedDef, ValueDef};
+use super::misc::Variant;
+use super::types::ElementType;
+
 /// A reference to an element, upstream `IwbElement`.
 pub type ElementRef = Arc<dyn Element>;
 
@@ -29,4 +33,27 @@ pub trait Element: Send + Sync {
     fn get_edit_value(&self) -> String;
 
     fn get_links_to(&self) -> Option<ElementRef>;
+
+    fn get_element_type(&self) -> ElementType;
+
+    fn get_def(&self) -> Option<Arc<dyn NamedDef>>;
+
+    fn get_value_def(&self) -> Option<Arc<dyn ValueDef>>;
+
+    fn get_native_value(&self) -> Variant;
+
+    /// The element that contains this one.
+    fn get_container(&self) -> Option<ElementRef>;
+
+    /// `Supports(element, IwbContainer)`.
+    fn as_container(&self) -> Option<&dyn Container> {
+        None
+    }
+}
+
+/// Upstream `IwbContainer`, with the methods of `IwbContainerBase`.
+pub trait Container: Element {
+    /// Upstream `ElementNativeValues[aPath]`: the native value of the element
+    /// at `path`, or an empty variant when there is none.
+    fn get_element_native_value(&self, path: &str) -> Variant;
 }
