@@ -7,6 +7,7 @@
 //! Port of `wbInterface.pas`, split into submodules that follow the order of
 //! the upstream unit.
 
+pub mod array;
 pub mod byte_array;
 pub mod def;
 pub mod element;
@@ -24,6 +25,7 @@ pub mod string;
 pub mod struct_def;
 pub mod types;
 
+pub use array::*;
 pub use byte_array::*;
 pub use def::*;
 pub use element::{

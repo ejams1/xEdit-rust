@@ -106,6 +106,9 @@ pub trait Container: Element {
     /// Upstream `ElementBySortOrder[aSortOrder]`.
     fn get_element_by_sort_order(&self, sort_order: i32) -> Option<ElementRef>;
 
+    /// Upstream `AnyElement`: one of the elements, or `None` for an empty container.
+    fn get_any_element(&self) -> Option<ElementRef>;
+
     /// Number of elements before the ones of the definition, such as a record header.
     fn get_additional_element_count(&self) -> i32;
 }

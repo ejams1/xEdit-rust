@@ -33,6 +33,7 @@ use std::sync::{Arc, Mutex, OnceLock, Weak};
 
 use arc_swap::{ArcSwapOption, Guard};
 
+use super::array::ArrayDef;
 use super::byte_array::ByteArrayDef;
 use super::element::{DataPtr, ElementArg, ElementRef};
 use super::enum_def::EnumDef;
@@ -304,6 +305,10 @@ pub trait Def: Send + Sync + 'static {
     }
 
     fn as_struct_def(&self) -> Option<&StructDef> {
+        None
+    }
+
+    fn as_array_def(&self) -> Option<&ArrayDef> {
         None
     }
 
