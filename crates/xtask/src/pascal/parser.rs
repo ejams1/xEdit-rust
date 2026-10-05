@@ -616,6 +616,11 @@ impl Parser {
 
     // ----- routines -----
 
+    /// Parses a routine header without body, up to and including its directives.
+    pub fn parse_routine_header(&mut self) -> Result<Routine> {
+        self.routine(false)
+    }
+
     fn params(&mut self) -> Result<Vec<Param>> {
         let mut params = Vec::new();
         if !self.eat_symbol("(") {

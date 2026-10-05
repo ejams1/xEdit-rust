@@ -19,6 +19,7 @@
 
 mod parity;
 mod pascal;
+mod portdefs;
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -119,6 +120,7 @@ fn main() -> Result<()> {
             std::env::set_current_dir(&root)?;
             sync(&upstream, rest.first().copied())
         }
+        ["port-defs", rest @ ..] => portdefs::run(rest),
         ["pascal-check", files @ ..] if !files.is_empty() => {
             let files: Vec<String> = files.iter().map(|file| (*file).to_owned()).collect();
             pascal::parser::check_files(&files)
