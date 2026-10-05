@@ -20,3 +20,17 @@ fn define_fo4_registers_the_records() {
     assert!(find_record_def(Signature::new(b"NPC_")).is_some());
     clear_record_defs();
 }
+
+#[test]
+fn define_tes5_registers_the_records() {
+    let _guard = test_lock();
+    clear_record_defs();
+    set_game_mode(GameMode::gmSSE);
+    xedit_defs::tes5::define_tes5();
+    let defs = record_defs();
+    // The records that DefineTES5 defines for Skyrim Special Edition.
+    assert_eq!(defs.len(), 134, "{} record definitions", defs.len());
+    assert!(find_record_def(Signature::new(b"GMST")).is_some());
+    assert!(find_record_def(Signature::new(b"NPC_")).is_some());
+    clear_record_defs();
+}

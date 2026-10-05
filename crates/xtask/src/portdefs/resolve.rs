@@ -77,7 +77,8 @@ impl<'a> Resolver<'a> {
                     match lower.as_str() {
                         "length" | "high" | "low" | "ord" | "pred" | "succ" => return Ty::Int,
                         "assigned" => return Ty::Bool,
-                        "inttostr" | "format" => return Ty::Str,
+                        "inttostr" | "format" | "paramstr" | "extractfilepath" => return Ty::Str,
+                        "fileexists" => return Ty::Bool,
                         _ => {}
                     }
                     // A cast such as Integer(x) or IwbFoo(x).
@@ -130,7 +131,12 @@ impl<'a> Resolver<'a> {
 
     /// The type of the function or property `name` of the value `base`.
     fn member_ty(&self, base: &Expr, name: &str, scope: &Scope) -> Ty {
-        match self.ty_of(base, scope) {
+        let base_ty = match self.ty_of(base, scope) {
+            // A function without arguments that is called without parentheses.
+            Ty::Routine(routine) => self.implicit_call_ty(&routine).unwrap_or(Ty::Unknown),
+            other => other,
+        };
+        match base_ty {
             Ty::Named(type_name) => self.symbols.member_ty(&type_name, name).unwrap_or(Ty::Unknown),
             _ => Ty::Unknown,
         }

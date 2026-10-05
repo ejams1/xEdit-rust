@@ -202,3 +202,13 @@ pub fn wb_record_size_decider_sizes(a_sizes: &[i32]) -> Option<UnionDecider> {
         sizes.len() as i32
     }))
 }
+
+/// Upstream `wbCombineVarRecs`.
+pub fn wb_combine_var_recs(a: &[VarRec], b: &[VarRec]) -> Vec<VarRec> {
+    a.iter().chain(b).cloned().collect()
+}
+
+/// Upstream `wbMakeVarRecs`.
+pub fn wb_make_var_recs(a: &[VarRec]) -> Vec<VarRec> {
+    a.to_vec()
+}
