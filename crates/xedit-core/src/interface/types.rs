@@ -296,13 +296,17 @@ impl Signature {
     }
 }
 
-/// The signature as a Delphi `string`: each byte is one character.
+/// The signature as a Delphi `string`. Delphi converts the character array as
+/// a zero-terminated string in the system code page, so the text ends before
+/// the first zero byte.
+// The system code page of the oracle machine is 1252.
 impl fmt::Display for Signature {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        for &byte in &self.0 {
-            fmt::Write::write_char(f, char::from(byte))?;
-        }
-        Ok(())
+        let length = self.0.iter().position(|&byte| byte == 0).unwrap_or(4);
+        let text = xedit_io::Encoding::Mbcs(1252)
+            .get_string(&self.0[..length])
+            .unwrap_or_default();
+        f.write_str(&text)
     }
 }
 
@@ -688,7 +692,8 @@ mod tests {
             Signature::from_str("EDI").unwrap_err().to_string(),
             "\"EDI\" is not a valid signature"
         );
-        assert_eq!(Signature([0, b'I', b'A', b'D']).to_string(), "\0IAD");
+        assert_eq!(Signature([0, b'I', b'A', b'D']).to_string(), "");
+        assert_eq!(Signature([b'A', 0x80, 0, b'D']).to_string(), "A\u{20ac}");
         assert_eq!(
             KNOWN_SUB_RECORD_SIGNATURES[KnownSubRecord::ksrGridCell.ord()].to_string(),
             "XCLC"

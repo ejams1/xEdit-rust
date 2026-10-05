@@ -4,4 +4,5 @@
 
 //! Element tree, definition model, records, groups, files and FormIDs.
 
+pub mod delphi;
 pub mod interface;
