@@ -307,11 +307,11 @@ impl SubRecordDef {
         self.on_struct(|def| def.set_summary_key(summary_key))
     }
 
-    pub fn set_summary_prefix_suffix_on_value(self: Arc<Self>, index: usize, prefix: &str, suffix: &str) -> Arc<Self> {
+    pub fn set_summary_prefix_suffix_on_value(self: Arc<Self>, index: i32, prefix: &str, suffix: &str) -> Arc<Self> {
         self.on_struct(|def| def.set_summary_member_prefix_suffix(index, prefix, suffix))
     }
 
-    pub fn set_summary_member_max_depth_on_value(self: Arc<Self>, index: usize, max_depth: i32) -> Arc<Self> {
+    pub fn set_summary_member_max_depth_on_value(self: Arc<Self>, index: i32, max_depth: i32) -> Arc<Self> {
         self.on_struct(|def| def.set_summary_member_max_depth(index, max_depth))
     }
 
@@ -349,8 +349,13 @@ impl SubRecordDef {
         })
     }
 
-    /// Port of `SetCountPathOnValue`.
-    pub fn set_count_path_on_value(self: Arc<Self>, values: &[&str], use_for_count_callback: bool) -> Arc<Self> {
+    /// Port of `SetCountPathOnValue` with one path.
+    pub fn set_count_path_on_value(self: Arc<Self>, value: &str, use_for_count_callback: bool) -> Arc<Self> {
+        self.set_count_paths_on_value(&[value], use_for_count_callback)
+    }
+
+    /// Port of `SetCountPathOnValue` with several paths.
+    pub fn set_count_paths_on_value(self: Arc<Self>, values: &[&str], use_for_count_callback: bool) -> Arc<Self> {
         if self.def.def_is_locked() {
             // A locked subrecord stays as it is when its array has the paths already.
             let array = self
@@ -367,10 +372,10 @@ impl SubRecordDef {
                 }
             }
         }
-        self.on_array(|def| def.set_count_path(values, use_for_count_callback))
+        self.on_array(|def| def.set_count_paths(values, use_for_count_callback))
     }
 
-    pub fn set_count_from_enum_on_value(self: Arc<Self>, enum_def: &EnumDef) -> Arc<Self> {
+    pub fn set_count_from_enum_on_value(self: Arc<Self>, enum_def: Option<Arc<EnumDef>>) -> Arc<Self> {
         self.on_array(|def| def.set_count_from_enum(enum_def))
     }
 
@@ -598,7 +603,7 @@ mod tests {
             },
         );
         let def = SubRecordDef::create(args("Items"), &[DNAM], Some(array), false)
-            .set_count_path_on_value(&["Count"], false)
+            .set_count_paths_on_value(&["Count"], false)
             .set_summary_passthrough_max_count_on_value(3);
         let array = def.get_value().unwrap().into_array_def().unwrap();
         assert_eq!(array.get_count_paths(), ["Count"]);
@@ -607,9 +612,9 @@ mod tests {
         let _record = SubRecordDef::create(args("Outer"), &[DATA], None, false);
         let parent: DefRef = _record.clone();
         let locked = set_parent(def.clone(), &Arc::downgrade(&parent), false);
-        let same = locked.clone().set_count_path_on_value(&["Count"], false);
+        let same = locked.clone().set_count_paths_on_value(&["Count"], false);
         assert!(Arc::ptr_eq(&same, &locked));
-        let changed = locked.clone().set_count_path_on_value(&["Other"], false);
+        let changed = locked.clone().set_count_paths_on_value(&["Other"], false);
         assert!(!Arc::ptr_eq(&changed, &locked));
     }
 

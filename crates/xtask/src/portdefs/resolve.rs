@@ -9,7 +9,7 @@ use std::collections::HashMap;
 use anyhow::{Result, bail};
 
 use super::model::{RoutineSig, Symbols, Ty};
-use crate::pascal::ast::{Expr, Param, Routine};
+use crate::pascal::ast::{Expr, Param, Routine, TypeRef};
 
 /// The local names of a routine body: parameters and variables.
 #[derive(Default, Clone)]
@@ -156,6 +156,7 @@ impl<'a> Resolver<'a> {
             },
             (Ty::Sig, Ty::Str) => Some(1),
             (Ty::Nil, Ty::Named(_) | Ty::Array(_)) => Some(0),
+            (Ty::Int | Ty::Float | Ty::Bool | Ty::Str | Ty::Sig, Ty::Named(name)) if name == "variant" => Some(1),
             (Ty::EmptyList, Ty::Array(_) | Ty::ArrayOfConst) => Some(0),
             (Ty::EmptyList, Ty::Named(name)) => {
                 // An empty set of an enumeration.
@@ -233,6 +234,38 @@ impl<'a> Resolver<'a> {
             }
         }
         best.sort();
+        // Delphi prefers `Integer` for integer arguments over the other
+        // integer types when nothing else tells the overloads apart, unless
+        // a literal does not fit in it.
+        if let [(cost, _), (next, _), ..] = best.as_slice()
+            && cost == next
+        {
+            let tied: Vec<usize> = best
+                .iter()
+                .filter(|(c, _)| c == cost)
+                .map(|(_, index)| *index)
+                .collect();
+            let wide = args.iter().any(|arg| match arg {
+                Expr::Int { digits, hex: true } => u64::from_str_radix(digits, 16).is_ok_and(|v| v > i32::MAX as u64),
+                Expr::Int { digits, hex: false } => digits.parse::<u64>().is_ok_and(|v| v > i32::MAX as u64),
+                _ => false,
+            });
+            let preferred_type = if wide { "cardinal" } else { "integer" };
+            let integers = |index: usize| {
+                overloads[index]
+                    .params
+                    .iter()
+                    .filter(|param| matches!(&param.type_ref, Some(TypeRef::Named(name)) if name.eq_ignore_ascii_case(preferred_type)))
+                    .count()
+            };
+            let most = tied.iter().map(|&index| integers(index)).max().unwrap_or(0);
+            let preferred: Vec<usize> = tied.iter().copied().filter(|&index| integers(index) == most).collect();
+            if let [index] = preferred.as_slice()
+                && most > 0
+            {
+                return Ok((Resolved { overload: *index }, &overloads[*index]));
+            }
+        }
         match best.as_slice() {
             [] => bail!(
                 "no overload of {name} takes ({})",
@@ -271,7 +304,12 @@ pub fn callback_matches(sig: &RoutineSig, callback: &Routine) -> bool {
         (None, None) => true,
         _ => false,
     };
-    sig.return_type.is_some() == callback.return_type.is_some()
+    let same_return = match (&sig.return_type, &callback.return_type) {
+        (Some(a), Some(b)) => format!("{a:?}").eq_ignore_ascii_case(&format!("{b:?}")),
+        (None, None) => true,
+        _ => false,
+    };
+    same_return
         && sig.params.len() == callback.params.len()
         && sig.params.iter().zip(&callback.params).all(|(a, b)| same_types(a, b))
 }

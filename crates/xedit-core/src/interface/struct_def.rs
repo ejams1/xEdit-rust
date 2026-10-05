@@ -182,7 +182,8 @@ impl StructDef {
     }
 
     /// Port of `SetSummaryMemberPrefixSuffix`.
-    pub fn set_summary_member_prefix_suffix(self: Arc<Self>, index: usize, prefix: &str, suffix: &str) -> Arc<Self> {
+    pub fn set_summary_member_prefix_suffix(self: Arc<Self>, index: i32, prefix: &str, suffix: &str) -> Arc<Self> {
+        let index = usize::try_from(index).expect("a non-negative index");
         let this = self.unlocked();
         assert!(
             index < this.st_members.len(),
@@ -198,7 +199,8 @@ impl StructDef {
     }
 
     /// Port of `SetSummaryMemberMaxDepth`.
-    pub fn set_summary_member_max_depth(self: Arc<Self>, index: usize, max_depth: i32) -> Arc<Self> {
+    pub fn set_summary_member_max_depth(self: Arc<Self>, index: i32, max_depth: i32) -> Arc<Self> {
+        let index = usize::try_from(index).expect("a non-negative index");
         let this = self.unlocked();
         assert!(
             index < this.st_members.len(),

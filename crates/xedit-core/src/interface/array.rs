@@ -335,7 +335,13 @@ impl ArrayDef {
 
     /// Port of `SetCountPath`: the paths of the elements that hold the count.
     /// With `use_for_count_callback` the first path also gives the count.
-    pub fn set_count_path(self: Arc<Self>, values: &[&str], use_for_count_callback: bool) -> Arc<Self> {
+    /// Port of `SetCountPath` with one path.
+    pub fn set_count_path(self: Arc<Self>, value: &str, use_for_count_callback: bool) -> Arc<Self> {
+        self.set_count_paths(&[value], use_for_count_callback)
+    }
+
+    /// Port of `SetCountPath` with several paths.
+    pub fn set_count_paths(self: Arc<Self>, values: &[&str], use_for_count_callback: bool) -> Arc<Self> {
         let new_count_paths: Vec<String> = values
             .iter()
             .filter(|value| !value.is_empty())
@@ -361,7 +367,8 @@ impl ArrayDef {
     }
 
     /// Port of `SetCountFromEnum`: one element per name of the enumeration.
-    pub fn set_count_from_enum(self: Arc<Self>, enum_def: &EnumDef) -> Arc<Self> {
+    pub fn set_count_from_enum(self: Arc<Self>, enum_def: Option<Arc<EnumDef>>) -> Arc<Self> {
+        let enum_def = enum_def.expect("the enumeration that gives the count");
         let this = self.unlocked();
         let count = enum_def.get_name_count();
         this.ar_count.store(count, Ordering::Relaxed);
@@ -840,15 +847,15 @@ mod tests {
         assert_eq!(unnamed.get_element_name_suffix(0), "Red");
 
         let enum_def = EnumDef::create(EnumClass::Enum, false, &["A", "B", "C"], &[]);
-        let from_enum = array_of(u16_def(), 0).set_count_from_enum(&enum_def);
+        let from_enum = array_of(u16_def(), 0).set_count_from_enum(Some(enum_def.clone()));
         assert_eq!(from_enum.get_count(), 3);
         assert_eq!(from_enum.get_element_label(2), "C");
 
-        let with_path = array_of(u16_def(), 0).set_count_path(&["", "Count"], true);
+        let with_path = array_of(u16_def(), 0).set_count_paths(&["", "Count"], true);
         assert_eq!(with_path.get_count_paths(), ["Count"]);
         assert!(with_path.get_count_callback().is_some());
         assert_eq!(with_path.get_def_type_name(), "Variable Count ArrayUnsigned Word");
-        let same = with_path.clone().set_count_path(&["Count"], false);
+        let same = with_path.clone().set_count_paths(&["Count"], false);
         assert!(Arc::ptr_eq(&same, &with_path));
 
         let copy = ArrayDef::clone_from(

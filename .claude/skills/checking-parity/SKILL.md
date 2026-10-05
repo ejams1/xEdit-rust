@@ -40,6 +40,8 @@ Pass the plugin path with backslashes and a drive letter. The oracle does not fi
 
 The dump goes to stdout and progress goes to stderr. `xDump.exe -FO4 -?` lists the options.
 
+A whole-file dump of `Fallout4.esm` (`-FO4 -q`) wrote 12.4 GB in 1 h 53 min and then stopped with `Unexpected Error: <EAccessViolation ...>` while dumping INFO `[000673E3]`, without `All Done.`. Treat the oracle output of a crashed run as valid up to the last complete record and compare only that prefix; the records after the crash need a dump that starts past them, or a smaller plugin.
+
 The `xEdit-llm` automation build is a secondary oracle for conflict, reference and cleaning results as JSON. It is a fork at a different upstream commit: use it to cross-check, never to close a gate.
 
 ## Inputs

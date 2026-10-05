@@ -355,7 +355,8 @@ impl FlagsDef {
     }
 
     /// Port of `SetFlagHasDontShow`.
-    pub fn set_flag_has_dont_show(self: Arc<Self>, index: usize, dont_show: Option<DontShowCallback>) -> Arc<Self> {
+    pub fn set_flag_has_dont_show(self: Arc<Self>, index: i32, dont_show: Option<DontShowCallback>) -> Arc<Self> {
+        let index = usize::try_from(index).expect("a non-negative index");
         let this = if self.def.def_is_locked() {
             Self::clone_from(&self)
         } else {

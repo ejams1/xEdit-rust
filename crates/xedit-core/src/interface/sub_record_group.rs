@@ -255,7 +255,13 @@ impl SubRecordArrayDef {
     }
 
     /// Port of `SetCountPath`: the paths of the elements that hold the count.
-    pub fn set_count_path(self: Arc<Self>, values: &[&str]) -> Arc<Self> {
+    /// Port of `SetCountPath` with one path.
+    pub fn set_count_path(self: Arc<Self>, value: &str) -> Arc<Self> {
+        self.set_count_paths(&[value])
+    }
+
+    /// Port of `SetCountPath` with several paths.
+    pub fn set_count_paths(self: Arc<Self>, values: &[&str]) -> Arc<Self> {
         let new_count_paths = count_paths(values);
         if new_count_paths == self.get_count_paths() {
             return self;
@@ -565,7 +571,8 @@ impl SubRecordStructDef {
         this
     }
 
-    pub fn set_summary_member_prefix_suffix(self: Arc<Self>, index: usize, prefix: &str, suffix: &str) -> Arc<Self> {
+    pub fn set_summary_member_prefix_suffix(self: Arc<Self>, index: i32, prefix: &str, suffix: &str) -> Arc<Self> {
+        let index = usize::try_from(index).expect("a non-negative index");
         let this = self.unlocked();
         assert!(
             index < this.srs_members.len(),
@@ -581,7 +588,8 @@ impl SubRecordStructDef {
         this
     }
 
-    pub fn set_summary_member_max_depth(self: Arc<Self>, index: usize, max_depth: i32) -> Arc<Self> {
+    pub fn set_summary_member_max_depth(self: Arc<Self>, index: i32, max_depth: i32) -> Arc<Self> {
+        let index = usize::try_from(index).expect("a non-negative index");
         let this = self.unlocked();
         assert!(
             index < this.srs_members.len(),
@@ -1096,7 +1104,7 @@ mod tests {
         assert_eq!(def.get_full_name(), "MODL - Models");
         assert!(def.get_sorted(None));
         assert_eq!(def.get_element().get_path(), "Models \\ Model");
-        let with_paths = def.clone().set_count_path(&["", "Count"]);
+        let with_paths = def.clone().set_count_paths(&["", "Count"]);
         assert!(Arc::ptr_eq(&with_paths, &def));
         assert_eq!(def.get_count_paths(), ["Count"]);
         let decided: IsSortedCallback = Arc::new(|container| container.is_some());

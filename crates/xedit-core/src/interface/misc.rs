@@ -8,6 +8,30 @@
 
 use std::sync::{Arc, RwLock};
 
+/// A variable of a definition unit: `wbFoo: IwbStructDef` becomes
+/// `static WB_FOO: Global<Option<Arc<StructDef>>>`. Reads clone the value.
+pub struct Global<T>(RwLock<Option<T>>);
+
+impl<T: Clone + Default> Global<T> {
+    pub const fn new() -> Self {
+        Global(RwLock::new(None))
+    }
+
+    pub fn get(&self) -> T {
+        self.0.read().unwrap().clone().unwrap_or_default()
+    }
+
+    pub fn set(&self, value: T) {
+        *self.0.write().unwrap() = Some(value);
+    }
+}
+
+impl<T: Clone + Default> Default for Global<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 use super::element::ElementArg;
 
 /// A value that upstream passes as a Delphi `Variant`.
@@ -24,6 +48,20 @@ pub enum Variant {
     /// A byte array (`TBytes`).
     Bytes(Vec<u8>),
 }
+
+macro_rules! variant_from {
+    ($($ty:ty => $variant:ident),* $(,)?) => {
+        $(
+            impl From<$ty> for Variant {
+                fn from(value: $ty) -> Self {
+                    Variant::$variant(value.into())
+                }
+            }
+        )*
+    };
+}
+
+variant_from!(bool => Bool, i8 => Int, i16 => Int, i32 => Int, i64 => Int, u8 => UInt, u16 => UInt, u32 => UInt, u64 => UInt, f32 => Float, f64 => Float, String => Str, &str => Str);
 
 /// The receiver of progress messages, upstream `_wbProgressCallback`.
 pub type ProgressCallback = Arc<dyn Fn(&str) + Send + Sync>;
