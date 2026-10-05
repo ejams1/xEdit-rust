@@ -5,7 +5,8 @@
 // Ported from xEdit: xDump.dpr
 
 //! The `dump` command: the element tree of a plugin as `xDump.exe` prints it
-//! in its plain mode (no report, no sizes, no hidden elements, no summary).
+//! in its plain mode (no report, no sizes, no hidden elements). The
+//! summaries of elements without a value are not written yet.
 
 use std::io::Write;
 
@@ -13,7 +14,7 @@ use xedit_core::implementation::{FileImpl, wb_file};
 use xedit_core::interface::globals::{
     GameMode, set_game_exe_name, set_game_master_esm, set_game_mode, set_game_name, set_hide_unused, set_simple_records,
 };
-use xedit_core::interface::{Container, Element, ElementRef, FileStates, clear_record_defs};
+use xedit_core::interface::{Container, ElementRef, FileStates, clear_record_defs};
 
 /// Port of the game setup of `xDump.dpr` for the plugins of a game.
 pub fn setup_game(game: &str) -> Result<GameMode, String> {
