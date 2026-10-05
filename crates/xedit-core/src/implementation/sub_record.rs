@@ -22,7 +22,6 @@ use crate::interface::types::{ConflictPriority, DefFlag, DefType, ElementType, S
 use super::structs::SubRecordHeaderStruct;
 use super::value::{Cursor, array_do_init, create_value_element, resolve, struct_do_init, union_do_init};
 use super::{ContainerBase, DataBlock, ElementBase, ElementImpl, MainRecordImpl};
-use std::sync::OnceLock;
 
 /// Port of `TwbSubRecord`.
 pub struct SubRecordImpl {
@@ -33,7 +32,7 @@ pub struct SubRecordImpl {
     block: DataBlock,
     sr_struct: SubRecordHeaderStruct,
     /// Port of `DoInit`: the value elements are built once.
-    sr_init: OnceLock<()>,
+    sr_init: super::InitOnce,
     /// Port of `srValueDef`: the resolved value definition, when the value
     /// has no name and its elements live in the subrecord itself.
     sr_value_def: RwLock<Option<Arc<dyn ValueDef>>>,
@@ -81,7 +80,7 @@ impl SubRecordImpl {
             file: Arc::downgrade(file),
             block: block.clone(),
             sr_struct: header,
-            sr_init: OnceLock::new(),
+            sr_init: super::InitOnce::new(),
             sr_value_def: RwLock::new(None),
             dc_data_base,
             dc_data_end,
@@ -118,7 +117,7 @@ impl SubRecordImpl {
 
     /// Port of `TwbSubRecord.Init`: the value elements of the subrecord.
     pub fn do_init(&self) {
-        self.sr_init.get_or_init(|| {
+        self.sr_init.run(|| {
             if self.skipped() {
                 return;
             }
@@ -187,6 +186,7 @@ impl SubRecordImpl {
 
 /// Port of `TwbSubRecordArray`: the subrecords of one array member.
 pub struct SubRecordArrayImpl {
+    self_ref: Weak<SubRecordArrayImpl>,
     pub(super) base: ElementBase,
     pub(super) container: ContainerBase,
     file: Weak<super::FileImpl>,
@@ -195,6 +195,7 @@ pub struct SubRecordArrayImpl {
 
 /// Port of `TwbSubRecordStruct`: the subrecords of one structure member.
 pub struct SubRecordStructImpl {
+    self_ref: Weak<SubRecordStructImpl>,
     pub(super) base: ElementBase,
     pub(super) container: ContainerBase,
     file: Weak<super::FileImpl>,
@@ -210,7 +211,8 @@ pub(super) fn create_sub_record_array(
     def: Arc<dyn RecordMemberDef>,
     file: &Weak<super::FileImpl>,
 ) -> Arc<SubRecordArrayImpl> {
-    let array = Arc::new(SubRecordArrayImpl {
+    let array = Arc::new_cyclic(|self_ref: &Weak<SubRecordArrayImpl>| SubRecordArrayImpl {
+        self_ref: self_ref.clone(),
         base: ElementBase::new(Some(owner)),
         container: ContainerBase::default(),
         file: file.clone(),
@@ -290,7 +292,8 @@ pub(super) fn create_sub_record_struct(
     def: Arc<dyn RecordMemberDef>,
     file: &Weak<super::FileImpl>,
 ) -> Arc<SubRecordStructImpl> {
-    let structure = Arc::new(SubRecordStructImpl {
+    let structure = Arc::new_cyclic(|self_ref: &Weak<SubRecordStructImpl>| SubRecordStructImpl {
+        self_ref: self_ref.clone(),
         base: ElementBase::new(Some(owner)),
         container: ContainerBase::default(),
         file: file.clone(),
@@ -649,6 +652,26 @@ impl Element for SubRecordImpl {
         value_def.to_native_value(self.data(), Some(&self_ref))
     }
 
+    /// Port of `TwbSubRecord.GetSummary`.
+    fn get_summary(&self) -> String {
+        let Some(def) = self.def() else {
+            return String::new();
+        };
+        self.do_init();
+        let self_ref = self.element_ref();
+        let mut links_to = None;
+        def.to_summary(0, Some(&self_ref), &mut links_to)
+    }
+
+    /// Port of `TwbSubRecord.InternalGetLinksTo`: through the resolved value
+    /// definition of a value without a name.
+    fn get_links_to(&self) -> Option<ElementRef> {
+        self.do_init();
+        let value_def = self.sr_value_def.read().unwrap().clone()?;
+        let self_ref = self.element_ref();
+        value_def.get_links_to(self.data(), Some(&self_ref))
+    }
+
     fn get_file(&self) -> Option<FileRef> {
         Some(self.file.upgrade()? as FileRef)
     }
@@ -694,11 +717,7 @@ macro_rules! container_by_elements {
         }
 
         fn get_element_by_name(&self, name: &str) -> Option<ElementRef> {
-            self.$init();
-            self.container
-                .elements()
-                .into_iter()
-                .find(|element| element.get_name() == name)
+            super::element_by_name(self, name)
         }
 
         fn get_element_by_path(&self, path: &str) -> Option<ElementRef> {
@@ -739,6 +758,13 @@ impl Container for SubRecordImpl {
 impl Element for SubRecordArrayImpl {
     element_common!(element_base);
     element_display_name!(element_base);
+
+    /// Port of `TwbSubRecordArray.GetSummary`.
+    fn get_summary(&self) -> String {
+        let self_ref = self.self_ref.upgrade().map(|array| array as ElementRef);
+        let mut links_to = None;
+        self.arc_def.to_summary(0, self_ref.as_ref(), &mut links_to)
+    }
 
     fn get_name(&self) -> String {
         self.arc_def.get_name().to_owned()
@@ -798,6 +824,13 @@ impl Container for SubRecordArrayImpl {
 impl Element for SubRecordStructImpl {
     element_common!(element_base);
     element_display_name!(element_base);
+
+    /// Port of `TwbSubRecordStruct.GetSummary`.
+    fn get_summary(&self) -> String {
+        let self_ref = self.self_ref.upgrade().map(|structure| structure as ElementRef);
+        let mut links_to = None;
+        self.src_def.to_summary(0, self_ref.as_ref(), &mut links_to)
+    }
 
     fn get_name(&self) -> String {
         self.src_def.get_name().to_owned()

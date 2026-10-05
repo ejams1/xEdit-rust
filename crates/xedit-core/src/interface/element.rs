@@ -82,6 +82,12 @@ pub trait Element: Send + Sync {
         self.get_name()
     }
 
+    /// Upstream `Summary`: the short form of the value that the definition
+    /// builds. Empty for an element without one.
+    fn get_summary(&self) -> String {
+        String::new()
+    }
+
     fn get_links_to(&self) -> Option<ElementRef>;
 
     fn get_element_type(&self) -> ElementType;
@@ -230,6 +236,9 @@ pub trait MainRecord: Container {
     fn get_version(&self) -> u32;
 
     fn get_is_deleted(&self) -> bool;
+
+    /// Upstream `MasterOrSelf`: the record this one overrides, or itself.
+    fn get_master_or_self(&self) -> MainRecordRef;
 
     /// The override of this record in the last file that has one.
     fn get_winning_override(&self) -> MainRecordRef;

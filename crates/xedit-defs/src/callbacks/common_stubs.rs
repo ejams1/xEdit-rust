@@ -127,11 +127,6 @@ pub fn wb_regn_sound_dont_show(_a_element: ElementArg) -> bool {
     todo!("port wbREGNSoundDontShow from wbDefinitionsCommon.pas line 112")
 }
 
-/// Upstream `wbRGBAToStr`, line 246 of `wbDefinitionsCommon.pas`.
-pub fn wb_rgba_to_str(_a_value: &mut String, _a_base_ptr: DataPtr, _a_element: ElementArg, _a_type: CallbackType) {
-    todo!("port wbRGBAToStr from wbDefinitionsCommon.pas line 246")
-}
-
 /// Upstream `wbRPLDAfterLoad`, line 47 of `wbDefinitionsCommon.pas`.
 pub fn wb_rpld_after_load(_a_element: &ElementRef) {
     todo!("port wbRPLDAfterLoad from wbDefinitionsCommon.pas line 47")
@@ -155,16 +150,6 @@ pub fn wb_str_to_lgdi_filter(_a_string: &str, _a_element: ElementArg) -> i64 {
 /// Upstream `wbTemplateActorDontShow`, line 114 of `wbDefinitionsCommon.pas`.
 pub fn wb_template_actor_dont_show(_a_element: ElementArg) -> bool {
     todo!("port wbTemplateActorDontShow from wbDefinitionsCommon.pas line 114")
-}
-
-/// Upstream `wbToStringFromLinksToMainRecordName`, line 250 of `wbDefinitionsCommon.pas`.
-pub fn wb_to_string_from_links_to_main_record_name(
-    _a_value: &mut String,
-    _a_base_ptr: DataPtr,
-    _a_element: ElementArg,
-    _a_type: CallbackType,
-) {
-    todo!("port wbToStringFromLinksToMainRecordName from wbDefinitionsCommon.pas line 250")
 }
 
 /// Upstream `wbVTXTPosition`, line 226 of `wbDefinitionsCommon.pas`.

@@ -232,16 +232,6 @@ pub fn wb_condition_vats_value_param_decider(_a_base_ptr: DataPtr, _a_element: E
     todo!("port wbConditionVATSValueParamDecider from wbDefinitionsTES5.pas line 864")
 }
 
-/// Upstream `wbDIALQuestToStr`, line 239 of `wbDefinitionsTES5.pas`.
-pub fn wb_dial_quest_to_str(
-    _a_value: &mut String,
-    _a_base_ptr: DataPtr,
-    _a_element: ElementArg,
-    _a_type: CallbackType,
-) {
-    todo!("port wbDIALQuestToStr from wbDefinitionsTES5.pas line 239")
-}
-
 /// Upstream `wbDialogueTextAfterLoad`, line 41 of `wbDefinitionsTES5.pas`.
 pub fn wb_dialogue_text_after_load(_a_element: &ElementRef) {
     todo!("port wbDialogueTextAfterLoad from wbDefinitionsTES5.pas line 41")
@@ -626,11 +616,6 @@ pub fn wb_scene_action_type_after_set(_a_element: &ElementRef, _a_old_value: &Va
     todo!("port wbSceneActionTypeAfterSet from wbDefinitionsTES5.pas line 65")
 }
 
-/// Upstream `wbSceneActionTypeDecider`, line 254 of `wbDefinitionsTES5.pas`.
-pub fn wb_scene_action_type_decider(_a_container: ElementArg) -> i32 {
-    todo!("port wbSceneActionTypeDecider from wbDefinitionsTES5.pas line 254")
-}
-
 /// Upstream `wbSceneAliasToStr`, line 221 of `wbDefinitionsTES5.pas`.
 pub fn wb_scene_alias_to_str(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) -> String {
     todo!("port wbSceneAliasToStr from wbDefinitionsTES5.pas line 221")
@@ -714,11 +699,6 @@ pub fn wb_type_decider(_a_base_ptr: DataPtr, _a_element: ElementArg) -> i32 {
 /// Upstream `wbUpdateSameParentUnions`, line 68 of `wbDefinitionsTES5.pas`.
 pub fn wb_update_same_parent_unions(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
     todo!("port wbUpdateSameParentUnions from wbDefinitionsTES5.pas line 68")
-}
-
-/// Upstream `wbVec3ToStr`, line 251 of `wbDefinitionsTES5.pas`.
-pub fn wb_vec3_to_str(_a_value: &mut String, _a_base_ptr: DataPtr, _a_element: ElementArg, _a_type: CallbackType) {
-    todo!("port wbVec3ToStr from wbDefinitionsTES5.pas line 251")
 }
 
 /// Upstream `wbVertexLinksTo`, line 159 of `wbDefinitionsTES5.pas`.

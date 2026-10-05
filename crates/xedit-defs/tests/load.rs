@@ -98,3 +98,25 @@ fn initializes_every_record_of_a_skyrim_plugin() {
     }
     clear_record_defs();
 }
+
+#[test]
+fn placed_record_names_its_base() {
+    let _guard = test_lock();
+    let Some(path) = plugin("XEDIT_SSE_DATA", "Update.esm") else {
+        return;
+    };
+    clear_record_defs();
+    xedit_core::implementation::clear_files_map();
+    set_game_mode(GameMode::gmSSE);
+    xedit_defs::tes5::define_tes5();
+    let file = wb_file(&path, i32::MAX, FileStates::empty()).unwrap();
+    let refr = file
+        .record_by_form_id(xedit_core::interface::FormID::from_cardinal(0x0002C46C), true, true)
+        .expect("the REFR");
+    let names: Vec<String> = (0..refr.get_element_count())
+        .filter_map(|index| refr.get_element(index))
+        .map(|element| element.get_name())
+        .collect();
+    assert!(names.iter().any(|name| name.starts_with("NAME")), "{names:?}");
+    assert!(refr.get_name().contains("Places"), "{}", refr.get_name());
+}
