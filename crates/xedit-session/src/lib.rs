@@ -8,6 +8,8 @@
 //! the MCP server and the GUI call commands and nothing else, so each of them
 //! covers the same set of operations.
 
+pub mod dump;
+
 use std::collections::BTreeMap;
 
 use schemars::{JsonSchema, Schema, schema_for};
