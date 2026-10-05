@@ -8,7 +8,9 @@
 //! the upstream unit.
 
 pub mod array;
+pub mod builders;
 pub mod byte_array;
+pub mod constructors;
 pub mod def;
 pub mod element;
 pub mod enum_def;
@@ -31,7 +33,9 @@ pub mod sub_record_group;
 pub mod types;
 
 pub use array::*;
+pub use builders::*;
 pub use byte_array::*;
+pub use constructors::*;
 pub use def::*;
 pub use element::*;
 pub use enum_def::*;

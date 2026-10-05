@@ -326,6 +326,14 @@ pascal_enum! {
     }
 }
 
+/// Upstream `TVarRec`: one value of an `array of const` argument.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum VarRec<'a> {
+    Int(i64),
+    Str(&'a str),
+    Bool(bool),
+}
+
 /// Signatures of the subrecords xEdit knows by role, indexed by [`KnownSubRecord`].
 pub type KnownSubRecordSignatures = [Signature; 5];
 

@@ -135,6 +135,8 @@ status = "pending"
 
 [units."Core/wbInterface.pas"]
 status = "pending"
+rust = "crates/xedit-core/src/interface"
+note = "The definition classes are ported by hand. The builder functions are generated into builders.rs by cargo xtask port-defs emit, with their constructors in constructors.rs. The rest of the unit is pending."
 
 [units."Core/wbLOD.pas"]
 status = "pending"

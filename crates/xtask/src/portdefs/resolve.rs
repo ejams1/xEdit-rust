@@ -38,7 +38,7 @@ pub struct Resolver<'a> {
     pub symbols: &'a Symbols,
 }
 
-impl Resolver<'_> {
+impl<'a> Resolver<'a> {
     /// The type of `expr`. `Ty::Unknown` when the transpiler does not know it.
     pub fn ty_of(&self, expr: &Expr, scope: &Scope) -> Ty {
         match expr {
@@ -70,6 +70,13 @@ impl Resolver<'_> {
             Expr::Call { callee, args } => match &**callee {
                 Expr::Ident(name) => {
                     let lower = name.to_ascii_lowercase();
+                    // The functions that the compiler provides.
+                    match lower.as_str() {
+                        "length" | "high" | "low" | "ord" | "pred" | "succ" => return Ty::Int,
+                        "assigned" => return Ty::Bool,
+                        "inttostr" | "format" => return Ty::Str,
+                        _ => {}
+                    }
                     // A cast such as Integer(x) or IwbFoo(x).
                     if !self.symbols.routines.contains_key(&lower)
                         && (self.symbols.types.contains_key(&lower)
@@ -203,7 +210,7 @@ impl Resolver<'_> {
     }
 
     /// Resolves a call of the routine `name` with `args` to one overload.
-    pub fn resolve_call<'s>(&'s self, name: &str, args: &[Expr], scope: &Scope) -> Result<(Resolved, &'s RoutineSig)> {
+    pub fn resolve_call(&self, name: &str, args: &[Expr], scope: &Scope) -> Result<(Resolved, &'a RoutineSig)> {
         let Some(overloads) = self.symbols.routines.get(&name.to_ascii_lowercase()) else {
             bail!("unknown routine {name}");
         };
@@ -258,7 +265,7 @@ impl Resolver<'_> {
 
 /// Whether the routine can be assigned to the callback type: same kind and
 /// the same parameter types.
-fn callback_matches(sig: &RoutineSig, callback: &Routine) -> bool {
+pub fn callback_matches(sig: &RoutineSig, callback: &Routine) -> bool {
     let same_types = |a: &Param, b: &Param| match (&a.type_ref, &b.type_ref) {
         (Some(a), Some(b)) => format!("{a:?}").eq_ignore_ascii_case(&format!("{b:?}")),
         (None, None) => true,
