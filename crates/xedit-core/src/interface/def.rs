@@ -39,6 +39,7 @@ use super::element::{DataPtr, ElementArg, ElementRef};
 use super::enum_def::EnumDef;
 use super::flags::{FlagDef, FlagsDef};
 use super::float::FloatDef;
+use super::form_id_formater::FormIDDefFormater;
 use super::globals::{
     collapse_benign_array, hide_unused, is_internal_edit, make_unknown_elements_unique, report_mode, report_unknown,
 };
@@ -318,6 +319,10 @@ pub trait Def: Send + Sync + 'static {
     }
 
     fn as_union_def(&self) -> Option<&UnionDef> {
+        None
+    }
+
+    fn as_form_id_def_formater(&self) -> Option<&FormIDDefFormater> {
         None
     }
 

@@ -15,6 +15,7 @@ pub mod enum_def;
 pub mod flags;
 pub mod float;
 pub mod form_id;
+pub mod form_id_formater;
 pub mod formaters;
 pub mod globals;
 pub mod guid;
@@ -29,13 +30,12 @@ pub mod types;
 pub use array::*;
 pub use byte_array::*;
 pub use def::*;
-pub use element::{
-    Container, DataContainer, DataPtr, Element, ElementArg, ElementRef, File, FileRef, MainRecord, MainRecordRef,
-};
+pub use element::*;
 pub use enum_def::*;
 pub use flags::*;
 pub use float::*;
 pub use form_id::{CRC32, FileID, FormID, ModuleType, ObjectIDOutOfBounds, SlotCounts};
+pub use form_id_formater::*;
 pub use formaters::*;
 pub use globals::{GameMode, ToolMode, ToolSource};
 pub use guid::*;
