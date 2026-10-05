@@ -50,6 +50,7 @@ use super::misc::{Variant, shorten_text};
 use super::resolvable::{ResolvableDef, UnionDef};
 use super::string::{StringDef, StringDefFormater};
 use super::struct_def::StructDef;
+use super::sub_record::{RecordMemberDef, SignatureDef, SubRecordDef};
 use super::types::{
     CallbackType, ConflictPriority, DefFlag, DefFlags, DefType, EditType, EnumSet, PascalEnum, def_flags_dont_clone,
     def_flags_inherit_down, def_flags_inherit_up,
@@ -323,6 +324,38 @@ pub trait Def: Send + Sync + 'static {
     }
 
     fn as_form_id_def_formater(&self) -> Option<&FormIDDefFormater> {
+        None
+    }
+
+    fn as_signature_def(&self) -> Option<&dyn SignatureDef> {
+        None
+    }
+
+    fn as_record_member_def(&self) -> Option<&dyn RecordMemberDef> {
+        None
+    }
+
+    fn into_record_member_def(self: Arc<Self>) -> Option<Arc<dyn RecordMemberDef>> {
+        None
+    }
+
+    fn as_sub_record_def(&self) -> Option<&SubRecordDef> {
+        None
+    }
+
+    fn into_struct_def(self: Arc<Self>) -> Option<Arc<StructDef>> {
+        None
+    }
+
+    fn into_array_def(self: Arc<Self>) -> Option<Arc<ArrayDef>> {
+        None
+    }
+
+    fn into_string_def(self: Arc<Self>) -> Option<Arc<StringDef>> {
+        None
+    }
+
+    fn into_len_string_def(self: Arc<Self>) -> Option<Arc<LenStringDef>> {
         None
     }
 
@@ -823,6 +856,12 @@ pub trait NamedDef: Def {
         }
     }
 
+    /// The assignment at the end of `SetToStr`. `TwbSubRecordDef` overrides it
+    /// and gives the callback to its value.
+    fn apply_to_str(&self, to_str: Option<ToStrCallback>) {
+        self.named_def_base().nd_to_str.set(to_str);
+    }
+
     fn is_removable(&self, element: ElementArg) -> bool {
         match self.named_def_base().nd_is_removable.load().as_deref() {
             Some(callback) => callback(element),
@@ -856,10 +895,9 @@ pub fn named_def_init_from_parent_before_children(def: &dyn NamedDef) {
             named.nd_unused.store(true, Ordering::Relaxed);
         }
     }
-    // Signature definitions keep their name. They arrive with their classes and
-    // then override this method.
     if make_unknown_elements_unique()
         && base.is_unknown.load(Ordering::Relaxed)
+        && def.as_signature_def().is_none()
         && !named.nd_name().contains('@')
         && let Some(parent) = &parent
     {
@@ -921,7 +959,7 @@ impl<T: NamedDef + DefKind + ?Sized> NamedDefSetters for Arc<T> {
 
     fn set_to_str(self, to_str: Option<ToStrCallback>) -> Self {
         let this = unlocked(self);
-        this.named_def_base().nd_to_str.set(to_str);
+        this.apply_to_str(to_str);
         this
     }
 }
@@ -1075,6 +1113,14 @@ pub trait ValueDef: NamedDef {
     fn get_element_map(&self) -> Vec<u32> {
         Vec::new()
     }
+
+    /// The assignment at the end of `SetDefaultNativeValue`. `TwbIntegerDef`
+    /// and `TwbFloatDef` override it and set their own default.
+    fn apply_default_native_value(&self, value: Variant) {
+        let base = self.value_def_base();
+        base.vd_default_native_value.set(Some(value));
+        base.vd_states.include(ValueDefState::vdsHasDefaultNativeValue);
+    }
 }
 
 /// Port of `TwbValueDef.ToSummary`.
@@ -1127,9 +1173,7 @@ impl<T: ValueDef + DefKind + ?Sized> ValueDefSetters for Arc<T> {
 
     fn set_default_native_value(self, value: Variant) -> Self {
         let this = unlocked(self);
-        let base = this.value_def_base();
-        base.vd_default_native_value.set(Some(value));
-        base.vd_states.include(ValueDefState::vdsHasDefaultNativeValue);
+        this.apply_default_native_value(value);
         this
     }
 

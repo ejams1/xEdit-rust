@@ -391,6 +391,10 @@ impl Def for StringDef {
         Some(self)
     }
 
+    fn into_string_def(self: Arc<Self>) -> Option<Arc<StringDef>> {
+        Some(self)
+    }
+
     fn init_from_parent_do_children(&self) {
         if let Some(formater) = self.bsd_formater.load().as_deref() {
             formater.init_from_parent();

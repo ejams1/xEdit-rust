@@ -168,6 +168,10 @@ impl Def for LenStringDef {
         Some(self)
     }
 
+    fn into_len_string_def(self: Arc<Self>) -> Option<Arc<LenStringDef>> {
+        Some(self)
+    }
+
     fn init_from_parent_do_children(&self) {
         if let Some(formater) = self.bsd_formater.load().as_deref() {
             formater.init_from_parent();

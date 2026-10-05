@@ -391,6 +391,10 @@ impl Def for StructDef {
         Some(self)
     }
 
+    fn into_struct_def(self: Arc<Self>) -> Option<Arc<StructDef>> {
+        Some(self)
+    }
+
     fn get_child_pos(&self, child: &dyn Def) -> i32 {
         self.st_members
             .iter()

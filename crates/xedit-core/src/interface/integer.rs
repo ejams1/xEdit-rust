@@ -339,6 +339,16 @@ impl NamedDef for IntegerDef {
 impl ValueDef for IntegerDef {
     value_def_plumbing!(ValueDef);
 
+    /// Port of the override of `SetDefaultNativeValue`, which sets `inDefault`.
+    fn apply_default_native_value(&self, value: Variant) {
+        // Upstream fails for a value that is not a number.
+        let default = match &value {
+            Variant::Float(float) => crate::delphi::round(*float),
+            other => other.as_ordinal().unwrap_or(0),
+        };
+        self.in_default.store(default, Ordering::Relaxed);
+    }
+
     fn to_string(&self, data: DataPtr, element: ElementArg) -> String {
         let mut result = String::new();
         if self.in_type == IntType::it0 {

@@ -422,6 +422,10 @@ impl Def for ArrayDef {
         Some(self)
     }
 
+    fn into_array_def(self: Arc<Self>) -> Option<Arc<ArrayDef>> {
+        Some(self)
+    }
+
     fn init_from_parent_do_children(&self) {
         self.ar_element.init_from_parent();
     }

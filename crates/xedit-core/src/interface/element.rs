@@ -44,6 +44,9 @@ pub trait Element: Send + Sync {
 
     fn get_full_path(&self) -> String;
 
+    /// Number of bytes of data that the element owns.
+    fn get_data_size(&self) -> i32;
+
     /// Whether the masters of the file changed and the element still stores
     /// FormIDs for the old list of masters.
     fn get_masters_updated(&self) -> bool;
