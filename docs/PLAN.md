@@ -6,7 +6,7 @@ Port xEdit to Rust with 1:1 functionality, expose every operation through a CLI,
 
 ## What is being ported
 
-Baseline: upstream [TES5Edit/TES5Edit](https://github.com/TES5Edit/TES5Edit), branch `dev-4.1.6`, commit `9fb0168` (recorded in `upstream-map.toml`). About 260,000 lines of Pascal in `Core` and `xEdit`, plus BSArch and Sniff.
+Baseline: upstream [TES5Edit/TES5Edit](https://github.com/TES5Edit/TES5Edit), release tag `xedit-4.1.5q` (commit `fd1e360`, recorded in `upstream-map.toml`). The baseline is always an official release, because the release binaries are the parity oracle. About 260,000 lines of Pascal in `Core` and `xEdit`, plus BSArch and Sniff.
 
 | Area | Upstream units | Size (lines) | Notes |
 | --- | --- | --- | --- |
@@ -28,7 +28,7 @@ Upstream uses three thread classes in total. Loading, reference building and con
 
 1. **One operation layer.** Every operation is a typed command in `xedit-session` with a serde request, a serde response and a JSON Schema. The CLI, the daemon, the MCP server and the GUI all call these commands and nothing else. A feature is not done until its command exists. This is what makes CLI coverage and agent control complete by construction and not a follow-up.
 2. **Upstream-shaped source.** Each Pascal unit maps to one Rust module with matching names (`wbLoadOrder.pas` to `load_order.rs`, `wbRecord(` to `wb_record(`). `upstream-map.toml` records the unit, the Rust module and the upstream commit last merged. An upstream diff then maps onto Rust lines directly.
-3. **Parity is measured, not asserted.** The Delphi build is the oracle. A differential harness compares Rust output with Delphi output on the same inputs. Each phase has a parity gate.
+3. **Parity is measured, not asserted.** The official Delphi release build of the baseline is the oracle. A differential harness compares Rust output with oracle output on the same inputs. Each phase has a parity gate.
 4. **Safe by default for agents.** Mutating commands support `--dry-run`, return structured outcomes, and require an explicit edit flag. Save is atomic (write temp file, rename), which removes the deferred-save problem of the Delphi daemon.
 5. **Machine-first output.** Every CLI command has `--json`. Errors have stable codes. `xedit schema` prints the full command catalogue so an agent can discover the surface without documentation.
 
@@ -52,7 +52,8 @@ Upstream uses three thread classes in total. Loading, reference building and con
 
 ## Parity harness
 
-- **Oracle:** a Delphi build of the pinned upstream commit. xDump and the `xEdit-llm` daemon already produce text and JSON output to compare against.
+- **Oracle:** the official xEdit release binaries of the baseline tag (`xDump.exe`, `xFOEdit.exe`, `xTESEdit.exe`, `xSFEdit.exe`, `BSArch.exe`, `BSArchPro.exe`, `Sniff.exe`). The project has no Delphi compiler, so the oracle cannot be rebuilt and the port source must match the release tag exactly. The harness finds the binaries through the `XEDIT_ORACLE_DIR` environment variable.
+- **Secondary oracle:** the `xEdit-llm` automation build returns conflict, reference and cleaning results as JSON, which is easier to compare than GUI state. It is a fork at a different upstream commit, so it is used only to cross-check and never to close a gate.
 - **Corpus:** vanilla masters for each game from the local game installs (never committed), plus small synthetic plugins committed under `tests/fixtures`.
 - **Checks:** full element dump equality, byte-identical round-trip save, conflict status equality, reference index equality, script output equality, archive listing and extraction equality.
 - **Coverage ledger:** `coverage/ledger.toml` lists every GUI event binding, game mode, tool mode, command-line switch and script host function with its status and the command that covers it. `cargo xtask sync <upstream checkout>` generates it from the upstream source and adds new upstream entries as `pending`. `cargo xtask check` validates it in CI. The `xEdit-llm` inventory (`Tools/AgentCoverage`) is a reference for which actions are presentation-only.
@@ -63,11 +64,11 @@ Each phase lists the port work, the CLI surface it adds, the agent skill work, a
 
 ### Phase 0: Foundations
 
-- **Port:** Workspace, command registry and CI (format, clippy, test, `cargo deny check licenses`, `cargo xtask check`). Pin the upstream commit in `upstream-map.toml`. Generate the unit map and the coverage ledger. Build the Delphi oracle and the parity harness skeleton.
+- **Port:** Workspace, command registry and CI (format, clippy, test, `cargo deny check licenses`, `cargo xtask check`). Pin the upstream release in `upstream-map.toml`. Generate the unit map and the coverage ledger. Build the parity harness skeleton.
 - **CLI:** `xedit --version`, `xedit schema`, `xedit call <command>`, global `--json` and error code conventions.
 - **Skills:** `porting-pascal-unit` (the procedure for porting one unit: headers, naming, map entry, parity test). `checking-parity` (run the harness and read its report).
 - **Gate:** CI green. Oracle produces a dump of one vanilla master.
-- **Status:** Done except the oracle and the harness. The oracle needs Delphi 12 (Community Edition is enough for the `LiteDebug` configuration), which is not installed on the development machine.
+- **Status:** Done except the harness. The 4.1.5q `xDump.exe` dumps a vanilla Fallout 4 master on the development machine.
 
 ### Phase 1: Read path for the first games
 
@@ -135,12 +136,12 @@ Each phase lists the port work, the CLI surface it adds, the agent skill work, a
 
 `syncing-upstream` is drafted in phase 2 and extended in every later phase. Procedure:
 
-1. Fetch upstream and list commits after the commit recorded in `upstream-map.toml`.
+1. Fetch upstream and find the newest release tag that has published binaries. List the commits between the tag recorded in `upstream-map.toml` and that tag. Commits after the newest release are not merged, because nothing can verify them.
 2. Classify each changed unit through the map: definitions, core, GUI, scripting, tools.
 3. Port the change. Definition changes go through `xtask port-defs`; other changes are ported by hand with `porting-pascal-unit`.
 4. Add or update the session command and CLI subcommand when the change adds an operation, and update the coverage ledger.
-5. Rebuild the oracle at the new upstream commit and run the parity harness.
-6. Advance the recorded commit and open one pull request per upstream release or logical group.
+5. Point `XEDIT_ORACLE_DIR` at the binaries of the new release and run the parity harness.
+6. Advance the recorded tag and commit with `cargo xtask sync <upstream checkout> <commit>` and open one pull request per upstream release.
 
 A unit that is not yet ported gets its upstream change recorded as pending in the map, so nothing is lost while the port is in progress.
 

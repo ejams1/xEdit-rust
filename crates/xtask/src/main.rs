@@ -41,8 +41,9 @@ struct UpstreamMap {
 #[derive(Serialize, Deserialize, Default)]
 struct Upstream {
     repository: String,
-    branch: String,
-    /// Upstream commit the port is level with.
+    /// Release tag the port is level with. Its published binaries are the parity oracle.
+    tag: String,
+    /// Commit of `tag`.
     commit: String,
 }
 

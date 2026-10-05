@@ -5,16 +5,28 @@ description: Use when verifying that the Rust port behaves the same as Delphi xE
 
 # Checking parity
 
-The Delphi build of the upstream commit in `upstream-map.toml` is the oracle. The port is correct when it produces the same output as the oracle on the same input.
+The official xEdit release build of the tag in `upstream-map.toml` is the oracle. The project has no Delphi compiler, so only released binaries can be the oracle. The port is correct when it produces the same output as the oracle on the same input.
 
 ## State of the harness
 
-The harness is not built yet. Building the oracle needs Delphi 12, which is not installed on the development machine. Until both exist, this skill describes the contract the harness must meet. Update this section when that changes.
+The harness is not built yet. Until it exists, run the oracle by hand and compare with `diff`. Update this section when that changes.
+
+## Running the oracle
+
+`XEDIT_ORACLE_DIR` points at the unpacked release (on the development machine: `M:\projectsíit-upstream-srcíit 4.1.5q`). The game is selected with a switch such as `-FO4` or `-SSE`. Masters are read from the directory of the input file.
+
+```
+"$XEDIT_ORACLE_DIR/xDump.exe" -FO4 -q "<game>/Data/<plugin>" > dump.txt 2> dump.log
+```
+
+The dump goes to stdout and progress goes to stderr. `xDump.exe -FO4 -?` lists the options.
+
+The `xEdit-llm` automation build is a secondary oracle for conflict, reference and cleaning results as JSON. It is a fork at a different upstream commit: use it to cross-check, never to close a gate.
 
 ## Inputs
 
 - **Corpus:** vanilla master files from the local game installs. Never commit game files. Small synthetic plugins live in `tests/fixtures` and are committed.
-- **Oracle output:** produced by the Delphi tools (xDump, xEdit tool modes, BSArch, Sniff) and cached outside the repository, keyed by upstream commit and input file hash.
+- **Oracle output:** produced by the release binaries (xDump, xEdit tool modes, BSArch, Sniff) and cached outside the repository, keyed by release tag and input file hash.
 
 ## Checks
 
