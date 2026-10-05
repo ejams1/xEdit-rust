@@ -636,6 +636,8 @@ dependencies = [
  "schemars",
  "serde",
  "serde_json",
+ "xedit-core",
+ "xedit-defs",
 ]
 
 [[package]]

@@ -317,6 +317,15 @@ fn run_oracle(case: &Case, oracle: &Path, dir: &Path, stem: &str, oracle_out: &P
     let status = Command::new(oracle)
         .arg(format!("-{}", case.game.mode))
         .arg("-q")
+        // The masters of a plugin that is not the game master load from the
+        // data path; without it the oracle fails on the hardcoded records.
+        .arg(format!(
+            "-D:{}",
+            case.input
+                .parent()
+                .map(|dir| dir.display().to_string())
+                .unwrap_or_default()
+        ))
         .arg(&case.input)
         .stdin(Stdio::null())
         .stdout(File::create(&partial)?)

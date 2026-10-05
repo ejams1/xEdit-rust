@@ -29,16 +29,16 @@ Only the dump check exists so far. Add the other checks of the table below to `c
 
 ## Running the oracle
 
-`XEDIT_ORACLE_DIR` points at the unpacked release archive of the baseline tag. The game is selected with a switch such as `-FO4` or `-SSE`. Masters are read from the directory of the input file.
+`XEDIT_ORACLE_DIR` points at the unpacked release archive of the baseline tag. The game is selected with a switch such as `-FO4` or `-SSE`. Masters are read from the directory of the input file, and `-D:<Data path>` is needed for every plugin but the game master: without it the oracle loads the hardcoded records, cannot find the game master again and stops with `EOSError: System Error. Code: 2`.
 
 ```
-"$XEDIT_ORACLE_DIR/xDump.exe" -FO4 -q "$XEDIT_FO4_DATA\<plugin>" > dump.txt 2> dump.log
-"$XEDIT_ORACLE_DIR/xDump.exe" -SSE -q "$XEDIT_SSE_DATA\<plugin>" > dump.txt 2> dump.log
+"$XEDIT_ORACLE_DIR/xDump.exe" -FO4 -q "-D:$XEDIT_FO4_DATA" "$XEDIT_FO4_DATA\<plugin>" > dump.txt 2> dump.log
+"$XEDIT_ORACLE_DIR/xDump.exe" -SSE -q "-D:$XEDIT_SSE_DATA" "$XEDIT_SSE_DATA\<plugin>" > dump.txt 2> dump.log
 ```
 
 Pass the plugin path with backslashes and a drive letter. The oracle does not find masters when the path uses forward slashes. The oracle exits with 0 after an exception; a complete run ends `dump.log` with `All Done.`.
 
-The dump goes to stdout and progress goes to stderr. `xDump.exe -FO4 -?` lists the options.
+The dump goes to stdout and progress goes to stderr. `xDump.exe -FO4 -?` lists the options. The plain dump prints `[S]: <summary>` after an element without value whose summary is not empty (`DumpSummary` is on by default), and the file header record itself has no name line: its elements start at column 0.
 
 A whole-file dump of `Fallout4.esm` (`-FO4 -q`) wrote 12.4 GB in 1 h 53 min and then stopped with `Unexpected Error: <EAccessViolation ...>` while dumping INFO `[000673E3]`, without `All Done.`. Treat the oracle output of a crashed run as valid up to the last complete record and compare only that prefix; the records after the crash need a dump that starts past them, or a smaller plugin.
 

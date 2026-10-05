@@ -24,6 +24,14 @@ struct Cli {
 enum Action {
     /// Print every command with its request and response JSON Schema.
     Schema,
+    /// Write the element tree of a plugin as xDump prints it.
+    Dump {
+        /// Game of the plugin: fo4, sse or tes5.
+        #[arg(long)]
+        game: String,
+        /// Path of the plugin.
+        file: String,
+    },
     /// Run a command by name.
     Call {
         /// Command name as listed by `xedit schema`, for example system.version.
@@ -37,6 +45,7 @@ enum Action {
 fn run(action: Action) -> Result<Value, CommandError> {
     let registry = Registry::standard();
     match action {
+        Action::Dump { .. } => unreachable!("handled in main"),
         Action::Schema => Ok(registry.catalogue()),
         Action::Call { name, params } => {
             let params = serde_json::from_str(&params)
@@ -48,6 +57,18 @@ fn run(action: Action) -> Result<Value, CommandError> {
 
 fn main() -> ExitCode {
     let cli = Cli::parse();
+    if let Action::Dump { game, file } = &cli.action {
+        let result = xedit_session::dump::setup_game(game).and_then(|_| {
+            let stdout = std::io::stdout();
+            let mut out = std::io::BufWriter::with_capacity(1 << 20, stdout.lock());
+            xedit_session::dump::dump_file(file, &mut out)
+        });
+        if let Err(error) = result {
+            eprintln!("error: {error}");
+            return ExitCode::FAILURE;
+        }
+        return ExitCode::SUCCESS;
+    }
     let outcome = run(cli.action);
     match (&outcome, cli.json) {
         (Ok(result), true) => println!("{}", json!({ "ok": true, "result": result })),
