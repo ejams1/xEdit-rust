@@ -62,8 +62,24 @@ Upstream uses three thread classes in total. Loading, reference building and con
 
 Each phase lists the port work, the CLI surface it adds, the agent skill work, and the gate that closes it.
 
+### How a phase is run
+
+1. **One pull request per phase.** Each phase is developed on its own branch (`phase-1-read-path` and so on) and opened as one pull request. Open it as a draft when the phase starts, so that CI runs on every push. Upstream sync work is not part of a phase and gets its own pull requests.
+2. **Suggested model.** Each phase names the Claude model suggested for the implementation work. The suggestion weighs how much of the phase is new design against how much is volume work that the parity harness checks mechanically. Escalate to the next model up when a problem resists two attempts.
+3. **Review by Fable.** When the phase gate passes, a fresh Fable 5.1 session reviews the whole pull request before it is merged. The session must be fresh, also for phases that Fable implemented, so that the review does not inherit the implementer's assumptions. Findings are fixed in the same pull request, and the review is repeated on the fixes.
+
+The review checks:
+
+- The gate evidence is real: the harness ran on the full corpus, and no expected output was edited to match the port.
+- Ported code follows the upstream unit and keeps its quirks. Deviations are marked `UPSTREAM-QUIRK:` or justified.
+- Every operation added in the phase is a session command with a schema, and `coverage/ledger.toml` and `upstream-map.toml` match what was ported.
+- Correctness and safety: error handling, `unsafe` blocks with `// SAFETY:` comments, no output that depends on thread count or CPU features.
+- License: file headers, upstream origin lines, dependency licenses.
+- The agent skills changed in the phase describe what the code now does.
+
 ### Phase 0: Foundations
 
+- **Model:** Fable 5.1. Done.
 - **Port:** Workspace, command registry and CI (format, clippy, test, `cargo deny check licenses`, `cargo xtask check`). Pin the upstream release in `upstream-map.toml`. Generate the unit map and the coverage ledger. Build the parity harness skeleton.
 - **CLI:** `xedit --version`, `xedit schema`, `xedit call <command>`, global `--json` and error code conventions.
 - **Skills:** `porting-pascal-unit` (the procedure for porting one unit: headers, naming, map entry, parity test). `checking-parity` (run the harness and read its report).
@@ -72,6 +88,7 @@ Each phase lists the port work, the CLI surface it adds, the agent skill work, a
 
 ### Phase 1: Read path for the first games
 
+- **Model:** Fable 5.1. The element and definition model and the transpiler set the patterns every later phase copies, and mistakes here are the most expensive to undo.
 - **Port:** `xedit-io`, the element and definition model, record and group parsing, compressed records, localized strings, game detection, load order. Write `xtask port-defs`, a transpiler from the Pascal definition calls to the Rust builder API; callbacks are ported by hand. Port the Fallout 4 and Skyrim SE definitions first.
 - **CLI:** `xedit session info`, `xedit files list`, `xedit records get|find|list`, `xedit elements get`, `xedit dump` (xDump equivalent).
 - **Skills:** `using-xedit-cli` version 1, covering read-only inspection. `porting-definitions` (run the transpiler, port callbacks, verify).
@@ -80,6 +97,7 @@ Each phase lists the port work, the CLI surface it adds, the agent skill work, a
 
 ### Phase 2: All games and saves
 
+- **Model:** Sonnet 5.5. High-volume, mechanical work driven by the transpiler and checked by dump parity. Hand a definition callback or a parity difference that resists two attempts to Opus 5.5.
 - **Port:** Remaining definitions (TES3, TES4, FO3, FNV, TES5, Enderal, VR variants, FO76, SF1 including reflection data) and the save game definitions.
 - **CLI:** `--game` for all 14 game modes, `xedit saves dump`.
 - **Skills:** Extend `using-xedit-cli` with per-game notes. First draft of `syncing-upstream` (see below), exercised on definition-only upstream commits, which are the most common kind.
@@ -87,6 +105,7 @@ Each phase lists the port work, the CLI surface it adds, the agent skill work, a
 
 ### Phase 3: Write path and daemon
 
+- **Model:** Opus 5.5. Byte-identical saving and FormID and master rewriting are subtle but follow the upstream code closely.
 - **Port:** Element editing, add and remove, copy as override and as new record, master management, FormID change and renumber, ESL/ESM/ESP flag handling, sort, save.
 - **CLI:** `xedit elements set|add|remove`, `xedit records copy|delete`, `xedit masters add|clean|sort`, `xedit formids change|renumber`, `xedit save`, all with `--dry-run`. `xedit serve` keeps a session loaded and accepts the same commands as JSON-RPC. `xedit mcp` exposes the command registry as MCP tools generated from the schemas.
 - **Skills:** `using-xedit-cli` version 2 with the mutation rules (edit flag, dry run, save, readback). `adding-a-command` (command, schema, CLI subcommand, test, ledger entry).
@@ -94,6 +113,7 @@ Each phase lists the port work, the CLI surface it adds, the agent skill work, a
 
 ### Phase 4: Analysis and tool modes
 
+- **Model:** Opus 5.5. Many separate features, each with its own oracle check.
 - **Port:** Conflict detection, reference index, filters, comparisons, error checks, ITM and UDR cleaning, quick auto clean, mod groups, merged patch, localization tools, and all 17 tool modes with their command-line switches.
 - **CLI:** `xedit conflicts`, `xedit refs`, `xedit filter`, `xedit compare`, `xedit check`, `xedit clean`, `xedit modgroups`, `xedit patch merged`, `xedit localization`. The legacy switches (`-quickautoclean`, `-IKnowWhatImDoing` and the rest) stay accepted for compatibility with existing mod manager setups.
 - **Skills:** Agent workflow skills on the native CLI: conflict audit, plugin cleaning, patch building. These replace the `xEdit-llm` daemon route.
@@ -102,6 +122,7 @@ Each phase lists the port work, the CLI surface it adds, the agent skill work, a
 
 ### Phase 5: Archives, assets and LOD
 
+- **Model:** Opus 5.5 for NIF, Sniff and LODGen. Sonnet 5.5 for BSA, BA2 and DDS, which are well-specified container formats.
 - **Port:** BSA and BA2 read and write, DDS, BSArch, NIF and material formats, Wwise, Sniff operations, LODGen.
 - **CLI:** `bsarch` with the upstream arguments, `xedit archive list|extract|pack`, `sniff <operation>`, `xedit lodgen`.
 - **Skills:** Asset skills: archive handling, NIF batch operations.
@@ -110,6 +131,7 @@ Each phase lists the port work, the CLI surface it adds, the agent skill work, a
 
 ### Phase 6: Scripting
 
+- **Model:** Fable 5.1 for the interpreter, because script compatibility is the most important goal and JvInterpreter semantics are undocumented. Sonnet 5.5 for the 598 host bindings once the binding pattern exists.
 - **Port:** A Pascal interpreter compatible with the JvInterpreter dialect, and all 604 host registrations bound to `xedit-session` commands. Scripts that build VCL forms run against a form shim in the GUI and fail with a clear error when headless.
 - **CLI:** `xedit script run|list|check`.
 - **Skills:** `writing-xedit-scripts` for agents that need custom batch logic.
@@ -117,6 +139,7 @@ Each phase lists the port work, the CLI surface it adds, the agent skill work, a
 
 ### Phase 7: GUI
 
+- **Model:** Opus 5.5 for the main window and the virtualised tree and grid. Sonnet 5.5 for the dialogs.
 - **Port:** Main window (navigation tree, view tab with conflict colours, referenced-by, messages, information), all dialogs, themes, bookmarks, settings files. Every action calls a session command.
 - **CLI:** No new commands. Any GUI action without a command is a bug against design rule 1.
 - **Skills:** None new. The coverage ledger must show every GUI binding as covered or presentation-only.
@@ -124,12 +147,14 @@ Each phase lists the port work, the CLI surface it adds, the agent skill work, a
 
 ### Phase 8: Performance
 
+- **Model:** Fable 5.1. SIMD, `unsafe` and concurrency changes must keep output identical, and errors here are silent.
 - **Work:** Profile with the benchmarks collected since phase 1. Add SIMD with runtime dispatch (SSE2 baseline, AVX2, AVX-512 where the CPU supports it) to hot loops: byte comparison in conflict detection, string and signature scanning, checksums, decompression, numeric conversion. Tune allocation with arenas and string interning. Parallelise remaining serial stages.
 - **Rule:** Every optimisation keeps a scalar fallback and must pass the full parity harness. Output never depends on thread count or CPU features.
 - **Gate:** Load, reference build, conflict scan, clean and archive pack are each faster than the Delphi build on the corpus, with numbers published in the repository.
 
 ### Phase 9: Release and cutover
 
+- **Model:** Sonnet 5.5.
 - **Work:** Release packaging with the per-game executable names (`FO4Edit.exe`, `SSEEdit.exe` and the rest). Migration notes. Point the agent plugin skills at `xedit mcp` and retire the `xEdit-llm` daemon route.
 
 ## Upstream sync skill
