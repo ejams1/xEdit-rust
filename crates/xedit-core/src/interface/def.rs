@@ -33,6 +33,7 @@ use std::sync::{Arc, Mutex, OnceLock, Weak};
 
 use arc_swap::{ArcSwapOption, Guard};
 
+use super::byte_array::ByteArrayDef;
 use super::element::{DataPtr, ElementArg, ElementRef};
 use super::enum_def::EnumDef;
 use super::flags::{FlagDef, FlagsDef};
@@ -279,6 +280,10 @@ pub trait Def: Send + Sync + 'static {
     }
 
     fn as_float_def(&self) -> Option<&FloatDef> {
+        None
+    }
+
+    fn as_byte_array_def(&self) -> Option<&ByteArrayDef> {
         None
     }
 

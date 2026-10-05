@@ -7,6 +7,7 @@
 //! Port of `wbInterface.pas`, split into submodules that follow the order of
 //! the upstream unit.
 
+pub mod byte_array;
 pub mod def;
 pub mod element;
 pub mod enum_def;
@@ -19,6 +20,7 @@ pub mod integer;
 pub mod misc;
 pub mod types;
 
+pub use byte_array::*;
 pub use def::*;
 pub use element::{Container, DataPtr, Element, ElementArg, ElementRef};
 pub use enum_def::*;
