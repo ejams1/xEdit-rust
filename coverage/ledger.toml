@@ -1549,10 +1549,6 @@ source = "mniNavCreateModGroupClick"
 status = "pending"
 source = "mniViewEditClick"
 
-[gui."xEdit/xeMainForm.dfm:mniViewHeaderClipboard:OnClick"]
-status = "pending"
-source = "mniViewHeaderClipboardClick"
-
 [gui."xEdit/xeMainForm.dfm:mniViewHeaderCopyAsNewRecord:OnClick"]
 status = "pending"
 source = "mniViewHeaderCopyIntoClick"
@@ -1568,18 +1564,6 @@ source = "mniViewHeaderCopyIntoClick"
 [gui."xEdit/xeMainForm.dfm:mniViewHeaderCopyAsWrapper:OnClick"]
 status = "pending"
 source = "mniViewHeaderCopyIntoClick"
-
-[gui."xEdit/xeMainForm.dfm:mniViewHeaderCopyLoadOrderFormID:OnClick"]
-status = "pending"
-source = "mniViewHeaderCopyLoadOrderFormIDClick"
-
-[gui."xEdit/xeMainForm.dfm:mniViewHeaderCopyModuleName:OnClick"]
-status = "pending"
-source = "mniViewHeaderCopyModuleNameClick"
-
-[gui."xEdit/xeMainForm.dfm:mniViewHeaderCopyName:OnClick"]
-status = "pending"
-source = "mniViewHeaderCopyNameClick"
 
 [gui."xEdit/xeMainForm.dfm:mniViewHeaderDeepCopyAsOverride:OnClick"]
 status = "pending"
@@ -2753,10 +2737,6 @@ source = "xEdit/xeInit.pas"
 status = "pending"
 source = "xDump.dpr"
 
-[switch.comparetofile]
-status = "pending"
-source = "xEdit/xeInit.pas"
-
 [switch.contrast]
 status = "pending"
 source = "Tools/TreeLodBillboardCreator/treelod.dpr"
@@ -2821,6 +2801,10 @@ source = "xEdit/xeInit.pas"
 status = "pending"
 source = "xEdit/xeInit.pas"
 
+[switch.dontremoveoffsetdata]
+status = "pending"
+source = "xEdit/xeInit.pas"
+
 [switch.dr]
 status = "pending"
 source = "xDump.dpr"
@@ -2848,10 +2832,6 @@ source = "BSArch.dpr"
 [switch.ff]
 status = "pending"
 source = "BSArch.dpr"
-
-[switch.fieldsfile]
-status = "pending"
-source = "xEdit/xeInit.pas"
 
 [switch.fillpnam]
 status = "pending"
@@ -2988,10 +2968,6 @@ source = "xEdit/xeInit.pas"
 [switch.mipmap]
 status = "pending"
 source = "Tools/TreeLodBillboardCreator/treelod.dpr"
-
-[switch.modgroups]
-status = "pending"
-source = "xEdit/xeInit.pas"
 
 [switch.moprofile]
 status = "pending"
@@ -3153,10 +3129,6 @@ source = "BSArch.dpr"
 status = "pending"
 source = "xEdit/xeInit.pas"
 
-[switch.showlargesubrecords]
-status = "pending"
-source = "xEdit/xeInit.pas"
-
 [switch.simpleformids]
 status = "pending"
 source = "xEdit/xeInit.pas"
@@ -3232,10 +3204,6 @@ source = "BSArch.dpr"
 [switch.tes5]
 status = "pending"
 source = "BSArch.dpr"
-
-[switch.testconflicts]
-status = "pending"
-source = "xEdit/xeInit.pas"
 
 [switch.thisisfine]
 status = "pending"
@@ -4459,7 +4427,7 @@ source = "_RemoveNode"
 
 [script."xejviScriptAdapterHost:cUnit.ScriptsPath:function"]
 status = "pending"
-source = "_ScriptsPath"
+source = "_wbScriptsPath"
 
 [script."xejviScriptAdapterHost:cUnit.TempPath:function"]
 status = "pending"

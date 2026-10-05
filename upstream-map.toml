@@ -3,8 +3,8 @@
 
 [upstream]
 repository = "https://github.com/TES5Edit/TES5Edit"
-branch = "dev-4.1.6"
-commit = "9fb016884bec138ea6c7b872cec831537d464c3e"
+tag = "xedit-4.1.5q"
+commit = "fd1e36020b2b5b6217e553dc0038983146a2e2dd"
 
 [units."BSArch.dpr"]
 status = "pending"
@@ -28,8 +28,7 @@ status = "pending"
 status = "pending"
 
 [units."Core/MSHeap.pas"]
-status = "not-ported"
-note = "Delphi memory manager override; Rust uses its own allocator."
+status = "pending"
 
 [units."Core/wbBSA.pas"]
 status = "pending"
@@ -44,9 +43,6 @@ status = "pending"
 status = "pending"
 
 [units."Core/wbCompression.pas"]
-status = "pending"
-
-[units."Core/wbConflict.pas"]
 status = "pending"
 
 [units."Core/wbDDS.pas"]
@@ -65,9 +61,6 @@ status = "pending"
 status = "pending"
 
 [units."Core/wbDataFormatNifTypes.pas"]
-status = "pending"
-
-[units."Core/wbDataFormatWwise.pas"]
 status = "pending"
 
 [units."Core/wbDefines.inc"]
@@ -121,13 +114,8 @@ status = "pending"
 [units."Core/wbDefinitionsTES5Saves.pas"]
 status = "pending"
 
-[units."Core/wbDiff.pas"]
-status = "replaced"
-note = "TDiff has its own license terms; use a Rust diff crate."
-
 [units."Core/wbHalfFloat.pas"]
-status = "replaced"
-note = "Use a Rust half-float crate."
+status = "pending"
 
 [units."Core/wbHardcoded.pas"]
 status = "pending"
