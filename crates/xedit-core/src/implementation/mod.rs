@@ -27,6 +27,10 @@ macro_rules! element_no_values {
         fn get_edit_value(&self) -> String {
             String::new()
         }
+
+        fn get_links_to(&self) -> Option<ElementRef> {
+            None
+        }
     };
     (own_values) => {};
 }
@@ -55,10 +59,6 @@ macro_rules! element_common {
         }
 
         fn add_referenced_from_id(&self, _form_id: FormID) {}
-
-        fn get_links_to(&self) -> Option<ElementRef> {
-            None
-        }
 
         fn get_container(&self) -> Option<ElementRef> {
             self.$base().container()
@@ -138,6 +138,43 @@ impl FileBytes {
     }
 }
 
+/// Port of the `csInit`, `csInitializing` and `csInitDone` states of
+/// `TwbContainer.DoInit`: the initialization runs once, and a call from
+/// inside the initialization (a decider that reads the container being
+/// built) returns at once instead of blocking.
+///
+/// The guard is not a lock: a second thread that calls `run` while the
+/// first one initializes sees the elements built so far.
+pub struct InitOnce(std::sync::atomic::AtomicU8);
+
+impl InitOnce {
+    const NOT_STARTED: u8 = 0;
+    const RUNNING: u8 = 1;
+    const DONE: u8 = 2;
+
+    pub const fn new() -> Self {
+        InitOnce(std::sync::atomic::AtomicU8::new(Self::NOT_STARTED))
+    }
+
+    pub fn run(&self, init: impl FnOnce()) {
+        if self
+            .0
+            .compare_exchange(Self::NOT_STARTED, Self::RUNNING, Ordering::AcqRel, Ordering::Acquire)
+            .is_err()
+        {
+            return;
+        }
+        init();
+        self.0.store(Self::DONE, Ordering::Release);
+    }
+}
+
+impl Default for InitOnce {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// The bytes an element reads its data from: the file, or the decompressed
 /// data of a record.
 #[derive(Clone)]
@@ -155,21 +192,50 @@ impl DataBlock {
     }
 }
 
-/// Port of `ElementByPath`: the names separated by `\`, with `[n]` for the
-/// element at a position.
+/// Port of `TwbContainer.GetElementByName`: by name, then by display name,
+/// ignoring case.
+pub(crate) fn element_by_name(container: &dyn Container, name: &str) -> Option<ElementRef> {
+    let elements: Vec<ElementRef> = (0..container.get_element_count())
+        .filter_map(|index| container.get_element(index))
+        .collect();
+    elements
+        .iter()
+        .find(|element| element.get_name().eq_ignore_ascii_case(name))
+        .or_else(|| {
+            elements
+                .iter()
+                .find(|element| element.get_display_name(true).eq_ignore_ascii_case(name))
+        })
+        .cloned()
+}
+
+/// Port of `ElementByPath` with `ResolveElementName`: the names separated by
+/// `\\`, with `.`, `..`, `[n]` for the element at a position, and a name of
+/// four characters that is also tried as a signature.
 pub(crate) fn element_by_path(container: &dyn Container, path: &str) -> Option<ElementRef> {
     let (first, rest) = match path.split_once('\\') {
         Some((first, rest)) => (first, Some(rest)),
         None => (path, None),
     };
-    let element = if let Some(index) = first.strip_prefix('[').and_then(|index| index.strip_suffix(']')) {
-        container.get_element(index.parse().ok()?)
+    if first == "." {
+        return match rest {
+            Some(rest) => container.get_element_by_path(rest),
+            None => None,
+        };
+    }
+    let element = if first == ".." {
+        container.get_container()
+    } else if let Some(index) = first.strip_prefix('[').and_then(|index| index.strip_suffix(']')) {
+        container.get_element(index.parse().unwrap_or(0))
     } else {
-        container.get_element_by_name(first)
-    }?;
+        container.get_element_by_name(first).or_else(|| {
+            let bytes: [u8; 4] = first.as_bytes().try_into().ok()?;
+            container.get_record_by_signature(Signature::new(&bytes))
+        })
+    };
     match rest {
-        Some(rest) => element.as_container()?.get_element_by_path(rest),
-        None => Some(element),
+        Some(rest) => element?.as_container()?.get_element_by_path(rest),
+        None => element,
     }
 }
 
@@ -806,7 +872,7 @@ pub struct MainRecordImpl {
     /// The decompressed data of a compressed record, decompressed on first use.
     mr_data_storage: OnceLock<Option<Arc<Vec<u8>>>>,
     /// Port of `DoInit`: the subrecords are built on first use.
-    mr_init: OnceLock<()>,
+    mr_init: InitOnce,
     mr_editor_id: RwLock<String>,
     mr_full_name: RwLock<String>,
     /// Port of `mrMaster` and `mrOverrides`.
@@ -852,7 +918,7 @@ impl MainRecordImpl {
             dc_data_base,
             dc_data_end,
             mr_data_storage: OnceLock::new(),
-            mr_init: OnceLock::new(),
+            mr_init: InitOnce::new(),
             mr_editor_id: RwLock::new(String::new()),
             mr_full_name: RwLock::new(String::new()),
             mr_master: RwLock::new(None),
@@ -962,7 +1028,7 @@ impl MainRecordImpl {
 
     /// Port of `DoInit`: builds the subrecords once.
     pub fn do_init(self: &Arc<Self>) {
-        self.mr_init.get_or_init(|| {
+        self.mr_init.run(|| {
             self.create_contained_in();
             sub_record::init_main_record(self);
         });
@@ -1169,10 +1235,7 @@ impl Container for FileImpl {
     }
 
     fn get_element_by_name(&self, name: &str) -> Option<ElementRef> {
-        self.container
-            .elements()
-            .into_iter()
-            .find(|element| element.get_name() == name)
+        element_by_name(self, name)
     }
 
     fn get_element_by_path(&self, path: &str) -> Option<ElementRef> {
@@ -1328,10 +1391,7 @@ impl Container for GroupRecordImpl {
     }
 
     fn get_element_by_name(&self, name: &str) -> Option<ElementRef> {
-        self.container
-            .elements()
-            .into_iter()
-            .find(|element| element.get_name() == name)
+        element_by_name(self, name)
     }
 
     fn get_element_by_path(&self, path: &str) -> Option<ElementRef> {
@@ -1377,10 +1437,31 @@ impl Element for MainRecordImpl {
         result
     }
 
-    /// Port of `TwbMainRecord.GetDisplayName` for the full name; the names
-    /// of references, cells and responses and the summary are not ported yet.
+    /// Port of `TwbMainRecord.GetDisplayName`: the full name, the names
+    /// of references, cells and responses, or the summary. The special names
+    /// of placed records and cells are not ported yet.
     fn get_display_name(&self, _use_suffix: bool) -> String {
-        self.get_full_name()
+        let mut result = self.get_full_name();
+        if result.is_empty() && self.mr_struct.signature == Signature::new(b"INFO") {
+            result = self
+                .get_element_by_path("Responses\\Response\\NAM1")
+                .map(|element| element.get_value())
+                .unwrap_or_default();
+        }
+        if result.is_empty() {
+            result = self.get_summary();
+        }
+        result
+    }
+
+    /// Port of `TwbMainRecord.GetSummary`.
+    fn get_summary(&self) -> String {
+        let Some(def) = &self.mr_def else {
+            return String::new();
+        };
+        let self_ref: ElementRef = self.self_arc();
+        let mut links_to = None;
+        def.to_summary(0, Some(&self_ref), &mut links_to)
     }
 
     fn get_data_size(&self) -> i32 {
@@ -1445,11 +1526,7 @@ impl Container for MainRecordImpl {
     }
 
     fn get_element_by_name(&self, name: &str) -> Option<ElementRef> {
-        self.self_arc().do_init();
-        self.container
-            .elements()
-            .into_iter()
-            .find(|element| element.get_name() == name)
+        element_by_name(self, name)
     }
 
     fn get_element_by_path(&self, path: &str) -> Option<ElementRef> {
@@ -1524,6 +1601,12 @@ impl MainRecord for MainRecordImpl {
 
     fn get_is_deleted(&self) -> bool {
         self.mr_struct.flags.is_deleted()
+    }
+
+    /// Port of `GetMasterOrSelf`.
+    fn get_master_or_self(&self) -> MainRecordRef {
+        let master = self.mr_master.read().unwrap().as_ref().and_then(Weak::upgrade);
+        master.unwrap_or_else(|| self.self_arc()) as MainRecordRef
     }
 
     /// Port of `GetWinningOverride`: the last override.

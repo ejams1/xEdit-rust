@@ -12,7 +12,7 @@
 //! of sorted arrays, chapters and the compressed structures of save files.
 
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, OnceLock, Weak};
+use std::sync::{Arc, Weak};
 
 use crate::interface::def::{EmptyDef, NamedDef, NamedDefArgs, ValueDef};
 use crate::interface::element::{Container, DataContainer, DataPtr, Element, ElementRef, FileRef, MainRecordRef};
@@ -34,7 +34,7 @@ pub struct ValueBase {
     range: Option<(usize, usize)>,
     vb_value_def: Arc<dyn ValueDef>,
     e_name_suffix: String,
-    init: OnceLock<()>,
+    init: super::InitOnce,
     optional_and_missing: AtomicBool,
 }
 
@@ -55,7 +55,7 @@ impl ValueBase {
             range,
             vb_value_def: value_def,
             e_name_suffix: name_suffix.to_owned(),
-            init: OnceLock::new(),
+            init: super::InitOnce::new(),
             optional_and_missing: AtomicBool::new(false),
         }
     }
@@ -199,7 +199,7 @@ impl ValueImpl {
 
     /// Port of `DoInit`: builds the children once.
     pub fn do_init(&self) {
-        self.vb.init.get_or_init(|| {
+        self.vb.init.run(|| {
             let Some((start, end)) = self.vb.range else { return };
             let self_ref = self.element_ref();
             let mut cursor = Cursor {
@@ -463,6 +463,23 @@ impl Element for ValueImpl {
         self.vb.vb_value_def.to_native_value(self.vb.data(), Some(&self_ref))
     }
 
+    /// Port of `TwbValueBase.GetSummary`.
+    fn get_summary(&self) -> String {
+        self.do_init();
+        let self_ref = self.element_ref();
+        let mut links_to = None;
+        self.vb
+            .vb_value_def
+            .to_summary(0, self.vb.data(), Some(&self_ref), &mut links_to)
+    }
+
+    /// Port of `TwbValueBase.InternalGetLinksTo`.
+    fn get_links_to(&self) -> Option<ElementRef> {
+        self.do_init();
+        let self_ref = self.element_ref();
+        self.vb.vb_value_def.get_links_to(self.vb.data(), Some(&self_ref))
+    }
+
     fn get_file(&self) -> Option<FileRef> {
         Some(self.vb.file.upgrade()? as FileRef)
     }
@@ -503,12 +520,7 @@ impl Container for ValueImpl {
     }
 
     fn get_element_by_name(&self, name: &str) -> Option<ElementRef> {
-        self.do_init();
-        self.vb
-            .container
-            .elements()
-            .into_iter()
-            .find(|element| element.get_name() == name)
+        super::element_by_name(self, name)
     }
 
     fn get_element_by_path(&self, path: &str) -> Option<ElementRef> {

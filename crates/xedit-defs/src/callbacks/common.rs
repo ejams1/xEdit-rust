@@ -386,3 +386,171 @@ pub fn wb_scen_add_info(a_main_record: &MainRecordRef) -> String {
     let path = if is_skyrim() { "PNAM" } else { "Quest" };
     in_container(element_edit_value(a_main_record, path))
 }
+
+/// Upstream `VarIsOrdinal` for the value of an element: the integer, or `None`.
+fn ordinal(value: Variant) -> Option<i64> {
+    match value {
+        Variant::Int(value) => Some(value),
+        Variant::UInt(value) => Some(value as i64),
+        Variant::Bool(value) => Some(i64::from(value)),
+        _ => None,
+    }
+}
+
+/// Upstream `wbSceneActionTypeDecider`: the `ANAM` type of a scene action.
+pub fn wb_scene_action_type_decider(a_container: ElementArg) -> i32 {
+    let Some(container) = a_container.and_then(|container| container.as_container()) else {
+        return -1;
+    };
+    ordinal(container.get_element_native_value("ANAM")).map_or(-1, |value| value as i32)
+}
+
+/// Upstream `wbSceneTimelineTypeDecider`: the kind of a scene timeline entry.
+pub fn wb_scene_timeline_type_decider(a_container: ElementArg) -> i32 {
+    let Some(container) = a_container.and_then(|container| container.as_container()) else {
+        return -1;
+    };
+    match ordinal(container.get_element_native_value("TNAM")) {
+        None => -1,
+        Some(2) => 1,
+        Some(4 | 5) => 2,
+        Some(0 | 7) => 3,
+        Some(_) => 0,
+    }
+}
+
+/// The main record an element links to.
+fn linked_record(element: &ElementRef) -> Option<MainRecordRef> {
+    element.get_links_to()?.into_main_record()
+}
+
+/// Upstream `wbDIALQuestToStr`: warns when the quest of a topic differs from
+/// the quest of its branch.
+pub fn wb_dial_quest_to_str(a_value: &mut String, _a_base_ptr: DataPtr, a_element: ElementArg, a_type: CallbackType) {
+    if a_type != CallbackType::ctCheck && a_type != CallbackType::ctToStr {
+        return;
+    }
+    let Some(element) = a_element else { return };
+    let Some(branch_quest) = element
+        .get_containing_main_record()
+        .and_then(|record| record.get_record_by_signature(Signature::new(b"BNAM")))
+        .and_then(|bnam| linked_record(&bnam))
+        .and_then(|branch| branch.get_record_by_signature(Signature::new(b"QNAM")))
+        .and_then(|qnam| linked_record(&qnam))
+        .map(|quest| quest.get_master_or_self())
+    else {
+        return;
+    };
+    let Some(element_quest) = linked_record(element).map(|quest| quest.get_master_or_self()) else {
+        return;
+    };
+    if element_quest.get_element_id() == branch_quest.get_element_id() {
+        return;
+    }
+    match a_type {
+        CallbackType::ctCheck => *a_value = "<Warning: does not match Quest assigned on Branch>".to_owned(),
+        _ => a_value.push_str(" <Warning: does not match Quest assigned on Branch>"),
+    }
+}
+
+/// Upstream `wbRGBAToStr`: the summary of a color.
+pub fn wb_rgba_to_str(a_value: &mut String, _a_base_ptr: DataPtr, a_element: ElementArg, a_type: CallbackType) {
+    let Some(container) = wb_try_set_container(a_element, a_type) else {
+        return;
+    };
+    let Some(container) = container.as_container() else {
+        return;
+    };
+    if container.get_element_count() < 3 {
+        return;
+    }
+    let summary = |index| {
+        container
+            .get_element(index)
+            .map(|element| element.get_summary())
+            .unwrap_or_default()
+    };
+    let (r, g, b) = (summary(0), summary(1), summary(2));
+    let alpha = container.get_element(3).filter(|alpha| {
+        alpha.get_conflict_priority() > ConflictPriority::cpIgnore
+            && alpha
+                .get_def()
+                .is_none_or(|def| def.get_def_type() != DefType::dtByteArray)
+    });
+    *a_value = match alpha {
+        Some(alpha) => format!("RGBA({r}, {g}, {b}, {})", alpha.get_summary()),
+        None => format!("RGB({r}, {g}, {b})"),
+    };
+}
+
+/// Upstream `wbVec3ToStr`: the summary of a vector.
+pub fn wb_vec3_to_str(a_value: &mut String, _a_base_ptr: DataPtr, a_element: ElementArg, a_type: CallbackType) {
+    let Some(container) = wb_try_set_container(a_element, a_type) else {
+        return;
+    };
+    let Some(container) = container.as_container() else {
+        return;
+    };
+    let summary = |index| {
+        container
+            .get_element(index)
+            .map(|element| element.get_summary())
+            .unwrap_or_default()
+    };
+    *a_value = format!("({}, {}, {})", summary(0), summary(1), summary(2));
+}
+
+/// Upstream `wbToStringFromLinksToSummary`: the summary of the element the
+/// value links to, with the record it is on.
+pub fn wb_to_string_from_links_to_summary(
+    a_value: &mut String,
+    _a_base_ptr: DataPtr,
+    a_element: ElementArg,
+    a_type: CallbackType,
+) {
+    if a_type != CallbackType::ctToStr {
+        return;
+    }
+    let Some(links_to) = a_element.and_then(|element| element.get_links_to()) else {
+        return;
+    };
+    let summary = links_to.get_summary();
+    if summary.is_empty() {
+        return;
+    }
+    *a_value = summary;
+    if links_to.as_main_record().is_none()
+        && let Some(main_record) = links_to.get_containing_main_record()
+    {
+        let record_name = main_record.get_name();
+        if !record_name.is_empty() {
+            a_value.push_str(" on ");
+            a_value.push_str(&record_name);
+        }
+    }
+}
+
+/// Upstream `wbToStringFromLinksToMainRecordName`: the value in brackets
+/// with the name of the record it links to.
+pub fn wb_to_string_from_links_to_main_record_name(
+    a_value: &mut String,
+    _a_base_ptr: DataPtr,
+    a_element: ElementArg,
+    a_type: CallbackType,
+) {
+    if a_type != CallbackType::ctToStr || a_value.is_empty() {
+        return;
+    }
+    *a_value = format!("[{a_value}]");
+    let Some(main_record) = a_element
+        .and_then(|element| element.get_links_to())
+        .and_then(|e| e.into_main_record())
+    else {
+        return;
+    };
+    let record_name = main_record.get_name();
+    if !record_name.is_empty() {
+        a_value.push(' ');
+        a_value.push_str(&record_name);
+    }
+}

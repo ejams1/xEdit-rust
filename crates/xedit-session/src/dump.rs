@@ -5,8 +5,8 @@
 // Ported from xEdit: xDump.dpr
 
 //! The `dump` command: the element tree of a plugin as `xDump.exe` prints it
-//! in its plain mode (no report, no sizes, no hidden elements). The
-//! summaries of elements without a value are not written yet.
+//! in its plain mode (no report, no sizes, no hidden elements), with the
+//! summaries of the elements without a value.
 
 use std::io::Write;
 
@@ -74,8 +74,16 @@ fn write_elements(container: &dyn Container, indent: &str, out: &mut dyn Write) 
 
 /// Port of `WriteElement` in the plain dump mode.
 fn write_element(element: &ElementRef, indent: &str, out: &mut dyn Write) -> std::io::Result<()> {
+    if std::env::var_os("XEDIT_TRACE").is_some() {
+        eprintln!("{indent}{}", element.get_name());
+    }
     let name = element.get_display_name(true);
     let value = element.get_value();
+    let summary = if value.is_empty() {
+        element.get_summary()
+    } else {
+        String::new()
+    };
     let mut indent = indent.to_owned();
     if element.get_name() != "Unused" && name != "Unused" {
         if !name.is_empty() {
@@ -88,7 +96,11 @@ fn write_element(element: &ElementRef, indent: &str, out: &mut dyn Write) -> std
             if !value.is_empty() {
                 writeln!(out, ": {value}")?;
             } else if !name.is_empty() {
-                writeln!(out)?;
+                if summary.is_empty() {
+                    writeln!(out)?;
+                } else {
+                    writeln!(out, " [S]: {summary}")?;
+                }
             }
         }
     }
