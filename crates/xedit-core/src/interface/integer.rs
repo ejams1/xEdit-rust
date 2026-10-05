@@ -108,6 +108,9 @@ pub trait IntegerDefInterface: ValueDef {
     fn get_int_type(&self) -> IntType;
 
     fn get_expected_length(&self, value: i64) -> i32;
+
+    /// Upstream `IwbIntegerDefInternal.ReplaceFormater`.
+    fn replace_formater(&self, formater: Option<Arc<dyn IntegerDefFormater>>);
 }
 
 /// Upstream `TwbIntegerDef`.
@@ -557,6 +560,10 @@ impl ValueDef for IntegerDef {
 }
 
 impl IntegerDefInterface for IntegerDef {
+    fn replace_formater(&self, formater: Option<Arc<dyn IntegerDefFormater>>) {
+        IntegerDef::replace_formater(self, formater);
+    }
+
     fn to_int(&self, data: DataPtr, element: ElementArg) -> i64 {
         let mut result = if Self::len(data) < i64::from(self.get_expected_length(0)) {
             0
