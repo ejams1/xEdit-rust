@@ -17,6 +17,8 @@ pub enum Variant {
     UInt(u64),
     Float(f64),
     Str(String),
+    /// A byte array (`TBytes`).
+    Bytes(Vec<u8>),
 }
 
 impl Variant {
@@ -26,7 +28,7 @@ impl Variant {
             Variant::Bool(value) => Some(if *value { -1 } else { 0 }),
             Variant::Int(value) => Some(*value),
             Variant::UInt(value) => Some(*value as i64),
-            Variant::Empty | Variant::Float(_) | Variant::Str(_) => None,
+            Variant::Empty | Variant::Float(_) | Variant::Str(_) | Variant::Bytes(_) => None,
         }
     }
 }
