@@ -1,0 +1,5818 @@
+# Everything reachable in upstream xEdit and the command that covers it.
+# Maintained with `cargo xtask sync`. Edit statuses by hand.
+
+[gui."BSArch/frmArchiveInfo.dfm:FormArchiveInfo:OnClose"]
+status = "pending"
+source = "FormClose"
+
+[gui."BSArch/frmArchiveInfo.dfm:FormArchiveInfo:OnDeactivate"]
+status = "pending"
+source = "FormDeactivate"
+
+[gui."BSArch/frmArchiveInfo.dfm:FormArchiveInfo:OnDestroy"]
+status = "pending"
+source = "FormDestroy"
+
+[gui."BSArch/frmArchiveInfo.dfm:FormArchiveInfo:OnKeyDown"]
+status = "pending"
+source = "FormKeyDown"
+
+[gui."BSArch/frmArchiveInfo.dfm:FormArchiveInfo:OnShow"]
+status = "pending"
+source = "FormShow"
+
+[gui."BSArch/frmArchiveInfo.dfm:mniSaveAs:OnClick"]
+status = "pending"
+source = "mniSaveAsClick"
+
+[gui."BSArch/frmArchiveInfo.dfm:vtText:OnGetText"]
+status = "pending"
+source = "vtTextGetText"
+
+[gui."BSArch/frmArchiveInfo.dfm:vtText:OnInitNode"]
+status = "pending"
+source = "vtTextInitNode"
+
+[gui."BSArch/frmArchiveInfo.dfm:vtText:OnKeyDown"]
+status = "pending"
+source = "vtTextKeyDown"
+
+[gui."BSArch/frmMain.dfm:FormMain:OnClose"]
+status = "pending"
+source = "FormClose"
+
+[gui."BSArch/frmMain.dfm:FormMain:OnCreate"]
+status = "pending"
+source = "FormCreate"
+
+[gui."BSArch/frmMain.dfm:btnClearList:OnClick"]
+status = "pending"
+source = "btnClearListClick"
+
+[gui."BSArch/frmMain.dfm:btnExit:OnClick"]
+status = "pending"
+source = "btnExitClick"
+
+[gui."BSArch/frmMain.dfm:btnFilterReset:OnClick"]
+status = "pending"
+source = "btnFilterResetClick"
+
+[gui."BSArch/frmMain.dfm:btnPack:OnClick"]
+status = "pending"
+source = "btnPackClick"
+
+[gui."BSArch/frmMain.dfm:edFilter:OnKeyPress"]
+status = "pending"
+source = "edFilterKeyPress"
+
+[gui."BSArch/frmMain.dfm:mnAssets:OnPopup"]
+status = "pending"
+source = "mnAssetsPopup"
+
+[gui."BSArch/frmMain.dfm:mniArchiveInfo:OnClick"]
+status = "pending"
+source = "mniArchiveInfoClick"
+
+[gui."BSArch/frmMain.dfm:mniAssetCompress:OnClick"]
+status = "pending"
+source = "mniAssetCompressClick"
+
+[gui."BSArch/frmMain.dfm:mniAssetEdit:OnClick"]
+status = "pending"
+source = "mniAssetEditClick"
+
+[gui."BSArch/frmMain.dfm:mniAssetFindIdentical:OnClick"]
+status = "pending"
+source = "mniAssetFindIdenticalClick"
+
+[gui."BSArch/frmMain.dfm:mniAssetOpen:OnClick"]
+status = "pending"
+source = "mniAssetOpenClick"
+
+[gui."BSArch/frmMain.dfm:mniAssetPack:OnClick"]
+status = "pending"
+source = "mniAssetPackClick"
+
+[gui."BSArch/frmMain.dfm:mniAssetRemoveSelected:OnClick"]
+status = "pending"
+source = "mniAssetRemoveSelectedClick"
+
+[gui."BSArch/frmMain.dfm:mniAssetRemoveUnselected:OnClick"]
+status = "pending"
+source = "mniAssetRemoveUnselectedClick"
+
+[gui."BSArch/frmMain.dfm:mniAssetReplace:OnClick"]
+status = "pending"
+source = "mniAssetReplaceClick"
+
+[gui."BSArch/frmMain.dfm:mniAssetUnpack:OnClick"]
+status = "pending"
+source = "mniAssetUnpackClick"
+
+[gui."BSArch/frmMain.dfm:mniAssetUnpackSaveAs:OnClick"]
+status = "pending"
+source = "mniAssetUnpackSaveAsClick"
+
+[gui."BSArch/frmMain.dfm:mniLoadList:OnClick"]
+status = "pending"
+source = "mniLoadListClick"
+
+[gui."BSArch/frmMain.dfm:mniSaveList:OnClick"]
+status = "pending"
+source = "mniSaveListClick"
+
+[gui."BSArch/frmMain.dfm:rbAll:OnClick"]
+status = "pending"
+source = "rbAllClick"
+
+[gui."BSArch/frmMain.dfm:rbCompressed:OnClick"]
+status = "pending"
+source = "rbAllClick"
+
+[gui."BSArch/frmMain.dfm:rbUncompressed:OnClick"]
+status = "pending"
+source = "rbAllClick"
+
+[gui."BSArch/frmMain.dfm:timerFilter:OnTimer"]
+status = "pending"
+source = "timerFilterTimer"
+
+[gui."BSArch/frmMain.dfm:vtAssets:OnBeforeCellPaint"]
+status = "pending"
+source = "vtAssetsBeforeCellPaint"
+
+[gui."BSArch/frmMain.dfm:vtAssets:OnChecked"]
+status = "pending"
+source = "vtAssetsChecked"
+
+[gui."BSArch/frmMain.dfm:vtAssets:OnCompareNodes"]
+status = "pending"
+source = "vtAssetsCompareNodes"
+
+[gui."BSArch/frmMain.dfm:vtAssets:OnDblClick"]
+status = "pending"
+source = "vtAssetsDblClick"
+
+[gui."BSArch/frmMain.dfm:vtAssets:OnGetText"]
+status = "pending"
+source = "vtAssetsGetText"
+
+[gui."BSArch/frmMain.dfm:vtAssets:OnHeaderClick"]
+status = "pending"
+source = "vtAssetsHeaderClick"
+
+[gui."BSArch/frmMain.dfm:vtAssets:OnInitNode"]
+status = "pending"
+source = "vtAssetsInitNode"
+
+[gui."BSArch/frmMain.dfm:vtAssets:OnKeyDown"]
+status = "pending"
+source = "vtAssetsKeyDown"
+
+[gui."BSArch/frmPack.dfm:FormPack:OnClose"]
+status = "pending"
+source = "FormClose"
+
+[gui."BSArch/frmPack.dfm:FormPack:OnCreate"]
+status = "pending"
+source = "FormCreate"
+
+[gui."BSArch/frmPack.dfm:FormPack:OnKeyDown"]
+status = "pending"
+source = "FormKeyDown"
+
+[gui."BSArch/frmPack.dfm:FormPack:OnShow"]
+status = "pending"
+source = "FormShow"
+
+[gui."BSArch/frmPack.dfm:btnBrowse:OnClick"]
+status = "pending"
+source = "btnBrowseClick"
+
+[gui."BSArch/frmPack.dfm:chkAutodetectFlags:OnClick"]
+status = "pending"
+source = "chkAutodetectFlagsClick"
+
+[gui."BSArch/frmSearchReplace.dfm:FormSearchReplace:OnClose"]
+status = "pending"
+source = "FormClose"
+
+[gui."BSArch/frmSearchReplace.dfm:FormSearchReplace:OnKeyDown"]
+status = "pending"
+source = "FormKeyDown"
+
+[gui."BSArch/frmSearchReplace.dfm:FormSearchReplace:OnShow"]
+status = "pending"
+source = "FormShow"
+
+[gui."BSArch/frmSearchReplace.dfm:rbAppend:OnClick"]
+status = "pending"
+source = "rbReplaceClick"
+
+[gui."BSArch/frmSearchReplace.dfm:rbPrepend:OnClick"]
+status = "pending"
+source = "rbReplaceClick"
+
+[gui."BSArch/frmSearchReplace.dfm:rbReplace:OnClick"]
+status = "pending"
+source = "rbReplaceClick"
+
+[gui."Core/wbTaskProgress.dfm:FormTaskProgress:OnActivate"]
+status = "pending"
+source = "FormActivate"
+
+[gui."Core/wbTaskProgress.dfm:FormTaskProgress:OnClose"]
+status = "pending"
+source = "FormClose"
+
+[gui."Core/wbTaskProgress.dfm:FormTaskProgress:OnCreate"]
+status = "pending"
+source = "FormCreate"
+
+[gui."Core/wbTaskProgress.dfm:btnCancel:OnClick"]
+status = "pending"
+source = "btnCancelClick"
+
+[gui."Sniff/Proc/ProcAnalyzeMesh.dfm:lblInfoCache:OnClick"]
+status = "pending"
+source = "lblInfoCacheClick"
+
+[gui."Sniff/Proc/ProcAnalyzeMesh.dfm:lblInfoMetrics:OnClick"]
+status = "pending"
+source = "lblInfoMetricsClick"
+
+[gui."Sniff/Proc/ProcCheckForErrors.dfm:lvChecks:OnSelectItem"]
+status = "pending"
+source = "lvChecksSelectItem"
+
+[gui."Sniff/Proc/ProcCheckForErrors.dfm:mniCheckAll:OnClick"]
+status = "pending"
+source = "mniCheckAllClick"
+
+[gui."Sniff/Proc/ProcCheckForErrors.dfm:mniUncheckAll:OnClick"]
+status = "pending"
+source = "mniCheckAllClick"
+
+[gui."Sniff/Proc/ProcConvertRootNode.dfm:cmbNodeFrom:OnSelect"]
+status = "pending"
+source = "cmbNodeFromSelect"
+
+[gui."Sniff/Proc/ProcCopyControlledBlocks.dfm:btnBrowse:OnClick"]
+status = "pending"
+source = "btnBrowseClick"
+
+[gui."Sniff/Proc/ProcCopyGeometryBlocks.dfm:btnBrowse:OnClick"]
+status = "pending"
+source = "btnBrowseClick"
+
+[gui."Sniff/Proc/ProcCopyPriorities.dfm:btnBrowse:OnClick"]
+status = "pending"
+source = "btnBrowseClick"
+
+[gui."Sniff/Proc/ProcFindTextures.dfm:edFormatFilter:OnChange"]
+status = "pending"
+source = "edFormatFilterChange"
+
+[gui."Sniff/Proc/ProcFindTextures.dfm:lvFormat:OnItemChecked"]
+status = "pending"
+source = "lvFormatItemChecked"
+
+[gui."Sniff/Proc/ProcFindTextures.dfm:mniCheckAll:OnClick"]
+status = "pending"
+source = "mniCheckAllClick"
+
+[gui."Sniff/Proc/ProcFindTextures.dfm:mniUncheckAll:OnClick"]
+status = "pending"
+source = "mniCheckAllClick"
+
+[gui."Sniff/Proc/ProcHavokSearchMaterial.dfm:edReplace:OnChange"]
+status = "pending"
+source = "rbTES5Click"
+
+[gui."Sniff/Proc/ProcHavokSearchMaterial.dfm:edSearch:OnChange"]
+status = "pending"
+source = "rbTES5Click"
+
+[gui."Sniff/Proc/ProcHavokSearchMaterial.dfm:rbFO3:OnClick"]
+status = "pending"
+source = "rbTES5Click"
+
+[gui."Sniff/Proc/ProcHavokSearchMaterial.dfm:rbTES4:OnClick"]
+status = "pending"
+source = "rbTES5Click"
+
+[gui."Sniff/Proc/ProcHavokSearchMaterial.dfm:rbTES5:OnClick"]
+status = "pending"
+source = "rbTES5Click"
+
+[gui."Sniff/Proc/ProcHavokSettingsUpdate.dfm:edSettings:OnGetPickList"]
+status = "pending"
+source = "edSettingsGetPickList"
+
+[gui."Sniff/Proc/ProcJsonConverter.dfm:rbFromJson:OnClick"]
+status = "pending"
+source = "rbToJsonClick"
+
+[gui."Sniff/Proc/ProcJsonConverter.dfm:rbToJson:OnClick"]
+status = "pending"
+source = "rbToJsonClick"
+
+[gui."Sniff/Proc/ProcOptimize.dfm:chkStripify:OnClick"]
+status = "pending"
+source = "chkStripifyClick"
+
+[gui."Sniff/Proc/ProcOptimize.dfm:chkTriangulate:OnClick"]
+status = "pending"
+source = "chkTriangulateClick"
+
+[gui."Sniff/Proc/ProcOptimize.dfm:lblInfo:OnClick"]
+status = "pending"
+source = "lblInfoClick"
+
+[gui."Sniff/Proc/ProcShaderFlagsUpdate.dfm:cmbGame:OnSelect"]
+status = "pending"
+source = "cmbGameSelect"
+
+[gui."Sniff/Proc/ProcUniversalFixer.dfm:btnBrowse:OnClick"]
+status = "pending"
+source = "btnBrowseClick"
+
+[gui."Sniff/Proc/ProcUniversalTweaker.dfm:btnPreset:OnClick"]
+status = "pending"
+source = "btnPresetClick"
+
+[gui."Sniff/Proc/ProcUniversalTweaker.dfm:chkOldValueCheck:OnClick"]
+status = "pending"
+source = "chkOldValueCheckClick"
+
+[gui."Sniff/Proc/ProcUniversalTweaker.dfm:edPath:OnChange"]
+status = "pending"
+source = "edPathChange"
+
+[gui."Sniff/Proc/ProcUniversalTweaker.dfm:miPresetAdd:OnClick"]
+status = "pending"
+source = "miPresetAddClick"
+
+[gui."Sniff/Proc/ProcUniversalTweaker.dfm:miPresetRemove:OnClick"]
+status = "pending"
+source = "miPresetRemoveClick"
+
+[gui."Sniff/Proc/ProcVertexPaint.dfm:btnColor2Select:OnClick"]
+status = "pending"
+source = "btnColorSelectClick"
+
+[gui."Sniff/Proc/ProcVertexPaint.dfm:btnColorSelect:OnClick"]
+status = "pending"
+source = "btnColorSelectClick"
+
+[gui."Sniff/Proc/ProcVertexPaint.dfm:lblHelper:OnClick"]
+status = "pending"
+source = "lblHelperClick"
+
+[gui."Sniff/Proc/ProcVertexPaint.dfm:rbAdjustColors:OnClick"]
+status = "pending"
+source = "rbSetColorsClick"
+
+[gui."Sniff/Proc/ProcVertexPaint.dfm:rbRemoveColors:OnClick"]
+status = "pending"
+source = "rbSetColorsClick"
+
+[gui."Sniff/Proc/ProcVertexPaint.dfm:rbReplaceColor:OnClick"]
+status = "pending"
+source = "rbSetColorsClick"
+
+[gui."Sniff/Proc/ProcVertexPaint.dfm:rbSetColors:OnClick"]
+status = "pending"
+source = "rbSetColorsClick"
+
+[gui."Sniff/frmMain.dfm:FormMain:OnClose"]
+status = "pending"
+source = "FormClose"
+
+[gui."Sniff/frmMain.dfm:FormMain:OnCreate"]
+status = "pending"
+source = "FormCreate"
+
+[gui."Sniff/frmMain.dfm:FormMain:OnShow"]
+status = "pending"
+source = "FormShow"
+
+[gui."Sniff/frmMain.dfm:btnExit:OnClick"]
+status = "pending"
+source = "btnExitClick"
+
+[gui."Sniff/frmMain.dfm:btnInputBrowse:OnClick"]
+status = "pending"
+source = "btnInputBrowseClick"
+
+[gui."Sniff/frmMain.dfm:btnOutputBrowse:OnClick"]
+status = "pending"
+source = "btnOutputBrowseClick"
+
+[gui."Sniff/frmMain.dfm:btnProcess:OnClick"]
+status = "pending"
+source = "btnProcessClick"
+
+[gui."Sniff/frmMain.dfm:cmbProcGame:OnClick"]
+status = "pending"
+source = "edProcFilterChange"
+
+[gui."Sniff/frmMain.dfm:edProcFilter:OnChange"]
+status = "pending"
+source = "edProcFilterChange"
+
+[gui."Sniff/frmMain.dfm:lblProcessedFiles:OnClick"]
+status = "pending"
+source = "lblProcessedFilesTitleClick"
+
+[gui."Sniff/frmMain.dfm:lblProcessedFilesTitle:OnClick"]
+status = "pending"
+source = "lblProcessedFilesTitleClick"
+
+[gui."Sniff/frmMain.dfm:lvProcs:OnSelectItem"]
+status = "pending"
+source = "lvProcsSelectItem"
+
+[gui."Sniff/frmMain.dfm:mniInputArchive:OnClick"]
+status = "pending"
+source = "mniInputArchiveClick"
+
+[gui."Sniff/frmMain.dfm:mniInputFolder:OnClick"]
+status = "pending"
+source = "mniInputFolderClick"
+
+[gui."Sniff/frmMain.dfm:tcMain:OnChange"]
+status = "pending"
+source = "tcMainChange"
+
+[gui."Sniff/frmVertexPaintHelper.dfm:FormVertexPaintHelper:OnKeyDown"]
+status = "pending"
+source = "FormKeyDown"
+
+[gui."Sniff/frmVertexPaintHelper.dfm:Image1:OnClick"]
+status = "pending"
+source = "Image1Click"
+
+[gui."xEdit/xeDeveloperMessageForm.dfm:btnKoFi:OnClick"]
+status = "pending"
+source = "btnKoFiClick"
+
+[gui."xEdit/xeDeveloperMessageForm.dfm:btnOK:OnClick"]
+status = "pending"
+source = "btnOKClick"
+
+[gui."xEdit/xeDeveloperMessageForm.dfm:btnOops:OnClick"]
+status = "pending"
+source = "btnOopsClick"
+
+[gui."xEdit/xeDeveloperMessageForm.dfm:btnPayPal:OnClick"]
+status = "pending"
+source = "btnPayPalClick"
+
+[gui."xEdit/xeDeveloperMessageForm.dfm:frmDeveloperMessage:OnClose"]
+status = "pending"
+source = "FormClose"
+
+[gui."xEdit/xeDeveloperMessageForm.dfm:frmDeveloperMessage:OnCreate"]
+status = "pending"
+source = "FormCreate"
+
+[gui."xEdit/xeDeveloperMessageForm.dfm:frmDeveloperMessage:OnShow"]
+status = "pending"
+source = "FormShow"
+
+[gui."xEdit/xeDeveloperMessageForm.dfm:tmrEnableButton:OnTimer"]
+status = "pending"
+source = "tmrEnableButtonTimer"
+
+[gui."xEdit/xeEditWarningForm.dfm:Timer1:OnTimer"]
+status = "pending"
+source = "Timer1Timer"
+
+[gui."xEdit/xeEditWarningForm.dfm:frmEditWarning:OnCreate"]
+status = "pending"
+source = "FormCreate"
+
+[gui."xEdit/xeEditWarningForm.dfm:frmEditWarning:OnShow"]
+status = "pending"
+source = "FormShow"
+
+[gui."xEdit/xeFileSelectForm.dfm:CheckListBox1:OnDblClick"]
+status = "pending"
+source = "CheckListBox1DblClick"
+
+[gui."xEdit/xeFileSelectForm.dfm:InvertSelection1:OnClick"]
+status = "pending"
+source = "InvertSelection1Click"
+
+[gui."xEdit/xeFileSelectForm.dfm:SelectAll1:OnClick"]
+status = "pending"
+source = "SelectAll1Click"
+
+[gui."xEdit/xeFileSelectForm.dfm:SelectNone1:OnClick"]
+status = "pending"
+source = "SelectNone1Click"
+
+[gui."xEdit/xeFileSelectForm.dfm:edSearch:OnChange"]
+status = "pending"
+source = "edSearchChange"
+
+[gui."xEdit/xeFileSelectForm.dfm:frmFileSelect:OnCreate"]
+status = "pending"
+source = "FormCreate"
+
+[gui."xEdit/xeFileSelectForm.dfm:frmFileSelect:OnKeyDown"]
+status = "pending"
+source = "FormKeyDown"
+
+[gui."xEdit/xeFilterOptionsForm.dfm:btnFilterAdd:OnClick"]
+status = "pending"
+source = "btnFilterAddClick"
+
+[gui."xEdit/xeFilterOptionsForm.dfm:btnFilterDel:OnClick"]
+status = "pending"
+source = "btnFilterDelClick"
+
+[gui."xEdit/xeFilterOptionsForm.dfm:btnFilterSave:OnClick"]
+status = "pending"
+source = "btnFilterSaveClick"
+
+[gui."xEdit/xeFilterOptionsForm.dfm:clbBaseRecordSignatures:OnKeyPress"]
+status = "pending"
+source = "clbKeyPress"
+
+[gui."xEdit/xeFilterOptionsForm.dfm:clbConflictAll:OnKeyPress"]
+status = "pending"
+source = "clbKeyPress"
+
+[gui."xEdit/xeFilterOptionsForm.dfm:clbConflictThis:OnKeyPress"]
+status = "pending"
+source = "clbKeyPress"
+
+[gui."xEdit/xeFilterOptionsForm.dfm:clbRecordSignatures:OnKeyPress"]
+status = "pending"
+source = "clbKeyPress"
+
+[gui."xEdit/xeFilterOptionsForm.dfm:cmbPreset:OnSelect"]
+status = "pending"
+source = "cmbPresetSelect"
+
+[gui."xEdit/xeFilterOptionsForm.dfm:frmFilterOptions:OnClose"]
+status = "pending"
+source = "FormClose"
+
+[gui."xEdit/xeFilterOptionsForm.dfm:frmFilterOptions:OnCreate"]
+status = "pending"
+source = "FormCreate"
+
+[gui."xEdit/xeFilterOptionsForm.dfm:frmFilterOptions:OnKeyDown"]
+status = "pending"
+source = "FormKeyDown"
+
+[gui."xEdit/xeFilterOptionsForm.dfm:frmFilterOptions:OnShow"]
+status = "pending"
+source = "FormShow"
+
+[gui."xEdit/xeFilterOptionsForm.dfm:mniInvertSelection:OnClick"]
+status = "pending"
+source = "mniSelectionClick"
+
+[gui."xEdit/xeFilterOptionsForm.dfm:mniSelectAll:OnClick"]
+status = "pending"
+source = "mniSelectionClick"
+
+[gui."xEdit/xeFilterOptionsForm.dfm:mniSelectNone:OnClick"]
+status = "pending"
+source = "mniSelectionClick"
+
+[gui."xEdit/xeGameSelectForm.dfm:ListBox1:OnDblClick"]
+status = "pending"
+source = "ListBox1DblClick"
+
+[gui."xEdit/xeGameSelectForm.dfm:edSearch:OnChange"]
+status = "pending"
+source = "edSearchChange"
+
+[gui."xEdit/xeGameSelectForm.dfm:frmGameSelect:OnCreate"]
+status = "pending"
+source = "FormCreate"
+
+[gui."xEdit/xeGameSelectForm.dfm:frmGameSelect:OnKeyDown"]
+status = "pending"
+source = "FormKeyDown"
+
+[gui."xEdit/xeLODGenForm.dfm:SelectAll1:OnClick"]
+status = "pending"
+source = "SelectAll1Click"
+
+[gui."xEdit/xeLODGenForm.dfm:SelectNone1:OnClick"]
+status = "pending"
+source = "SelectNone1Click"
+
+[gui."xEdit/xeLODGenForm.dfm:btnSplitTreesLOD:OnClick"]
+status = "pending"
+source = "btnSplitTreesLODClick"
+
+[gui."xEdit/xeLODGenForm.dfm:cbBuildAtlas:OnClick"]
+status = "pending"
+source = "cbBuildAtlasClick"
+
+[gui."xEdit/xeLODGenForm.dfm:cbChunk:OnClick"]
+status = "pending"
+source = "cbChunkClick"
+
+[gui."xEdit/xeLODGenForm.dfm:cbObjectsLOD:OnClick"]
+status = "pending"
+source = "cbObjectsLODClick"
+
+[gui."xEdit/xeLODGenForm.dfm:cbTreesLOD:OnClick"]
+status = "pending"
+source = "cbObjectsLODClick"
+
+[gui."xEdit/xeLODGenForm.dfm:cmbCompDiffuse:OnChange"]
+status = "pending"
+source = "cmbCompDiffuseChange"
+
+[gui."xEdit/xeLODGenForm.dfm:frmLODGen:OnClose"]
+status = "pending"
+source = "FormClose"
+
+[gui."xEdit/xeLODGenForm.dfm:frmLODGen:OnCreate"]
+status = "pending"
+source = "FormCreate"
+
+[gui."xEdit/xeLODGenForm.dfm:frmLODGen:OnKeyDown"]
+status = "pending"
+source = "FormKeyDown"
+
+[gui."xEdit/xeLODGenForm.dfm:frmLODGen:OnShow"]
+status = "pending"
+source = "FormShow"
+
+[gui."xEdit/xeLegendForm.dfm:dgLegend:OnDrawCell"]
+status = "pending"
+source = "dgLegendDrawCell"
+
+[gui."xEdit/xeLegendForm.dfm:frmLegend:OnClose"]
+status = "pending"
+source = "FormClose"
+
+[gui."xEdit/xeLegendForm.dfm:frmLegend:OnCreate"]
+status = "pending"
+source = "FormCreate"
+
+[gui."xEdit/xeLegendForm.dfm:frmLegend:OnDestroy"]
+status = "pending"
+source = "FormDestroy"
+
+[gui."xEdit/xeLegendForm.dfm:frmLegend:OnHide"]
+status = "pending"
+source = "FormHide"
+
+[gui."xEdit/xeLegendForm.dfm:frmLegend:OnShow"]
+status = "pending"
+source = "FormShow"
+
+[gui."xEdit/xeLocalizationForm.dfm:btnSave:OnClick"]
+status = "pending"
+source = "btnSaveClick"
+
+[gui."xEdit/xeLocalizationForm.dfm:frmLocalization:OnCreate"]
+status = "pending"
+source = "FormCreate"
+
+[gui."xEdit/xeLocalizationForm.dfm:memoText:OnChange"]
+status = "pending"
+source = "memoTextChange"
+
+[gui."xEdit/xeLocalizationForm.dfm:mniFileExport:OnClick"]
+status = "pending"
+source = "mniFileExportClick"
+
+[gui."xEdit/xeLocalizationForm.dfm:pmuStrings:OnPopup"]
+status = "pending"
+source = "pmuStringsPopup"
+
+[gui."xEdit/xeLocalizationForm.dfm:vetStrings:OnChange"]
+status = "pending"
+source = "vetStringsChange"
+
+[gui."xEdit/xeLocalizationForm.dfm:vetStrings:OnGetText"]
+status = "pending"
+source = "vetStringsGetText"
+
+[gui."xEdit/xeLocalizationForm.dfm:vetStrings:OnInitChildren"]
+status = "pending"
+source = "vetStringsInitChildren"
+
+[gui."xEdit/xeLocalizationForm.dfm:vetStrings:OnInitNode"]
+status = "pending"
+source = "vetStringsInitNode"
+
+[gui."xEdit/xeLocalizationForm.dfm:vetStrings:OnPaintText"]
+status = "pending"
+source = "vetStringsPaintText"
+
+[gui."xEdit/xeLocalizePluginForm.dfm:cbTranslation:OnClick"]
+status = "pending"
+source = "cbTranslationClick"
+
+[gui."xEdit/xeLocalizePluginForm.dfm:frmLocalizePlugin:OnClose"]
+status = "pending"
+source = "FormClose"
+
+[gui."xEdit/xeLocalizePluginForm.dfm:frmLocalizePlugin:OnCreate"]
+status = "pending"
+source = "FormCreate"
+
+[gui."xEdit/xeLogAnalyzerForm.dfm:btnAnalyze:OnClick"]
+status = "pending"
+source = "btnAnalyzeClick"
+
+[gui."xEdit/xeLogAnalyzerForm.dfm:btnFileSelect:OnClick"]
+status = "pending"
+source = "btnFileSelectClick"
+
+[gui."xEdit/xeLogAnalyzerForm.dfm:frmLogAnalyzer:OnClose"]
+status = "pending"
+source = "FormClose"
+
+[gui."xEdit/xeLogAnalyzerForm.dfm:frmLogAnalyzer:OnCreate"]
+status = "pending"
+source = "FormCreate"
+
+[gui."xEdit/xeLogAnalyzerForm.dfm:frmLogAnalyzer:OnShow"]
+status = "pending"
+source = "FormShow"
+
+[gui."xEdit/xeLogAnalyzerForm.dfm:vstForms:OnChange"]
+status = "pending"
+source = "vstFormsChange"
+
+[gui."xEdit/xeLogAnalyzerForm.dfm:vstForms:OnCompareNodes"]
+status = "pending"
+source = "vstFormsCompareNodes"
+
+[gui."xEdit/xeLogAnalyzerForm.dfm:vstForms:OnDblClick"]
+status = "pending"
+source = "vstFormsDblClick"
+
+[gui."xEdit/xeLogAnalyzerForm.dfm:vstForms:OnFreeNode"]
+status = "pending"
+source = "vstFormsFreeNode"
+
+[gui."xEdit/xeLogAnalyzerForm.dfm:vstForms:OnGetText"]
+status = "pending"
+source = "vstFormsGetText"
+
+[gui."xEdit/xeLogAnalyzerForm.dfm:vstForms:OnHeaderClick"]
+status = "pending"
+source = "vstFormsHeaderClick"
+
+[gui."xEdit/xeLogAnalyzerForm.dfm:vstForms:OnInitChildren"]
+status = "pending"
+source = "vstFormsInitChildren"
+
+[gui."xEdit/xeLogAnalyzerForm.dfm:vstForms:OnInitNode"]
+status = "pending"
+source = "vstFormsInitNode"
+
+[gui."xEdit/xeMainForm.dfm:acBack:OnExecute"]
+status = "pending"
+source = "acBackExecute"
+
+[gui."xEdit/xeMainForm.dfm:acBack:OnUpdate"]
+status = "pending"
+source = "acBackUpdate"
+
+[gui."xEdit/xeMainForm.dfm:acForward:OnExecute"]
+status = "pending"
+source = "acForwardExecute"
+
+[gui."xEdit/xeMainForm.dfm:acForward:OnUpdate"]
+status = "pending"
+source = "acForwardUpdate"
+
+[gui."xEdit/xeMainForm.dfm:acScript:OnExecute"]
+status = "pending"
+source = "acScriptExecute"
+
+[gui."xEdit/xeMainForm.dfm:bnDiscord:OnClick"]
+status = "pending"
+source = "bnDiscordClick"
+
+[gui."xEdit/xeMainForm.dfm:bnGitHub:OnClick"]
+status = "pending"
+source = "bnGitHubClick"
+
+[gui."xEdit/xeMainForm.dfm:bnHelp:OnClick"]
+status = "pending"
+source = "bnHelpClick"
+
+[gui."xEdit/xeMainForm.dfm:bnKoFi:OnClick"]
+status = "pending"
+source = "bnKoFiClick"
+
+[gui."xEdit/xeMainForm.dfm:bnLegend:OnClick"]
+status = "pending"
+source = "bnLegendClick"
+
+[gui."xEdit/xeMainForm.dfm:bnMainMenu:OnMouseDown"]
+status = "pending"
+source = "bnMainMenuMouseDown"
+
+[gui."xEdit/xeMainForm.dfm:bnNexusMods:OnClick"]
+status = "pending"
+source = "bnNexusModsClick"
+
+[gui."xEdit/xeMainForm.dfm:bnPatreon:OnClick"]
+status = "pending"
+source = "bnPatreonClick"
+
+[gui."xEdit/xeMainForm.dfm:bnPayPal:OnClick"]
+status = "pending"
+source = "bnPayPalClick"
+
+[gui."xEdit/xeMainForm.dfm:bnPinned:OnClick"]
+status = "pending"
+source = "bnPinnedClick"
+
+[gui."xEdit/xeMainForm.dfm:bnVideos:OnClick"]
+status = "pending"
+source = "bnVideosClick"
+
+[gui."xEdit/xeMainForm.dfm:btnCancel:OnClick"]
+status = "pending"
+source = "btnCancelClick"
+
+[gui."xEdit/xeMainForm.dfm:cbRegExFilter:OnClick"]
+status = "pending"
+source = "cbRegExFilterClick"
+
+[gui."xEdit/xeMainForm.dfm:cbViewFilterKeepChildren:OnClick"]
+status = "pending"
+source = "edViewFilterChange"
+
+[gui."xEdit/xeMainForm.dfm:cbViewFilterKeepParentsSiblings:OnClick"]
+status = "pending"
+source = "edViewFilterChange"
+
+[gui."xEdit/xeMainForm.dfm:cbViewFilterKeepSiblings:OnClick"]
+status = "pending"
+source = "edViewFilterChange"
+
+[gui."xEdit/xeMainForm.dfm:cobReferencedByFilter:OnChange"]
+status = "pending"
+source = "edReferencedByFilterChange"
+
+[gui."xEdit/xeMainForm.dfm:cobReferencedByFilter:OnKeyDown"]
+status = "pending"
+source = "edReferencedByFilterNameKeyDown"
+
+[gui."xEdit/xeMainForm.dfm:cobViewFilter:OnChange"]
+status = "pending"
+source = "edViewFilterChange"
+
+[gui."xEdit/xeMainForm.dfm:cobViewFilter:OnKeyDown"]
+status = "pending"
+source = "edViewFilterNameKeyDown"
+
+[gui."xEdit/xeMainForm.dfm:edEditorIDSearch:OnChange"]
+status = "pending"
+source = "edEditorIDSearchChange"
+
+[gui."xEdit/xeMainForm.dfm:edEditorIDSearch:OnEnter"]
+status = "pending"
+source = "edEditorIDSearchEnter"
+
+[gui."xEdit/xeMainForm.dfm:edEditorIDSearch:OnKeyDown"]
+status = "pending"
+source = "edEditorIDSearchKeyDown"
+
+[gui."xEdit/xeMainForm.dfm:edFileNameFilter:OnChange"]
+status = "pending"
+source = "edFileNameFilterChange"
+
+[gui."xEdit/xeMainForm.dfm:edFileNameFilter:OnKeyDown"]
+status = "pending"
+source = "edFileNameFilterKeyDown"
+
+[gui."xEdit/xeMainForm.dfm:edFileNameFilter:OnKeyPress"]
+status = "pending"
+source = "edFilterNoBeepOnEnterKeyPress"
+
+[gui."xEdit/xeMainForm.dfm:edFormIDSearch:OnChange"]
+status = "pending"
+source = "edFormIDSearchChange"
+
+[gui."xEdit/xeMainForm.dfm:edFormIDSearch:OnEnter"]
+status = "pending"
+source = "edFormIDSearchEnter"
+
+[gui."xEdit/xeMainForm.dfm:edFormIDSearch:OnKeyDown"]
+status = "pending"
+source = "edFormIDSearchKeyDown"
+
+[gui."xEdit/xeMainForm.dfm:edReferencedByFilterFileName:OnChange"]
+status = "pending"
+source = "edReferencedByFilterChange"
+
+[gui."xEdit/xeMainForm.dfm:edReferencedByFilterFileName:OnKeyDown"]
+status = "pending"
+source = "edReferencedByFilterNameKeyDown"
+
+[gui."xEdit/xeMainForm.dfm:edReferencedByFilterFileName:OnKeyPress"]
+status = "pending"
+source = "edFilterNoBeepOnEnterKeyPress"
+
+[gui."xEdit/xeMainForm.dfm:edReferencedByFilterName:OnChange"]
+status = "pending"
+source = "edReferencedByFilterChange"
+
+[gui."xEdit/xeMainForm.dfm:edReferencedByFilterName:OnKeyDown"]
+status = "pending"
+source = "edReferencedByFilterNameKeyDown"
+
+[gui."xEdit/xeMainForm.dfm:edReferencedByFilterName:OnKeyPress"]
+status = "pending"
+source = "edFilterNoBeepOnEnterKeyPress"
+
+[gui."xEdit/xeMainForm.dfm:edReferencedByFilterSignature:OnChange"]
+status = "pending"
+source = "edReferencedByFilterChange"
+
+[gui."xEdit/xeMainForm.dfm:edReferencedByFilterSignature:OnKeyDown"]
+status = "pending"
+source = "edReferencedByFilterNameKeyDown"
+
+[gui."xEdit/xeMainForm.dfm:edReferencedByFilterSignature:OnKeyPress"]
+status = "pending"
+source = "edFilterNoBeepOnEnterKeyPress"
+
+[gui."xEdit/xeMainForm.dfm:edViewFilterName:OnChange"]
+status = "pending"
+source = "edViewFilterChange"
+
+[gui."xEdit/xeMainForm.dfm:edViewFilterName:OnKeyDown"]
+status = "pending"
+source = "edViewFilterNameKeyDown"
+
+[gui."xEdit/xeMainForm.dfm:edViewFilterName:OnKeyPress"]
+status = "pending"
+source = "edFilterNoBeepOnEnterKeyPress"
+
+[gui."xEdit/xeMainForm.dfm:edViewFilterValue:OnChange"]
+status = "pending"
+source = "edViewFilterChange"
+
+[gui."xEdit/xeMainForm.dfm:edViewFilterValue:OnKeyDown"]
+status = "pending"
+source = "edViewFilterNameKeyDown"
+
+[gui."xEdit/xeMainForm.dfm:edViewFilterValue:OnKeyPress"]
+status = "pending"
+source = "edFilterNoBeepOnEnterKeyPress"
+
+[gui."xEdit/xeMainForm.dfm:fpnlReferencedByFilter:OnResize"]
+status = "pending"
+source = "fpnlViewFilterResize"
+
+[gui."xEdit/xeMainForm.dfm:fpnlViewFilter:OnResize"]
+status = "pending"
+source = "fpnlViewFilterResize"
+
+[gui."xEdit/xeMainForm.dfm:frmMain:OnClose"]
+status = "pending"
+source = "FormClose"
+
+[gui."xEdit/xeMainForm.dfm:frmMain:OnCreate"]
+status = "pending"
+source = "FormCreate"
+
+[gui."xEdit/xeMainForm.dfm:frmMain:OnKeyDown"]
+status = "pending"
+source = "FormKeyDown"
+
+[gui."xEdit/xeMainForm.dfm:frmMain:OnKeyUp"]
+status = "pending"
+source = "FormKeyUp"
+
+[gui."xEdit/xeMainForm.dfm:frmMain:OnResize"]
+status = "pending"
+source = "FormResize"
+
+[gui."xEdit/xeMainForm.dfm:frmMain:OnShow"]
+status = "pending"
+source = "FormShow"
+
+[gui."xEdit/xeMainForm.dfm:jbhGitHub:OnBalloonClick"]
+status = "pending"
+source = "jbhGitHubBalloonClick"
+
+[gui."xEdit/xeMainForm.dfm:jbhGitHub:OnCloseBtnClick"]
+status = "pending"
+source = "jbhGitHubCloseBtnClick"
+
+[gui."xEdit/xeMainForm.dfm:jbhNexusMods:OnBalloonClick"]
+status = "pending"
+source = "jbhNexusModsBalloonClick"
+
+[gui."xEdit/xeMainForm.dfm:jbhNexusMods:OnCloseBtnClick"]
+status = "pending"
+source = "jbhNexusModsCloseBtnClick"
+
+[gui."xEdit/xeMainForm.dfm:jbhPatreon:OnBalloonClick"]
+status = "pending"
+source = "jbhPatreonBalloonClick"
+
+[gui."xEdit/xeMainForm.dfm:jbhPatreon:OnCloseBtnClick"]
+status = "pending"
+source = "jbhPatreonCloseBtnClick"
+
+[gui."xEdit/xeMainForm.dfm:jbhSave:OnBalloonClick"]
+status = "pending"
+source = "jbhSaveBalloonClick"
+
+[gui."xEdit/xeMainForm.dfm:jbhSave:OnCloseBtnClick"]
+status = "pending"
+source = "jbhSaveCloseBtnClick"
+
+[gui."xEdit/xeMainForm.dfm:lvReferencedBy:OnColumnClick"]
+status = "pending"
+source = "lvReferencedByColumnClick"
+
+[gui."xEdit/xeMainForm.dfm:lvReferencedBy:OnData"]
+status = "pending"
+source = "lvReferencedByLoadData"
+
+[gui."xEdit/xeMainForm.dfm:lvReferencedBy:OnDataStateChange"]
+status = "pending"
+source = "lvReferencedByOnDataStateChange"
+
+[gui."xEdit/xeMainForm.dfm:lvReferencedBy:OnDblClick"]
+status = "pending"
+source = "lvReferencedByDblClick"
+
+[gui."xEdit/xeMainForm.dfm:lvReferencedBy:OnKeyDown"]
+status = "pending"
+source = "lvReferencedByKeyDown"
+
+[gui."xEdit/xeMainForm.dfm:lvReferencedBy:OnSelectItem"]
+status = "pending"
+source = "lvReferencedByOnSelect"
+
+[gui."xEdit/xeMainForm.dfm:mmoMessages:OnDblClick"]
+status = "pending"
+source = "mmoMessagesDblClick"
+
+[gui."xEdit/xeMainForm.dfm:mniBtnShrinkButtons:OnClick"]
+status = "pending"
+source = "mniBtnShrinkButtonsClick"
+
+[gui."xEdit/xeMainForm.dfm:mniCopyDisplayNameToClipboard:OnClick"]
+status = "pending"
+source = "mniCopyDisplayNameToClipboardClick"
+
+[gui."xEdit/xeMainForm.dfm:mniCopyFullPathToClipboard:OnClick"]
+status = "pending"
+source = "mniCopyFullPathToClipboardClick"
+
+[gui."xEdit/xeMainForm.dfm:mniCopyIndexedPathToClipBoard:OnClick"]
+status = "pending"
+source = "mniCopyIndexedPathToClipboardClick"
+
+[gui."xEdit/xeMainForm.dfm:mniCopyNameToClipboard:OnClick"]
+status = "pending"
+source = "mniCopyNameToClipboardClick"
+
+[gui."xEdit/xeMainForm.dfm:mniCopyPathNameToClipboard:OnClick"]
+status = "pending"
+source = "mniCopyPathNameToClipboardClick"
+
+[gui."xEdit/xeMainForm.dfm:mniCopyPathToClipboard:OnClick"]
+status = "pending"
+source = "mniCopyPathToClipboardClick"
+
+[gui."xEdit/xeMainForm.dfm:mniCopyShortNameToClipboard:OnClick"]
+status = "pending"
+source = "mniCopyShortNameToClipboardClick"
+
+[gui."xEdit/xeMainForm.dfm:mniCopySignatureToClipboard:OnClick"]
+status = "pending"
+source = "mniCopySignatureToClipboardClick"
+
+[gui."xEdit/xeMainForm.dfm:mniCreateNewFile:OnClick"]
+status = "pending"
+source = "mniCreateNewFileClick"
+
+[gui."xEdit/xeMainForm.dfm:mniMainLocalizationEditor:OnClick"]
+status = "pending"
+source = "mniMainLocalizationEditorClick"
+
+[gui."xEdit/xeMainForm.dfm:mniMainOptions:OnClick"]
+status = "pending"
+source = "mniNavOptionsClick"
+
+[gui."xEdit/xeMainForm.dfm:mniMainPluggyLinkBaseObject:OnClick"]
+status = "pending"
+source = "mniMainPluggyLinkClick"
+
+[gui."xEdit/xeMainForm.dfm:mniMainPluggyLinkDisabled:OnClick"]
+status = "pending"
+source = "mniMainPluggyLinkClick"
+
+[gui."xEdit/xeMainForm.dfm:mniMainPluggyLinkEnchantment:OnClick"]
+status = "pending"
+source = "mniMainPluggyLinkClick"
+
+[gui."xEdit/xeMainForm.dfm:mniMainPluggyLinkInventory:OnClick"]
+status = "pending"
+source = "mniMainPluggyLinkClick"
+
+[gui."xEdit/xeMainForm.dfm:mniMainPluggyLinkReference:OnClick"]
+status = "pending"
+source = "mniMainPluggyLinkClick"
+
+[gui."xEdit/xeMainForm.dfm:mniMainPluggyLinkSpell:OnClick"]
+status = "pending"
+source = "mniMainPluggyLinkClick"
+
+[gui."xEdit/xeMainForm.dfm:mniMainSave:OnClick"]
+status = "pending"
+source = "mniMainSaveClick"
+
+[gui."xEdit/xeMainForm.dfm:mniMarkallfileswithoutONAMasmodified:OnClick"]
+status = "pending"
+source = "mniMarkallfileswithoutONAMasmodifiedClick"
+
+[gui."xEdit/xeMainForm.dfm:mniMasterAndLeafsDisabled:OnClick"]
+status = "pending"
+source = "mniMasterAndLeafsClick"
+
+[gui."xEdit/xeMainForm.dfm:mniMasterAndLeafsEnabled:OnClick"]
+status = "pending"
+source = "mniMasterAndLeafsClick"
+
+[gui."xEdit/xeMainForm.dfm:mniMessagesClear:OnClick"]
+status = "pending"
+source = "mniMessagesClearClick"
+
+[gui."xEdit/xeMainForm.dfm:mniMessagesSaveSelected:OnClick"]
+status = "pending"
+source = "mniMessagesSaveSelectedClick"
+
+[gui."xEdit/xeMainForm.dfm:mniModGroups:OnClick"]
+status = "pending"
+source = "mniModGroupsClick"
+
+[gui."xEdit/xeMainForm.dfm:mniModGroupsDisabled:OnClick"]
+status = "pending"
+source = "mniModGroupsAbleClick"
+
+[gui."xEdit/xeMainForm.dfm:mniModGroupsEnabled:OnClick"]
+status = "pending"
+source = "mniModGroupsAbleClick"
+
+[gui."xEdit/xeMainForm.dfm:mniNavAdd:OnClick"]
+status = "pending"
+source = "mniNavAddClick"
+
+[gui."xEdit/xeMainForm.dfm:mniNavAddMasters:OnClick"]
+status = "pending"
+source = "mniNavAddMastersClick"
+
+[gui."xEdit/xeMainForm.dfm:mniNavApplyScript:OnClick"]
+status = "pending"
+source = "mniNavApplyScriptClick"
+
+[gui."xEdit/xeMainForm.dfm:mniNavBanditFix:OnClick"]
+status = "pending"
+source = "mniNavBanditFixClick"
+
+[gui."xEdit/xeMainForm.dfm:mniNavBatchChangeReferencingRecords:OnClick"]
+status = "pending"
+source = "mniNavBatchChangeReferencingRecordsClick"
+
+[gui."xEdit/xeMainForm.dfm:mniNavBuildReachable:OnClick"]
+status = "pending"
+source = "mniNavBuildReachableClick"
+
+[gui."xEdit/xeMainForm.dfm:mniNavBuildRef:OnClick"]
+status = "pending"
+source = "mniNavBuildRefClick"
+
+[gui."xEdit/xeMainForm.dfm:mniNavCellChildNotVWD:OnClick"]
+status = "pending"
+source = "mniNavCellChild"
+
+[gui."xEdit/xeMainForm.dfm:mniNavCellChildPers:OnClick"]
+status = "pending"
+source = "mniNavCellChild"
+
+[gui."xEdit/xeMainForm.dfm:mniNavCellChildTemp:OnClick"]
+status = "pending"
+source = "mniNavCellChild"
+
+[gui."xEdit/xeMainForm.dfm:mniNavCellChildVWD:OnClick"]
+status = "pending"
+source = "mniNavCellChild"
+
+[gui."xEdit/xeMainForm.dfm:mniNavChangeFormID:OnClick"]
+status = "pending"
+source = "mniNavChangeFormIDClick"
+
+[gui."xEdit/xeMainForm.dfm:mniNavChangeReferencingRecords:OnClick"]
+status = "pending"
+source = "mniNavChangeReferencingRecordsClick"
+
+[gui."xEdit/xeMainForm.dfm:mniNavCheckForCircularLeveledLists:OnClick"]
+status = "pending"
+source = "mniNavCheckForCircularLeveledListsClick"
+
+[gui."xEdit/xeMainForm.dfm:mniNavCheckForErrors:OnClick"]
+status = "pending"
+source = "mniNavCheckForErrorsClick"
+
+[gui."xEdit/xeMainForm.dfm:mniNavCleanMasters:OnClick"]
+status = "pending"
+source = "mniNavCleanMastersClick"
+
+[gui."xEdit/xeMainForm.dfm:mniNavCleanupInjected:OnClick"]
+status = "pending"
+source = "mniNavCleanupInjectedClick"
+
+[gui."xEdit/xeMainForm.dfm:mniNavCompactFormIDs:OnClick"]
+status = "pending"
+source = "mniNavRenumberFormIDsFromClick"
+
+[gui."xEdit/xeMainForm.dfm:mniNavCompareSelected:OnClick"]
+status = "pending"
+source = "mniNavCompareSelectedClick"
+
+[gui."xEdit/xeMainForm.dfm:mniNavCompareTo:OnClick"]
+status = "pending"
+source = "mniNavCompareToClick"
+
+[gui."xEdit/xeMainForm.dfm:mniNavCopyAsNewRecord:OnClick"]
+status = "pending"
+source = "mniNavCopyIntoClick"
+
+[gui."xEdit/xeMainForm.dfm:mniNavCopyAsOverride:OnClick"]
+status = "pending"
+source = "mniNavCopyIntoClick"
+
+[gui."xEdit/xeMainForm.dfm:mniNavCopyAsOverrideWithOverwrite:OnClick"]
+status = "pending"
+source = "mniNavCopyIntoClick"
+
+[gui."xEdit/xeMainForm.dfm:mniNavCopyAsSpawnRateOverride:OnClick"]
+status = "pending"
+source = "mniNavCopyIntoClick"
+
+[gui."xEdit/xeMainForm.dfm:mniNavCopyAsWrapper:OnClick"]
+status = "pending"
+source = "mniNavCopyIntoClick"
+
+[gui."xEdit/xeMainForm.dfm:mniNavCopyIdle:OnClick"]
+status = "pending"
+source = "mniNavCopyIdleClick"
+
+[gui."xEdit/xeMainForm.dfm:mniNavCreateDeltaPatch:OnClick"]
+status = "pending"
+source = "mniNavCreateDeltaPatchClick"
+
+[gui."xEdit/xeMainForm.dfm:mniNavCreateMergedPatch:OnClick"]
+status = "pending"
+source = "mniNavCreateMergedPatchClick"
+
+[gui."xEdit/xeMainForm.dfm:mniNavCreateModGroup:OnClick"]
+status = "pending"
+source = "mniNavCreateModGroupClick"
+
+[gui."xEdit/xeMainForm.dfm:mniNavCreateSEQFile:OnClick"]
+status = "pending"
+source = "mniNavCreateSEQFileClick"
+
+[gui."xEdit/xeMainForm.dfm:mniNavDeepCopyAsOverride:OnClick"]
+status = "pending"
+source = "mniNavCopyIntoClick"
+
+[gui."xEdit/xeMainForm.dfm:mniNavDeepCopyAsOverrideWithOverwriting:OnClick"]
+status = "pending"
+source = "mniNavCopyIntoClick"
+
+[gui."xEdit/xeMainForm.dfm:mniNavDeleteModGroups:OnClick"]
+status = "pending"
+source = "mniNavDeleteModGroupsClick"
+
+[gui."xEdit/xeMainForm.dfm:mniNavEditModGroup:OnClick"]
+status = "pending"
+source = "mniNavEditModGroupClick"
+
+[gui."xEdit/xeMainForm.dfm:mniNavFilterApply:OnClick"]
+status = "pending"
+source = "mniNavFilterApplyClick"
+
+[gui."xEdit/xeMainForm.dfm:mniNavFilterApplySelected:OnClick"]
+status = "pending"
+source = "mniNavFilterApplyClick"
+
+[gui."xEdit/xeMainForm.dfm:mniNavFilterConflicts:OnClick"]
+status = "pending"
+source = "mniNavFilterConflictsClick"
+
+[gui."xEdit/xeMainForm.dfm:mniNavFilterConflictsSelected:OnClick"]
+status = "pending"
+source = "mniNavFilterConflictsClick"
+
+[gui."xEdit/xeMainForm.dfm:mniNavFilterForCleaning:OnClick"]
+status = "pending"
+source = "mniNavFilterForCleaningClick"
+
+[gui."xEdit/xeMainForm.dfm:mniNavFilterForCleaningObsolete:OnClick"]
+status = "pending"
+source = "mniNavCleaningObsoleteClick"
+
+[gui."xEdit/xeMainForm.dfm:mniNavFilterForCleaningSelected:OnClick"]
+status = "pending"
+source = "mniNavFilterForCleaningClick"
+
+[gui."xEdit/xeMainForm.dfm:mniNavFilterForCleaningSelectedObsolete:OnClick"]
+status = "pending"
+source = "mniNavCleaningObsoleteClick"
+
+[gui."xEdit/xeMainForm.dfm:mniNavFilterRemove:OnClick"]
+status = "pending"
+source = "mniNavFilterRemoveClick"
+
+[gui."xEdit/xeMainForm.dfm:mniNavGenerateLOD:OnClick"]
+status = "pending"
+source = "mniNavGenerateLODClick"
+
+[gui."xEdit/xeMainForm.dfm:mniNavHeaderFilesDefault:OnClick"]
+status = "pending"
+source = "mniNavHeaderFilesClick"
+
+[gui."xEdit/xeMainForm.dfm:mniNavHeaderFilesFileName:OnClick"]
+status = "pending"
+source = "mniNavHeaderFilesClick"
+
+[gui."xEdit/xeMainForm.dfm:mniNavHeaderFilesLoadOrder:OnClick"]
+status = "pending"
+source = "mniNavHeaderFilesClick"
+
+[gui."xEdit/xeMainForm.dfm:mniNavHeaderINFObyFormID:OnClick"]
+status = "pending"
+source = "mniNavHeaderINFOClick"
+
+[gui."xEdit/xeMainForm.dfm:mniNavHeaderINFObyPreviousINFO:OnClick"]
+status = "pending"
+source = "mniNavHeaderINFOClick"
+
+[gui."xEdit/xeMainForm.dfm:mniNavHidden:OnClick"]
+status = "pending"
+source = "mniNavHiddenClick"
+
+[gui."xEdit/xeMainForm.dfm:mniNavLOManagersDirtyInfo:OnClick"]
+status = "pending"
+source = "mniNavLOManagersDirtyInfoClick"
+
+[gui."xEdit/xeMainForm.dfm:mniNavLocalizationSwitch:OnClick"]
+status = "pending"
+source = "mniNavLocalizationSwitchClick"
+
+[gui."xEdit/xeMainForm.dfm:mniNavMarkModified:OnClick"]
+status = "pending"
+source = "mniNavMarkModifiedClick"
+
+[gui."xEdit/xeMainForm.dfm:mniNavOptions:OnClick"]
+status = "pending"
+source = "mniNavOptionsClick"
+
+[gui."xEdit/xeMainForm.dfm:mniNavOtherCodeSiteLogging:OnClick"]
+status = "pending"
+source = "mniNavOtherCodeSiteLoggingClick"
+
+[gui."xEdit/xeMainForm.dfm:mniNavRaceLVLIs:OnClick"]
+status = "pending"
+source = "mniNavRaceLVLIsClick"
+
+[gui."xEdit/xeMainForm.dfm:mniNavRemove:OnClick"]
+status = "pending"
+source = "mniNavRemoveClick"
+
+[gui."xEdit/xeMainForm.dfm:mniNavRemoveIdenticalToMaster:OnClick"]
+status = "pending"
+source = "mniNavRemoveIdenticalToMasterClick"
+
+[gui."xEdit/xeMainForm.dfm:mniNavRemoveIdenticalToMasterObsolete:OnClick"]
+status = "pending"
+source = "mniNavCleaningObsoleteClick"
+
+[gui."xEdit/xeMainForm.dfm:mniNavRenumberFormIDsFrom:OnClick"]
+status = "pending"
+source = "mniNavRenumberFormIDsFromClick"
+
+[gui."xEdit/xeMainForm.dfm:mniNavRenumberFormIDsInject:OnClick"]
+status = "pending"
+source = "mniNavRenumberFormIDsFromClick"
+
+[gui."xEdit/xeMainForm.dfm:mniNavSetVWDAuto:OnClick"]
+status = "pending"
+source = "mniNavSetVWDAutoClick"
+
+[gui."xEdit/xeMainForm.dfm:mniNavSetVWDAutoInto:OnClick"]
+status = "pending"
+source = "mniNavSetVWDAutoIntoClick"
+
+[gui."xEdit/xeMainForm.dfm:mniNavSortMasters:OnClick"]
+status = "pending"
+source = "mniNavSortMastersClick"
+
+[gui."xEdit/xeMainForm.dfm:mniNavTest:OnClick"]
+status = "pending"
+source = "mniNavTestClick"
+
+[gui."xEdit/xeMainForm.dfm:mniNavUndeleteAndDisableReferences:OnClick"]
+status = "pending"
+source = "mniNavUndeleteAndDisableReferencesClick"
+
+[gui."xEdit/xeMainForm.dfm:mniNavUndeleteAndDisableReferencesObsolete:OnClick"]
+status = "pending"
+source = "mniNavCleaningObsoleteClick"
+
+[gui."xEdit/xeMainForm.dfm:mniNavUpdateCRCModGroups:OnClick"]
+status = "pending"
+source = "mniNavUpdateCRCModGroupsClick"
+
+[gui."xEdit/xeMainForm.dfm:mniRefByApplyScript:OnClick"]
+status = "pending"
+source = "mniNavApplyScriptClick"
+
+[gui."xEdit/xeMainForm.dfm:mniRefByCompareSelected:OnClick"]
+status = "pending"
+source = "mniRefByCompareSelectedClick"
+
+[gui."xEdit/xeMainForm.dfm:mniRefByCopyAsNewInto:OnClick"]
+status = "pending"
+source = "mniRefByCopyIntoClick"
+
+[gui."xEdit/xeMainForm.dfm:mniRefByCopyDisabledOverrideInto:OnClick"]
+status = "pending"
+source = "mniRefByCopyDisabledOverrideIntoClick"
+
+[gui."xEdit/xeMainForm.dfm:mniRefByCopyOverrideInto:OnClick"]
+status = "pending"
+source = "mniRefByCopyIntoClick"
+
+[gui."xEdit/xeMainForm.dfm:mniRefByCopyOverrideIntoWithOverwriting:OnClick"]
+status = "pending"
+source = "mniRefByCopyIntoClick"
+
+[gui."xEdit/xeMainForm.dfm:mniRefByDeepCopyOverrideInto:OnClick"]
+status = "pending"
+source = "mniRefByCopyIntoClick"
+
+[gui."xEdit/xeMainForm.dfm:mniRefByDeepCopyOverrideIntoWithOverwriting:OnClick"]
+status = "pending"
+source = "mniRefByCopyIntoClick"
+
+[gui."xEdit/xeMainForm.dfm:mniRefByMarkModified:OnClick"]
+status = "pending"
+source = "mniRefByMarkModifiedClick"
+
+[gui."xEdit/xeMainForm.dfm:mniRefByNotVWD:OnClick"]
+status = "pending"
+source = "mniRefByVWDClick"
+
+[gui."xEdit/xeMainForm.dfm:mniRefByRemove:OnClick"]
+status = "pending"
+source = "mniRefByRemoveClick"
+
+[gui."xEdit/xeMainForm.dfm:mniRefByVWD:OnClick"]
+status = "pending"
+source = "mniRefByVWDClick"
+
+[gui."xEdit/xeMainForm.dfm:mniSpreadsheetCompareSelected:OnClick"]
+status = "pending"
+source = "mniSpreadsheetCompareSelectedClick"
+
+[gui."xEdit/xeMainForm.dfm:mniSpreadsheetRebuild:OnClick"]
+status = "pending"
+source = "mniSpreadsheetRebuildClick"
+
+[gui."xEdit/xeMainForm.dfm:mniViewAdd:OnClick"]
+status = "pending"
+source = "mniViewAddClick"
+
+[gui."xEdit/xeMainForm.dfm:mniViewClear:OnClick"]
+status = "pending"
+source = "mniViewClearClick"
+
+[gui."xEdit/xeMainForm.dfm:mniViewClipboard:OnClick"]
+status = "pending"
+source = "mniViewClipboardClick"
+
+[gui."xEdit/xeMainForm.dfm:mniViewColumnWidthFitAll:OnClick"]
+status = "pending"
+source = "mniViewColumnWidthClick"
+
+[gui."xEdit/xeMainForm.dfm:mniViewColumnWidthFitSmart:OnClick"]
+status = "pending"
+source = "mniViewColumnWidthClick"
+
+[gui."xEdit/xeMainForm.dfm:mniViewColumnWidthFitText:OnClick"]
+status = "pending"
+source = "mniViewColumnWidthClick"
+
+[gui."xEdit/xeMainForm.dfm:mniViewColumnWidthStandard:OnClick"]
+status = "pending"
+source = "mniViewColumnWidthClick"
+
+[gui."xEdit/xeMainForm.dfm:mniViewCompareReferencedRow:OnClick"]
+status = "pending"
+source = "mniViewCompareReferencedRowClick"
+
+[gui."xEdit/xeMainForm.dfm:mniViewCopyMultipleToSelectedRecords:OnClick"]
+status = "pending"
+source = "mniViewCopyMultipleToSelectedRecordsClick"
+
+[gui."xEdit/xeMainForm.dfm:mniViewCopyToSelectedRecords:OnClick"]
+status = "pending"
+source = "mniViewCopyToSelectedRecordsClick"
+
+[gui."xEdit/xeMainForm.dfm:mniViewCreateModGroup:OnClick"]
+status = "pending"
+source = "mniNavCreateModGroupClick"
+
+[gui."xEdit/xeMainForm.dfm:mniViewEdit:OnClick"]
+status = "pending"
+source = "mniViewEditClick"
+
+[gui."xEdit/xeMainForm.dfm:mniViewHeaderClipboard:OnClick"]
+status = "pending"
+source = "mniViewHeaderClipboardClick"
+
+[gui."xEdit/xeMainForm.dfm:mniViewHeaderCopyAsNewRecord:OnClick"]
+status = "pending"
+source = "mniViewHeaderCopyIntoClick"
+
+[gui."xEdit/xeMainForm.dfm:mniViewHeaderCopyAsOverride:OnClick"]
+status = "pending"
+source = "mniViewHeaderCopyIntoClick"
+
+[gui."xEdit/xeMainForm.dfm:mniViewHeaderCopyAsOverrideWithOverwriting:OnClick"]
+status = "pending"
+source = "mniViewHeaderCopyIntoClick"
+
+[gui."xEdit/xeMainForm.dfm:mniViewHeaderCopyAsWrapper:OnClick"]
+status = "pending"
+source = "mniViewHeaderCopyIntoClick"
+
+[gui."xEdit/xeMainForm.dfm:mniViewHeaderCopyLoadOrderFormID:OnClick"]
+status = "pending"
+source = "mniViewHeaderCopyLoadOrderFormIDClick"
+
+[gui."xEdit/xeMainForm.dfm:mniViewHeaderCopyModuleName:OnClick"]
+status = "pending"
+source = "mniViewHeaderCopyModuleNameClick"
+
+[gui."xEdit/xeMainForm.dfm:mniViewHeaderCopyName:OnClick"]
+status = "pending"
+source = "mniViewHeaderCopyNameClick"
+
+[gui."xEdit/xeMainForm.dfm:mniViewHeaderDeepCopyAsOverride:OnClick"]
+status = "pending"
+source = "mniViewHeaderCopyIntoClick"
+
+[gui."xEdit/xeMainForm.dfm:mniViewHeaderDeepCopyAsOverrideWithOverwriting:OnClick"]
+status = "pending"
+source = "mniViewHeaderCopyIntoClick"
+
+[gui."xEdit/xeMainForm.dfm:mniViewHeaderHidden:OnClick"]
+status = "pending"
+source = "mniViewHeaderHiddenClick"
+
+[gui."xEdit/xeMainForm.dfm:mniViewHeaderJumpTo:OnClick"]
+status = "pending"
+source = "mniViewHeaderJumpToClick"
+
+[gui."xEdit/xeMainForm.dfm:mniViewHeaderRemove:OnClick"]
+status = "pending"
+source = "mniViewHeaderRemoveClick"
+
+[gui."xEdit/xeMainForm.dfm:mniViewHeaderUnhideAll:OnClick"]
+status = "pending"
+source = "mniViewHeaderUnhideAllClick"
+
+[gui."xEdit/xeMainForm.dfm:mniViewHideNoConflict:OnClick"]
+status = "pending"
+source = "mniViewHideNoConflictClick"
+
+[gui."xEdit/xeMainForm.dfm:mniViewModGroupsReload:OnClick"]
+status = "pending"
+source = "mniViewModGroupsReloadClick"
+
+[gui."xEdit/xeMainForm.dfm:mniViewMoveDown:OnClick"]
+status = "pending"
+source = "mniViewMoveDownClick"
+
+[gui."xEdit/xeMainForm.dfm:mniViewMoveUp:OnClick"]
+status = "pending"
+source = "mniViewMoveUpClick"
+
+[gui."xEdit/xeMainForm.dfm:mniViewNextMember:OnClick"]
+status = "pending"
+source = "mniViewNextMemberClick"
+
+[gui."xEdit/xeMainForm.dfm:mniViewPreviousMember:OnClick"]
+status = "pending"
+source = "mniViewPreviousMemberClick"
+
+[gui."xEdit/xeMainForm.dfm:mniViewRemove:OnClick"]
+status = "pending"
+source = "mniViewRemoveClick"
+
+[gui."xEdit/xeMainForm.dfm:mniViewRemoveFromSelected:OnClick"]
+status = "pending"
+source = "mniViewRemoveFromSelectedClick"
+
+[gui."xEdit/xeMainForm.dfm:mniViewSetToDefault:OnClick"]
+status = "pending"
+source = "mniViewSetToDefaultClick"
+
+[gui."xEdit/xeMainForm.dfm:mniViewSort:OnClick"]
+status = "pending"
+source = "mniViewSortClick"
+
+[gui."xEdit/xeMainForm.dfm:mniViewStickAuto:OnClick"]
+status = "pending"
+source = "mniViewStickAutoClick"
+
+[gui."xEdit/xeMainForm.dfm:mniViewStickSelected:OnClick"]
+status = "pending"
+source = "mniViewStickSelectedClick"
+
+[gui."xEdit/xeMainForm.dfm:pgMain:OnChange"]
+status = "pending"
+source = "pgMainChange"
+
+[gui."xEdit/xeMainForm.dfm:pmuBtnMenu:OnPopup"]
+status = "pending"
+source = "pmuBtnMenuPopup"
+
+[gui."xEdit/xeMainForm.dfm:pmuMain:OnPopup"]
+status = "pending"
+source = "pmuMainPopup"
+
+[gui."xEdit/xeMainForm.dfm:pmuNav:OnPopup"]
+status = "pending"
+source = "pmuNavPopup"
+
+[gui."xEdit/xeMainForm.dfm:pmuNavHeaderPopup:OnPopup"]
+status = "pending"
+source = "pmuNavHeaderPopupPopup"
+
+[gui."xEdit/xeMainForm.dfm:pmuRefBy:OnPopup"]
+status = "pending"
+source = "pmuRefByPopup"
+
+[gui."xEdit/xeMainForm.dfm:pmuSpreadsheet:OnPopup"]
+status = "pending"
+source = "pmuSpreadsheetPopup"
+
+[gui."xEdit/xeMainForm.dfm:pmuView:OnPopup"]
+status = "pending"
+source = "pmuViewPopup"
+
+[gui."xEdit/xeMainForm.dfm:pmuViewHeader:OnPopup"]
+status = "pending"
+source = "pmuViewHeaderPopup"
+
+[gui."xEdit/xeMainForm.dfm:pnlNav:OnResize"]
+status = "pending"
+source = "pnlNavResize"
+
+[gui."xEdit/xeMainForm.dfm:tbsAMMOSpreadsheet:OnShow"]
+status = "pending"
+source = "tbsSpreadsheetShow"
+
+[gui."xEdit/xeMainForm.dfm:tbsARMOSpreadsheet:OnShow"]
+status = "pending"
+source = "tbsSpreadsheetShow"
+
+[gui."xEdit/xeMainForm.dfm:tbsMessages:OnShow"]
+status = "pending"
+source = "tbsMessagesShow"
+
+[gui."xEdit/xeMainForm.dfm:tbsReferencedBy:OnShow"]
+status = "pending"
+source = "tbsViewShow"
+
+[gui."xEdit/xeMainForm.dfm:tbsView:OnShow"]
+status = "pending"
+source = "tbsViewShow"
+
+[gui."xEdit/xeMainForm.dfm:tbsWEAPSpreadsheet:OnShow"]
+status = "pending"
+source = "tbsSpreadsheetShow"
+
+[gui."xEdit/xeMainForm.dfm:tmrCheckUnsaved:OnTimer"]
+status = "pending"
+source = "tmrCheckUnsavedTimer"
+
+[gui."xEdit/xeMainForm.dfm:tmrGenerator:OnTimer"]
+status = "pending"
+source = "tmrGeneratorTimer"
+
+[gui."xEdit/xeMainForm.dfm:tmrMessages:OnTimer"]
+status = "pending"
+source = "tmrMessagesTimer"
+
+[gui."xEdit/xeMainForm.dfm:tmrPendingSetActive:OnTimer"]
+status = "pending"
+source = "tmrPendingSetActiveTimer"
+
+[gui."xEdit/xeMainForm.dfm:tmrReferencedByFilterApply:OnTimer"]
+status = "pending"
+source = "tmrReferencedByFilterApplyTimer"
+
+[gui."xEdit/xeMainForm.dfm:tmrShutdown:OnTimer"]
+status = "pending"
+source = "tmrShutdownTimer"
+
+[gui."xEdit/xeMainForm.dfm:tmrStartup:OnTimer"]
+status = "pending"
+source = "tmrStartupTimer"
+
+[gui."xEdit/xeMainForm.dfm:tmrUpdateColumnWidths:OnTimer"]
+status = "pending"
+source = "tmrUpdateColumnWidthsTimer"
+
+[gui."xEdit/xeMainForm.dfm:tmrViewFilterApply:OnTimer"]
+status = "pending"
+source = "tmrViewFilterApplyTimer"
+
+[gui."xEdit/xeMainForm.dfm:vstNav:OnBeforeItemErase"]
+status = "pending"
+source = "vstNavBeforeItemErase"
+
+[gui."xEdit/xeMainForm.dfm:vstNav:OnChange"]
+status = "pending"
+source = "vstNavChange"
+
+[gui."xEdit/xeMainForm.dfm:vstNav:OnCompareNodes"]
+status = "pending"
+source = "vstNavCompareNodes"
+
+[gui."xEdit/xeMainForm.dfm:vstNav:OnDragAllowed"]
+status = "pending"
+source = "vstNavDragAllowed"
+
+[gui."xEdit/xeMainForm.dfm:vstNav:OnDragOver"]
+status = "pending"
+source = "vstNavDragOver"
+
+[gui."xEdit/xeMainForm.dfm:vstNav:OnExpanding"]
+status = "pending"
+source = "vstNavExpanding"
+
+[gui."xEdit/xeMainForm.dfm:vstNav:OnFocusChanged"]
+status = "pending"
+source = "vstNavFocusChanged"
+
+[gui."xEdit/xeMainForm.dfm:vstNav:OnFreeNode"]
+status = "pending"
+source = "vstNavFreeNode"
+
+[gui."xEdit/xeMainForm.dfm:vstNav:OnGetText"]
+status = "pending"
+source = "vstNavGetText"
+
+[gui."xEdit/xeMainForm.dfm:vstNav:OnHeaderClick"]
+status = "pending"
+source = "vstNavHeaderClick"
+
+[gui."xEdit/xeMainForm.dfm:vstNav:OnIncrementalSearch"]
+status = "pending"
+source = "vstNavIncrementalSearch"
+
+[gui."xEdit/xeMainForm.dfm:vstNav:OnInitChildren"]
+status = "pending"
+source = "vstNavInitChildren"
+
+[gui."xEdit/xeMainForm.dfm:vstNav:OnInitNode"]
+status = "pending"
+source = "vstNavInitNode"
+
+[gui."xEdit/xeMainForm.dfm:vstNav:OnKeyDown"]
+status = "pending"
+source = "vstNavKeyDown"
+
+[gui."xEdit/xeMainForm.dfm:vstNav:OnKeyPress"]
+status = "pending"
+source = "vstNavKeyPress"
+
+[gui."xEdit/xeMainForm.dfm:vstNav:OnPaintText"]
+status = "pending"
+source = "vstNavPaintText"
+
+[gui."xEdit/xeMainForm.dfm:vstSpreadSheetAmmo:OnClick"]
+status = "pending"
+source = "vstSpreadSheetClick"
+
+[gui."xEdit/xeMainForm.dfm:vstSpreadSheetAmmo:OnCompareNodes"]
+status = "pending"
+source = "vstSpreadSheetCompareNodes"
+
+[gui."xEdit/xeMainForm.dfm:vstSpreadSheetAmmo:OnCreateEditor"]
+status = "pending"
+source = "vstSpreadSheetCreateEditor"
+
+[gui."xEdit/xeMainForm.dfm:vstSpreadSheetAmmo:OnDragAllowed"]
+status = "pending"
+source = "vstSpreadSheetDragAllowed"
+
+[gui."xEdit/xeMainForm.dfm:vstSpreadSheetAmmo:OnDragDrop"]
+status = "pending"
+source = "vstSpreadSheetDragDrop"
+
+[gui."xEdit/xeMainForm.dfm:vstSpreadSheetAmmo:OnDragOver"]
+status = "pending"
+source = "vstSpreadSheetDragOver"
+
+[gui."xEdit/xeMainForm.dfm:vstSpreadSheetAmmo:OnEditing"]
+status = "pending"
+source = "vstSpreadSheetEditing"
+
+[gui."xEdit/xeMainForm.dfm:vstSpreadSheetAmmo:OnFreeNode"]
+status = "pending"
+source = "vstSpreadSheetFreeNode"
+
+[gui."xEdit/xeMainForm.dfm:vstSpreadSheetAmmo:OnGetText"]
+status = "pending"
+source = "vstSpreadSheetGetText"
+
+[gui."xEdit/xeMainForm.dfm:vstSpreadSheetAmmo:OnHeaderClick"]
+status = "pending"
+source = "vstNavHeaderClick"
+
+[gui."xEdit/xeMainForm.dfm:vstSpreadSheetAmmo:OnIncrementalSearch"]
+status = "pending"
+source = "vstSpreadSheetIncrementalSearch"
+
+[gui."xEdit/xeMainForm.dfm:vstSpreadSheetAmmo:OnInitNode"]
+status = "pending"
+source = "vstSpreadSheetAmmoInitNode"
+
+[gui."xEdit/xeMainForm.dfm:vstSpreadSheetAmmo:OnNewText"]
+status = "pending"
+source = "vstSpreadSheetNewText"
+
+[gui."xEdit/xeMainForm.dfm:vstSpreadSheetAmmo:OnPaintText"]
+status = "pending"
+source = "vstSpreadSheetPaintText"
+
+[gui."xEdit/xeMainForm.dfm:vstSpreadSheetWeapon:OnClick"]
+status = "pending"
+source = "vstSpreadSheetClick"
+
+[gui."xEdit/xeMainForm.dfm:vstSpreadSheetWeapon:OnCompareNodes"]
+status = "pending"
+source = "vstSpreadSheetCompareNodes"
+
+[gui."xEdit/xeMainForm.dfm:vstSpreadSheetWeapon:OnCreateEditor"]
+status = "pending"
+source = "vstSpreadSheetCreateEditor"
+
+[gui."xEdit/xeMainForm.dfm:vstSpreadSheetWeapon:OnDragAllowed"]
+status = "pending"
+source = "vstSpreadSheetDragAllowed"
+
+[gui."xEdit/xeMainForm.dfm:vstSpreadSheetWeapon:OnDragDrop"]
+status = "pending"
+source = "vstSpreadSheetDragDrop"
+
+[gui."xEdit/xeMainForm.dfm:vstSpreadSheetWeapon:OnDragOver"]
+status = "pending"
+source = "vstSpreadSheetDragOver"
+
+[gui."xEdit/xeMainForm.dfm:vstSpreadSheetWeapon:OnEditing"]
+status = "pending"
+source = "vstSpreadSheetEditing"
+
+[gui."xEdit/xeMainForm.dfm:vstSpreadSheetWeapon:OnFreeNode"]
+status = "pending"
+source = "vstSpreadSheetFreeNode"
+
+[gui."xEdit/xeMainForm.dfm:vstSpreadSheetWeapon:OnGetText"]
+status = "pending"
+source = "vstSpreadSheetGetText"
+
+[gui."xEdit/xeMainForm.dfm:vstSpreadSheetWeapon:OnHeaderClick"]
+status = "pending"
+source = "vstNavHeaderClick"
+
+[gui."xEdit/xeMainForm.dfm:vstSpreadSheetWeapon:OnIncrementalSearch"]
+status = "pending"
+source = "vstSpreadSheetIncrementalSearch"
+
+[gui."xEdit/xeMainForm.dfm:vstSpreadSheetWeapon:OnInitNode"]
+status = "pending"
+source = "vstSpreadSheetWeaponInitNode"
+
+[gui."xEdit/xeMainForm.dfm:vstSpreadSheetWeapon:OnNewText"]
+status = "pending"
+source = "vstSpreadSheetNewText"
+
+[gui."xEdit/xeMainForm.dfm:vstSpreadSheetWeapon:OnPaintText"]
+status = "pending"
+source = "vstSpreadSheetPaintText"
+
+[gui."xEdit/xeMainForm.dfm:vstSpreadsheetArmor:OnClick"]
+status = "pending"
+source = "vstSpreadSheetClick"
+
+[gui."xEdit/xeMainForm.dfm:vstSpreadsheetArmor:OnCompareNodes"]
+status = "pending"
+source = "vstSpreadSheetCompareNodes"
+
+[gui."xEdit/xeMainForm.dfm:vstSpreadsheetArmor:OnCreateEditor"]
+status = "pending"
+source = "vstSpreadSheetCreateEditor"
+
+[gui."xEdit/xeMainForm.dfm:vstSpreadsheetArmor:OnDragAllowed"]
+status = "pending"
+source = "vstSpreadSheetDragAllowed"
+
+[gui."xEdit/xeMainForm.dfm:vstSpreadsheetArmor:OnDragDrop"]
+status = "pending"
+source = "vstSpreadSheetDragDrop"
+
+[gui."xEdit/xeMainForm.dfm:vstSpreadsheetArmor:OnDragOver"]
+status = "pending"
+source = "vstSpreadSheetDragOver"
+
+[gui."xEdit/xeMainForm.dfm:vstSpreadsheetArmor:OnEditing"]
+status = "pending"
+source = "vstSpreadSheetEditing"
+
+[gui."xEdit/xeMainForm.dfm:vstSpreadsheetArmor:OnFreeNode"]
+status = "pending"
+source = "vstSpreadSheetFreeNode"
+
+[gui."xEdit/xeMainForm.dfm:vstSpreadsheetArmor:OnGetText"]
+status = "pending"
+source = "vstSpreadSheetGetText"
+
+[gui."xEdit/xeMainForm.dfm:vstSpreadsheetArmor:OnHeaderClick"]
+status = "pending"
+source = "vstNavHeaderClick"
+
+[gui."xEdit/xeMainForm.dfm:vstSpreadsheetArmor:OnIncrementalSearch"]
+status = "pending"
+source = "vstSpreadSheetIncrementalSearch"
+
+[gui."xEdit/xeMainForm.dfm:vstSpreadsheetArmor:OnInitNode"]
+status = "pending"
+source = "vstSpreadSheetArmorInitNode"
+
+[gui."xEdit/xeMainForm.dfm:vstSpreadsheetArmor:OnNewText"]
+status = "pending"
+source = "vstSpreadSheetNewText"
+
+[gui."xEdit/xeMainForm.dfm:vstSpreadsheetArmor:OnPaintText"]
+status = "pending"
+source = "vstSpreadSheetPaintText"
+
+[gui."xEdit/xeMainForm.dfm:vstView:OnAdvancedHeaderDraw"]
+status = "pending"
+source = "vstViewAdvancedHeaderDraw"
+
+[gui."xEdit/xeMainForm.dfm:vstView:OnBeforeCellPaint"]
+status = "pending"
+source = "vstViewBeforeCellPaint"
+
+[gui."xEdit/xeMainForm.dfm:vstView:OnBeforeItemErase"]
+status = "pending"
+source = "vstViewBeforeItemErase"
+
+[gui."xEdit/xeMainForm.dfm:vstView:OnClick"]
+status = "pending"
+source = "vstViewClick"
+
+[gui."xEdit/xeMainForm.dfm:vstView:OnCollapsed"]
+status = "pending"
+source = "vstViewCollapsed"
+
+[gui."xEdit/xeMainForm.dfm:vstView:OnCollapsing"]
+status = "pending"
+source = "vstViewCollapsing"
+
+[gui."xEdit/xeMainForm.dfm:vstView:OnCreateEditor"]
+status = "pending"
+source = "vstViewCreateEditor"
+
+[gui."xEdit/xeMainForm.dfm:vstView:OnDblClick"]
+status = "pending"
+source = "vstViewDblClick"
+
+[gui."xEdit/xeMainForm.dfm:vstView:OnDragAllowed"]
+status = "pending"
+source = "vstViewDragAllowed"
+
+[gui."xEdit/xeMainForm.dfm:vstView:OnDragDrop"]
+status = "pending"
+source = "vstViewDragDrop"
+
+[gui."xEdit/xeMainForm.dfm:vstView:OnDragOver"]
+status = "pending"
+source = "vstViewDragOver"
+
+[gui."xEdit/xeMainForm.dfm:vstView:OnEditing"]
+status = "pending"
+source = "vstViewEditing"
+
+[gui."xEdit/xeMainForm.dfm:vstView:OnExpanded"]
+status = "pending"
+source = "vstViewExpanded"
+
+[gui."xEdit/xeMainForm.dfm:vstView:OnExpanding"]
+status = "pending"
+source = "vstViewExpanding"
+
+[gui."xEdit/xeMainForm.dfm:vstView:OnFocusChanged"]
+status = "pending"
+source = "vstViewFocusChanged"
+
+[gui."xEdit/xeMainForm.dfm:vstView:OnFocusChanging"]
+status = "pending"
+source = "vstViewFocusChanging"
+
+[gui."xEdit/xeMainForm.dfm:vstView:OnFreeNode"]
+status = "pending"
+source = "vstViewFreeNode"
+
+[gui."xEdit/xeMainForm.dfm:vstView:OnGetText"]
+status = "pending"
+source = "vstViewGetText"
+
+[gui."xEdit/xeMainForm.dfm:vstView:OnHeaderClick"]
+status = "pending"
+source = "vstViewHeaderClick"
+
+[gui."xEdit/xeMainForm.dfm:vstView:OnHeaderDrawQueryElements"]
+status = "pending"
+source = "vstViewHeaderDrawQueryElements"
+
+[gui."xEdit/xeMainForm.dfm:vstView:OnHeaderMouseDown"]
+status = "pending"
+source = "vstViewHeaderMouseDown"
+
+[gui."xEdit/xeMainForm.dfm:vstView:OnHeaderMouseMove"]
+status = "pending"
+source = "vstViewHeaderMouseMove"
+
+[gui."xEdit/xeMainForm.dfm:vstView:OnInitChildren"]
+status = "pending"
+source = "vstViewInitChildren"
+
+[gui."xEdit/xeMainForm.dfm:vstView:OnInitNode"]
+status = "pending"
+source = "vstViewInitNode"
+
+[gui."xEdit/xeMainForm.dfm:vstView:OnKeyDown"]
+status = "pending"
+source = "vstViewKeyDown"
+
+[gui."xEdit/xeMainForm.dfm:vstView:OnKeyPress"]
+status = "pending"
+source = "vstViewKeyPress"
+
+[gui."xEdit/xeMainForm.dfm:vstView:OnNewText"]
+status = "pending"
+source = "vstViewNewText"
+
+[gui."xEdit/xeMainForm.dfm:vstView:OnPaintText"]
+status = "pending"
+source = "vstViewPaintText"
+
+[gui."xEdit/xeMainForm.dfm:vstView:OnResize"]
+status = "pending"
+source = "vstViewResize"
+
+[gui."xEdit/xeMainForm.dfm:vstView:OnScroll"]
+status = "pending"
+source = "vstViewScroll"
+
+[gui."xEdit/xeModGroupEditForm.dfm:edName:OnChange"]
+status = "pending"
+source = "edNameChange"
+
+[gui."xEdit/xeModGroupEditForm.dfm:edName:OnKeyDown"]
+status = "pending"
+source = "edNameKeyDown"
+
+[gui."xEdit/xeModGroupEditForm.dfm:edName:OnKeyPress"]
+status = "pending"
+source = "edNameKeyPress"
+
+[gui."xEdit/xeModGroupEditForm.dfm:frmModGroupEdit:OnClose"]
+status = "pending"
+source = "FormClose"
+
+[gui."xEdit/xeModGroupEditForm.dfm:frmModGroupEdit:OnCreate"]
+status = "pending"
+source = "FormCreate"
+
+[gui."xEdit/xeModGroupEditForm.dfm:frmModGroupEdit:OnKeyDown"]
+status = "pending"
+source = "FormKeyDown"
+
+[gui."xEdit/xeModGroupEditForm.dfm:frmModGroupEdit:OnShow"]
+status = "pending"
+source = "FormShow"
+
+[gui."xEdit/xeModGroupEditForm.dfm:vstModGroupItems:OnGetText"]
+status = "pending"
+source = "vstModGroupItemsGetText"
+
+[gui."xEdit/xeModGroupEditForm.dfm:vstModGroupItems:OnIncrementalSearch"]
+status = "pending"
+source = "vstModGroupItemsIncrementalSearch"
+
+[gui."xEdit/xeModGroupEditForm.dfm:vstModGroupItems:OnInitChildren"]
+status = "pending"
+source = "vstModGroupItemsInitChildren"
+
+[gui."xEdit/xeModGroupEditForm.dfm:vstModGroupItems:OnInitNode"]
+status = "pending"
+source = "vstModGroupItemsInitNode"
+
+[gui."xEdit/xeModGroupEditForm.dfm:vstModGroupItems:OnKeyDown"]
+status = "pending"
+source = "vstModGroupItemsKeyDown"
+
+[gui."xEdit/xeModGroupEditForm.dfm:vstModGroupItems:OnNodeClick"]
+status = "pending"
+source = "vstModGroupItemsNodeClick"
+
+[gui."xEdit/xeModGroupSelectForm.dfm:acPresetDelete:OnExecute"]
+status = "pending"
+source = "acPresetDeleteExecute"
+
+[gui."xEdit/xeModGroupSelectForm.dfm:acPresetDelete:OnUpdate"]
+status = "pending"
+source = "acPresetDeleteUpdate"
+
+[gui."xEdit/xeModGroupSelectForm.dfm:acPresetLoad:OnExecute"]
+status = "pending"
+source = "acPresetLoadExecute"
+
+[gui."xEdit/xeModGroupSelectForm.dfm:acPresetLoad:OnUpdate"]
+status = "pending"
+source = "acPresetLoadUpdate"
+
+[gui."xEdit/xeModGroupSelectForm.dfm:acPresetSave:OnExecute"]
+status = "pending"
+source = "acPresetSaveExecute"
+
+[gui."xEdit/xeModGroupSelectForm.dfm:acPresetSave:OnUpdate"]
+status = "pending"
+source = "acPresetSaveUpdate"
+
+[gui."xEdit/xeModGroupSelectForm.dfm:cbPreset:OnKeyPress"]
+status = "pending"
+source = "cbPresetKeyPress"
+
+[gui."xEdit/xeModGroupSelectForm.dfm:edFilter:OnChange"]
+status = "pending"
+source = "edFilterChange"
+
+[gui."xEdit/xeModGroupSelectForm.dfm:edFilter:OnKeyDown"]
+status = "pending"
+source = "edFilterKeyDown"
+
+[gui."xEdit/xeModGroupSelectForm.dfm:frmModGroupSelect:OnClose"]
+status = "pending"
+source = "FormClose"
+
+[gui."xEdit/xeModGroupSelectForm.dfm:frmModGroupSelect:OnCreate"]
+status = "pending"
+source = "FormCreate"
+
+[gui."xEdit/xeModGroupSelectForm.dfm:frmModGroupSelect:OnKeyDown"]
+status = "pending"
+source = "FormKeyDown"
+
+[gui."xEdit/xeModGroupSelectForm.dfm:frmModGroupSelect:OnShow"]
+status = "pending"
+source = "FormShow"
+
+[gui."xEdit/xeModGroupSelectForm.dfm:mniInvertSelection:OnClick"]
+status = "pending"
+source = "mniInvertSelectionClick"
+
+[gui."xEdit/xeModGroupSelectForm.dfm:mniSelectAll:OnClick"]
+status = "pending"
+source = "mniSelectAllClick"
+
+[gui."xEdit/xeModGroupSelectForm.dfm:mniSelectNone:OnClick"]
+status = "pending"
+source = "mniSelectNoneClick"
+
+[gui."xEdit/xeModGroupSelectForm.dfm:pmuModGroups:OnPopup"]
+status = "pending"
+source = "pmuModGroupsPopup"
+
+[gui."xEdit/xeModGroupSelectForm.dfm:vstModGroups:OnBeforeGetCheckState"]
+status = "pending"
+source = "vstModGroupsBeforeGetCheckState"
+
+[gui."xEdit/xeModGroupSelectForm.dfm:vstModGroups:OnChecked"]
+status = "pending"
+source = "vstModGroupsChecked"
+
+[gui."xEdit/xeModGroupSelectForm.dfm:vstModGroups:OnCompareNodes"]
+status = "pending"
+source = "vstModGroupsCompareNodes"
+
+[gui."xEdit/xeModGroupSelectForm.dfm:vstModGroups:OnFreeNode"]
+status = "pending"
+source = "vstModGroupsFreeNode"
+
+[gui."xEdit/xeModGroupSelectForm.dfm:vstModGroups:OnGetText"]
+status = "pending"
+source = "vstModGroupsGetText"
+
+[gui."xEdit/xeModGroupSelectForm.dfm:vstModGroups:OnIncrementalSearch"]
+status = "pending"
+source = "vstModGroupsIncrementalSearch"
+
+[gui."xEdit/xeModGroupSelectForm.dfm:vstModGroups:OnInitChildren"]
+status = "pending"
+source = "vstModGroupsInitChildren"
+
+[gui."xEdit/xeModGroupSelectForm.dfm:vstModGroups:OnInitNode"]
+status = "pending"
+source = "vstModGroupsInitNode"
+
+[gui."xEdit/xeModGroupSelectForm.dfm:vstModGroups:OnKeyDown"]
+status = "pending"
+source = "vstModGroupsKeyDown"
+
+[gui."xEdit/xeModGroupSelectForm.dfm:vstModGroups:OnKeyPress"]
+status = "pending"
+source = "vstModGroupsKeyPress"
+
+[gui."xEdit/xeModGroupSelectForm.dfm:vstModGroups:OnNodeDblClick"]
+status = "pending"
+source = "vstModGroupsNodeDblClick"
+
+[gui."xEdit/xeModGroupSelectForm.dfm:vstModGroups:OnPaintText"]
+status = "pending"
+source = "vstModGroupsPaintText"
+
+[gui."xEdit/xeModuleSelectForm.dfm:acPresetDelete:OnExecute"]
+status = "pending"
+source = "acPresetDeleteExecute"
+
+[gui."xEdit/xeModuleSelectForm.dfm:acPresetDelete:OnUpdate"]
+status = "pending"
+source = "acPresetDeleteUpdate"
+
+[gui."xEdit/xeModuleSelectForm.dfm:acPresetLoad:OnExecute"]
+status = "pending"
+source = "acPresetLoadExecute"
+
+[gui."xEdit/xeModuleSelectForm.dfm:acPresetLoad:OnUpdate"]
+status = "pending"
+source = "acPresetLoadUpdate"
+
+[gui."xEdit/xeModuleSelectForm.dfm:acPresetSave:OnExecute"]
+status = "pending"
+source = "acPresetSaveExecute"
+
+[gui."xEdit/xeModuleSelectForm.dfm:acPresetSave:OnUpdate"]
+status = "pending"
+source = "acPresetSaveUpdate"
+
+[gui."xEdit/xeModuleSelectForm.dfm:btnOK:OnClick"]
+status = "pending"
+source = "btnOKClick"
+
+[gui."xEdit/xeModuleSelectForm.dfm:cbPreset:OnKeyPress"]
+status = "pending"
+source = "cbPresetKeyPress"
+
+[gui."xEdit/xeModuleSelectForm.dfm:cbRegExFilter:OnClick"]
+status = "pending"
+source = "cbRegExFilterClick"
+
+[gui."xEdit/xeModuleSelectForm.dfm:edFilter:OnChange"]
+status = "pending"
+source = "edFilterChange"
+
+[gui."xEdit/xeModuleSelectForm.dfm:edFilter:OnKeyDown"]
+status = "pending"
+source = "edFilterKeyDown"
+
+[gui."xEdit/xeModuleSelectForm.dfm:frmModuleSelect:OnClose"]
+status = "pending"
+source = "FormClose"
+
+[gui."xEdit/xeModuleSelectForm.dfm:frmModuleSelect:OnCreate"]
+status = "pending"
+source = "FormCreate"
+
+[gui."xEdit/xeModuleSelectForm.dfm:frmModuleSelect:OnKeyDown"]
+status = "pending"
+source = "FormKeyDown"
+
+[gui."xEdit/xeModuleSelectForm.dfm:frmModuleSelect:OnShow"]
+status = "pending"
+source = "FormShow"
+
+[gui."xEdit/xeModuleSelectForm.dfm:mniInvertSelection:OnClick"]
+status = "pending"
+source = "mniInvertSelectionClick"
+
+[gui."xEdit/xeModuleSelectForm.dfm:mniSelectAll:OnClick"]
+status = "pending"
+source = "mniSelectAllClick"
+
+[gui."xEdit/xeModuleSelectForm.dfm:mniSelectNone:OnClick"]
+status = "pending"
+source = "mniSelectNoneClick"
+
+[gui."xEdit/xeModuleSelectForm.dfm:pmuModules:OnPopup"]
+status = "pending"
+source = "pmuModulesPopup"
+
+[gui."xEdit/xeModuleSelectForm.dfm:vstModules:OnBeforeGetCheckState"]
+status = "pending"
+source = "vstModulesBeforeGetCheckState"
+
+[gui."xEdit/xeModuleSelectForm.dfm:vstModules:OnChecked"]
+status = "pending"
+source = "vstModulesChecked"
+
+[gui."xEdit/xeModuleSelectForm.dfm:vstModules:OnCompareNodes"]
+status = "pending"
+source = "vstModulesCompareNodes"
+
+[gui."xEdit/xeModuleSelectForm.dfm:vstModules:OnFreeNode"]
+status = "pending"
+source = "vstModulesFreeNode"
+
+[gui."xEdit/xeModuleSelectForm.dfm:vstModules:OnGetText"]
+status = "pending"
+source = "vstModulesGetText"
+
+[gui."xEdit/xeModuleSelectForm.dfm:vstModules:OnHeaderClick"]
+status = "pending"
+source = "vstModulesHeaderClick"
+
+[gui."xEdit/xeModuleSelectForm.dfm:vstModules:OnIncrementalSearch"]
+status = "pending"
+source = "vstModulesIncrementalSearch"
+
+[gui."xEdit/xeModuleSelectForm.dfm:vstModules:OnInitChildren"]
+status = "pending"
+source = "vstModulesInitChildren"
+
+[gui."xEdit/xeModuleSelectForm.dfm:vstModules:OnInitNode"]
+status = "pending"
+source = "vstModulesInitNode"
+
+[gui."xEdit/xeModuleSelectForm.dfm:vstModules:OnKeyDown"]
+status = "pending"
+source = "vstModulesKeyDown"
+
+[gui."xEdit/xeModuleSelectForm.dfm:vstModules:OnKeyPress"]
+status = "pending"
+source = "vstModulesKeyPress"
+
+[gui."xEdit/xeModuleSelectForm.dfm:vstModules:OnNodeDblClick"]
+status = "pending"
+source = "vstModulesNodeDblClick"
+
+[gui."xEdit/xeModuleSelectForm.dfm:vstModules:OnPaintText"]
+status = "pending"
+source = "vstModulesPaintText"
+
+[gui."xEdit/xeOptionsForm.dfm:cbConflictAll:OnChange"]
+status = "pending"
+source = "cbConflictAllChange"
+
+[gui."xEdit/xeOptionsForm.dfm:cbConflictThis:OnChange"]
+status = "pending"
+source = "cbConflictThisChange"
+
+[gui."xEdit/xeOptionsForm.dfm:cbThemeDark:OnSelect"]
+status = "pending"
+source = "cbThemeSystemSelect"
+
+[gui."xEdit/xeOptionsForm.dfm:cbThemeLight:OnSelect"]
+status = "pending"
+source = "cbThemeSystemSelect"
+
+[gui."xEdit/xeOptionsForm.dfm:cbThemeSystem:OnSelect"]
+status = "pending"
+source = "cbThemeSystemSelect"
+
+[gui."xEdit/xeOptionsForm.dfm:clbConflictAll:OnChange"]
+status = "pending"
+source = "clbConflictAllChange"
+
+[gui."xEdit/xeOptionsForm.dfm:clbConflictThis:OnChange"]
+status = "pending"
+source = "clbConflictThisChange"
+
+[gui."xEdit/xeOptionsForm.dfm:frmOptions:OnClose"]
+status = "pending"
+source = "FormClose"
+
+[gui."xEdit/xeOptionsForm.dfm:frmOptions:OnCreate"]
+status = "pending"
+source = "FormCreate"
+
+[gui."xEdit/xeOptionsForm.dfm:frmOptions:OnKeyDown"]
+status = "pending"
+source = "FormKeyDown"
+
+[gui."xEdit/xeOptionsForm.dfm:pnlFontMessages:OnClick"]
+status = "pending"
+source = "pnlFontRecordsClick"
+
+[gui."xEdit/xeOptionsForm.dfm:pnlFontRecords:OnClick"]
+status = "pending"
+source = "pnlFontRecordsClick"
+
+[gui."xEdit/xeOptionsForm.dfm:pnlFontViewer:OnClick"]
+status = "pending"
+source = "pnlFontRecordsClick"
+
+[gui."xEdit/xeOptionsForm.dfm:rbThemeDark:OnClick"]
+status = "pending"
+source = "rbThemeClick"
+
+[gui."xEdit/xeOptionsForm.dfm:rbThemeLight:OnClick"]
+status = "pending"
+source = "rbThemeClick"
+
+[gui."xEdit/xeOptionsForm.dfm:rbThemeSystem:OnClick"]
+status = "pending"
+source = "rbThemeClick"
+
+[gui."xEdit/xeRichEditForm.dfm:btnTOC:OnClick"]
+status = "pending"
+source = "btnTOCClick"
+
+[gui."xEdit/xeRichEditForm.dfm:edSearch:OnKeyPress"]
+status = "pending"
+source = "edSearchKeyPress"
+
+[gui."xEdit/xeRichEditForm.dfm:frmRichEdit:OnClose"]
+status = "pending"
+source = "FormClose"
+
+[gui."xEdit/xeRichEditForm.dfm:frmRichEdit:OnCreate"]
+status = "pending"
+source = "FormCreate"
+
+[gui."xEdit/xeRichEditForm.dfm:frmRichEdit:OnKeyDown"]
+status = "pending"
+source = "FormKeyDown"
+
+[gui."xEdit/xeRichEditForm.dfm:frmRichEdit:OnShow"]
+status = "pending"
+source = "FormShow"
+
+[gui."xEdit/xeRichEditForm.dfm:splTOC:OnMoved"]
+status = "pending"
+source = "splTOCMoved"
+
+[gui."xEdit/xeRichEditForm.dfm:tbrZoom:OnChange"]
+status = "pending"
+source = "tbrZoomChange"
+
+[gui."xEdit/xeRichEditForm.dfm:tmrEnableButton:OnTimer"]
+status = "pending"
+source = "tmrEnableButtonTimer"
+
+[gui."xEdit/xeRichEditForm.dfm:vstTOC:OnCollapsing"]
+status = "pending"
+source = "vstTOCCollapsing"
+
+[gui."xEdit/xeRichEditForm.dfm:vstTOC:OnGetText"]
+status = "pending"
+source = "vstTOCGetText"
+
+[gui."xEdit/xeRichEditForm.dfm:vstTOC:OnNodeDblClick"]
+status = "pending"
+source = "vstTOCNodeDblClick"
+
+[gui."xEdit/xeScriptForm.dfm:Editor:OnKeyDown"]
+status = "pending"
+source = "EditorKeyDown"
+
+[gui."xEdit/xeScriptForm.dfm:Editor:OnKeyPress"]
+status = "pending"
+source = "EditorKeyPress"
+
+[gui."xEdit/xeScriptForm.dfm:Editor:OnKeyUp"]
+status = "pending"
+source = "EditorKeyUp"
+
+[gui."xEdit/xeScriptForm.dfm:Editor:OnMouseUp"]
+status = "pending"
+source = "EditorMouseUp"
+
+[gui."xEdit/xeScriptForm.dfm:btnSave:OnClick"]
+status = "pending"
+source = "btnSaveClick"
+
+[gui."xEdit/xeScriptForm.dfm:chkScriptsSubDir:OnClick"]
+status = "pending"
+source = "chkScriptsSubDirClick"
+
+[gui."xEdit/xeScriptForm.dfm:cmbScripts:OnChange"]
+status = "pending"
+source = "cmbScriptsChange"
+
+[gui."xEdit/xeScriptForm.dfm:cmbScripts:OnCloseUp"]
+status = "pending"
+source = "cmbScriptsCloseUp"
+
+[gui."xEdit/xeScriptForm.dfm:cmbScripts:OnDropDown"]
+status = "pending"
+source = "cmbScriptsDropDown"
+
+[gui."xEdit/xeScriptForm.dfm:cmbScripts:OnEnter"]
+status = "pending"
+source = "cmbScriptsEnter"
+
+[gui."xEdit/xeScriptForm.dfm:cmbScripts:OnExit"]
+status = "pending"
+source = "cmbScriptsExit"
+
+[gui."xEdit/xeScriptForm.dfm:cmbScripts:OnKeyDown"]
+status = "pending"
+source = "cmbScriptsKeyDown"
+
+[gui."xEdit/xeScriptForm.dfm:cmbScripts:OnSelect"]
+status = "pending"
+source = "cmbScriptsSelect"
+
+[gui."xEdit/xeScriptForm.dfm:edFilter:OnChange"]
+status = "pending"
+source = "edFilterChange"
+
+[gui."xEdit/xeScriptForm.dfm:edFilter:OnKeyDown"]
+status = "pending"
+source = "edFilterKeyDown"
+
+[gui."xEdit/xeScriptForm.dfm:frmScript:OnClose"]
+status = "pending"
+source = "FormClose"
+
+[gui."xEdit/xeScriptForm.dfm:frmScript:OnCreate"]
+status = "pending"
+source = "FormCreate"
+
+[gui."xEdit/xeScriptForm.dfm:frmScript:OnKeyDown"]
+status = "pending"
+source = "FormKeyDown"
+
+[gui."xEdit/xeScriptForm.dfm:frmScript:OnShow"]
+status = "pending"
+source = "FormShow"
+
+[gui."xEdit/xeTipForm.dfm:cbShowTip:OnClick"]
+status = "pending"
+source = "cbShowTipClick"
+
+[gui."xEdit/xeTipForm.dfm:frmTip:OnCreate"]
+status = "pending"
+source = "FormCreate"
+
+[gui."xEdit/xeTipForm.dfm:frmTip:OnDestroy"]
+status = "pending"
+source = "FormDestroy"
+
+[gui."xEdit/xeTipForm.dfm:lblNextTip:OnClick"]
+status = "pending"
+source = "lblNextTipClick"
+
+[gui."xEdit/xeViewElementsForm.dfm:FindDialog1:OnFind"]
+status = "pending"
+source = "FindDialog1Find"
+
+[gui."xEdit/xeViewElementsForm.dfm:LiteCompareButton:OnClick"]
+status = "pending"
+source = "btnCompareClick"
+
+[gui."xEdit/xeViewElementsForm.dfm:LiteCopyButton:OnClick"]
+status = "pending"
+source = "btnCopyToClipboard"
+
+[gui."xEdit/xeViewElementsForm.dfm:btnCancel:OnClick"]
+status = "pending"
+source = "btnCancelClick"
+
+[gui."xEdit/xeViewElementsForm.dfm:btnCompare:OnClick"]
+status = "pending"
+source = "btnCompareClick"
+
+[gui."xEdit/xeViewElementsForm.dfm:frmViewElements:OnClose"]
+status = "pending"
+source = "FormClose"
+
+[gui."xEdit/xeViewElementsForm.dfm:frmViewElements:OnCreate"]
+status = "pending"
+source = "FormCreate"
+
+[gui."xEdit/xeViewElementsForm.dfm:frmViewElements:OnKeyDown"]
+status = "pending"
+source = "FormKeyDown"
+
+[gui."xEdit/xeViewElementsForm.dfm:frmViewElements:OnShow"]
+status = "pending"
+source = "FormShow"
+
+[gui."xEdit/xeViewElementsForm.dfm:mniCompareConf:OnClick"]
+status = "pending"
+source = "mniCompareConfClick"
+
+[gui."xEdit/xeWaitForm.dfm:bnCancel:OnClick"]
+status = "pending"
+source = "bnCancelClick"
+
+[gui."xEdit/xeWaitForm.dfm:frmWait:OnCreate"]
+status = "pending"
+source = "FormCreate"
+
+[gui."xEdit/xeWorldspaceCellDetailsForm.dfm:frmWorldspaceCellDetails:OnCreate"]
+status = "pending"
+source = "FormCreate"
+
+[gui."xEdit/xeWorldspaceCellDetailsForm.dfm:rbTemporary:OnClick"]
+status = "pending"
+source = "rbTemporaryClick"
+
+[switch."?"]
+status = "pending"
+source = "xDump.dpr"
+
+[switch.af]
+status = "pending"
+source = "BSArch.dpr"
+
+[switch.agl]
+status = "pending"
+source = "xEdit/xeInit.pas"
+
+[switch.aim]
+status = "pending"
+source = "Tools/TreeLodBillboardCreator/treelod.dpr"
+
+[switch.all]
+status = "pending"
+source = "Sniff/frmMain.pas"
+
+[switch.allbsa]
+status = "pending"
+source = "xDump.dpr"
+
+[switch.allowdirectsaves]
+status = "pending"
+source = "xEdit/xeInit.pas"
+
+[switch.allowedithedrversion]
+status = "pending"
+source = "xEdit/xeInit.pas"
+
+[switch.allowespmaster]
+status = "pending"
+source = "xEdit/xeInit.pas"
+
+[switch.allowmakepartial]
+status = "pending"
+source = "xEdit/xeInit.pas"
+
+[switch.allowmasterfilesedit]
+status = "pending"
+source = "xEdit/xeInit.pas"
+
+[switch.alwayssaveonam]
+status = "pending"
+source = "xEdit/xeInit.pas"
+
+[switch.autoexit]
+status = "pending"
+source = "xEdit/xeInit.pas"
+
+[switch.autogamelink]
+status = "pending"
+source = "xEdit/xeInit.pas"
+
+[switch.autoload]
+status = "pending"
+source = "xEdit/xeInit.pas"
+
+[switch.b]
+status = "pending"
+source = "xEdit/xeInit.pas"
+
+[switch.border]
+status = "pending"
+source = "Tools/TreeLodBillboardCreator/treelod.dpr"
+
+[switch.brightness]
+status = "pending"
+source = "Tools/TreeLodBillboardCreator/treelod.dpr"
+
+[switch.bsa]
+status = "pending"
+source = "xDump.dpr"
+
+[switch.btd]
+status = "pending"
+source = "xDump.dpr"
+
+[switch.bts]
+status = "pending"
+source = "xDump.dpr"
+
+[switch.c]
+status = "pending"
+source = "xEdit/xeInit.pas"
+
+[switch.check]
+status = "pending"
+source = "xDump.dpr"
+
+[switch.comparetofile]
+status = "pending"
+source = "xEdit/xeInit.pas"
+
+[switch.contrast]
+status = "pending"
+source = "Tools/TreeLodBillboardCreator/treelod.dpr"
+
+[switch.cp]
+status = "pending"
+source = "xDump.dpr"
+
+[switch.cp-general]
+status = "pending"
+source = "xDump.dpr"
+
+[switch.cp-trans]
+status = "pending"
+source = "xDump.dpr"
+
+[switch.customini]
+status = "pending"
+source = "xEdit/xeInit.pas"
+
+[switch.d]
+status = "pending"
+source = "xDump.dpr"
+
+[switch.dc]
+status = "pending"
+source = "xDump.dpr"
+
+[switch.dcr]
+status = "pending"
+source = "xDump.dpr"
+
+[switch.devmode]
+status = "pending"
+source = "xEdit/xeInit.pas"
+
+[switch.df]
+status = "pending"
+source = "xDump.dpr"
+
+[switch.dg]
+status = "pending"
+source = "xDump.dpr"
+
+[switch.dh]
+status = "pending"
+source = "xDump.dpr"
+
+[switch.do]
+status = "pending"
+source = "xDump.dpr"
+
+[switch.dontcache]
+status = "pending"
+source = "xEdit/xeInit.pas"
+
+[switch.dontcacheload]
+status = "pending"
+source = "xEdit/xeInit.pas"
+
+[switch.dontcachesave]
+status = "pending"
+source = "xEdit/xeInit.pas"
+
+[switch.dr]
+status = "pending"
+source = "xDump.dpr"
+
+[switch.dump]
+status = "pending"
+source = "BSArch.dpr"
+
+[switch.enforceallmasters]
+status = "pending"
+source = "xEdit/xeInit.pas"
+
+[switch.es]
+status = "pending"
+source = "xDump.dpr"
+
+[switch.exceptiontest]
+status = "pending"
+source = "xEdit/xeInit.pas"
+
+[switch.f]
+status = "pending"
+source = "BSArch.dpr"
+
+[switch.ff]
+status = "pending"
+source = "BSArch.dpr"
+
+[switch.fieldsfile]
+status = "pending"
+source = "xEdit/xeInit.pas"
+
+[switch.fillpnam]
+status = "pending"
+source = "xEdit/xeInit.pas"
+
+[switch.filteronam]
+status = "pending"
+source = "xEdit/xeInit.pas"
+
+[switch.fixpersistence]
+status = "pending"
+source = "xEdit/xeInit.pas"
+
+[switch.fixup]
+status = "pending"
+source = "xEdit/xeInit.pas"
+
+[switch.fixuppgrd]
+status = "pending"
+source = "xEdit/xeInit.pas"
+
+[switch.fnv]
+status = "pending"
+source = "BSArch.dpr"
+
+[switch.fo3]
+status = "pending"
+source = "BSArch.dpr"
+
+[switch.fo4]
+status = "pending"
+source = "BSArch.dpr"
+
+[switch.fo4dds]
+status = "pending"
+source = "BSArch.dpr"
+
+[switch.forcebsa]
+status = "pending"
+source = "xEdit/xeInit.pas"
+
+[switch.forceinternalediting]
+status = "pending"
+source = "xEdit/xeInit.pas"
+
+[switch.format]
+status = "pending"
+source = "Tools/TreeLodBillboardCreator/treelod.dpr"
+
+[switch.g]
+status = "pending"
+source = "xEdit/xeInit.pas"
+
+[switch.generateseq]
+status = "pending"
+source = "xEdit/xeInit.pas"
+
+[switch.givemetheredpill]
+status = "pending"
+source = "xEdit/xeInit.pas"
+
+[switch.height]
+status = "pending"
+source = "Tools/TreeLodBillboardCreator/treelod.dpr"
+
+[switch.help]
+status = "pending"
+source = "xDump.dpr"
+
+[switch.hidefixup]
+status = "pending"
+source = "xEdit/xeInit.pas"
+
+[switch.i]
+status = "pending"
+source = "Sniff/frmMain.pas"
+
+[switch.ignoreesl]
+status = "pending"
+source = "xEdit/xeInit.pas"
+
+[switch.ignorelight]
+status = "pending"
+source = "xEdit/xeInit.pas"
+
+[switch.ignoremedium]
+status = "pending"
+source = "xEdit/xeInit.pas"
+
+[switch.ignoresmall]
+status = "pending"
+source = "xEdit/xeInit.pas"
+
+[switch.ignoreupdate]
+status = "pending"
+source = "xEdit/xeInit.pas"
+
+[switch.iknowillbreakmygamewiththis]
+status = "pending"
+source = "xEdit/xeInit.pas"
+
+[switch.iknowwhatimdoing]
+status = "pending"
+source = "xEdit/xeInit.pas"
+
+[switch.itjustworkstm]
+status = "pending"
+source = "xEdit/xeInit.pas"
+
+[switch.l]
+status = "pending"
+source = "xDump.dpr"
+
+[switch.list]
+status = "pending"
+source = "BSArch.dpr"
+
+[switch.log]
+status = "pending"
+source = "Sniff/frmMain.pas"
+
+[switch.m]
+status = "pending"
+source = "xEdit/xeInit.pas"
+
+[switch.maskdiff]
+status = "pending"
+source = "Tools/TreeLodBillboardCreator/treelod.dpr"
+
+[switch.memory]
+status = "pending"
+source = "xEdit/xeInit.pas"
+
+[switch.mipmap]
+status = "pending"
+source = "Tools/TreeLodBillboardCreator/treelod.dpr"
+
+[switch.modgroups]
+status = "pending"
+source = "xEdit/xeInit.pas"
+
+[switch.moprofile]
+status = "pending"
+source = "xEdit/xeInit.pas"
+
+[switch.more]
+status = "pending"
+source = "xDump.dpr"
+
+[switch.moreinfoforindex]
+status = "pending"
+source = "xEdit/xeInit.pas"
+
+[switch.moreunknown]
+status = "pending"
+source = "xEdit/xeInit.pas"
+
+[switch.mt]
+status = "pending"
+source = "BSArch.dpr"
+
+[switch.nobsa]
+status = "pending"
+source = "xDump.dpr"
+
+[switch.nobuildrefs]
+status = "pending"
+source = "xEdit/xeInit.pas"
+
+[switch.nofillpnam]
+status = "pending"
+source = "xEdit/xeInit.pas"
+
+[switch.nofilteronam]
+status = "pending"
+source = "xEdit/xeInit.pas"
+
+[switch.nofixpersistence]
+status = "pending"
+source = "xEdit/xeInit.pas"
+
+[switch.nofixup]
+status = "pending"
+source = "xEdit/xeInit.pas"
+
+[switch.noreportinjected]
+status = "pending"
+source = "xEdit/xeInit.pas"
+
+[switch.nosortinfo]
+status = "pending"
+source = "xEdit/xeInit.pas"
+
+[switch.o]
+status = "pending"
+source = "Sniff/frmMain.pas"
+
+[switch.op]
+status = "pending"
+source = "Sniff/frmMain.pas"
+
+[switch.p]
+status = "pending"
+source = "Sniff/frmMain.pas"
+
+[switch.pseudoesl]
+status = "pending"
+source = "xEdit/xeInit.pas"
+
+[switch.pseudolight]
+status = "pending"
+source = "xEdit/xeInit.pas"
+
+[switch.pseudomedium]
+status = "pending"
+source = "xEdit/xeInit.pas"
+
+[switch.pseudosmall]
+status = "pending"
+source = "xEdit/xeInit.pas"
+
+[switch.pseudoupdate]
+status = "pending"
+source = "xEdit/xeInit.pas"
+
+[switch.q]
+status = "pending"
+source = "xDump.dpr"
+
+[switch.qac]
+status = "pending"
+source = "xEdit/xeInit.pas"
+
+[switch.qc]
+status = "pending"
+source = "xEdit/xeInit.pas"
+
+[switch.qsc]
+status = "pending"
+source = "xEdit/xeInit.pas"
+
+[switch.quickautoclean]
+status = "pending"
+source = "xEdit/xeInit.pas"
+
+[switch.quickclean]
+status = "pending"
+source = "xEdit/xeInit.pas"
+
+[switch.quickedit]
+status = "pending"
+source = "xEdit/xeInit.pas"
+
+[switch.quickshowconflicts]
+status = "pending"
+source = "xEdit/xeInit.pas"
+
+[switch.r]
+status = "pending"
+source = "xEdit/xeInit.pas"
+
+[switch.report]
+status = "pending"
+source = "xDump.dpr"
+
+[switch.reportinjected]
+status = "pending"
+source = "xEdit/xeInit.pas"
+
+[switch.resetsettings]
+status = "pending"
+source = "xEdit/xeInit.pas"
+
+[switch.s]
+status = "pending"
+source = "Sniff/frmMain.pas"
+
+[switch.script]
+status = "pending"
+source = "xEdit/xeInit.pas"
+
+[switch.scripthost]
+status = "pending"
+source = "xEdit/xeInit.pas"
+
+[switch.sf1]
+status = "pending"
+source = "BSArch.dpr"
+
+[switch.sf1dds]
+status = "pending"
+source = "BSArch.dpr"
+
+[switch.share]
+status = "pending"
+source = "BSArch.dpr"
+
+[switch.showfixup]
+status = "pending"
+source = "xEdit/xeInit.pas"
+
+[switch.showlargesubrecords]
+status = "pending"
+source = "xEdit/xeInit.pas"
+
+[switch.simpleformids]
+status = "pending"
+source = "xEdit/xeInit.pas"
+
+[switch.skip]
+status = "pending"
+source = "Sniff/frmMain.pas"
+
+[switch.skipbsa]
+status = "pending"
+source = "xEdit/xeInit.pas"
+
+[switch.skipinternalediting]
+status = "pending"
+source = "xEdit/xeInit.pas"
+
+[switch.sortinfo]
+status = "pending"
+source = "xEdit/xeInit.pas"
+
+[switch.speed]
+status = "pending"
+source = "xEdit/xeInit.pas"
+
+[switch.split]
+status = "pending"
+source = "BSArch.dpr"
+
+[switch.sr]
+status = "pending"
+source = "xDump.dpr"
+
+[switch.sro]
+status = "pending"
+source = "xDump.dpr"
+
+[switch.sroe]
+status = "pending"
+source = "xDump.dpr"
+
+[switch.sse]
+status = "pending"
+source = "BSArch.dpr"
+
+[switch.stripemptymasters]
+status = "pending"
+source = "xEdit/xeInit.pas"
+
+[switch.stripmasters]
+status = "pending"
+source = "xEdit/xeInit.pas"
+
+[switch.subdir]
+status = "pending"
+source = "Sniff/frmMain.pas"
+
+[switch.summary]
+status = "pending"
+source = "xDump.dpr"
+
+[switch.t]
+status = "pending"
+source = "xEdit/xeInit.pas"
+
+[switch.tes3]
+status = "pending"
+source = "BSArch.dpr"
+
+[switch.tes4]
+status = "pending"
+source = "BSArch.dpr"
+
+[switch.tes5]
+status = "pending"
+source = "BSArch.dpr"
+
+[switch.testconflicts]
+status = "pending"
+source = "xEdit/xeInit.pas"
+
+[switch.thisisfine]
+status = "pending"
+source = "xEdit/xeInit.pas"
+
+[switch.threads]
+status = "pending"
+source = "Sniff/frmMain.pas"
+
+[switch.top]
+status = "pending"
+source = "xDump.dpr"
+
+[switch.trackalleditorid]
+status = "pending"
+source = "xEdit/xeInit.pas"
+
+[switch.veryquickshowconflicts]
+status = "pending"
+source = "xEdit/xeInit.pas"
+
+[switch.vqsc]
+status = "pending"
+source = "xEdit/xeInit.pas"
+
+[switch.width]
+status = "pending"
+source = "Tools/TreeLodBillboardCreator/treelod.dpr"
+
+[switch.xbloat]
+status = "pending"
+source = "xDump.dpr"
+
+[switch.xc]
+status = "pending"
+source = "xDump.dpr"
+
+[switch.xcbloat]
+status = "pending"
+source = "xDump.dpr"
+
+[switch.xcg]
+status = "pending"
+source = "xDump.dpr"
+
+[switch.xf]
+status = "pending"
+source = "xDump.dpr"
+
+[switch.xg]
+status = "pending"
+source = "xDump.dpr"
+
+[switch.xr]
+status = "pending"
+source = "xDump.dpr"
+
+[switch.xsr]
+status = "pending"
+source = "xDump.dpr"
+
+[switch.z]
+status = "pending"
+source = "BSArch.dpr"
+
+[game_mode.gmEnderal]
+status = "pending"
+source = "Core/wbInterface.pas"
+
+[game_mode.gmEnderalSE]
+status = "pending"
+source = "Core/wbInterface.pas"
+
+[game_mode.gmFNV]
+status = "pending"
+source = "Core/wbInterface.pas"
+
+[game_mode.gmFO3]
+status = "pending"
+source = "Core/wbInterface.pas"
+
+[game_mode.gmFO4]
+status = "pending"
+source = "Core/wbInterface.pas"
+
+[game_mode.gmFO4VR]
+status = "pending"
+source = "Core/wbInterface.pas"
+
+[game_mode.gmFO76]
+status = "pending"
+source = "Core/wbInterface.pas"
+
+[game_mode.gmSF1]
+status = "pending"
+source = "Core/wbInterface.pas"
+
+[game_mode.gmSSE]
+status = "pending"
+source = "Core/wbInterface.pas"
+
+[game_mode.gmTES3]
+status = "pending"
+source = "Core/wbInterface.pas"
+
+[game_mode.gmTES4]
+status = "pending"
+source = "Core/wbInterface.pas"
+
+[game_mode.gmTES4R]
+status = "pending"
+source = "Core/wbInterface.pas"
+
+[game_mode.gmTES5]
+status = "pending"
+source = "Core/wbInterface.pas"
+
+[game_mode.gmTES5VR]
+status = "pending"
+source = "Core/wbInterface.pas"
+
+[tool_mode.tmCheckForDR]
+status = "pending"
+source = "Core/wbInterface.pas"
+
+[tool_mode.tmCheckForErrors]
+status = "pending"
+source = "Core/wbInterface.pas"
+
+[tool_mode.tmCheckForITM]
+status = "pending"
+source = "Core/wbInterface.pas"
+
+[tool_mode.tmDump]
+status = "pending"
+source = "Core/wbInterface.pas"
+
+[tool_mode.tmESMify]
+status = "pending"
+source = "Core/wbInterface.pas"
+
+[tool_mode.tmESPify]
+status = "pending"
+source = "Core/wbInterface.pas"
+
+[tool_mode.tmEdit]
+status = "pending"
+source = "Core/wbInterface.pas"
+
+[tool_mode.tmExport]
+status = "pending"
+source = "Core/wbInterface.pas"
+
+[tool_mode.tmGenerateSEQ]
+status = "pending"
+source = "Core/wbInterface.pas"
+
+[tool_mode.tmLODgen]
+status = "pending"
+source = "Core/wbInterface.pas"
+
+[tool_mode.tmMasterRestore]
+status = "pending"
+source = "Core/wbInterface.pas"
+
+[tool_mode.tmMasterUpdate]
+status = "pending"
+source = "Core/wbInterface.pas"
+
+[tool_mode.tmOnamUpdate]
+status = "pending"
+source = "Core/wbInterface.pas"
+
+[tool_mode.tmScript]
+status = "pending"
+source = "Core/wbInterface.pas"
+
+[tool_mode.tmSortAndCleanMasters]
+status = "pending"
+source = "Core/wbInterface.pas"
+
+[tool_mode.tmTranslate]
+status = "pending"
+source = "Core/wbInterface.pas"
+
+[tool_mode.tmView]
+status = "pending"
+source = "Core/wbInterface.pas"
+
+[script."xejviScriptAdapter:cInterface.wbGridCell:function"]
+status = "pending"
+source = "JvInterpreter_wbGridCell"
+
+[script."xejviScriptAdapter:cInterface.wbVector:function"]
+status = "pending"
+source = "JvInterpreter_wbVector"
+
+[script."xejviScriptAdapter:cUnit.Assigned:function"]
+status = "pending"
+source = "_Assigned"
+
+[script."xejviScriptAdapter:cUnit.EnableSkyrimSaveFormat:function"]
+status = "pending"
+source = "EnableSkyrimSaveFormat"
+
+[script."xejviScriptAdapter:cUnit.FullPathToFilename:function"]
+status = "pending"
+source = "_FullPathToFilename"
+
+[script."xejviScriptAdapter:cUnit.GetRecordDefNames:function"]
+status = "pending"
+source = "GetRecordDefNames"
+
+[script."xejviScriptAdapter:cUnit.ObjectToElement:function"]
+status = "pending"
+source = "ObjectToElement"
+
+[script."xejviScriptAdapter:cUnit.wbFilterStrings:function"]
+status = "pending"
+source = "wbFilterStrings"
+
+[script."xejviScriptAdapter:cUnit.wbRemoveDuplicateStrings:function"]
+status = "pending"
+source = "wbRemoveDuplicateStrings"
+
+[script."xejviScriptAdapter:cUnit.wbVersionNumber:function"]
+status = "pending"
+source = "wbGetVersionNumber"
+
+[script."xejviScriptAdapterContainer:cUnit.Add:function"]
+status = "pending"
+source = "IwbContainer_Add"
+
+[script."xejviScriptAdapterContainer:cUnit.AddElement:function"]
+status = "pending"
+source = "IwbContainer_AddElement"
+
+[script."xejviScriptAdapterContainer:cUnit.AdditionalElementCount:function"]
+status = "pending"
+source = "IwbContainer_AdditionalElementCount"
+
+[script."xejviScriptAdapterContainer:cUnit.ContainerStates:function"]
+status = "pending"
+source = "IwbContainer_ContainerStates"
+
+[script."xejviScriptAdapterContainer:cUnit.ElementByIndex:function"]
+status = "pending"
+source = "IwbContainer_ElementByIndex"
+
+[script."xejviScriptAdapterContainer:cUnit.ElementByName:function"]
+status = "pending"
+source = "IwbContainer_ElementByName"
+
+[script."xejviScriptAdapterContainer:cUnit.ElementByPath:function"]
+status = "pending"
+source = "IwbContainer_ElementByPath"
+
+[script."xejviScriptAdapterContainer:cUnit.ElementBySignature:function"]
+status = "pending"
+source = "IwbContainer_ElementBySignature"
+
+[script."xejviScriptAdapterContainer:cUnit.ElementCount:function"]
+status = "pending"
+source = "IwbContainer_ElementCount"
+
+[script."xejviScriptAdapterContainer:cUnit.ElementExists:function"]
+status = "pending"
+source = "IwbContainer_ElementExists"
+
+[script."xejviScriptAdapterContainer:cUnit.GetElementEditValues:function"]
+status = "pending"
+source = "IwbContainer_GetElementEditValues"
+
+[script."xejviScriptAdapterContainer:cUnit.GetElementNativeValues:function"]
+status = "pending"
+source = "IwbContainer_GetElementNativeValues"
+
+[script."xejviScriptAdapterContainer:cUnit.GetElementValues:function"]
+status = "pending"
+source = "IwbContainer_GetElementValues"
+
+[script."xejviScriptAdapterContainer:cUnit.IndexOf:function"]
+status = "pending"
+source = "IwbContainer_IndexOf"
+
+[script."xejviScriptAdapterContainer:cUnit.InsertElement:function"]
+status = "pending"
+source = "IwbContainer_InsertElement"
+
+[script."xejviScriptAdapterContainer:cUnit.IsSorted:function"]
+status = "pending"
+source = "IwbContainer_IsSorted"
+
+[script."xejviScriptAdapterContainer:cUnit.LastElement:function"]
+status = "pending"
+source = "IwbContainer_LastElement"
+
+[script."xejviScriptAdapterContainer:cUnit.RemoveByIndex:function"]
+status = "pending"
+source = "IwbContainer_RemoveByIndex"
+
+[script."xejviScriptAdapterContainer:cUnit.RemoveElement:function"]
+status = "pending"
+source = "IwbContainer_RemoveElement"
+
+[script."xejviScriptAdapterContainer:cUnit.ReverseElements:function"]
+status = "pending"
+source = "IwbContainer_ReverseElements"
+
+[script."xejviScriptAdapterContainer:cUnit.SetElementEditValues:function"]
+status = "pending"
+source = "IwbContainer_SetElementEditValues"
+
+[script."xejviScriptAdapterContainer:cUnit.SetElementNativeValues:function"]
+status = "pending"
+source = "IwbContainer_SetElementNativeValues"
+
+[script."xejviScriptAdapterDF:TdfDef.Create:get"]
+status = "pending"
+source = "TdfDef_Create"
+
+[script."xejviScriptAdapterDF:TdfDef.DefaultDataSize:get"]
+status = "pending"
+source = "TdfDef_DefaultDataSize"
+
+[script."xejviScriptAdapterDF:TdfDef.DefaultValue:get"]
+status = "pending"
+source = "TdfDef_DefaultValue"
+
+[script."xejviScriptAdapterDF:TdfDef.Name:get"]
+status = "pending"
+source = "TdfDef_Read_Name"
+
+[script."xejviScriptAdapterDF:TdfDef.Size:get"]
+status = "pending"
+source = "TdfDef_Size"
+
+[script."xejviScriptAdapterDF:TdfElement.Add:get"]
+status = "pending"
+source = "TdfElement_Add"
+
+[script."xejviScriptAdapterDF:TdfElement.Assign:get"]
+status = "pending"
+source = "TdfElement_Assign"
+
+[script."xejviScriptAdapterDF:TdfElement.BeginUpdate:get"]
+status = "pending"
+source = "TdfElement_BeginUpdate"
+
+[script."xejviScriptAdapterDF:TdfElement.Count:get"]
+status = "pending"
+source = "TdfElement_Read_Count"
+
+[script."xejviScriptAdapterDF:TdfElement.Count:set"]
+status = "pending"
+source = "TdfElement_Write_Count"
+
+[script."xejviScriptAdapterDF:TdfElement.DataSize:get"]
+status = "pending"
+source = "TdfElement_DataSize"
+
+[script."xejviScriptAdapterDF:TdfElement.DataType:get"]
+status = "pending"
+source = "TdfElement_DataType"
+
+[script."xejviScriptAdapterDF:TdfElement.Def:get"]
+status = "pending"
+source = "TdfElement_Def"
+
+[script."xejviScriptAdapterDF:TdfElement.Delete:get"]
+status = "pending"
+source = "TdfElement_Delete"
+
+[script."xejviScriptAdapterDF:TdfElement.EditValue:get"]
+status = "pending"
+source = "TdfElement_Read_EditValue"
+
+[script."xejviScriptAdapterDF:TdfElement.EditValue:set"]
+status = "pending"
+source = "TdfElement_Write_EditValue"
+
+[script."xejviScriptAdapterDF:TdfElement.EditValues:iget"]
+status = "pending"
+source = "TdfElement_Read_EditValues"
+
+[script."xejviScriptAdapterDF:TdfElement.EditValues:iset"]
+status = "pending"
+source = "TdfElement_Write_EditValues"
+
+[script."xejviScriptAdapterDF:TdfElement.ElementByName:get"]
+status = "pending"
+source = "TdfElement_ElementByName"
+
+[script."xejviScriptAdapterDF:TdfElement.ElementByPath:get"]
+status = "pending"
+source = "TdfElement_ElementByPath"
+
+[script."xejviScriptAdapterDF:TdfElement.Elements:iget"]
+status = "pending"
+source = "TdfElement_Read_Elements"
+
+[script."xejviScriptAdapterDF:TdfElement.Enabled:get"]
+status = "pending"
+source = "TdfElement_Read_Enabled"
+
+[script."xejviScriptAdapterDF:TdfElement.Enabled:set"]
+status = "pending"
+source = "TdfElement_Write_Enabled"
+
+[script."xejviScriptAdapterDF:TdfElement.EndUpdate:get"]
+status = "pending"
+source = "TdfElement_EndUpdate"
+
+[script."xejviScriptAdapterDF:TdfElement.FromJSON:get"]
+status = "pending"
+source = "TdfElement_FromJSON"
+
+[script."xejviScriptAdapterDF:TdfElement.Index:get"]
+status = "pending"
+source = "TdfElement_Index"
+
+[script."xejviScriptAdapterDF:TdfElement.IndexOf:get"]
+status = "pending"
+source = "TdfElement_IndexOf"
+
+[script."xejviScriptAdapterDF:TdfElement.Items:iget"]
+status = "pending"
+source = "TdfElement_Read_Items"
+
+[script."xejviScriptAdapterDF:TdfElement.LinksTo:get"]
+status = "pending"
+source = "TdfElement_LinksTo"
+
+[script."xejviScriptAdapterDF:TdfElement.LoadFromData:get"]
+status = "pending"
+source = "TdfElement_LoadFromData"
+
+[script."xejviScriptAdapterDF:TdfElement.LoadFromFile:get"]
+status = "pending"
+source = "TdfElement_LoadFromFile"
+
+[script."xejviScriptAdapterDF:TdfElement.LoadFromJSONFile:get"]
+status = "pending"
+source = "TdfElement_LoadFromJSONFile"
+
+[script."xejviScriptAdapterDF:TdfElement.LoadFromResource:get"]
+status = "pending"
+source = "TdfElement_LoadFromResource"
+
+[script."xejviScriptAdapterDF:TdfElement.Move:get"]
+status = "pending"
+source = "TdfElement_Move"
+
+[script."xejviScriptAdapterDF:TdfElement.Name:get"]
+status = "pending"
+source = "TdfElement_Name"
+
+[script."xejviScriptAdapterDF:TdfElement.NativeValue:get"]
+status = "pending"
+source = "TdfElement_Read_NativeValue"
+
+[script."xejviScriptAdapterDF:TdfElement.NativeValue:set"]
+status = "pending"
+source = "TdfElement_Write_NativeValue"
+
+[script."xejviScriptAdapterDF:TdfElement.NativeValues:iget"]
+status = "pending"
+source = "TdfElement_Read_NativeValues"
+
+[script."xejviScriptAdapterDF:TdfElement.NativeValues:iset"]
+status = "pending"
+source = "TdfElement_Write_NativeValues"
+
+[script."xejviScriptAdapterDF:TdfElement.Parent:get"]
+status = "pending"
+source = "TdfElement_Read_Parent"
+
+[script."xejviScriptAdapterDF:TdfElement.Parent:set"]
+status = "pending"
+source = "TdfElement_Write_Parent"
+
+[script."xejviScriptAdapterDF:TdfElement.Path:get"]
+status = "pending"
+source = "TdfElement_Path"
+
+[script."xejviScriptAdapterDF:TdfElement.Remove:get"]
+status = "pending"
+source = "TdfElement_Remove"
+
+[script."xejviScriptAdapterDF:TdfElement.Root:get"]
+status = "pending"
+source = "TdfElement_Root"
+
+[script."xejviScriptAdapterDF:TdfElement.SaveToFile:get"]
+status = "pending"
+source = "TdfElement_SaveToFile"
+
+[script."xejviScriptAdapterDF:TdfElement.SaveToJSONFile:get"]
+status = "pending"
+source = "TdfElement_SaveToJSONFile"
+
+[script."xejviScriptAdapterDF:TdfElement.SetToDefault:get"]
+status = "pending"
+source = "TdfElement_SetToDefault"
+
+[script."xejviScriptAdapterDF:TdfElement.ToJSON:get"]
+status = "pending"
+source = "TdfElement_ToJSON"
+
+[script."xejviScriptAdapterDF:TdfElement.ToText:get"]
+status = "pending"
+source = "TdfElement_ToText"
+
+[script."xejviScriptAdapterDF:TwbBGEMFile.Create:get"]
+status = "pending"
+source = "TwbBGEMFile_Create"
+
+[script."xejviScriptAdapterDF:TwbBGSMFile.Create:get"]
+status = "pending"
+source = "TwbBGSMFile_Create"
+
+[script."xejviScriptAdapterDF:TwbDDSFile.Create:get"]
+status = "pending"
+source = "TwbDDSFile_Create"
+
+[script."xejviScriptAdapterDF:TwbFUZFile.Create:get"]
+status = "pending"
+source = "TwbFUZFile_Create"
+
+[script."xejviScriptAdapterDF:TwbLODSettingsFO3File.Create:get"]
+status = "pending"
+source = "TwbLODSettingsFO3File_Create"
+
+[script."xejviScriptAdapterDF:TwbLODSettingsTES5File.Create:get"]
+status = "pending"
+source = "TwbLODSettingsTES5File_Create"
+
+[script."xejviScriptAdapterDF:TwbLODTreeBTTFile.Create:get"]
+status = "pending"
+source = "TwbLODTreeBTTFile_Create"
+
+[script."xejviScriptAdapterDF:TwbLODTreeLSTFile.Create:get"]
+status = "pending"
+source = "TwbLODTreeLSTFile_Create"
+
+[script."xejviScriptAdapterDF:TwbNiRef.Ptr:get"]
+status = "pending"
+source = "TwbNiRef_Ptr"
+
+[script."xejviScriptAdapterDF:TwbNiRef.Template:get"]
+status = "pending"
+source = "TwbNiRef_Template"
+
+[script."xejviScriptAdapterDF:TwbNifBlock.AddChild:get"]
+status = "pending"
+source = "TwbNifBlock_AddChild"
+
+[script."xejviScriptAdapterDF:TwbNifBlock.AddExtraData:get"]
+status = "pending"
+source = "TwbNifBlock_AddExtraData"
+
+[script."xejviScriptAdapterDF:TwbNifBlock.AddProperty:get"]
+status = "pending"
+source = "TwbNifBlock_AddProperty"
+
+[script."xejviScriptAdapterDF:TwbNifBlock.BlockType:get"]
+status = "pending"
+source = "TwbNifBlock_BlockType"
+
+[script."xejviScriptAdapterDF:TwbNifBlock.ChildByType:get"]
+status = "pending"
+source = "TwbNifBlock_ChildByType"
+
+[script."xejviScriptAdapterDF:TwbNifBlock.ChildrenByType:get"]
+status = "pending"
+source = "TwbNifBlock_ChildrenByType"
+
+[script."xejviScriptAdapterDF:TwbNifBlock.ExtraDataByName:get"]
+status = "pending"
+source = "TwbNifBlock_ExtraDataByName"
+
+[script."xejviScriptAdapterDF:TwbNifBlock.ExtraDataByType:get"]
+status = "pending"
+source = "TwbNifBlock_ExtraDataByType"
+
+[script."xejviScriptAdapterDF:TwbNifBlock.ExtraDatasByType:get"]
+status = "pending"
+source = "TwbNifBlock_ExtraDatasByType"
+
+[script."xejviScriptAdapterDF:TwbNifBlock.GetAssetsList:get"]
+status = "pending"
+source = "TwbNifBlock_GetAssetsList"
+
+[script."xejviScriptAdapterDF:TwbNifBlock.IsNiObject:get"]
+status = "pending"
+source = "TwbNifBlock_IsNiObject"
+
+[script."xejviScriptAdapterDF:TwbNifBlock.NifFile:get"]
+status = "pending"
+source = "TwbNifBlock_NifFile"
+
+[script."xejviScriptAdapterDF:TwbNifBlock.PropertiesByType:get"]
+status = "pending"
+source = "TwbNifBlock_PropertiesByType"
+
+[script."xejviScriptAdapterDF:TwbNifBlock.PropertyByName:get"]
+status = "pending"
+source = "TwbNifBlock_PropertyByName"
+
+[script."xejviScriptAdapterDF:TwbNifBlock.PropertyByType:get"]
+status = "pending"
+source = "TwbNifBlock_PropertyByType"
+
+[script."xejviScriptAdapterDF:TwbNifBlock.Refs:iget"]
+status = "pending"
+source = "TwbNifBlock_Read_Refs"
+
+[script."xejviScriptAdapterDF:TwbNifBlock.RefsCount:get"]
+status = "pending"
+source = "TwbNifBlock_RefsCount"
+
+[script."xejviScriptAdapterDF:TwbNifBlock.Strings:iget"]
+status = "pending"
+source = "TwbNifBlock_Read_Strings"
+
+[script."xejviScriptAdapterDF:TwbNifBlock.StringsCount:get"]
+status = "pending"
+source = "TwbNifBlock_StringsCount"
+
+[script."xejviScriptAdapterDF:TwbNifBlock.UpdateBounds:get"]
+status = "pending"
+source = "TwbNifBlock_UpdateBounds"
+
+[script."xejviScriptAdapterDF:TwbNifBlock.UpdateNormals:get"]
+status = "pending"
+source = "TwbNifBlock_UpdateNormals"
+
+[script."xejviScriptAdapterDF:TwbNifBlock.UpdateTangents:get"]
+status = "pending"
+source = "TwbNifBlock_UpdateTangents"
+
+[script."xejviScriptAdapterDF:TwbNifFile.AddBlock:get"]
+status = "pending"
+source = "TwbNifFile_AddBlock"
+
+[script."xejviScriptAdapterDF:TwbNifFile.BlockByName:get"]
+status = "pending"
+source = "TwbNifFile_BlockByName"
+
+[script."xejviScriptAdapterDF:TwbNifFile.BlockByType:get"]
+status = "pending"
+source = "TwbNifFile_BlockByType"
+
+[script."xejviScriptAdapterDF:TwbNifFile.Blocks:iget"]
+status = "pending"
+source = "TwbNifFile_Read_Blocks"
+
+[script."xejviScriptAdapterDF:TwbNifFile.BlocksByType:get"]
+status = "pending"
+source = "TwbNifFile_BlocksByType"
+
+[script."xejviScriptAdapterDF:TwbNifFile.BlocksCount:get"]
+status = "pending"
+source = "TwbNifFile_BlocksCount"
+
+[script."xejviScriptAdapterDF:TwbNifFile.ConvertBlock:get"]
+status = "pending"
+source = "TwbNifFile_ConvertBlock"
+
+[script."xejviScriptAdapterDF:TwbNifFile.CopyBlock:get"]
+status = "pending"
+source = "TwbNifFile_CopyBlock"
+
+[script."xejviScriptAdapterDF:TwbNifFile.Create:get"]
+status = "pending"
+source = "TwbNifFile_Create"
+
+[script."xejviScriptAdapterDF:TwbNifFile.Footer:get"]
+status = "pending"
+source = "TwbNifFile_Footer"
+
+[script."xejviScriptAdapterDF:TwbNifFile.GetAssetsList:get"]
+status = "pending"
+source = "TwbNifFile_GetAssetsList"
+
+[script."xejviScriptAdapterDF:TwbNifFile.Header:get"]
+status = "pending"
+source = "TwbNifFile_Header"
+
+[script."xejviScriptAdapterDF:TwbNifFile.InsertBlock:get"]
+status = "pending"
+source = "TwbNifFile_InsertBlock"
+
+[script."xejviScriptAdapterDF:TwbNifFile.InternalUpdates:get"]
+status = "pending"
+source = "TwbNifFile_Read_InternalUpdates"
+
+[script."xejviScriptAdapterDF:TwbNifFile.InternalUpdates:set"]
+status = "pending"
+source = "TwbNifFile_Write_InternalUpdates"
+
+[script."xejviScriptAdapterDF:TwbNifFile.NifVersion:get"]
+status = "pending"
+source = "TwbNifFile_Read_NifVersion"
+
+[script."xejviScriptAdapterDF:TwbNifFile.NifVersion:set"]
+status = "pending"
+source = "TwbNifFile_Write_NifVersion"
+
+[script."xejviScriptAdapterDF:TwbNifFile.Options:get"]
+status = "pending"
+source = "TwbNifFile_Read_Options"
+
+[script."xejviScriptAdapterDF:TwbNifFile.Options:set"]
+status = "pending"
+source = "TwbNifFile_Write_Options"
+
+[script."xejviScriptAdapterDF:TwbNifFile.SpellAddUpdateTangents:get"]
+status = "pending"
+source = "TwbNifFile_SpellAddUpdateTangents"
+
+[script."xejviScriptAdapterDF:TwbNifFile.SpellFaceNormals:get"]
+status = "pending"
+source = "TwbNifFile_SpellFaceNormals"
+
+[script."xejviScriptAdapterDF:TwbNifFile.SpellTriangulate:get"]
+status = "pending"
+source = "TwbNifFile_SpellTriangulate"
+
+[script."xejviScriptAdapterDF:TwbNifFile.SpellUpdateTangents:get"]
+status = "pending"
+source = "TwbNifFile_SpellUpdateTangents"
+
+[script."xejviScriptAdapterDF:sDFUnitName.dfCalcHash:function"]
+status = "pending"
+source = "JvInterpreter_dfCalcHash"
+
+[script."xejviScriptAdapterDF:sDFUnitName.dfFloatToStr:function"]
+status = "pending"
+source = "JvInterpreter_dfFloatToStr"
+
+[script."xejviScriptAdapterDF:sDFUnitName.dfStrToFloat:function"]
+status = "pending"
+source = "JvInterpreter_dfStrToFloat"
+
+[script."xejviScriptAdapterElement:cUnit.AssignTemplateByIndex:function"]
+status = "pending"
+source = "IwbElement_AssignTemplateByIndex"
+
+[script."xejviScriptAdapterElement:cUnit.AssignTemplateByName:function"]
+status = "pending"
+source = "IwbElement_AssignTemplateByName"
+
+[script."xejviScriptAdapterElement:cUnit.AssignTemplateCount:function"]
+status = "pending"
+source = "IwbElement_AssignTemplateCount"
+
+[script."xejviScriptAdapterElement:cUnit.BaseName:function"]
+status = "pending"
+source = "IwbElement_BaseName"
+
+[script."xejviScriptAdapterElement:cUnit.BeginUpdate:function"]
+status = "pending"
+source = "IwbElement_BeginUpdate"
+
+[script."xejviScriptAdapterElement:cUnit.BuildRef:function"]
+status = "pending"
+source = "IwbElement_BuildRef"
+
+[script."xejviScriptAdapterElement:cUnit.CanContainFormIDs:function"]
+status = "pending"
+source = "IwbElement_CanContainFormIDs"
+
+[script."xejviScriptAdapterElement:cUnit.CanMoveDown:function"]
+status = "pending"
+source = "IwbElement_CanMoveDown"
+
+[script."xejviScriptAdapterElement:cUnit.CanMoveUp:function"]
+status = "pending"
+source = "IwbElement_CanMoveUp"
+
+[script."xejviScriptAdapterElement:cUnit.Check:function"]
+status = "pending"
+source = "IwbElement_Check"
+
+[script."xejviScriptAdapterElement:cUnit.ClearElementState:function"]
+status = "pending"
+source = "IwbElement_ClearElementState"
+
+[script."xejviScriptAdapterElement:cUnit.ContainingMainRecord:function"]
+status = "pending"
+source = "IwbElement_ContainingMainRecord"
+
+[script."xejviScriptAdapterElement:cUnit.ContainingSubRecord:function"]
+status = "pending"
+source = "IwbElement_ContainingSubRecord"
+
+[script."xejviScriptAdapterElement:cUnit.DefType:function"]
+status = "pending"
+source = "IwbElement_DefType"
+
+[script."xejviScriptAdapterElement:cUnit.DefTypeAsText:function"]
+status = "pending"
+source = "IwbElement_DefTypeAsText"
+
+[script."xejviScriptAdapterElement:cUnit.DisplayName:function"]
+status = "pending"
+source = "IwbElement_DisplayName"
+
+[script."xejviScriptAdapterElement:cUnit.ElementAssign:function"]
+status = "pending"
+source = "IwbElement_Assign"
+
+[script."xejviScriptAdapterElement:cUnit.ElementType:function"]
+status = "pending"
+source = "IwbElement_ElementType"
+
+[script."xejviScriptAdapterElement:cUnit.ElementTypeAsText:function"]
+status = "pending"
+source = "IwbElement_ElementTypeAsText"
+
+[script."xejviScriptAdapterElement:cUnit.EndUpdate:function"]
+status = "pending"
+source = "IwbElement_EndUpdate"
+
+[script."xejviScriptAdapterElement:cUnit.EnumValues:function"]
+status = "pending"
+source = "IwbElement_EnumValues"
+
+[script."xejviScriptAdapterElement:cUnit.Equals:function"]
+status = "pending"
+source = "IwbElement_Equals"
+
+[script."xejviScriptAdapterElement:cUnit.FlagValues:function"]
+status = "pending"
+source = "IwbElement_FlagValues"
+
+[script."xejviScriptAdapterElement:cUnit.FullPath:function"]
+status = "pending"
+source = "IwbElement_FullPath"
+
+[script."xejviScriptAdapterElement:cUnit.GetContainer:function"]
+status = "pending"
+source = "IwbElement_GetContainer"
+
+[script."xejviScriptAdapterElement:cUnit.GetEditValue:function"]
+status = "pending"
+source = "IwbElement_GetEditValue"
+
+[script."xejviScriptAdapterElement:cUnit.GetElementState:function"]
+status = "pending"
+source = "IwbElement_GetElementState"
+
+[script."xejviScriptAdapterElement:cUnit.GetFile:function"]
+status = "pending"
+source = "IwbElement_GetFile"
+
+[script."xejviScriptAdapterElement:cUnit.GetNativeValue:function"]
+status = "pending"
+source = "IwbElement_GetNativeValue"
+
+[script."xejviScriptAdapterElement:cUnit.GetSummary:function"]
+status = "pending"
+source = "IwbElement_GetSummary"
+
+[script."xejviScriptAdapterElement:cUnit.GetValue:function"]
+status = "pending"
+source = "IwbElement_GetValue"
+
+[script."xejviScriptAdapterElement:cUnit.IndexedPath:function"]
+status = "pending"
+source = "IwbElement_IndexedPath"
+
+[script."xejviScriptAdapterElement:cUnit.IsEditable:function"]
+status = "pending"
+source = "IwbElement_GetIsEditable"
+
+[script."xejviScriptAdapterElement:cUnit.IsInjected:function"]
+status = "pending"
+source = "IwbElement_IsInjected"
+
+[script."xejviScriptAdapterElement:cUnit.LinksTo:function"]
+status = "pending"
+source = "IwbElement_LinksTo"
+
+[script."xejviScriptAdapterElement:cUnit.MarkModifiedRecursive:function"]
+status = "pending"
+source = "IwbElement_MarkModifiedRecursive"
+
+[script."xejviScriptAdapterElement:cUnit.MoveDown:function"]
+status = "pending"
+source = "IwbElement_MoveDown"
+
+[script."xejviScriptAdapterElement:cUnit.MoveUp:function"]
+status = "pending"
+source = "IwbElement_MoveUp"
+
+[script."xejviScriptAdapterElement:cUnit.Name:function"]
+status = "pending"
+source = "IwbElement_Name"
+
+[script."xejviScriptAdapterElement:cUnit.Path:function"]
+status = "pending"
+source = "IwbElement_Path"
+
+[script."xejviScriptAdapterElement:cUnit.PathName:function"]
+status = "pending"
+source = "IwbElement_PathName"
+
+[script."xejviScriptAdapterElement:cUnit.Remove:function"]
+status = "pending"
+source = "IwbElement_Remove"
+
+[script."xejviScriptAdapterElement:cUnit.ReportRequiredMasters:function"]
+status = "pending"
+source = "IwbElement_ReportRequiredMasters"
+
+[script."xejviScriptAdapterElement:cUnit.SetEditValue:function"]
+status = "pending"
+source = "IwbElement_SetEditValue"
+
+[script."xejviScriptAdapterElement:cUnit.SetElementState:function"]
+status = "pending"
+source = "IwbElement_SetElementState"
+
+[script."xejviScriptAdapterElement:cUnit.SetNativeValue:function"]
+status = "pending"
+source = "IwbElement_SetNativeValue"
+
+[script."xejviScriptAdapterElement:cUnit.SetToDefault:function"]
+status = "pending"
+source = "IwbElement_SetToDefault"
+
+[script."xejviScriptAdapterElement:cUnit.ShortName:function"]
+status = "pending"
+source = "IwbElement_ShortName"
+
+[script."xejviScriptAdapterElement:cUnit.SortKey:function"]
+status = "pending"
+source = "IwbElement_SortKey"
+
+[script."xejviScriptAdapterElement:cUnit.TemplateAssign:function"]
+status = "pending"
+source = "IwbElement_TemplateAssign"
+
+[script."xejviScriptAdapterElement:cUnit.wbCopyElementToFile:function"]
+status = "pending"
+source = "_wbCopyElementToFile"
+
+[script."xejviScriptAdapterElement:cUnit.wbCopyElementToFileWithPrefix:function"]
+status = "pending"
+source = "_wbCopyElementToFileWithPrefix"
+
+[script."xejviScriptAdapterElement:cUnit.wbCopyElementToFileWithPrefixAndSuffix:function"]
+status = "pending"
+source = "_wbCopyElementToFileWithPrefixAndSuffix"
+
+[script."xejviScriptAdapterElement:cUnit.wbCopyElementToRecord:function"]
+status = "pending"
+source = "_wbCopyElementToRecord"
+
+[script."xejviScriptAdapterFile:cUnit.AddMasterIfMissing:function"]
+status = "pending"
+source = "IwbFile_AddMasterIfMissing"
+
+[script."xejviScriptAdapterFile:cUnit.AddMasters:function"]
+status = "pending"
+source = "IwbFile_AddMasters"
+
+[script."xejviScriptAdapterFile:cUnit.AddMastersIfMissing:function"]
+status = "pending"
+source = "IwbFile_AddMastersIfMissing"
+
+[script."xejviScriptAdapterFile:cUnit.CanBeESL:function"]
+status = "pending"
+source = "IwbFile_CanBeLight"
+
+[script."xejviScriptAdapterFile:cUnit.CanBeLight:function"]
+status = "pending"
+source = "IwbFile_CanBeLight"
+
+[script."xejviScriptAdapterFile:cUnit.CanBeMedium:function"]
+status = "pending"
+source = "IwbFile_CanBeMedium"
+
+[script."xejviScriptAdapterFile:cUnit.CanBeSmall:function"]
+status = "pending"
+source = "IwbFile_CanBeLight"
+
+[script."xejviScriptAdapterFile:cUnit.CleanMasters:function"]
+status = "pending"
+source = "IwbFile_CleanMasters"
+
+[script."xejviScriptAdapterFile:cUnit.FileFormIDtoLoadOrderFormID:function"]
+status = "pending"
+source = "IwbFile_FileFormIDtoLoadOrderFormID"
+
+[script."xejviScriptAdapterFile:cUnit.FileWriteToStream:function"]
+status = "pending"
+source = "IwbFile_WriteToStream"
+
+[script."xejviScriptAdapterFile:cUnit.GetFileName:function"]
+status = "pending"
+source = "IwbFile_GetFileName"
+
+[script."xejviScriptAdapterFile:cUnit.GetIsESL:function"]
+status = "pending"
+source = "IwbFile_GetIsLight"
+
+[script."xejviScriptAdapterFile:cUnit.GetIsESM:function"]
+status = "pending"
+source = "IwbFile_GetIsESM"
+
+[script."xejviScriptAdapterFile:cUnit.GetIsLight:function"]
+status = "pending"
+source = "IwbFile_GetIsLight"
+
+[script."xejviScriptAdapterFile:cUnit.GetIsMedium:function"]
+status = "pending"
+source = "IwbFile_GetIsMedium"
+
+[script."xejviScriptAdapterFile:cUnit.GetIsSmall:function"]
+status = "pending"
+source = "IwbFile_GetIsLight"
+
+[script."xejviScriptAdapterFile:cUnit.GetLoadOrder:function"]
+status = "pending"
+source = "IwbFile_GetLoadOrder"
+
+[script."xejviScriptAdapterFile:cUnit.GetLoadOrderFileID:function"]
+status = "pending"
+source = "IwbFile_GetLoadOrderFileID"
+
+[script."xejviScriptAdapterFile:cUnit.GetMasters:function"]
+status = "pending"
+source = "IwbFile_GetMasters"
+
+[script."xejviScriptAdapterFile:cUnit.GetNewFormID:function"]
+status = "pending"
+source = "IwbFile_GetNewFormID"
+
+[script."xejviScriptAdapterFile:cUnit.GroupBySignature:function"]
+status = "pending"
+source = "IwbFile_GroupBySignature"
+
+[script."xejviScriptAdapterFile:cUnit.HasGroup:function"]
+status = "pending"
+source = "IwbFile_HasGroup"
+
+[script."xejviScriptAdapterFile:cUnit.HasMaster:function"]
+status = "pending"
+source = "IwbFile_HasMaster"
+
+[script."xejviScriptAdapterFile:cUnit.LoadOrderFormIDtoFileFormID:function"]
+status = "pending"
+source = "IwbFile_LoadOrderFormIDtoFileFormID"
+
+[script."xejviScriptAdapterFile:cUnit.MasterByIndex:function"]
+status = "pending"
+source = "IwbFile_MasterByIndex"
+
+[script."xejviScriptAdapterFile:cUnit.MasterCount:function"]
+status = "pending"
+source = "IwbFile_MasterCount"
+
+[script."xejviScriptAdapterFile:cUnit.RecordByEditorID:function"]
+status = "pending"
+source = "IwbFile_RecordByEditorID"
+
+[script."xejviScriptAdapterFile:cUnit.RecordByFormID:function"]
+status = "pending"
+source = "IwbFile_RecordByFormID"
+
+[script."xejviScriptAdapterFile:cUnit.RecordByIndex:function"]
+status = "pending"
+source = "IwbFile_RecordByIndex"
+
+[script."xejviScriptAdapterFile:cUnit.RecordCount:function"]
+status = "pending"
+source = "IwbFile_RecordCount"
+
+[script."xejviScriptAdapterFile:cUnit.SetIsESL:function"]
+status = "pending"
+source = "IwbFile_SetIsLight"
+
+[script."xejviScriptAdapterFile:cUnit.SetIsESM:function"]
+status = "pending"
+source = "IwbFile_SetIsESM"
+
+[script."xejviScriptAdapterFile:cUnit.SetIsLight:function"]
+status = "pending"
+source = "IwbFile_SetIsLight"
+
+[script."xejviScriptAdapterFile:cUnit.SetIsMedium:function"]
+status = "pending"
+source = "IwbFile_SetIsMedium"
+
+[script."xejviScriptAdapterFile:cUnit.SetIsSmall:function"]
+status = "pending"
+source = "IwbFile_SetIsLight"
+
+[script."xejviScriptAdapterFile:cUnit.SortMasters:function"]
+status = "pending"
+source = "IwbFile_SortMasters"
+
+[script."xejviScriptAdapterHost:cUnit.AddMessage:function"]
+status = "pending"
+source = "_AddMessage"
+
+[script."xejviScriptAdapterHost:cUnit.AddNewFile:function"]
+status = "pending"
+source = "_AddNewFile"
+
+[script."xejviScriptAdapterHost:cUnit.AddNewFileName:function"]
+status = "pending"
+source = "_AddNewFileName"
+
+[script."xejviScriptAdapterHost:cUnit.AddRequiredElementMasters:function"]
+status = "pending"
+source = "_AddRequiredElementMasters"
+
+[script."xejviScriptAdapterHost:cUnit.ApplyFilter:function"]
+status = "pending"
+source = "_ApplyFilter"
+
+[script."xejviScriptAdapterHost:cUnit.ClearMessages:function"]
+status = "pending"
+source = "_ClearMessages"
+
+[script."xejviScriptAdapterHost:cUnit.ConflictAllForElements:function"]
+status = "pending"
+source = "_ConflictAllForElements"
+
+[script."xejviScriptAdapterHost:cUnit.ConflictAllForMainRecord:function"]
+status = "pending"
+source = "_ConflictAllForMainRecord"
+
+[script."xejviScriptAdapterHost:cUnit.ConflictAllForNode:function"]
+status = "pending"
+source = "_ConflictAllForNode"
+
+[script."xejviScriptAdapterHost:cUnit.ConflictThisForMainRecord:function"]
+status = "pending"
+source = "_ConflictThisForMainRecord"
+
+[script."xejviScriptAdapterHost:cUnit.ConflictThisForNode:function"]
+status = "pending"
+source = "_ConflictThisForNode"
+
+[script."xejviScriptAdapterHost:cUnit.DataPath:function"]
+status = "pending"
+source = "_wbDataPath"
+
+[script."xejviScriptAdapterHost:cUnit.ExecuteCaptureConsoleOutput:function"]
+status = "pending"
+source = "_ExecuteCaptureConsoleOutput"
+
+[script."xejviScriptAdapterHost:cUnit.FileByIndex:function"]
+status = "pending"
+source = "_FileByIndex"
+
+[script."xejviScriptAdapterHost:cUnit.FileByLoadOrder:function"]
+status = "pending"
+source = "_FileByLoadOrder"
+
+[script."xejviScriptAdapterHost:cUnit.FileByLoadOrderFileID:function"]
+status = "pending"
+source = "_FileByLoadOrderFileID"
+
+[script."xejviScriptAdapterHost:cUnit.FileByName:function"]
+status = "pending"
+source = "_FileByName"
+
+[script."xejviScriptAdapterHost:cUnit.FileCount:function"]
+status = "pending"
+source = "_FileCount"
+
+[script."xejviScriptAdapterHost:cUnit.FilterApplied:function"]
+status = "pending"
+source = "_FilterApplied"
+
+[script."xejviScriptAdapterHost:cUnit.GenerateLODTES4:function"]
+status = "pending"
+source = "_GenerateLODTES4"
+
+[script."xejviScriptAdapterHost:cUnit.GenerateLODTES5Objects:function"]
+status = "pending"
+source = "_GenerateLODTES5Objects"
+
+[script."xejviScriptAdapterHost:cUnit.GenerateLODTES5Trees:function"]
+status = "pending"
+source = "_GenerateLODTES5Trees"
+
+[script."xejviScriptAdapterHost:cUnit.IsPositionChanged:function"]
+status = "pending"
+source = "_IsPositionChanged"
+
+[script."xejviScriptAdapterHost:cUnit.JumpTo:function"]
+status = "pending"
+source = "_JumpTo"
+
+[script."xejviScriptAdapterHost:cUnit.ProgramPath:function"]
+status = "pending"
+source = "_wbProgramPath"
+
+[script."xejviScriptAdapterHost:cUnit.RecordByHexFormID:function"]
+status = "pending"
+source = "_RecordByHexFormID"
+
+[script."xejviScriptAdapterHost:cUnit.RecordFromFileByFormID:function"]
+status = "pending"
+source = "_RecordFromFileByFormID"
+
+[script."xejviScriptAdapterHost:cUnit.RemoveFilter:function"]
+status = "pending"
+source = "_RemoveFilter"
+
+[script."xejviScriptAdapterHost:cUnit.RemoveNode:function"]
+status = "pending"
+source = "_RemoveNode"
+
+[script."xejviScriptAdapterHost:cUnit.ScriptsPath:function"]
+status = "pending"
+source = "_ScriptsPath"
+
+[script."xejviScriptAdapterHost:cUnit.TempPath:function"]
+status = "pending"
+source = "_wbTempPath"
+
+[script."xejviScriptAdapterHost:cUnit.dfFloatDecimalDigits:function"]
+status = "pending"
+source = "_dfFloatDecimalDigits"
+
+[script."xejviScriptAdapterHost:cUnit.frmFileSelect:function"]
+status = "pending"
+source = "_frmFileSelect"
+
+[script."xejviScriptAdapterHost:cUnit.frmMain:function"]
+status = "pending"
+source = "_frmMain"
+
+[script."xejviScriptAdapterHost:cUnit.wbAppName:function"]
+status = "pending"
+source = "_wbAppName"
+
+[script."xejviScriptAdapterHost:cUnit.wbBuildAtlasFromAtlasMap:function"]
+status = "pending"
+source = "_wbBuildAtlasFromAtlasMap"
+
+[script."xejviScriptAdapterHost:cUnit.wbBuildAtlasFromTexturesList:function"]
+status = "pending"
+source = "_wbBuildAtlasFromTexturesList"
+
+[script."xejviScriptAdapterHost:cUnit.wbDataPath:function"]
+status = "pending"
+source = "_wbDataPath"
+
+[script."xejviScriptAdapterHost:cUnit.wbDecodeTextureHashes:function"]
+status = "pending"
+source = "_wbDecodeTextureHashes"
+
+[script."xejviScriptAdapterHost:cUnit.wbGameMasterEsm:function"]
+status = "pending"
+source = "_wbGameMasterEsm"
+
+[script."xejviScriptAdapterHost:cUnit.wbGameMode:function"]
+status = "pending"
+source = "_wbGameMode"
+
+[script."xejviScriptAdapterHost:cUnit.wbGameName2:function"]
+status = "pending"
+source = "_wbGameName2"
+
+[script."xejviScriptAdapterHost:cUnit.wbGameName:function"]
+status = "pending"
+source = "_wbGameName"
+
+[script."xejviScriptAdapterHost:cUnit.wbGetUVRangeTexturesList:function"]
+status = "pending"
+source = "_wbGetUVRangeTexturesList"
+
+[script."xejviScriptAdapterHost:cUnit.wbLoadBSAs:function"]
+status = "pending"
+source = "_wbLoadBSAs"
+
+[script."xejviScriptAdapterHost:cUnit.wbOutputPath:function"]
+status = "pending"
+source = "_wbOutputPath"
+
+[script."xejviScriptAdapterHost:cUnit.wbProgramPath:function"]
+status = "pending"
+source = "_wbProgramPath"
+
+[script."xejviScriptAdapterHost:cUnit.wbRecordDefMap:function"]
+status = "pending"
+source = "_wbRecordDefMap"
+
+[script."xejviScriptAdapterHost:cUnit.wbScriptsPath:function"]
+status = "pending"
+source = "_wbScriptsPath"
+
+[script."xejviScriptAdapterHost:cUnit.wbSelectedFiles:function"]
+status = "pending"
+source = "_wbSelectedFiles"
+
+[script."xejviScriptAdapterHost:cUnit.wbSelectedFilesToFileNames:function"]
+status = "pending"
+source = "_wbSelectedFilesToFileNames"
+
+[script."xejviScriptAdapterHost:cUnit.wbSettings:function"]
+status = "pending"
+source = "_wbSettings"
+
+[script."xejviScriptAdapterHost:cUnit.wbSettingsFileName:function"]
+status = "pending"
+source = "_wbSettingsFileName"
+
+[script."xejviScriptAdapterHost:cUnit.wbSimpleRecords:function"]
+status = "pending"
+source = "_wbSimpleRecords"
+
+[script."xejviScriptAdapterHost:cUnit.wbTempPath:function"]
+status = "pending"
+source = "_wbTempPath"
+
+[script."xejviScriptAdapterHost:cUnit.wbTrackAllEditorID:function"]
+status = "pending"
+source = "_wbTrackAllEditorID"
+
+[script."xejviScriptAdapterMisc:TEncoding.ASCII:get"]
+status = "pending"
+source = "TEncoding_ASCII"
+
+[script."xejviScriptAdapterMisc:TEncoding.Default:get"]
+status = "pending"
+source = "TEncoding_Default"
+
+[script."xejviScriptAdapterMisc:TEncoding.UTF8:get"]
+status = "pending"
+source = "TEncoding_UTF8"
+
+[script."xejviScriptAdapterMisc:TEncoding.Unicode:get"]
+status = "pending"
+source = "TEncoding_Unicode"
+
+[script."xejviScriptAdapterMisc:TStrings.AddPair:get"]
+status = "pending"
+source = "TStrings_AddPair"
+
+[script."xejviScriptAdapterMisc:TStrings.CaseSensitive:get"]
+status = "pending"
+source = "TStringList_Read_CaseSensitive"
+
+[script."xejviScriptAdapterMisc:TStrings.CaseSensitive:set"]
+status = "pending"
+source = "TStringList_Write_CaseSensitive"
+
+[script."xejviScriptAdapterMisc:TStrings.Contains:get"]
+status = "pending"
+source = "TStrings_Contains"
+
+[script."xejviScriptAdapterMisc:TStrings.ContainsName:get"]
+status = "pending"
+source = "TStrings_ContainsName"
+
+[script."xejviScriptAdapterMisc:TStrings.ContainsObject:get"]
+status = "pending"
+source = "TStrings_ContainsObject"
+
+[script."xejviScriptAdapterMisc:TStrings.DelimitedText:get"]
+status = "pending"
+source = "TStrings_Read_DelimitedText"
+
+[script."xejviScriptAdapterMisc:TStrings.DelimitedText:set"]
+status = "pending"
+source = "TStrings_Write_DelimitedText"
+
+[script."xejviScriptAdapterMisc:TStrings.Delimiter:get"]
+status = "pending"
+source = "TStrings_Read_Delimiter"
+
+[script."xejviScriptAdapterMisc:TStrings.Delimiter:set"]
+status = "pending"
+source = "TStrings_Write_Delimiter"
+
+[script."xejviScriptAdapterMisc:TStrings.Difference:get"]
+status = "pending"
+source = "TStringList_Difference"
+
+[script."xejviScriptAdapterMisc:TStrings.InsertObject:get"]
+status = "pending"
+source = "TStrings_InsertObject"
+
+[script."xejviScriptAdapterMisc:TStrings.Intersection:get"]
+status = "pending"
+source = "TStringList_Intersection"
+
+[script."xejviScriptAdapterMisc:TStrings.LoadFromFile:get"]
+status = "pending"
+source = "TStrings_LoadFromFile"
+
+[script."xejviScriptAdapterMisc:TStrings.NameValueSeparator:set"]
+status = "pending"
+source = "TStrings_Write_NameValueSeparator"
+
+[script."xejviScriptAdapterMisc:TStrings.SaveToFile:get"]
+status = "pending"
+source = "TStrings_SaveToFile"
+
+[script."xejviScriptAdapterMisc:TStrings.SetStrings:get"]
+status = "pending"
+source = "TStrings_SetStrings"
+
+[script."xejviScriptAdapterMisc:TStrings.StrictDelimiter:set"]
+status = "pending"
+source = "TStrings_Write_StrictDelimiter"
+
+[script."xejviScriptAdapterMisc:TStrings.SymmetricDifference:get"]
+status = "pending"
+source = "TStringList_SymmetricDifference"
+
+[script."xejviScriptAdapterMisc:TStrings.Union:get"]
+status = "pending"
+source = "TStringList_Union"
+
+[script."xejviScriptAdapterMisc:TStrings.ValueFromIndex:iget"]
+status = "pending"
+source = "TStrings_Read_ValueFromIndex"
+
+[script."xejviScriptAdapterMisc:TStrings.ValueFromIndex:iset"]
+status = "pending"
+source = "TStrings_Write_ValueFromIndex"
+
+[script."xejviScriptAdapterMiscJson:TJsonArray.A:iget"]
+status = "pending"
+source = "TJsonArray_Read_A"
+
+[script."xejviScriptAdapterMiscJson:TJsonArray.A:iset"]
+status = "pending"
+source = "TJsonArray_Write_A"
+
+[script."xejviScriptAdapterMiscJson:TJsonArray.Add:get"]
+status = "pending"
+source = "TJsonArray_Add_V"
+
+[script."xejviScriptAdapterMiscJson:TJsonArray.AddArray:get"]
+status = "pending"
+source = "TJsonArray_Add_Array"
+
+[script."xejviScriptAdapterMiscJson:TJsonArray.AddObject:get"]
+status = "pending"
+source = "TJsonArray_Add_Object"
+
+[script."xejviScriptAdapterMiscJson:TJsonArray.Assign:get"]
+status = "pending"
+source = "TJsonArray_Assign"
+
+[script."xejviScriptAdapterMiscJson:TJsonArray.B:iget"]
+status = "pending"
+source = "TJsonArray_Read_B"
+
+[script."xejviScriptAdapterMiscJson:TJsonArray.B:iset"]
+status = "pending"
+source = "TJsonArray_Write_B"
+
+[script."xejviScriptAdapterMiscJson:TJsonArray.Clear:get"]
+status = "pending"
+source = "TJsonArray_Clear"
+
+[script."xejviScriptAdapterMiscJson:TJsonArray.Count:get"]
+status = "pending"
+source = "TJsonArray_Read_Count"
+
+[script."xejviScriptAdapterMiscJson:TJsonArray.Count:set"]
+status = "pending"
+source = "TJsonArray_Write_Count"
+
+[script."xejviScriptAdapterMiscJson:TJsonArray.Create:get"]
+status = "pending"
+source = "TJsonArray_Create"
+
+[script."xejviScriptAdapterMiscJson:TJsonArray.D:iget"]
+status = "pending"
+source = "TJsonArray_Read_D"
+
+[script."xejviScriptAdapterMiscJson:TJsonArray.D:iset"]
+status = "pending"
+source = "TJsonArray_Write_D"
+
+[script."xejviScriptAdapterMiscJson:TJsonArray.Delete:get"]
+status = "pending"
+source = "TJsonArray_Delete"
+
+[script."xejviScriptAdapterMiscJson:TJsonArray.Extract:get"]
+status = "pending"
+source = "TJsonArray_Extract"
+
+[script."xejviScriptAdapterMiscJson:TJsonArray.ExtractArray:get"]
+status = "pending"
+source = "TJsonArray_ExtractArray"
+
+[script."xejviScriptAdapterMiscJson:TJsonArray.ExtractObject:get"]
+status = "pending"
+source = "TJsonArray_ExtractObject"
+
+[script."xejviScriptAdapterMiscJson:TJsonArray.F:iget"]
+status = "pending"
+source = "TJsonArray_Read_F"
+
+[script."xejviScriptAdapterMiscJson:TJsonArray.F:iset"]
+status = "pending"
+source = "TJsonArray_Write_F"
+
+[script."xejviScriptAdapterMiscJson:TJsonArray.I:iget"]
+status = "pending"
+source = "TJsonArray_Read_I"
+
+[script."xejviScriptAdapterMiscJson:TJsonArray.I:iset"]
+status = "pending"
+source = "TJsonArray_Write_I"
+
+[script."xejviScriptAdapterMiscJson:TJsonArray.Insert:get"]
+status = "pending"
+source = "TJsonArray_Insert_V"
+
+[script."xejviScriptAdapterMiscJson:TJsonArray.InsertArray:get"]
+status = "pending"
+source = "TJsonArray_Insert_Array"
+
+[script."xejviScriptAdapterMiscJson:TJsonArray.InsertObject:get"]
+status = "pending"
+source = "TJsonArray_Insert_Object"
+
+[script."xejviScriptAdapterMiscJson:TJsonArray.IsNull:get"]
+status = "pending"
+source = "TJsonArray_IsNull"
+
+[script."xejviScriptAdapterMiscJson:TJsonArray.L:iget"]
+status = "pending"
+source = "TJsonArray_Read_L"
+
+[script."xejviScriptAdapterMiscJson:TJsonArray.L:iset"]
+status = "pending"
+source = "TJsonArray_Write_L"
+
+[script."xejviScriptAdapterMiscJson:TJsonArray.O:iget"]
+status = "pending"
+source = "TJsonArray_Read_O"
+
+[script."xejviScriptAdapterMiscJson:TJsonArray.O:iset"]
+status = "pending"
+source = "TJsonArray_Write_O"
+
+[script."xejviScriptAdapterMiscJson:TJsonArray.Parse:get"]
+status = "pending"
+source = "TJsonArray_Parse"
+
+[script."xejviScriptAdapterMiscJson:TJsonArray.S:iget"]
+status = "pending"
+source = "TJsonArray_Read_S"
+
+[script."xejviScriptAdapterMiscJson:TJsonArray.S:iset"]
+status = "pending"
+source = "TJsonArray_Write_S"
+
+[script."xejviScriptAdapterMiscJson:TJsonArray.Types:iget"]
+status = "pending"
+source = "TJsonArray_Read_Types"
+
+[script."xejviScriptAdapterMiscJson:TJsonArray.U:iget"]
+status = "pending"
+source = "TJsonArray_Read_U"
+
+[script."xejviScriptAdapterMiscJson:TJsonArray.U:iset"]
+status = "pending"
+source = "TJsonArray_Write_U"
+
+[script."xejviScriptAdapterMiscJson:TJsonBaseObject.FromJSON:get"]
+status = "pending"
+source = "TJsonBaseObject_FromJSON"
+
+[script."xejviScriptAdapterMiscJson:TJsonBaseObject.LoadFromFile:get"]
+status = "pending"
+source = "TJsonBaseObject_LoadFromFile"
+
+[script."xejviScriptAdapterMiscJson:TJsonBaseObject.LoadFromResource:get"]
+status = "pending"
+source = "TJsonBaseObject_LoadFromResource"
+
+[script."xejviScriptAdapterMiscJson:TJsonBaseObject.LoadFromStream:get"]
+status = "pending"
+source = "TJsonBaseObject_LoadFromStream"
+
+[script."xejviScriptAdapterMiscJson:TJsonBaseObject.Parse:get"]
+status = "pending"
+source = "TJsonBaseObject_Parse"
+
+[script."xejviScriptAdapterMiscJson:TJsonBaseObject.SaveToFile:get"]
+status = "pending"
+source = "TJsonBaseObject_SaveToFile"
+
+[script."xejviScriptAdapterMiscJson:TJsonBaseObject.SaveToLines:get"]
+status = "pending"
+source = "TJsonBaseObject_SaveToLines"
+
+[script."xejviScriptAdapterMiscJson:TJsonBaseObject.SaveToStream:get"]
+status = "pending"
+source = "TJsonBaseObject_SaveToStream"
+
+[script."xejviScriptAdapterMiscJson:TJsonBaseObject.ToJSON:get"]
+status = "pending"
+source = "TJsonBaseObject_ToJSON"
+
+[script."xejviScriptAdapterMiscJson:TJsonBaseObject.ToString:get"]
+status = "pending"
+source = "TJsonBaseObject_ToString"
+
+[script."xejviScriptAdapterMiscJson:TJsonObject.A:iget"]
+status = "pending"
+source = "TJsonObject_Read_A"
+
+[script."xejviScriptAdapterMiscJson:TJsonObject.A:iset"]
+status = "pending"
+source = "TJsonObject_Write_A"
+
+[script."xejviScriptAdapterMiscJson:TJsonObject.Assign:get"]
+status = "pending"
+source = "TJsonObject_Assign"
+
+[script."xejviScriptAdapterMiscJson:TJsonObject.B:iget"]
+status = "pending"
+source = "TJsonObject_Read_B"
+
+[script."xejviScriptAdapterMiscJson:TJsonObject.B:iset"]
+status = "pending"
+source = "TJsonObject_Write_B"
+
+[script."xejviScriptAdapterMiscJson:TJsonObject.Clear:get"]
+status = "pending"
+source = "TJsonObject_Clear"
+
+[script."xejviScriptAdapterMiscJson:TJsonObject.Contains:get"]
+status = "pending"
+source = "TJsonObject_Contains"
+
+[script."xejviScriptAdapterMiscJson:TJsonObject.Count:get"]
+status = "pending"
+source = "TJsonObject_Read_Count"
+
+[script."xejviScriptAdapterMiscJson:TJsonObject.Create:get"]
+status = "pending"
+source = "TJsonObject_Create"
+
+[script."xejviScriptAdapterMiscJson:TJsonObject.D:iget"]
+status = "pending"
+source = "TJsonObject_Read_D"
+
+[script."xejviScriptAdapterMiscJson:TJsonObject.D:iset"]
+status = "pending"
+source = "TJsonObject_Write_D"
+
+[script."xejviScriptAdapterMiscJson:TJsonObject.Delete:get"]
+status = "pending"
+source = "TJsonObject_Delete"
+
+[script."xejviScriptAdapterMiscJson:TJsonObject.Extract:get"]
+status = "pending"
+source = "TJsonObject_Extract"
+
+[script."xejviScriptAdapterMiscJson:TJsonObject.ExtractArray:get"]
+status = "pending"
+source = "TJsonObject_ExtractArray"
+
+[script."xejviScriptAdapterMiscJson:TJsonObject.ExtractObject:get"]
+status = "pending"
+source = "TJsonObject_ExtractObject"
+
+[script."xejviScriptAdapterMiscJson:TJsonObject.F:iget"]
+status = "pending"
+source = "TJsonObject_Read_F"
+
+[script."xejviScriptAdapterMiscJson:TJsonObject.F:iset"]
+status = "pending"
+source = "TJsonObject_Write_F"
+
+[script."xejviScriptAdapterMiscJson:TJsonObject.I:iget"]
+status = "pending"
+source = "TJsonObject_Read_I"
+
+[script."xejviScriptAdapterMiscJson:TJsonObject.I:iset"]
+status = "pending"
+source = "TJsonObject_Write_I"
+
+[script."xejviScriptAdapterMiscJson:TJsonObject.IndexOf:get"]
+status = "pending"
+source = "TJsonObject_IndexOf"
+
+[script."xejviScriptAdapterMiscJson:TJsonObject.IsNull:get"]
+status = "pending"
+source = "TJsonObject_IsNull"
+
+[script."xejviScriptAdapterMiscJson:TJsonObject.L:iget"]
+status = "pending"
+source = "TJsonObject_Read_L"
+
+[script."xejviScriptAdapterMiscJson:TJsonObject.L:iset"]
+status = "pending"
+source = "TJsonObject_Write_L"
+
+[script."xejviScriptAdapterMiscJson:TJsonObject.Names:iget"]
+status = "pending"
+source = "TJsonObject_Read_Names"
+
+[script."xejviScriptAdapterMiscJson:TJsonObject.O:iget"]
+status = "pending"
+source = "TJsonObject_Read_O"
+
+[script."xejviScriptAdapterMiscJson:TJsonObject.O:iset"]
+status = "pending"
+source = "TJsonObject_Write_O"
+
+[script."xejviScriptAdapterMiscJson:TJsonObject.Parse:get"]
+status = "pending"
+source = "TJsonObject_Parse"
+
+[script."xejviScriptAdapterMiscJson:TJsonObject.Remove:get"]
+status = "pending"
+source = "TJsonObject_Remove"
+
+[script."xejviScriptAdapterMiscJson:TJsonObject.S:iget"]
+status = "pending"
+source = "TJsonObject_Read_S"
+
+[script."xejviScriptAdapterMiscJson:TJsonObject.S:iset"]
+status = "pending"
+source = "TJsonObject_Write_S"
+
+[script."xejviScriptAdapterMiscJson:TJsonObject.Types:iget"]
+status = "pending"
+source = "TJsonObject_Read_Types"
+
+[script."xejviScriptAdapterMiscJson:TJsonObject.U:iget"]
+status = "pending"
+source = "TJsonObject_Read_U"
+
+[script."xejviScriptAdapterMiscJson:TJsonObject.U:iset"]
+status = "pending"
+source = "TJsonObject_Write_U"
+
+[script."xejviScriptAdapterMiscRegEx:TPerlRegEx.Compile:get"]
+status = "pending"
+source = "TPerlRegEx_Compile"
+
+[script."xejviScriptAdapterMiscRegEx:TPerlRegEx.Compiled:get"]
+status = "pending"
+source = "TPerlRegEx_Read_Compiled"
+
+[script."xejviScriptAdapterMiscRegEx:TPerlRegEx.ComputeReplacement:get"]
+status = "pending"
+source = "TPerlRegEx_ComputeReplacement"
+
+[script."xejviScriptAdapterMiscRegEx:TPerlRegEx.Create:get"]
+status = "pending"
+source = "TPerlRegEx_Create"
+
+[script."xejviScriptAdapterMiscRegEx:TPerlRegEx.EscapeRegExChars:get"]
+status = "pending"
+source = "TPerlRegEx_EscapeRegExChars"
+
+[script."xejviScriptAdapterMiscRegEx:TPerlRegEx.FoundMatch:get"]
+status = "pending"
+source = "TPerlRegEx_FoundMatch"
+
+[script."xejviScriptAdapterMiscRegEx:TPerlRegEx.GroupCount:get"]
+status = "pending"
+source = "TPerlRegEx_GroupCount"
+
+[script."xejviScriptAdapterMiscRegEx:TPerlRegEx.GroupLengths:iget"]
+status = "pending"
+source = "TPerlRegEx_Read_GroupLengths"
+
+[script."xejviScriptAdapterMiscRegEx:TPerlRegEx.GroupOffsets:iget"]
+status = "pending"
+source = "TPerlRegEx_Read_GroupOffsets"
+
+[script."xejviScriptAdapterMiscRegEx:TPerlRegEx.Groups:iget"]
+status = "pending"
+source = "TPerlRegEx_Read_Groups"
+
+[script."xejviScriptAdapterMiscRegEx:TPerlRegEx.Match:get"]
+status = "pending"
+source = "TPerlRegEx_Match"
+
+[script."xejviScriptAdapterMiscRegEx:TPerlRegEx.MatchAgain:get"]
+status = "pending"
+source = "TPerlRegEx_MatchAgain"
+
+[script."xejviScriptAdapterMiscRegEx:TPerlRegEx.MatchedLength:get"]
+status = "pending"
+source = "TPerlRegEx_MatchedLength"
+
+[script."xejviScriptAdapterMiscRegEx:TPerlRegEx.MatchedOffset:get"]
+status = "pending"
+source = "TPerlRegEx_MatchedOffset"
+
+[script."xejviScriptAdapterMiscRegEx:TPerlRegEx.MatchedText:get"]
+status = "pending"
+source = "TPerlRegEx_MatchedText"
+
+[script."xejviScriptAdapterMiscRegEx:TPerlRegEx.NamedGroup:get"]
+status = "pending"
+source = "TPerlRegEx_NamedGroup"
+
+[script."xejviScriptAdapterMiscRegEx:TPerlRegEx.Options:get"]
+status = "pending"
+source = "TPerlRegEx_Read_Options"
+
+[script."xejviScriptAdapterMiscRegEx:TPerlRegEx.Options:set"]
+status = "pending"
+source = "TPerlRegEx_Write_Options"
+
+[script."xejviScriptAdapterMiscRegEx:TPerlRegEx.RegEx:get"]
+status = "pending"
+source = "TPerlRegEx_Read_RegEx"
+
+[script."xejviScriptAdapterMiscRegEx:TPerlRegEx.RegEx:set"]
+status = "pending"
+source = "TPerlRegEx_Write_RegEx"
+
+[script."xejviScriptAdapterMiscRegEx:TPerlRegEx.Replace:get"]
+status = "pending"
+source = "TPerlRegEx_Replace"
+
+[script."xejviScriptAdapterMiscRegEx:TPerlRegEx.ReplaceAll:get"]
+status = "pending"
+source = "TPerlRegEx_ReplaceAll"
+
+[script."xejviScriptAdapterMiscRegEx:TPerlRegEx.Replacement:get"]
+status = "pending"
+source = "TPerlRegEx_Read_Replacement"
+
+[script."xejviScriptAdapterMiscRegEx:TPerlRegEx.Replacement:set"]
+status = "pending"
+source = "TPerlRegEx_Write_Replacement"
+
+[script."xejviScriptAdapterMiscRegEx:TPerlRegEx.Split:get"]
+status = "pending"
+source = "TPerlRegEx_Split"
+
+[script."xejviScriptAdapterMiscRegEx:TPerlRegEx.SplitCapture:get"]
+status = "pending"
+source = "TPerlRegEx_SplitCapture"
+
+[script."xejviScriptAdapterMiscRegEx:TPerlRegEx.Start:get"]
+status = "pending"
+source = "TPerlRegEx_Read_Start"
+
+[script."xejviScriptAdapterMiscRegEx:TPerlRegEx.Start:set"]
+status = "pending"
+source = "TPerlRegEx_Write_Start"
+
+[script."xejviScriptAdapterMiscRegEx:TPerlRegEx.Stop:get"]
+status = "pending"
+source = "TPerlRegEx_Read_Stop"
+
+[script."xejviScriptAdapterMiscRegEx:TPerlRegEx.Stop:set"]
+status = "pending"
+source = "TPerlRegEx_Write_Stop"
+
+[script."xejviScriptAdapterMiscRegEx:TPerlRegEx.StoreGroups:get"]
+status = "pending"
+source = "TPerlRegEx_StoreGroups"
+
+[script."xejviScriptAdapterMiscRegEx:TPerlRegEx.Studied:get"]
+status = "pending"
+source = "TPerlRegEx_Read_Studied"
+
+[script."xejviScriptAdapterMiscRegEx:TPerlRegEx.Study:get"]
+status = "pending"
+source = "TPerlRegEx_Study"
+
+[script."xejviScriptAdapterMiscRegEx:TPerlRegEx.Subject:get"]
+status = "pending"
+source = "TPerlRegEx_Read_Subject"
+
+[script."xejviScriptAdapterMiscRegEx:TPerlRegEx.Subject:set"]
+status = "pending"
+source = "TPerlRegEx_Write_Subject"
+
+[script."xejviScriptAdapterMiscRegEx:TPerlRegEx.SubjectLeft:get"]
+status = "pending"
+source = "TPerlRegEx_SubjectLeft"
+
+[script."xejviScriptAdapterMiscRegEx:TPerlRegEx.SubjectRight:get"]
+status = "pending"
+source = "TPerlRegEx_SubjectRight"
+
+[script."xejviScriptAdapterMiscVcl:TBinaryReader.Create:get"]
+status = "pending"
+source = "TBinaryReader_Create"
+
+[script."xejviScriptAdapterMiscVcl:TBinaryReader.Read:get"]
+status = "pending"
+source = "TBinaryReader_Read"
+
+[script."xejviScriptAdapterMiscVcl:TBinaryReader.ReadBoolean:get"]
+status = "pending"
+source = "TBinaryReader_ReadBoolean"
+
+[script."xejviScriptAdapterMiscVcl:TBinaryReader.ReadByte:get"]
+status = "pending"
+source = "TBinaryReader_ReadByte"
+
+[script."xejviScriptAdapterMiscVcl:TBinaryReader.ReadBytes:get"]
+status = "pending"
+source = "TBinaryReader_ReadBytes"
+
+[script."xejviScriptAdapterMiscVcl:TBinaryReader.ReadChar:get"]
+status = "pending"
+source = "TBinaryReader_ReadChar"
+
+[script."xejviScriptAdapterMiscVcl:TBinaryReader.ReadDouble:get"]
+status = "pending"
+source = "TBinaryReader_ReadDouble"
+
+[script."xejviScriptAdapterMiscVcl:TBinaryReader.ReadInteger:get"]
+status = "pending"
+source = "TBinaryReader_ReadInteger"
+
+[script."xejviScriptAdapterMiscVcl:TBinaryReader.ReadShortInt:get"]
+status = "pending"
+source = "TBinaryReader_ReadShortInt"
+
+[script."xejviScriptAdapterMiscVcl:TBinaryReader.ReadSingle:get"]
+status = "pending"
+source = "TBinaryReader_ReadSingle"
+
+[script."xejviScriptAdapterMiscVcl:TBinaryReader.ReadSmallInt:get"]
+status = "pending"
+source = "TBinaryReader_ReadSmallInt"
+
+[script."xejviScriptAdapterMiscVcl:TBinaryReader.ReadString:get"]
+status = "pending"
+source = "TBinaryReader_ReadString"
+
+[script."xejviScriptAdapterMiscVcl:TBinaryReader.ReadUInt16:get"]
+status = "pending"
+source = "TBinaryReader_ReadUInt16"
+
+[script."xejviScriptAdapterMiscVcl:TBinaryReader.ReadUInt32:get"]
+status = "pending"
+source = "TBinaryReader_ReadUInt32"
+
+[script."xejviScriptAdapterMiscVcl:TBinaryWriter.Create:get"]
+status = "pending"
+source = "TBinaryWriter_Create"
+
+[script."xejviScriptAdapterMiscVcl:TBinaryWriter.Write:get"]
+status = "pending"
+source = "TBinaryWriter_Write"
+
+[script."xejviScriptAdapterMiscVcl:TBinaryWriter.WriteSingle:get"]
+status = "pending"
+source = "TBinaryWriter_WriteSingle"
+
+[script."xejviScriptAdapterMiscVcl:TBitmap.SetSize:get"]
+status = "pending"
+source = "TBitmap_SetSize"
+
+[script."xejviScriptAdapterMiscVcl:TBytesStream.Create:get"]
+status = "pending"
+source = "TBytesStream_Create"
+
+[script."xejviScriptAdapterMiscVcl:TCheckListBox.AllowGrayed:get"]
+status = "pending"
+source = "TCheckListBox_Read_AllowGrayed"
+
+[script."xejviScriptAdapterMiscVcl:TCheckListBox.AllowGrayed:set"]
+status = "pending"
+source = "TCheckListBox_Write_AllowGrayed"
+
+[script."xejviScriptAdapterMiscVcl:TCheckListBox.CheckAll:get"]
+status = "pending"
+source = "TCheckListBox_CheckAll"
+
+[script."xejviScriptAdapterMiscVcl:TCheckListBox.Checked:iget"]
+status = "pending"
+source = "TCheckListBox_Read_Checked"
+
+[script."xejviScriptAdapterMiscVcl:TCheckListBox.Checked:iset"]
+status = "pending"
+source = "TCheckListBox_Write_Checked"
+
+[script."xejviScriptAdapterMiscVcl:TCheckListBox.Create:get"]
+status = "pending"
+source = "TCheckListBox_Create"
+
+[script."xejviScriptAdapterMiscVcl:TCheckListBox.Header:iget"]
+status = "pending"
+source = "TCheckListBox_Read_Header"
+
+[script."xejviScriptAdapterMiscVcl:TCheckListBox.Header:iset"]
+status = "pending"
+source = "TCheckListBox_Write_Header"
+
+[script."xejviScriptAdapterMiscVcl:TCheckListBox.ItemEnabled:iget"]
+status = "pending"
+source = "TCheckListBox_Read_ItemEnabled"
+
+[script."xejviScriptAdapterMiscVcl:TCheckListBox.ItemEnabled:iset"]
+status = "pending"
+source = "TCheckListBox_Write_ItemEnabled"
+
+[script."xejviScriptAdapterMiscVcl:TCheckListBox.State:iget"]
+status = "pending"
+source = "TCheckListBox_Read_State"
+
+[script."xejviScriptAdapterMiscVcl:TCheckListBox.State:iset"]
+status = "pending"
+source = "TCheckListBox_Write_State"
+
+[script."xejviScriptAdapterMiscVcl:TComboBox.DropDownCount:get"]
+status = "pending"
+source = "TComboBox_Read_DropDownCount"
+
+[script."xejviScriptAdapterMiscVcl:TComboBox.DropDownCount:set"]
+status = "pending"
+source = "TComboBox_Write_DropDownCount"
+
+[script."xejviScriptAdapterMiscVcl:TControl.ScaleValue:get"]
+status = "pending"
+source = "TControl_ScaleValue"
+
+[script."xejviScriptAdapterMiscVcl:TControl.StyleElements:get"]
+status = "pending"
+source = "TControl_Read_StyleElements"
+
+[script."xejviScriptAdapterMiscVcl:TControl.StyleElements:set"]
+status = "pending"
+source = "TControl_Write_StyleElements"
+
+[script."xejviScriptAdapterMiscVcl:TCustomForm.PopupMode:get"]
+status = "pending"
+source = "TCustomForm_Read_PopupMode"
+
+[script."xejviScriptAdapterMiscVcl:TCustomForm.PopupMode:set"]
+status = "pending"
+source = "TCustomForm_Write_PopupMode"
+
+[script."xejviScriptAdapterMiscVcl:TCustomForm.PopupParent:get"]
+status = "pending"
+source = "TCustomForm_Read_PopupParent"
+
+[script."xejviScriptAdapterMiscVcl:TCustomForm.PopupParent:set"]
+status = "pending"
+source = "TCustomForm_Write_PopupParent"
+
+[script."xejviScriptAdapterMiscVcl:TCustomIniFile.DeleteKey:get"]
+status = "pending"
+source = "TCustomIniFile_DeleteKey"
+
+[script."xejviScriptAdapterMiscVcl:TCustomIniFile.EraseSection:get"]
+status = "pending"
+source = "TCustomIniFile_EraseSection"
+
+[script."xejviScriptAdapterMiscVcl:TCustomIniFile.ReadBool:get"]
+status = "pending"
+source = "TCustomIniFile_ReadBool"
+
+[script."xejviScriptAdapterMiscVcl:TCustomIniFile.ReadFloat:get"]
+status = "pending"
+source = "TCustomIniFile_ReadFloat"
+
+[script."xejviScriptAdapterMiscVcl:TCustomIniFile.ReadInteger:get"]
+status = "pending"
+source = "TCustomIniFile_ReadInteger"
+
+[script."xejviScriptAdapterMiscVcl:TCustomIniFile.ReadSection:get"]
+status = "pending"
+source = "TCustomIniFile_ReadSection"
+
+[script."xejviScriptAdapterMiscVcl:TCustomIniFile.ReadSectionValues:get"]
+status = "pending"
+source = "TCustomIniFile_ReadSectionValues"
+
+[script."xejviScriptAdapterMiscVcl:TCustomIniFile.ReadSections:get"]
+status = "pending"
+source = "TCustomIniFile_ReadSections"
+
+[script."xejviScriptAdapterMiscVcl:TCustomIniFile.ReadString:get"]
+status = "pending"
+source = "TCustomIniFile_ReadString"
+
+[script."xejviScriptAdapterMiscVcl:TCustomIniFile.SectionExists:get"]
+status = "pending"
+source = "TCustomIniFile_SectionExists"
+
+[script."xejviScriptAdapterMiscVcl:TCustomIniFile.UpdateFile:get"]
+status = "pending"
+source = "TCustomIniFile_UpdateFile"
+
+[script."xejviScriptAdapterMiscVcl:TCustomIniFile.ValueExists:get"]
+status = "pending"
+source = "TCustomIniFile_ValueExists"
+
+[script."xejviScriptAdapterMiscVcl:TCustomIniFile.WriteBool:get"]
+status = "pending"
+source = "TCustomIniFile_WriteBool"
+
+[script."xejviScriptAdapterMiscVcl:TCustomIniFile.WriteFloat:get"]
+status = "pending"
+source = "TCustomIniFile_WriteFloat"
+
+[script."xejviScriptAdapterMiscVcl:TCustomIniFile.WriteInteger:get"]
+status = "pending"
+source = "TCustomIniFile_WriteInteger"
+
+[script."xejviScriptAdapterMiscVcl:TCustomIniFile.WriteString:get"]
+status = "pending"
+source = "TCustomIniFile_WriteString"
+
+[script."xejviScriptAdapterMiscVcl:TCustomLabeledEdit.Create:get"]
+status = "pending"
+source = "TCustomLabeledEdit_Create"
+
+[script."xejviScriptAdapterMiscVcl:TCustomLabeledEdit.EditLabel:get"]
+status = "pending"
+source = "TCustomLabeledEdit_Read_EditLabel"
+
+[script."xejviScriptAdapterMiscVcl:TCustomLabeledEdit.LabelPosition:get"]
+status = "pending"
+source = "TCustomLabeledEdit_Read_LabelPosition"
+
+[script."xejviScriptAdapterMiscVcl:TCustomLabeledEdit.LabelPosition:set"]
+status = "pending"
+source = "TCustomLabeledEdit_Write_LabelPosition"
+
+[script."xejviScriptAdapterMiscVcl:TCustomLabeledEdit.LabelSpacing:get"]
+status = "pending"
+source = "TCustomLabeledEdit_Read_LabelSpacing"
+
+[script."xejviScriptAdapterMiscVcl:TCustomLabeledEdit.LabelSpacing:set"]
+status = "pending"
+source = "TCustomLabeledEdit_Write_LabelSpacing"
+
+[script."xejviScriptAdapterMiscVcl:THashedStringList.Create:get"]
+status = "pending"
+source = "THashedStringList_Create"
+
+[script."xejviScriptAdapterMiscVcl:TIniFile.Create:get"]
+status = "pending"
+source = "TIniFile_Create"
+
+[script."xejviScriptAdapterMiscVcl:TLabeledEdit.Create:get"]
+status = "pending"
+source = "TLabeledEdit_Create"
+
+[script."xejviScriptAdapterMiscVcl:TListItem.SubItems:get"]
+status = "pending"
+source = "TListItem_Read_SubItems"
+
+[script."xejviScriptAdapterMiscVcl:TListItem.SubItems:set"]
+status = "pending"
+source = "TListItem_Write_SubItems"
+
+[script."xejviScriptAdapterMiscVcl:TListItems.Count:set"]
+status = "pending"
+source = "TListItems_Write_Count"
+
+[script."xejviScriptAdapterMiscVcl:TMemIniFile.Create:get"]
+status = "pending"
+source = "TMemIniFile_Create"
+
+[script."xejviScriptAdapterMiscVcl:TMemIniFile.GetStrings:get"]
+status = "pending"
+source = "TMemIniFile_GetStrings"
+
+[script."xejviScriptAdapterMiscVcl:TMemIniFile.SetStrings:get"]
+status = "pending"
+source = "TMemIniFile_SetStrings"
+
+[script."xejviScriptAdapterMiscVcl:TMenu.AutoHotKeys:get"]
+status = "pending"
+source = "TMenu_Read_AutoHotKeys"
+
+[script."xejviScriptAdapterMiscVcl:TMenu.AutoHotKeys:set"]
+status = "pending"
+source = "TMenu_Write_AutoHotKeys"
+
+[script."xejviScriptAdapterMiscVcl:TMenuItem.Clear:get"]
+status = "pending"
+source = "TMenuItem_Clear"
+
+[script."xejviScriptAdapterMiscVcl:TRegistryIniFile.Create:get"]
+status = "pending"
+source = "TRegistryIniFile_Create"
+
+[script."xejviScriptAdapterMiscVcl:TWinControl.DoubleBuffered:get"]
+status = "pending"
+source = "TWinControl_Read_DoubleBuffered"
+
+[script."xejviScriptAdapterMiscVcl:TWinControl.DoubleBuffered:set"]
+status = "pending"
+source = "TWinControl_Write_DoubleBuffered"
+
+[script."xejviScriptAdapterRecord:cUnit.BaseRecord:function"]
+status = "pending"
+source = "IwbMainRecord_BaseRecord"
+
+[script."xejviScriptAdapterRecord:cUnit.BaseRecordID:function"]
+status = "pending"
+source = "IwbMainRecord_BaseRecordID"
+
+[script."xejviScriptAdapterRecord:cUnit.ChangeFormSignature:function"]
+status = "pending"
+source = "IwbMainRecord_ChangeFormSignature"
+
+[script."xejviScriptAdapterRecord:cUnit.ChildGroup:function"]
+status = "pending"
+source = "IwbMainRecord_ChildGroup"
+
+[script."xejviScriptAdapterRecord:cUnit.ChildrenOf:function"]
+status = "pending"
+source = "IwbGroupRecord_ChildrenOf"
+
+[script."xejviScriptAdapterRecord:cUnit.CompareExchangeFormID:function"]
+status = "pending"
+source = "IwbMainRecord_CompareExchangeFormID"
+
+[script."xejviScriptAdapterRecord:cUnit.EditorID:function"]
+status = "pending"
+source = "IwbMainRecord_EditorID"
+
+[script."xejviScriptAdapterRecord:cUnit.FindChildGroup:function"]
+status = "pending"
+source = "IwbGroupRecord_FindChildGroup"
+
+[script."xejviScriptAdapterRecord:cUnit.FixedFormID:function"]
+status = "pending"
+source = "IwbMainRecord_FixedFormID"
+
+[script."xejviScriptAdapterRecord:cUnit.FormID:function"]
+status = "pending"
+source = "IwbMainRecord_FormID"
+
+[script."xejviScriptAdapterRecord:cUnit.GetFormVCS1:function"]
+status = "pending"
+source = "IwbMainRecord_GetFormVCS1"
+
+[script."xejviScriptAdapterRecord:cUnit.GetFormVCS2:function"]
+status = "pending"
+source = "IwbMainRecord_GetFormVCS2"
+
+[script."xejviScriptAdapterRecord:cUnit.GetFormVersion:function"]
+status = "pending"
+source = "IwbMainRecord_GetFormVersion"
+
+[script."xejviScriptAdapterRecord:cUnit.GetGridCell:function"]
+status = "pending"
+source = "IwbMainRecord_GetGridCell"
+
+[script."xejviScriptAdapterRecord:cUnit.GetIsDeleted:function"]
+status = "pending"
+source = "IwbMainRecord_GetIsDeleted"
+
+[script."xejviScriptAdapterRecord:cUnit.GetIsInitiallyDisabled:function"]
+status = "pending"
+source = "IwbMainRecord_GetIsInitiallyDisabled"
+
+[script."xejviScriptAdapterRecord:cUnit.GetIsPersistent:function"]
+status = "pending"
+source = "IwbMainRecord_GetIsPersistent"
+
+[script."xejviScriptAdapterRecord:cUnit.GetIsVisibleWhenDistant:function"]
+status = "pending"
+source = "IwbMainRecord_GetIsVisibleWhenDistant"
+
+[script."xejviScriptAdapterRecord:cUnit.GetLoadOrderFormID:function"]
+status = "pending"
+source = "IwbMainRecord_GetLoadOrderFormID"
+
+[script."xejviScriptAdapterRecord:cUnit.GetPosition:function"]
+status = "pending"
+source = "IwbMainRecord_GetPosition"
+
+[script."xejviScriptAdapterRecord:cUnit.GetRotation:function"]
+status = "pending"
+source = "IwbMainRecord_GetRotation"
+
+[script."xejviScriptAdapterRecord:cUnit.GroupLabel:function"]
+status = "pending"
+source = "IwbGroupRecord_GroupLabel"
+
+[script."xejviScriptAdapterRecord:cUnit.GroupType:function"]
+status = "pending"
+source = "IwbGroupRecord_GroupType"
+
+[script."xejviScriptAdapterRecord:cUnit.HasPrecombinedMesh:function"]
+status = "pending"
+source = "IwbMainRecord_HasPrecombinedMesh"
+
+[script."xejviScriptAdapterRecord:cUnit.HighestOverrideOrSelf:function"]
+status = "pending"
+source = "IwbMainRecord_HighestOverrideOrSelf"
+
+[script."xejviScriptAdapterRecord:cUnit.IsMaster:function"]
+status = "pending"
+source = "IwbMainRecord_IsMaster"
+
+[script."xejviScriptAdapterRecord:cUnit.IsWinningOverride:function"]
+status = "pending"
+source = "IwbMainRecord_IsWinningOverride"
+
+[script."xejviScriptAdapterRecord:cUnit.MainRecordByEditorID:function"]
+status = "pending"
+source = "IwbGroupRecord_MainRecordByEditorID"
+
+[script."xejviScriptAdapterRecord:cUnit.Master:function"]
+status = "pending"
+source = "IwbMainRecord_Master"
+
+[script."xejviScriptAdapterRecord:cUnit.MasterOrSelf:function"]
+status = "pending"
+source = "IwbMainRecord_MasterOrSelf"
+
+[script."xejviScriptAdapterRecord:cUnit.OverrideByIndex:function"]
+status = "pending"
+source = "IwbMainRecord_OverrideByIndex"
+
+[script."xejviScriptAdapterRecord:cUnit.OverrideCount:function"]
+status = "pending"
+source = "IwbMainRecord_OverrideCount"
+
+[script."xejviScriptAdapterRecord:cUnit.PrecombinedMesh:function"]
+status = "pending"
+source = "IwbMainRecord_PrecombinedMesh"
+
+[script."xejviScriptAdapterRecord:cUnit.ReferencedByCount:function"]
+status = "pending"
+source = "IwbMainRecord_ReferencedByCount"
+
+[script."xejviScriptAdapterRecord:cUnit.ReferencedByIndex:function"]
+status = "pending"
+source = "IwbMainRecord_ReferencedByIndex"
+
+[script."xejviScriptAdapterRecord:cUnit.ReferencesByIndex:function"]
+status = "pending"
+source = "IwbMainRecord_ReferencesByIndex"
+
+[script."xejviScriptAdapterRecord:cUnit.ReferencesCount:function"]
+status = "pending"
+source = "IwbMainRecord_ReferencesCount"
+
+[script."xejviScriptAdapterRecord:cUnit.SetEditorID:function"]
+status = "pending"
+source = "IwbMainRecord_SetEditorID"
+
+[script."xejviScriptAdapterRecord:cUnit.SetFormVCS1:function"]
+status = "pending"
+source = "IwbMainRecord_SetFormVCS1"
+
+[script."xejviScriptAdapterRecord:cUnit.SetFormVCS2:function"]
+status = "pending"
+source = "IwbMainRecord_SetFormVCS2"
+
+[script."xejviScriptAdapterRecord:cUnit.SetFormVersion:function"]
+status = "pending"
+source = "IwbMainRecord_SetFormVersion"
+
+[script."xejviScriptAdapterRecord:cUnit.SetIsDeleted:function"]
+status = "pending"
+source = "IwbMainRecord_SetIsDeleted"
+
+[script."xejviScriptAdapterRecord:cUnit.SetIsInitiallyDisabled:function"]
+status = "pending"
+source = "IwbMainRecord_SetIsInitiallyDisabled"
+
+[script."xejviScriptAdapterRecord:cUnit.SetIsPersistent:function"]
+status = "pending"
+source = "IwbMainRecord_SetIsPersistent"
+
+[script."xejviScriptAdapterRecord:cUnit.SetIsVisibleWhenDistant:function"]
+status = "pending"
+source = "IwbMainRecord_SetIsVisibleWhenDistant"
+
+[script."xejviScriptAdapterRecord:cUnit.SetLoadOrderFormID:function"]
+status = "pending"
+source = "IwbMainRecord_SetLoadOrderFormID"
+
+[script."xejviScriptAdapterRecord:cUnit.Signature:function"]
+status = "pending"
+source = "IwbMainRecord_Signature"
+
+[script."xejviScriptAdapterRecord:cUnit.UpdateRefs:function"]
+status = "pending"
+source = "IwbMainRecord_UpdateRefs"
+
+[script."xejviScriptAdapterRecord:cUnit.WinningOverride:function"]
+status = "pending"
+source = "IwbMainRecord_WinningOverride"
+
+[script."xejviScriptAdapterResource:TwbFastStringList.Create:get"]
+status = "pending"
+source = "TwbFastStringList_Create"
+
+[script."xejviScriptAdapterResource:cUnit.AssetTypeByExtension:function"]
+status = "pending"
+source = "TwbAsset_AssetTypeByExtension"
+
+[script."xejviScriptAdapterResource:cUnit.AssetTypeByFolder:function"]
+status = "pending"
+source = "TwbAsset_AssetTypeByFolder"
+
+[script."xejviScriptAdapterResource:cUnit.CreateHashFO4:function"]
+status = "pending"
+source = "Misc_CreateHashFO4"
+
+[script."xejviScriptAdapterResource:cUnit.CreateHashTES3:function"]
+status = "pending"
+source = "Misc_CreateHashTES3"
+
+[script."xejviScriptAdapterResource:cUnit.CreateHashTES4:function"]
+status = "pending"
+source = "Misc_CreateHashTES4"
+
+[script."xejviScriptAdapterResource:cUnit.LocalizationGetStringsFromFile:function"]
+status = "pending"
+source = "Misc_LocalizationGetStringsFromFile"
+
+[script."xejviScriptAdapterResource:cUnit.NifBlockList:function"]
+status = "pending"
+source = "NifUtils_NifBlockList"
+
+[script."xejviScriptAdapterResource:cUnit.NifTextureList:function"]
+status = "pending"
+source = "NifUtils_NifTextureList"
+
+[script."xejviScriptAdapterResource:cUnit.NifTextureListResource:function"]
+status = "pending"
+source = "NifUtils_NifTextureListResource"
+
+[script."xejviScriptAdapterResource:cUnit.NifTextureListUVRange:function"]
+status = "pending"
+source = "NifUtils_NifTextureListUVRange"
+
+[script."xejviScriptAdapterResource:cUnit.ResourceContainerList:function"]
+status = "pending"
+source = "IwbContainerHandler_ResourceContainerList"
+
+[script."xejviScriptAdapterResource:cUnit.ResourceCopy:function"]
+status = "pending"
+source = "IwbContainerHandler_ResourceCopy"
+
+[script."xejviScriptAdapterResource:cUnit.ResourceCount:function"]
+status = "pending"
+source = "IwbContainerHandler_ResourceCount"
+
+[script."xejviScriptAdapterResource:cUnit.ResourceExists:function"]
+status = "pending"
+source = "IwbContainerHandler_ResourceExists"
+
+[script."xejviScriptAdapterResource:cUnit.ResourceList:function"]
+status = "pending"
+source = "IwbContainerHandler_ResourceList"
+
+[script."xejviScriptAdapterResource:cUnit.ResourceOpenData:function"]
+status = "pending"
+source = "IwbContainerHandler_ResourceOpenData"
+
+[script."xejviScriptAdapterResource:cUnit.bscrc32:function"]
+status = "pending"
+source = "Misc_bscrc32"
+
+[script."xejviScriptAdapterResource:cUnit.wbAlphaBlend:function"]
+status = "pending"
+source = "Misc_wbAlphaBlend"
+
+[script."xejviScriptAdapterResource:cUnit.wbBlockFromSubBlock:function"]
+status = "pending"
+source = "Misc_wbBlockFromSubBlock"
+
+[script."xejviScriptAdapterResource:cUnit.wbCRC32Data:function"]
+status = "pending"
+source = "Misc_wbCRC32Data"
+
+[script."xejviScriptAdapterResource:cUnit.wbCRC32File:function"]
+status = "pending"
+source = "Misc_wbCRC32File"
+
+[script."xejviScriptAdapterResource:cUnit.wbCRC32Resource:function"]
+status = "pending"
+source = "Misc_wbCRC32Resource"
+
+[script."xejviScriptAdapterResource:cUnit.wbDDSDataToBitmap:function"]
+status = "pending"
+source = "DDSUtils_wbDDSDataToBitmap"
+
+[script."xejviScriptAdapterResource:cUnit.wbDDSResourceToBitmap:function"]
+status = "pending"
+source = "DDSUtils_wbDDSResourceToBitmap"
+
+[script."xejviScriptAdapterResource:cUnit.wbDDSStreamToBitmap:function"]
+status = "pending"
+source = "DDSUtils_wbDDSStreamToBitmap"
+
+[script."xejviScriptAdapterResource:cUnit.wbFindREFRsByBase:function"]
+status = "pending"
+source = "Misc_wbFindRefrsByBase"
+
+[script."xejviScriptAdapterResource:cUnit.wbFlipBitmap:function"]
+status = "pending"
+source = "Misc_wbFlipBitmap"
+
+[script."xejviScriptAdapterResource:cUnit.wbFormIDErrorCheckLock:function"]
+status = "pending"
+source = "Misc_wbFormIDErrorCheckLock"
+
+[script."xejviScriptAdapterResource:cUnit.wbFormIDErrorCheckUnlock:function"]
+status = "pending"
+source = "Misc_wbFormIDErrorCheckUnlock"
+
+[script."xejviScriptAdapterResource:cUnit.wbGetSiblingRecords:function"]
+status = "pending"
+source = "Misc_wbGetSiblingRecords"
+
+[script."xejviScriptAdapterResource:cUnit.wbGridCellToGroupLabel:function"]
+status = "pending"
+source = "Misc_wbGridCellToGroupLabel"
+
+[script."xejviScriptAdapterResource:cUnit.wbIsInGridCell:function"]
+status = "pending"
+source = "Misc_wbIsInGridCell"
+
+[script."xejviScriptAdapterResource:cUnit.wbIsPseudoESLMode:function"]
+status = "pending"
+source = "Misc_wbIsPseudoLightMode"
+
+[script."xejviScriptAdapterResource:cUnit.wbIsPseudoLightMode:function"]
+status = "pending"
+source = "Misc_wbIsPseudoLightMode"
+
+[script."xejviScriptAdapterResource:cUnit.wbIsPseudoMediumMode:function"]
+status = "pending"
+source = "Misc_wbIsPseudoMediumMode"
+
+[script."xejviScriptAdapterResource:cUnit.wbIsPseudoSmallMode:function"]
+status = "pending"
+source = "Misc_wbIsPseudoLightMode"
+
+[script."xejviScriptAdapterResource:cUnit.wbMD5Data:function"]
+status = "pending"
+source = "Misc_wbMD5Data"
+
+[script."xejviScriptAdapterResource:cUnit.wbMD5File:function"]
+status = "pending"
+source = "Misc_wbMD5File"
+
+[script."xejviScriptAdapterResource:cUnit.wbNormalizeResourceName:function"]
+status = "pending"
+source = "TwbAsset_wbNormalizeResourceName"
+
+[script."xejviScriptAdapterResource:cUnit.wbPositionToGridCell:function"]
+status = "pending"
+source = "Misc_wbPositionToGridCell"
+
+[script."xejviScriptAdapterResource:cUnit.wbSHA1Data:function"]
+status = "pending"
+source = "Misc_wbSHA1Data"
+
+[script."xejviScriptAdapterResource:cUnit.wbSHA1File:function"]
+status = "pending"
+source = "Misc_wbSHA1File"
+
+[script."xejviScriptAdapterResource:cUnit.wbStringListInString:function"]
+status = "pending"
+source = "Misc_wbStringListInString"
+
+[script."xejviScriptAdapterResource:cUnit.wbSubBlockFromGridCell:function"]
+status = "pending"
+source = "Misc_wbSubBlockFromGridCell"

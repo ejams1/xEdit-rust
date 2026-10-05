@@ -1,0 +1,484 @@
+# Upstream xEdit units and the state of their Rust port.
+# Maintained with `cargo xtask sync`. Edit statuses by hand.
+
+[upstream]
+repository = "https://github.com/TES5Edit/TES5Edit"
+branch = "dev-4.1.6"
+commit = "9fb016884bec138ea6c7b872cec831537d464c3e"
+
+[units."BSArch.dpr"]
+status = "pending"
+
+[units."BSArch/baDefines.inc"]
+status = "pending"
+
+[units."BSArch/frmArchiveInfo.pas"]
+status = "pending"
+
+[units."BSArch/frmMain.pas"]
+status = "pending"
+
+[units."BSArch/frmPack.pas"]
+status = "pending"
+
+[units."BSArch/frmSearchReplace.pas"]
+status = "pending"
+
+[units."BSArchPro.dpr"]
+status = "pending"
+
+[units."Core/MSHeap.pas"]
+status = "not-ported"
+note = "Delphi memory manager override; Rust uses its own allocator."
+
+[units."Core/wbBSA.pas"]
+status = "pending"
+
+[units."Core/wbBSArchive.pas"]
+status = "pending"
+
+[units."Core/wbBetterStringList.pas"]
+status = "pending"
+
+[units."Core/wbCommandLine.pas"]
+status = "pending"
+
+[units."Core/wbCompression.pas"]
+status = "pending"
+
+[units."Core/wbConflict.pas"]
+status = "pending"
+
+[units."Core/wbDDS.pas"]
+status = "pending"
+
+[units."Core/wbDataFormat.pas"]
+status = "pending"
+
+[units."Core/wbDataFormatMaterial.pas"]
+status = "pending"
+
+[units."Core/wbDataFormatMisc.pas"]
+status = "pending"
+
+[units."Core/wbDataFormatNif.pas"]
+status = "pending"
+
+[units."Core/wbDataFormatNifTypes.pas"]
+status = "pending"
+
+[units."Core/wbDataFormatWwise.pas"]
+status = "pending"
+
+[units."Core/wbDefines.inc"]
+status = "pending"
+
+[units."Core/wbDefinitionsCommon.pas"]
+status = "pending"
+
+[units."Core/wbDefinitionsFNV.pas"]
+status = "pending"
+
+[units."Core/wbDefinitionsFNVSaves.pas"]
+status = "pending"
+
+[units."Core/wbDefinitionsFO3.pas"]
+status = "pending"
+
+[units."Core/wbDefinitionsFO3Saves.pas"]
+status = "pending"
+
+[units."Core/wbDefinitionsFO4.pas"]
+status = "pending"
+
+[units."Core/wbDefinitionsFO4Saves.pas"]
+status = "pending"
+
+[units."Core/wbDefinitionsFO76.pas"]
+status = "pending"
+
+[units."Core/wbDefinitionsReflection.pas"]
+status = "pending"
+
+[units."Core/wbDefinitionsSF1.pas"]
+status = "pending"
+
+[units."Core/wbDefinitionsSignatures.pas"]
+status = "pending"
+
+[units."Core/wbDefinitionsTES3.pas"]
+status = "pending"
+
+[units."Core/wbDefinitionsTES4.pas"]
+status = "pending"
+
+[units."Core/wbDefinitionsTES4Saves.pas"]
+status = "pending"
+
+[units."Core/wbDefinitionsTES5.pas"]
+status = "pending"
+
+[units."Core/wbDefinitionsTES5Saves.pas"]
+status = "pending"
+
+[units."Core/wbDiff.pas"]
+status = "replaced"
+note = "TDiff has its own license terms; use a Rust diff crate."
+
+[units."Core/wbHalfFloat.pas"]
+status = "replaced"
+note = "Use a Rust half-float crate."
+
+[units."Core/wbHardcoded.pas"]
+status = "pending"
+
+[units."Core/wbHash.pas"]
+status = "pending"
+
+[units."Core/wbHelpers.pas"]
+status = "pending"
+
+[units."Core/wbImplementation.pas"]
+status = "pending"
+
+[units."Core/wbInterface.pas"]
+status = "pending"
+
+[units."Core/wbLOD.pas"]
+status = "pending"
+
+[units."Core/wbLoadOrder.pas"]
+status = "pending"
+
+[units."Core/wbLocalization.pas"]
+status = "pending"
+
+[units."Core/wbMeshOptimize.pas"]
+status = "pending"
+
+[units."Core/wbModGroups.pas"]
+status = "pending"
+
+[units."Core/wbNifMath.pas"]
+status = "pending"
+
+[units."Core/wbNifScanner.pas"]
+status = "pending"
+
+[units."Core/wbSaveInterface.pas"]
+status = "pending"
+
+[units."Core/wbSort.pas"]
+status = "pending"
+
+[units."Core/wbSteamVDFParser.pas"]
+status = "pending"
+
+[units."Core/wbStreams.pas"]
+status = "pending"
+
+[units."Core/wbTaskProgress.pas"]
+status = "pending"
+
+[units."Sniff.dpr"]
+status = "pending"
+
+[units."Sniff/Proc/ProcAddBoundingBox.pas"]
+status = "pending"
+
+[units."Sniff/Proc/ProcAddFacialAnim.pas"]
+status = "pending"
+
+[units."Sniff/Proc/ProcAddHeadtrackingAnim.pas"]
+status = "pending"
+
+[units."Sniff/Proc/ProcAddLODNode.pas"]
+status = "pending"
+
+[units."Sniff/Proc/ProcAddRootCollisionNode.pas"]
+status = "pending"
+
+[units."Sniff/Proc/ProcAdjustTransform.pas"]
+status = "pending"
+
+[units."Sniff/Proc/ProcAnalyzeMesh.pas"]
+status = "pending"
+
+[units."Sniff/Proc/ProcAnimQuadraticToLinear.pas"]
+status = "pending"
+
+[units."Sniff/Proc/ProcAnimSkeletonDeath.pas"]
+status = "pending"
+
+[units."Sniff/Proc/ProcApplyTransform.pas"]
+status = "pending"
+
+[units."Sniff/Proc/ProcAttachParent.pas"]
+status = "pending"
+
+[units."Sniff/Proc/ProcCheckForErrors.pas"]
+status = "pending"
+
+[units."Sniff/Proc/ProcCollapseLinksArrays.pas"]
+status = "pending"
+
+[units."Sniff/Proc/ProcConvertRootNode.pas"]
+status = "pending"
+
+[units."Sniff/Proc/ProcCopyControlledBlocks.pas"]
+status = "pending"
+
+[units."Sniff/Proc/ProcCopyGeometryBlocks.pas"]
+status = "pending"
+
+[units."Sniff/Proc/ProcCopyPriorities.pas"]
+status = "pending"
+
+[units."Sniff/Proc/ProcFindDrawCalls.pas"]
+status = "pending"
+
+[units."Sniff/Proc/ProcFindTextures.pas"]
+status = "pending"
+
+[units."Sniff/Proc/ProcFindUVs.pas"]
+status = "pending"
+
+[units."Sniff/Proc/ProcFixExportedKFAnim.pas"]
+status = "pending"
+
+[units."Sniff/Proc/ProcGroupShapes.pas"]
+status = "pending"
+
+[units."Sniff/Proc/ProcHavokInfo.pas"]
+status = "pending"
+
+[units."Sniff/Proc/ProcHavokSearchMaterial.pas"]
+status = "pending"
+
+[units."Sniff/Proc/ProcHavokSettingsUpdate.pas"]
+status = "pending"
+
+[units."Sniff/Proc/ProcInertiaUpdate.pas"]
+status = "pending"
+
+[units."Sniff/Proc/ProcJamAnim.pas"]
+status = "pending"
+
+[units."Sniff/Proc/ProcJsonConverter.pas"]
+status = "pending"
+
+[units."Sniff/Proc/ProcMergeProperties.pas"]
+status = "pending"
+
+[units."Sniff/Proc/ProcMergeShapes.pas"]
+status = "pending"
+
+[units."Sniff/Proc/ProcMoppUpdate.pas"]
+status = "pending"
+
+[units."Sniff/Proc/ProcOptimize.pas"]
+status = "pending"
+
+[units."Sniff/Proc/ProcOptimizeKF.pas"]
+status = "pending"
+
+[units."Sniff/Proc/ProcRagdollConstraintUpdate.pas"]
+status = "pending"
+
+[units."Sniff/Proc/ProcRemoveControlledBlocks.pas"]
+status = "pending"
+
+[units."Sniff/Proc/ProcRemoveNodes.pas"]
+status = "pending"
+
+[units."Sniff/Proc/ProcRemoveUnusedNodes.pas"]
+status = "pending"
+
+[units."Sniff/Proc/ProcReplaceAssets.pas"]
+status = "pending"
+
+[units."Sniff/Proc/ProcSetMissingNames.pas"]
+status = "pending"
+
+[units."Sniff/Proc/ProcShaderFlagsUpdate.pas"]
+status = "pending"
+
+[units."Sniff/Proc/ProcSoftParticles.pas"]
+status = "pending"
+
+[units."Sniff/Proc/ProcTangents.pas"]
+status = "pending"
+
+[units."Sniff/Proc/ProcTransformInfo.pas"]
+status = "pending"
+
+[units."Sniff/Proc/ProcUniversalFixer.pas"]
+status = "pending"
+
+[units."Sniff/Proc/ProcUniversalTweaker.pas"]
+status = "pending"
+
+[units."Sniff/Proc/ProcUnskinMesh.pas"]
+status = "pending"
+
+[units."Sniff/Proc/ProcUnweldedVertices.pas"]
+status = "pending"
+
+[units."Sniff/Proc/ProcUpdateBounds.pas"]
+status = "pending"
+
+[units."Sniff/Proc/ProcVertexPaint.pas"]
+status = "pending"
+
+[units."Sniff/Proc/ProcWallsReflectionFlag.pas"]
+status = "pending"
+
+[units."Sniff/Proc/ProcWeiExplosion.pas"]
+status = "pending"
+
+[units."Sniff/SniffProcessor.pas"]
+status = "pending"
+
+[units."Sniff/frMessages.pas"]
+status = "pending"
+
+[units."Sniff/frmMain.pas"]
+status = "pending"
+
+[units."Sniff/frmVertexPaintHelper.pas"]
+status = "pending"
+
+[units."Tools/NifTangentsBinormalsUpdater/niftbupd.dpr"]
+status = "pending"
+
+[units."Tools/TreeLodBillboardCreator/treelod.dpr"]
+status = "pending"
+
+[units."Tools/sseextend/sseextend.dpr"]
+status = "pending"
+
+[units."xDump.dpr"]
+status = "pending"
+
+[units."xDump/xdDefines.inc"]
+status = "pending"
+
+[units."xEdit.dpr"]
+status = "pending"
+
+[units."xEdit/JvI/xejviScriptAdapter.pas"]
+status = "pending"
+
+[units."xEdit/JvI/xejviScriptAdapterContainer.pas"]
+status = "pending"
+
+[units."xEdit/JvI/xejviScriptAdapterDF.pas"]
+status = "pending"
+
+[units."xEdit/JvI/xejviScriptAdapterElement.pas"]
+status = "pending"
+
+[units."xEdit/JvI/xejviScriptAdapterFile.pas"]
+status = "pending"
+
+[units."xEdit/JvI/xejviScriptAdapterHost.pas"]
+status = "pending"
+
+[units."xEdit/JvI/xejviScriptAdapterMisc.pas"]
+status = "pending"
+
+[units."xEdit/JvI/xejviScriptAdapterMiscJson.pas"]
+status = "pending"
+
+[units."xEdit/JvI/xejviScriptAdapterMiscRegEx.pas"]
+status = "pending"
+
+[units."xEdit/JvI/xejviScriptAdapterMiscVcl.pas"]
+status = "pending"
+
+[units."xEdit/JvI/xejviScriptAdapterRecord.pas"]
+status = "pending"
+
+[units."xEdit/JvI/xejviScriptAdapterResource.pas"]
+status = "pending"
+
+[units."xEdit/JvI/xejviScriptHost.pas"]
+status = "pending"
+
+[units."xEdit/xeDefines.inc"]
+status = "pending"
+
+[units."xEdit/xeDeveloperMessageForm.pas"]
+status = "pending"
+
+[units."xEdit/xeEditWarningForm.pas"]
+status = "pending"
+
+[units."xEdit/xeElementDetailForm.pas"]
+status = "pending"
+
+[units."xEdit/xeFileSelectForm.pas"]
+status = "pending"
+
+[units."xEdit/xeFilterOptionsForm.pas"]
+status = "pending"
+
+[units."xEdit/xeGameSelectForm.pas"]
+status = "pending"
+
+[units."xEdit/xeInit.pas"]
+status = "pending"
+
+[units."xEdit/xeLODGenForm.pas"]
+status = "pending"
+
+[units."xEdit/xeLegendForm.pas"]
+status = "pending"
+
+[units."xEdit/xeLocalizationForm.pas"]
+status = "pending"
+
+[units."xEdit/xeLocalizePluginForm.pas"]
+status = "pending"
+
+[units."xEdit/xeLogAnalyzerForm.pas"]
+status = "pending"
+
+[units."xEdit/xeMainForm.pas"]
+status = "pending"
+
+[units."xEdit/xeModGroupEditForm.pas"]
+status = "pending"
+
+[units."xEdit/xeModGroupSelectForm.pas"]
+status = "pending"
+
+[units."xEdit/xeModuleSelectForm.pas"]
+status = "pending"
+
+[units."xEdit/xeOptionsForm.pas"]
+status = "pending"
+
+[units."xEdit/xePushLikeButton.pas"]
+status = "pending"
+
+[units."xEdit/xeRichEditForm.pas"]
+status = "pending"
+
+[units."xEdit/xeScriptForm.pas"]
+status = "pending"
+
+[units."xEdit/xeScriptHost.pas"]
+status = "pending"
+
+[units."xEdit/xeTipForm.pas"]
+status = "pending"
+
+[units."xEdit/xeViewElementsForm.pas"]
+status = "pending"
+
+[units."xEdit/xeWaitForm.pas"]
+status = "pending"
+
+[units."xEdit/xeWorldspaceCellDetailsForm.pas"]
+status = "pending"

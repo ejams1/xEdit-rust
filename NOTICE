@@ -1,0 +1,54 @@
+xEdit-rust
+==========
+
+xEdit-rust is a Rust port of xEdit (https://github.com/TES5Edit/TES5Edit),
+created by ElminsterAU and the xEdit contributors. See the upstream README and
+whatsnew.md for per-release attribution.
+
+Licensing
+---------
+
+xEdit is licensed under the Mozilla Public License, v. 2.0 (MPL-2.0). A source
+file in this repository that is translated from, or otherwise derived from, an
+xEdit source file is a Modification of Covered Software under MPL-2.0 sections
+1.10 and 3.1 and remains under MPL-2.0. To keep the whole project under one
+license, original files written for this repository are also released under
+MPL-2.0. The full license text is in the LICENSE file.
+
+Upstream xEdit does not carry the "Incompatible With Secondary Licenses" notice
+(MPL-2.0 Exhibit B), and neither does this repository.
+
+Every source file carries the MPL-2.0 Exhibit A notice:
+
+    // This Source Code Form is subject to the terms of the Mozilla Public
+    // License, v. 2.0. If a copy of the MPL was not distributed with this
+    // file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
+A file ported from upstream also names its upstream origin directly below that
+notice, for example:
+
+    // Ported from xEdit: Core/wbLoadOrder.pas
+
+Third-party code embedded in upstream xEdit
+-------------------------------------------
+
+Some upstream units embed third-party code under other terms. These terms apply
+only when that specific code is ported. The preferred route is to use an
+existing Rust crate instead and not port the unit.
+
+  Core/wbHalfFloat.pas      Neslib.Half, Copyright (c) 2018 Erik van Bilsen,
+                            Simplified BSD License (BSD-2-Clause).
+  Core/wbMeshOptimize.pas   meshoptimizer 0.21, Copyright (c) 2016-2024 Arseny
+                            Kapoulkine, MIT License.
+  Core/wbDiff.pas,          TDiff 3.1, Copyright Angus Johnson,
+  External/Diff/Diff.pas    freeware with its own conditions. Do not port; use
+                            a Rust diff crate.
+  Core/MSHeap.pas           Windows heap memory manager by Roberto Della
+                            Pasqua. Delphi-specific; not ported.
+  External/TOM2/TOM2.pas    Generated COM type library import; not ported.
+
+The upstream Delphi submodules (JCL, JVCL, Virtual-TreeView, DWScript, SynEdit,
+JsonDataObjects, ImagingLib, FileContainer, vcl-styles-utils,
+delphi-detours-library, libdeflate-pas, lz4-delphi) are not ported. Rust crates
+replace them. The license of each crate dependency is checked against the
+allow list in deny.toml.
