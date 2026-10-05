@@ -21,11 +21,14 @@ pub mod integer;
 pub mod len_string;
 pub mod misc;
 pub mod string;
+pub mod struct_def;
 pub mod types;
 
 pub use byte_array::*;
 pub use def::*;
-pub use element::{Container, DataPtr, Element, ElementArg, ElementRef, File, FileRef, MainRecord, MainRecordRef};
+pub use element::{
+    Container, DataContainer, DataPtr, Element, ElementArg, ElementRef, File, FileRef, MainRecord, MainRecordRef,
+};
 pub use enum_def::*;
 pub use flags::*;
 pub use float::*;
@@ -37,4 +40,5 @@ pub use integer::*;
 pub use len_string::*;
 pub use misc::Variant;
 pub use string::*;
+pub use struct_def::{StructDef, StructDefArgs, StructSizeCallback};
 pub use types::*;
