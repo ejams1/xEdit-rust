@@ -19,6 +19,49 @@ pub enum Variant {
     Str(String),
 }
 
+impl Variant {
+    /// The value when `VarIsOrdinal` holds, converted as `Int64(variant)`.
+    pub fn as_ordinal(&self) -> Option<i64> {
+        match self {
+            Variant::Bool(value) => Some(if *value { -1 } else { 0 }),
+            Variant::Int(value) => Some(*value),
+            Variant::UInt(value) => Some(*value as i64),
+            Variant::Empty | Variant::Float(_) | Variant::Str(_) => None,
+        }
+    }
+}
+
+/// Port of `StrToIntDef` with a 32-bit result: decimal digits with an optional
+/// sign, or hexadecimal digits after `$` or `0x`.
+pub fn str_to_int_def(text: &str, default: i32) -> i32 {
+    let text = text.trim_start_matches(' ');
+    let (negative, digits) = match text.as_bytes().first() {
+        Some(b'-') => (true, &text[1..]),
+        Some(b'+') => (false, &text[1..]),
+        _ => (false, text),
+    };
+    let hex = digits
+        .strip_prefix('$')
+        .or_else(|| digits.strip_prefix("0x"))
+        .or_else(|| digits.strip_prefix("0X"));
+    let parsed = match hex {
+        // Eight hexadecimal digits fill the 32 bits, sign bit included.
+        Some(hex) if !hex.is_empty() && hex.bytes().all(|b| b.is_ascii_hexdigit()) => {
+            u32::from_str_radix(hex, 16).ok().map(|value| {
+                let value = value as i32;
+                if negative { value.wrapping_neg() } else { value }
+            })
+        }
+        Some(_) => None,
+        None if !digits.is_empty() && digits.bytes().all(|b| b.is_ascii_digit()) => {
+            let sign = if negative { "-" } else { "" };
+            format!("{sign}{digits}").parse::<i32>().ok()
+        }
+        None => None,
+    };
+    parsed.unwrap_or(default)
+}
+
 /// Length of a Delphi `string`: the number of UTF-16 code units.
 pub fn length(text: &str) -> usize {
     text.encode_utf16().count()
@@ -183,6 +226,21 @@ mod tests {
         assert_eq!(get_unknown_int_string(0x4100_0000), "<Unknown: 1090519040 $41000000 >");
         super::super::globals::set_extended_int_unknowns(false);
         assert_eq!(get_unknown_int_string(5), "<Unknown: 5>");
+    }
+
+    #[test]
+    fn str_to_int_def_forms() {
+        assert_eq!(str_to_int_def("42", -1), 42);
+        assert_eq!(str_to_int_def("-42", -1), -42);
+        assert_eq!(str_to_int_def("$1F", 0), 31);
+        assert_eq!(str_to_int_def("0x10", 0), 16);
+        assert_eq!(str_to_int_def("$FFFFFFFF", 0), -1);
+        assert_eq!(str_to_int_def("$100000000", 7), 7);
+        assert_eq!(str_to_int_def("", 7), 7);
+        assert_eq!(str_to_int_def("12a", 7), 7);
+        assert_eq!(str_to_int_def("99999999999", 7), 7);
+        assert_eq!(Variant::UInt(5).as_ordinal(), Some(5));
+        assert_eq!(Variant::Str("5".to_owned()).as_ordinal(), None);
     }
 
     #[test]
