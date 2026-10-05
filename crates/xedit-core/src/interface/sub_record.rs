@@ -167,7 +167,6 @@ macro_rules! record_member_plumbing {
         }
     };
 }
-#[allow(unused_imports)]
 pub(crate) use record_member_plumbing;
 
 /// Upstream `TwbSubRecordDef`: a subrecord with one value.
