@@ -7,10 +7,16 @@
 //! Port of `wbInterface.pas`, split into submodules that follow the order of
 //! the upstream unit.
 
+pub mod def;
+pub mod element;
 pub mod form_id;
 pub mod globals;
+pub mod misc;
 pub mod types;
 
+pub use def::*;
+pub use element::{DataPtr, Element, ElementArg, ElementRef};
 pub use form_id::{CRC32, FileID, FormID, ModuleType, ObjectIDOutOfBounds, SlotCounts};
 pub use globals::{GameMode, ToolMode, ToolSource};
+pub use misc::Variant;
 pub use types::*;

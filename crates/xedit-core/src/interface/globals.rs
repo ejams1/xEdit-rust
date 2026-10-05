@@ -543,8 +543,32 @@ pub fn is_update_supported() -> bool {
     matches!(game_mode(), GameMode::gmSF1) || has_added_update_support()
 }
 
+#[allow(non_upper_case_globals)]
+static _InternalEditCount: AtomicI32 = AtomicI32::new(0);
+#[allow(non_upper_case_globals)]
+static _BlockInternalEdit: AtomicBool = AtomicBool::new(false);
+
+/// Port of `wbBeginInternalEdit`. Each `true` result needs one [`end_internal_edit`].
+pub fn begin_internal_edit(force: bool) -> bool {
+    let result = edit_allowed() || ((allow_internal_edit() || force) && !_BlockInternalEdit.load(Ordering::Relaxed));
+    if result {
+        _InternalEditCount.fetch_add(1, Ordering::Relaxed);
+    }
+    result
+}
+
+pub fn end_internal_edit() {
+    _InternalEditCount.fetch_sub(1, Ordering::Relaxed);
+}
+
+pub fn is_internal_edit() -> bool {
+    _InternalEditCount.load(Ordering::Relaxed) > 0
+}
+
 /// Restores every setting of this module to its upstream default.
 pub fn reset() {
+    _InternalEditCount.store(0, Ordering::Relaxed);
+    _BlockInternalEdit.store(false, Ordering::Relaxed);
     reset_globals();
     reset_string_globals();
     set_game_mode(GameMode::gmTES3);
