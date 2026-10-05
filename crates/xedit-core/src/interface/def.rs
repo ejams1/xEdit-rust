@@ -43,6 +43,7 @@ use super::globals::{
 };
 use super::integer::{IntegerDefFormater, IntegerDefInterface};
 use super::misc::{Variant, shorten_text};
+use super::string::{StringDef, StringDefFormater};
 use super::types::{
     CallbackType, ConflictPriority, DefFlag, DefFlags, DefType, EditType, EnumSet, PascalEnum, def_flags_dont_clone,
     def_flags_inherit_down, def_flags_inherit_up,
@@ -284,6 +285,14 @@ pub trait Def: Send + Sync + 'static {
     }
 
     fn as_byte_array_def(&self) -> Option<&ByteArrayDef> {
+        None
+    }
+
+    fn as_string_def(&self) -> Option<&StringDef> {
+        None
+    }
+
+    fn into_string_def_formater(self: Arc<Self>) -> Option<Arc<dyn StringDefFormater>> {
         None
     }
 

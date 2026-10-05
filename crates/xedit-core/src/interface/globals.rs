@@ -13,8 +13,10 @@
 //! mode, as upstream does. Tests that change a setting must hold
 //! [`test_lock`] so that they do not run in parallel.
 
-use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU8, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU8, AtomicU32, Ordering};
 use std::sync::{Mutex, MutexGuard, RwLock};
+
+use xedit_io::Encoding;
 
 macro_rules! atomic_type {
     (bool) => {
@@ -543,6 +545,56 @@ pub fn is_update_supported() -> bool {
     matches!(game_mode(), GameMode::gmSF1) || has_added_update_support()
 }
 
+/// An encoding as an integer: 0 is UTF-8, any other value a code page.
+fn encoding_to_bits(encoding: Encoding) -> u32 {
+    match encoding {
+        Encoding::Utf8 => 0,
+        Encoding::Mbcs(code_page) => code_page,
+    }
+}
+
+fn encoding_from_bits(bits: u32) -> Encoding {
+    if bits == 0 {
+        Encoding::Utf8
+    } else {
+        Encoding::Mbcs(bits)
+    }
+}
+
+#[allow(non_upper_case_globals)]
+static wbEncoding: AtomicU32 = AtomicU32::new(1252);
+#[allow(non_upper_case_globals)]
+static wbEncodingTrans: AtomicU32 = AtomicU32::new(1252);
+#[allow(non_upper_case_globals)]
+static wbEncodingVMAD: AtomicU32 = AtomicU32::new(0);
+
+/// Upstream `wbEncoding`: the encoding of strings that are not translated.
+pub fn encoding() -> Encoding {
+    encoding_from_bits(wbEncoding.load(Ordering::Relaxed))
+}
+
+pub fn set_encoding(value: Encoding) {
+    wbEncoding.store(encoding_to_bits(value), Ordering::Relaxed);
+}
+
+/// Upstream `wbEncodingTrans`: the encoding of translatable strings.
+pub fn encoding_trans() -> Encoding {
+    encoding_from_bits(wbEncodingTrans.load(Ordering::Relaxed))
+}
+
+pub fn set_encoding_trans(value: Encoding) {
+    wbEncodingTrans.store(encoding_to_bits(value), Ordering::Relaxed);
+}
+
+/// Upstream `wbEncodingVMAD`: the encoding of script data.
+pub fn encoding_vmad() -> Encoding {
+    encoding_from_bits(wbEncodingVMAD.load(Ordering::Relaxed))
+}
+
+pub fn set_encoding_vmad(value: Encoding) {
+    wbEncodingVMAD.store(encoding_to_bits(value), Ordering::Relaxed);
+}
+
 #[allow(non_upper_case_globals)]
 static _InternalEditCount: AtomicI32 = AtomicI32::new(0);
 #[allow(non_upper_case_globals)]
@@ -567,6 +619,9 @@ pub fn is_internal_edit() -> bool {
 
 /// Restores every setting of this module to its upstream default.
 pub fn reset() {
+    set_encoding(Encoding::Mbcs(1252));
+    set_encoding_trans(Encoding::Mbcs(1252));
+    set_encoding_vmad(Encoding::Utf8);
     _InternalEditCount.store(0, Ordering::Relaxed);
     _BlockInternalEdit.store(false, Ordering::Relaxed);
     reset_globals();

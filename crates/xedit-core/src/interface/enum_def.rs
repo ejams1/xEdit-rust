@@ -15,6 +15,7 @@ use super::formaters::{editable_unless_internal_only, formater_impls, formater_p
 use super::globals::{report_mode, report_unknown_enums, show_flag_enum_value};
 use super::integer::{IntegerDefFormater, integer_def_formater_create};
 use super::misc::{get_unknown_int_string, int_to_hex64};
+use super::string::StringDefFormater;
 use super::types::{DefType, EditType};
 
 /// A name of an enumeration that is not in the dense list. Upstream `TwbSparseName`.
@@ -296,9 +297,39 @@ impl Def for EnumDef {
     fn as_enum_def(&self) -> Option<&EnumDef> {
         Some(self)
     }
+
+    fn into_string_def_formater(self: Arc<Self>) -> Option<Arc<dyn StringDefFormater>> {
+        Some(self)
+    }
 }
 
 formater_impls!(EnumDef);
+
+impl StringDefFormater for EnumDef {
+    fn str_to_string(&self, string: &str, element: ElementArg, for_summary: bool) -> String {
+        self.string_to_string(string, element, for_summary)
+    }
+
+    fn str_to_sort_key(&self, string: &str, element: ElementArg) -> String {
+        self.string_to_sort_key(string, element)
+    }
+
+    fn str_check(&self, string: &str, element: ElementArg) -> String {
+        self.string_check(string, element)
+    }
+
+    fn str_get_edit_type(&self, _element: ElementArg) -> EditType {
+        EditType::etComboBox
+    }
+
+    fn str_get_edit_info(&self, _element: ElementArg) -> Vec<String> {
+        self.en_edit_info.clone()
+    }
+
+    fn str_to_edit_value(&self, string: &str, element: ElementArg) -> String {
+        self.string_to_edit_value(string, element)
+    }
+}
 
 impl IntegerDefFormater for EnumDef {
     fn to_string(&self, int: i64, element: ElementArg, for_summary: bool) -> String {
