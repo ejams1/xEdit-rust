@@ -17,6 +17,7 @@ pub mod form_id;
 pub mod formaters;
 pub mod globals;
 pub mod integer;
+pub mod len_string;
 pub mod misc;
 pub mod string;
 pub mod types;
@@ -31,6 +32,7 @@ pub use form_id::{CRC32, FileID, FormID, ModuleType, ObjectIDOutOfBounds, SlotCo
 pub use formaters::*;
 pub use globals::{GameMode, ToolMode, ToolSource};
 pub use integer::*;
+pub use len_string::*;
 pub use misc::Variant;
 pub use string::*;
 pub use types::*;

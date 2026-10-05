@@ -170,16 +170,8 @@ impl StringDef {
         this
     }
 
-    /// Port of `bsdGetEncoding`.
     fn bsd_get_encoding(&self, element: ElementArg) -> Encoding {
-        if let Some(encoding) = self.bsd_encoding_override.load().as_deref() {
-            return *encoding;
-        }
-        let translatable = self.def.def_flags.contains(DefFlag::dfTranslatable);
-        if let Some(file) = element.and_then(|element| element.get_file()) {
-            return file.get_encoding(translatable);
-        }
-        if translatable { encoding_trans() } else { encoding() }
+        bsd_get_encoding(&self.def, &self.bsd_encoding_override, element)
     }
 
     /// Whether `element` stores an ID into the string tables.
@@ -511,44 +503,77 @@ impl ValueDef for StringDef {
     }
 
     fn get_edit_type(&self, data: DataPtr, element: ElementArg) -> EditType {
-        let mut result = match self.bsd_formater.load().as_deref() {
-            Some(formater) => formater.str_get_edit_type(element),
-            None => EditType::etDefault,
-        };
-        if let Some(to_str) = self.nd.nd_to_str.load().as_deref() {
-            let mut text = match result {
-                EditType::etComboBox => "ComboBox",
-                EditType::etCheckComboBox => "CheckComboBox",
-                EditType::etDefault => "",
-            }
-            .to_owned();
-            to_str(&mut text, data, element, CallbackType::ctEditType);
-            result = if text.eq_ignore_ascii_case("ComboBox") {
-                EditType::etComboBox
-            } else if text.eq_ignore_ascii_case("CheckComboBox") {
-                EditType::etCheckComboBox
-            } else {
-                EditType::etDefault
-            };
-        }
-        result
+        base_string_get_edit_type(&self.nd, &self.bsd_formater, data, element)
     }
 
     fn get_edit_info(&self, data: DataPtr, element: ElementArg) -> Vec<String> {
-        if let Some(edit_info) = self.vd.vd_edit_info.load().as_deref() {
-            return edit_info.clone();
-        }
-        let mut result = match self.bsd_formater.load().as_deref() {
-            Some(formater) => formater.str_get_edit_info(element),
-            None => Vec::new(),
-        };
-        if let Some(to_str) = self.nd.nd_to_str.load().as_deref() {
-            let mut text = to_comma_text(&result);
-            to_str(&mut text, data, element, CallbackType::ctEditInfo);
-            result = comma_text(&text);
-        }
-        result
+        base_string_get_edit_info(&self.nd, &self.vd, &self.bsd_formater, data, element)
     }
+}
+
+/// Port of `TwbBaseStringDef.bsdGetEncoding`.
+pub(crate) fn bsd_get_encoding(def: &DefBase, encoding_override: &DefCell<Encoding>, element: ElementArg) -> Encoding {
+    if let Some(encoding) = encoding_override.load().as_deref() {
+        return *encoding;
+    }
+    let translatable = def.def_flags.contains(DefFlag::dfTranslatable);
+    if let Some(file) = element.and_then(|element| element.get_file()) {
+        return file.get_encoding(translatable);
+    }
+    if translatable { encoding_trans() } else { encoding() }
+}
+
+/// Port of `TwbBaseStringDef.GetEditType`.
+pub(crate) fn base_string_get_edit_type(
+    nd: &NamedDefBase,
+    formater: &DefCell<Arc<dyn StringDefFormater>>,
+    data: DataPtr,
+    element: ElementArg,
+) -> EditType {
+    let mut result = match formater.load().as_deref() {
+        Some(formater) => formater.str_get_edit_type(element),
+        None => EditType::etDefault,
+    };
+    if let Some(to_str) = nd.nd_to_str.load().as_deref() {
+        let mut text = match result {
+            EditType::etComboBox => "ComboBox",
+            EditType::etCheckComboBox => "CheckComboBox",
+            EditType::etDefault => "",
+        }
+        .to_owned();
+        to_str(&mut text, data, element, CallbackType::ctEditType);
+        result = if text.eq_ignore_ascii_case("ComboBox") {
+            EditType::etComboBox
+        } else if text.eq_ignore_ascii_case("CheckComboBox") {
+            EditType::etCheckComboBox
+        } else {
+            EditType::etDefault
+        };
+    }
+    result
+}
+
+/// Port of `TwbBaseStringDef.GetEditInfo`.
+pub(crate) fn base_string_get_edit_info(
+    nd: &NamedDefBase,
+    vd: &ValueDefBase,
+    formater: &DefCell<Arc<dyn StringDefFormater>>,
+    data: DataPtr,
+    element: ElementArg,
+) -> Vec<String> {
+    if let Some(edit_info) = vd.vd_edit_info.load().as_deref() {
+        return edit_info.clone();
+    }
+    let mut result = match formater.load().as_deref() {
+        Some(formater) => formater.str_get_edit_info(element),
+        None => Vec::new(),
+    };
+    if let Some(to_str) = nd.nd_to_str.load().as_deref() {
+        let mut text = to_comma_text(&result);
+        to_str(&mut text, data, element, CallbackType::ctEditInfo);
+        result = comma_text(&text);
+    }
+    result
 }
 
 /// Port of reading `TStrings.CommaText`: items separated by commas, an item
