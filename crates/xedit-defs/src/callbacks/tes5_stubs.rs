@@ -377,11 +377,6 @@ pub fn wb_flstlnam_is_sorted(_a_container: ElementArg) -> bool {
     todo!("port wbFLSTLNAMIsSorted from wbDefinitionsTES5.pas line 1239")
 }
 
-/// Upstream `wbGMSTUnionDecider`, line 271 of `wbDefinitionsTES5.pas`.
-pub fn wb_gmst_union_decider(_a_base_ptr: DataPtr, _a_element: ElementArg) -> i32 {
-    todo!("port wbGMSTUnionDecider from wbDefinitionsTES5.pas line 271")
-}
-
 /// Upstream `wbGMSTEDIDAfterSet`, line 1021 of `wbDefinitionsTES5.pas`.
 pub fn wb_gmstedid_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
     todo!("port wbGMSTEDIDAfterSet from wbDefinitionsTES5.pas line 1021")

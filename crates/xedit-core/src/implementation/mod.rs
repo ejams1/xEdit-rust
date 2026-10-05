@@ -17,8 +17,30 @@ fn not_ported(what: &str) -> ! {
     unimplemented!("{what}: the values of the element tree are not ported yet")
 }
 
+/// The value accessors of an element without a value.
+macro_rules! element_no_values {
+    (with_values) => {
+        fn get_value_def(&self) -> Option<Arc<dyn ValueDef>> {
+            None
+        }
+
+        fn get_native_value(&self) -> Variant {
+            Variant::Empty
+        }
+
+        fn get_edit_value(&self) -> String {
+            String::new()
+        }
+    };
+    (own_values) => {};
+}
+
 macro_rules! element_common {
-    () => {
+    ($base:ident) => {
+        element_common!($base, with_values);
+    };
+    ($base:ident, $values:ident) => {
+        element_no_values!($values);
         fn get_element_id(&self) -> usize {
             std::ptr::from_ref(self) as *const () as usize
         }
@@ -33,31 +55,19 @@ macro_rules! element_common {
             None
         }
 
-        fn get_value_def(&self) -> Option<Arc<dyn ValueDef>> {
-            None
-        }
-
-        fn get_native_value(&self) -> Variant {
-            Variant::Empty
-        }
-
-        fn get_edit_value(&self) -> String {
-            String::new()
-        }
-
         fn get_container(&self) -> Option<ElementRef> {
-            self.base.container()
+            self.$base().container()
         }
 
         fn get_full_path(&self) -> String {
-            match self.base.container() {
+            match self.$base().container() {
                 Some(container) => format!("{} \\ {}", container.get_full_path(), self.get_name()),
                 None => self.get_name(),
             }
         }
 
         fn get_path(&self) -> String {
-            match self.base.container() {
+            match self.$base().container() {
                 Some(container) => format!("{} \\ {}", container.get_path(), self.get_name()),
                 None => self.get_name(),
             }
@@ -82,6 +92,7 @@ macro_rules! element_common {
 }
 
 pub mod sub_record;
+pub mod value;
 
 use std::path::Path;
 use std::sync::atomic::{AtomicI32, Ordering};
@@ -117,6 +128,41 @@ impl FileBytes {
             FileBytes::Mapped(map) => map,
             FileBytes::Owned(bytes) => bytes,
         }
+    }
+}
+
+/// The bytes an element reads its data from: the file, or the decompressed
+/// data of a record.
+#[derive(Clone)]
+pub enum DataBlock {
+    File(Arc<FileBytes>),
+    Buffer(Arc<Vec<u8>>),
+}
+
+impl DataBlock {
+    pub fn as_slice(&self) -> &[u8] {
+        match self {
+            DataBlock::File(bytes) => bytes.as_slice(),
+            DataBlock::Buffer(bytes) => bytes,
+        }
+    }
+}
+
+/// Port of `ElementByPath`: the names separated by `\`, with `[n]` for the
+/// element at a position.
+pub(crate) fn element_by_path(container: &dyn Container, path: &str) -> Option<ElementRef> {
+    let (first, rest) = match path.split_once('\\') {
+        Some((first, rest)) => (first, Some(rest)),
+        None => (path, None),
+    };
+    let element = if let Some(index) = first.strip_prefix('[').and_then(|index| index.strip_suffix(']')) {
+        container.get_element(index.parse().ok()?)
+    } else {
+        container.get_element_by_name(first)
+    }?;
+    match rest {
+        Some(rest) => element.as_container()?.get_element_by_path(rest),
+        None => Some(element),
     }
 }
 
@@ -486,7 +532,7 @@ pub struct MainRecordImpl {
     dc_data_base: usize,
     dc_data_end: usize,
     /// The decompressed data of a compressed record, decompressed on first use.
-    mr_data_storage: OnceLock<Option<Vec<u8>>>,
+    mr_data_storage: OnceLock<Option<Arc<Vec<u8>>>>,
     /// Port of `DoInit`: the subrecords are built on first use.
     mr_init: OnceLock<()>,
     mr_editor_id: RwLock<String>,
@@ -557,16 +603,6 @@ impl MainRecordImpl {
         self.mr_def.as_ref()
     }
 
-    /// The offset of the record data in the bytes of the file. The data of
-    /// a compressed record starts at 0 in its own storage.
-    pub(crate) fn data_start(&self) -> usize {
-        if self.mr_struct.flags.is_compressed() {
-            0
-        } else {
-            self.dc_data_base
-        }
-    }
-
     pub(crate) fn set_editor_id(&self, editor_id: String) {
         *self.mr_editor_id.write().unwrap() = editor_id;
     }
@@ -593,11 +629,11 @@ impl MainRecordImpl {
             .get_or_init(|| {
                 let uncompressed_length = u32::from_le_bytes(raw.get(..4)?.try_into().ok()?) as usize;
                 if uncompressed_length == 0 {
-                    return Some(Vec::new());
+                    return Some(Arc::new(Vec::new()));
                 }
                 let mut storage = vec![0u8; uncompressed_length];
                 match xedit_io::CompressionType::ZLib.decompress(raw.get(4..)?, &mut storage) {
-                    Ok(()) => Some(storage),
+                    Ok(()) => Some(Arc::new(storage)),
                     Err(error) => {
                         progress(&format!(
                             "<Error decompressing [{}:{}]: {error}>",
@@ -609,6 +645,19 @@ impl MainRecordImpl {
                 }
             })
             .as_deref()
+            .map(Vec::as_slice)
+    }
+
+    /// The block the data of the record lives in, with the data range.
+    pub(crate) fn data_block(&self) -> Option<(DataBlock, usize, usize)> {
+        if self.mr_struct.flags.is_compressed() {
+            self.data()?;
+            let storage = self.mr_data_storage.get()?.clone()?;
+            let len = storage.len();
+            Some((DataBlock::Buffer(storage), 0, len))
+        } else {
+            Some((DataBlock::File(self.bytes.clone()), self.dc_data_base, self.dc_data_end))
+        }
     }
 }
 
@@ -657,7 +706,7 @@ impl ElementImplCasts for ElementRef {
 }
 
 impl Element for FileImpl {
-    element_common!();
+    element_common!(element_base);
 
     fn get_name(&self) -> String {
         path_file_name(&self.fl_file_name).to_owned()
@@ -789,7 +838,7 @@ impl File for FileImpl {
 }
 
 impl Element for GroupRecordImpl {
-    element_common!();
+    element_common!(element_base);
 
     fn get_name(&self) -> String {
         self.gr_struct.name()
@@ -868,7 +917,7 @@ impl Container for GroupRecordImpl {
 }
 
 impl Element for MainRecordImpl {
-    element_common!();
+    element_common!(element_base);
 
     /// Port of `TwbMainRecord.GetName` without the editor ID and the name
     /// of the record, which need the subrecords.
@@ -890,6 +939,10 @@ impl Element for MainRecordImpl {
 
     fn get_def(&self) -> Option<Arc<dyn NamedDef>> {
         Some(self.mr_def.clone()? as Arc<dyn NamedDef>)
+    }
+
+    fn get_record_signature(&self) -> Option<Signature> {
+        Some(self.mr_struct.signature)
     }
 
     fn get_file(&self) -> Option<FileRef> {
@@ -932,8 +985,9 @@ impl ElementImpl for MainRecordImpl {
 }
 
 impl Container for MainRecordImpl {
-    fn get_element_native_value(&self, _path: &str) -> Variant {
-        not_ported("ElementNativeValues of a main record")
+    fn get_element_native_value(&self, path: &str) -> Variant {
+        self.get_element_by_path(path)
+            .map_or(Variant::Empty, |element| element.get_native_value())
     }
 
     fn get_element_by_name(&self, name: &str) -> Option<ElementRef> {
@@ -945,7 +999,7 @@ impl Container for MainRecordImpl {
     }
 
     fn get_element_by_path(&self, path: &str) -> Option<ElementRef> {
-        self.get_element_by_name(path)
+        element_by_path(self, path)
     }
 
     fn get_element_count(&self) -> i32 {

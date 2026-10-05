@@ -20,15 +20,23 @@ use crate::interface::sub_record_group::RecordDef;
 use crate::interface::types::{ConflictPriority, DefFlag, DefType, ElementType, Signature, TriBool};
 
 use super::structs::SubRecordHeaderStruct;
-use super::{ContainerBase, ElementBase, ElementImpl, FileBytes, MainRecordImpl};
+use super::value::{Cursor, array_do_init, create_value_element, resolve, struct_do_init, union_do_init};
+use super::{ContainerBase, DataBlock, ElementBase, ElementImpl, MainRecordImpl};
+use std::sync::OnceLock;
 
 /// Port of `TwbSubRecord`.
 pub struct SubRecordImpl {
+    self_ref: Weak<SubRecordImpl>,
     pub(super) base: ElementBase,
     pub(super) container: ContainerBase,
     file: Weak<super::FileImpl>,
-    bytes: Arc<FileBytes>,
+    block: DataBlock,
     sr_struct: SubRecordHeaderStruct,
+    /// Port of `DoInit`: the value elements are built once.
+    sr_init: OnceLock<()>,
+    /// Port of `srValueDef`: the resolved value definition, when the value
+    /// has no name and its elements live in the subrecord itself.
+    sr_value_def: RwLock<Option<Arc<dyn ValueDef>>>,
     /// The range of the subrecord data in `bytes`, after the header.
     dc_data_base: usize,
     dc_data_end: usize,
@@ -43,7 +51,7 @@ impl SubRecordImpl {
     /// and the `XXXX` leaves the container.
     pub(super) fn create(
         file: &Arc<super::FileImpl>,
-        bytes: &Arc<FileBytes>,
+        block: &DataBlock,
         container: &ElementRef,
         container_base: &ContainerBase,
         data: &[u8],
@@ -66,12 +74,15 @@ impl SubRecordImpl {
         }
         let dc_data_base = *offset + SubRecordHeaderStruct::SIZE;
         let dc_data_end = (dc_data_base + data_size).min(data_start + data.len());
-        let sub_record = Arc::new(SubRecordImpl {
+        let sub_record = Arc::new_cyclic(|self_ref: &Weak<SubRecordImpl>| SubRecordImpl {
+            self_ref: self_ref.clone(),
             base: ElementBase::new(Some(container)),
             container: ContainerBase::default(),
             file: Arc::downgrade(file),
-            bytes: bytes.clone(),
+            block: block.clone(),
             sr_struct: header,
+            sr_init: OnceLock::new(),
+            sr_value_def: RwLock::new(None),
             dc_data_base,
             dc_data_end,
             sr_def: RwLock::new(None),
@@ -98,7 +109,62 @@ impl SubRecordImpl {
     }
 
     pub fn data(&self) -> DataPtr<'_> {
-        self.bytes.as_slice().get(self.dc_data_base..self.dc_data_end)
+        self.block.as_slice().get(self.dc_data_base..self.dc_data_end)
+    }
+
+    fn element_ref(&self) -> ElementRef {
+        self.self_ref.upgrade().expect("a subrecord is alive while it is used")
+    }
+
+    /// Port of `TwbSubRecord.Init`: the value elements of the subrecord.
+    pub fn do_init(&self) {
+        self.sr_init.get_or_init(|| {
+            if self.skipped() {
+                return;
+            }
+            let Some(def) = self.def() else { return };
+            let Some(sub_record_def) = def.as_sub_record_def() else {
+                return;
+            };
+            let Some(value) = sub_record_def.get_value() else {
+                return;
+            };
+            let self_ref = self.element_ref();
+            let mut cursor = Cursor {
+                block: self.block.clone(),
+                pos: self.dc_data_base,
+                end: self.dc_data_end,
+            };
+            let value_def = resolve(value.clone(), cursor.data(), Some(&self_ref));
+            if value_def.get_name().is_empty() || value.def_base().def_flags.contains(DefFlag::dfUnionStaticResolve) {
+                *self.sr_value_def.write().unwrap() = Some(value_def.clone());
+                match value_def.get_def_type() {
+                    DefType::dtArray => {
+                        array_do_init(&value_def, &self_ref, &self.file, &mut cursor);
+                    }
+                    DefType::dtStruct | DefType::dtStructChapter => {
+                        struct_do_init(&value_def, &self_ref, &self.file, &mut cursor)
+                    }
+                    DefType::dtUnion => {
+                        if let Some(resolved) = union_do_init(&value_def, &self_ref, &self.file, &mut cursor) {
+                            *self.sr_value_def.write().unwrap() = Some(resolved);
+                        }
+                    }
+                    _ => {}
+                }
+            } else {
+                create_value_element(&self_ref, &self.file, &mut cursor, value_def, "");
+            }
+        });
+    }
+
+    /// The value definition the subrecord data is read with.
+    fn value_def(&self) -> Option<Arc<dyn ValueDef>> {
+        self.do_init();
+        if let Some(resolved) = self.sr_value_def.read().unwrap().clone() {
+            return Some(resolved);
+        }
+        self.def()?.as_sub_record_def()?.get_value()
     }
 
     pub fn def(&self) -> Option<Arc<dyn RecordMemberDef>> {
@@ -334,15 +400,16 @@ impl SubRecordStructImpl {
 pub(super) fn init_main_record(record: &Arc<MainRecordImpl>) {
     let Some(file) = record.file.upgrade() else { return };
     let self_ref: ElementRef = record.clone();
-    let Some(data) = record.data() else { return };
-    let data_start = record.data_start();
+    let Some((block, data_start, end)) = record.data_block() else {
+        return;
+    };
+    let data = &block.as_slice()[data_start..end];
     let mut offset = data_start;
-    let end = data_start + data.len();
     let ignored = ignore_records();
     while offset < end {
         let Some(sub_record) = SubRecordImpl::create(
             &file,
-            &record.bytes,
+            &block,
             &self_ref,
             &record.container,
             data,
@@ -503,7 +570,7 @@ impl SetOrders for ElementRef {
 }
 
 impl Element for SubRecordImpl {
-    element_common!();
+    element_common!(element_base, own_values);
 
     /// Port of `TwbSubRecord.GetName`: the signature and the name of the
     /// definition.
@@ -524,6 +591,39 @@ impl Element for SubRecordImpl {
 
     fn get_def(&self) -> Option<Arc<dyn NamedDef>> {
         Some(self.def()? as Arc<dyn NamedDef>)
+    }
+
+    fn get_value_def(&self) -> Option<Arc<dyn ValueDef>> {
+        self.value_def()
+    }
+
+    fn get_record_signature(&self) -> Option<Signature> {
+        Some(self.sr_struct.signature)
+    }
+
+    /// Port of `TwbSubRecord.GetValue`: the value of the subrecord data.
+    fn get_value(&self) -> String {
+        let Some(value_def) = self.value_def() else {
+            return String::new();
+        };
+        let self_ref = self.element_ref();
+        value_def.to_string(self.data(), Some(&self_ref))
+    }
+
+    fn get_edit_value(&self) -> String {
+        let Some(value_def) = self.value_def() else {
+            return String::new();
+        };
+        let self_ref = self.element_ref();
+        value_def.to_edit_value(self.data(), Some(&self_ref))
+    }
+
+    fn get_native_value(&self) -> Variant {
+        let Some(value_def) = self.value_def() else {
+            return Variant::Empty;
+        };
+        let self_ref = self.element_ref();
+        value_def.to_native_value(self.data(), Some(&self_ref))
     }
 
     fn get_file(&self) -> Option<FileRef> {
@@ -564,12 +664,14 @@ impl DataContainer for SubRecordImpl {
 }
 
 macro_rules! container_by_elements {
-    () => {
-        fn get_element_native_value(&self, _path: &str) -> Variant {
-            Variant::Empty
+    ($init:ident) => {
+        fn get_element_native_value(&self, path: &str) -> Variant {
+            self.get_element_by_path(path)
+                .map_or(Variant::Empty, |element| element.get_native_value())
         }
 
         fn get_element_by_name(&self, name: &str) -> Option<ElementRef> {
+            self.$init();
             self.container
                 .elements()
                 .into_iter()
@@ -577,14 +679,16 @@ macro_rules! container_by_elements {
         }
 
         fn get_element_by_path(&self, path: &str) -> Option<ElementRef> {
-            self.get_element_by_name(path)
+            super::element_by_path(self, path)
         }
 
         fn get_element_count(&self) -> i32 {
+            self.$init();
             self.container.elements().len() as i32
         }
 
         fn get_element(&self, index: i32) -> Option<ElementRef> {
+            self.$init();
             self.container
                 .elements()
                 .get(usize::try_from(index).ok()?)
@@ -606,11 +710,11 @@ macro_rules! container_by_elements {
 }
 
 impl Container for SubRecordImpl {
-    container_by_elements!();
+    container_by_elements!(do_init);
 }
 
 impl Element for SubRecordArrayImpl {
-    element_common!();
+    element_common!(element_base);
 
     fn get_name(&self) -> String {
         self.arc_def.get_name().to_owned()
@@ -659,12 +763,16 @@ impl ElementImpl for SubRecordArrayImpl {
     }
 }
 
+impl SubRecordArrayImpl {
+    fn no_init(&self) {}
+}
+
 impl Container for SubRecordArrayImpl {
-    container_by_elements!();
+    container_by_elements!(no_init);
 }
 
 impl Element for SubRecordStructImpl {
-    element_common!();
+    element_common!(element_base);
 
     fn get_name(&self) -> String {
         self.src_def.get_name().to_owned()
@@ -709,6 +817,10 @@ impl ElementImpl for SubRecordStructImpl {
     }
 }
 
+impl SubRecordStructImpl {
+    fn no_init(&self) {}
+}
+
 impl Container for SubRecordStructImpl {
-    container_by_elements!();
+    container_by_elements!(no_init);
 }
