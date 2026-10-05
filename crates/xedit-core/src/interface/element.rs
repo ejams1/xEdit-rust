@@ -17,7 +17,7 @@ use xedit_io::Encoding;
 use super::def::{NamedDef, ValueDef};
 use super::form_id::FormID;
 use super::misc::Variant;
-use super::types::{ElementType, TriBool};
+use super::types::{ConflictPriority, ElementType, TriBool};
 
 /// A reference to an element, upstream `IwbElement`.
 pub type ElementRef = Arc<dyn Element>;
@@ -64,6 +64,15 @@ pub trait Element: Send + Sync {
     /// Whether the element stores an ID into the string tables.
     fn get_localized(&self) -> TriBool;
 
+    fn get_conflict_priority(&self) -> ConflictPriority;
+
+    fn get_dont_show(&self) -> bool;
+
+    /// `Supports(element, IwbDataContainer)`.
+    fn as_data_container(&self) -> Option<&dyn DataContainer> {
+        None
+    }
+
     /// `Supports(element, IwbContainer)`.
     fn as_container(&self) -> Option<&dyn Container> {
         None
@@ -88,4 +97,21 @@ pub trait Container: Element {
     /// Upstream `ElementNativeValues[aPath]`: the native value of the element
     /// at `path`, or an empty variant when there is none.
     fn get_element_native_value(&self, path: &str) -> Variant;
+
+    fn get_element_count(&self) -> i32;
+
+    /// Upstream `Elements[aIndex]`.
+    fn get_element(&self, index: i32) -> Option<ElementRef>;
+
+    /// Upstream `ElementBySortOrder[aSortOrder]`.
+    fn get_element_by_sort_order(&self, sort_order: i32) -> Option<ElementRef>;
+
+    /// Number of elements before the ones of the definition, such as a record header.
+    fn get_additional_element_count(&self) -> i32;
+}
+
+/// Upstream `IwbDataContainer`: a container that owns a range of data.
+pub trait DataContainer: Container {
+    /// The bytes from upstream `DataBasePtr` up to `DataEndPtr`.
+    fn get_data(&self) -> DataPtr<'_>;
 }

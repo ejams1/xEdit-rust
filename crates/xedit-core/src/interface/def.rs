@@ -46,6 +46,7 @@ use super::integer::{IntegerDefFormater, IntegerDefInterface};
 use super::len_string::LenStringDef;
 use super::misc::{Variant, shorten_text};
 use super::string::{StringDef, StringDefFormater};
+use super::struct_def::StructDef;
 use super::types::{
     CallbackType, ConflictPriority, DefFlag, DefFlags, DefType, EditType, EnumSet, PascalEnum, def_flags_dont_clone,
     def_flags_inherit_down, def_flags_inherit_up,
@@ -299,6 +300,10 @@ pub trait Def: Send + Sync + 'static {
     }
 
     fn as_guid_def(&self) -> Option<&GuidDef> {
+        None
+    }
+
+    fn as_struct_def(&self) -> Option<&StructDef> {
         None
     }
 
