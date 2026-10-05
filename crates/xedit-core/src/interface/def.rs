@@ -41,6 +41,7 @@ use super::float::FloatDef;
 use super::globals::{
     collapse_benign_array, hide_unused, is_internal_edit, make_unknown_elements_unique, report_mode, report_unknown,
 };
+use super::guid::GuidDef;
 use super::integer::{IntegerDefFormater, IntegerDefInterface};
 use super::len_string::LenStringDef;
 use super::misc::{Variant, shorten_text};
@@ -294,6 +295,10 @@ pub trait Def: Send + Sync + 'static {
     }
 
     fn as_len_string_def(&self) -> Option<&LenStringDef> {
+        None
+    }
+
+    fn as_guid_def(&self) -> Option<&GuidDef> {
         None
     }
 
