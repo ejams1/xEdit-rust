@@ -421,6 +421,10 @@ impl Def for FormIDDefFormater {
         Some(self)
     }
 
+    fn into_form_id_def_formater(self: Arc<Self>) -> Option<Arc<FormIDDefFormater>> {
+        Some(self)
+    }
+
     fn get_no_reach(&self) -> bool {
         self.class.is_checked() && self.fidc_no_reach
     }

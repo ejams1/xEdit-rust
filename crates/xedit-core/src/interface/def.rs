@@ -46,6 +46,7 @@ use super::globals::{
 use super::guid::GuidDef;
 use super::integer::{IntegerDefFormater, IntegerDefInterface};
 use super::len_string::LenStringDef;
+use super::main_record::MainRecordDef;
 use super::misc::{Variant, shorten_text};
 use super::resolvable::{ResolvableDef, UnionDef};
 use super::string::{StringDef, StringDefFormater};
@@ -357,6 +358,14 @@ pub trait Def: Send + Sync + 'static {
     }
 
     fn as_record_def(&self) -> Option<&dyn RecordDef> {
+        None
+    }
+
+    fn as_main_record_def(&self) -> Option<&MainRecordDef> {
+        None
+    }
+
+    fn into_form_id_def_formater(self: Arc<Self>) -> Option<Arc<FormIDDefFormater>> {
         None
     }
 

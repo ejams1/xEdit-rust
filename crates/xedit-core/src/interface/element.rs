@@ -191,6 +191,8 @@ pub trait MainRecord: Container {
 
     fn get_signature(&self) -> Signature;
 
+    fn get_editor_id(&self) -> String;
+
     /// Upstream `ShortName`: the editor ID or the FormID of the record.
     fn get_short_name(&self) -> String;
 
