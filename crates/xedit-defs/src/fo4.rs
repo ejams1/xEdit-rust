@@ -18,6 +18,7 @@
 
 use std::sync::Arc;
 
+use xedit_core::delphi::*;
 use xedit_core::interface::globals::*;
 use xedit_core::interface::*;
 
@@ -12094,7 +12095,7 @@ pub fn define_fo4() {
                             wb_union_after_set(
                                 "Parameter #1",
                                 Some(Arc::new(wb_condition_param1_decider)),
-                                &wb_condition_parameters,
+                                &wb_condition_parameters.clone(),
                                 ConflictPriority::cpNormal,
                                 false,
                                 None,
@@ -12105,7 +12106,7 @@ pub fn define_fo4() {
                             wb_union_after_set(
                                 "Parameter #2",
                                 Some(Arc::new(wb_condition_param2_decider)),
-                                &wb_condition_parameters,
+                                &wb_condition_parameters.clone(),
                                 ConflictPriority::cpNormal,
                                 false,
                                 None,

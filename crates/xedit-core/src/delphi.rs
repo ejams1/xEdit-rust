@@ -11,6 +11,30 @@
 // Not confirmed against the oracle yet. The parity harness decides.
 const FLOAT_TO_DECIMAL_PRECISION: usize = 18;
 
+/// Port of `ParamStr(0)`: the path of the running program.
+pub fn exe_path() -> String {
+    std::env::current_exe()
+        .map(|path| path.display().to_string())
+        .unwrap_or_default()
+}
+
+/// Port of `ExtractFilePath`: the directory part of a path, with its
+/// trailing separator.
+pub fn extract_file_path(path: &str) -> String {
+    match path.rfind(['\\', '/', ':']) {
+        Some(index) => path[..=index].to_owned(),
+        None => String::new(),
+    }
+}
+
+/// Port of `TFile.ReadAllLines`.
+///
+/// Panics when the file cannot be read, as the Delphi exception would.
+pub fn read_all_lines(path: &str) -> Vec<String> {
+    let text = std::fs::read_to_string(path).unwrap_or_else(|error| panic!("reading {path}: {error}"));
+    text.lines().map(str::to_owned).collect()
+}
+
 /// Port of `FloatToStrF(value, ffFixed, 99, digits)` with `.` as the decimal
 /// separator, which is what xEdit sets.
 ///

@@ -608,6 +608,7 @@ fn unit_imports(unit_name: &str) -> String {
 
 use std::sync::Arc;
 
+use xedit_core::delphi::*;
 use xedit_core::interface::*;
 use xedit_core::interface::globals::*;
 

@@ -8,3 +8,5 @@ pub mod common;
 mod common_stubs;
 pub mod fo4;
 mod fo4_stubs;
+pub mod tes5;
+mod tes5_stubs;

@@ -762,6 +762,69 @@ impl<'a> Emitter<'a> {
                     },
                 );
             }
+            Stmt::Try {
+                body,
+                handlers,
+                except,
+                finally: None,
+            } if handlers.is_empty() && except.as_ref().is_some_and(Vec::is_empty) => {
+                // UPSTREAM-QUIRK: `try ... except end` swallows every
+                // exception upstream. The body runs without that net here.
+                self.statements(body, depth, cx, out)?;
+            }
+            Stmt::Case {
+                selector,
+                arms,
+                else_branch,
+            } => {
+                let selector = self.expr(selector, cx)?;
+                let target = Target {
+                    ty: selector.ty.clone(),
+                    owned: false,
+                    num: selector.num,
+                };
+                out.push_str(&format!(
+                    "{pad}match {} {{
+",
+                    selector.code
+                ));
+                for arm in arms {
+                    let labels = arm
+                        .labels
+                        .iter()
+                        .map(|label| match label {
+                            Expr::Range(low, high) => Ok(format!(
+                                "{}..={}",
+                                self.expr_to(low, &target, cx)?,
+                                self.expr_to(high, &target, cx)?
+                            )),
+                            other => self.expr_to(other, &target, cx),
+                        })
+                        .collect::<Result<Vec<_>>>()?;
+                    out.push_str(&format!(
+                        "{pad}    {} => {{
+",
+                        labels.join(" | ")
+                    ));
+                    self.statement(&arm.body, depth + 2, cx, out)?;
+                    out.push_str(&format!(
+                        "{pad}    }}
+"
+                    ));
+                }
+                out.push_str(&format!(
+                    "{pad}    _ => {{
+"
+                ));
+                if let Some(else_branch) = else_branch {
+                    self.statements(else_branch, depth + 2, cx, out)?;
+                }
+                out.push_str(&format!(
+                    "{pad}    }}
+{pad}}}
+"
+                ));
+            }
             Stmt::Raise(exception) => {
                 // `raise Exception.Create('message')`
                 let message = match exception.as_ref() {
@@ -1529,12 +1592,15 @@ impl<'a> Emitter<'a> {
 
     /// Reads a local, a parameter or the result.
     fn read(&self, code: &str, target: &Target, owned: bool) -> Val {
+        // Shared values are cloned on every read; owned strings and arrays
+        // of locals are cloned when they are read as owned values.
         let shared = match &target.ty {
             Ty::Named(name) => self.is_interface(name) || self.is_callback(name),
             _ => false,
         };
+        let cloned_when_owned = owned && matches!(target.ty, Ty::Str | Ty::Array(_));
         let mut value = Val::new(
-            if shared {
+            if shared || cloned_when_owned {
                 format!("{code}.clone()")
             } else {
                 code.to_owned()
@@ -1692,6 +1758,20 @@ impl<'a> Emitter<'a> {
                     Ty::Bool,
                 ));
             }
+            ("paramstr", [Expr::Int { digits, .. }]) if digits == "0" => {
+                return Ok(Val::new("exe_path()", Ty::Str).owned());
+            }
+            ("extractfilepath", [path]) => {
+                let path = self.expr(path, cx)?;
+                return Ok(Val::new(format!("extract_file_path(&{})", path.code), Ty::Str).owned());
+            }
+            ("fileexists", [path]) => {
+                let path = self.expr(path, cx)?;
+                return Ok(Val::new(
+                    format!("std::path::Path::new(&{}).exists()", path.code),
+                    Ty::Bool,
+                ));
+            }
             ("assert", [condition, ..]) => {
                 return Ok(Val::new(
                     format!("assert!({})", self.condition(condition, cx)?),
@@ -1754,7 +1834,14 @@ impl<'a> Emitter<'a> {
         if !self.symbols.routines.contains_key(&lower) {
             bail!("call of {name}, which is not a known routine");
         }
-        let (resolved, sig) = self.resolver().resolve_call(name, args, &cx.scope)?;
+        let (resolved, sig) = self.resolver().resolve_call(name, args, &cx.scope).map_err(|error| {
+            let unknown: Vec<String> = args
+                .iter()
+                .filter(|arg| self.resolver().ty_of(arg, &cx.scope) == Ty::Unknown)
+                .map(|arg| format!("{arg:?}").chars().take(200).collect())
+                .collect();
+            anyhow!("{error}; unknown: {unknown:?}")
+        })?;
         let mut function = self.names[&(lower.clone(), resolved.overload)].clone();
         if sig.unit.eq_ignore_ascii_case("wbinterface") && lower.starts_with("wbis") {
             function = function[3..].to_owned();
@@ -1823,6 +1910,15 @@ impl<'a> Emitter<'a> {
             let mut value = self.call_sig(&function, sig, args, cx)?;
             value.ty = Ty::Named(class_lower);
             return Ok(value);
+        }
+        // `TFile.ReadAllLines`
+        if let Expr::Ident(class) = base
+            && class.eq_ignore_ascii_case("tfile")
+            && name.eq_ignore_ascii_case("readalllines")
+            && let [path] = args
+        {
+            let path = self.expr(path, cx)?;
+            return Ok(Val::new(format!("read_all_lines(&{})", path.code), Ty::Array(Box::new(Ty::Str))).owned());
         }
         // A method of a list variable of `wbInterface` is a free function.
         if let Expr::Ident(variable) = base

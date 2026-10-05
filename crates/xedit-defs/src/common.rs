@@ -18,6 +18,7 @@
 
 use std::sync::Arc;
 
+use xedit_core::delphi::*;
 use xedit_core::interface::globals::*;
 use xedit_core::interface::*;
 
@@ -5089,7 +5090,7 @@ pub fn wb_enchantment(a_capacity: bool) -> Option<Arc<dyn RecordMemberDef>> {
     let mut a_sig2: Signature = is_tes4_signature(ANAM, EAMT);
     result = wb_form_id_ck_signature(
         a_sig1,
-        &a_name,
+        &a_name.clone(),
         &[ENCH],
         false,
         ConflictPriority::cpNormal,
@@ -5100,7 +5101,7 @@ pub fn wb_enchantment(a_capacity: bool) -> Option<Arc<dyn RecordMemberDef>> {
     .map(|def| def as Arc<dyn RecordMemberDef>);
     if a_capacity {
         result = wb_r_struct(
-            &a_name,
+            &a_name.clone(),
             &[
                 wb_form_id_ck_signature(
                     a_sig1,
@@ -6875,13 +6876,13 @@ pub fn wb_model_info(a_signature: Signature, a_name: &str) -> Option<Arc<dyn Rec
     let mut a_name: String = a_name.to_owned();
     let mut result: Option<Arc<dyn RecordMemberDef>> = Default::default();
     if (game_mode() < GameMode::gmTES5) {
-        if (a_name == "".to_owned()) {
+        if (a_name.clone() == "".to_owned()) {
             a_name = "Textures".to_owned();
         }
         if !(decode_texture_hashes()) {
             return wb_byte_array_signature(
                 a_signature,
-                &a_name,
+                &a_name.clone(),
                 0,
                 ConflictPriority::cpIgnore,
                 false,
@@ -6951,7 +6952,7 @@ pub fn wb_model_info(a_signature: Signature, a_name: &str) -> Option<Arc<dyn Rec
         .map(|def| def.include_flag_when(DefFlag::dfCollapsed, collapse_model_info_texture()));
         result = wb_array_signature_count(
             a_signature,
-            &a_name,
+            &a_name.clone(),
             texture_file.clone().map(|def| def as Arc<dyn ValueDef>),
             0,
             None,
@@ -6964,13 +6965,13 @@ pub fn wb_model_info(a_signature: Signature, a_name: &str) -> Option<Arc<dyn Rec
         .map(|def| def.include_flag_when(DefFlag::dfCollapsed, collapse_model_info_textures()))
         .map(|def| def as Arc<dyn RecordMemberDef>);
     } else {
-        if (a_name == "".to_owned()) {
+        if (a_name.clone() == "".to_owned()) {
             a_name = "Model Information".to_owned();
         }
         if !(decode_texture_hashes()) {
             return wb_byte_array_signature(
                 a_signature,
-                &a_name,
+                &a_name.clone(),
                 0,
                 ConflictPriority::cpIgnore,
                 false,
@@ -7162,7 +7163,7 @@ pub fn wb_model_info(a_signature: Signature, a_name: &str) -> Option<Arc<dyn Rec
         .map(|def| def.include_flag_when(DefFlag::dfSummaryMembersNoName, true));
         result = wb_union_signature(
             a_signature,
-            &a_name,
+            &a_name.clone(),
             Some(Arc::new(wb_model_info_decider)),
             &[
                 wb_struct(
@@ -7254,13 +7255,13 @@ pub fn wb_model_infos(
     if (game_mode() >= GameMode::gmTES5) {
         panic!("Not Supported");
     }
-    if (a_name == "".to_owned()) {
+    if (a_name.clone() == "".to_owned()) {
         a_name = "Model List Textures".to_owned();
     }
     if !(decode_texture_hashes()) {
         return wb_byte_array_signature(
             a_signature,
-            &a_name,
+            &a_name.clone(),
             0,
             ConflictPriority::cpIgnore,
             false,
@@ -7330,7 +7331,7 @@ pub fn wb_model_infos(
     .map(|def| def.include_flag_when(DefFlag::dfCollapsed, collapse_model_info_texture()));
     result = wb_array_signature_count(
         a_signature,
-        &a_name,
+        &a_name.clone(),
         wb_struct(
             "Model",
             &[wb_array_count(
@@ -8109,13 +8110,13 @@ pub fn wb_textured_model(
     }
     for i in (0)..=(a_texture_sub_records.len() as i32 - 1) {
         {
-            let index = (((l_members.len() as i32) - (a_texture_sub_records.len() as i32)) + i) as usize;
+            let index = (((l_members.clone().len() as i32) - (a_texture_sub_records.len() as i32)) + i) as usize;
             l_members[index] = a_texture_sub_records[(i) as usize].clone();
         }
     }
     result = wb_r_struct(
         a_sub_record_name,
-        &l_members,
+        &l_members.clone(),
         &[],
         ConflictPriority::cpNormal,
         false,
@@ -8172,8 +8173,8 @@ pub fn wb_time_interpolators_mult_add(
     result = wb_r_struct(
         a_name,
         &[
-            wb_time_interpolators_signature(a_signature_mult, &s_mult),
-            wb_time_interpolators_signature(a_signature_add, &s_add),
+            wb_time_interpolators_signature(a_signature_mult, &s_mult.clone()),
+            wb_time_interpolators_signature(a_signature_add, &s_add.clone()),
         ],
         &[],
         ConflictPriority::cpNormal,
