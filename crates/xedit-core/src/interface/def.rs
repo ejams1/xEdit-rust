@@ -46,6 +46,7 @@ use super::guid::GuidDef;
 use super::integer::{IntegerDefFormater, IntegerDefInterface};
 use super::len_string::LenStringDef;
 use super::misc::{Variant, shorten_text};
+use super::resolvable::{ResolvableDef, UnionDef};
 use super::string::{StringDef, StringDefFormater};
 use super::struct_def::StructDef;
 use super::types::{
@@ -312,6 +313,14 @@ pub trait Def: Send + Sync + 'static {
         None
     }
 
+    fn as_resolvable_def(&self) -> Option<&dyn ResolvableDef> {
+        None
+    }
+
+    fn as_union_def(&self) -> Option<&UnionDef> {
+        None
+    }
+
     fn into_string_def_formater(self: Arc<Self>) -> Option<Arc<dyn StringDefFormater>> {
         None
     }
@@ -499,8 +508,15 @@ pub fn def_init_from_parent_before_children(def: &dyn Def) {
     }
     // UPSTREAM-QUIRK: the second test upstream asks for IwbUnionDef but stores the
     // result in an IwbSubRecordUnionDef variable. Both read the Required property,
-    // so the effect is the intended one. Both tests arrive with the classes that
-    // implement these interfaces.
+    // so the effect is the intended one. The test for IwbSubRecordUnionDef
+    // arrives with that class.
+    if !base.def_required()
+        && let Some(parent) = &parent
+        && parent.as_union_def().is_some()
+        && parent.get_required()
+    {
+        base.def_required.store(true, Ordering::Relaxed);
+    }
 }
 
 /// Port of `TwbDef.InitFromParentAfterChildren`.
