@@ -5,7 +5,7 @@
 //! The symbols and types of the parsed Pascal units, as far as the
 //! transpiler needs them to resolve overloaded calls.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::pascal::ast::{Decl, Expr, Param, Routine, RoutineKind, TypeDecl, TypeRef, Unit};
 use crate::pascal::lexer::{Token, TokenKind};
@@ -46,6 +46,10 @@ pub enum TypeKind {
     /// A procedural type with its signature.
     Callback(Box<Routine>),
     Alias(Ty),
+    /// `set of T` with the lower-case name of `T`.
+    Set(String),
+    /// `^T` with the name of `T` as declared.
+    Pointer(String),
     Other,
 }
 
@@ -77,6 +81,8 @@ pub struct Symbols {
     /// Lower-case interface or class name to its functions and properties:
     /// lower-case member name to the name of its type.
     pub members: HashMap<String, HashMap<String, String>>,
+    /// Lower-case names of the constants among `values`.
+    pub consts: HashSet<String>,
 }
 
 fn lower(name: &str) -> String {
@@ -119,6 +125,9 @@ impl Symbols {
                 };
                 for name in &var.names {
                     self.values.insert(lower(name), ty.clone());
+                    if matches!(decl, Decl::Const(_)) {
+                        self.consts.insert(lower(name));
+                    }
                 }
             }
             Decl::Routine(routine) => {
@@ -196,6 +205,10 @@ impl Symbols {
                 Some(element) => TypeKind::Alias(Ty::Array(Box::new(self.ty_of_name(element)))),
                 None => TypeKind::Other,
             }
+        } else if symbol(0, "^") && tokens.len() == 2 && tokens[1].ident().is_some() {
+            TypeKind::Pointer(tokens[1].ident().unwrap_or_default().to_owned())
+        } else if word(0, "set") && word(1, "of") && tokens.len() == 3 && tokens[2].ident().is_some() {
+            TypeKind::Set(lower(tokens[2].ident().unwrap_or_default()))
         } else if tokens.len() == 1 && tokens[0].ident().is_some() {
             TypeKind::Alias(self.ty_of_name(tokens[0].ident().unwrap_or_default()))
         } else {
@@ -203,6 +216,21 @@ impl Symbols {
         };
         if matches!(kind, TypeKind::Interface(_) | TypeKind::Class(_)) {
             self.members.insert(lower(&decl.name), scan_members(tokens));
+            for mut method in scan_methods(tokens) {
+                if method.kind == RoutineKind::Constructor {
+                    method.return_type = Some(TypeRef::Named(decl.name.clone()));
+                }
+                self.routines
+                    .entry(format!("{}.{}", lower(&decl.name), lower(&method.name)))
+                    .or_default()
+                    .push(RoutineSig {
+                        name: format!("{}.{}", decl.name, method.name),
+                        params: method.params,
+                        return_type: method.return_type,
+                        unit: String::new(),
+                        line: method.line,
+                    });
+            }
         }
         self.types.insert(
             lower(&decl.name),
@@ -303,6 +331,29 @@ impl Symbols {
         None
     }
 
+    /// The lower-case name of the interface or class that declares the
+    /// method `member`: `name` or one of its ancestors.
+    pub fn method_owner(&self, name: &str, member: &str) -> Option<String> {
+        let member = lower(member);
+        let mut pending = vec![lower(name)];
+        let mut seen = Vec::new();
+        while let Some(current) = pending.pop() {
+            if seen.contains(&current) {
+                continue;
+            }
+            if self.routines.contains_key(&format!("{current}.{member}")) {
+                return Some(current);
+            }
+            match self.types.get(&current).map(|info| &info.kind) {
+                Some(TypeKind::Interface(Some(parent))) => pending.push(parent.clone()),
+                Some(TypeKind::Class(parents)) => pending.extend(parents.iter().cloned()),
+                _ => {}
+            }
+            seen.push(current);
+        }
+        None
+    }
+
     pub fn callback(&self, name: &str) -> Option<&Routine> {
         match self.types.get(&lower(name)).map(|info| &info.kind) {
             Some(TypeKind::Callback(routine)) => Some(routine),
@@ -350,6 +401,50 @@ fn scan_members(tokens: &[Token]) -> HashMap<String, String> {
         index = cursor;
     }
     members
+}
+
+/// The methods and constructors in the tokens of an interface or class body.
+fn scan_methods(tokens: &[Token]) -> Vec<Routine> {
+    let mut methods = Vec::new();
+    let mut index = 0;
+    while index < tokens.len() {
+        let starts = ["function", "procedure", "constructor"]
+            .iter()
+            .any(|word| tokens[index].is_word(word));
+        if !starts || tokens.get(index + 1).and_then(Token::ident).is_none() {
+            index += 1;
+            continue;
+        }
+        // The header ends at the first `;` outside of parentheses.
+        let mut end = index;
+        let mut depth = 0;
+        while end < tokens.len() {
+            let token = &tokens[end];
+            if token.is_symbol("(") || token.is_symbol("[") {
+                depth += 1;
+            } else if token.is_symbol(")") || token.is_symbol("]") {
+                depth -= 1;
+            } else if token.is_symbol(";") && depth == 0 {
+                break;
+            }
+            end += 1;
+        }
+        let line = tokens[index].line;
+        let mut header = tokens[index..end].to_vec();
+        header.push(Token {
+            kind: TokenKind::Symbol(";"),
+            line,
+        });
+        header.push(Token {
+            kind: TokenKind::Eof,
+            line,
+        });
+        if let Ok(routine) = Parser::new(header).parse_routine_header() {
+            methods.push(routine);
+        }
+        index = end.max(index + 1);
+    }
+    methods
 }
 
 /// Parses the tokens of a procedural type: `reference to function(...): T`,
