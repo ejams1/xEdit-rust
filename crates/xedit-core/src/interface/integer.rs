@@ -74,6 +74,14 @@ pub trait IntegerDefFormater: NamedDef {
     }
 }
 
+impl DefKind for dyn IntegerDefInterface {
+    fn duplicate_same(&self) -> Arc<Self> {
+        self.duplicate()
+            .into_integer_def()
+            .expect("the duplicate of an integer definition is an integer definition")
+    }
+}
+
 impl DefKind for dyn IntegerDefFormater {
     fn duplicate_same(&self) -> Arc<Self> {
         self.duplicate()
@@ -296,6 +304,10 @@ impl Def for IntegerDef {
     }
 
     fn as_integer_def(&self) -> Option<&dyn IntegerDefInterface> {
+        Some(self)
+    }
+
+    fn into_integer_def(self: Arc<Self>) -> Option<Arc<dyn IntegerDefInterface>> {
         Some(self)
     }
 

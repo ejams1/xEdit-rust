@@ -49,7 +49,7 @@ pub use guid::*;
 pub use integer::*;
 pub use len_string::*;
 pub use main_record::*;
-pub use misc::Variant;
+pub use misc::{Global, Variant};
 pub use resolvable::*;
 pub use string::*;
 pub use struct_def::{StructDef, StructDefArgs, StructSizeCallback};

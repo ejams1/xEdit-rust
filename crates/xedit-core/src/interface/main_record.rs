@@ -552,7 +552,8 @@ impl MainRecordDef {
         this
     }
 
-    pub fn set_summary_member_prefix_suffix(self: Arc<Self>, index: usize, prefix: &str, suffix: &str) -> Arc<Self> {
+    pub fn set_summary_member_prefix_suffix(self: Arc<Self>, index: i32, prefix: &str, suffix: &str) -> Arc<Self> {
+        let index = usize::try_from(index).expect("a non-negative index");
         let this = self.unlocked();
         assert!(
             index < this.rec_members.len(),
@@ -567,7 +568,8 @@ impl MainRecordDef {
         this
     }
 
-    pub fn set_summary_member_max_depth(self: Arc<Self>, index: usize, max_depth: i32) -> Arc<Self> {
+    pub fn set_summary_member_max_depth(self: Arc<Self>, index: i32, max_depth: i32) -> Arc<Self> {
+        let index = usize::try_from(index).expect("a non-negative index");
         let this = self.unlocked();
         assert!(
             index < this.rec_members.len(),

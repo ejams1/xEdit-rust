@@ -21,7 +21,7 @@ use super::byte_array::{ByteArrayDef, CountCallback};
 use super::def::{
     AfterLoadCallback, AfterSetCallback, DontShowCallback, EmptyDef, GetConflictPriority, NamedDefArgs, ValueDef,
 };
-use super::element::ElementArg;
+use super::element::{DataPtr, ElementArg, ElementRef};
 use super::enum_def::{EnumClass, EnumDef, SparseName};
 use super::flags::FlagsDef;
 use super::float::{FloatDef, FloatDefArgs, FloatKind, FloatNormalizer};
@@ -35,6 +35,7 @@ use super::guid::GuidDef;
 use super::integer::{IntegerDef, IntegerDefFormater};
 use super::len_string::LenStringDef;
 use super::main_record::{AddInfoCallback, MainRecordDef, MainRecordDefArgs, add_ref_record_def};
+use super::misc::{int_to_hex64, str_to_int_def};
 use super::resolvable::{RecursiveDef, UnionDecider, UnionDef};
 use super::string::{StringClass, StringDef};
 use super::struct_def::{StructDef, StructDefArgs};
@@ -42,7 +43,7 @@ use super::sub_record::{RecordMemberDef, SubRecordDef};
 use super::sub_record_group::{
     IsSortedCallback, RUnionDecider, SubRecordArrayDef, SubRecordStructDef, SubRecordUnionDef,
 };
-use super::types::{ConflictPriority, IntType, KnownSubRecordSignatures, Signature, VarRec};
+use super::types::{CallbackType, ConflictPriority, ElementType, IntType, KnownSubRecordSignatures, Signature, VarRec};
 use crate::delphi::single_same_value;
 
 /// Upstream `wbRadiansToDegreesScale`, a variable that nothing changes.
@@ -1024,6 +1025,136 @@ pub fn wb_ref_id() -> Option<Arc<dyn IntegerDefFormater>> {
 /// Upstream `wbNeverShow`.
 pub fn wb_never_show(_a_element: ElementArg) -> bool {
     hide_never_show()
+}
+
+/// Upstream `wbNextObjectIDToString`.
+pub fn wb_next_object_id_to_string(a_int: i64, _a_element: ElementArg, a_type: CallbackType) -> String {
+    match a_type {
+        CallbackType::ctToStr | CallbackType::ctToSortKey => int_to_hex64(a_int, 8),
+        CallbackType::ctToEditValue => format!("${}", int_to_hex64(a_int, 8)),
+        _ => String::new(),
+    }
+}
+
+/// Upstream `wbNextObjectIDToInt`. The `?` form needs the file of the
+/// element and belongs to the write path.
+pub fn wb_next_object_id_to_int(a_string: &str, _a_element: ElementArg) -> i64 {
+    let s = a_string.trim();
+    if s.is_empty() {
+        return 2048;
+    }
+    if s == "?" {
+        unimplemented!("wbNextObjectIDToInt with '?' needs the high object ID of the file: write path");
+    }
+    i64::from(str_to_int_def(s, 2048))
+}
+
+/// Upstream `wbVCI1ToStrBeforeFO4`: the version control info of a record header.
+pub fn wb_vci1_to_str_before_fo4(
+    a_value: &mut String,
+    a_base_ptr: DataPtr,
+    _a_element: ElementArg,
+    a_type: CallbackType,
+) {
+    if a_type != CallbackType::ctToStr {
+        return;
+    }
+    let Some(bytes) = a_base_ptr.and_then(|data| data.get(..4)) else {
+        return;
+    };
+    let mut c = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
+    if c == 0 {
+        *a_value = "None".to_owned();
+        return;
+    }
+    let day = c & 0xFF;
+    c >>= 8;
+    let mut year = i64::from(c & 0xFF);
+    c >>= 8;
+    year -= 1;
+    let month = year % 12 + 1;
+    year = year / 12 + 2003;
+    let user = c & 0xFF;
+    c >>= 8;
+    let index = c & 0xFF;
+    *a_value = format!("{year:04}-{month:02}-{day:02} User: {user} Index: {index}");
+}
+
+/// Upstream `wbVCI1ToStrAfterFO4`.
+pub fn wb_vci1_to_str_after_fo4(
+    a_value: &mut String,
+    a_base_ptr: DataPtr,
+    _a_element: ElementArg,
+    a_type: CallbackType,
+) {
+    if a_type != CallbackType::ctToStr {
+        return;
+    }
+    let Some(bytes) = a_base_ptr.and_then(|data| data.get(..4)) else {
+        return;
+    };
+    let mut c = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
+    if c == 0 {
+        *a_value = "None".to_owned();
+        return;
+    }
+    let day = c & 0x1F;
+    c >>= 5;
+    let month = c & 0x0F;
+    c >>= 4;
+    let year = (c & 0x7F) + 2000;
+    c >>= 7;
+    let user = c & 0xFF;
+    c >>= 8;
+    let index = c & 0xFF;
+    *a_value = format!("{year:04}-{month:02}-{day:02} User: {user} Index: {index}");
+}
+
+/// Upstream `wbSparseFlags`: the flag names from sparse enumeration names.
+pub fn wb_sparse_flags(a_flags: &[VarRec], a_unknowns: bool, a_size: u32) -> Vec<String> {
+    let e = EnumDef::create(EnumClass::Enum, false, &[], &sparse_names(false, a_flags));
+    (0..a_size)
+        .map(|i| {
+            let s = IntegerDefFormater::to_string(&*e, i64::from(i), None, false);
+            if !s.starts_with('<') {
+                s
+            } else if a_unknowns {
+                format!("Unknown {i}")
+            } else {
+                String::new()
+            }
+        })
+        .collect()
+}
+
+/// Upstream `GetContainerFromUnion`: the container that a union or value
+/// element belongs to, or the element itself when it is a container.
+pub fn get_container_from_union(element: &ElementRef) -> Option<ElementRef> {
+    let mut result = match element.get_element_type() {
+        ElementType::etUnion | ElementType::etValue => element.get_container(),
+        _ => Some(element.clone()),
+    };
+    while let Some(current) = &result
+        && current.get_element_type() == ElementType::etUnion
+    {
+        result = current.get_container();
+    }
+    result.filter(|container| container.as_container().is_some())
+}
+
+/// Upstream `GetContainerRefFromUnionOrValue`.
+pub fn get_container_ref_from_union_or_value(element: &ElementRef) -> Option<ElementRef> {
+    let is_container = |candidate: &ElementRef| candidate.as_container().is_some();
+    let mut result = match element.get_element_type() {
+        ElementType::etUnion | ElementType::etValue => element.get_container().filter(is_container),
+        _ => Some(element.clone()).filter(is_container),
+    };
+    while let Some(current) = result.clone()
+        && current.get_element_type() == ElementType::etUnion
+    {
+        result = current.get_container().filter(is_container);
+    }
+    result
 }
 
 /// Upstream `wbNormalizeRadians`: the angle in `0..2π`.

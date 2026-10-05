@@ -611,6 +611,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "xedit-defs"
+version = "0.1.0"
+dependencies = [
+ "xedit-core",
+]
+
+[[package]]
 name = "xedit-io"
 version = "0.1.0"
 dependencies = [

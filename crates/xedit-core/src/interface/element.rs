@@ -55,6 +55,10 @@ pub trait Element: Send + Sync {
     fn add_referenced_from_id(&self, form_id: FormID);
 
     /// `Supports(element, IwbMainRecord)`.
+    fn into_main_record(self: Arc<Self>) -> Option<MainRecordRef> {
+        None
+    }
+
     fn as_main_record(&self) -> Option<&dyn MainRecord> {
         None
     }
@@ -200,6 +204,11 @@ pub trait MainRecord: Container {
 
     fn get_is_persistent(&self) -> bool;
 
+    /// Upstream `Version`: the form version in the record header.
+    fn get_version(&self) -> u32;
+
+    fn get_is_deleted(&self) -> bool;
+
     /// The override of this record in the last file that has one.
     fn get_winning_override(&self) -> MainRecordRef;
 
@@ -216,6 +225,9 @@ pub trait Container: Element {
 
     /// Upstream `ElementByName[aName]`.
     fn get_element_by_name(&self, name: &str) -> Option<ElementRef>;
+
+    /// Upstream `ElementByPath[aPath]`: names separated by `\`.
+    fn get_element_by_path(&self, path: &str) -> Option<ElementRef>;
 
     fn get_element_count(&self) -> i32;
 

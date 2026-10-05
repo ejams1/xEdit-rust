@@ -1,0 +1,10 @@
+[package]
+name = "xedit-defs"
+version = "0.1.0"
+description = "Record definitions of the games, generated from the xEdit sources"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+xedit-core = { path = "../xedit-core" }

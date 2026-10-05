@@ -7,7 +7,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use crate::pascal::ast::{Decl, Expr, Param, Routine, RoutineKind, TypeDecl, TypeRef, Unit};
+use crate::pascal::ast::{Decl, Expr, Param, Routine, RoutineKind, TypeDecl, TypeRef, Unit, VarDecl};
 use crate::pascal::lexer::{Token, TokenKind};
 use crate::pascal::parser::Parser;
 
@@ -83,6 +83,11 @@ pub struct Symbols {
     pub members: HashMap<String, HashMap<String, String>>,
     /// Lower-case names of the constants among `values`.
     pub consts: HashSet<String>,
+    /// Lower-case name of a value to the lower-case name of its unit.
+    pub value_units: HashMap<String, String>,
+    /// Lower-case name of a value to the declaration, for the unit
+    /// variables that become statics.
+    pub value_decls: HashMap<String, VarDecl>,
 }
 
 fn lower(name: &str) -> String {
@@ -125,6 +130,8 @@ impl Symbols {
                 };
                 for name in &var.names {
                     self.values.insert(lower(name), ty.clone());
+                    self.value_units.insert(lower(name), lower(unit));
+                    self.value_decls.insert(lower(name), var.clone());
                     if matches!(decl, Decl::Const(_)) {
                         self.consts.insert(lower(name));
                     }
@@ -251,7 +258,7 @@ impl Symbols {
             "integer" | "cardinal" | "int64" | "uint64" | "byte" | "word" | "smallint" | "shortint" | "nativeint"
             | "nativeuint" | "longint" | "longword" => Ty::Int,
             "extended" | "double" | "single" => Ty::Float,
-            "variant" => Ty::Unknown,
+            "variant" => Ty::Named("variant".to_owned()),
             _ => match self.types.get(&name) {
                 Some(TypeInfo {
                     kind: TypeKind::Alias(ty),

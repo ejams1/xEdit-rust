@@ -281,6 +281,10 @@ pub trait Def: Send + Sync + 'static {
         None
     }
 
+    fn into_integer_def(self: Arc<Self>) -> Option<Arc<dyn IntegerDefInterface>> {
+        None
+    }
+
     fn as_enum_def(&self) -> Option<&EnumDef> {
         None
     }
