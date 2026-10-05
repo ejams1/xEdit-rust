@@ -26,6 +26,7 @@ pub mod resolvable;
 pub mod string;
 pub mod struct_def;
 pub mod sub_record;
+pub mod sub_record_group;
 pub mod types;
 
 pub use array::*;
@@ -47,4 +48,5 @@ pub use resolvable::*;
 pub use string::*;
 pub use struct_def::{StructDef, StructDefArgs, StructSizeCallback};
 pub use sub_record::*;
+pub use sub_record_group::*;
 pub use types::*;

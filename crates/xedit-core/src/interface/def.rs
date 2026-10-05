@@ -51,6 +51,7 @@ use super::resolvable::{ResolvableDef, UnionDef};
 use super::string::{StringDef, StringDefFormater};
 use super::struct_def::StructDef;
 use super::sub_record::{RecordMemberDef, SignatureDef, SubRecordDef};
+use super::sub_record_group::{RecordDef, SubRecordArrayDef, SubRecordStructDef, SubRecordUnionDef};
 use super::types::{
     CallbackType, ConflictPriority, DefFlag, DefFlags, DefType, EditType, EnumSet, PascalEnum, def_flags_dont_clone,
     def_flags_inherit_down, def_flags_inherit_up,
@@ -343,6 +344,22 @@ pub trait Def: Send + Sync + 'static {
         None
     }
 
+    fn as_sub_record_array_def(&self) -> Option<&SubRecordArrayDef> {
+        None
+    }
+
+    fn as_sub_record_struct_def(&self) -> Option<&SubRecordStructDef> {
+        None
+    }
+
+    fn as_sub_record_union_def(&self) -> Option<&SubRecordUnionDef> {
+        None
+    }
+
+    fn as_record_def(&self) -> Option<&dyn RecordDef> {
+        None
+    }
+
     fn into_struct_def(self: Arc<Self>) -> Option<Arc<StructDef>> {
         None
     }
@@ -546,11 +563,10 @@ pub fn def_init_from_parent_before_children(def: &dyn Def) {
     }
     // UPSTREAM-QUIRK: the second test upstream asks for IwbUnionDef but stores the
     // result in an IwbSubRecordUnionDef variable. Both read the Required property,
-    // so the effect is the intended one. The test for IwbSubRecordUnionDef
-    // arrives with that class.
+    // so the effect is the intended one.
     if !base.def_required()
         && let Some(parent) = &parent
-        && parent.as_union_def().is_some()
+        && (parent.as_sub_record_union_def().is_some() || parent.as_union_def().is_some())
         && parent.get_required()
     {
         base.def_required.store(true, Ordering::Relaxed);
