@@ -191,7 +191,8 @@ fn parse(args: &[&str]) -> Result<Options> {
         games: Vec::new(),
         files: Vec::new(),
         oracle_only: false,
-        jobs: 4,
+        // Three dumps of up to 4.5 GB each next to the oracle fit in 32 GB.
+        jobs: 3,
     };
     let mut rest = rest.iter();
     while let Some(&arg) = rest.next() {
