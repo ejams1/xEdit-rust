@@ -562,23 +562,23 @@ impl Container for ValueImpl {
 
     fn get_element_count(&self) -> i32 {
         self.do_init();
-        self.vb.container.elements().len() as i32
+        self.vb.container.element_count() as i32
     }
 
     /// Port of `TwbContainer.GetElement` with `cntElementsMap`: the element
     /// map of the definition reorders the elements for the callers.
     fn get_element(&self, index: i32) -> Option<ElementRef> {
         self.do_init();
-        let elements = self.vb.container.elements();
+        let count = self.vb.container.element_count();
         let mut index = usize::try_from(index).ok()?;
-        if index >= elements.len() {
+        if index >= count {
             return None;
         }
         let map = self.vb.vb_value_def.get_element_map();
-        if map.len() == elements.len() {
+        if map.len() == count {
             index = map[index] as usize;
         }
-        elements.get(index).cloned()
+        self.vb.container.element_at(index)
     }
 
     fn get_element_by_sort_order(&self, sort_order: i32) -> Option<ElementRef> {

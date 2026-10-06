@@ -230,6 +230,11 @@ impl StructDef {
         cell.load().as_deref().cloned().unwrap_or_default()
     }
 
+    /// The content of a summary field, shared rather than copied.
+    fn shared<T>(&self, cell: &DefCell<T>) -> Option<Arc<T>> {
+        cell.load().as_ref().cloned()
+    }
+
     /// The sort key of the member `sort_member`, which starts after the
     /// members before it.
     fn member_sort_key(&self, sort_member: usize, data: DataPtr, element: ElementArg, extended: bool) -> String {
@@ -274,10 +279,14 @@ impl StructDef {
         let Some(cer) = container.as_container() else {
             return;
         };
-        let max_depths = self.loaded(&self.st_summary_max_depth);
-        let prefixes = self.loaded(&self.st_summary_prefix);
-        let suffixes = self.loaded(&self.st_summary_suffix);
-        let delimiter = self.loaded(&self.st_summary_delimiter);
+        let max_depths = self.shared(&self.st_summary_max_depth);
+        let max_depths = max_depths.as_deref().map_or(&[][..], Vec::as_slice);
+        let prefixes = self.shared(&self.st_summary_prefix);
+        let prefixes = prefixes.as_deref().map_or(&[][..], Vec::as_slice);
+        let suffixes = self.shared(&self.st_summary_suffix);
+        let suffixes = suffixes.as_deref().map_or(&[][..], Vec::as_slice);
+        let delimiter = self.shared(&self.st_summary_delimiter);
+        let delimiter = delimiter.as_deref().map_or("", String::as_str);
         for &sort_member in keys {
             let Ok(sort_member) = usize::try_from(sort_member) else {
                 continue;
@@ -292,7 +301,7 @@ impl StructDef {
                 continue;
             }
             state.member_used[sort_member] = true;
-            let max_depth = from_array(&max_depths, sort_member);
+            let max_depth = from_array(max_depths, sort_member);
             if !(max_depth == 0 || depth < max_depth) {
                 continue;
             }
@@ -337,8 +346,8 @@ impl StructDef {
             if member_summary.is_empty() {
                 continue;
             }
-            let prefix = from_array(&prefixes, sort_member);
-            let suffix = from_array(&suffixes, sort_member);
+            let prefix = from_array(prefixes, sort_member);
+            let suffix = from_array(suffixes, sort_member);
             let has_fix = !prefix.is_empty() || !suffix.is_empty();
             let no_name = state.members_no_name || member_def.get_def_flags().contains(DefFlag::dfSummaryNoName);
             if !state.result.is_empty() {
@@ -346,7 +355,7 @@ impl StructDef {
                     state.result = format!("{}:({})", state.delayed_name, state.result);
                     state.delayed_name.clear();
                 }
-                state.result.push_str(&delimiter);
+                state.result.push_str(delimiter);
             }
             let mut member_summary_name = member_def.get_summary_name();
             if member_cer.get_element_type() == ElementType::etArray && member_cer.get_element_count() == 1 {
@@ -448,8 +457,9 @@ impl ValueDef for StructDef {
                 self.summary_process(&self.st_sort_key, depth, container, links_to, &mut state);
                 self.summary_process(&self.st_ex_sort_key, depth, container, links_to, &mut state);
             }
-            let summary_key = self.loaded(&self.st_summary_key);
-            self.summary_process(&summary_key, depth, container, links_to, &mut state);
+            let summary_key = self.shared(&self.st_summary_key);
+            let summary_key = summary_key.as_deref().map_or(&[][..], Vec::as_slice);
+            self.summary_process(summary_key, depth, container, links_to, &mut state);
             result = state.result;
         }
         if links_to.is_none()
@@ -568,8 +578,8 @@ impl ValueDef for StructDef {
         self.st_members.iter().any(|member| member.get_is_variable_size())
     }
 
-    fn get_element_map(&self) -> Vec<u32> {
-        self.st_element_map.clone()
+    fn get_element_map(&self) -> &[u32] {
+        &self.st_element_map
     }
 }
 
