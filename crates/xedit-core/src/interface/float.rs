@@ -192,11 +192,11 @@ impl FloatDef {
         if self.fd_scale != 1.0 {
             value *= self.fd_scale;
         }
-        if value.is_nan() || value.is_infinite() {
+        if value.is_nan() {
             return f64::NAN;
         }
         if self.fd_digits >= 0 {
-            round_to_ex(value, -self.fd_digits).unwrap_or(f64::NAN)
+            round_to_ex(value, -self.fd_digits)
         } else {
             value
         }
@@ -467,8 +467,9 @@ mod tests {
         assert_eq!(show(&def, f32::MAX), "Default");
         assert_eq!(show(&def, f32::MIN), "Min");
         assert_eq!(show(&def, 1234567.9), "1234567.875000");
-        // Rounding to six decimals overflows a 64-bit integer.
-        assert_eq!(show(&def, 1.0e20), "NaN");
+        // Rounding to six decimals overflows a 64-bit integer: the oracle
+        // prints the x64 integer indefinite scaled back.
+        assert_eq!(show(&def, 1.0e20), "-9223372013568.000000");
         assert_eq!(def.get_def_type_name(), "Float");
     }
 
@@ -491,7 +492,7 @@ mod tests {
         // The native value carries the rounding of `RoundToEx`.
         assert_eq!(
             def.to_native_value(Some(&1.5f32.to_le_bytes()), None),
-            Variant::Float(round_to_ex(1.5, -6).unwrap())
+            Variant::Float(round_to_ex(1.5, -6))
         );
     }
 
