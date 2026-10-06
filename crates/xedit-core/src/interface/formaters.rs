@@ -5,8 +5,8 @@
 // Ported from xEdit: Core/wbInterface.pas
 
 //! The small integer formaters: `TwbIntegerDefFormaterUnion`,
-//! `TwbDumpIntegerDefFormater`, `TwbStr4`, `TwbDivDef`, `TwbDivFDef`,
-//! `TwbMulDef` and `TwbCallbackDef`.
+//! `TwbDumpIntegerDefFormater`, `TwbStr4`, `TwbChar4`, `TwbDivDef`,
+//! `TwbDivFDef`, `TwbMulDef` and `TwbCallbackDef`.
 
 use std::sync::{Arc, Weak};
 
@@ -336,6 +336,66 @@ impl IntegerDefFormater for Str4 {
 
     fn get_is_editable(&self, _int: i64, _element: ElementArg) -> bool {
         editable_unless_internal_only(&self.def)
+    }
+}
+
+plain_formater!(
+    /// Upstream `TwbChar4`: the four characters of an Oblivion editor ID
+    /// stored as an integer, such as the code of a magic effect, which name
+    /// the record with that editor ID.
+    Char4,
+    "TwbChar4"
+);
+
+impl Char4 {
+    /// Port of `TwbChar4.Create` with `AfterConstruction`.
+    pub fn create_char4() -> Arc<Self> {
+        let this = Self::create();
+        this.def.def_flags.include(DefFlag::dfCanContainFormID);
+        this
+    }
+
+    /// The characters in the order of the bytes (`PwbSignature(@U32)^`).
+    fn characters(int: i64) -> String {
+        Signature::from_int(int as u32).to_string()
+    }
+}
+
+impl IntegerDefFormater for Char4 {
+    /// Port of `TwbChar4.ToString`: the name of the record with the editor
+    /// ID, or the characters with a warning.
+    fn to_string(&self, int: i64, element: ElementArg, _for_summary: bool) -> String {
+        let mut result = Self::characters(int);
+        if let Some(file) = element.and_then(|element| element.get_file())
+            && let Some(record) = file.get_record_by_editor_id(&result)
+        {
+            let result = record.get_name();
+            self.used(element, &result);
+            return result;
+        }
+        if int as u32 != 0 {
+            result.push_str(" <Warning: could not be resolved>");
+        }
+        self.used(element, &result);
+        result
+    }
+
+    fn to_sort_key(&self, int: i64, _element: ElementArg) -> String {
+        Self::characters(int)
+    }
+
+    fn to_edit_value(&self, int: i64, _element: ElementArg) -> String {
+        Self::characters(int)
+    }
+
+    fn get_is_editable(&self, _int: i64, _element: ElementArg) -> bool {
+        editable_unless_internal_only(&self.def)
+    }
+
+    fn get_links_to(&self, int: i64, element: ElementArg) -> Option<ElementRef> {
+        let file = element?.get_file()?;
+        file.get_record_by_editor_id(&Self::characters(int))
+            .map(|record| record as ElementRef)
     }
 }
 

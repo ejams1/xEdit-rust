@@ -76,6 +76,9 @@ pub enum StringClass {
     LString,
     /// `TwbLStringKCDef`
     LStringKC,
+    /// `TwbStringMgefCodeDef`: the code of an Oblivion magic effect, four
+    /// characters or a dynamic code with the file it comes from.
+    MgefCode,
 }
 
 impl StringClass {
@@ -107,6 +110,10 @@ impl StringDef {
         let (def, nd) = NamedDefBase::create(args);
         if class.is_localized() {
             def.def_flags.include(DefFlag::dfTranslatable);
+        }
+        // Port of `TwbStringMgefCodeDef.AfterConstruction`.
+        if class == StringClass::MgefCode {
+            def.def_flags.include(DefFlag::dfCanContainFormID);
         }
         let this = Arc::new_cyclic(|self_ref: &Weak<Self>| Self {
             self_ref: self_ref.clone(),
@@ -264,8 +271,12 @@ impl StringDef {
         result
     }
 
-    /// Port of `ToStringNative`, with the override of `TwbLStringDef`.
+    /// Port of `ToStringNative`, with the overrides of `TwbLStringDef` and
+    /// `TwbStringMgefCodeDef`.
     fn to_string_native(&self, data: DataPtr, element: ElementArg, transform: StringTransformType) -> String {
+        if self.class == StringClass::MgefCode {
+            return self.mgef_code_to_string_native(data, element, transform);
+        }
         if !(self.class.is_localized() && Self::element_is_localized(element)) {
             return self.string_to_string_native(data, element, transform);
         }
@@ -287,6 +298,76 @@ impl StringDef {
         } else {
             format!("lstring ID [{id:08X}] could not be resolved")
         }
+    }
+
+    /// Port of `TwbStringMgefCodeDef.ToStringNative`.
+    fn mgef_code_to_string_native(&self, data: DataPtr, element: ElementArg, transform: StringTransformType) -> String {
+        use StringTransformType::*;
+        let bytes = data.unwrap_or_default();
+        let mut len = bytes.len();
+        if self.sd_size > 0 && len > self.sd_size as usize {
+            len = self.sd_size as usize;
+        }
+        if self.sd_forward {
+            len = bytes[..len].iter().position(|&byte| byte == 0).unwrap_or(len);
+        } else {
+            while len > 0 && bytes[len - 1] == 0 {
+                len -= 1;
+            }
+        }
+        if len == 4 {
+            // UPSTREAM-QUIRK: the loop tests the first character four times.
+            let is_alpha = bytes[0].is_ascii_alphanumeric() || bytes[0] == b'_';
+            if !is_alpha {
+                let code = u32::from_le_bytes(bytes[..4].try_into().unwrap());
+                if code & 0x8000_0000 != 0
+                    && let Some(element) = element
+                    && let Some(file) = element.get_file()
+                {
+                    if transform == ttCheck {
+                        return String::new();
+                    }
+                    let file_id = (code & 0xFF) as i32;
+                    let file_name = if file_id >= file.get_master_count(false) {
+                        file.get_name()
+                    } else {
+                        file.get_master(file_id, false)
+                            .map(|master| master.get_name())
+                            .unwrap_or_default()
+                    };
+                    return format!("{file_name}:{}", (code & !0x8000_00FF) >> 8);
+                }
+                if transform == ttCheck {
+                    return "Effect Code is neither alphanumeric nor dynamic".to_owned();
+                }
+                let mut result = format!("{code:08X}");
+                if transform == ttToString {
+                    result.push_str(" <Warning: Effect Code is neither alphanumeric nor dynamic>");
+                }
+                return result;
+            }
+        }
+        let mut result = self.string_to_string_native(data, element, transform);
+        let mut length = result.chars().count();
+        if transform == ttCheck {
+            if length == 0 {
+                result = self.string_to_string_native(data, element, ttToString);
+                length = result.chars().count();
+            } else {
+                return result;
+            }
+        }
+        if length != 4 {
+            match transform {
+                ttToString => result.push_str(&format!(" <Warning: Expected 4 bytes but found {length}>")),
+                ttCheck => return format!("Expected 4 bytes but found {length}: {result}"),
+                _ => {}
+            }
+        }
+        if transform == ttCheck {
+            return String::new();
+        }
+        result
     }
 
     /// Port of `TransformString` with the overrides of the descendants.
@@ -458,6 +539,20 @@ impl ValueDef for StringDef {
             to_str(&mut result, data, element, CallbackType::ctCheck);
         }
         result
+    }
+
+    /// Port of `TwbStringMgefCodeDef.GetLinksTo`: the magic effect with the
+    /// code as its editor ID.
+    fn get_links_to(&self, data: DataPtr, element: ElementArg) -> Option<ElementRef> {
+        if let Some(callback) = self.vd.vd_links_to_callback.load().as_deref() {
+            return callback(element);
+        }
+        if self.class != StringClass::MgefCode {
+            return None;
+        }
+        let file = element?.get_file()?;
+        let key = self.to_string_transform(data, element, StringTransformType::ttToSortKey);
+        file.get_record_by_editor_id(&key).map(|record| record as ElementRef)
     }
 
     fn get_size(&self, data: DataPtr, element: ElementArg) -> i32 {
