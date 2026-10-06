@@ -430,6 +430,16 @@ impl ContainerBase {
         self.cnt_elements.read().unwrap().clone()
     }
 
+    /// The number of elements, without copying the list.
+    pub(crate) fn element_count(&self) -> usize {
+        self.cnt_elements.read().unwrap().len()
+    }
+
+    /// The element at `index`, without copying the list.
+    pub(crate) fn element_at(&self, index: usize) -> Option<ElementRef> {
+        self.cnt_elements.read().unwrap().get(index).cloned()
+    }
+
     /// Port of `ReleaseElements`: the container gives up its elements.
     pub(crate) fn release_elements(&self) -> Vec<ElementRef> {
         std::mem::take(&mut *self.cnt_elements.write().unwrap())
@@ -2032,11 +2042,11 @@ impl Container for FileImpl {
     }
 
     fn get_element_count(&self) -> i32 {
-        self.container.elements().len() as i32
+        self.container.element_count() as i32
     }
 
     fn get_element(&self, index: i32) -> Option<ElementRef> {
-        self.container.elements().get(usize::try_from(index).ok()?).cloned()
+        self.container.element_at(usize::try_from(index).ok()?)
     }
 
     fn get_element_by_sort_order(&self, sort_order: i32) -> Option<ElementRef> {
@@ -2235,11 +2245,11 @@ impl Container for GroupRecordImpl {
     }
 
     fn get_element_count(&self) -> i32 {
-        self.container.elements().len() as i32
+        self.container.element_count() as i32
     }
 
     fn get_element(&self, index: i32) -> Option<ElementRef> {
-        self.container.elements().get(usize::try_from(index).ok()?).cloned()
+        self.container.element_at(usize::try_from(index).ok()?)
     }
 
     fn get_element_by_sort_order(&self, sort_order: i32) -> Option<ElementRef> {
@@ -2422,12 +2432,12 @@ impl Container for MainRecordImpl {
 
     fn get_element_count(&self) -> i32 {
         self.self_arc().do_init();
-        self.container.elements().len() as i32
+        self.container.element_count() as i32
     }
 
     fn get_element(&self, index: i32) -> Option<ElementRef> {
         self.self_arc().do_init();
-        self.container.elements().get(usize::try_from(index).ok()?).cloned()
+        self.container.element_at(usize::try_from(index).ok()?)
     }
 
     fn get_element_by_sort_order(&self, sort_order: i32) -> Option<ElementRef> {
