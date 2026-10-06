@@ -72,11 +72,6 @@ pub fn wb_cell_combined_refs_counter(_a_base_ptr: DataPtr, _a_element: ElementAr
     todo!("port wbCELLCombinedRefsCounter from wbDefinitionsFO4.pas line 2530")
 }
 
-/// Upstream `wbCellLightingIsRemovable`, line 136 of `wbDefinitionsFO4.pas`.
-pub fn wb_cell_lighting_is_removable(_a_element: ElementArg) -> bool {
-    todo!("port wbCellLightingIsRemovable from wbDefinitionsFO4.pas line 136")
-}
-
 /// Upstream `wbCELLDATAAfterSet`, line 2206 of `wbDefinitionsFO4.pas`.
 pub fn wb_celldata_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
     todo!("port wbCELLDATAAfterSet from wbDefinitionsFO4.pas line 2206")
@@ -95,11 +90,6 @@ pub fn wb_clfm_color_to_int(_a_string: &str, _a_element: ElementArg) -> i64 {
 /// Upstream `wbCLFMColorToStr`, line 1575 of `wbDefinitionsFO4.pas`.
 pub fn wb_clfm_color_to_str(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) -> String {
     todo!("port wbCLFMColorToStr from wbDefinitionsFO4.pas line 1575")
-}
-
-/// Upstream `wbClmtMoonsPhaseLength`, line 200 of `wbDefinitionsFO4.pas`.
-pub fn wb_clmt_moons_phase_length(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) -> String {
-    todo!("port wbClmtMoonsPhaseLength from wbDefinitionsFO4.pas line 200")
 }
 
 /// Upstream `wbClmtTime`, line 201 of `wbDefinitionsFO4.pas`.
@@ -252,21 +242,6 @@ pub fn wb_face_morph_to_str(_a_int: i64, _a_element: ElementArg, _a_type: Callba
     todo!("port wbFaceMorphToStr from wbDefinitionsFO4.pas line 2877")
 }
 
-/// Upstream `wbFlagNavmeshBoundingBoxDontSHow`, line 85 of `wbDefinitionsFO4.pas`.
-pub fn wb_flag_navmesh_bounding_box_dont_s_how(_a_element: ElementArg) -> bool {
-    todo!("port wbFlagNavmeshBoundingBoxDontSHow from wbDefinitionsFO4.pas line 85")
-}
-
-/// Upstream `wbFlagNavmeshFilterDontSHow`, line 84 of `wbDefinitionsFO4.pas`.
-pub fn wb_flag_navmesh_filter_dont_s_how(_a_element: ElementArg) -> bool {
-    todo!("port wbFlagNavmeshFilterDontSHow from wbDefinitionsFO4.pas line 84")
-}
-
-/// Upstream `wbFlagNavmeshGroundDontSHow`, line 88 of `wbDefinitionsFO4.pas`.
-pub fn wb_flag_navmesh_ground_dont_s_how(_a_element: ElementArg) -> bool {
-    todo!("port wbFlagNavmeshGroundDontSHow from wbDefinitionsFO4.pas line 88")
-}
-
 /// Upstream `wbFLSTEDIDAfterSet`, line 1259 of `wbDefinitionsFO4.pas`.
 pub fn wb_flstedid_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
     todo!("port wbFLSTEDIDAfterSet from wbDefinitionsFO4.pas line 1259")
@@ -317,11 +292,6 @@ pub fn wb_int_to_hex_str(_a_int: i64, _a_element: ElementArg, _a_type: CallbackT
     todo!("port wbIntToHexStr from wbDefinitionsFO4.pas line 2664")
 }
 
-/// Upstream `wbLCTNCellDontShow`, line 105 of `wbDefinitionsFO4.pas`.
-pub fn wb_lctn_cell_dont_show(_a_element: ElementArg) -> bool {
-    todo!("port wbLCTNCellDontShow from wbDefinitionsFO4.pas line 105")
-}
-
 /// Upstream `wbLLEAfterLoad`, line 2297 of `wbDefinitionsFO4.pas`.
 pub fn wb_lle_after_load(_a_element: &ElementRef) {
     todo!("port wbLLEAfterLoad from wbDefinitionsFO4.pas line 2297")
@@ -335,16 +305,6 @@ pub fn wb_mesg_after_load(_a_element: &ElementRef) {
 /// Upstream `wbMESGDNAMAfterSet`, line 61 of `wbDefinitionsFO4.pas`.
 pub fn wb_mesgdnam_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
     todo!("port wbMESGDNAMAfterSet from wbDefinitionsFO4.pas line 61")
-}
-
-/// Upstream `wbMESGTNAMDontShow`, line 103 of `wbDefinitionsFO4.pas`.
-pub fn wb_mesgtnam_dont_show(_a_element: ElementArg) -> bool {
-    todo!("port wbMESGTNAMDontShow from wbDefinitionsFO4.pas line 103")
-}
-
-/// Upstream `wbMessageTNAMIsRemovable`, line 137 of `wbDefinitionsFO4.pas`.
-pub fn wb_message_tnam_is_removable(_a_element: ElementArg) -> bool {
-    todo!("port wbMessageTNAMIsRemovable from wbDefinitionsFO4.pas line 137")
 }
 
 /// Upstream `wbMGEFArchtypeAfterSet`, line 1444 of `wbDefinitionsFO4.pas`.
@@ -496,26 +456,6 @@ pub fn wb_refr_record_flags_decider(_a_element: ElementArg) -> i32 {
     todo!("port wbREFRRecordFlagsDecider from wbDefinitionsFO4.pas line 2616")
 }
 
-/// Upstream `wbREGNGrassDontShow`, line 107 of `wbDefinitionsFO4.pas`.
-pub fn wb_regn_grass_dont_show(_a_element: ElementArg) -> bool {
-    todo!("port wbREGNGrassDontShow from wbDefinitionsFO4.pas line 107")
-}
-
-/// Upstream `wbREGNMapDontShow`, line 110 of `wbDefinitionsFO4.pas`.
-pub fn wb_regn_map_dont_show(_a_element: ElementArg) -> bool {
-    todo!("port wbREGNMapDontShow from wbDefinitionsFO4.pas line 110")
-}
-
-/// Upstream `wbREGNObjectsDontShow`, line 111 of `wbDefinitionsFO4.pas`.
-pub fn wb_regn_objects_dont_show(_a_element: ElementArg) -> bool {
-    todo!("port wbREGNObjectsDontShow from wbDefinitionsFO4.pas line 111")
-}
-
-/// Upstream `wbREGNWeatherDontShow`, line 113 of `wbDefinitionsFO4.pas`.
-pub fn wb_regn_weather_dont_show(_a_element: ElementArg) -> bool {
-    todo!("port wbREGNWeatherDontShow from wbDefinitionsFO4.pas line 113")
-}
-
 /// Upstream `wbSCENBehaviorEnumAfterLoad`, line 3155 of `wbDefinitionsFO4.pas`.
 pub fn wb_scen_behavior_enum_after_load(_a_element: &ElementRef) {
     todo!("port wbSCENBehaviorEnumAfterLoad from wbDefinitionsFO4.pas line 3155")
@@ -628,14 +568,4 @@ pub fn wb_world_after_load(_a_element: &ElementRef) {
 /// Upstream `wbWorldAfterSet`, line 69 of `wbDefinitionsFO4.pas`.
 pub fn wb_world_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
     todo!("port wbWorldAfterSet from wbDefinitionsFO4.pas line 69")
-}
-
-/// Upstream `wbWorldClimateIsRemovable`, line 142 of `wbDefinitionsFO4.pas`.
-pub fn wb_world_climate_is_removable(_a_element: ElementArg) -> bool {
-    todo!("port wbWorldClimateIsRemovable from wbDefinitionsFO4.pas line 142")
-}
-
-/// Upstream `wbWorldWaterIsRemovable`, line 141 of `wbDefinitionsFO4.pas`.
-pub fn wb_world_water_is_removable(_a_element: ElementArg) -> bool {
-    todo!("port wbWorldWaterIsRemovable from wbDefinitionsFO4.pas line 141")
 }

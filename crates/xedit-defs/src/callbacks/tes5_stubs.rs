@@ -67,19 +67,9 @@ pub fn wb_book_data_flags_after_set(_a_element: &ElementRef, _a_old_value: &Vari
     todo!("port wbBOOKDataFlagsAfterSet from wbDefinitionsTES5.pas line 55")
 }
 
-/// Upstream `wbBookTeachesDontSHow`, line 94 of `wbDefinitionsTES5.pas`.
-pub fn wb_book_teaches_dont_s_how(_a_element: ElementArg) -> bool {
-    todo!("port wbBookTeachesDontSHow from wbDefinitionsTES5.pas line 94")
-}
-
 /// Upstream `wbCELLAfterLoad`, line 1773 of `wbDefinitionsTES5.pas`.
 pub fn wb_cell_after_load(_a_element: &ElementRef) {
     todo!("port wbCELLAfterLoad from wbDefinitionsTES5.pas line 1773")
-}
-
-/// Upstream `wbCellLightingIsRemovable`, line 136 of `wbDefinitionsTES5.pas`.
-pub fn wb_cell_lighting_is_removable(_a_element: ElementArg) -> bool {
-    todo!("port wbCellLightingIsRemovable from wbDefinitionsTES5.pas line 136")
 }
 
 /// Upstream `wbCELLDATAAfterSet`, line 1757 of `wbDefinitionsTES5.pas`.
@@ -90,11 +80,6 @@ pub fn wb_celldata_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a
 /// Upstream `wbCELLXCLWGetConflictPriority`, line 1722 of `wbDefinitionsTES5.pas`.
 pub fn wb_cellxclw_get_conflict_priority(_a_element: ElementArg, _a_conflict_priority: &mut ConflictPriority) {
     todo!("port wbCELLXCLWGetConflictPriority from wbDefinitionsTES5.pas line 1722")
-}
-
-/// Upstream `wbClmtMoonsPhaseLength`, line 200 of `wbDefinitionsTES5.pas`.
-pub fn wb_clmt_moons_phase_length(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) -> String {
-    todo!("port wbClmtMoonsPhaseLength from wbDefinitionsTES5.pas line 200")
 }
 
 /// Upstream `wbClmtTime`, line 201 of `wbDefinitionsTES5.pas`.
@@ -197,21 +182,6 @@ pub fn wb_epfd_actor_value_to_str(_a_int: i64, _a_element: ElementArg, _a_type: 
     todo!("port wbEPFDActorValueToStr from wbDefinitionsTES5.pas line 889")
 }
 
-/// Upstream `wbFlagNavmeshBoundingBoxDontSHow`, line 85 of `wbDefinitionsTES5.pas`.
-pub fn wb_flag_navmesh_bounding_box_dont_s_how(_a_element: ElementArg) -> bool {
-    todo!("port wbFlagNavmeshBoundingBoxDontSHow from wbDefinitionsTES5.pas line 85")
-}
-
-/// Upstream `wbFlagNavmeshFilterDontSHow`, line 84 of `wbDefinitionsTES5.pas`.
-pub fn wb_flag_navmesh_filter_dont_s_how(_a_element: ElementArg) -> bool {
-    todo!("port wbFlagNavmeshFilterDontSHow from wbDefinitionsTES5.pas line 84")
-}
-
-/// Upstream `wbFlagNavmeshGroundDontSHow`, line 88 of `wbDefinitionsTES5.pas`.
-pub fn wb_flag_navmesh_ground_dont_s_how(_a_element: ElementArg) -> bool {
-    todo!("port wbFlagNavmeshGroundDontSHow from wbDefinitionsTES5.pas line 88")
-}
-
 /// Upstream `wbFLSTEDIDAfterSet`, line 1041 of `wbDefinitionsTES5.pas`.
 pub fn wb_flstedid_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
     todo!("port wbFLSTEDIDAfterSet from wbDefinitionsTES5.pas line 1041")
@@ -232,34 +202,9 @@ pub fn wb_infopnam_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a
     todo!("port wbINFOPNAMAfterSet from wbDefinitionsTES5.pas line 997")
 }
 
-/// Upstream `wbLCTNCellDontShow`, line 105 of `wbDefinitionsTES5.pas`.
-pub fn wb_lctn_cell_dont_show(_a_element: ElementArg) -> bool {
-    todo!("port wbLCTNCellDontShow from wbDefinitionsTES5.pas line 105")
-}
-
-/// Upstream `wbLIGHCarryDontShow`, line 99 of `wbDefinitionsTES5.pas`.
-pub fn wb_ligh_carry_dont_show(_a_element: ElementArg) -> bool {
-    todo!("port wbLIGHCarryDontShow from wbDefinitionsTES5.pas line 99")
-}
-
 /// Upstream `wbLIGHDataFlagsAfterSet`, line 2176 of `wbDefinitionsTES5.pas`.
 pub fn wb_ligh_data_flags_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
     todo!("port wbLIGHDataFlagsAfterSet from wbDefinitionsTES5.pas line 2176")
-}
-
-/// Upstream `wbLIGHFalloffDontShow`, line 100 of `wbDefinitionsTES5.pas`.
-pub fn wb_ligh_falloff_dont_show(_a_element: ElementArg) -> bool {
-    todo!("port wbLIGHFalloffDontShow from wbDefinitionsTES5.pas line 100")
-}
-
-/// Upstream `wbLIGHFlickerDontShow`, line 101 of `wbDefinitionsTES5.pas`.
-pub fn wb_ligh_flicker_dont_show(_a_element: ElementArg) -> bool {
-    todo!("port wbLIGHFlickerDontShow from wbDefinitionsTES5.pas line 101")
-}
-
-/// Upstream `wbLIGHShadowSpotDontShow`, line 102 of `wbDefinitionsTES5.pas`.
-pub fn wb_ligh_shadow_spot_dont_show(_a_element: ElementArg) -> bool {
-    todo!("port wbLIGHShadowSpotDontShow from wbDefinitionsTES5.pas line 102")
 }
 
 /// Upstream `wbMESGAfterLoad`, line 43 of `wbDefinitionsTES5.pas`.
@@ -270,16 +215,6 @@ pub fn wb_mesg_after_load(_a_element: &ElementRef) {
 /// Upstream `wbMESGDNAMAfterSet`, line 61 of `wbDefinitionsTES5.pas`.
 pub fn wb_mesgdnam_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
     todo!("port wbMESGDNAMAfterSet from wbDefinitionsTES5.pas line 61")
-}
-
-/// Upstream `wbMESGTNAMDontShow`, line 103 of `wbDefinitionsTES5.pas`.
-pub fn wb_mesgtnam_dont_show(_a_element: ElementArg) -> bool {
-    todo!("port wbMESGTNAMDontShow from wbDefinitionsTES5.pas line 103")
-}
-
-/// Upstream `wbMessageTNAMIsRemovable`, line 137 of `wbDefinitionsTES5.pas`.
-pub fn wb_message_tnam_is_removable(_a_element: ElementArg) -> bool {
-    todo!("port wbMessageTNAMIsRemovable from wbDefinitionsTES5.pas line 137")
 }
 
 /// Upstream `wbMGEFArchtypeAfterSet`, line 1210 of `wbDefinitionsTES5.pas`.
@@ -305,11 +240,6 @@ pub fn wb_pack_date_after_load(_a_element: &ElementRef) {
 /// Upstream `wbPACKDateAfterSet`, line 62 of `wbDefinitionsTES5.pas`.
 pub fn wb_pack_date_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
     todo!("port wbPACKDateAfterSet from wbDefinitionsTES5.pas line 62")
-}
-
-/// Upstream `wbPACKTemplateDontShow`, line 106 of `wbDefinitionsTES5.pas`.
-pub fn wb_pack_template_dont_show(_a_element: ElementArg) -> bool {
-    todo!("port wbPACKTemplateDontShow from wbDefinitionsTES5.pas line 106")
 }
 
 /// Upstream `wbPackageDataInputValueTypeAfterSet`, line 1931 of `wbDefinitionsTES5.pas`.
@@ -369,31 +299,6 @@ pub fn wb_refr_after_load(_a_element: &ElementRef) {
 /// Upstream `wbREFRNavmeshTriangleToStr`, line 219 of `wbDefinitionsTES5.pas`.
 pub fn wb_refr_navmesh_triangle_to_str(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) -> String {
     todo!("port wbREFRNavmeshTriangleToStr from wbDefinitionsTES5.pas line 219")
-}
-
-/// Upstream `wbREGNGrassDontShow`, line 107 of `wbDefinitionsTES5.pas`.
-pub fn wb_regn_grass_dont_show(_a_element: ElementArg) -> bool {
-    todo!("port wbREGNGrassDontShow from wbDefinitionsTES5.pas line 107")
-}
-
-/// Upstream `wbREGNLandDontShow`, line 109 of `wbDefinitionsTES5.pas`.
-pub fn wb_regn_land_dont_show(_a_element: ElementArg) -> bool {
-    todo!("port wbREGNLandDontShow from wbDefinitionsTES5.pas line 109")
-}
-
-/// Upstream `wbREGNMapDontShow`, line 110 of `wbDefinitionsTES5.pas`.
-pub fn wb_regn_map_dont_show(_a_element: ElementArg) -> bool {
-    todo!("port wbREGNMapDontShow from wbDefinitionsTES5.pas line 110")
-}
-
-/// Upstream `wbREGNObjectsDontShow`, line 111 of `wbDefinitionsTES5.pas`.
-pub fn wb_regn_objects_dont_show(_a_element: ElementArg) -> bool {
-    todo!("port wbREGNObjectsDontShow from wbDefinitionsTES5.pas line 111")
-}
-
-/// Upstream `wbREGNWeatherDontShow`, line 113 of `wbDefinitionsTES5.pas`.
-pub fn wb_regn_weather_dont_show(_a_element: ElementArg) -> bool {
-    todo!("port wbREGNWeatherDontShow from wbDefinitionsTES5.pas line 113")
 }
 
 /// Upstream `wbSceneActionTypeAfterSet`, line 65 of `wbDefinitionsTES5.pas`.
@@ -479,19 +384,4 @@ pub fn wb_world_after_load(_a_element: &ElementRef) {
 /// Upstream `wbWorldAfterSet`, line 69 of `wbDefinitionsTES5.pas`.
 pub fn wb_world_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
     todo!("port wbWorldAfterSet from wbDefinitionsTES5.pas line 69")
-}
-
-/// Upstream `wbWorldClimateIsRemovable`, line 142 of `wbDefinitionsTES5.pas`.
-pub fn wb_world_climate_is_removable(_a_element: ElementArg) -> bool {
-    todo!("port wbWorldClimateIsRemovable from wbDefinitionsTES5.pas line 142")
-}
-
-/// Upstream `wbWorldWaterIsRemovable`, line 141 of `wbDefinitionsTES5.pas`.
-pub fn wb_world_water_is_removable(_a_element: ElementArg) -> bool {
-    todo!("port wbWorldWaterIsRemovable from wbDefinitionsTES5.pas line 141")
-}
-
-/// Upstream `wbWorldXWEMDontShow`, line 116 of `wbDefinitionsTES5.pas`.
-pub fn wb_world_xwem_dont_show(_a_element: ElementArg) -> bool {
-    todo!("port wbWorldXWEMDontShow from wbDefinitionsTES5.pas line 116")
 }
