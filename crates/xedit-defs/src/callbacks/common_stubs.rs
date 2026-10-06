@@ -37,6 +37,11 @@ pub fn wb_condition_run_on_after_set(_a_element: &ElementRef, _a_old_value: &Var
     todo!("port wbConditionRunOnAfterSet from wbDefinitionsCommon.pas line 57")
 }
 
+/// Upstream `wbConditionSummaryLinksTo`, line 149 of `wbDefinitionsCommon.pas`.
+pub fn wb_condition_summary_links_to(_a_element: ElementArg) -> Option<ElementRef> {
+    todo!("port wbConditionSummaryLinksTo from wbDefinitionsCommon.pas line 149")
+}
+
 /// Upstream `wbConditionTypeAfterSet`, line 56 of `wbDefinitionsCommon.pas`.
 pub fn wb_condition_type_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
     todo!("port wbConditionTypeAfterSet from wbDefinitionsCommon.pas line 56")
@@ -65,6 +70,11 @@ pub fn wb_idle_marker_pnam_after_set(_a_element: &ElementRef, _a_old_value: &Var
 /// Upstream `wbIdleMarkerQNAMAfterSet`, line 60 of `wbDefinitionsCommon.pas`.
 pub fn wb_idle_marker_qnam_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
     todo!("port wbIdleMarkerQNAMAfterSet from wbDefinitionsCommon.pas line 60")
+}
+
+/// Upstream `wbIntPrefixedStrToInt`, line 184 of `wbDefinitionsCommon.pas`.
+pub fn wb_int_prefixed_str_to_int(_a_string: &str, _a_element: ElementArg) -> i64 {
+    todo!("port wbIntPrefixedStrToInt from wbDefinitionsCommon.pas line 184")
 }
 
 /// Upstream `wbLGDIFiltersToStr`, line 212 of `wbDefinitionsCommon.pas`.

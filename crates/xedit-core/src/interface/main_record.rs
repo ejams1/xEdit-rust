@@ -25,13 +25,15 @@ use super::struct_def::{StructDef, set_array_entry};
 use super::sub_record::{RecordMemberDef, SignatureDef, signature_def_get_full_name};
 use super::sub_record_group::{RecordDef, struct_keys_to_summary};
 use super::types::{
-    CallbackType, ConflictPriority, DefType, KNOWN_SUB_RECORD_SIGNATURES, KnownSubRecord, KnownSubRecordSignatures,
-    PascalEnum, Signature,
+    CallbackType, ConflictPriority, DefType, KnownSubRecord, KnownSubRecordSignatures, PascalEnum, Signature,
 };
 
 pub type AddInfoCallback = Arc<dyn Fn(&MainRecordRef) -> String + Send + Sync>;
 pub type MainRecordGetFormIDCallback = Arc<dyn Fn(&MainRecordRef) -> Option<FormID> + Send + Sync>;
 pub type MainRecordIdentityCallback = Arc<dyn Fn(&MainRecordRef) -> String + Send + Sync>;
+/// Upstream `TwbMainRecordSetEditorIDCallback`: writes the editor ID of a
+/// Morrowind record, whose editor ID is not always in `EDID`.
+pub type MainRecordSetEditorIDCallback = Arc<dyn Fn(&ElementRef, &str) + Send + Sync>;
 /// Gives the editor ID from the subrecord that holds it.
 pub type MainRecordGetEditorIDCallback = Arc<dyn Fn(&ElementRef) -> String + Send + Sync>;
 /// Gives the grid cell from the subrecord that holds it.
@@ -226,6 +228,7 @@ pub struct MainRecordDef {
     rec_known_sr_members: [i32; 5],
     rec_get_form_id_callback: DefCell<MainRecordGetFormIDCallback>,
     rec_identity_callback: DefCell<MainRecordIdentityCallback>,
+    rec_set_editor_id_callback: DefCell<MainRecordSetEditorIDCallback>,
     rec_get_editor_id_callback: DefCell<MainRecordGetEditorIDCallback>,
     rec_get_grid_cell_callback: DefCell<MainRecordGetGridCellCallback>,
     rec_form_id_base: AtomicU8,
@@ -241,7 +244,9 @@ pub struct MainRecordDef {
 impl MainRecordDef {
     /// Port of `TwbMainRecordDef.Create`.
     pub fn create(args: MainRecordDefArgs) -> Result<Arc<Self>, MainRecordDefError> {
-        let known_srs = args.known_srs.unwrap_or(KNOWN_SUB_RECORD_SIGNATURES);
+        let known_srs = args
+            .known_srs
+            .unwrap_or_else(super::globals::known_sub_record_signatures);
         let known = |role: KnownSubRecord| known_srs[role.ord()];
         let name = if args.name.is_empty() {
             args.signature.to_string()
@@ -356,6 +361,7 @@ impl MainRecordDef {
                 rec_known_sr_members,
                 rec_get_form_id_callback: DefCell::default(),
                 rec_identity_callback: DefCell::default(),
+                rec_set_editor_id_callback: DefCell::default(),
                 rec_get_editor_id_callback: DefCell::default(),
                 rec_get_grid_cell_callback: DefCell::default(),
                 rec_form_id_base: AtomicU8::new(0),
@@ -398,6 +404,8 @@ impl MainRecordDef {
         NamedDefBase::after_clone(&*this, source);
         this.rec_get_form_id_callback.assign(&source.rec_get_form_id_callback);
         this.rec_identity_callback.assign(&source.rec_identity_callback);
+        this.rec_set_editor_id_callback
+            .assign(&source.rec_set_editor_id_callback);
         this.rec_get_editor_id_callback
             .assign(&source.rec_get_editor_id_callback);
         this.rec_get_grid_cell_callback
@@ -642,6 +650,14 @@ impl MainRecordDef {
     pub fn set_get_form_id_callback(self: Arc<Self>, callback: Option<MainRecordGetFormIDCallback>) -> Arc<Self> {
         let this = self.unlocked();
         this.rec_get_form_id_callback.set(callback);
+        this
+    }
+
+    /// Upstream `SetSetEditorIDCallback`. The callback is used by the write
+    /// path.
+    pub fn set_set_editor_id_callback(self: Arc<Self>, callback: Option<MainRecordSetEditorIDCallback>) -> Arc<Self> {
+        let this = self.unlocked();
+        this.rec_set_editor_id_callback.set(callback);
         this
     }
 

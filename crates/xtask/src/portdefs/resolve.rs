@@ -8,7 +8,7 @@ use std::collections::HashMap;
 
 use anyhow::{Result, bail};
 
-use super::model::{RoutineSig, Symbols, Ty};
+use super::model::{RoutineSig, Symbols, Ty, TypeKind};
 use crate::pascal::ast::{Expr, Param, Routine, TypeRef};
 
 /// The local names of a routine body: parameters and variables.
@@ -120,7 +120,19 @@ impl<'a> Resolver<'a> {
             },
             Expr::Unary { op, operand } => {
                 if op == "@" {
-                    Ty::Unknown
+                    // The address of a value is of the pointer type declared
+                    // for its type, such as `PwbKnownSubRecordSignatures`.
+                    match self.ty_of(operand, scope) {
+                        Ty::Named(pointee) => self
+                            .symbols
+                            .types
+                            .iter()
+                            .find(|(_, info)| {
+                                matches!(&info.kind, TypeKind::Pointer(target) if target.eq_ignore_ascii_case(&pointee))
+                            })
+                            .map_or(Ty::Unknown, |(name, _)| Ty::Named(name.clone())),
+                        _ => Ty::Unknown,
+                    }
                 } else {
                     self.ty_of(operand, scope)
                 }
@@ -254,6 +266,27 @@ impl<'a> Resolver<'a> {
                 .filter(|(c, _)| c == cost)
                 .map(|(_, index)| *index)
                 .collect();
+            // A routine of a unit hides the routines of the units it uses, so
+            // among overloads from different units the last unit wins (the
+            // overloads are in the order their units were added).
+            let last_unit = tied.iter().map(|&index| &overloads[index].unit).max_by_key(|unit| {
+                overloads
+                    .iter()
+                    .rposition(|overload| &overload.unit == *unit)
+                    .unwrap_or(0)
+            });
+            if let Some(last_unit) = last_unit {
+                let own: Vec<usize> = tied
+                    .iter()
+                    .copied()
+                    .filter(|&index| &overloads[index].unit == last_unit)
+                    .collect();
+                if let [index] = own.as_slice()
+                    && own.len() < tied.len()
+                {
+                    return Ok((Resolved { overload: *index }, &overloads[*index]));
+                }
+            }
             let wide = args.iter().any(|arg| match arg {
                 Expr::Int { digits, hex: true } => u64::from_str_radix(digits, 16).is_ok_and(|v| v > i32::MAX as u64),
                 Expr::Int { digits, hex: false } => digits.parse::<u64>().is_ok_and(|v| v > i32::MAX as u64),

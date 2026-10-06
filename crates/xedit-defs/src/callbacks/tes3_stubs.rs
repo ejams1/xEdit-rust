@@ -12,6 +12,86 @@
 
 use xedit_core::interface::*;
 
+/// Upstream `anonymous routine in define_tes3`, line 1126 of `wbDefinitionsTES3.pas`.
+pub fn define_tes3_anonymous_1126(_a_sub_record: &ElementRef) -> Option<GridCell> {
+    todo!("port anonymous routine in define_tes3 from wbDefinitionsTES3.pas line 1126")
+}
+
+/// Upstream `anonymous routine in define_tes3`, line 1135 of `wbDefinitionsTES3.pas`.
+pub fn define_tes3_anonymous_1135(_a_main_record: &MainRecordRef) -> Option<FormID> {
+    todo!("port anonymous routine in define_tes3 from wbDefinitionsTES3.pas line 1135")
+}
+
+/// Upstream `anonymous routine in define_tes3`, line 1139 of `wbDefinitionsTES3.pas`.
+pub fn define_tes3_anonymous_1139(_a_main_record: &MainRecordRef) -> String {
+    todo!("port anonymous routine in define_tes3 from wbDefinitionsTES3.pas line 1139")
+}
+
+/// Upstream `anonymous routine in define_tes3`, line 1702 of `wbDefinitionsTES3.pas`.
+pub fn define_tes3_anonymous_1702(_a_main_record: &MainRecordRef) -> Option<FormID> {
+    todo!("port anonymous routine in define_tes3 from wbDefinitionsTES3.pas line 1702")
+}
+
+/// Upstream `anonymous routine in define_tes3`, line 1706 of `wbDefinitionsTES3.pas`.
+pub fn define_tes3_anonymous_1706(_a_main_record: &MainRecordRef) -> String {
+    todo!("port anonymous routine in define_tes3 from wbDefinitionsTES3.pas line 1706")
+}
+
+/// Upstream `anonymous routine in define_tes3`, line 2029 of `wbDefinitionsTES3.pas`.
+pub fn define_tes3_anonymous_2029(_a_sub_record: &ElementRef) -> Option<GridCell> {
+    todo!("port anonymous routine in define_tes3 from wbDefinitionsTES3.pas line 2029")
+}
+
+/// Upstream `anonymous routine in define_tes3`, line 2036 of `wbDefinitionsTES3.pas`.
+pub fn define_tes3_anonymous_2036(_a_main_record: &MainRecordRef) -> Option<FormID> {
+    todo!("port anonymous routine in define_tes3 from wbDefinitionsTES3.pas line 2036")
+}
+
+/// Upstream `anonymous routine in define_tes3`, line 2040 of `wbDefinitionsTES3.pas`.
+pub fn define_tes3_anonymous_2040(_a_main_record: &MainRecordRef) -> String {
+    todo!("port anonymous routine in define_tes3 from wbDefinitionsTES3.pas line 2040")
+}
+
+/// Upstream `anonymous routine in define_tes3`, line 2170 of `wbDefinitionsTES3.pas`.
+pub fn define_tes3_anonymous_2170(_a_main_record: &MainRecordRef) -> Option<FormID> {
+    todo!("port anonymous routine in define_tes3 from wbDefinitionsTES3.pas line 2170")
+}
+
+/// Upstream `anonymous routine in define_tes3`, line 2251 of `wbDefinitionsTES3.pas`.
+pub fn define_tes3_anonymous_2251(_a_sub_record: &ElementRef) -> String {
+    todo!("port anonymous routine in define_tes3 from wbDefinitionsTES3.pas line 2251")
+}
+
+/// Upstream `anonymous routine in define_tes3`, line 2254 of `wbDefinitionsTES3.pas`.
+pub fn define_tes3_anonymous_2254(_a_sub_record: &ElementRef, _a_editor_id: &str) {
+    todo!("port anonymous routine in define_tes3 from wbDefinitionsTES3.pas line 2254")
+}
+
+/// Upstream `anonymous routine in define_tes3`, line 916 of `wbDefinitionsTES3.pas`.
+pub fn define_tes3_anonymous_916(_a_main_record: &MainRecordRef) -> Option<FormID> {
+    todo!("port anonymous routine in define_tes3 from wbDefinitionsTES3.pas line 916")
+}
+
+/// Upstream `wbCalcPGRCSize`, line 83 of `wbDefinitionsTES3.pas`.
+pub fn wb_calc_pgrc_size(_a_base_ptr: DataPtr, _a_element: ElementArg) -> u32 {
+    todo!("port wbCalcPGRCSize from wbDefinitionsTES3.pas line 83")
+}
+
+/// Upstream `wbCELLAfterLoad`, line 100 of `wbDefinitionsTES3.pas`.
+pub fn wb_cell_after_load(_a_element: &ElementRef) {
+    todo!("port wbCELLAfterLoad from wbDefinitionsTES3.pas line 100")
+}
+
+/// Upstream `wbConditionFunctionDecider`, line 191 of `wbDefinitionsTES3.pas`.
+pub fn wb_condition_function_decider(_a_base_ptr: DataPtr, _a_element: ElementArg) -> i32 {
+    todo!("port wbConditionFunctionDecider from wbDefinitionsTES3.pas line 191")
+}
+
+/// Upstream `wbDeletedAfterLoad`, line 120 of `wbDefinitionsTES3.pas`.
+pub fn wb_deleted_after_load(_a_element: &ElementRef) {
+    todo!("port wbDeletedAfterLoad from wbDefinitionsTES3.pas line 120")
+}
+
 /// Upstream `wbEffectAreaDontShow`, line 136 of `wbDefinitionsTES3.pas`.
 pub fn wb_effect_area_dont_show(_a_element: ElementArg) -> bool {
     todo!("port wbEffectAreaDontShow from wbDefinitionsTES3.pas line 136")
@@ -57,7 +137,47 @@ pub fn wb_effect_skill_dont_show(_a_element: ElementArg) -> bool {
     todo!("port wbEffectSkillDontShow from wbDefinitionsTES3.pas line 162")
 }
 
+/// Upstream `wbFactionReactionToStr`, line 247 of `wbDefinitionsTES3.pas`.
+pub fn wb_faction_reaction_to_str(
+    _a_value: &mut String,
+    _a_base_ptr: DataPtr,
+    _a_element: ElementArg,
+    _a_type: CallbackType,
+) {
+    todo!("port wbFactionReactionToStr from wbDefinitionsTES3.pas line 247")
+}
+
 /// Upstream `wbForwardForReal`, line 261 of `wbDefinitionsTES3.pas`.
 pub fn wb_forward_for_real(_a_element: &ElementRef) {
     todo!("port wbForwardForReal from wbDefinitionsTES3.pas line 261")
+}
+
+/// Upstream `wbFRMRToString`, line 289 of `wbDefinitionsTES3.pas`.
+pub fn wb_frmr_to_string(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) -> String {
+    todo!("port wbFRMRToString from wbDefinitionsTES3.pas line 289")
+}
+
+/// Upstream `wbGlobalAfterLoad`, line 299 of `wbDefinitionsTES3.pas`.
+pub fn wb_global_after_load(_a_element: &ElementRef) {
+    todo!("port wbGlobalAfterLoad from wbDefinitionsTES3.pas line 299")
+}
+
+/// Upstream `wbIngredientAfterLoad`, line 330 of `wbDefinitionsTES3.pas`.
+pub fn wb_ingredient_after_load(_a_element: &ElementRef) {
+    todo!("port wbIngredientAfterLoad from wbDefinitionsTES3.pas line 330")
+}
+
+/// Upstream `wbNPCDataDecider`, line 354 of `wbDefinitionsTES3.pas`.
+pub fn wb_npc_data_decider(_a_base_ptr: DataPtr, _a_element: ElementArg) -> i32 {
+    todo!("port wbNPCDataDecider from wbDefinitionsTES3.pas line 354")
+}
+
+/// Upstream `wbSkillDecider`, line 362 of `wbDefinitionsTES3.pas`.
+pub fn wb_skill_decider(_a_base_ptr: DataPtr, _a_element: ElementArg) -> i32 {
+    todo!("port wbSkillDecider from wbDefinitionsTES3.pas line 362")
+}
+
+/// Upstream `wbTES3AfterLoad`, line 395 of `wbDefinitionsTES3.pas`.
+pub fn wb_tes3_after_load(_a_element: &ElementRef) {
+    todo!("port wbTES3AfterLoad from wbDefinitionsTES3.pas line 395")
 }
