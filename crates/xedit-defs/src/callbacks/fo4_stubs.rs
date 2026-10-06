@@ -22,11 +22,6 @@ pub fn wb_acbs_level_mult_after_set(_a_element: &ElementRef, _a_old_value: &Vari
     todo!("port wbACBSLevelMultAfterSet from wbDefinitionsFO4.pas line 54")
 }
 
-/// Upstream `wbAECHDataDecider`, line 1546 of `wbDefinitionsFO4.pas`.
-pub fn wb_aech_data_decider(_a_base_ptr: DataPtr, _a_element: ElementArg) -> i32 {
-    todo!("port wbAECHDataDecider from wbDefinitionsFO4.pas line 1546")
-}
-
 /// Upstream `wbAECHTypeAfterSet`, line 1689 of `wbDefinitionsFO4.pas`.
 pub fn wb_aech_type_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
     todo!("port wbAECHTypeAfterSet from wbDefinitionsFO4.pas line 1689")
@@ -42,19 +37,9 @@ pub fn wb_armo_after_load(_a_element: &ElementRef) {
     todo!("port wbARMOAfterLoad from wbDefinitionsFO4.pas line 2017")
 }
 
-/// Upstream `wbBOOKTeachesDecider`, line 1700 of `wbDefinitionsFO4.pas`.
-pub fn wb_book_teaches_decider(_a_base_ptr: DataPtr, _a_element: ElementArg) -> i32 {
-    todo!("port wbBOOKTeachesDecider from wbDefinitionsFO4.pas line 1700")
-}
-
 /// Upstream `wbCELLCombinedRefsAfterSet`, line 2540 of `wbDefinitionsFO4.pas`.
 pub fn wb_cell_combined_refs_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
     todo!("port wbCELLCombinedRefsAfterSet from wbDefinitionsFO4.pas line 2540")
-}
-
-/// Upstream `wbCELLCombinedRefsCounter`, line 2530 of `wbDefinitionsFO4.pas`.
-pub fn wb_cell_combined_refs_counter(_a_base_ptr: DataPtr, _a_element: ElementArg) -> u32 {
-    todo!("port wbCELLCombinedRefsCounter from wbDefinitionsFO4.pas line 2530")
 }
 
 /// Upstream `wbCELLDATAAfterSet`, line 2206 of `wbDefinitionsFO4.pas`.
@@ -67,69 +52,14 @@ pub fn wb_cellxclw_get_conflict_priority(_a_element: ElementArg, _a_conflict_pri
     todo!("port wbCELLXCLWGetConflictPriority from wbDefinitionsFO4.pas line 2172")
 }
 
-/// Upstream `wbCLFMColorToInt`, line 1605 of `wbDefinitionsFO4.pas`.
-pub fn wb_clfm_color_to_int(_a_string: &str, _a_element: ElementArg) -> i64 {
-    todo!("port wbCLFMColorToInt from wbDefinitionsFO4.pas line 1605")
-}
-
-/// Upstream `wbCLFMColorToStr`, line 1575 of `wbDefinitionsFO4.pas`.
-pub fn wb_clfm_color_to_str(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) -> String {
-    todo!("port wbCLFMColorToStr from wbDefinitionsFO4.pas line 1575")
-}
-
 /// Upstream `wbClmtTime`, line 201 of `wbDefinitionsFO4.pas`.
 pub fn wb_clmt_time(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) -> String {
     todo!("port wbClmtTime from wbDefinitionsFO4.pas line 201")
 }
 
-/// Upstream `wbCombinedMeshIDToInt`, line 2590 of `wbDefinitionsFO4.pas`.
-pub fn wb_combined_mesh_id_to_int(_a_string: &str, _a_element: ElementArg) -> i64 {
-    todo!("port wbCombinedMeshIDToInt from wbDefinitionsFO4.pas line 2590")
-}
-
-/// Upstream `wbCombinedMeshIDToStr`, line 2566 of `wbDefinitionsFO4.pas`.
-pub fn wb_combined_mesh_id_to_str(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) -> String {
-    todo!("port wbCombinedMeshIDToStr from wbDefinitionsFO4.pas line 2566")
-}
-
 /// Upstream `wbConditionEventToInt`, line 900 of `wbDefinitionsFO4.pas`.
 pub fn wb_condition_event_to_int(_a_string: &str, _a_element: ElementArg) -> i64 {
     todo!("port wbConditionEventToInt from wbDefinitionsFO4.pas line 900")
-}
-
-/// Upstream `wbConditionEventToStr`, line 862 of `wbDefinitionsFO4.pas`.
-pub fn wb_condition_event_to_str(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) -> String {
-    todo!("port wbConditionEventToStr from wbDefinitionsFO4.pas line 862")
-}
-
-/// Upstream `wbConditionFunctionToInt`, line 798 of `wbDefinitionsFO4.pas`.
-pub fn wb_condition_function_to_int(_a_string: &str, _a_element: ElementArg) -> i64 {
-    todo!("port wbConditionFunctionToInt from wbDefinitionsFO4.pas line 798")
-}
-
-/// Upstream `wbConditionFunctionToStr`, line 766 of `wbDefinitionsFO4.pas`.
-pub fn wb_condition_function_to_str(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) -> String {
-    todo!("port wbConditionFunctionToStr from wbDefinitionsFO4.pas line 766")
-}
-
-/// Upstream `wbConditionParam1Decider`, line 810 of `wbDefinitionsFO4.pas`.
-pub fn wb_condition_param1_decider(_a_base_ptr: DataPtr, _a_element: ElementArg) -> i32 {
-    todo!("port wbConditionParam1Decider from wbDefinitionsFO4.pas line 810")
-}
-
-/// Upstream `wbConditionParam2Decider`, line 839 of `wbDefinitionsFO4.pas`.
-pub fn wb_condition_param2_decider(_a_base_ptr: DataPtr, _a_element: ElementArg) -> i32 {
-    todo!("port wbConditionParam2Decider from wbDefinitionsFO4.pas line 839")
-}
-
-/// Upstream `wbConditionQuestOverlay`, line 995 of `wbDefinitionsFO4.pas`.
-pub fn wb_condition_quest_overlay(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) -> i64 {
-    todo!("port wbConditionQuestOverlay from wbDefinitionsFO4.pas line 995")
-}
-
-/// Upstream `wbConditionQuestStageToStr`, line 916 of `wbDefinitionsFO4.pas`.
-pub fn wb_condition_quest_stage_to_str(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) -> String {
-    todo!("port wbConditionQuestStageToStr from wbDefinitionsFO4.pas line 916")
 }
 
 /// Upstream `wbConditionRunOnAfterSet`, line 57 of `wbDefinitionsFO4.pas`.
@@ -145,11 +75,6 @@ pub fn wb_condition_string_to_int(_a_string: &str, _a_element: ElementArg) -> i6
 /// Upstream `wbConditionTypeAfterSet`, line 56 of `wbDefinitionsFO4.pas`.
 pub fn wb_condition_type_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
     todo!("port wbConditionTypeAfterSet from wbDefinitionsFO4.pas line 56")
-}
-
-/// Upstream `wbCoverLinksTo`, line 150 of `wbDefinitionsFO4.pas`.
-pub fn wb_cover_links_to(_a_element: ElementArg) -> Option<ElementRef> {
-    todo!("port wbCoverLinksTo from wbDefinitionsFO4.pas line 150")
 }
 
 /// Upstream `wbDialogueTextAfterLoad`, line 41 of `wbDefinitionsFO4.pas`.
@@ -172,16 +97,6 @@ pub fn wb_efit_after_load(_a_element: &ElementRef) {
     todo!("port wbEFITAfterLoad from wbDefinitionsFO4.pas line 2264")
 }
 
-/// Upstream `wbEPFDDecider`, line 1512 of `wbDefinitionsFO4.pas`.
-pub fn wb_epfd_decider(_a_base_ptr: DataPtr, _a_element: ElementArg) -> i32 {
-    todo!("port wbEPFDDecider from wbDefinitionsFO4.pas line 1512")
-}
-
-/// Upstream `wbFaceMorphToStr`, line 2877 of `wbDefinitionsFO4.pas`.
-pub fn wb_face_morph_to_str(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) -> String {
-    todo!("port wbFaceMorphToStr from wbDefinitionsFO4.pas line 2877")
-}
-
 /// Upstream `wbFLSTEDIDAfterSet`, line 1259 of `wbDefinitionsFO4.pas`.
 pub fn wb_flstedid_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
     todo!("port wbFLSTEDIDAfterSet from wbDefinitionsFO4.pas line 1259")
@@ -197,39 +112,14 @@ pub fn wb_gmstedid_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a
     todo!("port wbGMSTEDIDAfterSet from wbDefinitionsFO4.pas line 1239")
 }
 
-/// Upstream `wbHexStrToInt`, line 2673 of `wbDefinitionsFO4.pas`.
-pub fn wb_hex_str_to_int(_a_string: &str, _a_element: ElementArg) -> i64 {
-    todo!("port wbHexStrToInt from wbDefinitionsFO4.pas line 2673")
-}
-
 /// Upstream `wbIdleMarkerPNAMAfterSet`, line 59 of `wbDefinitionsFO4.pas`.
 pub fn wb_idle_marker_pnam_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
     todo!("port wbIdleMarkerPNAMAfterSet from wbDefinitionsFO4.pas line 59")
 }
 
-/// Upstream `wbIdleMarkerPNAMDontShow`, line 97 of `wbDefinitionsFO4.pas`.
-pub fn wb_idle_marker_pnam_dont_show(_a_element: ElementArg) -> bool {
-    todo!("port wbIdleMarkerPNAMDontShow from wbDefinitionsFO4.pas line 97")
-}
-
 /// Upstream `wbIdleMarkerQNAMAfterSet`, line 60 of `wbDefinitionsFO4.pas`.
 pub fn wb_idle_marker_qnam_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
     todo!("port wbIdleMarkerQNAMAfterSet from wbDefinitionsFO4.pas line 60")
-}
-
-/// Upstream `wbIdleMarkerQNAMDontShow`, line 98 of `wbDefinitionsFO4.pas`.
-pub fn wb_idle_marker_qnam_dont_show(_a_element: ElementArg) -> bool {
-    todo!("port wbIdleMarkerQNAMDontShow from wbDefinitionsFO4.pas line 98")
-}
-
-/// Upstream `wbINFOGroupDecider`, line 1353 of `wbDefinitionsFO4.pas`.
-pub fn wb_info_group_decider(_a_base_ptr: DataPtr, _a_element: ElementArg) -> i32 {
-    todo!("port wbINFOGroupDecider from wbDefinitionsFO4.pas line 1353")
-}
-
-/// Upstream `wbIntToHexStr`, line 2664 of `wbDefinitionsFO4.pas`.
-pub fn wb_int_to_hex_str(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) -> String {
-    todo!("port wbIntToHexStr from wbDefinitionsFO4.pas line 2664")
 }
 
 /// Upstream `wbLLEAfterLoad`, line 2297 of `wbDefinitionsFO4.pas`.
@@ -257,64 +147,14 @@ pub fn wb_mgef_assoc_item_after_set(_a_element: &ElementRef, _a_old_value: &Vari
     todo!("port wbMGEFAssocItemAfterSet from wbDefinitionsFO4.pas line 1411")
 }
 
-/// Upstream `wbMGEFAssocItemDecider`, line 1368 of `wbDefinitionsFO4.pas`.
-pub fn wb_mgef_assoc_item_decider(_a_base_ptr: DataPtr, _a_element: ElementArg) -> i32 {
-    todo!("port wbMGEFAssocItemDecider from wbDefinitionsFO4.pas line 1368")
-}
-
 /// Upstream `wbMGEFAV2WeightAfterSet`, line 1428 of `wbDefinitionsFO4.pas`.
 pub fn wb_mgefav2_weight_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
     todo!("port wbMGEFAV2WeightAfterSet from wbDefinitionsFO4.pas line 1428")
 }
 
-/// Upstream `wbMorphValueToStr`, line 2715 of `wbDefinitionsFO4.pas`.
-pub fn wb_morph_value_to_str(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) -> String {
-    todo!("port wbMorphValueToStr from wbDefinitionsFO4.pas line 2715")
-}
-
-/// Upstream `wbNoteTypeDecider`, line 274 of `wbDefinitionsFO4.pas`.
-pub fn wb_note_type_decider(_a_base_ptr: DataPtr, _a_element: ElementArg) -> i32 {
-    todo!("port wbNoteTypeDecider from wbDefinitionsFO4.pas line 274")
-}
-
 /// Upstream `wbNPCAfterLoad`, line 2113 of `wbDefinitionsFO4.pas`.
 pub fn wb_npc_after_load(_a_element: &ElementRef) {
     todo!("port wbNPCAfterLoad from wbDefinitionsFO4.pas line 2113")
-}
-
-/// Upstream `wbObjectModPropertyToInt`, line 2447 of `wbDefinitionsFO4.pas`.
-pub fn wb_object_mod_property_to_int(_a_string: &str, _a_element: ElementArg) -> i64 {
-    todo!("port wbObjectModPropertyToInt from wbDefinitionsFO4.pas line 2447")
-}
-
-/// Upstream `wbObjectModPropertyToStr`, line 2422 of `wbDefinitionsFO4.pas`.
-pub fn wb_object_mod_property_to_str(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) -> String {
-    todo!("port wbObjectModPropertyToStr from wbDefinitionsFO4.pas line 2422")
-}
-
-/// Upstream `wbObjectPropertyToStr`, line 243 of `wbDefinitionsFO4.pas`.
-pub fn wb_object_property_to_str(
-    _a_value: &mut String,
-    _a_base_ptr: DataPtr,
-    _a_element: ElementArg,
-    _a_type: CallbackType,
-) {
-    todo!("port wbObjectPropertyToStr from wbDefinitionsFO4.pas line 243")
-}
-
-/// Upstream `wbOMODDataFunctionTypeDecider`, line 2461 of `wbDefinitionsFO4.pas`.
-pub fn wb_omod_data_function_type_decider(_a_base_ptr: DataPtr, _a_element: ElementArg) -> i32 {
-    todo!("port wbOMODDataFunctionTypeDecider from wbDefinitionsFO4.pas line 2461")
-}
-
-/// Upstream `wbOMODDataPropertyValue1Decider`, line 2483 of `wbDefinitionsFO4.pas`.
-pub fn wb_omod_data_property_value1_decider(_a_base_ptr: DataPtr, _a_element: ElementArg) -> i32 {
-    todo!("port wbOMODDataPropertyValue1Decider from wbDefinitionsFO4.pas line 2483")
-}
-
-/// Upstream `wbOMODDataPropertyValue2Decider`, line 2509 of `wbDefinitionsFO4.pas`.
-pub fn wb_omod_data_property_value2_decider(_a_base_ptr: DataPtr, _a_element: ElementArg) -> i32 {
-    todo!("port wbOMODDataPropertyValue2Decider from wbDefinitionsFO4.pas line 2509")
 }
 
 /// Upstream `wbPACKDateAfterLoad`, line 44 of `wbDefinitionsFO4.pas`.
@@ -336,34 +176,14 @@ pub fn wb_package_data_input_value_type_after_set(
     todo!("port wbPackageDataInputValueTypeAfterSet from wbDefinitionsFO4.pas line 2373")
 }
 
-/// Upstream `wbPerkDATADecider`, line 1493 of `wbDefinitionsFO4.pas`.
-pub fn wb_perk_data_decider(_a_base_ptr: DataPtr, _a_element: ElementArg) -> i32 {
-    todo!("port wbPerkDATADecider from wbDefinitionsFO4.pas line 1493")
-}
-
-/// Upstream `wbPerkDATAQuestStageToStr`, line 1077 of `wbDefinitionsFO4.pas`.
-pub fn wb_perk_data_quest_stage_to_str(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) -> String {
-    todo!("port wbPerkDATAQuestStageToStr from wbDefinitionsFO4.pas line 1077")
-}
-
 /// Upstream `wbPERKPRKETypeAfterSet`, line 63 of `wbDefinitionsFO4.pas`.
 pub fn wb_perkprke_type_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
     todo!("port wbPERKPRKETypeAfterSet from wbDefinitionsFO4.pas line 63")
 }
 
-/// Upstream `wbPubPackCNAMDecider`, line 2334 of `wbDefinitionsFO4.pas`.
-pub fn wb_pub_pack_cnam_decider(_a_base_ptr: DataPtr, _a_element: ElementArg) -> i32 {
-    todo!("port wbPubPackCNAMDecider from wbDefinitionsFO4.pas line 2334")
-}
-
 /// Upstream `wbREFRAfterLoad`, line 2118 of `wbDefinitionsFO4.pas`.
 pub fn wb_refr_after_load(_a_element: &ElementRef) {
     todo!("port wbREFRAfterLoad from wbDefinitionsFO4.pas line 2118")
-}
-
-/// Upstream `wbREFRRecordFlagsDecider`, line 2616 of `wbDefinitionsFO4.pas`.
-pub fn wb_refr_record_flags_decider(_a_element: ElementArg) -> i32 {
-    todo!("port wbREFRRecordFlagsDecider from wbDefinitionsFO4.pas line 2616")
 }
 
 /// Upstream `wbSCENBehaviorEnumAfterLoad`, line 3155 of `wbDefinitionsFO4.pas`.
@@ -376,11 +196,6 @@ pub fn wb_scene_action_type_after_set(_a_element: &ElementRef, _a_old_value: &Va
     todo!("port wbSceneActionTypeAfterSet from wbDefinitionsFO4.pas line 65")
 }
 
-/// Upstream `wbScriptFragmentsEmptyScriptDecider`, line 279 of `wbDefinitionsFO4.pas`.
-pub fn wb_script_fragments_empty_script_decider(_a_base_ptr: DataPtr, _a_element: ElementArg) -> i32 {
-    todo!("port wbScriptFragmentsEmptyScriptDecider from wbDefinitionsFO4.pas line 279")
-}
-
 /// Upstream `wbScriptFragmentsQuestScriptNameAfterSet`, line 66 of `wbDefinitionsFO4.pas`.
 pub fn wb_script_fragments_quest_script_name_after_set(
     _a_element: &ElementRef,
@@ -390,39 +205,9 @@ pub fn wb_script_fragments_quest_script_name_after_set(
     todo!("port wbScriptFragmentsQuestScriptNameAfterSet from wbDefinitionsFO4.pas line 66")
 }
 
-/// Upstream `wbScriptPropertyDecider`, line 1662 of `wbDefinitionsFO4.pas`.
-pub fn wb_script_property_decider(_a_base_ptr: DataPtr, _a_element: ElementArg) -> i32 {
-    todo!("port wbScriptPropertyDecider from wbDefinitionsFO4.pas line 1662")
-}
-
 /// Upstream `wbScriptPropertyTypeAfterSet`, line 67 of `wbDefinitionsFO4.pas`.
 pub fn wb_script_property_type_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
     todo!("port wbScriptPropertyTypeAfterSet from wbDefinitionsFO4.pas line 67")
-}
-
-/// Upstream `wbSNDRDataDecider`, line 1638 of `wbDefinitionsFO4.pas`.
-pub fn wb_sndr_data_decider(_a_base_ptr: DataPtr, _a_element: ElementArg) -> i32 {
-    todo!("port wbSNDRDataDecider from wbDefinitionsFO4.pas line 1638")
-}
-
-/// Upstream `wbStringToInt`, line 1179 of `wbDefinitionsFO4.pas`.
-pub fn wb_string_to_int(_a_string: &str, _a_element: ElementArg) -> i64 {
-    todo!("port wbStringToInt from wbDefinitionsFO4.pas line 1179")
-}
-
-/// Upstream `wbTemplateActorsDontShow`, line 115 of `wbDefinitionsFO4.pas`.
-pub fn wb_template_actors_dont_show(_a_element: ElementArg) -> bool {
-    todo!("port wbTemplateActorsDontShow from wbDefinitionsFO4.pas line 115")
-}
-
-/// Upstream `wbTintLayerToStr`, line 3004 of `wbDefinitionsFO4.pas`.
-pub fn wb_tint_layer_to_str(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) -> String {
-    todo!("port wbTintLayerToStr from wbDefinitionsFO4.pas line 3004")
-}
-
-/// Upstream `wbTypeDecider`, line 2355 of `wbDefinitionsFO4.pas`.
-pub fn wb_type_decider(_a_base_ptr: DataPtr, _a_element: ElementArg) -> i32 {
-    todo!("port wbTypeDecider from wbDefinitionsFO4.pas line 2355")
 }
 
 /// Upstream `wbUpdateSameParentUnions`, line 68 of `wbDefinitionsFO4.pas`.

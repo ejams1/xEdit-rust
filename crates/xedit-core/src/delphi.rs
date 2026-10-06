@@ -131,6 +131,12 @@ pub fn float_to_str_f_fixed(value: f64, digits: usize) -> String {
 /// Port of `FloatToStr`: up to 15 significant digits, in scientific notation
 /// when the value is below 0.00001 or has more than 15 digits before the point.
 pub fn float_to_str(value: f64) -> String {
+    format_general(value, 15)
+}
+
+/// Port of `Format('%.*g', [precision, value])` and `FloatToStrF(value,
+/// ffGeneral, precision, 0)`: up to `precision` significant digits.
+pub fn format_general(value: f64, precision: usize) -> String {
     if value.is_nan() {
         return "NAN".to_owned();
     }
@@ -140,7 +146,7 @@ pub fn float_to_str(value: f64) -> String {
     if value == 0.0 {
         return "0".to_owned();
     }
-    let formatted = format!("{:.14e}", value.abs());
+    let formatted = format!("{:.*e}", precision.max(1) - 1, value.abs());
     let (mantissa, exponent) = formatted.split_once('e').expect("exponent format has an exponent");
     let exponent: i32 = exponent.parse().expect("exponent is a number");
     let digits: String = mantissa.chars().filter(char::is_ascii_digit).collect();
@@ -150,7 +156,7 @@ pub fn float_to_str(value: f64) -> String {
     if value < 0.0 {
         result.push('-');
     }
-    if (-5..15).contains(&exponent) {
+    if (-5..precision as i32).contains(&exponent) {
         if exponent < 0 {
             result.push_str("0.");
             result.push_str(&"0".repeat((-exponent - 1) as usize));

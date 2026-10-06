@@ -159,6 +159,9 @@ pub trait File: Container {
     /// key in the named index, in this file or one of its masters.
     fn get_record_from_index_by_key(&self, index: i32, key: &str) -> Option<MainRecordRef>;
 
+    /// Upstream `LoadOrder`.
+    fn get_load_order(&self) -> i32;
+
     fn get_is_localized(&self) -> bool;
 
     fn get_file_states(&self) -> FileStates;
@@ -265,6 +268,19 @@ pub trait MainRecord: Container {
 
     /// Upstream `Flags`: the flags of the record header.
     fn get_flags(&self) -> crate::implementation::structs::MainRecordStructFlags;
+
+    /// Upstream `FormID`: the FormID as the file stores it.
+    fn get_form_id(&self) -> FormID;
+
+    /// Upstream `FixedFormID`.
+    fn get_fixed_form_id(&self) -> FormID;
+
+    /// Upstream `HasPrecombinedMesh`: whether a placed record of Fallout 4
+    /// is part of a precombined mesh of its cell.
+    fn get_has_precombined_mesh(&self) -> bool;
+
+    /// Upstream `PrecombinedMesh`: the file of that mesh.
+    fn get_precombined_mesh(&self) -> String;
 
     /// Upstream `CanBePartial`: whether the record may be a partial form.
     fn get_can_be_partial(&self) -> bool;
