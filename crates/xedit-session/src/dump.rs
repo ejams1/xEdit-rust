@@ -11,7 +11,7 @@
 
 use std::io::Write;
 use std::path::Path;
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 
 use xedit_core::container_handler::{add_archive, add_folder, clear_containers};
 use xedit_core::delphi::{change_file_ext, extract_file_path};
@@ -157,7 +157,7 @@ pub fn dump_file(path: &str, mode: GameMode, out: &mut dyn Write) -> Result<(), 
     let file = wb_file(path, i32::MAX, FileStates::empty()).map_err(|error| error.to_string())?;
     load_resources(&file, path, mode);
     load_hardcoded(mode)?;
-    write_container(&file, "", out).map_err(|error| error.to_string())
+    write_container(&file, out).map_err(|error| error.to_string())
 }
 
 /// Port of the hardcoded load of `xDump.dpr`: when the game master is
@@ -184,14 +184,15 @@ pub(crate) fn load_hardcoded(mode: GameMode) -> Result<(), String> {
 }
 
 /// Port of `WriteContainer`.
-fn write_container(container: &FileImpl, indent: &str, out: &mut dyn Write) -> std::io::Result<()> {
-    write_elements(container, indent, out)
+fn write_container(container: &FileImpl, out: &mut dyn Write) -> std::io::Result<()> {
+    write_elements(container, 0, out)
 }
 
-fn write_elements(container: &dyn Container, indent: &str, out: &mut dyn Write) -> std::io::Result<()> {
+/// Writes the elements of `container` at nesting `depth`.
+fn write_elements(container: &dyn Container, depth: usize, out: &mut dyn Write) -> std::io::Result<()> {
     for index in 0..container.get_element_count() {
         if let Some(element) = container.get_element(index) {
-            write_element(&element, indent, out)?;
+            write_element(&element, depth, out)?;
         }
     }
     Ok(())
@@ -208,34 +209,55 @@ fn write_text(out: &mut dyn Write, text: &str) -> std::io::Result<()> {
     }
 }
 
-/// Port of `WriteElement` in the plain dump mode.
-fn write_element(element: &ElementRef, indent: &str, out: &mut dyn Write) -> std::io::Result<()> {
-    if std::env::var_os("XEDIT_TRACE").is_some() {
-        eprintln!("{indent}{}", element.get_name());
+/// Writes the two spaces of indentation per nesting level.
+fn write_indent(out: &mut dyn Write, depth: usize) -> std::io::Result<()> {
+    const SPACES: &[u8; 64] = &[b' '; 64];
+    let mut remaining = depth * 2;
+    while remaining > 0 {
+        let count = remaining.min(SPACES.len());
+        out.write_all(&SPACES[..count])?;
+        remaining -= count;
+    }
+    Ok(())
+}
+
+/// Whether `XEDIT_TRACE` is set: every element name goes to stderr.
+fn trace_enabled() -> bool {
+    static TRACE: LazyLock<bool> = LazyLock::new(|| std::env::var_os("XEDIT_TRACE").is_some());
+    *TRACE
+}
+
+/// Port of `WriteElement` in the plain dump mode. The name, the value and
+/// the summary are written straight into `out`; the summary is only
+/// computed when the line needs it.
+fn write_element(element: &ElementRef, depth: usize, out: &mut dyn Write) -> std::io::Result<()> {
+    if trace_enabled() {
+        eprintln!("{:width$}{}", "", element.get_name(), width = depth * 2);
     }
     let name = element.get_display_name(true);
     let value = element.get_value();
-    let summary = if value.is_empty() {
-        element.get_summary()
-    } else {
-        String::new()
-    };
-    let mut indent = indent.to_owned();
+    let mut child_depth = depth;
     if element.get_name() != "Unused" && name != "Unused" {
         if !name.is_empty() {
-            write_text(out, &format!("{indent}{name}"))?;
+            write_indent(out, depth)?;
+            write_text(out, &name)?;
         }
         if !name.is_empty() || !value.is_empty() {
-            indent.push_str("  ");
+            child_depth += 1;
         }
         if !name.starts_with("Hidden: ") {
             if !value.is_empty() {
-                write_text(out, &format!(": {value}\r\n"))?;
+                out.write_all(b": ")?;
+                write_text(out, &value)?;
+                out.write_all(b"\r\n")?;
             } else if !name.is_empty() {
+                let summary = element.get_summary();
                 if summary.is_empty() {
                     out.write_all(b"\r\n")?;
                 } else {
-                    write_text(out, &format!(" [S]: {summary}\r\n"))?;
+                    out.write_all(b" [S]: ")?;
+                    write_text(out, &summary)?;
+                    out.write_all(b"\r\n")?;
                 }
             }
         }
@@ -243,7 +265,7 @@ fn write_element(element: &ElementRef, indent: &str, out: &mut dyn Write) -> std
     if let Some(container) = element.as_container()
         && !name.starts_with("Hidden: ")
     {
-        write_elements(container, &indent, out)?;
+        write_elements(container, child_depth, out)?;
     }
     // `WriteContainer` holds an `IwbContainerElementRef` on the record while
     // it writes the elements; releasing it resets the record and frees the
