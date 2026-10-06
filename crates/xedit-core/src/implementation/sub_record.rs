@@ -58,7 +58,7 @@ impl SubRecordImpl {
         offset: &mut usize,
     ) -> Option<Arc<Self>> {
         let header = SubRecordHeaderStruct::parse(data, *offset - data_start)?;
-        let mut data_size = usize::from(header.data_size);
+        let mut data_size = header.data_size as usize;
         if data_size == 0 {
             // The size of a subrecord that is too big for 16 bits comes before it.
             let elements = container_base.elements();
@@ -71,7 +71,7 @@ impl SubRecordImpl {
                 container_base.remove_element(elements.len() - 1);
             }
         }
-        let dc_data_base = *offset + SubRecordHeaderStruct::SIZE;
+        let dc_data_base = *offset + SubRecordHeaderStruct::size();
         let dc_data_end = (dc_data_base + data_size).min(data_start + data.len());
         let sub_record = Arc::new_cyclic(|self_ref: &Weak<SubRecordImpl>| SubRecordImpl {
             self_ref: self_ref.clone(),
@@ -649,7 +649,7 @@ impl Element for SubRecordImpl {
     }
 
     fn get_sub_record_header_size(&self) -> Option<i32> {
-        Some(i32::from(self.sr_struct.data_size))
+        Some(self.sr_struct.data_size as i32)
     }
 
     /// Port of `TwbSubRecord.GetValue`: the value of the subrecord data.
