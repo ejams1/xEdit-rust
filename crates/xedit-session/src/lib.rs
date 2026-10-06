@@ -8,6 +8,7 @@
 //! the MCP server and the GUI call commands and nothing else, so each of them
 //! covers the same set of operations.
 
+pub mod commands;
 pub mod dump;
 
 use std::collections::BTreeMap;
@@ -17,9 +18,13 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
-/// State shared by all commands of one run.
+/// State shared by all commands of one run: the game and the plugins
+/// loaded with `Session::load`.
 #[derive(Default)]
-pub struct Session {}
+pub struct Session {
+    game: Option<xedit_core::interface::globals::GameMode>,
+    files: Vec<std::sync::Arc<xedit_core::implementation::FileImpl>>,
+}
 
 /// A command failure. `code` is stable and safe to match on.
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
@@ -66,6 +71,7 @@ impl Registry {
     pub fn standard() -> Self {
         let mut registry = Self::default();
         registry.register("system.version", "Report the xEdit version.", false, version);
+        commands::register(&mut registry);
         registry
     }
 
@@ -171,8 +177,11 @@ mod tests {
     #[test]
     fn catalogue_lists_schemas() {
         let catalogue = Registry::standard().catalogue();
-        let command = &catalogue["commands"][0];
-        assert_eq!(command["name"], "system.version");
+        let commands = catalogue["commands"].as_array().unwrap();
+        let command = commands
+            .iter()
+            .find(|command| command["name"] == "system.version")
+            .unwrap();
         assert_eq!(command["mutates"], false);
         assert!(command["response"]["properties"]["version"].is_object());
     }

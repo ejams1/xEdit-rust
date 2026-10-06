@@ -1866,6 +1866,14 @@ impl File for FileImpl {
             .is_some_and(|header| header.mr_struct.flags.is_localized())
     }
 
+    fn get_is_esm(&self) -> bool {
+        self.header().is_some_and(|header| header.mr_struct.flags.is_esm())
+    }
+
+    fn get_record_count(&self) -> i32 {
+        self.fl_records.read().unwrap().len() as i32
+    }
+
     fn get_file_states(&self) -> FileStates {
         *self.fl_states.read().unwrap()
     }

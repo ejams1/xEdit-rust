@@ -164,6 +164,12 @@ pub trait File: Container {
 
     fn get_is_localized(&self) -> bool;
 
+    /// Upstream `IsESM`: the ESM flag of the file header.
+    fn get_is_esm(&self) -> bool;
+
+    /// Upstream `RecordCount`: the number of main records in the file.
+    fn get_record_count(&self) -> i32;
+
     fn get_file_states(&self) -> FileStates;
 
     /// Upstream `LoadOrderFileID`: the slot of the file in the load order.
