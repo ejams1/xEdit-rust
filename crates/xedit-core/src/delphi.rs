@@ -8,8 +8,42 @@
 
 /// Significant digits that `FloatToDecimal` produces before it rounds to the
 /// requested number of decimals.
-// Not confirmed against the oracle yet. The parity harness decides.
 const FLOAT_TO_DECIMAL_PRECISION: usize = 18;
+
+/// The decimal digits of `FloatToDecimal` on 64-bit Delphi: the value is
+/// scaled by a power of ten in double precision into an 18 digit integer,
+/// so the last digits carry the rounding error of that multiplication
+/// (`4294953215.9999995` scales to `429495321599999936`). Returns the
+/// digits and the exponent such that the value is `0.d1d2... * 10^exponent`.
+fn float_to_decimal(value: f64) -> (Vec<u8>, i64) {
+    let value = value.abs();
+    if value == 0.0 {
+        return (vec![b'0'; FLOAT_TO_DECIMAL_PRECISION], 0);
+    }
+    let scale = |exponent: i64| {
+        let power = FLOAT_TO_DECIMAL_PRECISION as i64 - exponent;
+        if power >= 0 {
+            value * 10f64.powi(power as i32)
+        } else {
+            value / 10f64.powi(-power as i32)
+        }
+    };
+    let mut exponent = value.log10().floor() as i64 + 1;
+    let mut scaled = scale(exponent);
+    if scaled >= 1e18 {
+        exponent += 1;
+        scaled = scale(exponent);
+    } else if scaled < 1e17 {
+        exponent -= 1;
+        scaled = scale(exponent);
+    }
+    let mut mantissa = scaled.round_ties_even() as u64;
+    if mantissa >= 1_000_000_000_000_000_000 {
+        mantissa /= 10;
+        exponent += 1;
+    }
+    (format!("{mantissa:018}").into_bytes(), exponent)
+}
 
 /// Port of `ParamStr(0)`: the path of the running program.
 pub fn exe_path() -> String {
@@ -62,13 +96,7 @@ pub fn float_to_str_f_fixed(value: f64, digits: usize) -> String {
         return if value < 0.0 { "-INF" } else { "INF" }.to_owned();
     }
     // Mantissa digits and decimal exponent: value = 0.d1d2d3... * 10^exponent.
-    let formatted = format!("{:.*e}", FLOAT_TO_DECIMAL_PRECISION - 1, value.abs());
-    let (mantissa, exponent) = formatted.split_once('e').expect("exponent format has an exponent");
-    let mut decimal: Vec<u8> = mantissa.bytes().filter(u8::is_ascii_digit).collect();
-    let mut exponent: i64 = exponent.parse::<i64>().expect("exponent is a number") + 1;
-    if value == 0.0 {
-        exponent = 0;
-    }
+    let (mut decimal, mut exponent) = float_to_decimal(value);
 
     // Round half up to `digits` decimals: keep `exponent + digits` digits.
     let keep = exponent + digits as i64;
@@ -228,11 +256,39 @@ pub fn int_power(base: f64, exponent: i32) -> f64 {
     if exponent < 0 { 1.0 / result } else { result }
 }
 
+/// Port of the `Single` overload of `IntPower`: the base is squared in
+/// double precision, the result is rounded to single after every
+/// multiplication and the reciprocal is taken in double.
+pub fn int_power_single(base: f32, exponent: i32) -> f32 {
+    let mut y = exponent.unsigned_abs();
+    let mut base = f64::from(base);
+    let mut result = 1.0_f32;
+    while y > 0 {
+        while y & 1 == 0 {
+            y >>= 1;
+            base *= base;
+        }
+        y -= 1;
+        result = (f64::from(result) * base) as f32;
+    }
+    if exponent < 0 {
+        (1.0 / f64::from(result)) as f32
+    } else {
+        result
+    }
+}
+
 /// Port of xEdit `RoundToEx`: rounds to the decimal position `digit`, where -6
 /// keeps six decimals. `None` when the scaled value does not fit an `Int64`,
 /// which raises a floating point exception in Delphi.
+///
+/// UPSTREAM-QUIRK: `IntPower(10, ADigit)` binds to the `Single` overload, so
+/// the factor is the single-precision `10^digit` (for example
+/// `9.99999997e-7` for six decimals); the value is divided by it, rounded,
+/// and multiplied by it again in double precision, which puts the result
+/// one unit off correct rounding for values near a tie.
 pub fn round_to_ex(value: f64, digit: i32) -> Option<f64> {
-    let factor = int_power(10.0, digit);
+    let factor = f64::from(int_power_single(10.0, digit));
     let scaled = value / factor;
     // 2^63. NaN does not fit either.
     if scaled.is_nan() || scaled.abs() >= 9_223_372_036_854_775_808.0 {
@@ -337,7 +393,24 @@ mod tests {
         assert_eq!(int_power(10.0, 3), 1000.0);
         assert_eq!(int_power(10.0, -6), 1.0 / 1_000_000.0);
         assert_eq!(int_power(2.0, 0), 1.0);
-        assert_eq!(round_to_ex(1.2345678, -3), Some(1.235));
+        assert_eq!(format!("{:.3}", round_to_ex(1.2345678, -3).unwrap()), "1.235");
+        // The oracle prints 9823.924804 and 14043.040040 for these singles.
+        assert_eq!(
+            format!("{:.6}", round_to_ex(9823.9248046875, -6).unwrap()),
+            "9823.924804"
+        );
+        assert_eq!(
+            format!("{:.6}", round_to_ex(14043.0400390625, -6).unwrap()),
+            "14043.040040"
+        );
+        assert_eq!(format!("{:.6}", round_to_ex(451.0703125, -6).unwrap()), "451.070313");
+        assert_eq!(format!("{:.6}", round_to_ex(3515.0703125, -6).unwrap()), "3515.070312");
+        // The 18 digit mantissa is scaled in double precision: the oracle
+        // prints 4294953215.999999 for this water height.
+        assert_eq!(
+            float_to_str_f_fixed(round_to_ex(4294953216.0, -6).unwrap(), 6),
+            "4294953215.999999"
+        );
         assert_eq!(round_to_ex(1e20, -6), None);
         assert_eq!(round_to_ex(-0.0, -6), Some(0.0));
         assert!(single_same_value(4.0e-7, 0.0));

@@ -488,9 +488,10 @@ mod tests {
         assert_eq!(def.get_size(None, None), 4);
         assert_eq!(def.get_size(Some(&[]), None), 0);
         assert_eq!(def.to_native_value(Some(&[0, 0]), None), Variant::Empty);
+        // The native value carries the rounding of `RoundToEx`.
         assert_eq!(
             def.to_native_value(Some(&1.5f32.to_le_bytes()), None),
-            Variant::Float(1.5)
+            Variant::Float(round_to_ex(1.5, -6).unwrap())
         );
     }
 
@@ -501,8 +502,9 @@ mod tests {
         assert_eq!(half.to_string(Some(&0x3C00u16.to_le_bytes()), None), "1.000");
         assert_eq!(half.to_string(Some(&0x7BFFu16.to_le_bytes()), None), "Default");
         assert_eq!(half.to_string(Some(&0x0400u16.to_le_bytes()), None), "Min");
-        // The half with the value 1024 shows as Min as well.
-        assert_eq!(half.to_string(Some(&0x6400u16.to_le_bytes()), None), "Min");
+        // The half with the value 1024 is not the Min bit pattern and is
+        // rounded away from the Min value by `RoundToEx`.
+        assert_eq!(half.to_string(Some(&0x6400u16.to_le_bytes()), None), "1024.000");
         let double = def_with(FloatKind::fkDouble, -1, 1.0);
         assert_eq!(double.to_string(Some(&0.1f64.to_le_bytes()), None), "0.100000000000");
         assert_eq!(double.get_default_size(None, None), 8);
