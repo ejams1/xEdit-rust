@@ -17,8 +17,8 @@ use xedit_core::container_handler::{add_archive, add_folder, clear_containers};
 use xedit_core::delphi::{change_file_ext, extract_file_path};
 use xedit_core::implementation::{FileBytes, FileImpl, game_master_file, wb_file, wb_file_compare};
 use xedit_core::interface::globals::{
-    GameMode, game_exe_name, game_master_esm, language, set_data_path, set_game_exe_name, set_game_master_esm,
-    set_game_mode, set_game_name, set_hide_unused, set_language, set_simple_records,
+    GameMode, game_exe_name, game_master_esm, language, set_create_contained_in, set_data_path, set_game_exe_name,
+    set_game_master_esm, set_game_mode, set_game_name, set_hide_unused, set_language, set_simple_records,
 };
 use xedit_core::interface::misc::{progress, set_progress_callback};
 use xedit_core::interface::{
@@ -45,6 +45,11 @@ pub fn setup_game(game: &str) -> Result<GameMode, String> {
     set_simple_records(false);
     set_hide_unused(false);
     set_game_mode(mode);
+    // xDump turns the contained-in elements off for Fallout 4 and later.
+    set_create_contained_in(!matches!(
+        mode,
+        GameMode::gmFO4 | GameMode::gmFO4VR | GameMode::gmFO76 | GameMode::gmSF1
+    ));
     clear_record_defs();
     match mode {
         GameMode::gmFO4 => {

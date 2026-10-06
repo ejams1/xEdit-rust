@@ -13,7 +13,7 @@
 
 use std::sync::Arc;
 
-use xedit_core::delphi::{float_to_str_f_fixed, round, str_to_float};
+use xedit_core::delphi::{float_to_str_f_fixed, format_general, round, str_to_float};
 use xedit_core::interface::builders::wb_flags_unknown_is_unused;
 use xedit_core::interface::constructors::get_container_from_union;
 use xedit_core::interface::globals::{
@@ -381,6 +381,9 @@ pub fn wb_placed_add_info(a_main_record: &MainRecordRef) -> String {
         {
             let (grid_x, grid_y) = position_to_grid_cell(x, y);
             result = format!("{result} at {grid_x},{grid_y}");
+        }
+        if a_main_record.get_has_precombined_mesh() {
+            result = format!("{result} in {}", a_main_record.get_precombined_mesh());
         }
     }
     result
@@ -2585,4 +2588,106 @@ pub fn collision_layer_links_to(a_element: ElementArg) -> Option<ElementRef> {
     let file = element.get_file()?;
     file.get_record_from_index_by_key(wb_idx_collision_layer(), &index.to_string())
         .map(|record| record as ElementRef)
+}
+
+/// Upstream `wbIdleMarkerPNAMDontShow`: hidden when the record has `QNAM`.
+pub fn wb_idle_marker_pnam_dont_show(a_element: ElementArg) -> bool {
+    a_element
+        .and_then(|element| element.get_containing_main_record())
+        .is_some_and(|main_record| main_record.get_element_by_signature(Signature::new(b"QNAM")).is_some())
+}
+
+/// Upstream `wbIdleMarkerQNAMDontShow`: hidden when the record has `PNAM`.
+pub fn wb_idle_marker_qnam_dont_show(a_element: ElementArg) -> bool {
+    a_element
+        .and_then(|element| element.get_containing_main_record())
+        .is_some_and(|main_record| main_record.get_element_by_signature(Signature::new(b"PNAM")).is_some())
+}
+
+/// Upstream `wbTemplateActorsDontShow`: hidden without template flags.
+pub fn wb_template_actors_dont_show(a_element: ElementArg) -> bool {
+    a_element
+        .and_then(|element| element.get_containing_main_record())
+        .is_some_and(|main_record| {
+            variant_int(&main_record.get_element_native_value("ACBS\\Template Flags")) as u32 == 0
+        })
+}
+
+/// Upstream `wbCoverLinksTo`: the cover of the navmesh at the index.
+pub fn wb_cover_links_to(a_element: ElementArg) -> Option<ElementRef> {
+    let element = a_element?;
+    element.get_container()?.as_container()?;
+    let main_record = element.get_containing_main_record()?;
+    let index = variant_int(&element.get_native_value());
+    navmesh_item(&main_record, "NVNM\\Cover Array", index)
+}
+
+/// Upstream `wbNoteTypeDecider`: the member for the `DNAM` type of the note.
+pub fn wb_note_type_decider(_a_base_ptr: DataPtr, a_element: ElementArg) -> i32 {
+    let Some(container) = wb_try_get_container_from_union(a_element) else {
+        return 0;
+    };
+    let Some(container) = container.get_container() else {
+        return 0;
+    };
+    let Some(dnam) = container
+        .as_container()
+        .and_then(|container| container.get_element_by_signature(Signature::new(b"DNAM")))
+    else {
+        return 0;
+    };
+    match variant_int(&dnam.get_native_value()) {
+        0 => 1,
+        1 => 2,
+        3 => 3,
+        _ => 0,
+    }
+}
+
+/// Upstream `wbScriptFragmentsEmptyScriptDecider`: 1 without a script name.
+pub fn wb_script_fragments_empty_script_decider(_a_base_ptr: DataPtr, a_element: ElementArg) -> i32 {
+    let Some(container) = wb_try_get_container_from_union(a_element) else {
+        return 0;
+    };
+    let empty = container
+        .as_container()
+        .is_some_and(|container| container.get_element_edit_value("ScriptName").is_empty());
+    if empty { 1 } else { 0 }
+}
+
+/// Upstream `wbObjectPropertyToStr`: the actor value and its value.
+pub fn wb_object_property_to_str(
+    a_value: &mut String,
+    _a_base_ptr: DataPtr,
+    a_element: ElementArg,
+    a_type: CallbackType,
+) {
+    let Some(container) = wb_try_set_container(a_element, a_type) else {
+        return;
+    };
+    let Some(cer) = container.as_container() else { return };
+    let actor_value_form = cer.get_element_by_name("Actor Value");
+    let Some(main_record) = wb_try_get_main_record(actor_value_form.as_ref(), "") else {
+        return;
+    };
+    let value = cer
+        .get_element_by_name("Value")
+        .map(|value| value.get_value())
+        .unwrap_or_default();
+    let number = str_to_float(&value).unwrap_or(0.0);
+    *a_value = format!("{} = {}", main_record.get_editor_id(), format_general(number, 5));
+    if !matches!(game_mode(), GameMode::gmFO76 | GameMode::gmSF1) {
+        return;
+    }
+    let Some(curve_table) = cer.get_element_by_name("Curve Table") else {
+        return;
+    };
+    let Some(curve_table) = curve_table.as_container() else {
+        return;
+    };
+    let form = curve_table.get_element_by_name("Curve Table");
+    let Some(main_record) = wb_try_get_main_record(form.as_ref(), "") else {
+        return;
+    };
+    a_value.push_str(&format!(" {{Curve Table: {}}}", main_record.get_short_name()));
 }

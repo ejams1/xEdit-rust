@@ -115,9 +115,9 @@ use crate::interface::element::{
 use crate::interface::form_id::{FileID, FormID};
 use crate::interface::globals::{
     GameMode, create_contained_in, display_load_order_form_id, game_exe_name, game_master_esm, game_mode,
-    header_signature, is_light_supported, is_medium_supported, is_update_supported, pseudo_light, pseudo_medium,
-    pseudo_update, remove_offset_data, size_of_main_record_struct, track_all_editor_id, vwd_as_quest_children,
-    wb_get_group_order,
+    header_signature, is_fallout3, is_fallout4, is_fallout76, is_light_supported, is_medium_supported, is_skyrim,
+    is_starfield, is_update_supported, pseudo_light, pseudo_medium, pseudo_update, remove_offset_data,
+    size_of_main_record_struct, track_all_editor_id, vwd_as_quest_children, wb_get_group_order,
 };
 use crate::interface::integer::IntegerDefFormater;
 use crate::interface::main_record::{
@@ -791,6 +791,33 @@ impl FileImpl {
         while offset < bytes.len() {
             create_record(self, &container, bytes, &mut offset, None)?;
         }
+        // Port of the top level group check of `TwbFile.Scan` for the games
+        // from Skyrim on: an empty top level group is removed.
+        if is_skyrim() || is_fallout3() || is_fallout4() || is_fallout76() || is_starfield() {
+            let elements = self.container.elements();
+            for index in (1..elements.len()).rev() {
+                let Some(group) = elements[index]
+                    .as_element_impl()
+                    .and_then(|element| element.group_record_impl())
+                else {
+                    progress(&format!(
+                        "[{}] Error: File contains invalid top level record: {}",
+                        self.get_name(),
+                        elements[index].get_name()
+                    ));
+                    continue;
+                };
+                if group.get_element_count() == 0 {
+                    let name = group.get_name();
+                    progress(&format!(
+                        "[{}] Warning: File contains empty top level group: {name}",
+                        self.get_name()
+                    ));
+                    self.container.remove_element(index);
+                    progress(&format!("[{}] Removed empty group: {name}", self.get_name()));
+                }
+            }
+        }
         let mut sorted = self.fl_records.read().unwrap().clone();
         sorted.sort_by_key(|record| record.get_fixed_form_id().to_cardinal());
         self.fl_sorted_records.set(sorted).ok();
@@ -1243,6 +1270,10 @@ pub struct MainRecordImpl {
     mr_fixed_form_id: OnceLock<FormID>,
     /// Port of `mrDisplayName`: cached for the records of official files.
     mr_display_name: OnceLock<String>,
+    /// Port of `mrPrecombinedCellID` and `mrPrecombinedID` with the
+    /// `mrsHasPrecombinedMesh` state: the cell and mesh of a precombined
+    /// reference, checked once.
+    mr_precombined: OnceLock<Option<(u32, u32)>>,
 }
 
 impl MainRecordImpl {
@@ -1290,6 +1321,7 @@ impl MainRecordImpl {
             mr_overrides: RwLock::new(Vec::new()),
             mr_fixed_form_id: OnceLock::new(),
             mr_display_name: OnceLock::new(),
+            mr_precombined: OnceLock::new(),
         });
         if let Some(parent) = container.as_container_base() {
             parent.add_element(record.clone());
@@ -1377,6 +1409,68 @@ impl MainRecordImpl {
             result = true;
         }
         if result { keys.defined_keys() } else { Vec::new() }
+    }
+
+    /// Port of `GetPrecombinedMesh` up to the cache check: the cell FormID
+    /// object ID and the mesh ID of a precombined placed record.
+    fn precombined(self: &Arc<Self>) -> Option<(u32, u32)> {
+        *self.mr_precombined.get_or_init(|| {
+            if !matches!(game_mode(), GameMode::gmFO4 | GameMode::gmFO4VR | GameMode::gmFO76) {
+                return None;
+            }
+            self.file.upgrade()?;
+            if !matches!(
+                self.mr_struct.signature.0.as_slice(),
+                b"REFR" | b"PGRE" | b"PMIS" | b"PARW" | b"PBEA" | b"PFLA" | b"PCON" | b"PBAR" | b"PHZD"
+            ) {
+                return None;
+            }
+            // Markers can't be precombined.
+            let def = self.mr_def.as_ref()?;
+            let base = def.known_sub_record_signatures()[KnownSubRecord::ksrBaseRecord.ord()];
+            let base_form_id = self
+                .get_element_native_value(&base.to_string())
+                .as_ordinal()
+                .unwrap_or(0) as u32;
+            if base_form_id < 0x800 {
+                return None;
+            }
+            let cell = self
+                .base
+                .container()
+                .and_then(|container| container.as_element_impl()?.group_record_impl())
+                .and_then(|group| group.children_of())?;
+            let cell_form_id = cell.mr_struct.form_id;
+            // Upstream caches the references of the cell between the calls;
+            // the list is read for every record here.
+            let own = self.mr_struct.form_id.to_cardinal();
+            if game_mode() == GameMode::gmFO76 {
+                let refs = cell.get_element_by_path("XCRP\\References")?;
+                let refs = refs.as_container()?;
+                for index in 0..refs.get_element_count() {
+                    let reference = refs.get_element(index)?.get_native_value().as_ordinal().unwrap_or(0) as u32;
+                    if reference == own {
+                        return Some((cell_form_id.object_id(), 0));
+                    }
+                }
+            } else {
+                let refs = cell.get_element_by_path("XCRI\\References")?;
+                let refs = refs.as_container()?;
+                for index in 0..refs.get_element_count() {
+                    let Some(pair) = refs.get_element(index) else { continue };
+                    let Some(pair) = pair.as_container() else { continue };
+                    if pair.get_element_count() != 2 {
+                        continue;
+                    }
+                    let reference = pair.get_element(0)?.get_native_value().as_ordinal().unwrap_or(0) as u32;
+                    if reference == own {
+                        let id = pair.get_element(1)?.get_native_value().as_ordinal().unwrap_or(0) as u32;
+                        return Some((cell_form_id.object_id(), id));
+                    }
+                }
+            }
+            None
+        })
     }
 
     /// Port of `AddOverride`.
@@ -1727,6 +1821,10 @@ impl Container for FileImpl {
 }
 
 impl File for FileImpl {
+    fn get_load_order(&self) -> i32 {
+        self.load_order()
+    }
+
     fn get_record_from_index_by_key(&self, index: i32, key: &str) -> Option<MainRecordRef> {
         self.record_from_index_by_key(index, key)
             .map(|record| record as MainRecordRef)
@@ -2116,6 +2214,43 @@ impl DataContainer for MainRecordImpl {
 
 impl MainRecord for MainRecordImpl {
     /// Port of `GetLoadOrderFormID`.
+    fn get_form_id(&self) -> FormID {
+        self.mr_struct.form_id
+    }
+
+    fn get_has_precombined_mesh(&self) -> bool {
+        self.self_arc().precombined().is_some()
+    }
+
+    /// Port of `GetPrecombinedMesh` for a record that has one.
+    fn get_precombined_mesh(&self) -> String {
+        let Some((cell_id, mesh_id)) = self.self_arc().precombined() else {
+            return String::new();
+        };
+        if game_mode() == GameMode::gmFO76 {
+            return format!("Precombined\\{cell_id:08X}\\{cell_id:08X}nif");
+        }
+        let mut master_folder = String::new();
+        if let Some(cell) = self
+            .base
+            .container()
+            .and_then(|container| container.as_element_impl()?.group_record_impl())
+            .and_then(|group| group.children_of())
+        {
+            let cell = cell.get_master_or_self();
+            if let Some(file) = cell.get_file()
+                && file.get_load_order() > 0
+            {
+                master_folder = format!("{}\\", file.get_name());
+            }
+        }
+        format!("Precombined\\{master_folder}{cell_id:08X}_{mesh_id:08X}_OC.nif")
+    }
+
+    fn get_fixed_form_id(&self) -> FormID {
+        MainRecordImpl::get_fixed_form_id(self)
+    }
+
     fn get_load_order_form_id(&self) -> FormID {
         let form_id = self.get_fixed_form_id();
         match self.file_impl() {
