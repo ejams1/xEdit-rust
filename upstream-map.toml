@@ -33,9 +33,13 @@ note = "Delphi memory manager override; Rust uses its own allocator."
 
 [units."Core/wbBSA.pas"]
 status = "pending"
+rust = "crates/xedit-core/src/container_handler.rs"
+note = "The container handler read side (AddFolder, AddBSA, ContainerExists, OpenResource) is ported. The resource listings and the texture helpers are pending."
 
 [units."Core/wbBSArchive.pas"]
 status = "pending"
+rust = "crates/xedit-io/src/archive.rs"
+note = "Reading the file table and the files of a BSA (versions 103 to 105) and a general BA2 is ported. Morrowind archives, texture archives, the Starfield formats and writing are pending."
 
 [units."Core/wbBetterStringList.pas"]
 status = "pending"
@@ -141,7 +145,7 @@ status = "pending"
 [units."Core/wbImplementation.pas"]
 status = "pending"
 rust = "crates/xedit-core/src/implementation"
-note = "The structure scan of a file (TwbFile.Scan, TwbGroupRecord, TwbMainRecord headers and data, decompression) is ported. The subrecords, values and everything else are pending."
+note = "The structure scan of a file, the records, subrecords, values, unions, the record header and the contained-in element are ported for reading. Editing, references and everything else are pending."
 
 [units."Core/wbInterface.pas"]
 status = "pending"
@@ -156,6 +160,8 @@ status = "pending"
 
 [units."Core/wbLocalization.pas"]
 status = "pending"
+rust = "crates/xedit-core/src/localization.rs"
+note = "The read side (the strings files, LoadForFile, GetValue, LocalizedValueDecider) and the language encodings of wbInterface are ported. Adding and writing strings is pending."
 
 [units."Core/wbMeshOptimize.pas"]
 status = "pending"

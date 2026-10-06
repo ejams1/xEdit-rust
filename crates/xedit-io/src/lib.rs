@@ -4,10 +4,12 @@
 
 //! Memory-mapped files, compression and string encodings.
 
+pub mod archive;
 pub mod compression;
 pub mod encoding;
 pub mod mapped_file;
 
+pub use archive::{Archive, ArchiveError};
 pub use compression::{CompressionError, CompressionType};
 pub use encoding::{Encoding, EncodingError};
 pub use mapped_file::MappedFile;

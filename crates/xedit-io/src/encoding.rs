@@ -25,6 +25,14 @@ pub enum Encoding {
 pub struct EncodingError;
 
 impl Encoding {
+    /// Delphi `EncodingName`: `UTF-8` or the Windows name of the code page.
+    pub fn name(self) -> String {
+        match self {
+            Encoding::Utf8 => "UTF-8".to_owned(),
+            Encoding::Mbcs(code_page) => format!("Windows-{code_page}"),
+        }
+    }
+
     /// Converts bytes to a string. Port of `TEncoding.GetString`.
     pub fn get_string(self, bytes: &[u8]) -> Result<String, EncodingError> {
         if bytes.is_empty() {

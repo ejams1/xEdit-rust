@@ -27,6 +27,19 @@ pub fn extract_file_path(path: &str) -> String {
     }
 }
 
+/// Port of `ExtractFileName`.
+pub fn path_file_name(path: &str) -> &str {
+    path.rsplit(['\\', '/']).next().unwrap_or(path)
+}
+
+/// Port of `ChangeFileExt`: the path with its extension (the part from the
+/// last `.` of the file name) replaced by `extension`.
+pub fn change_file_ext(path: &str, extension: &str) -> String {
+    let name_start = path.rfind(['\\', '/', ':']).map_or(0, |index| index + 1);
+    let stem_end = path[name_start..].rfind('.').map_or(path.len(), |dot| name_start + dot);
+    format!("{}{extension}", &path[..stem_end])
+}
+
 /// Port of `TFile.ReadAllLines`.
 ///
 /// Panics when the file cannot be read, as the Delphi exception would.

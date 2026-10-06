@@ -65,10 +65,14 @@ fn scans_the_structure_of_a_skyrim_plugin() {
             "{} has no editor ID",
             record.get_name()
         );
+        // The value of the union is a child element of the subrecord.
         let data = record.get_element_by_name("DATA - Value").expect("a DATA subrecord");
-        values.push(format!("{} = {}", record.get_editor_id(), data.get_value()));
+        let value = data
+            .as_container()
+            .and_then(|data| data.get_element(0))
+            .expect("the value element");
+        values.push(format!("{} = {}", record.get_editor_id(), value.get_value()));
     }
-    // The strings of a localized file need the string tables, which are not ported yet.
     assert!(values.contains(&"fDiffMultHPToPCL = 3.000000".to_owned()), "{values:?}");
     assert!(values.contains(&"iUpdateESMVersion = 8".to_owned()), "{values:?}");
     let compressed = records

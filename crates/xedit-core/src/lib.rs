@@ -4,6 +4,8 @@
 
 //! Element tree, definition model, records, groups, files and FormIDs.
 
+pub mod container_handler;
 pub mod delphi;
 pub mod implementation;
 pub mod interface;
+pub mod localization;

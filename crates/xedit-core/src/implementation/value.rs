@@ -538,7 +538,8 @@ impl Container for ValueImpl {
     }
 
     fn get_element_by_sort_order(&self, sort_order: i32) -> Option<ElementRef> {
-        self.get_element(sort_order)
+        self.do_init();
+        self.vb.container.element_by_sort_order(sort_order)
     }
 
     fn get_any_element(&self) -> Option<ElementRef> {

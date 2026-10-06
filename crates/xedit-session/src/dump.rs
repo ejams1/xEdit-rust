@@ -10,12 +10,21 @@
 //! the oracle writes them.
 
 use std::io::Write;
+use std::path::Path;
 
+use xedit_core::container_handler::{add_archive, add_folder, clear_containers};
+use xedit_core::delphi::{change_file_ext, extract_file_path};
 use xedit_core::implementation::{FileImpl, wb_file};
 use xedit_core::interface::globals::{
-    GameMode, set_game_exe_name, set_game_master_esm, set_game_mode, set_game_name, set_hide_unused, set_simple_records,
+    GameMode, language, set_data_path, set_game_exe_name, set_game_master_esm, set_game_mode, set_game_name,
+    set_hide_unused, set_language, set_simple_records,
 };
-use xedit_core::interface::{Container, ElementRef, FileStates, clear_record_defs};
+use xedit_core::interface::misc::progress;
+use xedit_core::interface::{Container, Element, ElementRef, File, FileStates, clear_record_defs};
+use xedit_core::localization::{
+    add_default_l_encodings_if_missing, add_l_encoding_if_missing, install_localization_handler, set_l_encoding_default,
+};
+use xedit_io::Encoding;
 
 /// Port of the game setup of `xDump.dpr` for the plugins of a game.
 pub fn setup_game(game: &str) -> Result<GameMode, String> {
@@ -50,12 +59,89 @@ pub fn setup_game(game: &str) -> Result<GameMode, String> {
         }
         _ => unreachable!(),
     }
+    setup_language(mode);
     Ok(mode)
 }
 
+/// Port of the language setup of `xDump.dpr`: the default language of the
+/// game and the encodings of its string tables.
+fn setup_language(mode: GameMode) {
+    set_language(if mode == GameMode::gmFO4 { "En" } else { "English" });
+    set_l_encoding_default(Encoding::Utf8, false);
+    match mode {
+        GameMode::gmSSE => add_l_encoding_if_missing("english", Encoding::Mbcs(1252), false),
+        GameMode::gmFO4 => add_l_encoding_if_missing("en", Encoding::Mbcs(1252), false),
+        _ => add_default_l_encodings_if_missing(false),
+    }
+    add_default_l_encodings_if_missing(true);
+}
+
+/// Port of the resource loading of `xDump.dpr`: when the plugin or one of
+/// its masters is localized and a loose `.STRINGS` file is missing, the
+/// archives of each master and of the plugin (`<name>`, `<name> - Interface`,
+/// `<name> - Localization`, `<name> - Wwise*`) are added, then the data folder.
+fn load_resources(file: &FileImpl, path: &str, mode: GameMode) {
+    let data_path = extract_file_path(path);
+    set_data_path(&data_path);
+    clear_containers();
+    let mut names: Vec<String> = file.masters().iter().map(|master| master.get_name()).collect();
+    names.push(file.get_name());
+    let is_localized = file.get_is_localized() || file.masters().iter().any(|master| master.get_is_localized());
+    let load_archives = is_localized
+        && names.iter().any(|name| {
+            let strings = format!(
+                "{data_path}Strings\\{}_{}.STRINGS",
+                change_file_ext(name, ""),
+                language()
+            );
+            !Path::new(&strings).is_file()
+        });
+    if load_archives {
+        let extension = if mode == GameMode::gmFO4 { ".ba2" } else { ".bsa" };
+        for name in &names {
+            let stem = change_file_ext(name, "");
+            for suffix in ["", " - Interface", " - Localization"] {
+                let archive = format!("{data_path}{stem}{suffix}{extension}");
+                if Path::new(&archive).is_file() {
+                    add_resource_archive(&archive);
+                }
+            }
+            // The Wwise archives match by prefix.
+            let prefix = format!("{stem} - Wwise").to_ascii_lowercase();
+            let mut wwise: Vec<String> = std::fs::read_dir(&data_path)
+                .into_iter()
+                .flatten()
+                .flatten()
+                .map(|entry| entry.file_name().to_string_lossy().into_owned())
+                .filter(|file_name| {
+                    let lower = file_name.to_ascii_lowercase();
+                    lower.starts_with(&prefix) && lower.ends_with(extension)
+                })
+                .collect();
+            wwise.sort();
+            for file_name in wwise {
+                add_resource_archive(&format!("{data_path}{file_name}"));
+            }
+        }
+    }
+    add_folder(Path::new(&data_path));
+    install_localization_handler();
+}
+
+fn add_resource_archive(archive: &str) {
+    progress(&format!(
+        "[{}] Loading Resources.",
+        xedit_core::delphi::path_file_name(archive)
+    ));
+    if let Err(error) = add_archive(Path::new(archive)) {
+        progress(&error.to_string());
+    }
+}
+
 /// Loads the plugin and writes its dump.
-pub fn dump_file(path: &str, out: &mut dyn Write) -> Result<(), String> {
+pub fn dump_file(path: &str, mode: GameMode, out: &mut dyn Write) -> Result<(), String> {
     let file = wb_file(path, i32::MAX, FileStates::empty()).map_err(|error| error.to_string())?;
+    load_resources(&file, path, mode);
     write_container(&file, "", out).map_err(|error| error.to_string())
 }
 
