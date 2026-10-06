@@ -66,3 +66,7 @@ The `xEdit-llm` automation build is a secondary oracle for conflict, reference a
 2. Read the Pascal code that produces the oracle value. The oracle is right by definition, including its quirks.
 3. Fix the port. Add the reduced case as a fixture test.
 4. Never change expected output to match the port.
+
+## Known open differences
+
+- **Single floats at six decimals (`xDump.exe` 4.1.5q, 64-bit).** The oracle prints `RoundToEx(Value, -6)` formatted with `FloatToStrF(ffFixed, 99, 6)`. For a few percent of values whose seventh decimal is near 5 (navmesh vertices, `Approx Location`, bounds) the oracle's last digit is one off from correct rounding of the single value, in both directions, deterministic per value (for example `14043.0400390625` prints `14043.040040`, `9823.9248046875` prints `9823.924804`, exact ties come out odd or even by value). No decimal or double-arithmetic model tried so far reproduces it (see the scratch scripts in the session that found it: constant-factor division, 15 to 20 significant digits with every rounding mode, digit-by-digit extraction). The port prints the correctly rounded value. Revisit with the Delphi 64-bit RTL sources for `Round`, `IntPower` and `FloatToDecimal`.

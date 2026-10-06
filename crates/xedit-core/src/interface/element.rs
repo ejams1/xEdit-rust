@@ -279,16 +279,48 @@ pub trait MainRecord: Container {
 /// Upstream `IwbContainer`, with the methods of `IwbContainerBase`.
 pub trait Container: Element {
     /// Upstream `ElementNativeValues[aPath]`: the native value of the element
-    /// at `path`, or an empty variant when there is none.
+    /// at `path`, or an empty variant when there is none. The last name of
+    /// the path may be a flag of a flags value, as `GetMemberNativeValue`
+    /// reads it.
     fn get_element_native_value(&self, path: &str) -> Variant {
-        self.get_element_by_path(path)
-            .map_or(Variant::Empty, |element| element.get_native_value())
+        match self.get_element_by_path(path) {
+            Some(element) => element.get_native_value(),
+            None => match self.member_flag_value(path) {
+                Some(set) => Variant::Bool(set),
+                None => Variant::Empty,
+            },
+        }
     }
 
-    /// Upstream `ElementEditValues[aPath]`.
+    /// Upstream `ElementEditValues[aPath]`, with a flag of a flags value as
+    /// the last name like `GetMemberEditValue`.
     fn get_element_edit_value(&self, path: &str) -> String {
-        self.get_element_by_path(path)
-            .map_or_else(String::new, |element| element.get_edit_value())
+        match self.get_element_by_path(path) {
+            Some(element) => element.get_edit_value(),
+            None => match self.member_flag_value(path) {
+                Some(set) => if set { "1" } else { "0" }.to_owned(),
+                None => String::new(),
+            },
+        }
+    }
+
+    /// Port of `GetMemberEditValue` and `GetMemberNativeValue` for a path:
+    /// when the container at the path without its last name is a flags
+    /// value, whether the flag with that name is set.
+    fn member_flag_value(&self, path: &str) -> Option<bool> {
+        let (container, name): (Option<ElementRef>, &str) = match path.rsplit_once('\\') {
+            Some((container_path, name)) => (self.get_element_by_path(container_path), name),
+            None => (None, path),
+        };
+        let (value_def, edit_value) = match &container {
+            Some(container) => (container.get_value_def()?, container.get_edit_value()),
+            None => (self.get_value_def()?, self.get_edit_value()),
+        };
+        let integer_def = value_def.as_integer_def()?;
+        let formater = integer_def.get_formater(container.as_ref())?;
+        let flag_def = formater.as_flags_def()?.find_flag(name)?;
+        let index = flag_def.get_flag_index() as usize;
+        Some(edit_value.as_bytes().get(index) == Some(&b'1'))
     }
 
     /// Upstream `ElementLinksTo[aPath]`.

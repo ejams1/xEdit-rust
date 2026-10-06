@@ -340,6 +340,9 @@ pub struct ElementBase {
     e_memory_order: AtomicI32,
     /// Port of `eNameSuffix`: `#3` for the elements of an array.
     e_name_suffix: RwLock<String>,
+    /// Port of `esResolving` in `eStates`: set while a definition resolves
+    /// through this element, so that a nested resolve stops.
+    e_resolving: std::sync::atomic::AtomicBool,
 }
 
 impl ElementBase {
@@ -349,6 +352,7 @@ impl ElementBase {
             e_sort_order: AtomicI32::new(0),
             e_memory_order: AtomicI32::new(0),
             e_name_suffix: RwLock::new(String::new()),
+            e_resolving: std::sync::atomic::AtomicBool::new(false),
         }
     }
 
@@ -1445,6 +1449,17 @@ pub trait ElementImpl: Element {
     /// The element as a reference, for the callbacks that take one. `None`
     /// while the element is being created.
     fn self_element_ref(&self) -> Option<ElementRef>;
+
+    /// Port of `BeginResolve`: whether this element may resolve a definition
+    /// now; false while it is resolving one already.
+    fn begin_resolve(&self) -> bool {
+        !self.element_base().e_resolving.swap(true, Ordering::AcqRel)
+    }
+
+    /// Port of `EndResolve`.
+    fn end_resolve(&self) {
+        self.element_base().e_resolving.store(false, Ordering::Release);
+    }
 
     fn container_base(&self) -> Option<&ContainerBase> {
         None

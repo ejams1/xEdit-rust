@@ -396,16 +396,6 @@ pub fn wb_package_data_input_value_type_after_set(
     todo!("port wbPackageDataInputValueTypeAfterSet from wbDefinitionsFO4.pas line 2373")
 }
 
-/// Upstream `wbPackagePSDTMonthValueToInt`, line 193 of `wbDefinitionsFO4.pas`.
-pub fn wb_package_psdt_month_value_to_int(_a_string: &str, _a_element: ElementArg) -> i64 {
-    todo!("port wbPackagePSDTMonthValueToInt from wbDefinitionsFO4.pas line 193")
-}
-
-/// Upstream `wbPackagePSDTMonthValueToStr`, line 228 of `wbDefinitionsFO4.pas`.
-pub fn wb_package_psdt_month_value_to_str(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) -> String {
-    todo!("port wbPackagePSDTMonthValueToStr from wbDefinitionsFO4.pas line 228")
-}
-
 /// Upstream `wbPerkDATADecider`, line 1493 of `wbDefinitionsFO4.pas`.
 pub fn wb_perk_data_decider(_a_base_ptr: DataPtr, _a_element: ElementArg) -> i32 {
     todo!("port wbPerkDATADecider from wbDefinitionsFO4.pas line 1493")
@@ -426,29 +416,9 @@ pub fn wb_pub_pack_cnam_decider(_a_base_ptr: DataPtr, _a_element: ElementArg) ->
     todo!("port wbPubPackCNAMDecider from wbDefinitionsFO4.pas line 2334")
 }
 
-/// Upstream `wbQuestStageToInt`, line 180 of `wbDefinitionsFO4.pas`.
-pub fn wb_quest_stage_to_int(_a_string: &str, _a_element: ElementArg) -> i64 {
-    todo!("port wbQuestStageToInt from wbDefinitionsFO4.pas line 180")
-}
-
-/// Upstream `wbQUSTEventToStr`, line 245 of `wbDefinitionsFO4.pas`.
-pub fn wb_qust_event_to_str(
-    _a_value: &mut String,
-    _a_base_ptr: DataPtr,
-    _a_element: ElementArg,
-    _a_type: CallbackType,
-) {
-    todo!("port wbQUSTEventToStr from wbDefinitionsFO4.pas line 245")
-}
-
 /// Upstream `wbREFRAfterLoad`, line 2118 of `wbDefinitionsFO4.pas`.
 pub fn wb_refr_after_load(_a_element: &ElementRef) {
     todo!("port wbREFRAfterLoad from wbDefinitionsFO4.pas line 2118")
-}
-
-/// Upstream `wbREFRNavmeshTriangleToStr`, line 219 of `wbDefinitionsFO4.pas`.
-pub fn wb_refr_navmesh_triangle_to_str(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) -> String {
-    todo!("port wbREFRNavmeshTriangleToStr from wbDefinitionsFO4.pas line 219")
 }
 
 /// Upstream `wbREFRRecordFlagsDecider`, line 2616 of `wbDefinitionsFO4.pas`.
@@ -510,11 +480,6 @@ pub fn wb_tint_layer_to_str(_a_int: i64, _a_element: ElementArg, _a_type: Callba
     todo!("port wbTintLayerToStr from wbDefinitionsFO4.pas line 3004")
 }
 
-/// Upstream `wbTriangleLinksTo`, line 158 of `wbDefinitionsFO4.pas`.
-pub fn wb_triangle_links_to(_a_element: ElementArg) -> Option<ElementRef> {
-    todo!("port wbTriangleLinksTo from wbDefinitionsFO4.pas line 158")
-}
-
 /// Upstream `wbTypeDecider`, line 2355 of `wbDefinitionsFO4.pas`.
 pub fn wb_type_decider(_a_base_ptr: DataPtr, _a_element: ElementArg) -> i32 {
     todo!("port wbTypeDecider from wbDefinitionsFO4.pas line 2355")
@@ -523,11 +488,6 @@ pub fn wb_type_decider(_a_base_ptr: DataPtr, _a_element: ElementArg) -> i32 {
 /// Upstream `wbUpdateSameParentUnions`, line 68 of `wbDefinitionsFO4.pas`.
 pub fn wb_update_same_parent_unions(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
     todo!("port wbUpdateSameParentUnions from wbDefinitionsFO4.pas line 68")
-}
-
-/// Upstream `wbVertexLinksTo`, line 159 of `wbDefinitionsFO4.pas`.
-pub fn wb_vertex_links_to(_a_element: ElementArg) -> Option<ElementRef> {
-    todo!("port wbVertexLinksTo from wbDefinitionsFO4.pas line 159")
 }
 
 /// Upstream `wbVertexToInt0`, line 189 of `wbDefinitionsFO4.pas`.

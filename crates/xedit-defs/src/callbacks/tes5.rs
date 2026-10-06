@@ -9,6 +9,10 @@
 
 pub use super::tes5_stubs::*;
 
+use std::sync::Mutex;
+
+use xedit_core::delphi::{change_file_ext, path_file_name, round};
+use xedit_core::interface::form_id_formater::actor_value_enum;
 use xedit_core::interface::globals::more_info_for_decider;
 use xedit_core::interface::misc::{int_to_hex64, progress};
 use xedit_core::interface::string::to_comma_text;
@@ -466,4 +470,261 @@ pub fn wb_condition_quest_stage_to_str(a_int: i64, a_element: ElementArg, a_type
 /// Upstream `wbStringToInt`.
 pub fn wb_string_to_int(a_string: &str, _a_element: ElementArg) -> i64 {
     str_to_int64(a_string).unwrap_or(0)
+}
+
+/// Upstream `TFaceGenFeature`: the tint layers of a race and sex, cached
+/// by `wbTintLayerToStr`.
+struct FaceGenFeature {
+    race_id: String,
+    female: bool,
+    entries: Vec<(u32, String)>,
+}
+
+/// Upstream `TintLayers`: the cache of the tint layers by race.
+static TINT_LAYERS: Mutex<Vec<FaceGenFeature>> = Mutex::new(Vec::new());
+
+/// The tint layers of the race from its `Head Data`.
+fn tint_layer_entries(race: &MainRecordRef, female: bool) -> Vec<(u32, String)> {
+    let path = if female {
+        "Head Data\\Female Head Data\\Tint Masks"
+    } else {
+        "Head Data\\Male Head Data\\Tint Masks"
+    };
+    let Some(container) = race.get_element_by_path(path) else {
+        return Vec::new();
+    };
+    let Some(container) = container.as_container() else {
+        return Vec::new();
+    };
+    let mut entries = Vec::new();
+    for index in 0..container.get_element_count() {
+        // Should never be false.
+        let Some(entry) = container.get_element(index) else {
+            continue;
+        };
+        let Some(entry) = entry.as_container() else { continue };
+        let layer_index = variant_int(&entry.get_element_native_value("Tint Layer\\TINI")) as u32;
+        let mut name = entry.get_element_edit_value("Tint Layer\\TINP");
+        // Add the texture name.
+        if !name.is_empty() {
+            name = format!("[{name}] ");
+        }
+        let texture = entry.get_element_edit_value("Tint Layer\\TINT");
+        name.push_str(&change_file_ext(path_file_name(&texture), ""));
+        entries.push((layer_index, name));
+    }
+    entries
+}
+
+/// Upstream `wbTintLayerToStr`: the name of the tint layer of the race of
+/// the actor.
+pub fn wb_tint_layer_to_str(a_int: i64, a_element: ElementArg, a_type: CallbackType) -> String {
+    let mut result = match a_type {
+        CallbackType::ctToStr | CallbackType::ctToSummary | CallbackType::ctToEditValue => a_int.to_string(),
+        CallbackType::ctToSortKey => return int_to_hex64(a_int, 8),
+        CallbackType::ctCheck => format!("<Warning: Could not resolve tint layer index {a_int}>"),
+        _ => String::new(),
+    };
+    let Some(actor) = a_element.and_then(|element| element.get_containing_main_record()) else {
+        return result;
+    };
+    let female = actor.get_element_edit_value("ACBS\\Flags\\Female") == "1";
+    let Some(race) = actor
+        .get_element_by_signature(Signature::new(b"RNAM"))
+        .and_then(|element| element.get_links_to())
+        .and_then(|element| element.into_main_record())
+    else {
+        return result;
+    };
+    let race = race.get_winning_override();
+    let race_id = race.get_editor_id();
+    let entries = {
+        let mut cache = TINT_LAYERS.lock().unwrap();
+        let cached = cache
+            .iter()
+            .position(|feature| feature.female == female && feature.race_id == race_id);
+        let position = match cached {
+            Some(position) => position,
+            None => {
+                // Cache not found, fill with data from RACE.
+                for female2 in [false, true] {
+                    cache.push(FaceGenFeature {
+                        race_id: race_id.clone(),
+                        female: female2,
+                        entries: tint_layer_entries(&race, female2),
+                    });
+                }
+                match cache
+                    .iter()
+                    .position(|feature| feature.female == female && feature.race_id == race_id)
+                {
+                    Some(position) => position,
+                    None => return result,
+                }
+            }
+        };
+        cache[position].entries.clone()
+    };
+    let index = a_int as u32;
+    let entry_name = entries
+        .iter()
+        .find(|(layer_index, _)| *layer_index == index)
+        .map(|(_, name)| name.clone())
+        .unwrap_or_default();
+    match a_type {
+        CallbackType::ctToStr | CallbackType::ctToSummary => {
+            if !entry_name.is_empty() {
+                result = format!("{a_int} {entry_name}");
+            } else {
+                result = a_int.to_string();
+                if a_type == CallbackType::ctToStr {
+                    result.push_str(&format!(
+                        " <Tint Layer Index [{a_int}] not found in {}>",
+                        race.get_name()
+                    ));
+                }
+            }
+        }
+        CallbackType::ctCheck => {
+            result = if entry_name.is_empty() {
+                format!("<Tint Layer Index [{a_int}] not found in {}>", race.get_name())
+            } else {
+                String::new()
+            };
+        }
+        CallbackType::ctEditType => result = "ComboBox".to_owned(),
+        CallbackType::ctEditInfo => {
+            result = entries
+                .iter()
+                .map(|(layer_index, name)| format!("\"{layer_index} {name}\""))
+                .collect::<Vec<_>>()
+                .join(",");
+        }
+        _ => {}
+    }
+    result
+}
+
+/// Upstream `wbEPFDActorValueToStr`: the actor value stored as a float.
+pub fn wb_epfd_actor_value_to_str(a_int: i64, a_element: ElementArg, a_type: CallbackType) -> String {
+    let as_float = f32::from_bits(a_int as u32);
+    let a_int = round(f64::from(as_float));
+    let Some(actor_values) = actor_value_enum() else {
+        return String::new();
+    };
+    match a_type {
+        CallbackType::ctToStr | CallbackType::ctToSummary => {
+            actor_values.to_string(a_int, a_element, a_type == CallbackType::ctToSummary)
+        }
+        CallbackType::ctToSortKey => actor_values.to_sort_key(a_int, a_element),
+        CallbackType::ctCheck => actor_values.check(a_int, a_element),
+        CallbackType::ctToEditValue => actor_values.to_edit_value(a_int, a_element),
+        CallbackType::ctEditType => "ComboBox".to_owned(),
+        CallbackType::ctEditInfo => to_comma_text(&actor_values.get_edit_info(a_element)),
+        _ => String::new(),
+    }
+}
+
+/// Upstream `wbEPFDActorValueToInt`: the actor value stored as a float.
+pub fn wb_epfd_actor_value_to_int(a_string: &str, _a_element: ElementArg) -> i64 {
+    let value = actor_value_enum()
+        .and_then(|actor_values| actor_values.find_name(a_string))
+        .unwrap_or_else(|| a_string.trim().parse().unwrap_or(0));
+    i64::from((value as f32).to_bits())
+}
+
+/// Upstream `wbPerkDATAQuestStageToStr`: the stage of the quest of the perk entry.
+pub fn wb_perk_data_quest_stage_to_str(a_int: i64, a_element: ElementArg, a_type: CallbackType) -> String {
+    let mut result = match a_type {
+        CallbackType::ctToEditValue | CallbackType::ctToSummary => a_int.to_string(),
+        CallbackType::ctToStr => format!("{a_int} <Warning: Could not resolve Quest>"),
+        CallbackType::ctToSortKey => return int_to_hex64(a_int, 8),
+        CallbackType::ctCheck => "<Warning: Could not resolve Quest>".to_owned(),
+        _ => String::new(),
+    };
+    let Some(container) = wb_try_get_container_ref_from_union_or_value(a_element) else {
+        return result;
+    };
+    let Some(main_record) = wb_try_get_main_record(
+        container
+            .as_container()
+            .and_then(|container| container.get_element_by_name("Quest"))
+            .as_ref(),
+        "",
+    ) else {
+        return result;
+    };
+    let main_record = main_record.get_winning_override();
+    if main_record.get_signature() != QUST {
+        match a_type {
+            CallbackType::ctToStr => {
+                result = format!(
+                    "{a_int} <Warning: \"{}\" is not a Quest record>",
+                    main_record.get_short_name()
+                );
+            }
+            CallbackType::ctCheck => {
+                result = format!("<Warning: \"{}\" is not a Quest record>", main_record.get_short_name());
+            }
+            _ => {}
+        }
+        return result;
+    }
+    let mut edit_infos: Option<Vec<String>> = match a_type {
+        CallbackType::ctEditType => return "ComboBox".to_owned(),
+        CallbackType::ctEditInfo => Some(Vec::new()),
+        _ => None,
+    };
+    if let Some(stages) = main_record.get_element_by_name("Stages")
+        && let Some(stages) = stages.as_container()
+    {
+        for index in 0..stages.get_element_count() {
+            let Some(stage) = stages.get_element(index) else {
+                continue;
+            };
+            let Some(stage) = stage.as_container() else { continue };
+            let j = variant_int(&stage.get_element_native_value("INDX\\Stage Index"));
+            let s = stage
+                .get_element_by_path("Log Entries\\Log Entry\\CNAM")
+                .map(|entry| entry.get_value())
+                .unwrap_or_default();
+            let s = s.trim();
+            let mut t = format!("{j:0>3}");
+            if !s.is_empty() {
+                t = format!("{t} {s}");
+            }
+            if let Some(edit_infos) = &mut edit_infos {
+                edit_infos.push(t.clone());
+            }
+            if j == a_int {
+                match a_type {
+                    CallbackType::ctToStr | CallbackType::ctToSummary | CallbackType::ctToEditValue => result = t,
+                    CallbackType::ctCheck => result = String::new(),
+                    _ => {}
+                }
+                return result;
+            }
+        }
+    }
+    match a_type {
+        CallbackType::ctToStr => {
+            result = format!(
+                "{a_int} <Warning: Quest Stage [{a_int}] not found in \"{}\">",
+                main_record.get_name()
+            );
+        }
+        CallbackType::ctCheck => {
+            result = format!(
+                "<Warning: Quest Stage [{a_int}] not found in \"{}\">",
+                main_record.get_name()
+            );
+        }
+        CallbackType::ctEditInfo => {
+            let mut edit_infos = edit_infos.unwrap_or_default();
+            edit_infos.sort_by_key(|text| text.to_lowercase());
+            result = to_comma_text(&edit_infos);
+        }
+        _ => {}
+    }
+    result
 }

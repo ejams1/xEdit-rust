@@ -172,16 +172,6 @@ pub fn wb_efit_after_load(_a_element: &ElementRef) {
     todo!("port wbEFITAfterLoad from wbDefinitionsTES5.pas line 1860")
 }
 
-/// Upstream `wbEPFDActorValueToInt`, line 907 of `wbDefinitionsTES5.pas`.
-pub fn wb_epfd_actor_value_to_int(_a_string: &str, _a_element: ElementArg) -> i64 {
-    todo!("port wbEPFDActorValueToInt from wbDefinitionsTES5.pas line 907")
-}
-
-/// Upstream `wbEPFDActorValueToStr`, line 889 of `wbDefinitionsTES5.pas`.
-pub fn wb_epfd_actor_value_to_str(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) -> String {
-    todo!("port wbEPFDActorValueToStr from wbDefinitionsTES5.pas line 889")
-}
-
 /// Upstream `wbFLSTEDIDAfterSet`, line 1041 of `wbDefinitionsTES5.pas`.
 pub fn wb_flstedid_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
     todo!("port wbFLSTEDIDAfterSet from wbDefinitionsTES5.pas line 1041")
@@ -251,39 +241,9 @@ pub fn wb_package_data_input_value_type_after_set(
     todo!("port wbPackageDataInputValueTypeAfterSet from wbDefinitionsTES5.pas line 1931")
 }
 
-/// Upstream `wbPackagePSDTMonthValueToInt`, line 193 of `wbDefinitionsTES5.pas`.
-pub fn wb_package_psdt_month_value_to_int(_a_string: &str, _a_element: ElementArg) -> i64 {
-    todo!("port wbPackagePSDTMonthValueToInt from wbDefinitionsTES5.pas line 193")
-}
-
-/// Upstream `wbPackagePSDTMonthValueToStr`, line 228 of `wbDefinitionsTES5.pas`.
-pub fn wb_package_psdt_month_value_to_str(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) -> String {
-    todo!("port wbPackagePSDTMonthValueToStr from wbDefinitionsTES5.pas line 228")
-}
-
-/// Upstream `wbPerkDATAQuestStageToStr`, line 917 of `wbDefinitionsTES5.pas`.
-pub fn wb_perk_data_quest_stage_to_str(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) -> String {
-    todo!("port wbPerkDATAQuestStageToStr from wbDefinitionsTES5.pas line 917")
-}
-
 /// Upstream `wbPERKPRKETypeAfterSet`, line 63 of `wbDefinitionsTES5.pas`.
 pub fn wb_perkprke_type_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
     todo!("port wbPERKPRKETypeAfterSet from wbDefinitionsTES5.pas line 63")
-}
-
-/// Upstream `wbQuestStageToInt`, line 180 of `wbDefinitionsTES5.pas`.
-pub fn wb_quest_stage_to_int(_a_string: &str, _a_element: ElementArg) -> i64 {
-    todo!("port wbQuestStageToInt from wbDefinitionsTES5.pas line 180")
-}
-
-/// Upstream `wbQUSTEventToStr`, line 245 of `wbDefinitionsTES5.pas`.
-pub fn wb_qust_event_to_str(
-    _a_value: &mut String,
-    _a_base_ptr: DataPtr,
-    _a_element: ElementArg,
-    _a_type: CallbackType,
-) {
-    todo!("port wbQUSTEventToStr from wbDefinitionsTES5.pas line 245")
 }
 
 /// Upstream `wbRACEAfterLoad`, line 1681 of `wbDefinitionsTES5.pas`.
@@ -294,11 +254,6 @@ pub fn wb_race_after_load(_a_element: &ElementRef) {
 /// Upstream `wbREFRAfterLoad`, line 1660 of `wbDefinitionsTES5.pas`.
 pub fn wb_refr_after_load(_a_element: &ElementRef) {
     todo!("port wbREFRAfterLoad from wbDefinitionsTES5.pas line 1660")
-}
-
-/// Upstream `wbREFRNavmeshTriangleToStr`, line 219 of `wbDefinitionsTES5.pas`.
-pub fn wb_refr_navmesh_triangle_to_str(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) -> String {
-    todo!("port wbREFRNavmeshTriangleToStr from wbDefinitionsTES5.pas line 219")
 }
 
 /// Upstream `wbSceneActionTypeAfterSet`, line 65 of `wbDefinitionsTES5.pas`.
@@ -321,24 +276,9 @@ pub fn wb_scroll_type_after_load(_a_element: &ElementRef) {
     todo!("port wbScrollTypeAfterLoad from wbDefinitionsTES5.pas line 49")
 }
 
-/// Upstream `wbTintLayerToStr`, line 2023 of `wbDefinitionsTES5.pas`.
-pub fn wb_tint_layer_to_str(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) -> String {
-    todo!("port wbTintLayerToStr from wbDefinitionsTES5.pas line 2023")
-}
-
-/// Upstream `wbTriangleLinksTo`, line 158 of `wbDefinitionsTES5.pas`.
-pub fn wb_triangle_links_to(_a_element: ElementArg) -> Option<ElementRef> {
-    todo!("port wbTriangleLinksTo from wbDefinitionsTES5.pas line 158")
-}
-
 /// Upstream `wbUpdateSameParentUnions`, line 68 of `wbDefinitionsTES5.pas`.
 pub fn wb_update_same_parent_unions(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
     todo!("port wbUpdateSameParentUnions from wbDefinitionsTES5.pas line 68")
-}
-
-/// Upstream `wbVertexLinksTo`, line 159 of `wbDefinitionsTES5.pas`.
-pub fn wb_vertex_links_to(_a_element: ElementArg) -> Option<ElementRef> {
-    todo!("port wbVertexLinksTo from wbDefinitionsTES5.pas line 159")
 }
 
 /// Upstream `wbVertexToInt0`, line 189 of `wbDefinitionsTES5.pas`.
