@@ -12,6 +12,61 @@
 
 use xedit_core::interface::*;
 
+/// Upstream `wbACBSLevelMultAfterLoad`, line 39 of `wbDefinitionsCommon.pas`.
+pub fn wb_acbs_level_mult_after_load(_a_element: &ElementRef) {
+    todo!("port wbACBSLevelMultAfterLoad from wbDefinitionsCommon.pas line 39")
+}
+
+/// Upstream `wbACBSLevelMultAfterSet`, line 54 of `wbDefinitionsCommon.pas`.
+pub fn wb_acbs_level_mult_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
+    todo!("port wbACBSLevelMultAfterSet from wbDefinitionsCommon.pas line 54")
+}
+
+/// Upstream `wbAVIFSkillAfterLoad`, line 40 of `wbDefinitionsCommon.pas`.
+pub fn wb_avif_skill_after_load(_a_element: &ElementRef) {
+    todo!("port wbAVIFSkillAfterLoad from wbDefinitionsCommon.pas line 40")
+}
+
+/// Upstream `wbBOOKDataFlagsAfterSet`, line 55 of `wbDefinitionsCommon.pas`.
+pub fn wb_book_data_flags_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
+    todo!("port wbBOOKDataFlagsAfterSet from wbDefinitionsCommon.pas line 55")
+}
+
+/// Upstream `wbConditionRunOnAfterSet`, line 57 of `wbDefinitionsCommon.pas`.
+pub fn wb_condition_run_on_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
+    todo!("port wbConditionRunOnAfterSet from wbDefinitionsCommon.pas line 57")
+}
+
+/// Upstream `wbConditionTypeAfterSet`, line 56 of `wbDefinitionsCommon.pas`.
+pub fn wb_condition_type_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
+    todo!("port wbConditionTypeAfterSet from wbDefinitionsCommon.pas line 56")
+}
+
+/// Upstream `wbDialogueTextAfterLoad`, line 41 of `wbDefinitionsCommon.pas`.
+pub fn wb_dialogue_text_after_load(_a_element: &ElementRef) {
+    todo!("port wbDialogueTextAfterLoad from wbDefinitionsCommon.pas line 41")
+}
+
+/// Upstream `wbDialogueTextAfterSet`, line 58 of `wbDefinitionsCommon.pas`.
+pub fn wb_dialogue_text_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
+    todo!("port wbDialogueTextAfterSet from wbDefinitionsCommon.pas line 58")
+}
+
+/// Upstream `wbDOBJObjectsAfterLoad`, line 42 of `wbDefinitionsCommon.pas`.
+pub fn wb_dobj_objects_after_load(_a_element: &ElementRef) {
+    todo!("port wbDOBJObjectsAfterLoad from wbDefinitionsCommon.pas line 42")
+}
+
+/// Upstream `wbIdleMarkerPNAMAfterSet`, line 59 of `wbDefinitionsCommon.pas`.
+pub fn wb_idle_marker_pnam_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
+    todo!("port wbIdleMarkerPNAMAfterSet from wbDefinitionsCommon.pas line 59")
+}
+
+/// Upstream `wbIdleMarkerQNAMAfterSet`, line 60 of `wbDefinitionsCommon.pas`.
+pub fn wb_idle_marker_qnam_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
+    todo!("port wbIdleMarkerQNAMAfterSet from wbDefinitionsCommon.pas line 60")
+}
+
 /// Upstream `wbLGDIFiltersToStr`, line 212 of `wbDefinitionsCommon.pas`.
 pub fn wb_lgdi_filters_to_str(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) -> String {
     todo!("port wbLGDIFiltersToStr from wbDefinitionsCommon.pas line 212")
@@ -27,12 +82,91 @@ pub fn wb_lgdi_slot_def_anonymous_7802(_a_base_ptr: DataPtr, _a_element: Element
     todo!("port anonymous routine in wb_lgdi_slot_def from wbDefinitionsCommon.pas line 7802")
 }
 
+/// Upstream `wbMESGAfterLoad`, line 43 of `wbDefinitionsCommon.pas`.
+pub fn wb_mesg_after_load(_a_element: &ElementRef) {
+    todo!("port wbMESGAfterLoad from wbDefinitionsCommon.pas line 43")
+}
+
+/// Upstream `wbMESGDNAMAfterSet`, line 61 of `wbDefinitionsCommon.pas`.
+pub fn wb_mesgdnam_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
+    todo!("port wbMESGDNAMAfterSet from wbDefinitionsCommon.pas line 61")
+}
+
+/// Upstream `wbPACKDateAfterLoad`, line 44 of `wbDefinitionsCommon.pas`.
+pub fn wb_pack_date_after_load(_a_element: &ElementRef) {
+    todo!("port wbPACKDateAfterLoad from wbDefinitionsCommon.pas line 44")
+}
+
+/// Upstream `wbPACKDateAfterSet`, line 62 of `wbDefinitionsCommon.pas`.
+pub fn wb_pack_date_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
+    todo!("port wbPACKDateAfterSet from wbDefinitionsCommon.pas line 62")
+}
+
+/// Upstream `wbPERKPRKETypeAfterSet`, line 63 of `wbDefinitionsCommon.pas`.
+pub fn wb_perkprke_type_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
+    todo!("port wbPERKPRKETypeAfterSet from wbDefinitionsCommon.pas line 63")
+}
+
+/// Upstream `wbRecipeCategoryDataAfterLoad`, line 46 of `wbDefinitionsCommon.pas`.
+pub fn wb_recipe_category_data_after_load(_a_element: &ElementRef) {
+    todo!("port wbRecipeCategoryDataAfterLoad from wbDefinitionsCommon.pas line 46")
+}
+
 /// Upstream `wbRPLDAfterLoad`, line 47 of `wbDefinitionsCommon.pas`.
 pub fn wb_rpld_after_load(_a_element: &ElementRef) {
     todo!("port wbRPLDAfterLoad from wbDefinitionsCommon.pas line 47")
 }
 
+/// Upstream `wbSceneActionTypeAfterSet`, line 65 of `wbDefinitionsCommon.pas`.
+pub fn wb_scene_action_type_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
+    todo!("port wbSceneActionTypeAfterSet from wbDefinitionsCommon.pas line 65")
+}
+
+/// Upstream `wbScriptFragmentsQuestScriptNameAfterSet`, line 66 of `wbDefinitionsCommon.pas`.
+pub fn wb_script_fragments_quest_script_name_after_set(
+    _a_element: &ElementRef,
+    _a_old_value: &Variant,
+    _a_new_value: &Variant,
+) {
+    todo!("port wbScriptFragmentsQuestScriptNameAfterSet from wbDefinitionsCommon.pas line 66")
+}
+
+/// Upstream `wbScriptPropertyTypeAfterSet`, line 67 of `wbDefinitionsCommon.pas`.
+pub fn wb_script_property_type_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
+    todo!("port wbScriptPropertyTypeAfterSet from wbDefinitionsCommon.pas line 67")
+}
+
+/// Upstream `wbScrollCastAfterLoad`, line 48 of `wbDefinitionsCommon.pas`.
+pub fn wb_scroll_cast_after_load(_a_element: &ElementRef) {
+    todo!("port wbScrollCastAfterLoad from wbDefinitionsCommon.pas line 48")
+}
+
+/// Upstream `wbScrollTypeAfterLoad`, line 49 of `wbDefinitionsCommon.pas`.
+pub fn wb_scroll_type_after_load(_a_element: &ElementRef) {
+    todo!("port wbScrollTypeAfterLoad from wbDefinitionsCommon.pas line 49")
+}
+
+/// Upstream `wbSOUNAfterLoad`, line 50 of `wbDefinitionsCommon.pas`.
+pub fn wb_soun_after_load(_a_element: &ElementRef) {
+    todo!("port wbSOUNAfterLoad from wbDefinitionsCommon.pas line 50")
+}
+
 /// Upstream `wbStrToLGDIFilter`, line 188 of `wbDefinitionsCommon.pas`.
 pub fn wb_str_to_lgdi_filter(_a_string: &str, _a_element: ElementArg) -> i64 {
     todo!("port wbStrToLGDIFilter from wbDefinitionsCommon.pas line 188")
+}
+
+/// Upstream `wbUpdateSameParentUnions`, line 68 of `wbDefinitionsCommon.pas`.
+pub fn wb_update_same_parent_unions(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
+    todo!("port wbUpdateSameParentUnions from wbDefinitionsCommon.pas line 68")
+}
+
+/// Upstream `wbWorldAfterLoad`, line 51 of `wbDefinitionsCommon.pas`.
+pub fn wb_world_after_load(_a_element: &ElementRef) {
+    todo!("port wbWorldAfterLoad from wbDefinitionsCommon.pas line 51")
+}
+
+/// Upstream `wbWorldAfterSet`, line 69 of `wbDefinitionsCommon.pas`.
+pub fn wb_world_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
+    todo!("port wbWorldAfterSet from wbDefinitionsCommon.pas line 69")
 }

@@ -22,16 +22,6 @@ pub fn define_tes5_anonymous_6207(_a_element: ElementArg) -> bool {
     todo!("port anonymous routine in define_tes5 from wbDefinitionsTES5.pas line 6207")
 }
 
-/// Upstream `wbACBSLevelMultAfterLoad`, line 39 of `wbDefinitionsTES5.pas`.
-pub fn wb_acbs_level_mult_after_load(_a_element: &ElementRef) {
-    todo!("port wbACBSLevelMultAfterLoad from wbDefinitionsTES5.pas line 39")
-}
-
-/// Upstream `wbACBSLevelMultAfterSet`, line 54 of `wbDefinitionsTES5.pas`.
-pub fn wb_acbs_level_mult_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
-    todo!("port wbACBSLevelMultAfterSet from wbDefinitionsTES5.pas line 54")
-}
-
 /// Upstream `wbARMAAfterLoad`, line 1643 of `wbDefinitionsTES5.pas`.
 pub fn wb_arma_after_load(_a_element: &ElementRef) {
     todo!("port wbARMAAfterLoad from wbDefinitionsTES5.pas line 1643")
@@ -40,16 +30,6 @@ pub fn wb_arma_after_load(_a_element: &ElementRef) {
 /// Upstream `wbARMOAfterLoad`, line 1638 of `wbDefinitionsTES5.pas`.
 pub fn wb_armo_after_load(_a_element: &ElementRef) {
     todo!("port wbARMOAfterLoad from wbDefinitionsTES5.pas line 1638")
-}
-
-/// Upstream `wbAVIFSkillAfterLoad`, line 40 of `wbDefinitionsTES5.pas`.
-pub fn wb_avif_skill_after_load(_a_element: &ElementRef) {
-    todo!("port wbAVIFSkillAfterLoad from wbDefinitionsTES5.pas line 40")
-}
-
-/// Upstream `wbBOOKDataFlagsAfterSet`, line 55 of `wbDefinitionsTES5.pas`.
-pub fn wb_book_data_flags_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
-    todo!("port wbBOOKDataFlagsAfterSet from wbDefinitionsTES5.pas line 55")
 }
 
 /// Upstream `wbCELLAfterLoad`, line 1773 of `wbDefinitionsTES5.pas`.
@@ -70,36 +50,6 @@ pub fn wb_cellxclw_get_conflict_priority(_a_element: ElementArg, _a_conflict_pri
 /// Upstream `wbConditionEventToInt`, line 772 of `wbDefinitionsTES5.pas`.
 pub fn wb_condition_event_to_int(_a_string: &str, _a_element: ElementArg) -> i64 {
     todo!("port wbConditionEventToInt from wbDefinitionsTES5.pas line 772")
-}
-
-/// Upstream `wbConditionRunOnAfterSet`, line 57 of `wbDefinitionsTES5.pas`.
-pub fn wb_condition_run_on_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
-    todo!("port wbConditionRunOnAfterSet from wbDefinitionsTES5.pas line 57")
-}
-
-/// Upstream `wbConditionStringToInt`, line 178 of `wbDefinitionsTES5.pas`.
-pub fn wb_condition_string_to_int(_a_string: &str, _a_element: ElementArg) -> i64 {
-    todo!("port wbConditionStringToInt from wbDefinitionsTES5.pas line 178")
-}
-
-/// Upstream `wbConditionTypeAfterSet`, line 56 of `wbDefinitionsTES5.pas`.
-pub fn wb_condition_type_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
-    todo!("port wbConditionTypeAfterSet from wbDefinitionsTES5.pas line 56")
-}
-
-/// Upstream `wbDialogueTextAfterLoad`, line 41 of `wbDefinitionsTES5.pas`.
-pub fn wb_dialogue_text_after_load(_a_element: &ElementRef) {
-    todo!("port wbDialogueTextAfterLoad from wbDefinitionsTES5.pas line 41")
-}
-
-/// Upstream `wbDialogueTextAfterSet`, line 58 of `wbDefinitionsTES5.pas`.
-pub fn wb_dialogue_text_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
-    todo!("port wbDialogueTextAfterSet from wbDefinitionsTES5.pas line 58")
-}
-
-/// Upstream `wbDOBJObjectsAfterLoad`, line 42 of `wbDefinitionsTES5.pas`.
-pub fn wb_dobj_objects_after_load(_a_element: &ElementRef) {
-    todo!("port wbDOBJObjectsAfterLoad from wbDefinitionsTES5.pas line 42")
 }
 
 /// Upstream `wbEFITAfterLoad`, line 1860 of `wbDefinitionsTES5.pas`.
@@ -132,16 +82,6 @@ pub fn wb_ligh_data_flags_after_set(_a_element: &ElementRef, _a_old_value: &Vari
     todo!("port wbLIGHDataFlagsAfterSet from wbDefinitionsTES5.pas line 2176")
 }
 
-/// Upstream `wbMESGAfterLoad`, line 43 of `wbDefinitionsTES5.pas`.
-pub fn wb_mesg_after_load(_a_element: &ElementRef) {
-    todo!("port wbMESGAfterLoad from wbDefinitionsTES5.pas line 43")
-}
-
-/// Upstream `wbMESGDNAMAfterSet`, line 61 of `wbDefinitionsTES5.pas`.
-pub fn wb_mesgdnam_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
-    todo!("port wbMESGDNAMAfterSet from wbDefinitionsTES5.pas line 61")
-}
-
 /// Upstream `wbMGEFArchtypeAfterSet`, line 1210 of `wbDefinitionsTES5.pas`.
 pub fn wb_mgef_archtype_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
     todo!("port wbMGEFArchtypeAfterSet from wbDefinitionsTES5.pas line 1210")
@@ -157,16 +97,6 @@ pub fn wb_mgefav2_weight_after_set(_a_element: &ElementRef, _a_old_value: &Varia
     todo!("port wbMGEFAV2WeightAfterSet from wbDefinitionsTES5.pas line 1194")
 }
 
-/// Upstream `wbPACKDateAfterLoad`, line 44 of `wbDefinitionsTES5.pas`.
-pub fn wb_pack_date_after_load(_a_element: &ElementRef) {
-    todo!("port wbPACKDateAfterLoad from wbDefinitionsTES5.pas line 44")
-}
-
-/// Upstream `wbPACKDateAfterSet`, line 62 of `wbDefinitionsTES5.pas`.
-pub fn wb_pack_date_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
-    todo!("port wbPACKDateAfterSet from wbDefinitionsTES5.pas line 62")
-}
-
 /// Upstream `wbPackageDataInputValueTypeAfterSet`, line 1931 of `wbDefinitionsTES5.pas`.
 pub fn wb_package_data_input_value_type_after_set(
     _a_element: &ElementRef,
@@ -174,11 +104,6 @@ pub fn wb_package_data_input_value_type_after_set(
     _a_new_value: &Variant,
 ) {
     todo!("port wbPackageDataInputValueTypeAfterSet from wbDefinitionsTES5.pas line 1931")
-}
-
-/// Upstream `wbPERKPRKETypeAfterSet`, line 63 of `wbDefinitionsTES5.pas`.
-pub fn wb_perkprke_type_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
-    todo!("port wbPERKPRKETypeAfterSet from wbDefinitionsTES5.pas line 63")
 }
 
 /// Upstream `wbRACEAfterLoad`, line 1681 of `wbDefinitionsTES5.pas`.
@@ -191,42 +116,7 @@ pub fn wb_refr_after_load(_a_element: &ElementRef) {
     todo!("port wbREFRAfterLoad from wbDefinitionsTES5.pas line 1660")
 }
 
-/// Upstream `wbSceneActionTypeAfterSet`, line 65 of `wbDefinitionsTES5.pas`.
-pub fn wb_scene_action_type_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
-    todo!("port wbSceneActionTypeAfterSet from wbDefinitionsTES5.pas line 65")
-}
-
-/// Upstream `wbScriptPropertyTypeAfterSet`, line 67 of `wbDefinitionsTES5.pas`.
-pub fn wb_script_property_type_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
-    todo!("port wbScriptPropertyTypeAfterSet from wbDefinitionsTES5.pas line 67")
-}
-
-/// Upstream `wbScrollCastAfterLoad`, line 48 of `wbDefinitionsTES5.pas`.
-pub fn wb_scroll_cast_after_load(_a_element: &ElementRef) {
-    todo!("port wbScrollCastAfterLoad from wbDefinitionsTES5.pas line 48")
-}
-
-/// Upstream `wbScrollTypeAfterLoad`, line 49 of `wbDefinitionsTES5.pas`.
-pub fn wb_scroll_type_after_load(_a_element: &ElementRef) {
-    todo!("port wbScrollTypeAfterLoad from wbDefinitionsTES5.pas line 49")
-}
-
-/// Upstream `wbUpdateSameParentUnions`, line 68 of `wbDefinitionsTES5.pas`.
-pub fn wb_update_same_parent_unions(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
-    todo!("port wbUpdateSameParentUnions from wbDefinitionsTES5.pas line 68")
-}
-
 /// Upstream `wbWEAPAfterLoad`, line 1686 of `wbDefinitionsTES5.pas`.
 pub fn wb_weap_after_load(_a_element: &ElementRef) {
     todo!("port wbWEAPAfterLoad from wbDefinitionsTES5.pas line 1686")
-}
-
-/// Upstream `wbWorldAfterLoad`, line 51 of `wbDefinitionsTES5.pas`.
-pub fn wb_world_after_load(_a_element: &ElementRef) {
-    todo!("port wbWorldAfterLoad from wbDefinitionsTES5.pas line 51")
-}
-
-/// Upstream `wbWorldAfterSet`, line 69 of `wbDefinitionsTES5.pas`.
-pub fn wb_world_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
-    todo!("port wbWorldAfterSet from wbDefinitionsTES5.pas line 69")
 }

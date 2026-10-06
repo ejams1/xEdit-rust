@@ -2,12 +2,12 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-// Ported from xEdit: Core/wbDefinitionsFO4.pas
+// Ported from xEdit: Core/wbDefinitionsFO76.pas
 
-//! The callbacks of `wbDefinitionsFO4.pas` that are ported by hand. The
-//! ones that are not ported yet are stubs in `fo4_stubs.rs`.
+//! The callbacks of `wbDefinitionsFO76.pas` that are ported by hand. The
+//! ones that are not ported yet are stubs in `fo76_stubs.rs`.
 
-pub use super::fo4_stubs::*;
+pub use super::fo76_stubs::*;
 
 use std::sync::{Arc, Mutex};
 
@@ -18,11 +18,12 @@ use xedit_core::interface::string::to_comma_text;
 use xedit_core::interface::*;
 
 use super::common::{
-    collision_layer_links_to, index_key_from_ordinal, variant_int, wb_try_get_container_from_union,
-    wb_try_get_container_ref_from_union_or_value, wb_try_get_containing_main_record, wb_try_get_main_record,
+    collision_layer_links_to, index_key_from_ordinal, variant_int, wb_form_version_decider_version,
+    wb_try_get_container_from_union, wb_try_get_container_ref_from_union_or_value, wb_try_get_containing_main_record,
+    wb_try_get_main_record,
 };
 use crate::common::{wb_idx_addon_node, wb_idx_collision_layer};
-use crate::fo4::{
+use crate::fo76::{
     TConditionParameterType, WB_ACTOR_PROPERTY_ENUM, WB_ARMOR_PROPERTY_ENUM, WB_CONDITION_FUNCTIONS,
     WB_EVENT_FUNCTION_ENUM, WB_EVENT_MEMBER_ENUM, WB_WEAPON_PROPERTY_ENUM, wb_condition_desc_from_index,
 };
@@ -48,7 +49,7 @@ pub fn make_var_recs(a: &[VarRec]) -> Vec<VarRec> {
 /// Upstream `GetObjectModPropertyEnum`. Not ported yet: it needs the
 /// element tree.
 pub fn get_object_mod_property_enum(_a_element: Option<Arc<dyn Element>>) -> Option<Arc<EnumDef>> {
-    todo!("port GetObjectModPropertyEnum from wbDefinitionsFO4.pas line 2392")
+    todo!("port GetObjectModPropertyEnum from wbDefinitionsFO76.pas line 2392")
 }
 
 /// Upstream `CmpW32`: -1, 0 or 1 for two unsigned values.
@@ -58,24 +59,6 @@ pub fn cmp_w32(a: u32, b: u32) -> i32 {
         std::cmp::Ordering::Equal => 0,
         std::cmp::Ordering::Greater => 1,
     }
-}
-
-/// Upstream anonymous routine at line 7895 of `wbDefinitionsFO4.pas`: the
-/// `ADDN` index key.
-pub fn define_fo4_anonymous_7895(a_main_record: &MainRecordRef, a_index_keys: &mut IndexKeys) {
-    index_key_from_ordinal(a_main_record, a_index_keys, "DATA", wb_idx_addon_node());
-}
-
-/// Upstream anonymous routine at line 9638 of `wbDefinitionsFO4.pas`: the
-/// `COLL` index key.
-pub fn define_fo4_anonymous_9638(a_main_record: &MainRecordRef, a_index_keys: &mut IndexKeys) {
-    index_key_from_ordinal(a_main_record, a_index_keys, "BNAM", wb_idx_collision_layer());
-}
-
-/// Upstream anonymous routine at line 11711 of `wbDefinitionsFO4.pas`: the
-/// collision layer of `XTRI`.
-pub fn define_fo4_anonymous_11711(a_element: ElementArg) -> Option<ElementRef> {
-    collision_layer_links_to(a_element)
 }
 
 /// Upstream `wbTypeDecider`: the `Type` value of the container.
@@ -135,20 +118,6 @@ pub fn wb_book_teaches_decider(_a_base_ptr: DataPtr, a_element: ElementArg) -> i
     }
 }
 
-/// Upstream `wbPerkDATADecider`: the `Type` of the `PRKE` subrecord.
-pub fn wb_perk_data_decider(_a_base_ptr: DataPtr, a_element: ElementArg) -> i32 {
-    let Some(prke) = a_element
-        .and_then(|element| element.get_container())
-        .and_then(|container| container.as_container()?.get_record_by_signature(PRKE))
-    else {
-        return 0;
-    };
-    let Some(kind) = prke.as_container().and_then(|prke| prke.get_element_by_name("Type")) else {
-        return 0;
-    };
-    kind.get_native_value().as_ordinal().unwrap_or(0) as i32
-}
-
 /// Upstream `wbEPFDDecider`: the `EPFT` value, or 8 for the functions that
 /// take an actor value.
 pub fn wb_epfd_decider(_a_base_ptr: DataPtr, a_element: ElementArg) -> i32 {
@@ -190,70 +159,6 @@ pub fn wb_pub_pack_cnam_decider(_a_base_ptr: DataPtr, a_element: ElementArg) -> 
     }
 }
 
-/// Upstream `wbMGEFAssocItemDecider`: the member for the `Archetype`.
-pub fn wb_mgef_assoc_item_decider(a_base_ptr: DataPtr, a_element: ElementArg) -> i32 {
-    const OFFSET_ARCHTYPE: usize = 56;
-    let Some(container) = wb_try_get_container_from_union(a_element) else {
-        return 0;
-    };
-    let archtype = match container
-        .as_container()
-        .and_then(|container| container.get_element_by_name("Archetype"))
-    {
-        Some(element) => element.get_native_value().as_ordinal(),
-        None => match (container.as_data_container(), a_base_ptr) {
-            (Some(_), Some(data)) if data.len() >= OFFSET_ARCHTYPE + 4 => Some(i64::from(u32::from_le_bytes(
-                data[OFFSET_ARCHTYPE..OFFSET_ARCHTYPE + 4].try_into().unwrap(),
-            ))),
-            _ => None,
-        },
-    };
-    match archtype {
-        Some(12) => 1, // Light
-        Some(17) => 2, // Bound Item
-        Some(18) => 3, // Summon Creature
-        Some(25) => 4, // Guide
-        Some(34) => 8, // Peak Mod
-        Some(35) => 5, // Cloak
-        Some(36) => 6, // Werewolf
-        Some(39) => 7, // Enhance Weapon
-        Some(40) => 4, // Spawn Hazard
-        Some(45) => 9, // Damage Type
-        Some(46) => 9, // Immunity
-        _ => 0,
-    }
-}
-
-/// Upstream `wbREFRRecordFlagsDecider`: the member for the signature of
-/// the base record of the reference.
-pub fn wb_refr_record_flags_decider(a_element: ElementArg) -> i32 {
-    let Some(main_record) = wb_try_get_containing_main_record(a_element) else {
-        return 0;
-    };
-    let name = main_record.get_element_by_signature(NAME);
-    let Some(base) = wb_try_get_main_record(name.as_ref(), "") else {
-        return 0;
-    };
-    match base.get_signature().0.as_slice() {
-        b"ACTI" | b"STAT" | b"SCOL" | b"TREE" => 1,
-        b"CONT" | b"TERM" => 2,
-        b"DOOR" => 3,
-        b"LIGH" => 4,
-        b"MSTT" => 5,
-        b"ADDN" => 6,
-        b"SCRL" | b"AMMO" | b"ARMO" | b"BOOK" | b"INGR" | b"KEYM" | b"MISC" | b"FURN" | b"WEAP" | b"ALCH" => 7,
-        _ => 0,
-    }
-}
-
-/// Upstream `wbINFOGroupDecider`: 1 for a record with flag `$40`.
-pub fn wb_info_group_decider(_a_base_ptr: DataPtr, a_element: ElementArg) -> i32 {
-    match a_element.and_then(|element| element.get_containing_main_record()) {
-        Some(main_record) if main_record.get_flags().0 & 0x40 != 0 => 1,
-        _ => 0,
-    }
-}
-
 /// Upstream `wbAECHDataDecider`: the member for the `KNAM` type of the effect chain.
 pub fn wb_aech_data_decider(_a_base_ptr: DataPtr, a_element: ElementArg) -> i32 {
     let Some(container) = wb_try_get_container_from_union(a_element) else {
@@ -276,23 +181,6 @@ pub fn wb_aech_data_decider(_a_base_ptr: DataPtr, a_element: ElementArg) -> i32 
     }
 }
 
-/// Upstream `wbSNDRDataDecider`: 1 for an auto weapon sound descriptor.
-pub fn wb_sndr_data_decider(_a_base_ptr: DataPtr, a_element: ElementArg) -> i32 {
-    let Some(container) = wb_try_get_container_from_union(a_element) else {
-        return 0;
-    };
-    let Some(container) = container.get_container() else {
-        return 0;
-    };
-    let Some(cnam) = container
-        .as_container()
-        .and_then(|container| container.get_element_by_signature(Signature::new(b"CNAM")))
-    else {
-        return 0;
-    };
-    if cnam.get_edit_value() == "AutoWeapon" { 1 } else { 0 }
-}
-
 /// Upstream `wbOMODDataFunctionTypeDecider`.
 pub fn wb_omod_data_function_type_decider(_a_base_ptr: DataPtr, a_element: ElementArg) -> i32 {
     let Some(container) = wb_try_get_container_from_union(a_element) else {
@@ -302,32 +190,6 @@ pub fn wb_omod_data_function_type_decider(_a_base_ptr: DataPtr, a_element: Eleme
         2 => 1,
         4 => 3,
         5 => 2,
-        _ => 0,
-    }
-}
-
-/// Upstream `wbOMODDataPropertyValue1Decider`.
-pub fn wb_omod_data_property_value1_decider(_a_base_ptr: DataPtr, a_element: ElementArg) -> i32 {
-    let Some(container) = wb_try_get_container_from_union(a_element) else {
-        return 0;
-    };
-    match container_int(&container, "Value Type") {
-        0 => 1,
-        1 => 2,
-        2 => 3,
-        4 | 6 => 4,
-        5 => {
-            let property = container
-                .as_container()
-                .map(|container| container.get_element_edit_value("Property"))
-                .unwrap_or_default();
-            match property.as_str() {
-                "SoundLevel" => 6,
-                "StaggerValue" => 7,
-                "HitBehaviour" => 8,
-                _ => 5,
-            }
-        }
         _ => 0,
     }
 }
@@ -389,16 +251,6 @@ pub fn wb_condition_function_to_str(a_int: i64, _a_element: ElementArg, a_type: 
         },
     }
     result
-}
-
-/// Upstream `wbConditionFunctionToInt`.
-pub fn wb_condition_function_to_int(a_string: &str, _a_element: ElementArg) -> i64 {
-    for function in WB_CONDITION_FUNCTIONS {
-        if function.name.eq_ignore_ascii_case(a_string) {
-            return i64::from(function.index);
-        }
-    }
-    a_string.trim().parse().unwrap_or(0)
 }
 
 /// Upstream `wbConditionParam1Decider`.
@@ -542,130 +394,6 @@ fn quest_stage_text(main_record: &MainRecordRef, a_int: i64, a_type: CallbackTyp
         }
     }
     Err(edit_infos)
-}
-
-/// Upstream `wbConditionQuestStageToStr`.
-pub fn wb_condition_quest_stage_to_str(a_int: i64, a_element: ElementArg, a_type: CallbackType) -> String {
-    let mut result = match a_type {
-        CallbackType::ctToSortKey => return int_to_hex64(a_int, 8),
-        CallbackType::ctToEditValue | CallbackType::ctToSummary => a_int.to_string(),
-        CallbackType::ctCheck => "<Warning: Could not resolve Parameter 1>".to_owned(),
-        CallbackType::ctToStr => format!("{a_int} <Warning: Could not resolve Parameter 1>"),
-        _ => String::new(),
-    };
-    let Some(container) = wb_try_get_container_ref_from_union_or_value(a_element) else {
-        return result;
-    };
-    let parameter = container
-        .as_container()
-        .and_then(|container| container.get_element_by_name("Parameter #1"));
-    let Some(main_record) = wb_try_get_main_record(parameter.as_ref(), "") else {
-        return result;
-    };
-    let main_record = quest_override(main_record);
-    if main_record.get_signature() != QUST {
-        match a_type {
-            CallbackType::ctCheck => {
-                result = format!("<Warning: \"{}\" is not a Quest record>", main_record.get_short_name());
-            }
-            CallbackType::ctToStr => {
-                result = format!(
-                    "{a_int} <Warning: \"{}\" is not a Quest record>",
-                    main_record.get_short_name()
-                );
-            }
-            _ => {}
-        }
-        return result;
-    }
-    if a_type == CallbackType::ctEditType {
-        return "ComboBox".to_owned();
-    }
-    match quest_stage_text(&main_record, a_int, a_type) {
-        Ok(text) => text,
-        Err(mut edit_infos) => match a_type {
-            CallbackType::ctCheck => {
-                format!(
-                    "<Warning: Quest Stage [{a_int}] not found in \"{}\">",
-                    main_record.get_name()
-                )
-            }
-            CallbackType::ctToStr => {
-                format!(
-                    "{a_int} <Warning: Quest Stage [{a_int}] not found in \"{}\">",
-                    main_record.get_name()
-                )
-            }
-            CallbackType::ctEditInfo => {
-                edit_infos.sort_by_key(|text| text.to_lowercase());
-                to_comma_text(&edit_infos)
-            }
-            _ => result,
-        },
-    }
-}
-
-/// Upstream `wbPerkDATAQuestStageToStr`.
-pub fn wb_perk_data_quest_stage_to_str(a_int: i64, a_element: ElementArg, a_type: CallbackType) -> String {
-    let mut result = match a_type {
-        CallbackType::ctToStr => format!("{a_int} <Warning: Could not resolve Quest>"),
-        CallbackType::ctToSummary | CallbackType::ctToEditValue => a_int.to_string(),
-        CallbackType::ctToSortKey => return int_to_hex64(a_int, 8),
-        CallbackType::ctCheck => "<Warning: Could not resolve Quest>".to_owned(),
-        _ => String::new(),
-    };
-    let Some(container) = wb_try_get_container_ref_from_union_or_value(a_element) else {
-        return result;
-    };
-    let parameter = container
-        .as_container()
-        .and_then(|container| container.get_element_by_name("Quest"));
-    let Some(main_record) = wb_try_get_main_record(parameter.as_ref(), "") else {
-        return result;
-    };
-    let main_record = quest_override(main_record);
-    if main_record.get_signature() != QUST {
-        match a_type {
-            CallbackType::ctToStr => {
-                result = format!(
-                    "{a_int} <Warning: \"{}\" is not a Quest record>",
-                    main_record.get_short_name()
-                );
-            }
-            CallbackType::ctToSummary => result = a_int.to_string(),
-            CallbackType::ctCheck => {
-                result = format!("<Warning: \"{}\" is not a Quest record>", main_record.get_short_name());
-            }
-            _ => {}
-        }
-        return result;
-    }
-    if a_type == CallbackType::ctEditType {
-        return "ComboBox".to_owned();
-    }
-    match quest_stage_text(&main_record, a_int, a_type) {
-        Ok(text) => text,
-        Err(mut edit_infos) => match a_type {
-            CallbackType::ctToStr => {
-                format!(
-                    "{a_int} <Warning: Quest Stage [{a_int}] not found in \"{}\">",
-                    main_record.get_name()
-                )
-            }
-            CallbackType::ctToSummary => a_int.to_string(),
-            CallbackType::ctCheck => {
-                format!(
-                    "<Warning: Quest Stage [{a_int}] not found in \"{}\">",
-                    main_record.get_name()
-                )
-            }
-            CallbackType::ctEditInfo => {
-                edit_infos.sort_by_key(|text| text.to_lowercase());
-                to_comma_text(&edit_infos)
-            }
-            _ => result,
-        },
-    }
 }
 
 /// Upstream `wbStringToInt`.
@@ -834,52 +562,6 @@ pub fn wb_combined_mesh_id_to_int(a_string: &str, _a_element: ElementArg) -> i64
     i64::from_str_radix(hex, 16).unwrap_or(0)
 }
 
-/// Upstream `wbConditionQuestOverlay`: a null quest stands for the quest the
-/// condition belongs to.
-pub fn wb_condition_quest_overlay(a_int: i64, a_element: ElementArg, a_type: CallbackType) -> i64 {
-    if a_int != 0
-        || !matches!(
-            a_type,
-            CallbackType::ctCheck
-                | CallbackType::ctLinksTo
-                | CallbackType::ctToSortKey
-                | CallbackType::ctToStr
-                | CallbackType::ctToSummary
-        )
-    {
-        return a_int;
-    }
-    let Some(main_record) = a_element.and_then(|element| element.get_containing_main_record()) else {
-        return a_int;
-    };
-    let native = |signature: &[u8; 4]| {
-        main_record
-            .get_element_by_signature(Signature::new(signature))
-            .map_or(a_int, |element| variant_int(&element.get_native_value()))
-    };
-    match main_record.get_signature().0.as_slice() {
-        b"QUST" => i64::from(main_record.get_fixed_form_id().to_cardinal()),
-        b"SCEN" => native(b"PNAM"),
-        b"PACK" => native(b"QNAM"),
-        b"INFO" => {
-            // The DIAL of the INFO.
-            let Some(group) = main_record
-                .get_container()
-                .and_then(|container| container.as_element_impl()?.group_record_impl())
-            else {
-                return a_int;
-            };
-            match group.children_of() {
-                Some(dial) if dial.get_signature() == Signature::new(b"DIAL") => dial
-                    .get_element_by_signature(Signature::new(b"QNAM"))
-                    .map_or(a_int, |element| variant_int(&element.get_native_value())),
-                _ => a_int,
-            }
-        }
-        _ => a_int,
-    }
-}
-
 /// Upstream `TFaceGenFeature`: the entries of a race feature by race and
 /// sex, as the face callbacks cache them.
 struct FaceGenFeature {
@@ -911,7 +593,7 @@ fn cached_entries(
     cache: &Mutex<Vec<FaceGenFeature>>,
     race: &MainRecordRef,
     female: bool,
-    build: impl Fn(&MainRecordRef, bool) -> Vec<(u32, String)>,
+    build: &impl Fn(&MainRecordRef, bool) -> Vec<(u32, String)>,
 ) -> Option<Vec<(u32, String)>> {
     let race_id = race.get_editor_id();
     let mut cache = cache.lock().unwrap();
@@ -937,9 +619,9 @@ fn cached_entries(
     Some(cache[position].entries.clone())
 }
 
-/// The elements of the container at `name` of the record, as containers.
-fn container_entries(record: &MainRecordRef, name: &str) -> Vec<ElementRef> {
-    let Some(container) = record.get_element_by_name(name) else {
+/// The elements of the container at `path` of the record, as containers.
+fn container_entries(record: &MainRecordRef, path: &str) -> Vec<ElementRef> {
+    let Some(container) = record.get_element_by_path(path) else {
         return Vec::new();
     };
     let Some(container) = container.as_container() else {
@@ -975,6 +657,18 @@ fn native_u32(entry: &ElementRef, path: &str) -> u32 {
         .map_or(0, |entry| variant_int(&entry.get_element_native_value(path)) as u32)
 }
 
+/// How a face callback prints its feature.
+struct FeatureText {
+    /// The index is printed in hexadecimal.
+    hex: bool,
+    /// The feature in the warning that it cannot be resolved.
+    what: &'static str,
+    /// The feature in the warning that it is not found.
+    kind: &'static str,
+    /// An index missing for the sex of the actor is looked up for the other.
+    other_sex: bool,
+}
+
 /// The shared result text of the face callbacks.
 fn face_feature_text(
     a_int: i64,
@@ -982,9 +676,14 @@ fn face_feature_text(
     a_element: ElementArg,
     cache: &Mutex<Vec<FaceGenFeature>>,
     build: impl Fn(&MainRecordRef, bool) -> Vec<(u32, String)>,
-    hex: bool,
-    what: &str,
+    feature: &FeatureText,
 ) -> String {
+    let FeatureText {
+        hex,
+        what,
+        kind,
+        other_sex,
+    } = *feature;
     let index_text = if hex { int_to_hex64(a_int, 8) } else { a_int.to_string() };
     let mut result = match a_type {
         CallbackType::ctToStr | CallbackType::ctToSummary | CallbackType::ctToEditValue => index_text.clone(),
@@ -995,21 +694,26 @@ fn face_feature_text(
     let Some((race, female)) = actor_race(a_element) else {
         return result;
     };
-    let Some(entries) = cached_entries(cache, &race, female, build) else {
+    let Some(mut entries) = cached_entries(cache, &race, female, &build) else {
         return result;
     };
     let index = a_int as u32;
-    let entry_name = entries
-        .iter()
-        .find(|(entry_index, _)| *entry_index == index)
-        .map(|(_, name)| name.clone())
-        .unwrap_or_default();
-    // The capitalized form of the kind in the messages.
-    let kind = match what {
-        "tint layer" => "Tint Layer Index",
-        "face morph" => "Face morph index",
-        _ => "Morph index",
+    let find = |entries: &[(u32, String)]| {
+        entries
+            .iter()
+            .find(|(entry_index, _)| *entry_index == index)
+            .map(|(_, name)| name.clone())
+            .unwrap_or_default()
     };
+    let mut entry_name = find(&entries);
+    // The face morphs fall back to the entries of the other sex.
+    if entry_name.is_empty() && other_sex {
+        let Some(other) = cached_entries(cache, &race, !female, &build) else {
+            return result;
+        };
+        entries = other;
+        entry_name = find(&entries);
+    }
     match a_type {
         CallbackType::ctToStr | CallbackType::ctToSummary => {
             if !entry_name.is_empty() {
@@ -1048,6 +752,270 @@ fn face_feature_text(
     result
 }
 
+/// Upstream `wbConditionFunctionToInt`.
+pub fn wb_condition_function_to_int(a_string: &str, _a_element: ElementArg) -> i64 {
+    for function in WB_CONDITION_FUNCTIONS {
+        if function.name.eq_ignore_ascii_case(a_string) {
+            return i64::from(function.index);
+        }
+    }
+    a_string.trim().parse().unwrap_or(0)
+}
+
+/// Upstream `wbConditionQuestOverlay`: a null quest stands for the quest the
+/// condition belongs to.
+pub fn wb_condition_quest_overlay(a_int: i64, a_element: ElementArg, a_type: CallbackType) -> i64 {
+    if a_int != 0
+        || !matches!(
+            a_type,
+            CallbackType::ctCheck
+                | CallbackType::ctLinksTo
+                | CallbackType::ctToSortKey
+                | CallbackType::ctToStr
+                | CallbackType::ctToSummary
+        )
+    {
+        return a_int;
+    }
+    let Some(main_record) = a_element.and_then(|element| element.get_containing_main_record()) else {
+        return a_int;
+    };
+    let native = |signature: &[u8; 4]| {
+        main_record
+            .get_element_by_signature(Signature::new(signature))
+            .map_or(a_int, |element| variant_int(&element.get_native_value()))
+    };
+    match main_record.get_signature().0.as_slice() {
+        b"QUST" => i64::from(main_record.get_fixed_form_id().to_cardinal()),
+        b"ACTI" | b"TACT" => native(b"QSTI"),
+        b"SCEN" => native(b"PNAM"),
+        b"PACK" | b"TERM" => native(b"QNAM"),
+        b"INFO" => {
+            // The DIAL of the INFO.
+            let Some(group) = main_record
+                .get_container()
+                .and_then(|container| container.as_element_impl()?.group_record_impl())
+            else {
+                return a_int;
+            };
+            match group.children_of() {
+                Some(dial) if dial.get_signature() == Signature::new(b"DIAL") => dial
+                    .get_element_by_signature(Signature::new(b"QNAM"))
+                    .map_or(a_int, |element| variant_int(&element.get_native_value())),
+                _ => a_int,
+            }
+        }
+        _ => a_int,
+    }
+}
+
+/// Upstream `wbMGEFAssocItemDecider`: the member for the `Archetype`.
+pub fn wb_mgef_assoc_item_decider(a_base_ptr: DataPtr, a_element: ElementArg) -> i32 {
+    const OFFSET_ARCHTYPE: usize = 56;
+    let Some(container) = wb_try_get_container_from_union(a_element) else {
+        return 0;
+    };
+    let archtype = match container
+        .as_container()
+        .and_then(|container| container.get_element_by_name("Archetype"))
+    {
+        Some(element) => element.get_native_value().as_ordinal(),
+        None => match (container.as_data_container(), a_base_ptr) {
+            (Some(_), Some(data)) if data.len() >= OFFSET_ARCHTYPE + 4 => Some(i64::from(u32::from_le_bytes(
+                data[OFFSET_ARCHTYPE..OFFSET_ARCHTYPE + 4].try_into().unwrap(),
+            ))),
+            _ => None,
+        },
+    };
+    // The report of an unknown archetype in report mode is not ported.
+    match archtype {
+        Some(0) => 9,   // Value Modifier
+        Some(12) => 1,  // Light
+        Some(17) => 2,  // Bound Item
+        Some(18) => 3,  // Summon Creature
+        Some(20) => 11, // Telekinesis
+        Some(25) => 4,  // Guide
+        Some(34) => 8,  // Peak Mod
+        Some(35) => 5,  // Cloak
+        Some(36) => 6,  // Werewolf
+        Some(39) => 7,  // Enhance Weapon
+        Some(40) => 4,  // Spawn Hazard
+        Some(45) => 10, // Damage
+        Some(46) => 6,  // Vampire Lord
+        Some(50) => 12, // Grow Flora
+        _ => 0,
+    }
+}
+
+/// Upstream `wbOMODDataPropertyValue1Decider`.
+pub fn wb_omod_data_property_value1_decider(_a_base_ptr: DataPtr, a_element: ElementArg) -> i32 {
+    let Some(container) = wb_try_get_container_from_union(a_element) else {
+        return 0;
+    };
+    match container_int(&container, "Value Type") {
+        0 => 1,
+        1 => 2,
+        2 => 3,
+        4 | 6 => 4,
+        5 => {
+            let property = container
+                .as_container()
+                .map(|container| container.get_element_edit_value("Property"))
+                .unwrap_or_default();
+            match property.as_str() {
+                "SoundLevel" => 6,
+                "StaggerValue" => 7,
+                "HitBehaviour" => 8,
+                _ => 5,
+            }
+        }
+        _ => 0,
+    }
+}
+
+/// Upstream `wbREFRRecordFlagsDecider`: the member for the signature of
+/// the base record of the reference.
+pub fn wb_refr_record_flags_decider(a_element: ElementArg) -> i32 {
+    let Some(main_record) = wb_try_get_containing_main_record(a_element) else {
+        return 0;
+    };
+    let name = main_record.get_element_by_signature(NAME);
+    let Some(base) = wb_try_get_main_record(name.as_ref(), "") else {
+        return 0;
+    };
+    match base.get_signature().0.as_slice() {
+        b"ACTI" | b"STAT" | b"SCOL" | b"TREE" => 1,
+        b"CONT" | b"TERM" => 2,
+        b"DOOR" => 3,
+        b"LIGH" => 4,
+        b"MSTT" => 5,
+        b"ADDN" => 6,
+        b"SCRL" | b"AMMO" | b"ARMO" | b"BOOK" | b"INGR" | b"KEYM" | b"MISC" | b"FURN" | b"WEAP" | b"ALCH" | b"LVLI" => {
+            7
+        }
+        _ => 0,
+    }
+}
+
+/// Upstream `wbSNDRDataDecider`: 1 for an auto weapon sound descriptor.
+pub fn wb_sndr_data_decider(_a_base_ptr: DataPtr, a_element: ElementArg) -> i32 {
+    let Some(container) = wb_try_get_container_from_union(a_element) else {
+        return 0;
+    };
+    let Some(container) = container.get_container() else {
+        return 0;
+    };
+    let Some(cnam) = container
+        .as_container()
+        .and_then(|container| container.get_element_by_signature(Signature::new(b"CNAM")))
+    else {
+        return 0;
+    };
+    // `AutoWeapon`.
+    if variant_int(&cnam.get_native_value()) == 0xED15_7AE3 {
+        1
+    } else {
+        0
+    }
+}
+
+/// Upstream `wbPerkDATAQuestStageToStr`.
+pub fn wb_perk_data_quest_stage_to_str(a_int: i64, a_element: ElementArg, a_type: CallbackType) -> String {
+    let mut result = match a_type {
+        CallbackType::ctToStr => format!("{a_int} <Warning: Could not resolve Quest>"),
+        CallbackType::ctToSummary | CallbackType::ctToEditValue => a_int.to_string(),
+        CallbackType::ctToSortKey => return int_to_hex64(a_int, 8),
+        CallbackType::ctCheck => "<Warning: Could not resolve Quest>".to_owned(),
+        _ => String::new(),
+    };
+    let Some(container) = wb_try_get_container_ref_from_union_or_value(a_element) else {
+        return result;
+    };
+    let parameter = container
+        .as_container()
+        .and_then(|container| container.get_element_by_name("Quest"));
+    let Some(main_record) = wb_try_get_main_record(parameter.as_ref(), "") else {
+        return result;
+    };
+    let main_record = quest_override(main_record);
+    if main_record.get_signature() != QUST {
+        match a_type {
+            CallbackType::ctToStr => {
+                result = format!(
+                    "{a_int} <Warning: \"{}\" is not a Quest record>",
+                    main_record.get_short_name()
+                );
+            }
+            CallbackType::ctToSummary => result = a_int.to_string(),
+            CallbackType::ctCheck => {
+                result = format!("<Warning: \"{}\" is not a Quest record>", main_record.get_short_name());
+            }
+            _ => {}
+        }
+        return result;
+    }
+    if a_type == CallbackType::ctEditType {
+        return "ComboBox".to_owned();
+    }
+    let stages = quest_stage_text(&main_record, a_int, a_type).or_else(|mut edit_infos| {
+        // The objectives follow the stages.
+        if let Some(objectives) = main_record.get_element_by_name("Objectives")
+            && let Some(objectives) = objectives.as_container()
+        {
+            for index in 0..objectives.get_element_count() {
+                let Some(objective) = objectives.get_element(index) else {
+                    continue;
+                };
+                let Some(objective) = objective.as_container() else {
+                    continue;
+                };
+                let j = variant_int(&objective.get_element_native_value("QOBJ"));
+                let s = objective
+                    .get_element_by_path("NNAM")
+                    .map(|nnam| nnam.get_value())
+                    .unwrap_or_default();
+                let s = s.trim();
+                let mut t = format!("{j:0>3}");
+                if !s.is_empty() {
+                    t = format!("{t} {s}");
+                }
+                if a_type == CallbackType::ctEditInfo {
+                    edit_infos.push(t);
+                } else if j == a_int {
+                    return Ok(match a_type {
+                        CallbackType::ctToStr | CallbackType::ctToSummary | CallbackType::ctToEditValue => t,
+                        _ => String::new(),
+                    });
+                }
+            }
+        }
+        Err(edit_infos)
+    });
+    match stages {
+        Ok(text) => text,
+        Err(mut edit_infos) => match a_type {
+            CallbackType::ctToStr => {
+                format!(
+                    "{a_int} <Warning: Quest Stage/Objective [{a_int}] not found in \"{}\">",
+                    main_record.get_name()
+                )
+            }
+            CallbackType::ctToSummary => a_int.to_string(),
+            CallbackType::ctCheck => {
+                format!(
+                    "<Warning: Quest Stage/Objective [{a_int}] not found in \"{}\">",
+                    main_record.get_name()
+                )
+            }
+            CallbackType::ctEditInfo => {
+                edit_infos.sort_by_key(|text| text.to_lowercase());
+                to_comma_text(&edit_infos)
+            }
+            _ => result,
+        },
+    }
+}
+
 /// Upstream `wbTintLayerToStr`: the tint group and option of the index.
 pub fn wb_tint_layer_to_str(a_int: i64, a_element: ElementArg, a_type: CallbackType) -> String {
     face_feature_text(
@@ -1057,9 +1025,9 @@ pub fn wb_tint_layer_to_str(a_int: i64, a_element: ElementArg, a_type: CallbackT
         &TINT_LAYERS,
         |race, female| {
             let name = if female {
-                "Female Tint Layers"
+                r"Head Datas\Female Head Data\Female Tint Layers"
             } else {
-                "Male Tint Layers"
+                r"Head Datas\Male Head Data\Male Tint Layers"
             };
             let mut entries = Vec::new();
             for group in container_entries(race, name) {
@@ -1078,8 +1046,12 @@ pub fn wb_tint_layer_to_str(a_int: i64, a_element: ElementArg, a_type: CallbackT
             }
             entries
         },
-        false,
-        "tint layer",
+        &FeatureText {
+            hex: false,
+            what: "tint layer",
+            kind: "Tint Layer Index",
+            other_sex: false,
+        },
     )
 }
 
@@ -1092,9 +1064,9 @@ pub fn wb_face_morph_to_str(a_int: i64, a_element: ElementArg, a_type: CallbackT
         &FACE_MORPHS,
         |race, female| {
             let name = if female {
-                "Female Face Morphs"
+                r"Head Datas\Female Head Data\Female Face Morphs"
             } else {
-                "Male Face Morphs"
+                r"Head Datas\Male Head Data\Male Face Morphs"
             };
             let mut entries = Vec::new();
             for entry in container_entries(race, name) {
@@ -1105,8 +1077,12 @@ pub fn wb_face_morph_to_str(a_int: i64, a_element: ElementArg, a_type: CallbackT
             }
             entries
         },
-        true,
-        "face morph",
+        &FeatureText {
+            hex: true,
+            what: "face morph",
+            kind: "Face Morph Index",
+            other_sex: true,
+        },
     )
 }
 
@@ -1120,9 +1096,9 @@ pub fn wb_morph_value_to_str(a_int: i64, a_element: ElementArg, a_type: Callback
         &MORPH_VALUES,
         |race, female| {
             let name = if female {
-                "Female Morph Groups"
+                r"Head Datas\Female Head Data\Female Morph Groups"
             } else {
-                "Male Morph Groups"
+                r"Head Datas\Male Head Data\Male Morph Groups"
             };
             let mut entries = Vec::new();
             // Iterate over the morph groups.
@@ -1154,7 +1130,243 @@ pub fn wb_morph_value_to_str(a_int: i64, a_element: ElementArg, a_type: Callback
             }
             entries
         },
-        true,
-        "morph",
+        &FeatureText {
+            hex: true,
+            what: "morph",
+            kind: "Morph Index",
+            other_sex: false,
+        },
     )
+}
+
+/// The end of the quest stage callbacks once the quest is found: the text
+/// of the stage, or the warning when the quest has no such stage.
+fn quest_stage_result(main_record: &MainRecordRef, a_int: i64, a_type: CallbackType, result: String) -> String {
+    if a_type == CallbackType::ctEditType {
+        return "ComboBox".to_owned();
+    }
+    match quest_stage_text(main_record, a_int, a_type) {
+        Ok(text) => text,
+        Err(mut edit_infos) => match a_type {
+            CallbackType::ctCheck => format!(
+                "<Warning: Quest Stage [{a_int}] not found in \"{}\">",
+                main_record.get_name()
+            ),
+            CallbackType::ctToStr => format!(
+                "{a_int} <Warning: Quest Stage [{a_int}] not found in \"{}\">",
+                main_record.get_name()
+            ),
+            CallbackType::ctEditInfo => {
+                edit_infos.sort_by_key(|text| text.to_lowercase());
+                to_comma_text(&edit_infos)
+            }
+            _ => result,
+        },
+    }
+}
+
+/// Upstream `wbConditionParam1QuestStageToStr`: the stage of the quest the
+/// record of the condition belongs to.
+pub fn wb_condition_param1_quest_stage_to_str(a_int: i64, a_element: ElementArg, a_type: CallbackType) -> String {
+    let result = match a_type {
+        CallbackType::ctToSortKey => return int_to_hex64(a_int, 8),
+        CallbackType::ctToEditValue | CallbackType::ctToSummary => a_int.to_string(),
+        CallbackType::ctCheck => "<Warning: Could not resolve Quest>".to_owned(),
+        CallbackType::ctToStr => format!("{a_int} <Warning: Could not resolve Quest>"),
+        _ => String::new(),
+    };
+    let Some(mut main_record) = a_element.and_then(|element| element.get_containing_main_record()) else {
+        return result;
+    };
+    let by_signature =
+        |record: &MainRecordRef, signature: &[u8; 4]| record.get_element_by_signature(Signature::new(signature));
+    let element = match main_record.get_signature().0.as_slice() {
+        b"ACTI" | b"TACT" | b"FURN" => by_signature(&main_record, b"QSTI"),
+        b"SCEN" => by_signature(&main_record, b"PNAM"),
+        b"PACK" | b"TERM" => by_signature(&main_record, b"QNAM"),
+        b"GMRW" => by_signature(&main_record, b"ANAM"),
+        b"INFO" => {
+            // The DIAL of the INFO.
+            let dial = main_record
+                .get_container()
+                .and_then(|container| container.as_element_impl()?.group_record_impl())
+                .and_then(|group| group.children_of());
+            match dial {
+                Some(dial) => {
+                    let dial: MainRecordRef = dial;
+                    main_record = dial.clone();
+                    if dial.get_signature() == Signature::new(b"DIAL") {
+                        by_signature(&dial, b"QNAM")
+                    } else {
+                        None
+                    }
+                }
+                None => None,
+            }
+        }
+        _ => None,
+    };
+    // `Supports` clears the record when the element links to no record.
+    if let Some(element) = element {
+        match element.get_links_to().and_then(|linked| linked.into_main_record()) {
+            Some(linked) => main_record = linked,
+            None => return result,
+        }
+    }
+    if main_record.get_signature() != QUST {
+        return result;
+    }
+    quest_stage_result(&main_record, a_int, a_type, result)
+}
+
+/// Upstream `wbConditionParam2QuestStageToStr`: the stage of the quest of
+/// the first parameter.
+pub fn wb_condition_param2_quest_stage_to_str(a_int: i64, a_element: ElementArg, a_type: CallbackType) -> String {
+    let result = match a_type {
+        CallbackType::ctToSortKey => return int_to_hex64(a_int, 8),
+        CallbackType::ctToEditValue | CallbackType::ctToSummary => a_int.to_string(),
+        CallbackType::ctCheck => "<Warning: Could not resolve Parameter 1>".to_owned(),
+        CallbackType::ctToStr => format!("{a_int} <Warning: Could not resolve Parameter 1>"),
+        _ => String::new(),
+    };
+    let Some(container) = wb_try_get_container_ref_from_union_or_value(a_element) else {
+        return result;
+    };
+    let parameter = container
+        .as_container()
+        .and_then(|container| container.get_element_by_name("Parameter #1"));
+    let Some(main_record) = wb_try_get_main_record(parameter.as_ref(), "") else {
+        return result;
+    };
+    let main_record = quest_override(main_record);
+    if main_record.get_signature() != QUST {
+        return match a_type {
+            CallbackType::ctCheck => format!("<Warning: \"{}\" is not a Quest record>", main_record.get_short_name()),
+            CallbackType::ctToStr => format!(
+                "{a_int} <Warning: \"{}\" is not a Quest record>",
+                main_record.get_short_name()
+            ),
+            _ => result,
+        };
+    }
+    quest_stage_result(&main_record, a_int, a_type, result)
+}
+
+/// Upstream `wbDeciderCELLFlags`: the two byte flags of old cells, else by
+/// form version 187.
+pub fn wb_decider_cell_flags(a_base_ptr: DataPtr, a_element: ElementArg) -> i32 {
+    if a_base_ptr.is_some_and(|data| data.len() == 2) {
+        return 0;
+    }
+    wb_form_version_decider_version(187).map_or(0, |decider| decider(a_base_ptr, a_element))
+}
+
+/// Upstream `wbRDOTCountCallback`: the entries of 76 bytes in the data of
+/// the container of the union.
+pub fn wb_rdot_count_callback(_a_base_ptr: DataPtr, a_element: ElementArg) -> u32 {
+    let Some(container) = wb_try_get_container_from_union(a_element) else {
+        return 0;
+    };
+    let Some(container) = container.get_container() else {
+        return 0;
+    };
+    (container.get_data_size() / 76) as u32
+}
+
+/// The `EPFT` of the container of the element.
+fn container_epft(a_element: ElementArg) -> i64 {
+    a_element
+        .and_then(|element| element.get_container())
+        .and_then(|container| {
+            container
+                .as_container()
+                .map(|container| variant_int(&container.get_element_native_value("EPFT")))
+        })
+        .unwrap_or(0)
+}
+
+/// Upstream `wbEPF2Decider`.
+pub fn wb_epf2_decider(_a_base_ptr: DataPtr, a_element: ElementArg) -> i32 {
+    i32::from(container_epft(a_element) == 1)
+}
+
+/// Upstream `wbEPF3Decider`.
+pub fn wb_epf3_decider(_a_base_ptr: DataPtr, a_element: ElementArg) -> i32 {
+    i32::from(container_epft(a_element) == 8)
+}
+
+/// Upstream `wbEPFDAVDataDecider`: 1 for data shorter than 8 bytes.
+pub fn wb_epfdav_data_decider(_a_base_ptr: DataPtr, a_element: ElementArg) -> i32 {
+    match a_element {
+        Some(element) if element.get_data_size() < 8 => 1,
+        _ => 0,
+    }
+}
+
+/// Upstream `wbPerkEffectDataDecider`: the `Type` of the `PRKE` of the
+/// container.
+pub fn wb_perk_effect_data_decider(_a_base_ptr: DataPtr, a_element: ElementArg) -> i32 {
+    let Some(container) = a_element.and_then(|element| element.get_container()) else {
+        return 0;
+    };
+    let Some(prke) = container
+        .as_container()
+        .and_then(|container| container.get_record_by_signature(PRKE))
+    else {
+        return 0;
+    };
+    let Some(kind) = prke.as_container().and_then(|prke| prke.get_element_by_name("Type")) else {
+        return 0;
+    };
+    variant_int(&kind.get_native_value()) as i32
+}
+
+/// Upstream `wbLGDIFiltersLinksTo`: the legendary mod of the filter, found
+/// from the base star slot of the filter and the mod index.
+pub fn wb_lgdi_filters_links_to(a_element: ElementArg) -> Option<ElementRef> {
+    let element = a_element?;
+    let filter = element.get_container()?;
+    let filter = filter.as_container()?;
+    let main_record = element.get_containing_main_record()?;
+    let legendary_mods = main_record.get_element_by_signature(Signature::new(b"BNAM"))?;
+    let legendary_mods = legendary_mods.as_container()?;
+    let base_star_slot = variant_int(&filter.get_element(0)?.get_native_value());
+    let mod_index = variant_int(&element.get_native_value());
+    let mut legendary_index = None;
+    for i in 0..legendary_mods.get_element_count() {
+        let legendary_mod = legendary_mods.get_element(i)?;
+        let first = legendary_mod.as_container()?.get_element(0)?;
+        if variant_int(&first.get_native_value()) == base_star_slot {
+            legendary_index = Some(i64::from(i) + mod_index);
+            break;
+        }
+    }
+    let mod_base = legendary_mods.get_element(i32::try_from(legendary_index?).ok()?)?;
+    mod_base.as_container()?.get_element(1)?.get_links_to()
+}
+
+/// Upstream anonymous routine at line 10085 of `wbDefinitionsFO76.pas`: the
+/// `ADDN` index key, from `IKEK` when the record has one, else `DATA`.
+pub fn define_fo76_anonymous_10085(a_main_record: &MainRecordRef, a_index_keys: &mut IndexKeys) {
+    let signature = if a_main_record
+        .get_element_by_signature(Signature::new(b"IKEK"))
+        .is_some()
+    {
+        "IKEK"
+    } else {
+        "DATA"
+    };
+    index_key_from_ordinal(a_main_record, a_index_keys, signature, wb_idx_addon_node());
+}
+
+/// Upstream anonymous routine at line 11895 of `wbDefinitionsFO76.pas`: the
+/// `COLL` index key.
+pub fn define_fo76_anonymous_11895(a_main_record: &MainRecordRef, a_index_keys: &mut IndexKeys) {
+    index_key_from_ordinal(a_main_record, a_index_keys, "BNAM", wb_idx_collision_layer());
+}
+
+/// Upstream anonymous routine at line 14827 of `wbDefinitionsFO76.pas`: the
+/// collision layer of `XTRI`.
+pub fn define_fo76_anonymous_14827(a_element: ElementArg) -> Option<ElementRef> {
+    collision_layer_links_to(a_element)
 }

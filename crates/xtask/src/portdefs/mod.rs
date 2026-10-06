@@ -18,7 +18,7 @@ pub mod emit;
 pub mod model;
 pub mod resolve;
 
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 use std::path::Path;
 
 use anyhow::{Context, Result, bail, ensure};
@@ -541,14 +541,44 @@ fn emit_unit(upstream: &Path, unit_name: &str, out: &Path, stubs: &Path, ported:
     }
     std::fs::write(out, &text).with_context(|| format!("writing {}", out.display()))?;
 
+    // The Common unit also stubs the Common callbacks that only the game
+    // units name, so that each has one stub, in `common_stubs.rs`.
+    let mut stub_callbacks: Vec<(String, (String, String, u32), &str)> = emitter
+        .callbacks
+        .borrow()
+        .iter()
+        .map(|(rust, callback)| (rust.clone(), callback.clone(), unit_name))
+        .collect();
+    if unit_name == "wbDefinitionsCommon" {
+        let mut common_callbacks = BTreeMap::new();
+        for game_unit in GAME_UNITS {
+            let (game_symbols, game) = definition_symbols(upstream, game_unit)?;
+            let game_emitter = emit::Emitter::new(&game_symbols, game_unit);
+            for decl in &game.implementation {
+                if let Decl::Routine(routine) = decl
+                    && is_definition_routine(routine, &game_symbols)
+                {
+                    let _ = game_emitter.routine(routine);
+                }
+            }
+            common_callbacks.extend(game_emitter.common_callbacks.borrow().clone());
+        }
+        for (rust, callback) in common_callbacks {
+            if !emitter.callbacks.borrow().contains_key(&rust) {
+                stub_callbacks.push((rust, callback, unit_name));
+            }
+        }
+        stub_callbacks.sort_by(|a, b| a.0.cmp(&b.0));
+    }
+
     let mut stub_text = format!("{GENERATED_UNIT_HEADER}\n// Ported from xEdit: Core/{unit_name}.pas\n\n");
     stub_text.push_str(STUBS_IMPORTS);
     let mut stub_count = 0;
-    for (rust, (pascal, callback_type, line)) in emitter.callbacks.borrow().iter() {
+    for (rust, (pascal, callback_type, line), stub_unit) in &stub_callbacks {
         if ported.contains(rust) {
             continue;
         }
-        match emitter.callback_stub(rust, pascal, callback_type, *line, unit_name) {
+        match emitter.callback_stub(rust, pascal, callback_type, *line, stub_unit) {
             Some(stub) => {
                 stub_text.push('\n');
                 stub_text.push_str(&stub);
@@ -589,6 +619,18 @@ const GENERATED_UNIT_HEADER: &str = "\
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 ";
+
+/// The game definition units, whose Common callbacks the Common unit stubs.
+const GAME_UNITS: &[&str] = &[
+    "wbDefinitionsTES3",
+    "wbDefinitionsTES4",
+    "wbDefinitionsFO3",
+    "wbDefinitionsFNV",
+    "wbDefinitionsTES5",
+    "wbDefinitionsFO4",
+    "wbDefinitionsFO76",
+    "wbDefinitionsSF1",
+];
 
 /// The module name of a definition unit: `wbDefinitionsFO4` is `fo4`.
 pub fn unit_module(unit_name: &str) -> String {

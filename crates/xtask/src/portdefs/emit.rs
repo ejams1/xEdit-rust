@@ -273,6 +273,9 @@ pub struct Emitter<'a> {
     /// The callbacks that the output names: Rust name to the Pascal name,
     /// the lower-case callback type and the line.
     pub callbacks: RefCell<BTreeMap<String, (String, String, u32)>>,
+    /// The callbacks of `wbDefinitionsCommon` that a game unit names, in the
+    /// same form. Their stubs belong to the Common unit.
+    pub common_callbacks: RefCell<BTreeMap<String, (String, String, u32)>>,
 }
 
 impl<'a> Emitter<'a> {
@@ -283,6 +286,7 @@ impl<'a> Emitter<'a> {
             names: overload_names(symbols),
             references: RefCell::default(),
             callbacks: RefCell::default(),
+            common_callbacks: RefCell::default(),
         }
     }
 
@@ -1161,10 +1165,15 @@ impl<'a> Emitter<'a> {
         self.references
             .borrow_mut()
             .insert(function.clone(), format!("callback {}", overloads[index].name));
-        if overloads[index].unit.eq_ignore_ascii_case(self.unit)
-            || overloads[index].unit.eq_ignore_ascii_case("wbDefinitionsCommon")
-        {
-            self.callbacks.borrow_mut().insert(
+        let callbacks = if overloads[index].unit.eq_ignore_ascii_case(self.unit) {
+            Some(&self.callbacks)
+        } else if overloads[index].unit.eq_ignore_ascii_case("wbDefinitionsCommon") {
+            Some(&self.common_callbacks)
+        } else {
+            None
+        };
+        if let Some(callbacks) = callbacks {
+            callbacks.borrow_mut().insert(
                 function.clone(),
                 (
                     overloads[index].name.clone(),
