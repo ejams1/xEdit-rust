@@ -12,16 +12,6 @@
 
 use xedit_core::interface::*;
 
-/// Upstream `wbACBSLevelMultAfterLoad`, line 39 of `wbDefinitionsFO4.pas`.
-pub fn wb_acbs_level_mult_after_load(_a_element: &ElementRef) {
-    todo!("port wbACBSLevelMultAfterLoad from wbDefinitionsFO4.pas line 39")
-}
-
-/// Upstream `wbACBSLevelMultAfterSet`, line 54 of `wbDefinitionsFO4.pas`.
-pub fn wb_acbs_level_mult_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
-    todo!("port wbACBSLevelMultAfterSet from wbDefinitionsFO4.pas line 54")
-}
-
 /// Upstream `wbAECHTypeAfterSet`, line 1689 of `wbDefinitionsFO4.pas`.
 pub fn wb_aech_type_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
     todo!("port wbAECHTypeAfterSet from wbDefinitionsFO4.pas line 1689")
@@ -57,36 +47,6 @@ pub fn wb_condition_event_to_int(_a_string: &str, _a_element: ElementArg) -> i64
     todo!("port wbConditionEventToInt from wbDefinitionsFO4.pas line 900")
 }
 
-/// Upstream `wbConditionRunOnAfterSet`, line 57 of `wbDefinitionsFO4.pas`.
-pub fn wb_condition_run_on_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
-    todo!("port wbConditionRunOnAfterSet from wbDefinitionsFO4.pas line 57")
-}
-
-/// Upstream `wbConditionStringToInt`, line 178 of `wbDefinitionsFO4.pas`.
-pub fn wb_condition_string_to_int(_a_string: &str, _a_element: ElementArg) -> i64 {
-    todo!("port wbConditionStringToInt from wbDefinitionsFO4.pas line 178")
-}
-
-/// Upstream `wbConditionTypeAfterSet`, line 56 of `wbDefinitionsFO4.pas`.
-pub fn wb_condition_type_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
-    todo!("port wbConditionTypeAfterSet from wbDefinitionsFO4.pas line 56")
-}
-
-/// Upstream `wbDialogueTextAfterLoad`, line 41 of `wbDefinitionsFO4.pas`.
-pub fn wb_dialogue_text_after_load(_a_element: &ElementRef) {
-    todo!("port wbDialogueTextAfterLoad from wbDefinitionsFO4.pas line 41")
-}
-
-/// Upstream `wbDialogueTextAfterSet`, line 58 of `wbDefinitionsFO4.pas`.
-pub fn wb_dialogue_text_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
-    todo!("port wbDialogueTextAfterSet from wbDefinitionsFO4.pas line 58")
-}
-
-/// Upstream `wbDOBJObjectsAfterLoad`, line 42 of `wbDefinitionsFO4.pas`.
-pub fn wb_dobj_objects_after_load(_a_element: &ElementRef) {
-    todo!("port wbDOBJObjectsAfterLoad from wbDefinitionsFO4.pas line 42")
-}
-
 /// Upstream `wbEFITAfterLoad`, line 2264 of `wbDefinitionsFO4.pas`.
 pub fn wb_efit_after_load(_a_element: &ElementRef) {
     todo!("port wbEFITAfterLoad from wbDefinitionsFO4.pas line 2264")
@@ -107,29 +67,9 @@ pub fn wb_gmstedid_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a
     todo!("port wbGMSTEDIDAfterSet from wbDefinitionsFO4.pas line 1239")
 }
 
-/// Upstream `wbIdleMarkerPNAMAfterSet`, line 59 of `wbDefinitionsFO4.pas`.
-pub fn wb_idle_marker_pnam_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
-    todo!("port wbIdleMarkerPNAMAfterSet from wbDefinitionsFO4.pas line 59")
-}
-
-/// Upstream `wbIdleMarkerQNAMAfterSet`, line 60 of `wbDefinitionsFO4.pas`.
-pub fn wb_idle_marker_qnam_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
-    todo!("port wbIdleMarkerQNAMAfterSet from wbDefinitionsFO4.pas line 60")
-}
-
 /// Upstream `wbLLEAfterLoad`, line 2297 of `wbDefinitionsFO4.pas`.
 pub fn wb_lle_after_load(_a_element: &ElementRef) {
     todo!("port wbLLEAfterLoad from wbDefinitionsFO4.pas line 2297")
-}
-
-/// Upstream `wbMESGAfterLoad`, line 43 of `wbDefinitionsFO4.pas`.
-pub fn wb_mesg_after_load(_a_element: &ElementRef) {
-    todo!("port wbMESGAfterLoad from wbDefinitionsFO4.pas line 43")
-}
-
-/// Upstream `wbMESGDNAMAfterSet`, line 61 of `wbDefinitionsFO4.pas`.
-pub fn wb_mesgdnam_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
-    todo!("port wbMESGDNAMAfterSet from wbDefinitionsFO4.pas line 61")
 }
 
 /// Upstream `wbMGEFArchtypeAfterSet`, line 1444 of `wbDefinitionsFO4.pas`.
@@ -152,16 +92,6 @@ pub fn wb_npc_after_load(_a_element: &ElementRef) {
     todo!("port wbNPCAfterLoad from wbDefinitionsFO4.pas line 2113")
 }
 
-/// Upstream `wbPACKDateAfterLoad`, line 44 of `wbDefinitionsFO4.pas`.
-pub fn wb_pack_date_after_load(_a_element: &ElementRef) {
-    todo!("port wbPACKDateAfterLoad from wbDefinitionsFO4.pas line 44")
-}
-
-/// Upstream `wbPACKDateAfterSet`, line 62 of `wbDefinitionsFO4.pas`.
-pub fn wb_pack_date_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
-    todo!("port wbPACKDateAfterSet from wbDefinitionsFO4.pas line 62")
-}
-
 /// Upstream `wbPackageDataInputValueTypeAfterSet`, line 2373 of `wbDefinitionsFO4.pas`.
 pub fn wb_package_data_input_value_type_after_set(
     _a_element: &ElementRef,
@@ -169,11 +99,6 @@ pub fn wb_package_data_input_value_type_after_set(
     _a_new_value: &Variant,
 ) {
     todo!("port wbPackageDataInputValueTypeAfterSet from wbDefinitionsFO4.pas line 2373")
-}
-
-/// Upstream `wbPERKPRKETypeAfterSet`, line 63 of `wbDefinitionsFO4.pas`.
-pub fn wb_perkprke_type_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
-    todo!("port wbPERKPRKETypeAfterSet from wbDefinitionsFO4.pas line 63")
 }
 
 /// Upstream `wbREFRAfterLoad`, line 2118 of `wbDefinitionsFO4.pas`.
@@ -184,38 +109,4 @@ pub fn wb_refr_after_load(_a_element: &ElementRef) {
 /// Upstream `wbSCENBehaviorEnumAfterLoad`, line 3155 of `wbDefinitionsFO4.pas`.
 pub fn wb_scen_behavior_enum_after_load(_a_element: &ElementRef) {
     todo!("port wbSCENBehaviorEnumAfterLoad from wbDefinitionsFO4.pas line 3155")
-}
-
-/// Upstream `wbSceneActionTypeAfterSet`, line 65 of `wbDefinitionsFO4.pas`.
-pub fn wb_scene_action_type_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
-    todo!("port wbSceneActionTypeAfterSet from wbDefinitionsFO4.pas line 65")
-}
-
-/// Upstream `wbScriptFragmentsQuestScriptNameAfterSet`, line 66 of `wbDefinitionsFO4.pas`.
-pub fn wb_script_fragments_quest_script_name_after_set(
-    _a_element: &ElementRef,
-    _a_old_value: &Variant,
-    _a_new_value: &Variant,
-) {
-    todo!("port wbScriptFragmentsQuestScriptNameAfterSet from wbDefinitionsFO4.pas line 66")
-}
-
-/// Upstream `wbScriptPropertyTypeAfterSet`, line 67 of `wbDefinitionsFO4.pas`.
-pub fn wb_script_property_type_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
-    todo!("port wbScriptPropertyTypeAfterSet from wbDefinitionsFO4.pas line 67")
-}
-
-/// Upstream `wbUpdateSameParentUnions`, line 68 of `wbDefinitionsFO4.pas`.
-pub fn wb_update_same_parent_unions(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
-    todo!("port wbUpdateSameParentUnions from wbDefinitionsFO4.pas line 68")
-}
-
-/// Upstream `wbWorldAfterLoad`, line 51 of `wbDefinitionsFO4.pas`.
-pub fn wb_world_after_load(_a_element: &ElementRef) {
-    todo!("port wbWorldAfterLoad from wbDefinitionsFO4.pas line 51")
-}
-
-/// Upstream `wbWorldAfterSet`, line 69 of `wbDefinitionsFO4.pas`.
-pub fn wb_world_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
-    todo!("port wbWorldAfterSet from wbDefinitionsFO4.pas line 69")
 }

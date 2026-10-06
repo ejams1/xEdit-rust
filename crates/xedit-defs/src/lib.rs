@@ -10,7 +10,11 @@
 
 pub mod callbacks;
 pub mod common;
+pub mod fnv;
+pub mod fo3;
 pub mod fo4;
+pub mod fo76;
 pub mod hardcoded;
 pub mod signatures;
+pub mod tes4;
 pub mod tes5;

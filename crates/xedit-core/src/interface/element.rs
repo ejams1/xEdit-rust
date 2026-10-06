@@ -300,6 +300,15 @@ pub trait MainRecord: Container {
     /// The override of this record that the file `file` sees: the one in the
     /// file itself or in the last of its masters that has one.
     fn get_highest_override_visible_for_file(&self, file: &FileRef) -> Option<MainRecordRef>;
+
+    /// Upstream `HighestOverrideOrSelf[aMaxLoadOrder]`: the last override
+    /// that is not a partial form in a file at or before the load order, or
+    /// the record itself.
+    fn get_highest_override_or_self(&self, max_load_order: i32) -> MainRecordRef;
+
+    /// Upstream `BaseRecord`: the record the base record subrecord of a
+    /// placed record links to.
+    fn get_base_record(&self) -> Option<MainRecordRef>;
 }
 
 /// Upstream `IwbContainer`, with the methods of `IwbContainerBase`.

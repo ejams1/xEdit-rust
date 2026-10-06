@@ -2752,4 +2752,34 @@ impl MainRecord for MainRecordImpl {
         let file = file.as_element_impl()?.file_impl()?;
         Some(self.self_arc().highest_override_visible_for_file(&file) as MainRecordRef)
     }
+
+    /// Port of `GetHighestOverrideOrSelf`.
+    fn get_highest_override_or_self(&self, max_load_order: i32) -> MainRecordRef {
+        let master = self.mr_master.read().unwrap().as_ref().and_then(Weak::upgrade);
+        let base = master.unwrap_or_else(|| self.self_arc());
+        let overrides = base.mr_overrides.read().unwrap();
+        overrides
+            .iter()
+            .rev()
+            .filter_map(Weak::upgrade)
+            .find(|record| {
+                !record.get_is_partial_form()
+                    && record
+                        .file_impl()
+                        .is_some_and(|file| file.load_order() <= max_load_order)
+            })
+            .map_or_else(|| self.self_arc() as MainRecordRef, |record| record as MainRecordRef)
+    }
+
+    /// Port of `GetBaseRecord` without the cache of the base record FormID.
+    fn get_base_record(&self) -> Option<MainRecordRef> {
+        let def = self.mr_def.as_ref()?;
+        if !def.get_contains_known_sub_record(KnownSubRecord::ksrBaseRecord) {
+            return None;
+        }
+        let signature = def.known_sub_record_signatures()[KnownSubRecord::ksrBaseRecord.ord()];
+        self.get_record_by_signature(signature)?
+            .get_links_to()?
+            .into_main_record()
+    }
 }

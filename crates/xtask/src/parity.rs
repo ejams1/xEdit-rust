@@ -413,8 +413,15 @@ fn build_port(root: &Path) -> Result<PathBuf> {
         .current_dir(root)
         .status()?;
     ensure!(status.success(), "building xedit-cli failed");
-    Ok(root
-        .join("target/release")
+    // Cargo builds into `CARGO_TARGET_DIR` when it is set, which lets two
+    // harness runs use separate port binaries.
+    let target = match std::env::var_os("CARGO_TARGET_DIR").map(PathBuf::from) {
+        Some(dir) if dir.is_relative() => root.join(dir),
+        Some(dir) => dir,
+        None => root.join("target"),
+    };
+    Ok(target
+        .join("release")
         .join(format!("xedit{}", std::env::consts::EXE_SUFFIX)))
 }
 

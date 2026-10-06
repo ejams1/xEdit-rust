@@ -2740,3 +2740,215 @@ pub fn wb_model_info_anonymous_8585(
         *a_value = "SubRecord has invalid format for the Form Version of this record".to_owned();
     }
 }
+
+/// Upstream `wbEdgeLinksTo0`.
+pub fn wb_edge_links_to0(a_element: ElementArg) -> Option<ElementRef> {
+    wb_edge_links_to(0, a_element)
+}
+
+/// Upstream `wbEdgeToStr0`.
+pub fn wb_edge_to_str0(a_int: i64, a_element: ElementArg, a_type: CallbackType) -> String {
+    wb_edge_to_str(0, a_int, a_element, a_type)
+}
+
+/// Upstream `wbEdgeToInt0`.
+pub fn wb_edge_to_int0(a_string: &str, a_element: ElementArg) -> i64 {
+    wb_edge_to_int(0, a_string, a_element)
+}
+
+/// Upstream `wbVertexToStr0`.
+pub fn wb_vertex_to_str0(a_int: i64, a_element: ElementArg, a_type: CallbackType) -> String {
+    wb_vertex_to_str(0, a_int, a_element, a_type)
+}
+
+/// Upstream `wbVertexToInt0`.
+pub fn wb_vertex_to_int0(a_string: &str, a_element: ElementArg) -> i64 {
+    wb_vertex_to_int(0, a_string, a_element)
+}
+
+/// Upstream `wbEdgeLinksTo1`.
+pub fn wb_edge_links_to1(a_element: ElementArg) -> Option<ElementRef> {
+    wb_edge_links_to(1, a_element)
+}
+
+/// Upstream `wbEdgeToStr1`.
+pub fn wb_edge_to_str1(a_int: i64, a_element: ElementArg, a_type: CallbackType) -> String {
+    wb_edge_to_str(1, a_int, a_element, a_type)
+}
+
+/// Upstream `wbEdgeToInt1`.
+pub fn wb_edge_to_int1(a_string: &str, a_element: ElementArg) -> i64 {
+    wb_edge_to_int(1, a_string, a_element)
+}
+
+/// Upstream `wbVertexToStr1`.
+pub fn wb_vertex_to_str1(a_int: i64, a_element: ElementArg, a_type: CallbackType) -> String {
+    wb_vertex_to_str(1, a_int, a_element, a_type)
+}
+
+/// Upstream `wbVertexToInt1`.
+pub fn wb_vertex_to_int1(a_string: &str, a_element: ElementArg) -> i64 {
+    wb_vertex_to_int(1, a_string, a_element)
+}
+
+/// Upstream `wbEdgeLinksTo2`.
+pub fn wb_edge_links_to2(a_element: ElementArg) -> Option<ElementRef> {
+    wb_edge_links_to(2, a_element)
+}
+
+/// Upstream `wbEdgeToStr2`.
+pub fn wb_edge_to_str2(a_int: i64, a_element: ElementArg, a_type: CallbackType) -> String {
+    wb_edge_to_str(2, a_int, a_element, a_type)
+}
+
+/// Upstream `wbEdgeToInt2`.
+pub fn wb_edge_to_int2(a_string: &str, a_element: ElementArg) -> i64 {
+    wb_edge_to_int(2, a_string, a_element)
+}
+
+/// Upstream `wbVertexToStr2`.
+pub fn wb_vertex_to_str2(a_int: i64, a_element: ElementArg, a_type: CallbackType) -> String {
+    wb_vertex_to_str(2, a_int, a_element, a_type)
+}
+
+/// Upstream `wbVertexToInt2`.
+pub fn wb_vertex_to_int2(a_string: &str, a_element: ElementArg) -> i64 {
+    wb_vertex_to_int(2, a_string, a_element)
+}
+
+/// Upstream `wbAlwaysDontShow`.
+pub fn wb_always_dont_show(_a_element: ElementArg) -> bool {
+    true
+}
+
+/// Upstream `wbREGNImposterDontShow`: the imposters only show for region
+/// data of type 8.
+pub fn wb_regn_imposter_dont_show(a_element: ElementArg) -> bool {
+    wb_get_regn_type(a_element) != 8
+}
+
+/// Upstream `wbPxDTLocationDecider`: the location `Type` of the package
+/// location.
+pub fn wb_px_dt_location_decider(_a_base_ptr: DataPtr, a_element: ElementArg) -> i32 {
+    let Some(container) = wb_try_get_container_from_union(a_element) else {
+        return 0;
+    };
+    container
+        .as_container()
+        .and_then(|container| container.get_element_by_name("Type"))
+        .map_or(0, |kind| variant_int(&kind.get_native_value()) as i32)
+}
+
+/// Upstream `wbConditionStringToInt`. Upstream also writes the string into
+/// `CIS1` or `CIS2` for parameters 5 and 6; that edit comes with the write
+/// path.
+pub fn wb_condition_string_to_int(_a_string: &str, _a_element: ElementArg) -> i64 {
+    0
+}
+
+/// Upstream `wbNVTREdgeToInt`.
+pub fn wb_nvtr_edge_to_int(a_string: &str, _a_element: ElementArg) -> i64 {
+    a_string.trim().parse().unwrap_or(0)
+}
+
+/// Upstream `wbNVTREdgeToStr`: an external edge names the triangle and
+/// navmesh of its edge link.
+pub fn wb_nvtr_edge_to_str(a_int: i64, a_element: ElementArg, a_type: CallbackType) -> String {
+    let mut is_external = false;
+    let container = a_element.filter(|element| element.as_container().is_some());
+    if let Some(container) = container {
+        let name = container.get_name();
+        // `Copy(Name, 11, 1)`: the digit of `Edge 0-1` and the like.
+        let index = name.chars().nth(10).and_then(|c| c.to_digit(10));
+        if let Some(index @ 0..=2) = index {
+            let flags = variant_int(
+                &container
+                    .as_container()
+                    .unwrap()
+                    .get_element_native_value("..\\..\\Flags"),
+            ) as u32;
+            is_external = flags & (1 << index) != 0;
+        }
+    }
+    let Some(container) = container.filter(|_| is_external) else {
+        return match a_type {
+            CallbackType::ctToStr | CallbackType::ctToSummary => a_int.to_string(),
+            _ => String::new(),
+        };
+    };
+    let container = container.as_container().unwrap();
+    let link = format!("..\\..\\..\\..\\NVEX\\Edge Link #{a_int}");
+    let exists = container.get_element_exists(&link);
+    match a_type {
+        CallbackType::ctToStr | CallbackType::ctToSummary => {
+            if exists {
+                format!(
+                    "{a_int} (Triangle #{} in {})",
+                    container
+                        .get_element_by_path(&format!("{link}\\Triangle"))
+                        .map(|element| element.get_value())
+                        .unwrap_or_default(),
+                    container
+                        .get_element_by_path(&format!("{link}\\Navmesh"))
+                        .map(|element| element.get_value())
+                        .unwrap_or_default()
+                )
+            } else if a_type == CallbackType::ctToStr {
+                format!("{a_int} <Error: NVEX\\Edge Link #{a_int} is missing>")
+            } else {
+                a_int.to_string()
+            }
+        }
+        // The element sort keys are not ported yet.
+        CallbackType::ctToSortKey => String::new(),
+        CallbackType::ctCheck if exists => String::new(),
+        CallbackType::ctCheck => format!("NVEX\\Edge Link #{a_int} is missing"),
+        _ => String::new(),
+    }
+}
+
+/// Upstream `wbScriptToStr`: the one line of a script, or a summary of the
+/// script source.
+pub fn wb_script_to_str(a_value: &mut String, _a_base_ptr: DataPtr, a_element: ElementArg, a_type: CallbackType) {
+    let Some(container) = wb_try_set_container(a_element, a_type) else {
+        return;
+    };
+    let Some(container) = container.as_container() else {
+        return;
+    };
+    let compiled = if is_morrowind() {
+        container.get_element_by_signature(Signature::new(b"SCDT"))
+    } else {
+        container.get_element_by_signature(Signature::new(b"SCDA"))
+    };
+    let source = container.get_element_by_signature(Signature::new(b"SCTX"));
+    let Some(_) = compiled else {
+        *a_value = if source.is_some() {
+            "<Source not compiled>"
+        } else {
+            "<Empty>"
+        }
+        .to_owned();
+        return;
+    };
+    let Some(source) = source else {
+        *a_value = "<Source missing>".to_owned();
+        return;
+    };
+    // `TStringList.Text` splits at CR, LF and CRLF; `Trim` removes the
+    // control characters and spaces.
+    let delphi_trim = |line: &str| line.trim_matches(|c: char| c <= ' ').to_owned();
+    let text = source.get_value();
+    let lines: Vec<String> = text
+        .split("\r\n")
+        .flat_map(|line| line.split(['\r', '\n']))
+        .map(delphi_trim)
+        .filter(|line| !line.is_empty() && !line.starts_with(';'))
+        .collect();
+    // A trailing line break does not start a line.
+    *a_value = match lines.len() {
+        0 => "<Source missing>".to_owned(),
+        1 => lines[0].clone(),
+        count => format!("<{count} lines>"),
+    };
+}

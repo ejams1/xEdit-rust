@@ -17,7 +17,7 @@ use std::sync::{Arc, RwLock, Weak};
 use crate::interface::def::{EmptyDef, NamedDef, NamedDefArgs, ValueDef};
 use crate::interface::element::{Container, DataContainer, DataPtr, Element, ElementRef, FileRef, MainRecordRef};
 use crate::interface::form_id::FormID;
-use crate::interface::globals::sort_sub_records;
+use crate::interface::globals::{hide_never_show, sort_sub_records};
 use crate::interface::misc::Variant;
 use crate::interface::types::{ConflictPriority, DefFlag, DefType, ElementType, TriBool, dt_non_values};
 
@@ -152,6 +152,9 @@ enum ValueKind {
     Struct,
     Array,
     Union,
+    /// Port of `TwbStringListTerminator`: the zero byte that ends an array of
+    /// zero-terminated strings.
+    Terminator,
 }
 
 /// Port of `TwbValueBase.Create` from a pointer with `InitDataPtr`: the
@@ -230,6 +233,7 @@ impl ValueImpl {
                 ValueKind::Union => {
                     union_do_init(&self.vb.vb_value_def, &self_ref, &self.vb.file, &mut cursor);
                 }
+                ValueKind::Terminator => {}
             }
         });
     }
@@ -399,7 +403,41 @@ pub(super) fn array_do_init(
     {
         cursor.pos = final_pos;
     }
+    if element_def.get_def_type() == DefType::dtString && element_def.get_is_variable_size() {
+        let element = create_string_list_terminator(container, file);
+        element.vb.base.e_memory_order.store(i, Ordering::Relaxed);
+    }
     sorted
+}
+
+/// Port of `TwbStringListTerminator.Create`: the `Terminator` element after
+/// the strings of an array of zero-terminated strings. It has no data of its
+/// own; its size is the one byte of the terminator.
+fn create_string_list_terminator(container: &ElementRef, file: &Weak<super::FileImpl>) -> Arc<ValueImpl> {
+    let def = EmptyDef::create(
+        NamedDefArgs {
+            priority: ConflictPriority::cpIgnore,
+            required: false,
+            name: "Terminator".to_owned(),
+            after_load: None,
+            after_set: None,
+            // Port of `TwbStringListTerminator.GetDontShow`.
+            dont_show: Some(Arc::new(|_| hide_never_show())),
+            get_cp: None,
+            terminator: false,
+        },
+        false,
+    );
+    let block = DataBlock::Buffer(Arc::new(Vec::new()));
+    let element = Arc::new_cyclic(|self_ref: &Weak<ValueImpl>| ValueImpl {
+        self_ref: self_ref.clone(),
+        vb: ValueBase::new(container, file, &block, None, def, ""),
+        kind: ValueKind::Terminator,
+    });
+    if let Some(parent) = container.as_element_impl().and_then(ElementImpl::container_base) {
+        parent.add_element(element.clone());
+    }
+    element
 }
 
 /// Port of `UnionDoInit`: the one child the decider selects, or none for a
@@ -458,6 +496,9 @@ impl Element for ValueImpl {
     }
 
     fn get_data_size(&self) -> i32 {
+        if self.kind == ValueKind::Terminator {
+            return 1;
+        }
         match self.vb.range() {
             Some((start, end)) => (end - start) as i32,
             None => self.vb.vb_value_def.get_default_size(None, None),
@@ -470,6 +511,7 @@ impl Element for ValueImpl {
             ValueKind::Struct => ElementType::etStruct,
             ValueKind::Array => ElementType::etArray,
             ValueKind::Union => ElementType::etUnion,
+            ValueKind::Terminator => ElementType::etStringListTerminator,
         }
     }
 

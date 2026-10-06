@@ -95,6 +95,10 @@ pub fn setup_game(game: &str) -> Result<GameMode, String> {
             xedit_defs::tes5::define_tes5
         }
         GameMode::gmFO4 | GameMode::gmFO4VR => xedit_defs::fo4::define_fo4,
+        GameMode::gmTES4 => xedit_defs::tes4::define_tes4,
+        GameMode::gmFO3 => xedit_defs::fo3::define_fo3,
+        GameMode::gmFNV => xedit_defs::fnv::define_fnv,
+        GameMode::gmFO76 => xedit_defs::fo76::define_fo76,
         _ => return Err(format!("the definitions of {tag} are not ported yet")),
     };
     set_simple_records(false);
