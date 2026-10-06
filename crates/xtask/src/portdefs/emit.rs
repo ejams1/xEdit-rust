@@ -63,6 +63,8 @@ const TYPES: &[(&str, &str)] = &[
 /// The Rust parameters and result of each callback type, as the aliases in
 /// `xedit-core` declare them.
 const CALLBACKS: &[(&str, &str)] = &[
+    ("tproc", "()"),
+    ("twbsubrecordforvaluecallback", "(v: Option<Arc<dyn ValueDef>>)"),
     ("twbaddinfocallback", "(a_main_record: &MainRecordRef) -> String"),
     ("twbafterloadcallback", "(a_element: &ElementRef)"),
     (
@@ -771,7 +773,67 @@ impl<'a> Emitter<'a> {
                 let [name] = var.names.as_slice() else {
                     bail!("inline variable with several names")
                 };
-                let closure = self.closure(routine, cx, depth)?;
+                // A closure in a variable of a callback type is passed on as
+                // a callback, so it is written by hand like an anonymous
+                // routine that is passed directly.
+                let typed_callback = var.type_ref.as_ref().is_some_and(
+                    |type_ref| matches!(type_ref, TypeRef::Named(type_name) if self.is_callback(&type_name.to_ascii_lowercase())),
+                );
+                let translated = if typed_callback {
+                    Err(anyhow!("a closure of a callback type is written by hand"))
+                } else {
+                    self.closure(routine, cx, depth)
+                };
+                let closure = match translated {
+                    Ok(closure) => closure,
+                    // A closure that cannot be translated is written by hand
+                    // when it is a callback; a plain closure is left out, and
+                    // the closures that call it become hand-written as well.
+                    Err(error) => {
+                        let callback = var.type_ref.as_ref().and_then(|type_ref| match type_ref {
+                            TypeRef::Named(type_name) if self.is_callback(&type_name.to_ascii_lowercase()) => {
+                                Some(type_name.clone())
+                            }
+                            _ => None,
+                        });
+                        let Some(callback) = callback else {
+                            out.push_str(&format!(
+                                "{pad}// `{name}` is not translated ({error}); the callbacks that call it are written by hand.
+"
+                            ));
+                            return Ok(());
+                        };
+                        let function = format!("{}_anonymous_{}", cx.routine, routine.line);
+                        self.callbacks.borrow_mut().insert(
+                            function.clone(),
+                            (
+                                format!("anonymous routine in {}", cx.routine),
+                                callback.to_ascii_lowercase(),
+                                routine.line,
+                            ),
+                        );
+                        out.push_str(&format!(
+                            "{pad}let {}: {} = Some(Arc::new({function}));\n",
+                            snake(name),
+                            self.named(&callback)?
+                        ));
+                        let target = Target {
+                            ty: Ty::Named(callback.to_ascii_lowercase()),
+                            owned: false,
+                            num: None,
+                        };
+                        cx.scope.insert(name, target.ty.clone());
+                        cx.locals.insert(
+                            name.to_ascii_lowercase(),
+                            Local {
+                                target,
+                                is_param: false,
+                                rust: snake(name),
+                            },
+                        );
+                        return Ok(());
+                    }
+                };
                 out.push_str(&format!("{pad}let {} = {closure};\n", snake(name)));
                 cx.closures.insert(
                     name.to_ascii_lowercase(),
@@ -1599,6 +1661,11 @@ impl<'a> Emitter<'a> {
         if let Some(local) = cx.locals.get(&lower) {
             return Ok(self.read(&local.rust, &local.target, !local.is_param));
         }
+        // A closure named without arguments is its call.
+        if let Some(sig) = cx.closures.get(&lower) {
+            let sig = sig.clone();
+            return self.call_sig(&snake(&sig.name), &sig, &[], cx);
+        }
         if let Some(ty) = self.symbols.values.get(&lower) {
             // A value of an enumeration.
             if let Ty::Named(type_name) = ty
@@ -1871,8 +1938,9 @@ impl<'a> Emitter<'a> {
         }
         // A closure of the routine.
         if let Some(sig) = cx.closures.get(&lower) {
+            // The Rust name comes from the declaration: Pascal ignores case.
             let sig = sig.clone();
-            return self.call_sig(&snake(name), &sig, args, cx);
+            return self.call_sig(&snake(&sig.name), &sig, args, cx);
         }
         // A cast to an interface that is the same type on the Rust side.
         if let [value] = args

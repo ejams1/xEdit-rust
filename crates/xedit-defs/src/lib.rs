@@ -15,6 +15,8 @@ pub mod fo3;
 pub mod fo4;
 pub mod fo76;
 pub mod hardcoded;
+pub mod reflection;
+pub mod sf1;
 pub mod signatures;
 pub mod tes3;
 pub mod tes4;

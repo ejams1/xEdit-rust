@@ -20,9 +20,9 @@ use xedit_core::implementation::{
     wb_file_compare,
 };
 use xedit_core::interface::globals::{
-    GameMode, game_exe_name, game_master_esm, game_name, language, set_create_contained_in, set_data_path,
-    set_game_exe_name, set_game_master_esm, set_game_mode, set_game_name, set_hide_unused, set_language,
-    set_simple_records,
+    GameMode, clear_resources_loaded_handlers, game_exe_name, game_master_esm, game_name, language,
+    set_create_contained_in, set_data_path, set_game_exe_name, set_game_master_esm, set_game_mode, set_game_name,
+    set_hide_unused, set_language, set_simple_records, wb_resources_loaded,
 };
 use xedit_core::interface::misc::{progress, set_progress_callback};
 use xedit_core::interface::{
@@ -100,6 +100,7 @@ pub fn setup_game(game: &str) -> Result<GameMode, String> {
         GameMode::gmFO3 => xedit_defs::fo3::define_fo3,
         GameMode::gmFNV => xedit_defs::fnv::define_fnv,
         GameMode::gmFO76 => xedit_defs::fo76::define_fo76,
+        GameMode::gmSF1 => xedit_defs::sf1::define_sf1,
         _ => return Err(format!("the definitions of {tag} are not ported yet")),
     };
     set_simple_records(false);
@@ -114,6 +115,7 @@ pub fn setup_game(game: &str) -> Result<GameMode, String> {
     set_game_exe_name(&format!("{}.exe", exe_name.unwrap_or(game_name)));
     set_game_master_esm(&master_esm.map_or_else(|| format!("{game_name}.esm"), str::to_owned));
     clear_record_defs();
+    clear_resources_loaded_handlers();
     define();
     init_records();
     setup_language(mode);
@@ -196,6 +198,7 @@ pub(crate) fn load_resources(file: &FileImpl, path: &str, mode: GameMode) {
         }
     }
     add_folder(Path::new(&data_path));
+    wb_resources_loaded();
     install_localization_handler();
 }
 

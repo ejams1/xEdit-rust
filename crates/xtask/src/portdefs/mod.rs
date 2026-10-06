@@ -412,11 +412,24 @@ fn definition_symbols(upstream: &Path, unit_name: &str) -> Result<(Symbols, Unit
     let interface = read_unit(upstream, "Core/wbInterface.pas")?;
     let signatures = read_unit(upstream, "Core/wbDefinitionsSignatures.pas")?;
     let mut symbols = Symbols::default();
+    // `TProc` of `System.SysUtils`, the type of the resources loaded handlers.
+    symbols.add_unit(
+        &crate::pascal::parser::parse_unit(
+            "unit System; interface type TProc = reference to procedure; implementation end.",
+            DEFINES,
+        )?,
+        false,
+    );
     symbols.add_unit(&interface, false);
     symbols.add_unit(&signatures, false);
     if unit_name != "wbDefinitionsCommon" {
         let common = read_unit(upstream, "Core/wbDefinitionsCommon.pas")?;
         symbols.add_unit(&common, false);
+    }
+    // Starfield uses the reflection definitions.
+    if unit_name == "wbDefinitionsSF1" {
+        let reflection = read_unit(upstream, "Core/wbDefinitionsReflection.pas")?;
+        symbols.add_unit(&reflection, false);
     }
     let unit = read_unit(upstream, &format!("Core/{unit_name}.pas"))?;
     symbols.add_unit(&unit, true);
@@ -438,7 +451,11 @@ fn is_definition_routine(routine: &Routine, symbols: &Symbols) -> bool {
         line: routine.line,
     };
     let callback = symbols.types.values().find(|info| match &info.kind {
-        model::TypeKind::Callback(callback) => resolve::callback_matches(&sig, callback),
+        // `TProc` is only the type of the resources loaded handlers; a
+        // procedure without arguments such as `DefineSF1` is not a callback.
+        model::TypeKind::Callback(callback) if !info.name.eq_ignore_ascii_case("TProc") => {
+            resolve::callback_matches(&sig, callback)
+        }
         _ => false,
     });
     if let Some(info) = callback
@@ -464,6 +481,10 @@ fn emit_unit(upstream: &Path, unit_name: &str, out: &Path, stubs: &Path, ported:
     {
         ported_files.push(dir.join("common.rs"));
         ported_files.push(dir.join("common_stubs.rs"));
+        if unit_name == "wbDefinitionsSF1" {
+            ported_files.push(dir.join("reflection.rs"));
+            ported_files.push(dir.join("reflection_stubs.rs"));
+        }
     }
     let mut ported: HashSet<String> = HashSet::new();
     for path in &ported_files {
@@ -630,6 +651,7 @@ const GAME_UNITS: &[&str] = &[
     "wbDefinitionsFO4",
     "wbDefinitionsFO76",
     "wbDefinitionsSF1",
+    "wbDefinitionsReflection",
 ];
 
 /// The module name of a definition unit: `wbDefinitionsFO4` is `fo4`.
@@ -660,6 +682,9 @@ use crate::signatures::*;
     if module != "common" {
         text.push_str("use crate::callbacks::common::*;\nuse crate::common::*;\n");
     }
+    if module == "sf1" {
+        text.push_str("use crate::callbacks::reflection::*;\nuse crate::reflection::*;\n");
+    }
     text.push_str(&format!("use crate::callbacks::{module}::*;\n"));
     text
 }
@@ -670,6 +695,8 @@ const STUBS_IMPORTS: &str = "\
 //! Stubs of the callbacks that are not ported yet. Each panics when called.
 
 #![allow(clippy::all, unused_variables, unused_imports)]
+
+use std::sync::Arc;
 
 use xedit_core::interface::*;
 ";
