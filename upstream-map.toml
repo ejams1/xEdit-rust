@@ -369,6 +369,8 @@ status = "pending"
 
 [units."xDump.dpr"]
 status = "pending"
+rust = "crates/xedit-session/src/dump.rs"
+note = "The plain dump mode (game setup, resource loading, hardcoded records, WriteContainer and WriteElement) is ported as xedit dump. The report mode, the size columns, the hidden elements and the export modes are pending."
 
 [units."xDump/xdDefines.inc"]
 status = "pending"
