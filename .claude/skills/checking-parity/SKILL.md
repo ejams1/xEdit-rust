@@ -25,6 +25,8 @@ Environment variables:
 
 Oracle output is cached as `<cache>/<tag>/<game>/<file>.<hash>.oracle.txt`, so the oracle runs once per input file. A run that the oracle ended with `Unexpected Error` is kept as `<file>.<hash>.oracle.crashed.txt` and compared as a prefix: the port has to match it up to the crash and may continue, which the report shows as `equal-prefix`. The oracle is slow on large masters: it writes about 80 MB of dump per minute and needs more than ten minutes for `Fallout4.esm`. `--oracle-only` fills the cache without running the port. The port output of the last run is next to the oracle output as `.port.txt`.
 
+The harness runs `--jobs` files at a time; the default is 3. That assumes at most 4.5 GB of working set per port dump (`DLCCoast.esm`; `Skyrim.esm` peaks at 1.7 GB) next to the oracle, which fits in 32 GB of memory. Raise it only on a machine with more memory. The wall clock is bounded by the largest file: the port dumps `Skyrim.esm` (8.3 GB of text) in about 3 minutes and `Update.esm` in about 20 seconds on the reference machine.
+
 Only the dump check exists so far. Add the other checks of the table below to `crates/xtask/src/parity.rs` in the phase that ports the feature.
 
 ## Running the oracle
