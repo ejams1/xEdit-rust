@@ -58,10 +58,10 @@ fn run(action: Action) -> Result<Value, CommandError> {
 fn main() -> ExitCode {
     let cli = Cli::parse();
     if let Action::Dump { game, file } = &cli.action {
-        let result = xedit_session::dump::setup_game(game).and_then(|_| {
+        let result = xedit_session::dump::setup_game(game).and_then(|mode| {
             let stdout = std::io::stdout();
             let mut out = std::io::BufWriter::with_capacity(1 << 20, stdout.lock());
-            xedit_session::dump::dump_file(file, &mut out)
+            xedit_session::dump::dump_file(file, mode, &mut out)
         });
         if let Err(error) = result {
             eprintln!("error: {error}");

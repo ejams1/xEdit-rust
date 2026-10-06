@@ -157,13 +157,12 @@ impl SubRecordImpl {
         });
     }
 
-    /// The value definition the subrecord data is read with.
+    /// Port of `GetValueDef`: the value definition the subrecord data is
+    /// read with. `None` when the value is a child element instead (a named
+    /// value definition), like upstream `srValueDef`.
     fn value_def(&self) -> Option<Arc<dyn ValueDef>> {
         self.do_init();
-        if let Some(resolved) = self.sr_value_def.read().unwrap().clone() {
-            return Some(resolved);
-        }
-        self.def()?.as_sub_record_def()?.get_value()
+        self.sr_value_def.read().unwrap().clone()
     }
 
     pub fn def(&self) -> Option<Arc<dyn RecordMemberDef>> {
@@ -738,7 +737,8 @@ macro_rules! container_by_elements {
         }
 
         fn get_element_by_sort_order(&self, sort_order: i32) -> Option<ElementRef> {
-            self.get_element(sort_order)
+            self.$init();
+            self.container.element_by_sort_order(sort_order)
         }
 
         fn get_any_element(&self) -> Option<ElementRef> {

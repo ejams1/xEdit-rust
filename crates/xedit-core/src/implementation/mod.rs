@@ -105,6 +105,7 @@ use std::sync::{Arc, OnceLock, RwLock, Weak};
 
 use xedit_io::{Encoding, MappedFile};
 
+use crate::delphi::path_file_name;
 use crate::interface::constructors::find_record_def;
 use crate::interface::def::{NamedDef, ValueDef};
 use crate::interface::element::{
@@ -313,6 +314,22 @@ impl ContainerBase {
 
     pub(crate) fn elements(&self) -> Vec<ElementRef> {
         self.cnt_elements.read().unwrap().clone()
+    }
+
+    /// Port of `TwbContainer.GetElementBySortOrder` after the init: the
+    /// element whose sort order is `sort_order`, which the caller has
+    /// already reduced by the additional element count.
+    pub(crate) fn element_by_sort_order(&self, sort_order: i32) -> Option<ElementRef> {
+        self.cnt_elements
+            .read()
+            .unwrap()
+            .iter()
+            .find(|element| {
+                element
+                    .as_element_impl()
+                    .is_some_and(|element| element.element_base().e_sort_order.load(Ordering::Relaxed) == sort_order)
+            })
+            .cloned()
     }
 }
 
@@ -743,11 +760,6 @@ pub fn wb_file_from_bytes(
     file.scan()?;
     crate::interface::element::add_file(file.clone());
     Ok(file)
-}
-
-/// Port of `ExtractFileName`.
-fn path_file_name(path: &str) -> &str {
-    path.rsplit(['\\', '/']).next().unwrap_or(path)
 }
 
 /// Port of `TwbRecord.CreateForPtr` for the records of a file or group:
@@ -1276,7 +1288,7 @@ impl Container for FileImpl {
     }
 
     fn get_element_by_sort_order(&self, sort_order: i32) -> Option<ElementRef> {
-        self.get_element(sort_order)
+        self.container.element_by_sort_order(sort_order)
     }
 
     fn get_any_element(&self) -> Option<ElementRef> {
@@ -1432,7 +1444,7 @@ impl Container for GroupRecordImpl {
     }
 
     fn get_element_by_sort_order(&self, sort_order: i32) -> Option<ElementRef> {
-        self.get_element(sort_order)
+        self.container.element_by_sort_order(sort_order)
     }
 
     fn get_any_element(&self) -> Option<ElementRef> {
@@ -1569,15 +1581,29 @@ impl Container for MainRecordImpl {
     }
 
     fn get_element_by_sort_order(&self, sort_order: i32) -> Option<ElementRef> {
-        self.get_element(sort_order)
+        self.self_arc().do_init();
+        self.container
+            .element_by_sort_order(sort_order - self.get_additional_element_count())
     }
 
     fn get_any_element(&self) -> Option<ElementRef> {
         self.get_element(0)
     }
 
+    /// Port of `TwbMainRecord.GetAdditionalElementCount`: the record header
+    /// and the contained-in element.
     fn get_additional_element_count(&self) -> i32 {
-        0
+        let mut result = 1;
+        if create_contained_in()
+            && let Some(group) = self
+                .base
+                .container()
+                .and_then(|container| container.as_element_impl()?.group_record_impl())
+            && matches!(group.group_type(), 1 | 4..=10)
+        {
+            result += 1;
+        }
+        result
     }
 }
 
