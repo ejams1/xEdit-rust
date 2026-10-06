@@ -663,8 +663,11 @@ fn check(case: &Case, runner: &Runner) -> Result<Outcome> {
 /// Runs the oracle on `case` and caches its output compressed. Returns the
 /// peak memory of the run.
 fn run_oracle(case: &Case, runner: &Runner, dir: &Path, stem: &str) -> Result<Option<u64>> {
-    let partial = dir.join(format!("{stem}.oracle.partial.zst"));
-    let log = dir.join(format!("{stem}.oracle.log"));
+    // Each harness process writes its own partial output and log, so that two
+    // runs on the same file do not clobber each other; the first to finish
+    // fills the cache.
+    let partial = dir.join(format!("{stem}.oracle.{}.partial.zst", std::process::id()));
+    let log = dir.join(format!("{stem}.oracle.{}.log", std::process::id()));
     let mut command = Command::new(&runner.oracle);
     command
         .arg(format!("-{}", case.game.mode))
@@ -713,13 +716,24 @@ fn run_oracle(case: &Case, runner: &Runner, dir: &Path, stem: &str) -> Result<Op
     }
     ensure!(status.success(), "oracle failed: {status}, last log line: {last}");
     if last.ends_with("All Done.") {
-        fs::rename(&partial, dir.join(format!("{stem}.oracle.txt.zst")))?;
+        keep_partial(&partial, &dir.join(format!("{stem}.oracle.txt.zst")))?;
     } else if last.contains("Unexpected Error") {
-        fs::rename(&partial, dir.join(format!("{stem}.oracle.crashed.txt.zst")))?;
+        keep_partial(&partial, &dir.join(format!("{stem}.oracle.crashed.txt.zst")))?;
     } else {
         bail!("oracle did not finish: last log line: {last}");
     }
     Ok(peak)
+}
+
+/// Moves a finished oracle output into the cache, unless another run put it
+/// there first.
+fn keep_partial(partial: &Path, cached: &Path) -> Result<()> {
+    if cached.exists() {
+        fs::remove_file(partial)?;
+        return Ok(());
+    }
+    fs::rename(partial, cached)?;
+    Ok(())
 }
 
 /// Cuts the file down to its last `keep` bytes, from a line start, and
