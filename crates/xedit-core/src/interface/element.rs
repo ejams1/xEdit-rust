@@ -159,6 +159,10 @@ pub trait File: Container {
     /// key in the named index, in this file or one of its masters.
     fn get_record_from_index_by_key(&self, index: i32, key: &str) -> Option<MainRecordRef>;
 
+    /// Upstream `RecordByEditorID[aEditorID]`: the record with the editor ID
+    /// in this file, else in its masters from the last one down.
+    fn get_record_by_editor_id(&self, editor_id: &str) -> Option<MainRecordRef>;
+
     /// Upstream `LoadOrder`.
     fn get_load_order(&self) -> i32;
 

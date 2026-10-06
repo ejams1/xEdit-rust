@@ -1094,8 +1094,10 @@ fn contained_in_def(group_type: i32, name: &str, signature: Signature) -> Arc<dy
 
 /// The bytes of a `PLYR` group with the player reference `[00000014]
 /// <PlayerRef>` that `TwbFile.Scan` adds to the hardcoded file: a new record
-/// with the form version of the game and only the editor ID.
+/// with the form version of the game and only the editor ID. The record and
+/// group headers have the size of the game: Oblivion's have no form version.
 fn player_reference_group() -> Vec<u8> {
+    let header_size = size_of_main_record_struct() as usize;
     let version: u16 = match game_mode() {
         GameMode::gmSF1 => 582,
         GameMode::gmFO76 => 208,
@@ -1117,7 +1119,8 @@ fn player_reference_group() -> Vec<u8> {
     header.extend_from_slice(&0u32.to_le_bytes());
     header.extend_from_slice(&version.to_le_bytes());
     header.extend_from_slice(&0u16.to_le_bytes());
-    let group_size = 24 + header.len() + record.len();
+    header.truncate(header_size);
+    let group_size = header_size + header.len() + record.len();
     let mut group = Vec::with_capacity(group_size);
     group.extend_from_slice(b"GRUP");
     group.extend_from_slice(&(group_size as u32).to_le_bytes());
@@ -1125,6 +1128,7 @@ fn player_reference_group() -> Vec<u8> {
     group.extend_from_slice(&0i32.to_le_bytes());
     group.extend_from_slice(&0u32.to_le_bytes());
     group.extend_from_slice(&0u32.to_le_bytes());
+    group.truncate(header_size);
     group.extend_from_slice(&header);
     group.extend_from_slice(&record);
     group
@@ -2210,6 +2214,17 @@ impl File for FileImpl {
     fn get_record_from_index_by_key(&self, index: i32, key: &str) -> Option<MainRecordRef> {
         self.record_from_index_by_key(index, key)
             .map(|record| record as MainRecordRef)
+    }
+
+    /// Port of `TwbFile.GetRecordByEditorID`.
+    fn get_record_by_editor_id(&self, editor_id: &str) -> Option<MainRecordRef> {
+        if let Some(record) = self.find_key_in_index(idx_editor_id(), editor_id) {
+            return Some(record as MainRecordRef);
+        }
+        self.masters()
+            .iter()
+            .rev()
+            .find_map(|master| master.get_record_by_editor_id(editor_id))
     }
 
     /// Port of `TwbFile.GetEncoding` without the overrides of the file.

@@ -27,7 +27,7 @@ use super::flags::FlagsDef;
 use super::float::{FloatDef, FloatDefArgs, FloatKind, FloatNormalizer};
 use super::form_id_formater::FormIDDefFormater;
 use super::formaters::{
-    CallbackDef, DivDef, DivFDef, DumpIntegerDefFormater, IntToStrCallback, IntegerDefFormaterUnion,
+    CallbackDef, Char4, DivDef, DivFDef, DumpIntegerDefFormater, IntToStrCallback, IntegerDefFormaterUnion,
     IntegerDefFormaterUnionDecider, MulDef, Str4, StrToIntCallback,
 };
 use super::globals::{hide_never_show, report_mode};
@@ -234,7 +234,7 @@ pub fn twb_callback_def_create(
 }
 
 pub fn twb_char4_create() -> Option<Arc<dyn IntegerDefFormater>> {
-    not_ported("TwbChar4", "only Oblivion uses it")
+    Some(Char4::create_char4())
 }
 
 pub fn twb_data6_key2_enum_def_create(
@@ -537,21 +537,7 @@ string_constructor!(twb_string_script_def_create, StringClass::Script);
 string_constructor!(twb_l_string_def_create, StringClass::LString);
 string_constructor!(twb_l_string_kc_def_create, StringClass::LStringKC);
 
-#[allow(clippy::too_many_arguments)]
-pub fn twb_string_mgef_code_def_create(
-    _a_priority: ConflictPriority,
-    _a_required: bool,
-    _a_name: &str,
-    _a_size: i32,
-    _a_after_load: Option<AfterLoadCallback>,
-    _a_after_set: Option<AfterSetCallback>,
-    _a_dont_show: Option<DontShowCallback>,
-    _a_get_cp: Option<GetConflictPriority>,
-    _a_terminator: bool,
-    _a_forward: bool,
-) -> Option<Arc<StringDef>> {
-    not_ported("TwbStringMgefCodeDef", "only Oblivion uses it")
-}
+string_constructor!(twb_string_mgef_code_def_create, StringClass::MgefCode);
 
 #[allow(clippy::too_many_arguments)]
 pub fn twb_len_string_def_create(
