@@ -78,8 +78,8 @@ impl ValueBase {
 
 /// The position of the next element while the children of a container are
 /// built: `None` once the data is used up.
-pub(super) struct Cursor {
-    pub block: DataBlock,
+pub(crate) struct Cursor {
+    pub(crate) block: DataBlock,
     pub pos: usize,
     pub end: usize,
 }

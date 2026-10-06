@@ -116,7 +116,7 @@ use crate::interface::globals::{
     is_medium_supported, is_update_supported, pseudo_light, pseudo_medium, pseudo_update, size_of_main_record_struct,
     vwd_as_quest_children, wb_get_group_order,
 };
-use crate::interface::main_record::MainRecordDef;
+use crate::interface::main_record::{MainRecordDef, main_record_header};
 use crate::interface::misc::{Variant, progress};
 use crate::interface::sub_record_group::RecordDef;
 use crate::interface::types::{ConflictPriority, ElementType, FileState, FileStates, Signature, TriBool};
@@ -1030,6 +1030,7 @@ impl MainRecordImpl {
     pub fn do_init(self: &Arc<Self>) {
         self.mr_init.run(|| {
             self.create_contained_in();
+            self.create_record_header();
             sub_record::init_main_record(self);
         });
     }
@@ -1078,7 +1079,31 @@ impl MainRecordImpl {
         let def = contained_in_def(group.group_type(), name, Signature::new(signature));
         let self_ref: ElementRef = self.clone();
         let element = value::create_contained_in_element(&self_ref, &self.file, def, group.group_label());
-        self.container.insert_element(0, element);
+        self.container.add_element(element);
+    }
+
+    /// Port of the `TwbRecordHeaderStruct` creation in `TwbMainRecord.Init`:
+    /// a structure over the header bytes of the record, with the header
+    /// definition of the record definition or the shared one.
+    fn create_record_header(self: &Arc<Self>) {
+        let header_def = match &self.mr_def {
+            Some(def) => def.get_record_header_struct(),
+            None => main_record_header().and_then(|header| header.into_struct_def()),
+        };
+        let Some(header_def) = header_def else { return };
+        let header_size = size_of_main_record_struct() as usize;
+        let Some(start) = self.dc_data_base.checked_sub(header_size) else {
+            return;
+        };
+        let self_ref: ElementRef = self.clone();
+        let mut cursor = value::Cursor {
+            block: DataBlock::File(self.bytes.clone()),
+            pos: start,
+            end: start + header_size,
+        };
+        let element =
+            value::create_value_element(&self_ref, &self.file, &mut cursor, header_def as Arc<dyn ValueDef>, "");
+        element.set_sort_and_memory_order(-1);
     }
 
     fn self_arc(&self) -> Arc<Self> {
