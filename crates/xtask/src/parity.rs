@@ -80,7 +80,9 @@ struct Case {
 struct Outcome {
     game: &'static str,
     file: String,
-    /// `equal`, `different`, `oracle-failed`, `port-failed` or `oracle-only`.
+    /// `equal`, `equal-prefix` (the oracle crashed and the port matches its
+    /// output up to the crash), `different`, `oracle-failed`, `port-failed`
+    /// or `oracle-only`.
     status: &'static str,
     #[serde(skip_serializing_if = "Option::is_none")]
     detail: Option<String>,
@@ -160,7 +162,10 @@ pub fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
 
     let mut outcomes = outcomes.into_inner().unwrap();
     outcomes.sort_by(|a, b| (a.game, &a.file).cmp(&(b.game, &b.file)));
-    let equal = outcomes.iter().filter(|o| o.status == "equal").count();
+    let equal = outcomes
+        .iter()
+        .filter(|o| o.status == "equal" || o.status == "equal-prefix")
+        .count();
     let report = Report {
         tag,
         equal,
@@ -268,9 +273,13 @@ fn check(case: &Case, oracle: &Path, port: Option<&Path>, cache: &Path) -> Resul
     fs::create_dir_all(&dir)?;
     let stem = format!("{}.{:016x}", case.name, content_hash(&case.input)?);
     let oracle_out = dir.join(format!("{stem}.oracle.txt"));
-    if !oracle_out.exists() {
-        run_oracle(case, oracle, &dir, &stem, &oracle_out)?;
+    let oracle_crashed = dir.join(format!("{stem}.oracle.crashed.txt"));
+    if !oracle_out.exists() && !oracle_crashed.exists() {
+        run_oracle(case, oracle, &dir, &stem, &oracle_out, &oracle_crashed)?;
     }
+    // A crashed oracle run is valid up to the last record it wrote.
+    let crashed = !oracle_out.exists();
+    let oracle_out = if crashed { oracle_crashed } else { oracle_out };
     let oracle_bytes = fs::metadata(&oracle_out)?.len();
     let mut outcome = Outcome {
         game: case.game.name,
@@ -297,8 +306,8 @@ fn check(case: &Case, oracle: &Path, port: Option<&Path>, cache: &Path) -> Resul
         outcome.detail = Some(format!("  {status}, see {}", port_log.display()));
         return Ok(outcome);
     }
-    match first_difference(&oracle_out, &port_out)? {
-        None => outcome.status = "equal",
+    match first_difference(&oracle_out, &port_out, crashed)? {
+        None => outcome.status = if crashed { "equal-prefix" } else { "equal" },
         Some(detail) => {
             outcome.status = "different";
             outcome.detail = Some(format!(
@@ -311,7 +320,14 @@ fn check(case: &Case, oracle: &Path, port: Option<&Path>, cache: &Path) -> Resul
     Ok(outcome)
 }
 
-fn run_oracle(case: &Case, oracle: &Path, dir: &Path, stem: &str, oracle_out: &Path) -> Result<()> {
+fn run_oracle(
+    case: &Case,
+    oracle: &Path,
+    dir: &Path,
+    stem: &str,
+    oracle_out: &Path,
+    oracle_crashed: &Path,
+) -> Result<()> {
     let partial = dir.join(format!("{stem}.oracle.partial"));
     let log = dir.join(format!("{stem}.oracle.log"));
     let status = Command::new(oracle)
@@ -332,19 +348,26 @@ fn run_oracle(case: &Case, oracle: &Path, dir: &Path, stem: &str, oracle_out: &P
         .stderr(File::create(&log)?)
         .status()
         .with_context(|| format!("running {}", oracle.display()))?;
-    // xDump exits with 0 after an exception. A complete run ends its log with "All Done.".
+    // xDump exits with 0 after an exception. A complete run ends its log with
+    // "All Done."; a run that died with an access violation (which the oracle
+    // does on every Fallout 4 INFO with an alias condition) is kept as the
+    // prefix the port has to match.
     let log_text = String::from_utf8_lossy(&fs::read(&log)?).into_owned();
     let last = log_text.lines().last().unwrap_or_default();
-    ensure!(
-        status.success() && last.ends_with("All Done."),
-        "oracle did not finish: {status}, last log line: {last}"
-    );
-    fs::rename(&partial, oracle_out)?;
+    ensure!(status.success(), "oracle failed: {status}, last log line: {last}");
+    if last.ends_with("All Done.") {
+        fs::rename(&partial, oracle_out)?;
+    } else if last.contains("Unexpected Error") {
+        fs::rename(&partial, oracle_crashed)?;
+    } else {
+        bail!("oracle did not finish: last log line: {last}");
+    }
     Ok(())
 }
 
 /// Describes the first line that differs, or returns `None` for equal files.
-fn first_difference(oracle: &Path, port: &Path) -> Result<Option<String>> {
+/// With `prefix`, the port may continue past the end of the oracle output.
+fn first_difference(oracle: &Path, port: &Path, prefix: bool) -> Result<Option<String>> {
     let mut oracle = BufReader::with_capacity(1 << 20, File::open(oracle)?);
     let mut port = BufReader::with_capacity(1 << 20, File::open(port)?);
     let (mut expected, mut actual) = (Vec::new(), Vec::new());
@@ -355,10 +378,10 @@ fn first_difference(oracle: &Path, port: &Path) -> Result<Option<String>> {
         let read_expected = oracle.read_until(b'\n', &mut expected)?;
         let read_actual = port.read_until(b'\n', &mut actual)?;
         line += 1;
-        if read_expected == 0 && read_actual == 0 {
+        if read_expected == 0 && (read_actual == 0 || prefix) {
             return Ok(None);
         }
-        if expected != actual {
+        if expected != actual && !(prefix && read_expected < read_actual && actual.starts_with(&expected)) {
             let show = |bytes: &[u8]| {
                 if bytes.is_empty() {
                     "<end of file>".to_owned()
@@ -395,12 +418,37 @@ mod tests {
         let (a, b) = (dir.join("a"), dir.join("b"));
         fs::write(&a, "one\r\ntwo\r\n").unwrap();
         fs::write(&b, "one\r\ntwo\r\n").unwrap();
-        assert_eq!(first_difference(&a, &b).unwrap(), None);
+        assert_eq!(first_difference(&a, &b, false).unwrap(), None);
         fs::write(&b, "one\r\n2\r\n").unwrap();
-        let detail = first_difference(&a, &b).unwrap().unwrap();
+        let detail = first_difference(&a, &b, false).unwrap().unwrap();
         assert!(detail.contains("line 2") && detail.contains("- two") && detail.contains("+ 2"));
         fs::write(&b, "one\r\n").unwrap();
-        assert!(first_difference(&a, &b).unwrap().unwrap().contains("<end of file>"));
+        assert!(
+            first_difference(&a, &b, false)
+                .unwrap()
+                .unwrap()
+                .contains("<end of file>")
+        );
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn prefix_allows_the_port_to_continue() {
+        let dir = std::env::temp_dir().join(format!("xtask-parity-prefix-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let (oracle, port) = (dir.join("oracle"), dir.join("port"));
+        // The oracle crashed in the middle of its third line.
+        fs::write(&oracle, "one\r\ntwo\r\nthr").unwrap();
+        fs::write(&port, "one\r\ntwo\r\nthree\r\nfour\r\n").unwrap();
+        assert_eq!(first_difference(&oracle, &port, true).unwrap(), None);
+        assert!(first_difference(&oracle, &port, false).unwrap().is_some());
+        fs::write(&port, "one\r\ntwo\r\nfour\r\n").unwrap();
+        assert!(
+            first_difference(&oracle, &port, true)
+                .unwrap()
+                .unwrap()
+                .contains("line 3")
+        );
         fs::remove_dir_all(&dir).unwrap();
     }
 }

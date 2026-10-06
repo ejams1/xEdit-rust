@@ -23,7 +23,7 @@ Environment variables:
 | `XEDIT_FO4_DATA`, `XEDIT_SSE_DATA` | `Data` directory of each game. |
 | `XEDIT_PARITY_CACHE` | Cache directory. Optional; defaults to the user cache directory. |
 
-Oracle output is cached as `<cache>/<tag>/<game>/<file>.<hash>.oracle.txt`, so the oracle runs once per input file. The oracle is slow on large masters: it writes about 80 MB of dump per minute and needs more than ten minutes for `Fallout4.esm`. `--oracle-only` fills the cache without running the port. The port output of the last run is next to the oracle output as `.port.txt`.
+Oracle output is cached as `<cache>/<tag>/<game>/<file>.<hash>.oracle.txt`, so the oracle runs once per input file. A run that the oracle ended with `Unexpected Error` is kept as `<file>.<hash>.oracle.crashed.txt` and compared as a prefix: the port has to match it up to the crash and may continue, which the report shows as `equal-prefix`. The oracle is slow on large masters: it writes about 80 MB of dump per minute and needs more than ten minutes for `Fallout4.esm`. `--oracle-only` fills the cache without running the port. The port output of the last run is next to the oracle output as `.port.txt`.
 
 Only the dump check exists so far. Add the other checks of the table below to `crates/xtask/src/parity.rs` in the phase that ports the feature.
 
