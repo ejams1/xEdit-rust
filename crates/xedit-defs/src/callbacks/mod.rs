@@ -14,6 +14,8 @@ pub mod fo4;
 mod fo4_stubs;
 pub mod fo76;
 mod fo76_stubs;
+pub mod tes3;
+mod tes3_stubs;
 pub mod tes4;
 mod tes4_stubs;
 pub mod tes5;

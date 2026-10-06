@@ -16,5 +16,6 @@ pub mod fo4;
 pub mod fo76;
 pub mod hardcoded;
 pub mod signatures;
+pub mod tes3;
 pub mod tes4;
 pub mod tes5;

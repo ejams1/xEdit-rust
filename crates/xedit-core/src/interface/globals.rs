@@ -18,7 +18,7 @@ use std::sync::{Mutex, MutexGuard, RwLock};
 
 use xedit_io::Encoding;
 
-use super::types::Signature;
+use super::types::{KNOWN_SUB_RECORD_SIGNATURES, KnownSubRecord, KnownSubRecordSignatures, Signature};
 
 macro_rules! atomic_type {
     (bool) => {
@@ -697,8 +697,22 @@ pub fn is_internal_edit() -> bool {
     _InternalEditCount.load(Ordering::Relaxed) > 0
 }
 
+/// Upstream `wbKnownSubRecordSignatures`: the signatures of the known
+/// subrecords of the record definitions that do not give their own.
+/// Morrowind changes them.
+static KNOWN_SUB_RECORD_SIGNATURES_NOW: RwLock<KnownSubRecordSignatures> = RwLock::new(KNOWN_SUB_RECORD_SIGNATURES);
+
+pub fn known_sub_record_signatures() -> KnownSubRecordSignatures {
+    *KNOWN_SUB_RECORD_SIGNATURES_NOW.read().unwrap()
+}
+
+pub fn set_known_sub_record_signature(role: KnownSubRecord, signature: Signature) {
+    KNOWN_SUB_RECORD_SIGNATURES_NOW.write().unwrap()[super::types::PascalEnum::ord(role)] = signature;
+}
+
 /// Restores every setting of this module to its upstream default.
 pub fn reset() {
+    *KNOWN_SUB_RECORD_SIGNATURES_NOW.write().unwrap() = KNOWN_SUB_RECORD_SIGNATURES;
     set_encoding(Encoding::Mbcs(1252));
     set_encoding_trans(Encoding::Mbcs(1252));
     set_encoding_vmad(Encoding::Utf8);

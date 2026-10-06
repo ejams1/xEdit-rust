@@ -14,7 +14,7 @@
 use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap, HashSet};
 
-use anyhow::{Result, anyhow, bail};
+use anyhow::{Result, anyhow, bail, ensure};
 
 use super::model::{RoutineSig, Symbols, Ty, TypeKind};
 use super::resolve::{Resolver, Scope};
@@ -113,6 +113,10 @@ const CALLBACKS: &[(&str, &str)] = &[
     (
         "twbmainrecordgetformidcallback",
         "(a_main_record: &MainRecordRef) -> Option<FormID>",
+    ),
+    (
+        "twbmainrecordseteditoridcallback",
+        "(a_sub_record: &ElementRef, a_editor_id: &str)",
     ),
     (
         "twbmainrecordidentitycallback",
@@ -595,6 +599,20 @@ impl<'a> Emitter<'a> {
                     // The setters of the `wbInterface` globals borrow strings.
                     let target = self.target(type_ref, !setter.starts_with("set_"));
                     out.push_str(&format!("{pad}{setter}({});\n", self.expr_to(value, &target, cx)?));
+                    return Ok(());
+                }
+                // `wbKnownSubRecordSignatures[ksrRole] := 'SIGN'`, which only
+                // Morrowind does.
+                if let Expr::Index { base, args } = target
+                    && let [index] = args.as_slice()
+                    && let Expr::Ident(name) = &**base
+                    && name.eq_ignore_ascii_case("wbKnownSubRecordSignatures")
+                    && let Expr::Ident(role) = index
+                    && let Expr::Str(signature) = value
+                {
+                    out.push_str(&format!(
+                        "{pad}set_known_sub_record_signature(KnownSubRecord::{role}, Signature::new(b\"{signature}\"));\n"
+                    ));
                     return Ok(());
                 }
                 if let Expr::Index { base, args } = target
@@ -1262,6 +1280,25 @@ impl<'a> Emitter<'a> {
             let code = self.expr_to(value, &target, &cx)?;
             return Ok(Some(format!(
                 "/// Upstream `{name}`.\npub const {rust_name}: {rust_ty} = {code};\n"
+            )));
+        }
+        // `TwbKnownSubRecordSignatures = ('NAME', '____', ...)`: the known
+        // subrecord signatures of a record type, one per role.
+        if let TypeRef::Named(type_name) = type_ref
+            && type_name.eq_ignore_ascii_case("TwbKnownSubRecordSignatures")
+        {
+            let signatures: Vec<String> = decl
+                .value_tokens
+                .iter()
+                .filter_map(|token| match &token.kind {
+                    TokenKind::Str(text) => Some(format!("Signature::new(b\"{text}\")")),
+                    _ => None,
+                })
+                .collect();
+            ensure!(signatures.len() == 5, "constant {name} does not have five signatures");
+            return Ok(Some(format!(
+                "/// Upstream `{name}`.\npub const {rust_name}: KnownSubRecordSignatures = [{}];\n",
+                signatures.join(", ")
             )));
         }
         // `array[lo..hi] of TRecord = ((Field: value; ...), ...)`
