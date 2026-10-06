@@ -1496,7 +1496,7 @@ impl<'a> Emitter<'a> {
                 value
             }
             Expr::Unary { op, operand } => {
-                let operand = self.expr(operand, cx)?;
+                let operand = self.value(operand, cx)?;
                 match op.as_str() {
                     "not" if operand.ty == Ty::Bool => Val::new(format!("!({})", operand.code), Ty::Bool),
                     "not" => Val::new(format!("!({})", operand.code), operand.ty).num(operand.num),
@@ -1526,6 +1526,16 @@ impl<'a> Emitter<'a> {
             }
             other => bail!("expression {} is not supported", expr_name(other)),
         })
+    }
+
+    /// The expression as a value: a routine named without arguments, as an
+    /// operand, is its call.
+    fn value(&self, expr: &Expr, cx: &Context) -> Result<Val> {
+        let value = self.expr(expr, cx)?;
+        if let Ty::Routine(name) = &value.ty {
+            return self.call(name, &[], &Context::empty());
+        }
+        Ok(value)
     }
 
     fn ident(&self, name: &str, cx: &Context) -> Result<Val> {
@@ -1622,8 +1632,8 @@ impl<'a> Emitter<'a> {
             };
             return self.call(name, std::slice::from_ref(left), cx);
         }
-        let a = self.expr(left, cx)?;
-        let b = self.expr(right, cx)?;
+        let a = self.value(left, cx)?;
+        let b = self.value(right, cx)?;
         let bool_target = Target {
             ty: Ty::Bool,
             owned: false,

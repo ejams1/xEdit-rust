@@ -6,8 +6,8 @@
 
 //! The `dump` command: the element tree of a plugin as `xDump.exe` prints it
 //! in its plain mode (no report, no sizes, no hidden elements), with the
-//! summaries of the elements without a value. The lines end with CRLF as
-//! the oracle writes them.
+//! summaries of the elements without a value. The lines end with CRLF and
+//! the text is in the Windows-1252 code page, as the oracle writes them.
 
 use std::io::Write;
 use std::path::Path;
@@ -192,6 +192,17 @@ fn write_elements(container: &dyn Container, indent: &str, out: &mut dyn Write) 
     Ok(())
 }
 
+/// Writes the text as xDump does: through the ANSI code page of the
+/// console output (Windows-1252), where a character without a mapping
+/// becomes `?`.
+fn write_text(out: &mut dyn Write, text: &str) -> std::io::Result<()> {
+    if text.is_ascii() {
+        out.write_all(text.as_bytes())
+    } else {
+        out.write_all(&Encoding::Mbcs(1252).get_bytes(text))
+    }
+}
+
 /// Port of `WriteElement` in the plain dump mode.
 fn write_element(element: &ElementRef, indent: &str, out: &mut dyn Write) -> std::io::Result<()> {
     if std::env::var_os("XEDIT_TRACE").is_some() {
@@ -207,19 +218,19 @@ fn write_element(element: &ElementRef, indent: &str, out: &mut dyn Write) -> std
     let mut indent = indent.to_owned();
     if element.get_name() != "Unused" && name != "Unused" {
         if !name.is_empty() {
-            write!(out, "{indent}{name}")?;
+            write_text(out, &format!("{indent}{name}"))?;
         }
         if !name.is_empty() || !value.is_empty() {
             indent.push_str("  ");
         }
         if !name.starts_with("Hidden: ") {
             if !value.is_empty() {
-                write!(out, ": {value}\r\n")?;
+                write_text(out, &format!(": {value}\r\n"))?;
             } else if !name.is_empty() {
                 if summary.is_empty() {
                     out.write_all(b"\r\n")?;
                 } else {
-                    write!(out, " [S]: {summary}\r\n")?;
+                    write_text(out, &format!(" [S]: {summary}\r\n"))?;
                 }
             }
         }

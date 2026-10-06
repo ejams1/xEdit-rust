@@ -509,7 +509,7 @@ pub fn is_tes4_fo3_value_def(
 ) -> Option<Arc<dyn ValueDef>> {
     let mut result: Option<Arc<dyn ValueDef>> = Default::default();
     result = a_def2.clone();
-    if is_oblivion() {
+    if (is_oblivion() || is_fallout3()) {
         result = a_def1.clone();
     }
     result
@@ -519,7 +519,7 @@ pub fn is_tes4_fo3_value_def(
 pub fn is_tes4_fo3_string(a_def1: &str, a_def2: &str) -> String {
     let mut result: String = Default::default();
     result = a_def2.to_owned();
-    if is_oblivion() {
+    if (is_oblivion() || is_fallout3()) {
         result = a_def1.to_owned();
     }
     result
@@ -706,7 +706,7 @@ pub fn is_fo4_plus_record_member_def(
 ) -> Option<Arc<dyn RecordMemberDef>> {
     let mut result: Option<Arc<dyn RecordMemberDef>> = Default::default();
     result = a_def2.clone();
-    if is_fallout4() {
+    if ((is_fallout4() || is_fallout76()) || is_starfield()) {
         result = a_def1.clone();
     }
     result
@@ -719,7 +719,7 @@ pub fn is_fo4_plus_value_def(
 ) -> Option<Arc<dyn ValueDef>> {
     let mut result: Option<Arc<dyn ValueDef>> = Default::default();
     result = a_def2.clone();
-    if is_fallout4() {
+    if ((is_fallout4() || is_fallout76()) || is_starfield()) {
         result = a_def1.clone();
     }
     result
@@ -729,7 +729,7 @@ pub fn is_fo4_plus_value_def(
 pub fn is_fo4_plus_string(a_def1: &str, a_def2: &str) -> String {
     let mut result: String = Default::default();
     result = a_def2.to_owned();
-    if is_fallout4() {
+    if ((is_fallout4() || is_fallout76()) || is_starfield()) {
         result = a_def1.to_owned();
     }
     result
@@ -762,7 +762,7 @@ pub fn is_fo76_string(a_def1: &str, a_def2: &str) -> String {
 pub fn is_fo76_sf1(a_def1: &str, a_def2: &str) -> String {
     let mut result: String = Default::default();
     result = a_def2.to_owned();
-    if is_fallout76() {
+    if (is_fallout76() || is_starfield()) {
         result = a_def1.to_owned();
     }
     result
@@ -4629,7 +4629,7 @@ pub fn wb_weather_time_of_day(a_name: &str) -> Option<Arc<dyn ValueDef>> {
         .map(|def| def.include_flag_when(DefFlag::dfUnionStaticResolve, true))
         .map(|def| def as Arc<dyn ValueDef>);
     } else {
-        if is_fallout4() {
+        if ((is_fallout4() || is_fallout76()) || is_starfield()) {
             struct_ = wb_struct(
                 a_name,
                 &[
@@ -5505,7 +5505,7 @@ pub fn wb_head_part(
     }
     result = wb_r_struct_sk(
         &[0],
-        &(if is_oblivion() {
+        &(if (is_oblivion() || is_fallout3()) {
             "Part".to_owned()
         } else {
             "Head Part".to_owned()
@@ -5513,7 +5513,7 @@ pub fn wb_head_part(
         &[
             wb_integer_signature_formater(
                 INDX,
-                &(if is_oblivion() {
+                &(if (is_oblivion() || is_fallout3()) {
                     "Index".to_owned()
                 } else {
                     "Head Part Number".to_owned()
@@ -5531,9 +5531,9 @@ pub fn wb_head_part(
                 None,
             )
             .map(|def| def as Arc<dyn RecordMemberDef>),
-            if_then_record_member_def(is_oblivion(), a_model.clone(), None),
+            if_then_record_member_def((is_oblivion() || is_fallout3()), a_model.clone(), None),
             if_then_record_member_def(
-                is_oblivion(),
+                (is_oblivion() || is_fallout3()),
                 None,
                 wb_form_id_ck_signature(
                     HEAD,
@@ -5547,7 +5547,7 @@ pub fn wb_head_part(
                 )
                 .map(|def| def as Arc<dyn RecordMemberDef>),
             ),
-            if_then_record_member_def(is_oblivion(), wb_icon.clone(), None),
+            if_then_record_member_def((is_oblivion() || is_fallout3()), wb_icon.clone(), None),
         ],
         &[],
         ConflictPriority::cpNormal,
@@ -7737,7 +7737,7 @@ pub fn wb_region_areas() -> Option<Arc<dyn RecordMemberDef>> {
                 .map(|def| def.set_after_load(Some(Arc::new(wb_rpld_after_load))))
                 .map(|def| def as Arc<dyn RecordMemberDef>),
                 if_then_record_member_def(
-                    is_fallout4(),
+                    (is_fallout4() || is_fallout76()),
                     wb_unknown_signature(ANAM, ConflictPriority::cpNormal, false, None, None)
                         .map(|def| def as Arc<dyn RecordMemberDef>),
                     None,
@@ -7766,7 +7766,7 @@ pub fn wb_region_areas() -> Option<Arc<dyn RecordMemberDef>> {
 /// Upstream `wbRegionSounds`, line 8729 of `wbDefinitionsCommon.pas`.
 pub fn wb_region_sounds() -> Option<Arc<dyn RecordMemberDef>> {
     wb_array_s_signature_count(
-        if_then_signature(is_oblivion(), RDSD, RDSA),
+        if_then_signature((is_oblivion() || is_fallout3()), RDSD, RDSA),
         "Sounds",
         wb_struct_sk(
             &[0],
@@ -8101,7 +8101,7 @@ pub fn wb_textured_model(
             l_members[index] = wb_model_info(a_signatures[(2) as usize], "");
         }
     } else {
-        if is_starfield() {
+        if !(is_starfield()) {
             {
                 let index = (1) as usize;
                 l_members[index] = wb_model_info(a_signatures[(1) as usize], "");
@@ -10923,7 +10923,7 @@ pub fn wb_world_max_height() -> Option<Arc<dyn RecordMemberDef>> {
     )
     .map(|def| def.include_flag_when(DefFlag::dfCollapsed, collapse_other()))
     .map(|def| def.include_flag_when(DefFlag::dfFastAssign, true))
-    .map(|def| def.include_flag_when(DefFlag::dfNoCopyAsOverride, is_fallout4()))
+    .map(|def| def.include_flag_when(DefFlag::dfNoCopyAsOverride, !(is_fallout4())))
     .map(|def| def as Arc<dyn RecordMemberDef>)
 }
 

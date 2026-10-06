@@ -17,8 +17,8 @@ use xedit_core::delphi::{float_to_str_f_fixed, round, str_to_float};
 use xedit_core::interface::builders::wb_flags_unknown_is_unused;
 use xedit_core::interface::constructors::get_container_from_union;
 use xedit_core::interface::globals::{
-    GameMode, game_mode, is_fallout_nv, is_fallout3, is_fallout76, is_morrowind, is_oblivion, is_skyrim, is_starfield,
-    resolve_alias,
+    GameMode, cs, game_mode, is_fallout_nv, is_fallout3, is_fallout76, is_morrowind, is_oblivion, is_skyrim,
+    is_starfield, resolve_alias,
 };
 use xedit_core::interface::misc::int_to_hex64;
 use xedit_core::interface::string::to_comma_text;
@@ -2064,5 +2064,193 @@ pub fn wb_qust_alias_to_str(a_value: &mut String, _a_base_ptr: DataPtr, a_elemen
             );
         }
         _ => {}
+    }
+}
+
+/// The record flags of the containing main record, 0 without one.
+fn containing_record_flags(a_element: ElementArg) -> u32 {
+    a_element
+        .and_then(|element| element.get_containing_main_record())
+        .map_or(0, |main_record| main_record.get_flags().0)
+}
+
+/// Upstream `wbFlagNavmeshFilterDontSHow`.
+pub fn wb_flag_navmesh_filter_dont_s_how(a_element: ElementArg) -> bool {
+    let flags = containing_record_flags(a_element);
+    flags & 0x800_0000 != 0
+        || (flags & 0x1000_0000 != 0 && is_starfield())
+        || (flags & 0x2000_0000 != 0 && is_starfield())
+        || flags & 0x4000_0000 != 0
+}
+
+/// Upstream `wbFlagNavmeshBoundingBoxDontSHow`.
+pub fn wb_flag_navmesh_bounding_box_dont_s_how(a_element: ElementArg) -> bool {
+    let flags = containing_record_flags(a_element);
+    flags & 0x400_0000 != 0
+        || (flags & 0x1000_0000 != 0 && is_starfield())
+        || (flags & 0x2000_0000 != 0 && is_starfield())
+        || flags & 0x4000_0000 != 0
+}
+
+/// Upstream `wbFlagNavmeshGroundDontSHow`.
+pub fn wb_flag_navmesh_ground_dont_s_how(a_element: ElementArg) -> bool {
+    let flags = containing_record_flags(a_element);
+    flags & 0x400_0000 != 0
+        || flags & 0x800_0000 != 0
+        || (flags & 0x1000_0000 != 0 && is_starfield())
+        || (flags & 0x2000_0000 != 0 && is_starfield())
+}
+
+/// Upstream `wbBookTeachesDontSHow`: hidden for a book that teaches nothing.
+pub fn wb_book_teaches_dont_s_how(a_element: ElementArg) -> bool {
+    let flags = a_element
+        .and_then(|element| element.get_container())
+        .map_or(0, |container| container_int(&container, "Flags"));
+    flags & 0x1 == 0 && flags & 0x4 == 0
+}
+
+/// The `DATA\Flags` of the containing light record.
+fn light_flags(a_element: ElementArg) -> Option<i64> {
+    let main_record = a_element?.get_containing_main_record()?;
+    let data = main_record.get_element_by_signature(Signature::new(b"DATA"))?;
+    let flags = data.as_container()?.get_element_by_name("Flags")?;
+    Some(variant_int(&flags.get_native_value()))
+}
+
+/// Upstream `wbLIGHCarryDontShow`: hidden unless the light can be carried.
+pub fn wb_ligh_carry_dont_show(a_element: ElementArg) -> bool {
+    light_flags(a_element).is_some_and(|flags| flags & 0x2 == 0)
+}
+
+/// Upstream `wbLIGHFalloffDontShow`: hidden unless the light is a shadow
+/// spotlight or hemisphere.
+pub fn wb_ligh_falloff_dont_show(a_element: ElementArg) -> bool {
+    light_flags(a_element)
+        .is_some_and(|flags| flags & 0x400 == 0 && flags & 0x800 == 0 && (!cs() || flags & 0x4000 == 0))
+}
+
+/// Upstream `wbLIGHFlickerDontShow`: hidden unless the light flickers or pulses.
+pub fn wb_ligh_flicker_dont_show(a_element: ElementArg) -> bool {
+    light_flags(a_element)
+        .is_some_and(|flags| flags & 0x8 == 0 && flags & 0x40 == 0 && flags & 0x80 == 0 && flags & 0x100 == 0)
+}
+
+/// Upstream `wbLIGHShadowSpotDontShow`: hidden unless the light is a shadow spotlight.
+pub fn wb_ligh_shadow_spot_dont_show(a_element: ElementArg) -> bool {
+    light_flags(a_element).is_some_and(|flags| flags & 0x400 == 0 && (!cs() || flags & 0x4000 == 0))
+}
+
+/// Upstream `wbMESGTNAMDontShow`: hidden for a message box.
+pub fn wb_mesgtnam_dont_show(a_element: ElementArg) -> bool {
+    a_element
+        .and_then(|element| element.get_containing_main_record())
+        .is_some_and(|main_record| variant_int(&main_record.get_element_native_value("DNAM")) & 1 != 0)
+}
+
+/// Upstream `wbLCTNCellDontShow`: hidden when the location is a cell.
+pub fn wb_lctn_cell_dont_show(a_element: ElementArg) -> bool {
+    let Some(container) = a_element.and_then(|element| element.get_container()) else {
+        return false;
+    };
+    container
+        .as_container()
+        .and_then(|container| container.get_element_by_name("World/Cell"))
+        .and_then(|location| location.get_links_to())
+        .and_then(|links_to| links_to.into_main_record())
+        .is_some_and(|main_record| main_record.get_signature() == Signature::new(b"CELL"))
+}
+
+/// Upstream `wbPACKTemplateDontShow`: hidden for a package with a template.
+pub fn wb_pack_template_dont_show(a_element: ElementArg) -> bool {
+    a_element
+        .and_then(|element| element.get_containing_main_record())
+        .is_some_and(|main_record| variant_int(&main_record.get_element_native_value("PKCU\\Package Template")) != 0)
+}
+
+/// Upstream `wbREGNGrassDontShow`.
+pub fn wb_regn_grass_dont_show(a_element: ElementArg) -> bool {
+    wb_get_regn_type(a_element) != 6
+}
+
+/// Upstream `wbREGNLandDontShow`.
+pub fn wb_regn_land_dont_show(a_element: ElementArg) -> bool {
+    wb_get_regn_type(a_element) != 5
+}
+
+/// Upstream `wbREGNMapDontShow`.
+pub fn wb_regn_map_dont_show(a_element: ElementArg) -> bool {
+    wb_get_regn_type(a_element) != 4
+}
+
+/// Upstream `wbREGNObjectsDontShow`.
+pub fn wb_regn_objects_dont_show(a_element: ElementArg) -> bool {
+    wb_get_regn_type(a_element) != 2
+}
+
+/// Upstream `wbREGNWeatherDontShow`.
+pub fn wb_regn_weather_dont_show(a_element: ElementArg) -> bool {
+    wb_get_regn_type(a_element) != 3
+}
+
+/// Upstream `wbWorldXWEMDontShow`: hidden for an exterior.
+pub fn wb_world_xwem_dont_show(a_element: ElementArg) -> bool {
+    a_element
+        .and_then(|element| element.get_containing_main_record())
+        .is_some_and(|main_record| variant_int(&main_record.get_element_native_value("DATA")) & 1 == 0)
+}
+
+/// Upstream `wbCellLightingIsRemovable`.
+pub fn wb_cell_lighting_is_removable(a_element: ElementArg) -> bool {
+    a_element
+        .and_then(|element| element.get_containing_main_record())
+        .is_some_and(|main_record| variant_int(&main_record.get_element_native_value("DATA")) & 1 == 0)
+}
+
+/// Upstream `wbMessageTNAMIsRemovable`.
+pub fn wb_message_tnam_is_removable(a_element: ElementArg) -> bool {
+    a_element
+        .and_then(|element| element.get_containing_main_record())
+        .is_some_and(|main_record| variant_int(&main_record.get_element_native_value("DNAM")) & 1 == 1)
+}
+
+/// Upstream `wbWorldWaterIsRemovable`.
+pub fn wb_world_water_is_removable(a_element: ElementArg) -> bool {
+    if is_oblivion() {
+        a_element
+            .and_then(|element| element.get_containing_main_record())
+            .is_some_and(|main_record| main_record.get_record_by_signature(Signature::new(b"WNAM")).is_some())
+    } else {
+        parent_worldspace_flags(a_element) & 0x08 == 8
+    }
+}
+
+/// Upstream `wbWorldClimateIsRemovable`.
+pub fn wb_world_climate_is_removable(a_element: ElementArg) -> bool {
+    if is_oblivion() {
+        a_element
+            .and_then(|element| element.get_containing_main_record())
+            .is_some_and(|main_record| main_record.get_record_by_signature(Signature::new(b"WNAM")).is_some())
+    } else {
+        parent_worldspace_flags(a_element) & 0x10 == 16
+    }
+}
+
+/// Upstream `wbClmtMoonsPhaseLength`: the moons and the phase length.
+pub fn wb_clmt_moons_phase_length(a_int: i64, _a_element: ElementArg, a_type: CallbackType) -> String {
+    match a_type {
+        CallbackType::ctToSortKey => int_to_hex64(a_int, 2),
+        CallbackType::ctToStr | CallbackType::ctToSummary => {
+            let phase_length = a_int % 64;
+            let secunda = a_int & 64 != 0;
+            let masser = a_int & 128 != 0;
+            let moons = match (masser, secunda) {
+                (true, true) => "Masser, Secunda / ",
+                (true, false) => "Masser / ",
+                (false, true) => "Secunda / ",
+                (false, false) => "No Moon / ",
+            };
+            format!("{moons}{phase_length}")
+        }
+        _ => String::new(),
     }
 }
