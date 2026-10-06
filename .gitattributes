@@ -1,0 +1,4 @@
+# Plugins are binary data.
+*.esm binary
+*.esp binary
+*.esl binary

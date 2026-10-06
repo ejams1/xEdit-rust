@@ -6,21 +6,26 @@
 
 //! The hardcoded records of each game: the forms the engine defines
 //! without a plugin, such as the player reference. Upstream keeps them as
-//! plugins embedded in a data module (`Core/Hardcoded/*.esp`); here they
-//! are embedded from `hardcoded/`.
-
-use xedit_core::interface::globals::GameMode;
+//! plugins embedded in a data module (`Core/wbHardcoded.dfm`, with copies in
+//! `Core/Hardcoded`); here they are embedded from `hardcoded/`. The
+//! Morrowind plugin exists only in the data module and was extracted from
+//! it; the Enderal plugin there is identical to the Skyrim one.
 
 /// Port of `TwbHardcodedContainer.GetHardCodedDat`: the embedded plugin of
-/// the hardcoded records of the game, `None` for a game without one here.
-/// The `<GameName>.Hardcoded.Override.dat` file upstream reads next to the
-/// program is not supported.
-pub fn hardcoded_dat(game_mode: GameMode) -> Option<&'static [u8]> {
-    match game_mode {
-        GameMode::gmTES5 | GameMode::gmTES5VR | GameMode::gmSSE | GameMode::gmEnderal | GameMode::gmEnderalSE => {
-            Some(include_bytes!("../hardcoded/Skyrim.esp"))
-        }
-        GameMode::gmFO4 | GameMode::gmFO4VR => Some(include_bytes!("../hardcoded/Fallout4.esp")),
-        _ => None,
-    }
+/// the hardcoded records of the game, found by the game name (`wbGameName`)
+/// as upstream finds its `fc<GameName>` container. `None` for a game
+/// without one. The `<GameName>.Hardcoded.Override.dat` file upstream reads
+/// next to the program is not supported.
+pub fn hardcoded_dat(game_name: &str) -> Option<&'static [u8]> {
+    Some(match game_name {
+        "Morrowind" => include_bytes!("../hardcoded/Morrowind.esm"),
+        "Oblivion" => include_bytes!("../hardcoded/Oblivion.esp"),
+        "Fallout3" => include_bytes!("../hardcoded/Fallout3.esp"),
+        "FalloutNV" => include_bytes!("../hardcoded/FalloutNV.esp"),
+        "Skyrim" | "Enderal" => include_bytes!("../hardcoded/Skyrim.esp"),
+        "Fallout4" => include_bytes!("../hardcoded/Fallout4.esp"),
+        "Fallout76" => include_bytes!("../hardcoded/Fallout76.esp"),
+        "Starfield" => include_bytes!("../hardcoded/Starfield.esm"),
+        _ => return None,
+    })
 }
