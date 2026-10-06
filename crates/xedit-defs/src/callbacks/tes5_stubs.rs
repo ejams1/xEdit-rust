@@ -67,11 +67,6 @@ pub fn wb_cellxclw_get_conflict_priority(_a_element: ElementArg, _a_conflict_pri
     todo!("port wbCELLXCLWGetConflictPriority from wbDefinitionsTES5.pas line 1722")
 }
 
-/// Upstream `wbClmtTime`, line 201 of `wbDefinitionsTES5.pas`.
-pub fn wb_clmt_time(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) -> String {
-    todo!("port wbClmtTime from wbDefinitionsTES5.pas line 201")
-}
-
 /// Upstream `wbConditionEventToInt`, line 772 of `wbDefinitionsTES5.pas`.
 pub fn wb_condition_event_to_int(_a_string: &str, _a_element: ElementArg) -> i64 {
     todo!("port wbConditionEventToInt from wbDefinitionsTES5.pas line 772")

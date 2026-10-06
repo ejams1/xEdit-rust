@@ -2240,6 +2240,30 @@ pub fn wb_world_climate_is_removable(a_element: ElementArg) -> bool {
     }
 }
 
+/// Upstream `wbClmtTime`: the time of day in ten minute steps, as
+/// `TimeToStr` prints it with the English long time format.
+pub fn wb_clmt_time(a_int: i64, _a_element: ElementArg, a_type: CallbackType) -> String {
+    let mut a_int = a_int;
+    while a_int > 143 {
+        a_int -= 143;
+    }
+    match a_type {
+        CallbackType::ctToSortKey => int_to_hex64(a_int, 4),
+        CallbackType::ctToStr | CallbackType::ctToSummary => {
+            let hour = a_int / 6;
+            let minute = (a_int % 6) * 10;
+            let (hour12, suffix) = match hour {
+                0 => (12, "AM"),
+                1..=11 => (hour, "AM"),
+                12 => (12, "PM"),
+                _ => (hour - 12, "PM"),
+            };
+            format!("{hour12}:{minute:02}:00 {suffix}")
+        }
+        _ => String::new(),
+    }
+}
+
 /// Upstream `wbClmtMoonsPhaseLength`: the moons and the phase length.
 pub fn wb_clmt_moons_phase_length(a_int: i64, _a_element: ElementArg, a_type: CallbackType) -> String {
     match a_type {
