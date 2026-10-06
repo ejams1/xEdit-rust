@@ -1013,6 +1013,11 @@ fn player_reference_group() -> Vec<u8> {
     group
 }
 
+/// Port of `PrecombinedCache`: the precombined references of the cell that
+/// was looked at last, by cell FormID and file name.
+type PrecombinedCache = Option<(FormID, String, Vec<(u32, u32)>)>;
+static PRECOMBINED_CACHE: std::sync::Mutex<PrecombinedCache> = std::sync::Mutex::new(None);
+
 /// Port of `StrRight`: the text padded on the left with spaces to `len`.
 fn str_right(text: &str, len: usize) -> String {
     format!("{text:>len$}")
@@ -1441,35 +1446,46 @@ impl MainRecordImpl {
                 .and_then(|container| container.as_element_impl()?.group_record_impl())
                 .and_then(|group| group.children_of())?;
             let cell_form_id = cell.mr_struct.form_id;
-            // Upstream caches the references of the cell between the calls;
-            // the list is read for every record here.
+            // Port of `PrecombinedCache`: the references of the cell, kept
+            // between the records of the same cell and file.
+            let file_name = self.file.upgrade().map(|file| file.get_name()).unwrap_or_default();
             let own = self.mr_struct.form_id.to_cardinal();
-            if game_mode() == GameMode::gmFO76 {
-                let refs = cell.get_element_by_path("XCRP\\References")?;
-                let refs = refs.as_container()?;
-                for index in 0..refs.get_element_count() {
-                    let reference = refs.get_element(index)?.get_native_value().as_ordinal().unwrap_or(0) as u32;
-                    if reference == own {
-                        return Some((cell_form_id.object_id(), 0));
+            let mut cache = PRECOMBINED_CACHE.lock().unwrap();
+            if cache
+                .as_ref()
+                .is_none_or(|(form_id, name, _)| *form_id != cell_form_id || *name != file_name)
+            {
+                let mut entries = Vec::new();
+                let ordinal = |element: Option<ElementRef>| {
+                    element.map_or(0, |element| element.get_native_value().as_ordinal().unwrap_or(0)) as u32
+                };
+                if game_mode() == GameMode::gmFO76 {
+                    if let Some(refs) = cell.get_element_by_path("XCRP\\References")
+                        && let Some(refs) = refs.as_container()
+                    {
+                        for index in 0..refs.get_element_count() {
+                            entries.push((ordinal(refs.get_element(index)), 0));
+                        }
+                    }
+                } else if let Some(refs) = cell.get_element_by_path("XCRI\\References")
+                    && let Some(refs) = refs.as_container()
+                {
+                    for index in 0..refs.get_element_count() {
+                        let Some(pair) = refs.get_element(index) else { continue };
+                        let Some(pair) = pair.as_container() else { continue };
+                        if pair.get_element_count() != 2 {
+                            continue;
+                        }
+                        entries.push((ordinal(pair.get_element(0)), ordinal(pair.get_element(1))));
                     }
                 }
-            } else {
-                let refs = cell.get_element_by_path("XCRI\\References")?;
-                let refs = refs.as_container()?;
-                for index in 0..refs.get_element_count() {
-                    let Some(pair) = refs.get_element(index) else { continue };
-                    let Some(pair) = pair.as_container() else { continue };
-                    if pair.get_element_count() != 2 {
-                        continue;
-                    }
-                    let reference = pair.get_element(0)?.get_native_value().as_ordinal().unwrap_or(0) as u32;
-                    if reference == own {
-                        let id = pair.get_element(1)?.get_native_value().as_ordinal().unwrap_or(0) as u32;
-                        return Some((cell_form_id.object_id(), id));
-                    }
-                }
+                *cache = Some((cell_form_id, file_name, entries));
             }
-            None
+            let (_, _, entries) = cache.as_ref()?;
+            entries
+                .iter()
+                .find(|(reference, _)| *reference == own)
+                .map(|(_, id)| (cell_form_id.object_id(), *id))
         })
     }
 

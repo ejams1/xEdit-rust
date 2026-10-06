@@ -1230,9 +1230,14 @@ pub fn get_container_ref_from_union_or_value(element: &ElementRef) -> Option<Ele
     result
 }
 
+/// Upstream `TwoPi`: twice the single-precision `OnePi`.
+///
+/// UPSTREAM-QUIRK: `OnePi` is declared as `Single = 3.1415927`, so angles
+/// normalized by adding or subtracting `TwoPi` carry its error.
+pub const TWO_PI: f64 = 2.0 * (std::f32::consts::PI as f64);
+
 /// Upstream `wbNormalizeRadians`: the angle in `0..2π`.
 pub fn wb_normalize_radians(_a_element: ElementArg, a_float: f64) -> f64 {
-    const TWO_PI: f64 = 2.0 * std::f64::consts::PI;
     let mut result = a_float;
     if (result / TWO_PI).abs() > 100.0 {
         result -= result.signum() * TWO_PI * ((result / TWO_PI).abs() - 100.0).trunc();
@@ -1332,9 +1337,9 @@ mod tests {
 
     #[test]
     fn normalize_radians() {
-        let two_pi = 2.0 * std::f64::consts::PI;
+        let two_pi = TWO_PI;
         assert_eq!(wb_normalize_radians(None, -1.0), two_pi - 1.0);
         assert_eq!(wb_normalize_radians(None, two_pi), 0.0);
-        assert!((wb_normalize_radians(None, 1000.5 * two_pi) - std::f64::consts::PI).abs() < 1e-9);
+        assert!((wb_normalize_radians(None, 1000.5 * two_pi) - two_pi / 2.0).abs() < 1e-9);
     }
 }

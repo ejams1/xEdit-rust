@@ -24,7 +24,7 @@ use xedit_core::interface::misc::{int_to_hex64, str_to_int_def};
 use xedit_core::interface::string::to_comma_text;
 use xedit_core::interface::*;
 
-use crate::common::{wb_idx_collision_layer, wb_package_schedule_month_enum};
+use crate::common::{wb_idx_addon_node, wb_idx_collision_layer, wb_package_schedule_month_enum};
 
 pub use super::common_stubs::*;
 
@@ -2690,4 +2690,27 @@ pub fn wb_object_property_to_str(
         return;
     };
     a_value.push_str(&format!(" {{Curve Table: {}}}", main_record.get_short_name()));
+}
+
+/// Upstream anonymous routine at line 8545 of `wbDefinitionsCommon.pas`: the
+/// `ADDN` record with the addon node index.
+pub fn wb_model_info_anonymous_8545(a_element: ElementArg) -> Option<ElementRef> {
+    let element = a_element?;
+    let index = element.get_native_value().as_ordinal()?;
+    let file = element.get_file()?;
+    file.get_record_from_index_by_key(wb_idx_addon_node(), &index.to_string())
+        .map(|record| record as ElementRef)
+}
+
+/// Upstream anonymous routine at line 8585 of `wbDefinitionsCommon.pas`: the
+/// check text of model information in the wrong format.
+pub fn wb_model_info_anonymous_8585(
+    a_value: &mut String,
+    _a_base_ptr: DataPtr,
+    _a_element: ElementArg,
+    a_type: CallbackType,
+) {
+    if a_type == CallbackType::ctCheck {
+        *a_value = "SubRecord has invalid format for the Form Version of this record".to_owned();
+    }
 }
