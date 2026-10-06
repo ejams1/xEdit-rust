@@ -8,6 +8,11 @@ use clap::{Parser, Subcommand};
 use serde_json::{Value, json};
 use xedit_session::{CommandError, Registry, Session};
 
+/// The dump allocates and frees millions of small strings and element
+/// nodes; mimalloc serves them faster than the Windows heap.
+#[global_allocator]
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
+
 /// xEdit command-line interface.
 #[derive(Parser)]
 #[command(name = "xedit", version)]
