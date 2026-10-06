@@ -459,6 +459,17 @@ pub fn set_header_signature(value: Signature) {
     *HEADER_SIGNATURE.write().unwrap() = value;
 }
 
+/// Upstream `wbCellSizeFactor`: the size of an exterior cell in units.
+static CELL_SIZE_FACTOR: RwLock<f64> = RwLock::new(4096.0);
+
+pub fn cell_size_factor() -> f64 {
+    *CELL_SIZE_FACTOR.read().unwrap()
+}
+
+pub fn set_cell_size_factor(value: f64) {
+    *CELL_SIZE_FACTOR.write().unwrap() = value;
+}
+
 static HEDR_VERSION: RwLock<f64> = RwLock::new(1.0);
 
 /// Upstream `wbHEDRVersion`: the version the file header of the game has.

@@ -10,6 +10,8 @@
 
 #![allow(clippy::all, unused_variables, unused_imports)]
 
+use std::sync::Arc;
+
 use xedit_core::interface::*;
 
 /// Upstream `wbACBSLevelMultAfterLoad`, line 39 of `wbDefinitionsCommon.pas`.
@@ -47,6 +49,16 @@ pub fn wb_condition_type_after_set(_a_element: &ElementRef, _a_old_value: &Varia
     todo!("port wbConditionTypeAfterSet from wbDefinitionsCommon.pas line 56")
 }
 
+/// Upstream `wbCrowdPropertyToStr`, line 238 of `wbDefinitionsCommon.pas`.
+pub fn wb_crowd_property_to_str(
+    _a_value: &mut String,
+    _a_base_ptr: DataPtr,
+    _a_element: ElementArg,
+    _a_type: CallbackType,
+) {
+    todo!("port wbCrowdPropertyToStr from wbDefinitionsCommon.pas line 238")
+}
+
 /// Upstream `wbDialogueTextAfterLoad`, line 41 of `wbDefinitionsCommon.pas`.
 pub fn wb_dialogue_text_after_load(_a_element: &ElementRef) {
     todo!("port wbDialogueTextAfterLoad from wbDefinitionsCommon.pas line 41")
@@ -62,6 +74,16 @@ pub fn wb_dobj_objects_after_load(_a_element: &ElementRef) {
     todo!("port wbDOBJObjectsAfterLoad from wbDefinitionsCommon.pas line 42")
 }
 
+/// Upstream `wbFlagNavmeshIgnoreErosionDontSHow`, line 87 of `wbDefinitionsCommon.pas`.
+pub fn wb_flag_navmesh_ignore_erosion_dont_s_how(_a_element: ElementArg) -> bool {
+    todo!("port wbFlagNavmeshIgnoreErosionDontSHow from wbDefinitionsCommon.pas line 87")
+}
+
+/// Upstream `wbFlagNavmeshOnlyCutDontSHow`, line 86 of `wbDefinitionsCommon.pas`.
+pub fn wb_flag_navmesh_only_cut_dont_s_how(_a_element: ElementArg) -> bool {
+    todo!("port wbFlagNavmeshOnlyCutDontSHow from wbDefinitionsCommon.pas line 86")
+}
+
 /// Upstream `wbIdleMarkerPNAMAfterSet`, line 59 of `wbDefinitionsCommon.pas`.
 pub fn wb_idle_marker_pnam_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
     todo!("port wbIdleMarkerPNAMAfterSet from wbDefinitionsCommon.pas line 59")
@@ -70,6 +92,11 @@ pub fn wb_idle_marker_pnam_after_set(_a_element: &ElementRef, _a_old_value: &Var
 /// Upstream `wbIdleMarkerQNAMAfterSet`, line 60 of `wbDefinitionsCommon.pas`.
 pub fn wb_idle_marker_qnam_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
     todo!("port wbIdleMarkerQNAMAfterSet from wbDefinitionsCommon.pas line 60")
+}
+
+/// Upstream `wbINFOAliasToStr`, line 211 of `wbDefinitionsCommon.pas`.
+pub fn wb_info_alias_to_str(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) -> String {
+    todo!("port wbINFOAliasToStr from wbDefinitionsCommon.pas line 211")
 }
 
 /// Upstream `wbIntPrefixedStrToInt`, line 184 of `wbDefinitionsCommon.pas`.
@@ -102,6 +129,26 @@ pub fn wb_mesgdnam_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a
     todo!("port wbMESGDNAMAfterSet from wbDefinitionsCommon.pas line 61")
 }
 
+/// Upstream `wbNPCFaceDialLinksTo`, line 154 of `wbDefinitionsCommon.pas`.
+pub fn wb_npc_face_dial_links_to(_a_element: ElementArg) -> Option<ElementRef> {
+    todo!("port wbNPCFaceDialLinksTo from wbDefinitionsCommon.pas line 154")
+}
+
+/// Upstream `wbNPCFaceDialToStr`, line 213 of `wbDefinitionsCommon.pas`.
+pub fn wb_npc_face_dial_to_str(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) -> String {
+    todo!("port wbNPCFaceDialToStr from wbDefinitionsCommon.pas line 213")
+}
+
+/// Upstream `wbNPCFaceMorphLinksTo`, line 155 of `wbDefinitionsCommon.pas`.
+pub fn wb_npc_face_morph_links_to(_a_element: ElementArg) -> Option<ElementRef> {
+    todo!("port wbNPCFaceMorphLinksTo from wbDefinitionsCommon.pas line 155")
+}
+
+/// Upstream `wbNPCFaceMorphToStr`, line 214 of `wbDefinitionsCommon.pas`.
+pub fn wb_npc_face_morph_to_str(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) -> String {
+    todo!("port wbNPCFaceMorphToStr from wbDefinitionsCommon.pas line 214")
+}
+
 /// Upstream `wbPACKDateAfterLoad`, line 44 of `wbDefinitionsCommon.pas`.
 pub fn wb_pack_date_after_load(_a_element: &ElementRef) {
     todo!("port wbPACKDateAfterLoad from wbDefinitionsCommon.pas line 44")
@@ -115,6 +162,16 @@ pub fn wb_pack_date_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _
 /// Upstream `wbPERKPRKETypeAfterSet`, line 63 of `wbDefinitionsCommon.pas`.
 pub fn wb_perkprke_type_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
     todo!("port wbPERKPRKETypeAfterSet from wbDefinitionsCommon.pas line 63")
+}
+
+/// Upstream `wbPERKPRUCAfterSet`, line 64 of `wbDefinitionsCommon.pas`.
+pub fn wb_perkpruc_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
+    todo!("port wbPERKPRUCAfterSet from wbDefinitionsCommon.pas line 64")
+}
+
+/// Upstream `wbPNDTAfterLoad`, line 45 of `wbDefinitionsCommon.pas`.
+pub fn wb_pndt_after_load(_a_element: &ElementRef) {
+    todo!("port wbPNDTAfterLoad from wbDefinitionsCommon.pas line 45")
 }
 
 /// Upstream `wbRecipeCategoryDataAfterLoad`, line 46 of `wbDefinitionsCommon.pas`.
@@ -179,4 +236,18 @@ pub fn wb_world_after_load(_a_element: &ElementRef) {
 /// Upstream `wbWorldAfterSet`, line 69 of `wbDefinitionsCommon.pas`.
 pub fn wb_world_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
     todo!("port wbWorldAfterSet from wbDefinitionsCommon.pas line 69")
+}
+
+/// Upstream `wbWwiseKeywordMappingSoundDecider`, line 282 of `wbDefinitionsCommon.pas`.
+pub fn wb_wwise_keyword_mapping_sound_decider(_a_base_ptr: DataPtr, _a_element: ElementArg) -> i32 {
+    todo!("port wbWwiseKeywordMappingSoundDecider from wbDefinitionsCommon.pas line 282")
+}
+
+/// Upstream `wbWwiseKeywordMappingTemplateAfterSet`, line 70 of `wbDefinitionsCommon.pas`.
+pub fn wb_wwise_keyword_mapping_template_after_set(
+    _a_element: &ElementRef,
+    _a_old_value: &Variant,
+    _a_new_value: &Variant,
+) {
+    todo!("port wbWwiseKeywordMappingTemplateAfterSet from wbDefinitionsCommon.pas line 70")
 }
