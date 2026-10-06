@@ -27,21 +27,6 @@ pub fn wb_lgdi_slot_def_anonymous_7802(_a_base_ptr: DataPtr, _a_element: Element
     todo!("port anonymous routine in wb_lgdi_slot_def from wbDefinitionsCommon.pas line 7802")
 }
 
-/// Upstream `anonymous routine in wb_model_info`, line 8545 of `wbDefinitionsCommon.pas`.
-pub fn wb_model_info_anonymous_8545(_a_element: ElementArg) -> Option<ElementRef> {
-    todo!("port anonymous routine in wb_model_info from wbDefinitionsCommon.pas line 8545")
-}
-
-/// Upstream `anonymous routine in wb_model_info`, line 8585 of `wbDefinitionsCommon.pas`.
-pub fn wb_model_info_anonymous_8585(
-    _a_value: &mut String,
-    _a_base_ptr: DataPtr,
-    _a_element: ElementArg,
-    _a_type: CallbackType,
-) {
-    todo!("port anonymous routine in wb_model_info from wbDefinitionsCommon.pas line 8585")
-}
-
 /// Upstream `wbRPLDAfterLoad`, line 47 of `wbDefinitionsCommon.pas`.
 pub fn wb_rpld_after_load(_a_element: &ElementRef) {
     todo!("port wbRPLDAfterLoad from wbDefinitionsCommon.pas line 47")
