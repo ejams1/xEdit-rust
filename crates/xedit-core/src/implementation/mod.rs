@@ -101,7 +101,7 @@ pub mod value;
 
 use std::collections::HashMap;
 use std::path::Path;
-use std::sync::atomic::{AtomicI32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use std::sync::{Arc, OnceLock, RwLock, Weak};
 
 use xedit_io::{Encoding, MappedFile};
@@ -177,12 +177,18 @@ impl InitOnce {
         self.0.store(Self::DONE, Ordering::Release);
     }
 
+    /// Whether an init runs (`csInit`).
+    pub fn is_running(&self) -> bool {
+        self.0.load(Ordering::Acquire) == Self::RUNNING
+    }
+
     /// Port of the `csInitDone` removal in `DoReset`: the next `run` builds
-    /// again. Nothing happens while an init runs.
-    pub fn reset(&self) {
-        let _ = self
-            .0
-            .compare_exchange(Self::DONE, Self::NOT_STARTED, Ordering::AcqRel, Ordering::Acquire);
+    /// again. Nothing happens while an init runs or before one ran; returns
+    /// whether a finished init was reset.
+    pub fn reset(&self) -> bool {
+        self.0
+            .compare_exchange(Self::DONE, Self::NOT_STARTED, Ordering::AcqRel, Ordering::Acquire)
+            .is_ok()
     }
 }
 
@@ -1129,6 +1135,44 @@ fn player_reference_group() -> Vec<u8> {
 type PrecombinedCache = Option<(FormID, String, Vec<(u32, u32)>)>;
 static PRECOMBINED_CACHE: std::sync::Mutex<PrecombinedCache> = std::sync::Mutex::new(None);
 
+/// The main records in the order their subrecords were built, with the
+/// count of the build. Delphi resets a record when its last
+/// `IwbContainerElementRef` goes away, so a record that a callback reads
+/// (a navmesh an edge of another navmesh links to) does not keep its
+/// subrecords. The port has no such count and resets the records built
+/// longest ago instead, at the points where nothing holds their elements
+/// (`trim_initialized_records`).
+static INITIALIZED_RECORDS: std::sync::Mutex<std::collections::VecDeque<(Weak<MainRecordImpl>, u32)>> =
+    std::sync::Mutex::new(std::collections::VecDeque::new());
+
+/// Resets the main records whose subrecords were built longest ago until at
+/// most `keep` builds remain, except `except`, which stays built. Call it
+/// only where no element of another main record is held, such as between
+/// two elements of a dump: a reset record gives up its elements and builds
+/// them again on the next use.
+pub fn trim_initialized_records(keep: usize, except: Option<&Arc<MainRecordImpl>>) {
+    let expired: Vec<(Weak<MainRecordImpl>, u32)> = {
+        let mut records = INITIALIZED_RECORDS.lock().unwrap();
+        if records.len() <= keep {
+            return;
+        }
+        let excess = records.len() - keep;
+        records.drain(..excess).collect()
+    };
+    for (record, build) in expired {
+        let Some(record) = record.upgrade() else { continue };
+        if except.is_some_and(|except| Arc::ptr_eq(except, &record)) {
+            INITIALIZED_RECORDS
+                .lock()
+                .unwrap()
+                .push_back((Arc::downgrade(&record), build));
+        } else if record.mr_builds.load(Ordering::Relaxed) == build {
+            // A record built again since this entry has a newer entry.
+            record.reset();
+        }
+    }
+}
+
 /// Port of `StrRight`: the text padded on the left with spaces to `len`.
 fn str_right(text: &str, len: usize) -> String {
     format!("{text:>len$}")
@@ -1465,6 +1509,13 @@ fn compare_group_contents(a: &ElementRef, b: &ElementRef) -> std::cmp::Ordering 
     result
 }
 
+/// The state of the decompressed data of a compressed record.
+enum DataStorage {
+    Unloaded,
+    Loaded(Arc<Vec<u8>>),
+    Failed,
+}
+
 /// Port of `TwbMainRecord`, as far as the structure of the record goes.
 pub struct MainRecordImpl {
     self_ref: Weak<MainRecordImpl>,
@@ -1477,12 +1528,21 @@ pub struct MainRecordImpl {
     /// The range of the record data in the file, after the header.
     dc_data_base: usize,
     dc_data_end: usize,
-    /// The decompressed data of a compressed record, decompressed on first use.
-    mr_data_storage: OnceLock<Option<Arc<Vec<u8>>>>,
+    /// Port of `mrDataStorage`: the decompressed data of a compressed
+    /// record, decompressed on first use and released by `reset`.
+    mr_data_storage: std::sync::Mutex<DataStorage>,
+    /// The decompressed data lent out by `data`, which `reset` cannot take
+    /// back while the borrow lives; kept for the life of the record.
+    mr_pinned_data: OnceLock<Option<Arc<Vec<u8>>>>,
     /// Port of `DoInit`: the subrecords are built on first use.
     mr_init: InitOnce,
     mr_editor_id: RwLock<String>,
     mr_full_name: RwLock<String>,
+    /// Port of `mrsQuickInitDone` and `csInitOnce`: the subrecords were
+    /// built once, so the names are known after a reset.
+    mr_names_known: AtomicBool,
+    /// The number of times the subrecords were built.
+    mr_builds: std::sync::atomic::AtomicU32,
     /// Port of `mrMaster` and `mrOverrides`.
     mr_master: RwLock<Option<Weak<MainRecordImpl>>>,
     mr_overrides: RwLock<Vec<Weak<MainRecordImpl>>>,
@@ -1533,10 +1593,13 @@ impl MainRecordImpl {
             mr_def,
             dc_data_base,
             dc_data_end,
-            mr_data_storage: OnceLock::new(),
+            mr_data_storage: std::sync::Mutex::new(DataStorage::Unloaded),
+            mr_pinned_data: OnceLock::new(),
             mr_init: InitOnce::new(),
             mr_editor_id: RwLock::new(String::new()),
             mr_full_name: RwLock::new(String::new()),
+            mr_names_known: AtomicBool::new(false),
+            mr_builds: std::sync::atomic::AtomicU32::new(0),
             mr_master: RwLock::new(None),
             mr_overrides: RwLock::new(Vec::new()),
             mr_fixed_form_id: OnceLock::new(),
@@ -1577,8 +1640,35 @@ impl MainRecordImpl {
 
     /// Port of `GetFullName`, read while the subrecords are built.
     pub fn get_full_name(&self) -> String {
-        self.self_arc().do_init();
+        if self.can_have(KnownSubRecord::ksrFullName) {
+            self.self_arc().quick_init();
+        }
         self.mr_full_name.read().unwrap().clone()
+    }
+
+    /// Port of `GetCanHaveEditorID` and `GetCanHaveFullName`.
+    fn can_have(&self, known: KnownSubRecord) -> bool {
+        self.mr_def
+            .as_ref()
+            .is_some_and(|def| def.get_contains_known_sub_record(known))
+    }
+
+    /// Port of the quick init of `GetEditorID` and `GetFullName`: a record
+    /// whose subrecords were never built builds them to read its names and
+    /// resets at once (`DoReset(True)`), so that a record read only for its
+    /// name does not keep its subrecords. The names stay cached
+    /// (`mrsQuickInitDone`, `csInitOnce`).
+    /// UPSTREAM-QUIRK: upstream builds only the subrecords up to
+    /// `QuickInitLimit`; the port builds all of them, which reads the same
+    /// names. While the record's own init runs, upstream returns `<EditorID
+    /// not yet available: init still running>`; the port returns the names
+    /// read so far, as it did before the quick init was ported.
+    fn quick_init(self: &Arc<Self>) {
+        if self.mr_names_known.load(Ordering::Acquire) || self.mr_init.is_running() {
+            return;
+        }
+        self.do_init();
+        self.reset();
     }
 
     /// Port of `FixedFormID`. The hardcoded range of the game master is
@@ -1765,9 +1855,15 @@ impl MainRecordImpl {
     /// Port of `DoInit`: builds the subrecords once.
     pub fn do_init(self: &Arc<Self>) {
         self.mr_init.run(|| {
+            let build = self.mr_builds.fetch_add(1, Ordering::Relaxed) + 1;
+            INITIALIZED_RECORDS
+                .lock()
+                .unwrap()
+                .push_back((Arc::downgrade(self), build));
             self.create_contained_in();
             self.create_record_header();
             sub_record::init_main_record(self);
+            self.mr_names_known.store(true, Ordering::Release);
             // Port of the `wbRemoveOffsetData` step of `TwbMainRecord.Init`:
             // the offsets of a worldspace are dropped.
             if remove_offset_data() && self.mr_struct.signature == Signature::new(b"WRLD") {
@@ -1787,11 +1883,20 @@ impl MainRecordImpl {
     /// subrecords built by `do_init` are released and the next use builds
     /// them again. In Delphi this runs when the last `IwbContainerElementRef`
     /// of the record goes away, which keeps the memory of a dump bounded to
-    /// one record at a time. The decompressed data stays: the elements borrow
-    /// it, so it cannot be reset without them.
+    /// one record at a time. The decompressed data is released as upstream
+    /// `mrDataStorage`; elements that outlive the reset keep their own
+    /// reference to it.
     pub fn reset(&self) {
+        // A record whose init runs keeps its elements and data.
+        if self.mr_init.is_running() {
+            return;
+        }
         self.container.release_elements();
         self.mr_init.reset();
+        let mut storage = self.mr_data_storage.lock().unwrap();
+        if matches!(*storage, DataStorage::Loaded(_)) {
+            *storage = DataStorage::Unloaded;
+        }
     }
 
     /// Port of the `TwbContainedInElement` creation in `TwbMainRecord.Init`:
@@ -1871,41 +1976,76 @@ impl MainRecordImpl {
             .expect("a main record is alive while it is used")
     }
 
+    /// The record data as stored in the file, after the header.
+    fn raw_data(&self) -> DataPtr<'_> {
+        self.bytes.as_slice().get(self.dc_data_base..self.dc_data_end)
+    }
+
+    /// Port of `DecompressIfNeeded` for a compressed record: the
+    /// decompressed data, `None` when the decompression fails. A failure
+    /// is reported once and stays.
+    fn decompressed(&self) -> Option<Arc<Vec<u8>>> {
+        let mut storage = self.mr_data_storage.lock().unwrap();
+        match &*storage {
+            DataStorage::Loaded(data) => return Some(data.clone()),
+            DataStorage::Failed => return None,
+            DataStorage::Unloaded => {}
+        }
+        let decompressed = (|| {
+            let raw = self.raw_data()?;
+            let uncompressed_length = u32::from_le_bytes(raw.get(..4)?.try_into().ok()?) as usize;
+            if uncompressed_length == 0 {
+                return Some(Arc::new(Vec::new()));
+            }
+            let mut data = vec![0u8; uncompressed_length];
+            match xedit_io::CompressionType::ZLib.decompress(raw.get(4..)?, &mut data) {
+                Ok(()) => Some(Arc::new(data)),
+                Err(error) => {
+                    progress(&format!(
+                        "<Error decompressing [{}:{}]: {error}>",
+                        self.mr_struct.signature,
+                        self.mr_struct.form_id.to_string(false)
+                    ));
+                    None
+                }
+            }
+        })();
+        *storage = match &decompressed {
+            Some(data) => DataStorage::Loaded(data.clone()),
+            None => DataStorage::Failed,
+        };
+        decompressed
+    }
+
     /// Port of `DecompressIfNeeded`: the record data, decompressed when the
-    /// record is compressed. `None` when the decompression fails.
+    /// record is compressed. `None` when the decompression fails. The
+    /// decompressed data of a borrow stays for the life of the record; the
+    /// element tree reads it through `data_block`, which `reset` releases.
     pub fn data(&self) -> DataPtr<'_> {
-        let raw = self.bytes.as_slice().get(self.dc_data_base..self.dc_data_end)?;
+        let raw = self.raw_data()?;
         if !self.mr_struct.flags.is_compressed() {
             return Some(raw);
         }
-        self.mr_data_storage
-            .get_or_init(|| {
-                let uncompressed_length = u32::from_le_bytes(raw.get(..4)?.try_into().ok()?) as usize;
-                if uncompressed_length == 0 {
-                    return Some(Arc::new(Vec::new()));
-                }
-                let mut storage = vec![0u8; uncompressed_length];
-                match xedit_io::CompressionType::ZLib.decompress(raw.get(4..)?, &mut storage) {
-                    Ok(()) => Some(Arc::new(storage)),
-                    Err(error) => {
-                        progress(&format!(
-                            "<Error decompressing [{}:{}]: {error}>",
-                            self.mr_struct.signature,
-                            self.mr_struct.form_id.to_string(false)
-                        ));
-                        None
-                    }
-                }
-            })
+        self.mr_pinned_data
+            .get_or_init(|| self.decompressed())
             .as_deref()
             .map(Vec::as_slice)
+    }
+
+    /// The size of the record data, decompressed when the record is
+    /// compressed.
+    fn data_len(&self) -> Option<usize> {
+        if self.mr_struct.flags.is_compressed() {
+            self.decompressed().map(|data| data.len())
+        } else {
+            self.raw_data().map(<[u8]>::len)
+        }
     }
 
     /// The block the data of the record lives in, with the data range.
     pub(crate) fn data_block(&self) -> Option<(DataBlock, usize, usize)> {
         if self.mr_struct.flags.is_compressed() {
-            self.data()?;
-            let storage = self.mr_data_storage.get()?.clone()?;
+            let storage = self.decompressed()?;
             let len = storage.len();
             Some((DataBlock::Buffer(storage), 0, len))
         } else {
@@ -2363,7 +2503,7 @@ impl Element for MainRecordImpl {
     }
 
     fn get_data_size(&self) -> i32 {
-        self.data().map_or(0, |data| data.len() as i32)
+        self.data_len().map_or(0, |len| len as i32)
     }
 
     fn get_element_type(&self) -> ElementType {
@@ -2527,7 +2667,9 @@ impl MainRecord for MainRecordImpl {
     }
 
     fn get_editor_id(&self) -> String {
-        self.self_arc().do_init();
+        if self.can_have(KnownSubRecord::ksrEditorID) {
+            self.self_arc().quick_init();
+        }
         self.mr_editor_id.read().unwrap().clone()
     }
 
