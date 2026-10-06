@@ -17,24 +17,9 @@ pub fn define_tes5_anonymous_4890(_a_element: &ElementRef, _a_old_value: &Varian
     todo!("port anonymous routine in define_tes5 from wbDefinitionsTES5.pas line 4890")
 }
 
-/// Upstream `anonymous routine in define_tes5`, line 6171 of `wbDefinitionsTES5.pas`.
-pub fn define_tes5_anonymous_6171(_a_main_record: &MainRecordRef, _a_index_keys: &mut IndexKeys) {
-    todo!("port anonymous routine in define_tes5 from wbDefinitionsTES5.pas line 6171")
-}
-
 /// Upstream `anonymous routine in define_tes5`, line 6207 of `wbDefinitionsTES5.pas`.
 pub fn define_tes5_anonymous_6207(_a_element: ElementArg) -> bool {
     todo!("port anonymous routine in define_tes5 from wbDefinitionsTES5.pas line 6207")
-}
-
-/// Upstream `anonymous routine in define_tes5`, line 7697 of `wbDefinitionsTES5.pas`.
-pub fn define_tes5_anonymous_7697(_a_main_record: &MainRecordRef, _a_index_keys: &mut IndexKeys) {
-    todo!("port anonymous routine in define_tes5 from wbDefinitionsTES5.pas line 7697")
-}
-
-/// Upstream `anonymous routine in define_tes5`, line 9854 of `wbDefinitionsTES5.pas`.
-pub fn define_tes5_anonymous_9854(_a_element: ElementArg) -> Option<ElementRef> {
-    todo!("port anonymous routine in define_tes5 from wbDefinitionsTES5.pas line 9854")
 }
 
 /// Upstream `wbACBSLevelMultAfterLoad`, line 39 of `wbDefinitionsTES5.pas`.
@@ -120,51 +105,6 @@ pub fn wb_dialogue_text_after_set(_a_element: &ElementRef, _a_old_value: &Varian
 /// Upstream `wbDOBJObjectsAfterLoad`, line 42 of `wbDefinitionsTES5.pas`.
 pub fn wb_dobj_objects_after_load(_a_element: &ElementRef) {
     todo!("port wbDOBJObjectsAfterLoad from wbDefinitionsTES5.pas line 42")
-}
-
-/// Upstream `wbEdgeLinksTo0`, line 151 of `wbDefinitionsTES5.pas`.
-pub fn wb_edge_links_to0(_a_element: ElementArg) -> Option<ElementRef> {
-    todo!("port wbEdgeLinksTo0 from wbDefinitionsTES5.pas line 151")
-}
-
-/// Upstream `wbEdgeLinksTo1`, line 152 of `wbDefinitionsTES5.pas`.
-pub fn wb_edge_links_to1(_a_element: ElementArg) -> Option<ElementRef> {
-    todo!("port wbEdgeLinksTo1 from wbDefinitionsTES5.pas line 152")
-}
-
-/// Upstream `wbEdgeLinksTo2`, line 153 of `wbDefinitionsTES5.pas`.
-pub fn wb_edge_links_to2(_a_element: ElementArg) -> Option<ElementRef> {
-    todo!("port wbEdgeLinksTo2 from wbDefinitionsTES5.pas line 153")
-}
-
-/// Upstream `wbEdgeToInt0`, line 181 of `wbDefinitionsTES5.pas`.
-pub fn wb_edge_to_int0(_a_string: &str, _a_element: ElementArg) -> i64 {
-    todo!("port wbEdgeToInt0 from wbDefinitionsTES5.pas line 181")
-}
-
-/// Upstream `wbEdgeToInt1`, line 182 of `wbDefinitionsTES5.pas`.
-pub fn wb_edge_to_int1(_a_string: &str, _a_element: ElementArg) -> i64 {
-    todo!("port wbEdgeToInt1 from wbDefinitionsTES5.pas line 182")
-}
-
-/// Upstream `wbEdgeToInt2`, line 183 of `wbDefinitionsTES5.pas`.
-pub fn wb_edge_to_int2(_a_string: &str, _a_element: ElementArg) -> i64 {
-    todo!("port wbEdgeToInt2 from wbDefinitionsTES5.pas line 183")
-}
-
-/// Upstream `wbEdgeToStr0`, line 205 of `wbDefinitionsTES5.pas`.
-pub fn wb_edge_to_str0(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) -> String {
-    todo!("port wbEdgeToStr0 from wbDefinitionsTES5.pas line 205")
-}
-
-/// Upstream `wbEdgeToStr1`, line 206 of `wbDefinitionsTES5.pas`.
-pub fn wb_edge_to_str1(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) -> String {
-    todo!("port wbEdgeToStr1 from wbDefinitionsTES5.pas line 206")
-}
-
-/// Upstream `wbEdgeToStr2`, line 207 of `wbDefinitionsTES5.pas`.
-pub fn wb_edge_to_str2(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) -> String {
-    todo!("port wbEdgeToStr2 from wbDefinitionsTES5.pas line 207")
 }
 
 /// Upstream `wbEFITAfterLoad`, line 1860 of `wbDefinitionsTES5.pas`.
@@ -279,36 +219,6 @@ pub fn wb_scroll_type_after_load(_a_element: &ElementRef) {
 /// Upstream `wbUpdateSameParentUnions`, line 68 of `wbDefinitionsTES5.pas`.
 pub fn wb_update_same_parent_unions(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
     todo!("port wbUpdateSameParentUnions from wbDefinitionsTES5.pas line 68")
-}
-
-/// Upstream `wbVertexToInt0`, line 189 of `wbDefinitionsTES5.pas`.
-pub fn wb_vertex_to_int0(_a_string: &str, _a_element: ElementArg) -> i64 {
-    todo!("port wbVertexToInt0 from wbDefinitionsTES5.pas line 189")
-}
-
-/// Upstream `wbVertexToInt1`, line 190 of `wbDefinitionsTES5.pas`.
-pub fn wb_vertex_to_int1(_a_string: &str, _a_element: ElementArg) -> i64 {
-    todo!("port wbVertexToInt1 from wbDefinitionsTES5.pas line 190")
-}
-
-/// Upstream `wbVertexToInt2`, line 191 of `wbDefinitionsTES5.pas`.
-pub fn wb_vertex_to_int2(_a_string: &str, _a_element: ElementArg) -> i64 {
-    todo!("port wbVertexToInt2 from wbDefinitionsTES5.pas line 191")
-}
-
-/// Upstream `wbVertexToStr0`, line 223 of `wbDefinitionsTES5.pas`.
-pub fn wb_vertex_to_str0(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) -> String {
-    todo!("port wbVertexToStr0 from wbDefinitionsTES5.pas line 223")
-}
-
-/// Upstream `wbVertexToStr1`, line 224 of `wbDefinitionsTES5.pas`.
-pub fn wb_vertex_to_str1(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) -> String {
-    todo!("port wbVertexToStr1 from wbDefinitionsTES5.pas line 224")
-}
-
-/// Upstream `wbVertexToStr2`, line 225 of `wbDefinitionsTES5.pas`.
-pub fn wb_vertex_to_str2(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) -> String {
-    todo!("port wbVertexToStr2 from wbDefinitionsTES5.pas line 225")
 }
 
 /// Upstream `wbWEAPAfterLoad`, line 1686 of `wbDefinitionsTES5.pas`.

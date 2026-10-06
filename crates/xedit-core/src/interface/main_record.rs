@@ -37,11 +37,97 @@ pub type MainRecordGetEditorIDCallback = Arc<dyn Fn(&ElementRef) -> String + Sen
 /// Gives the grid cell from the subrecord that holds it.
 pub type MainRecordGetGridCellCallback = Arc<dyn Fn(&ElementRef) -> Option<GridCell> + Send + Sync>;
 
-/// Upstream `TwbIndexKeys`. The index keys are not ported yet; the
-/// definitions set their callbacks and nothing calls them.
+/// Upstream `_NamedIndices`: the names of the record indices, by index,
+/// with whether their keys compare case sensitively.
+static NAMED_INDICES: RwLock<Vec<(String, bool)>> = RwLock::new(Vec::new());
+
+/// Port of `wbNamedIndex`: the index of the name, registered on first use.
+/// The names compare ignoring case.
+pub fn wb_named_index(name: &str, case_sensitive: bool) -> i32 {
+    let mut indices = NAMED_INDICES.write().unwrap();
+    if let Some(index) = indices.iter().position(|(known, _)| known.eq_ignore_ascii_case(name)) {
+        return index as i32;
+    }
+    indices.push((name.to_owned(), case_sensitive));
+    (indices.len() - 1) as i32
+}
+
+/// Port of `wbNamedIndexName`.
+pub fn named_index_name(index: i32) -> String {
+    usize::try_from(index)
+        .ok()
+        .and_then(|index| NAMED_INDICES.read().unwrap().get(index).map(|(name, _)| name.clone()))
+        .unwrap_or_default()
+}
+
+/// Port of `wbNamedIndexComparer`: the key as the index compares it; the
+/// keys of an index that ignores case are kept in lower case.
+pub fn named_index_key(index: i32, key: &str) -> String {
+    let case_sensitive = usize::try_from(index)
+        .ok()
+        .and_then(|index| {
+            NAMED_INDICES
+                .read()
+                .unwrap()
+                .get(index)
+                .map(|(_, case_sensitive)| *case_sensitive)
+        })
+        .unwrap_or(true);
+    if case_sensitive {
+        key.to_owned()
+    } else {
+        key.to_lowercase()
+    }
+}
+
+/// Upstream `wbIdxEditorID`: the index of the editor IDs.
+pub fn idx_editor_id() -> i32 {
+    wb_named_index("EditorID", false)
+}
+
+/// Upstream `TwbIndexKeys`: the key of a record in each named index.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct IndexKeys {
-    pub keys: Vec<String>,
+    keys: Vec<String>,
+}
+
+impl IndexKeys {
+    /// Port of `SetKey`: an empty value past the end is not stored.
+    pub fn set_key(&mut self, index: i32, value: &str) {
+        let Ok(index) = usize::try_from(index) else { return };
+        if index >= NAMED_INDICES.read().unwrap().len() {
+            return;
+        }
+        if index >= self.keys.len() {
+            if value.is_empty() {
+                return;
+            }
+            self.keys.resize(index + 1, String::new());
+        }
+        self.keys[index] = value.to_owned();
+    }
+
+    /// Port of `GetKey`.
+    pub fn get_key(&self, index: i32) -> String {
+        usize::try_from(index)
+            .ok()
+            .and_then(|index| self.keys.get(index).cloned())
+            .unwrap_or_default()
+    }
+
+    /// Port of `GetDefinedKeys`: the (index, key) pairs that are set.
+    pub fn defined_keys(&self) -> Vec<(i32, String)> {
+        self.keys
+            .iter()
+            .enumerate()
+            .filter(|(_, key)| !key.is_empty())
+            .map(|(index, key)| (index as i32, key.clone()))
+            .collect()
+    }
+
+    pub fn clear(&mut self) {
+        self.keys.clear();
+    }
 }
 
 /// Upstream `TwbBuildIndexKeysCallback`.
@@ -516,12 +602,23 @@ impl MainRecordDef {
         }
     }
 
-    /// Port of `SetBuildIndexKeys`. The callback is kept for the index keys,
-    /// which are not ported yet.
+    /// Port of `SetBuildIndexKeys`.
     pub fn set_build_index_keys(self: Arc<Self>, callback: Option<BuildIndexKeysCallback>) -> Arc<Self> {
         let this = self.unlocked();
         this.rec_build_index_keys.set(callback);
         this
+    }
+
+    /// Port of `TwbMainRecordDef.BuildIndexKeys`: runs the callback of the
+    /// definition; true when there is one.
+    pub fn build_index_keys(&self, main_record: &MainRecordRef, keys: &mut IndexKeys) -> bool {
+        match self.rec_build_index_keys.load().as_deref() {
+            Some(callback) => {
+                callback(main_record, keys);
+                true
+            }
+            None => false,
+        }
     }
 
     pub fn set_add_info(self: Arc<Self>, add_info: Option<AddInfoCallback>) -> Arc<Self> {

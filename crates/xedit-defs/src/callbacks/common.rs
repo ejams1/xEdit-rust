@@ -20,11 +20,11 @@ use xedit_core::interface::globals::{
     GameMode, cs, game_mode, is_fallout_nv, is_fallout3, is_fallout76, is_morrowind, is_oblivion, is_skyrim,
     is_starfield, resolve_alias,
 };
-use xedit_core::interface::misc::int_to_hex64;
+use xedit_core::interface::misc::{int_to_hex64, str_to_int_def};
 use xedit_core::interface::string::to_comma_text;
 use xedit_core::interface::*;
 
-use crate::common::wb_package_schedule_month_enum;
+use crate::common::{wb_idx_collision_layer, wb_package_schedule_month_enum};
 
 pub use super::common_stubs::*;
 
@@ -2361,15 +2361,31 @@ pub fn wb_quest_stage_to_int(a_string: &str, _a_element: ElementArg) -> i64 {
 /// Upstream `wbQUSTEventToStr`: warns about a quest the story manager
 /// does not know.
 ///
-/// UPSTREAM-QUIRK: upstream looks through the references to the quest,
-/// which only exist after the references are built; the dump does not
-/// build them, so the text is never added.
-pub fn wb_qust_event_to_str(
-    _a_value: &mut String,
-    _a_base_ptr: DataPtr,
-    _a_element: ElementArg,
-    _a_type: CallbackType,
-) {
+/// UPSTREAM-QUIRK: upstream looks for an `SMQN` among the references to the
+/// quest. The references are only built on request, which the dump never
+/// does, so the quest is never found and the warning always applies, as
+/// the oracle prints it.
+pub fn wb_qust_event_to_str(a_value: &mut String, _a_base_ptr: DataPtr, a_element: ElementArg, a_type: CallbackType) {
+    let Some(element) = a_element else { return };
+    let Some(main_record) = element.get_containing_main_record() else {
+        return;
+    };
+    match a_type {
+        CallbackType::ctCheck => {
+            *a_value = format!(
+                "<Warning: {} has not been added to the story manager>",
+                main_record.get_short_name()
+            );
+        }
+        CallbackType::ctToStr => {
+            *a_value = format!(
+                "{}<Warning: {} has not been added to the story manager>",
+                element.get_edit_value(),
+                main_record.get_short_name()
+            );
+        }
+        _ => {}
+    }
 }
 
 /// Upstream `wbTriangleLinksTo`: the triangle of the navmesh at the index.
@@ -2398,4 +2414,175 @@ pub fn wb_vertex_links_to(a_element: ElementArg) -> Option<ElementRef> {
         return None;
     }
     vertices.get_element(index as i32)
+}
+
+/// The triangle container, the containing navmesh record and the value of
+/// a vertex or edge element.
+fn navmesh_context(a_element: ElementArg) -> Option<(ElementRef, MainRecordRef, i64)> {
+    let element = a_element?;
+    let triangle = element.get_container()?;
+    triangle.as_container()?;
+    let main_record = element.get_containing_main_record()?;
+    Some((triangle, main_record, variant_int(&element.get_native_value())))
+}
+
+/// The element at `index` of the container at `path` of the record.
+fn navmesh_item(main_record: &MainRecordRef, path: &str, index: i64) -> Option<ElementRef> {
+    let items = main_record.get_element_by_path(path)?;
+    let items = items.as_container()?;
+    if index < 0 || index >= i64::from(items.get_element_count()) {
+        return None;
+    }
+    items.get_element(index as i32)
+}
+
+/// Upstream `wbEdgeLinksTo`: the triangle across the edge, through the
+/// edge links of another navmesh when the edge flag says so.
+pub fn wb_edge_links_to(a_edge: i32, a_element: ElementArg) -> Option<ElementRef> {
+    let (triangle, mut main_record, mut index) = navmesh_context(a_element)?;
+    let flags = container_int(&triangle, "Flags");
+    if flags & (1 << a_edge) != 0 {
+        let edge_link = navmesh_item(&main_record, "NVNM\\Edge Links", index)?;
+        let edge_link = edge_link.as_container()?;
+        main_record = edge_link.get_element_links_to("Navmesh")?.into_main_record()?;
+        index = variant_int(&edge_link.get_element_native_value("Triangle"));
+    }
+    navmesh_item(&main_record, "NVNM\\Triangles", index)
+}
+
+/// Upstream `wbEdgeToStr`: the triangle index, with the navmesh of an
+/// edge link.
+pub fn wb_edge_to_str(a_edge: i32, a_int: i64, a_element: ElementArg, a_type: CallbackType) -> String {
+    match a_type {
+        CallbackType::ctToStr | CallbackType::ctToSummary => {
+            if a_int < 0 {
+                return "None".to_owned();
+            }
+            let mut result = a_int.to_string();
+            let Some((triangle, main_record, _)) = navmesh_context(a_element) else {
+                return result;
+            };
+            let flags = container_int(&triangle, "Flags");
+            if flags & (1 << a_edge) != 0 {
+                let Some(edge_link) = navmesh_item(&main_record, "NVNM\\Edge Links", a_int) else {
+                    return result;
+                };
+                let Some(edge_link) = edge_link.as_container() else {
+                    return result;
+                };
+                let Some(main_record) = edge_link
+                    .get_element_links_to("Navmesh")
+                    .and_then(|navmesh| navmesh.into_main_record())
+                else {
+                    return result;
+                };
+                let index = variant_int(&edge_link.get_element_native_value("Triangle"));
+                result.push_str(&format!(" (#{index} in {})", main_record.get_name()));
+            }
+            result
+        }
+        CallbackType::ctToSortKey => {
+            let mut result = format!("00000000{}", int_to_hex64(a_int, 4));
+            let Some((triangle, main_record, _)) = navmesh_context(a_element) else {
+                return result;
+            };
+            let mut form_id = main_record.get_load_order_form_id();
+            let mut index = a_int;
+            let flags = container_int(&triangle, "Flags");
+            if flags & (1 << a_edge) != 0 {
+                let Some(edge_link) = navmesh_item(&main_record, "NVNM\\Edge Links", a_int) else {
+                    return result;
+                };
+                let Some(edge_link) = edge_link.as_container() else {
+                    return result;
+                };
+                let Some(main_record) = edge_link
+                    .get_element_links_to("Navmesh")
+                    .and_then(|navmesh| navmesh.into_main_record())
+                else {
+                    return result;
+                };
+                form_id = main_record.get_load_order_form_id();
+                index = variant_int(&edge_link.get_element_native_value("Triangle"));
+            }
+            result = format!("{}{}", form_id.to_string(false), int_to_hex64(index, 4));
+            result
+        }
+        CallbackType::ctToEditValue => {
+            if a_int < 0 {
+                String::new()
+            } else {
+                a_int.to_string()
+            }
+        }
+        _ => String::new(),
+    }
+}
+
+/// Upstream `wbEdgeToInt`.
+pub fn wb_edge_to_int(_a_edge: i32, a_string: &str, _a_element: ElementArg) -> i64 {
+    let text = a_string.trim();
+    if text.is_empty() || text.eq_ignore_ascii_case("None") {
+        -1
+    } else {
+        i64::from(str_to_int_def(a_string, 0))
+    }
+}
+
+/// Upstream `wbVertexToStr`: the vertex index with its position.
+///
+/// UPSTREAM-QUIRK: the sort key of the vertex is not ported; the sort key
+/// form gives the index only.
+pub fn wb_vertex_to_str(_a_vertex: i32, a_int: i64, a_element: ElementArg, a_type: CallbackType) -> String {
+    match a_type {
+        CallbackType::ctToStr | CallbackType::ctToSummary => {
+            let mut result = a_int.to_string();
+            let Some((_, main_record, _)) = navmesh_context(a_element) else {
+                return result;
+            };
+            let Some(vertex) = navmesh_item(&main_record, "NVNM\\Vertices", a_int) else {
+                return result;
+            };
+            if let Some(vertex) = vertex.as_container() {
+                result.push_str(&format!(
+                    " ({}, {}, {})",
+                    vertex.get_element_edit_value("X"),
+                    vertex.get_element_edit_value("Y"),
+                    vertex.get_element_edit_value("Z")
+                ));
+            }
+            result
+        }
+        CallbackType::ctToSortKey => int_to_hex64(a_int, 4),
+        CallbackType::ctToEditValue => a_int.to_string(),
+        _ => String::new(),
+    }
+}
+
+/// Upstream `wbVertexToInt`.
+pub fn wb_vertex_to_int(_a_vertex: i32, a_string: &str, _a_element: ElementArg) -> i64 {
+    i64::from(str_to_int_def(a_string, 0))
+}
+
+/// The index keys callback of a record whose key is an ordinal subrecord
+/// value: `ADDN` by `DATA`, `COLL` by `BNAM`.
+pub fn index_key_from_ordinal(
+    a_main_record: &MainRecordRef,
+    a_index_keys: &mut IndexKeys,
+    signature: &str,
+    index: i32,
+) {
+    let value = a_main_record.get_element_native_value(signature);
+    let Some(ordinal) = value.as_ordinal() else { return };
+    a_index_keys.set_key(index, &ordinal.to_string());
+}
+
+/// The links-to callback of a collision layer index (`XTRI`): the `COLL`
+/// record with that index in the file or its masters.
+pub fn collision_layer_links_to(a_element: ElementArg) -> Option<ElementRef> {
+    let element = a_element?;
+    let index = element.get_native_value().as_ordinal()?;
+    let file = element.get_file()?;
+    file.get_record_from_index_by_key(wb_idx_collision_layer(), &index.to_string())
+        .map(|record| record as ElementRef)
 }

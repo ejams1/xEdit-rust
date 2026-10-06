@@ -107,6 +107,23 @@ impl SubRecordImpl {
         }
     }
 
+    /// Port of `TwbRecord.GetName`: the signature with its control
+    /// characters shown as the letters from `a`.
+    pub fn get_name_signature(&self) -> String {
+        self.sr_struct
+            .signature
+            .0
+            .iter()
+            .map(|&byte| {
+                if byte < 32 {
+                    char::from(b'a' + byte)
+                } else {
+                    char::from(byte)
+                }
+            })
+            .collect()
+    }
+
     pub fn data(&self) -> DataPtr<'_> {
         self.block.as_slice().get(self.dc_data_base..self.dc_data_end)
     }
@@ -584,10 +601,11 @@ impl Element for SubRecordImpl {
 
     /// Port of `TwbSubRecord.GetName`: the signature and the name of the
     /// definition.
+    /// Port of `TwbSubRecord.GetName`.
     fn get_name(&self) -> String {
         match self.def() {
-            Some(def) => format!("{} - {}", self.get_display_signature(), def.get_name()),
-            None => self.get_display_signature(),
+            Some(def) => format!("{} - {}", self.get_name_signature(), def.get_name()),
+            None => self.get_name_signature(),
         }
     }
 
@@ -610,7 +628,7 @@ impl Element for SubRecordImpl {
     /// Port of `TwbSubRecord.GetDisplayName`: the signature with the name of
     /// the resolved value, or of the definition.
     fn get_display_name(&self, use_suffix: bool) -> String {
-        let mut result = self.get_display_signature();
+        let mut result = self.get_name_signature();
         if let Some(value_def) = self.value_def()
             && !value_def.get_name().is_empty()
         {

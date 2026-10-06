@@ -183,7 +183,7 @@ pub fn snake(name: &str) -> String {
 /// The Rust type of a Pascal scalar type name.
 fn scalar(name: &str) -> Option<&'static str> {
     Some(match name.to_ascii_lowercase().as_str() {
-        "integer" | "longint" => "i32",
+        "integer" | "longint" | "twbnamedindex" => "i32",
         "cardinal" | "longword" => "u32",
         "int64" => "i64",
         "uint64" => "u64",
