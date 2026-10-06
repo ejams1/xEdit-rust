@@ -106,7 +106,7 @@ use std::sync::{Arc, OnceLock, RwLock, Weak};
 
 use xedit_io::{Encoding, MappedFile};
 
-use crate::delphi::path_file_name;
+use crate::delphi::{int_power, path_file_name, round};
 use crate::interface::constructors::find_record_def;
 use crate::interface::def::{Def, NamedDef, ValueDef};
 use crate::interface::element::{
@@ -115,9 +115,9 @@ use crate::interface::element::{
 use crate::interface::form_id::{FileID, FormID};
 use crate::interface::globals::{
     GameMode, create_contained_in, display_load_order_form_id, game_exe_name, game_master_esm, game_mode,
-    header_signature, is_fallout3, is_fallout4, is_fallout76, is_light_supported, is_medium_supported, is_skyrim,
-    is_starfield, is_update_supported, pseudo_light, pseudo_medium, pseudo_update, remove_offset_data,
-    size_of_main_record_struct, track_all_editor_id, vwd_as_quest_children, wb_get_group_order,
+    has_added_light_support, header_signature, is_fallout3, is_fallout4, is_fallout76, is_light_supported,
+    is_medium_supported, is_skyrim, is_starfield, is_update_supported, pseudo_light, pseudo_medium, pseudo_update,
+    remove_offset_data, size_of_main_record_struct, track_all_editor_id, vwd_as_quest_children, wb_get_group_order,
 };
 use crate::interface::integer::IntegerDefFormater;
 use crate::interface::main_record::{
@@ -474,6 +474,9 @@ pub struct FileImpl {
     fl_sorted_records: OnceLock<Vec<Arc<MainRecordImpl>>>,
     fl_masters: RwLock<Vec<Arc<FileImpl>>>,
     fl_load_finished: OnceLock<()>,
+    /// The header version, read once the header exists: a loaded file does
+    /// not change it.
+    fl_version: OnceLock<f64>,
     /// Port of `flCompareTo`: the file a compare load takes the load order
     /// of, such as the game master for the hardcoded records.
     fl_compare_to: Option<String>,
@@ -523,6 +526,23 @@ impl FileImpl {
             .elements()
             .first()
             .and_then(|element| element.clone().into_main_record_impl())
+    }
+
+    /// Port of `GetVersion`: `HEDR\Version` of the header, rounded to two
+    /// decimals as `RoundTo` does. Zero without a header.
+    pub fn get_version(&self) -> f64 {
+        if let Some(version) = self.fl_version.get() {
+            return *version;
+        }
+        let Some(header) = self.header() else { return 0.0 };
+        let version = match header.get_element_native_value(r"HEDR\Version") {
+            Variant::Float(version) => version,
+            Variant::Int(version) => version as f64,
+            Variant::UInt(version) => version as f64,
+            _ => 0.0,
+        };
+        let factor = int_power(10.0, -2);
+        *self.fl_version.get_or_init(|| round(version / factor) as f64 * factor)
     }
 
     /// Port of `flRecords`: the main records of the file in file order.
@@ -1151,6 +1171,7 @@ pub fn wb_file_compare(
         fl_sorted_records: OnceLock::new(),
         fl_masters: RwLock::new(Vec::new()),
         fl_load_finished: OnceLock::new(),
+        fl_version: OnceLock::new(),
         fl_compare_to: compare_to.map(str::to_owned),
         fl_injected_records: RwLock::new(Vec::new()),
         fl_records_indices: RwLock::new(Vec::new()),
@@ -1921,8 +1942,19 @@ impl File for FileImpl {
         Some(master as FileRef)
     }
 
+    /// Port of `GetAllowHardcodedRangeUse` without the generation cache: a
+    /// plugin of a game and header version that lets its own records use
+    /// object IDs below $800, once it has masters. Such a FormID then stays
+    /// in the plugin instead of pointing at the game master.
     fn get_allow_hardcoded_range_use(&self) -> bool {
-        false
+        let mode = game_mode();
+        let game_allows = mode == GameMode::gmTES3
+            || ((matches!(mode, GameMode::gmSSE | GameMode::gmEnderalSE)
+                || (mode == GameMode::gmTES5VR && has_added_light_support()))
+                && self.get_version() >= 1.709)
+            || (mode == GameMode::gmFO4 && self.get_version() >= 1.0)
+            || mode == GameMode::gmSF1;
+        game_allows && self.master_count() > 0
     }
 
     fn get_record_by_form_id(
