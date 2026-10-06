@@ -1139,8 +1139,8 @@ pub trait ValueDef: NamedDef {
         }
     }
 
-    fn get_element_map(&self) -> Vec<u32> {
-        Vec::new()
+    fn get_element_map(&self) -> &[u32] {
+        &[]
     }
 
     /// The assignment at the end of `SetDefaultNativeValue`. `TwbIntegerDef`

@@ -750,15 +750,12 @@ macro_rules! container_by_elements {
 
         fn get_element_count(&self) -> i32 {
             self.$init();
-            self.container.elements().len() as i32
+            self.container.element_count() as i32
         }
 
         fn get_element(&self, index: i32) -> Option<ElementRef> {
             self.$init();
-            self.container
-                .elements()
-                .get(usize::try_from(index).ok()?)
-                .cloned()
+            self.container.element_at(usize::try_from(index).ok()?)
         }
 
         fn get_element_by_sort_order(&self, sort_order: i32) -> Option<ElementRef> {
