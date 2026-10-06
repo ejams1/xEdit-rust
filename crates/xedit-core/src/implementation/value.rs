@@ -12,7 +12,7 @@
 //! of sorted arrays, chapters and the compressed structures of save files.
 
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Weak};
+use std::sync::{Arc, RwLock, Weak};
 
 use crate::interface::def::{EmptyDef, NamedDef, NamedDefArgs, ValueDef};
 use crate::interface::element::{Container, DataContainer, DataPtr, Element, ElementRef, FileRef, MainRecordRef};
@@ -31,7 +31,8 @@ pub struct ValueBase {
     block: DataBlock,
     /// The range of the data of the element in `block`. `None` for an
     /// element without data, such as an optional member that is missing.
-    range: Option<(usize, usize)>,
+    /// The end moves once, when `InitDataPtr` sizes the element.
+    range: RwLock<Option<(usize, usize)>>,
     vb_value_def: Arc<dyn ValueDef>,
     e_name_suffix: String,
     init: super::InitOnce,
@@ -52,7 +53,7 @@ impl ValueBase {
             container: ContainerBase::default(),
             file: file.clone(),
             block: block.clone(),
-            range,
+            range: RwLock::new(range),
             vb_value_def: value_def,
             e_name_suffix: name_suffix.to_owned(),
             init: super::InitOnce::new(),
@@ -60,8 +61,12 @@ impl ValueBase {
         }
     }
 
+    pub fn range(&self) -> Option<(usize, usize)> {
+        *self.range.read().unwrap()
+    }
+
     pub fn data(&self) -> DataPtr<'_> {
-        let (start, end) = self.range?;
+        let (start, end) = self.range()?;
         self.block.as_slice().get(start..end)
     }
 
@@ -169,25 +174,26 @@ pub(super) fn create_value_element(
     };
     let start = cursor.pos;
     let mut end = cursor.end;
-    let range = if cursor.has_data() || cursor.pos == cursor.end {
-        let size = value_def.get_size(cursor.data(), Some(container));
-        if (0..i32::MAX).contains(&size) {
-            end = (start + size as usize).min(cursor.end);
-        }
-        Some((start, end))
-    } else {
-        None
-    };
+    let range = (cursor.has_data() || cursor.pos == cursor.end).then_some((start, end));
     let element = Arc::new_cyclic(|self_ref: &Weak<ValueImpl>| ValueImpl {
         self_ref: self_ref.clone(),
         vb: ValueBase::new(container, file, &cursor.block, range, value_def, name_suffix),
         kind,
     });
-    if range.is_some() {
-        cursor.pos = end;
-    }
     if let Some(parent) = container.as_element_impl().and_then(ElementImpl::container_base) {
         parent.add_element(element.clone());
+    }
+    // Port of `TwbValueBase.InitDataPtr`: the size is computed through the
+    // element itself, which may initialize its children on the way when a
+    // decider looks at them, as upstream does from the constructor.
+    if range.is_some() {
+        let self_ref = element.element_ref();
+        let size = element.vb.vb_value_def.get_size(element.vb.data(), Some(&self_ref));
+        if (0..i32::MAX).contains(&size) {
+            end = (start + size as usize).min(cursor.end);
+            *element.vb.range.write().unwrap() = Some((start, end));
+        }
+        cursor.pos = end;
     }
     element
 }
@@ -200,7 +206,7 @@ impl ValueImpl {
     /// Port of `DoInit`: builds the children once.
     pub fn do_init(&self) {
         self.vb.init.run(|| {
-            let Some((start, end)) = self.vb.range else { return };
+            let Some((start, end)) = self.vb.range() else { return };
             let self_ref = self.element_ref();
             let mut cursor = Cursor {
                 block: self.vb.block.clone(),
@@ -444,7 +450,7 @@ impl Element for ValueImpl {
     }
 
     fn get_data_size(&self) -> i32 {
-        match self.vb.range {
+        match self.vb.range() {
             Some((start, end)) => (end - start) as i32,
             None => self.vb.vb_value_def.get_default_size(None, None),
         }
@@ -551,9 +557,20 @@ impl Container for ValueImpl {
         self.vb.container.elements().len() as i32
     }
 
+    /// Port of `TwbContainer.GetElement` with `cntElementsMap`: the element
+    /// map of the definition reorders the elements for the callers.
     fn get_element(&self, index: i32) -> Option<ElementRef> {
         self.do_init();
-        self.vb.container.elements().get(usize::try_from(index).ok()?).cloned()
+        let elements = self.vb.container.elements();
+        let mut index = usize::try_from(index).ok()?;
+        if index >= elements.len() {
+            return None;
+        }
+        let map = self.vb.vb_value_def.get_element_map();
+        if map.len() == elements.len() {
+            index = map[index] as usize;
+        }
+        elements.get(index).cloned()
     }
 
     fn get_element_by_sort_order(&self, sort_order: i32) -> Option<ElementRef> {

@@ -113,9 +113,9 @@ use crate::interface::element::{
 };
 use crate::interface::form_id::{FileID, FormID};
 use crate::interface::globals::{
-    GameMode, create_contained_in, display_load_order_form_id, game_master_esm, game_mode, header_signature,
-    is_light_supported, is_medium_supported, is_update_supported, pseudo_light, pseudo_medium, pseudo_update,
-    size_of_main_record_struct, vwd_as_quest_children, wb_get_group_order,
+    GameMode, create_contained_in, display_load_order_form_id, game_exe_name, game_master_esm, game_mode,
+    header_signature, is_light_supported, is_medium_supported, is_update_supported, pseudo_light, pseudo_medium,
+    pseudo_update, size_of_main_record_struct, vwd_as_quest_children, wb_get_group_order,
 };
 use crate::interface::main_record::{MainRecordDef, main_record_header};
 use crate::interface::misc::{Variant, progress};
@@ -289,12 +289,19 @@ fn element_by_path_from_any_parent(container: &dyn Container, rest: &str) -> Opt
     None
 }
 
-/// Port of `TwbElement.GetConflictPriority`: from the value definition,
-/// else the definition, with `cpFormID` resolved for the record.
+/// Port of `TwbElement.GetConflictPriority` and the override of
+/// `TwbDataContainer`: from the value definition, resolved against the data
+/// of a data container, else the definition, with `cpFormID` resolved for
+/// the record.
 pub(crate) fn element_conflict_priority(element: &dyn ElementImpl) -> ConflictPriority {
     let self_ref = element.self_element_ref();
     let def: Option<Arc<dyn Def>> = match element.get_value_def() {
-        Some(value_def) => Some(value_def as Arc<dyn Def>),
+        Some(value_def) => match element.as_data_container() {
+            Some(data_container) => {
+                Some(value::resolve(value_def, data_container.get_data(), self_ref.as_ref()) as Arc<dyn Def>)
+            }
+            None => Some(value_def as Arc<dyn Def>),
+        },
         None => element.get_def().map(|def| def as Arc<dyn Def>),
     };
     let mut result = ConflictPriority::cpNormal;
@@ -441,6 +448,12 @@ pub struct FileImpl {
     fl_sorted_records: OnceLock<Vec<Arc<MainRecordImpl>>>,
     fl_masters: RwLock<Vec<Arc<FileImpl>>>,
     fl_load_finished: OnceLock<()>,
+    /// Port of `flCompareTo`: the file a compare load takes the load order
+    /// of, such as the game master for the hardcoded records.
+    fl_compare_to: Option<String>,
+    /// Port of `flInjectedRecords`: records of other files with FormIDs of
+    /// this file, sorted by FormID.
+    fl_injected_records: RwLock<Vec<Arc<MainRecordImpl>>>,
 }
 
 static NEXT_LOAD_ORDER: AtomicI32 = AtomicI32::new(0);
@@ -496,13 +509,67 @@ impl FileImpl {
             return;
         }
         let file_id = form_id.file_id();
-        let is_new = i32::from(file_id.full_slot()) >= self.master_count();
-        if is_new || (form_id.is_hardcoded() && !self.get_file_states().contains(FileState::fsIsGameMaster)) {
+        let states = self.get_file_states();
+        let hardcoded_elsewhere = form_id.is_hardcoded() && !states.contains(FileState::fsIsGameMaster);
+        if self.is_new_record(file_id) && !states.contains(FileState::fsIsCompareLoad) && !hardcoded_elsewhere {
+            // A new record.
             return;
         }
         if let Some(master) = self.get_master_record_by_form_id(form_id, true, true) {
             master.add_override(&record);
+        } else if hardcoded_elsewhere {
+            if let Some(game_master) = game_master_file() {
+                game_master.inject_main_record(record);
+            }
+        } else if let Some(master) = self.get_master_for_file_id(file_id) {
+            master.inject_main_record(record);
+        } else {
+            progress(&format!(
+                "Error: <master file not found> while trying to determine master record for {}",
+                record.get_name()
+            ));
         }
+    }
+
+    /// Port of `IsNewRecord`: whether the FileID is the file's own.
+    fn is_new_record(&self, file_id: FileID) -> bool {
+        i32::from(file_id.full_slot()) >= self.master_count()
+    }
+
+    /// Port of `GetMasterForFileID` without the complex FileIDs: the master
+    /// at the slot, or the last master for a compare load.
+    fn get_master_for_file_id(&self, file_id: FileID) -> Option<Arc<FileImpl>> {
+        let masters = self.fl_masters.read().unwrap();
+        let slot = file_id.full_slot();
+        if slot >= 0 && (slot as usize) < masters.len() {
+            return Some(masters[slot as usize].clone());
+        }
+        if self.get_file_states().contains(FileState::fsIsCompareLoad) {
+            return masters.last().cloned();
+        }
+        None
+    }
+
+    /// Port of `InjectMainRecord`: a record of another file with a FormID of
+    /// this file, or an override of one that is injected already.
+    fn inject_main_record(&self, record: Arc<MainRecordImpl>) {
+        let form_id = record.get_fixed_form_id().to_cardinal();
+        let mut injected = self.fl_injected_records.write().unwrap();
+        match injected.binary_search_by_key(&form_id, |injected| injected.get_fixed_form_id().to_cardinal()) {
+            Ok(index) => injected[index].clone().add_override(&record),
+            Err(index) => injected.insert(index, record),
+        }
+    }
+
+    /// Port of `FindInjectedID`.
+    fn find_injected_id(&self, form_id: FormID) -> Option<Arc<MainRecordImpl>> {
+        let injected = self.fl_injected_records.read().unwrap();
+        let index = injected
+            .binary_search_by_key(&form_id.to_cardinal(), |record| {
+                record.get_fixed_form_id().to_cardinal()
+            })
+            .ok()?;
+        Some(injected[index].clone())
     }
 
     fn master_count(&self) -> i32 {
@@ -564,6 +631,12 @@ impl FileImpl {
         new_masters: bool,
     ) -> Option<Arc<MainRecordImpl>> {
         if let Some(record) = self.find_form_id(form_id) {
+            return Some(record);
+        }
+        if allow_injected
+            && self.is_new_record(form_id.file_id())
+            && let Some(record) = self.find_injected_id(form_id)
+        {
             return Some(record);
         }
         if self.get_file_states().contains(FileState::fsIsGameMaster) {
@@ -665,6 +738,22 @@ impl FileImpl {
         if self.fl_states.read().unwrap().contains(FileState::fsOnlyHeader) {
             return Ok(());
         }
+        // A compare load takes the load order of the file it compares to.
+        if self.get_file_states().contains(FileState::fsIsCompareLoad) {
+            let compare_to = self.fl_compare_to.as_deref().and_then(|name| {
+                let name = path_file_name(name);
+                FILES_MAP
+                    .read()
+                    .unwrap()
+                    .iter()
+                    .find(|file| file.get_name().eq_ignore_ascii_case(name))
+                    .cloned()
+            });
+            *self.fl_load_order_file_id.write().unwrap() = match compare_to {
+                Some(compare_to) => compare_to.get_load_order_file_id(),
+                None => FileID::create_full(0xFF),
+            };
+        }
         // The masters load before the slot is decided.
         if let Some(master_files) = header.get_element_by_name("Master Files") {
             let master_files = master_files.as_container().expect("the master files are a container");
@@ -761,8 +850,46 @@ fn contained_in_def(group_type: i32, name: &str, signature: Signature) -> Arc<dy
     def
 }
 
+/// The bytes of a `PLYR` group with the player reference `[00000014]
+/// <PlayerRef>` that `TwbFile.Scan` adds to the hardcoded file: a new record
+/// with the form version of the game and only the editor ID.
+fn player_reference_group() -> Vec<u8> {
+    let version: u16 = match game_mode() {
+        GameMode::gmSF1 => 582,
+        GameMode::gmFO76 => 208,
+        GameMode::gmFO4 | GameMode::gmFO4VR => 131,
+        GameMode::gmSSE | GameMode::gmTES5VR | GameMode::gmEnderalSE => 44,
+        GameMode::gmTES5 | GameMode::gmEnderal => 43,
+        _ => 15,
+    };
+    let editor_id = b"PlayerRef\0";
+    let mut record = Vec::new();
+    record.extend_from_slice(b"EDID");
+    record.extend_from_slice(&(editor_id.len() as u16).to_le_bytes());
+    record.extend_from_slice(editor_id);
+    let mut header = Vec::new();
+    header.extend_from_slice(b"PLYR");
+    header.extend_from_slice(&(record.len() as u32).to_le_bytes());
+    header.extend_from_slice(&0u32.to_le_bytes());
+    header.extend_from_slice(&0x14u32.to_le_bytes());
+    header.extend_from_slice(&0u32.to_le_bytes());
+    header.extend_from_slice(&version.to_le_bytes());
+    header.extend_from_slice(&0u16.to_le_bytes());
+    let group_size = 24 + header.len() + record.len();
+    let mut group = Vec::with_capacity(group_size);
+    group.extend_from_slice(b"GRUP");
+    group.extend_from_slice(&(group_size as u32).to_le_bytes());
+    group.extend_from_slice(b"PLYR");
+    group.extend_from_slice(&0i32.to_le_bytes());
+    group.extend_from_slice(&0u32.to_le_bytes());
+    group.extend_from_slice(&0u32.to_le_bytes());
+    group.extend_from_slice(&header);
+    group.extend_from_slice(&record);
+    group
+}
+
 /// Port of `wbGetGameMasterFile`.
-fn game_master_file() -> Option<Arc<FileImpl>> {
+pub fn game_master_file() -> Option<Arc<FileImpl>> {
     FILES_MAP
         .read()
         .unwrap()
@@ -810,6 +937,20 @@ pub fn wb_file_from_bytes(
     states: FileStates,
     bytes: FileBytes,
 ) -> Result<Arc<FileImpl>, LoadError> {
+    wb_file_compare(file_name, load_order, None, states, bytes)
+}
+
+/// Port of `wbFile` with `aCompareTo`: a file loaded in the place of
+/// `compare_to`, which it takes the load order of. The hardcoded records
+/// load this way, with the name of the game executable and the game
+/// master as the file to compare to.
+pub fn wb_file_compare(
+    file_name: &str,
+    load_order: i32,
+    compare_to: Option<&str>,
+    states: FileStates,
+    bytes: FileBytes,
+) -> Result<Arc<FileImpl>, LoadError> {
     let mut fl_states = FileStates::empty();
     for state in [
         FileState::fsIsTemporary,
@@ -822,11 +963,26 @@ pub fn wb_file_from_bytes(
         }
     }
     let base_name = path_file_name(file_name);
-    if base_name.eq_ignore_ascii_case(&game_master_esm()) {
+    if compare_to.is_some() {
+        fl_states.include(FileState::fsIsCompareLoad);
+        if base_name.eq_ignore_ascii_case(&game_exe_name()) {
+            fl_states.include(FileState::fsIsHardcoded);
+        }
+    } else if base_name.eq_ignore_ascii_case(&game_master_esm()) {
         fl_states.include(FileState::fsIsGameMaster);
         fl_states.include(FileState::fsIsOfficial);
     }
     fl_states.include(FileState::fsMemoryMapped);
+    // UPSTREAM-QUIRK: upstream adds the player reference to the hardcoded
+    // file through the editing API after the scan; here its group is
+    // appended to the bytes before the scan, which reads the same.
+    let bytes = if fl_states.contains(FileState::fsIsHardcoded) && game_mode() > GameMode::gmTES3 {
+        let mut owned = bytes.as_slice().to_vec();
+        owned.extend_from_slice(&player_reference_group());
+        FileBytes::Owned(owned)
+    } else {
+        bytes
+    };
     let file = Arc::new_cyclic(|self_ref: &Weak<FileImpl>| FileImpl {
         self_ref: self_ref.clone(),
         base: ElementBase::new(None),
@@ -840,6 +996,8 @@ pub fn wb_file_from_bytes(
         fl_sorted_records: OnceLock::new(),
         fl_masters: RwLock::new(Vec::new()),
         fl_load_finished: OnceLock::new(),
+        fl_compare_to: compare_to.map(str::to_owned),
+        fl_injected_records: RwLock::new(Vec::new()),
     });
     progress(&format!("[{}] Loading file", file.get_name()));
     FILES_MAP.write().unwrap().push(file.clone());
@@ -976,6 +1134,8 @@ pub struct MainRecordImpl {
     /// Port of `mrMaster` and `mrOverrides`.
     mr_master: RwLock<Option<Weak<MainRecordImpl>>>,
     mr_overrides: RwLock<Vec<Weak<MainRecordImpl>>>,
+    /// Port of `mrFixedFormID`.
+    mr_fixed_form_id: OnceLock<FormID>,
 }
 
 impl MainRecordImpl {
@@ -1021,6 +1181,7 @@ impl MainRecordImpl {
             mr_full_name: RwLock::new(String::new()),
             mr_master: RwLock::new(None),
             mr_overrides: RwLock::new(Vec::new()),
+            mr_fixed_form_id: OnceLock::new(),
         });
         if let Some(parent) = container.as_container_base() {
             parent.add_element(record.clone());
@@ -1062,8 +1223,30 @@ impl MainRecordImpl {
 
     /// Port of `FixedFormID`. The hardcoded range of the game master is
     /// not adjusted yet.
+    /// Port of `GetFixedFormID` and `DoGetFixedFormID` without the complex
+    /// FileIDs: the FormID with the FileID of the game master for the
+    /// hardcoded range, and the file's own FileID for a slot beyond the
+    /// masters.
     pub fn get_fixed_form_id(&self) -> FormID {
-        self.mr_struct.form_id
+        *self.mr_fixed_form_id.get_or_init(|| {
+            let mut result = self.mr_struct.form_id;
+            let Some(file) = self.file.upgrade() else {
+                return result;
+            };
+            if result.object_id() < 0x800 {
+                if file.get_allow_hardcoded_range_use() {
+                    if result.is_hardcoded() {
+                        return result;
+                    }
+                } else {
+                    return result.change_file_id(FileID::null());
+                }
+            }
+            if i32::from(result.file_id().full_slot()) >= file.master_count() {
+                result = result.change_file_id(file.get_file_file_id());
+            }
+            result
+        })
     }
 
     /// Port of `AddOverride`.

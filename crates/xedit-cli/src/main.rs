@@ -58,6 +58,8 @@ fn run(action: Action) -> Result<Value, CommandError> {
 fn main() -> ExitCode {
     let cli = Cli::parse();
     if let Action::Dump { game, file } = &cli.action {
+        // The progress messages go to stderr like the log of xDump.
+        xedit_session::dump::log_progress_to_stderr();
         let result = xedit_session::dump::setup_game(game).and_then(|mode| {
             let stdout = std::io::stdout();
             let mut out = std::io::BufWriter::with_capacity(1 << 20, stdout.lock());

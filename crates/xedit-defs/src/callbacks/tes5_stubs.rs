@@ -47,11 +47,6 @@ pub fn wb_acbs_level_mult_after_set(_a_element: &ElementRef, _a_old_value: &Vari
     todo!("port wbACBSLevelMultAfterSet from wbDefinitionsTES5.pas line 54")
 }
 
-/// Upstream `wbAliasToInt`, line 177 of `wbDefinitionsTES5.pas`.
-pub fn wb_alias_to_int(_a_string: &str, _a_element: ElementArg) -> i64 {
-    todo!("port wbAliasToInt from wbDefinitionsTES5.pas line 177")
-}
-
 /// Upstream `wbARMAAfterLoad`, line 1643 of `wbDefinitionsTES5.pas`.
 pub fn wb_arma_after_load(_a_element: &ElementRef) {
     todo!("port wbARMAAfterLoad from wbDefinitionsTES5.pas line 1643")
@@ -107,54 +102,9 @@ pub fn wb_clmt_time(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) 
     todo!("port wbClmtTime from wbDefinitionsTES5.pas line 201")
 }
 
-/// Upstream `wbConditionAliasToStr`, line 202 of `wbDefinitionsTES5.pas`.
-pub fn wb_condition_alias_to_str(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) -> String {
-    todo!("port wbConditionAliasToStr from wbDefinitionsTES5.pas line 202")
-}
-
 /// Upstream `wbConditionEventToInt`, line 772 of `wbDefinitionsTES5.pas`.
 pub fn wb_condition_event_to_int(_a_string: &str, _a_element: ElementArg) -> i64 {
     todo!("port wbConditionEventToInt from wbDefinitionsTES5.pas line 772")
-}
-
-/// Upstream `wbConditionEventToStr`, line 732 of `wbDefinitionsTES5.pas`.
-pub fn wb_condition_event_to_str(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) -> String {
-    todo!("port wbConditionEventToStr from wbDefinitionsTES5.pas line 732")
-}
-
-/// Upstream `wbConditionFunctionToInt`, line 683 of `wbDefinitionsTES5.pas`.
-pub fn wb_condition_function_to_int(_a_string: &str, _a_element: ElementArg) -> i64 {
-    todo!("port wbConditionFunctionToInt from wbDefinitionsTES5.pas line 683")
-}
-
-/// Upstream `wbConditionFunctionToStr`, line 649 of `wbDefinitionsTES5.pas`.
-pub fn wb_condition_function_to_str(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) -> String {
-    todo!("port wbConditionFunctionToStr from wbDefinitionsTES5.pas line 649")
-}
-
-/// Upstream `wbConditionOwnerToStr`, line 237 of `wbDefinitionsTES5.pas`.
-pub fn wb_condition_owner_to_str(
-    _a_value: &mut String,
-    _a_base_ptr: DataPtr,
-    _a_element: ElementArg,
-    _a_type: CallbackType,
-) {
-    todo!("port wbConditionOwnerToStr from wbDefinitionsTES5.pas line 237")
-}
-
-/// Upstream `wbConditionParam1Decider`, line 692 of `wbDefinitionsTES5.pas`.
-pub fn wb_condition_param1_decider(_a_base_ptr: DataPtr, _a_element: ElementArg) -> i32 {
-    todo!("port wbConditionParam1Decider from wbDefinitionsTES5.pas line 692")
-}
-
-/// Upstream `wbConditionParam2Decider`, line 712 of `wbDefinitionsTES5.pas`.
-pub fn wb_condition_param2_decider(_a_base_ptr: DataPtr, _a_element: ElementArg) -> i32 {
-    todo!("port wbConditionParam2Decider from wbDefinitionsTES5.pas line 712")
-}
-
-/// Upstream `wbConditionQuestStageToStr`, line 789 of `wbDefinitionsTES5.pas`.
-pub fn wb_condition_quest_stage_to_str(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) -> String {
-    todo!("port wbConditionQuestStageToStr from wbDefinitionsTES5.pas line 789")
 }
 
 /// Upstream `wbConditionRunOnAfterSet`, line 57 of `wbDefinitionsTES5.pas`.
@@ -167,34 +117,9 @@ pub fn wb_condition_string_to_int(_a_string: &str, _a_element: ElementArg) -> i6
     todo!("port wbConditionStringToInt from wbDefinitionsTES5.pas line 178")
 }
 
-/// Upstream `wbConditionStringToStr`, line 203 of `wbDefinitionsTES5.pas`.
-pub fn wb_condition_string_to_str(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) -> String {
-    todo!("port wbConditionStringToStr from wbDefinitionsTES5.pas line 203")
-}
-
-/// Upstream `wbConditionToStr`, line 236 of `wbDefinitionsTES5.pas`.
-pub fn wb_condition_to_str(_a_value: &mut String, _a_base_ptr: DataPtr, _a_element: ElementArg, _a_type: CallbackType) {
-    todo!("port wbConditionToStr from wbDefinitionsTES5.pas line 236")
-}
-
 /// Upstream `wbConditionTypeAfterSet`, line 56 of `wbDefinitionsTES5.pas`.
 pub fn wb_condition_type_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
     todo!("port wbConditionTypeAfterSet from wbDefinitionsTES5.pas line 56")
-}
-
-/// Upstream `wbConditionTypeToInt`, line 179 of `wbDefinitionsTES5.pas`.
-pub fn wb_condition_type_to_int(_a_string: &str, _a_element: ElementArg) -> i64 {
-    todo!("port wbConditionTypeToInt from wbDefinitionsTES5.pas line 179")
-}
-
-/// Upstream `wbConditionTypeToStr`, line 204 of `wbDefinitionsTES5.pas`.
-pub fn wb_condition_type_to_str(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) -> String {
-    todo!("port wbConditionTypeToStr from wbDefinitionsTES5.pas line 204")
-}
-
-/// Upstream `wbConditionVATSValueParamDecider`, line 864 of `wbDefinitionsTES5.pas`.
-pub fn wb_condition_vats_value_param_decider(_a_base_ptr: DataPtr, _a_element: ElementArg) -> i32 {
-    todo!("port wbConditionVATSValueParamDecider from wbDefinitionsTES5.pas line 864")
 }
 
 /// Upstream `wbDialogueTextAfterLoad`, line 41 of `wbDefinitionsTES5.pas`.
@@ -372,16 +297,6 @@ pub fn wb_mgefav2_weight_after_set(_a_element: &ElementRef, _a_old_value: &Varia
     todo!("port wbMGEFAV2WeightAfterSet from wbDefinitionsTES5.pas line 1194")
 }
 
-/// Upstream `wbNPCPackageToStr`, line 242 of `wbDefinitionsTES5.pas`.
-pub fn wb_npc_package_to_str(
-    _a_value: &mut String,
-    _a_base_ptr: DataPtr,
-    _a_element: ElementArg,
-    _a_type: CallbackType,
-) {
-    todo!("port wbNPCPackageToStr from wbDefinitionsTES5.pas line 242")
-}
-
 /// Upstream `wbPACKDateAfterLoad`, line 44 of `wbDefinitionsTES5.pas`.
 pub fn wb_pack_date_after_load(_a_element: &ElementRef) {
     todo!("port wbPACKDateAfterLoad from wbDefinitionsTES5.pas line 44")
@@ -406,11 +321,6 @@ pub fn wb_package_data_input_value_type_after_set(
     todo!("port wbPackageDataInputValueTypeAfterSet from wbDefinitionsTES5.pas line 1931")
 }
 
-/// Upstream `wbPackageLocationAliasToStr`, line 216 of `wbDefinitionsTES5.pas`.
-pub fn wb_package_location_alias_to_str(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) -> String {
-    todo!("port wbPackageLocationAliasToStr from wbDefinitionsTES5.pas line 216")
-}
-
 /// Upstream `wbPackagePSDTMonthValueToInt`, line 193 of `wbDefinitionsTES5.pas`.
 pub fn wb_package_psdt_month_value_to_int(_a_string: &str, _a_element: ElementArg) -> i64 {
     todo!("port wbPackagePSDTMonthValueToInt from wbDefinitionsTES5.pas line 193")
@@ -431,29 +341,9 @@ pub fn wb_perkprke_type_after_set(_a_element: &ElementRef, _a_old_value: &Varian
     todo!("port wbPERKPRKETypeAfterSet from wbDefinitionsTES5.pas line 63")
 }
 
-/// Upstream `wbQuestAliasToStr`, line 217 of `wbDefinitionsTES5.pas`.
-pub fn wb_quest_alias_to_str(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) -> String {
-    todo!("port wbQuestAliasToStr from wbDefinitionsTES5.pas line 217")
-}
-
-/// Upstream `wbQuestExternalAliasToStr`, line 218 of `wbDefinitionsTES5.pas`.
-pub fn wb_quest_external_alias_to_str(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) -> String {
-    todo!("port wbQuestExternalAliasToStr from wbDefinitionsTES5.pas line 218")
-}
-
 /// Upstream `wbQuestStageToInt`, line 180 of `wbDefinitionsTES5.pas`.
 pub fn wb_quest_stage_to_int(_a_string: &str, _a_element: ElementArg) -> i64 {
     todo!("port wbQuestStageToInt from wbDefinitionsTES5.pas line 180")
-}
-
-/// Upstream `wbQUSTAliasToStr`, line 244 of `wbDefinitionsTES5.pas`.
-pub fn wb_qust_alias_to_str(
-    _a_value: &mut String,
-    _a_base_ptr: DataPtr,
-    _a_element: ElementArg,
-    _a_type: CallbackType,
-) {
-    todo!("port wbQUSTAliasToStr from wbDefinitionsTES5.pas line 244")
 }
 
 /// Upstream `wbQUSTEventToStr`, line 245 of `wbDefinitionsTES5.pas`.
@@ -506,29 +396,9 @@ pub fn wb_regn_weather_dont_show(_a_element: ElementArg) -> bool {
     todo!("port wbREGNWeatherDontShow from wbDefinitionsTES5.pas line 113")
 }
 
-/// Upstream `wbSCENAliasLinksTo`, line 156 of `wbDefinitionsTES5.pas`.
-pub fn wb_scen_alias_links_to(_a_element: ElementArg) -> Option<ElementRef> {
-    todo!("port wbSCENAliasLinksTo from wbDefinitionsTES5.pas line 156")
-}
-
 /// Upstream `wbSceneActionTypeAfterSet`, line 65 of `wbDefinitionsTES5.pas`.
 pub fn wb_scene_action_type_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
     todo!("port wbSceneActionTypeAfterSet from wbDefinitionsTES5.pas line 65")
-}
-
-/// Upstream `wbSceneAliasToStr`, line 221 of `wbDefinitionsTES5.pas`.
-pub fn wb_scene_alias_to_str(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) -> String {
-    todo!("port wbSceneAliasToStr from wbDefinitionsTES5.pas line 221")
-}
-
-/// Upstream `wbScriptObjectAliasLinksTo`, line 157 of `wbDefinitionsTES5.pas`.
-pub fn wb_script_object_alias_links_to(_a_element: ElementArg) -> Option<ElementRef> {
-    todo!("port wbScriptObjectAliasLinksTo from wbDefinitionsTES5.pas line 157")
-}
-
-/// Upstream `wbScriptObjectAliasToStr`, line 222 of `wbDefinitionsTES5.pas`.
-pub fn wb_script_object_alias_to_str(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) -> String {
-    todo!("port wbScriptObjectAliasToStr from wbDefinitionsTES5.pas line 222")
 }
 
 /// Upstream `wbScriptPropertyTypeAfterSet`, line 67 of `wbDefinitionsTES5.pas`.
@@ -544,16 +414,6 @@ pub fn wb_scroll_cast_after_load(_a_element: &ElementRef) {
 /// Upstream `wbScrollTypeAfterLoad`, line 49 of `wbDefinitionsTES5.pas`.
 pub fn wb_scroll_type_after_load(_a_element: &ElementRef) {
     todo!("port wbScrollTypeAfterLoad from wbDefinitionsTES5.pas line 49")
-}
-
-/// Upstream `wbStrToInt`, line 187 of `wbDefinitionsTES5.pas`.
-pub fn wb_str_to_int(_a_string: &str, _a_element: ElementArg) -> i64 {
-    todo!("port wbStrToInt from wbDefinitionsTES5.pas line 187")
-}
-
-/// Upstream `wbStringToInt`, line 992 of `wbDefinitionsTES5.pas`.
-pub fn wb_string_to_int(_a_string: &str, _a_element: ElementArg) -> i64 {
-    todo!("port wbStringToInt from wbDefinitionsTES5.pas line 992")
 }
 
 /// Upstream `wbTintLayerToStr`, line 2023 of `wbDefinitionsTES5.pas`.

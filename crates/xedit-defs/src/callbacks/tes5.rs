@@ -10,11 +10,28 @@
 pub use super::tes5_stubs::*;
 
 use xedit_core::interface::globals::more_info_for_decider;
-use xedit_core::interface::misc::progress;
+use xedit_core::interface::misc::{int_to_hex64, progress};
+use xedit_core::interface::string::to_comma_text;
 use xedit_core::interface::*;
 
-use super::common::wb_try_get_container_from_union;
-use crate::signatures::{ANAM, NAME, PRKE};
+use super::common::{
+    variant_int, wb_try_get_container_from_union, wb_try_get_container_ref_from_union_or_value, wb_try_get_main_record,
+};
+use crate::signatures::{ANAM, NAME, PRKE, QUST};
+use crate::tes5::{
+    TConditionParameterType, WB_CONDITION_FUNCTIONS, WB_EVENT_FUNCTION_ENUM, WB_EVENT_MEMBER_ENUM,
+    wb_condition_desc_from_index,
+};
+
+/// Delphi `StrToIntDef(aString, 0)` for 64 bits: decimal, or hexadecimal
+/// after `$`.
+fn str_to_int64(text: &str) -> Option<i64> {
+    let text = text.trim();
+    match text.strip_prefix('$') {
+        Some(hex) => i64::from_str_radix(hex, 16).ok(),
+        None => text.parse().ok(),
+    }
+}
 
 /// Upstream `CombineVarRecs`.
 pub fn combine_var_recs(a: &[VarRec], b: &[VarRec]) -> Vec<VarRec> {
@@ -39,11 +56,7 @@ pub fn cmp_w32(a: u32, b: u32) -> i32 {
 fn container_int(container: &ElementRef, path: &str) -> i64 {
     container
         .as_container()
-        .map_or(0, |container| match container.get_element_native_value(path) {
-            Variant::Float(float) => float.round() as i64,
-            Variant::Str(text) => text.trim().parse().unwrap_or(0),
-            other => other.as_ordinal().unwrap_or(0),
-        })
+        .map_or(0, |container| variant_int(&container.get_element_native_value(path)))
 }
 
 /// Upstream `wbTypeDecider`: the `Type` value of the container.
@@ -221,4 +234,236 @@ pub fn wb_refr_record_flags_decider(a_element: ElementArg) -> i32 {
         b"TREE" => 9,
         _ => 0,
     }
+}
+
+/// Upstream `wbConditionFunctionToStr`: the name of the condition function.
+pub fn wb_condition_function_to_str(a_int: i64, _a_element: ElementArg, a_type: CallbackType) -> String {
+    let desc = wb_condition_desc_from_index(a_int as i32);
+    match a_type {
+        CallbackType::ctEditType => "ComboBox".to_owned(),
+        CallbackType::ctToSortKey => int_to_hex64(a_int, 8),
+        CallbackType::ctCheck => match desc {
+            Some(_) => String::new(),
+            None => format!("<Unknown: {a_int}>"),
+        },
+        CallbackType::ctToStr | CallbackType::ctToSummary | CallbackType::ctToEditValue => match desc {
+            Some(desc) => desc.name.to_owned(),
+            None if matches!(a_type, CallbackType::ctToSummary | CallbackType::ctToEditValue) => a_int.to_string(),
+            None => format!("<Unknown: {a_int}>"),
+        },
+        CallbackType::ctEditInfo => {
+            let mut names: Vec<String> = WB_CONDITION_FUNCTIONS
+                .iter()
+                .map(|function| function.name.to_owned())
+                .collect();
+            names.sort_by_key(|name| name.to_lowercase());
+            to_comma_text(&names)
+        }
+        _ => String::new(),
+    }
+}
+
+/// Upstream `wbConditionFunctionToInt`.
+pub fn wb_condition_function_to_int(a_string: &str, _a_element: ElementArg) -> i64 {
+    for function in WB_CONDITION_FUNCTIONS {
+        if function.name.eq_ignore_ascii_case(a_string) {
+            return i64::from(function.index);
+        }
+    }
+    str_to_int64(a_string).unwrap_or(0)
+}
+
+/// The parameter type of the function of the condition, with the alias and
+/// packdata flags applied to the reference types.
+fn condition_param_decider(a_element: ElementArg, second: bool) -> i32 {
+    let Some(container) = wb_try_get_container_from_union(a_element) else {
+        return 0;
+    };
+    let function = container_int(&container, "Function");
+    let Some(desc) = wb_condition_desc_from_index(function as i32) else {
+        return 0;
+    };
+    let mut param_type = if second { desc.param_type2 } else { desc.param_type1 };
+    let param_flag = container_int(&container, "Type");
+    if matches!(
+        param_type,
+        TConditionParameterType::ptReference | TConditionParameterType::ptActor | TConditionParameterType::ptPackage
+    ) {
+        if param_flag & 0x02 > 0 {
+            // 'use aliases' is set
+            param_type = TConditionParameterType::ptAlias;
+        } else if param_flag & 0x08 > 0 {
+            // 'use packdata' is set
+            param_type = TConditionParameterType::ptPackdata;
+        }
+    }
+    param_type as i32 + 1
+}
+
+/// Upstream `wbConditionParam1Decider`.
+pub fn wb_condition_param1_decider(_a_base_ptr: DataPtr, a_element: ElementArg) -> i32 {
+    condition_param_decider(a_element, false)
+}
+
+/// Upstream `wbConditionParam2Decider`.
+pub fn wb_condition_param2_decider(_a_base_ptr: DataPtr, a_element: ElementArg) -> i32 {
+    condition_param_decider(a_element, true)
+}
+
+/// Upstream `wbConditionVATSValueParamDecider`: the value of parameter 1.
+pub fn wb_condition_vats_value_param_decider(_a_base_ptr: DataPtr, a_element: ElementArg) -> i32 {
+    let Some(container) = wb_try_get_container_from_union(a_element) else {
+        return 0;
+    };
+    container_int(&container, "Parameter #1") as i32
+}
+
+/// Upstream `wbConditionEventToStr`: the event function and member.
+pub fn wb_condition_event_to_str(a_int: i64, _a_element: ElementArg, a_type: CallbackType) -> String {
+    let event_function = a_int & 0xFFFF;
+    let event_member = a_int >> 16;
+    let function_enum = WB_EVENT_FUNCTION_ENUM.get();
+    let member_enum = WB_EVENT_MEMBER_ENUM.get();
+    let (Some(function_enum), Some(member_enum)) = (function_enum, member_enum) else {
+        return String::new();
+    };
+    match a_type {
+        CallbackType::ctEditType => "ComboBox".to_owned(),
+        CallbackType::ctToSortKey => int_to_hex64(a_int, 8),
+        CallbackType::ctToStr | CallbackType::ctToSummary | CallbackType::ctToEditValue => format!(
+            "{}:{}",
+            function_enum.to_edit_value(event_function, None),
+            member_enum.to_edit_value(event_member, None)
+        ),
+        CallbackType::ctCheck => {
+            let mut s1 = function_enum.check(event_function, None);
+            if !s1.is_empty() {
+                s1 = format!("EventFunction{s1}");
+            }
+            let mut s2 = member_enum.check(event_member, None);
+            if !s2.is_empty() {
+                s2 = format!("EventMember{s2}");
+            }
+            if !s1.is_empty() || !s2.is_empty() {
+                format!("{s1}:{s2}")
+            } else {
+                String::new()
+            }
+        }
+        CallbackType::ctEditInfo => {
+            let members = member_enum.get_edit_info(None);
+            let mut names = Vec::new();
+            for index in 0..function_enum.get_name_count() {
+                for member in &members {
+                    names.push(format!("{}:{member}", function_enum.get_name_of(i64::from(index))));
+                }
+            }
+            names.sort_by_key(|name| name.to_lowercase());
+            to_comma_text(&names)
+        }
+        _ => String::new(),
+    }
+}
+
+/// Upstream `wbConditionQuestStageToStr`: the stage of the quest of
+/// parameter 1.
+pub fn wb_condition_quest_stage_to_str(a_int: i64, a_element: ElementArg, a_type: CallbackType) -> String {
+    let mut result = match a_type {
+        CallbackType::ctToSortKey => return int_to_hex64(a_int, 8),
+        CallbackType::ctToEditValue | CallbackType::ctToSummary => a_int.to_string(),
+        CallbackType::ctCheck => "<Warning: Could not resolve Parameter 1>".to_owned(),
+        CallbackType::ctToStr => format!("{a_int} <Warning: Could not resolve Parameter 1>"),
+        _ => String::new(),
+    };
+    let Some(container) = wb_try_get_container_ref_from_union_or_value(a_element) else {
+        return result;
+    };
+    let Some(main_record) = wb_try_get_main_record(
+        container
+            .as_container()
+            .and_then(|container| container.get_element_by_name("Parameter #1"))
+            .as_ref(),
+        "",
+    ) else {
+        return result;
+    };
+    let main_record = main_record.get_winning_override();
+    if main_record.get_signature() != QUST {
+        match a_type {
+            CallbackType::ctCheck => {
+                result = format!("<Warning: \"{}\" is not a Quest record>", main_record.get_short_name());
+            }
+            CallbackType::ctToStr => {
+                result = format!(
+                    "{a_int} <Warning: \"{}\" is not a Quest record>",
+                    main_record.get_short_name()
+                );
+            }
+            _ => {}
+        }
+        return result;
+    }
+    let mut edit_infos: Option<Vec<(String, i64)>> = match a_type {
+        CallbackType::ctEditType => return "ComboBox".to_owned(),
+        CallbackType::ctEditInfo => Some(Vec::new()),
+        _ => None,
+    };
+    if let Some(stages) = main_record.get_element_by_name("Stages")
+        && let Some(stages) = stages.as_container()
+    {
+        for index in 0..stages.get_element_count() {
+            let Some(stage) = stages.get_element(index) else {
+                continue;
+            };
+            let Some(stage) = stage.as_container() else { continue };
+            let j = variant_int(&stage.get_element_native_value("INDX\\Stage Index"));
+            let s = stage
+                .get_element_by_path("Log Entries\\Log Entry\\CNAM")
+                .map(|entry| entry.get_value())
+                .unwrap_or_default();
+            let s = s.trim();
+            let mut t = format!("{j:0>3}");
+            if !s.is_empty() {
+                t = format!("{t} {s}");
+            }
+            if let Some(edit_infos) = &mut edit_infos {
+                edit_infos.push((t.clone(), j));
+            }
+            if j == a_int {
+                match a_type {
+                    CallbackType::ctToStr | CallbackType::ctToSummary | CallbackType::ctToEditValue => result = t,
+                    CallbackType::ctCheck => result = String::new(),
+                    _ => {}
+                }
+                return result;
+            }
+        }
+    }
+    match a_type {
+        CallbackType::ctCheck => {
+            result = format!(
+                "<Warning: Quest Stage [{a_int}] not found in \"{}\">",
+                main_record.get_name()
+            );
+        }
+        CallbackType::ctToStr => {
+            result = format!(
+                "{a_int} <Warning: Quest Stage [{a_int}] not found in \"{}\">",
+                main_record.get_name()
+            );
+        }
+        CallbackType::ctEditInfo => {
+            let mut edit_infos = edit_infos.unwrap_or_default();
+            edit_infos.sort_by_key(|(text, _)| text.to_lowercase());
+            let names: Vec<String> = edit_infos.into_iter().map(|(text, _)| text).collect();
+            result = to_comma_text(&names);
+        }
+        _ => {}
+    }
+    result
+}
+
+/// Upstream `wbStringToInt`.
+pub fn wb_string_to_int(a_string: &str, _a_element: ElementArg) -> i64 {
+    str_to_int64(a_string).unwrap_or(0)
 }

@@ -47,11 +47,6 @@ pub fn wb_aech_type_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _
     todo!("port wbAECHTypeAfterSet from wbDefinitionsFO4.pas line 1689")
 }
 
-/// Upstream `wbAliasToInt`, line 177 of `wbDefinitionsFO4.pas`.
-pub fn wb_alias_to_int(_a_string: &str, _a_element: ElementArg) -> i64 {
-    todo!("port wbAliasToInt from wbDefinitionsFO4.pas line 177")
-}
-
 /// Upstream `wbARMAAfterLoad`, line 2022 of `wbDefinitionsFO4.pas`.
 pub fn wb_arma_after_load(_a_element: &ElementRef) {
     todo!("port wbARMAAfterLoad from wbDefinitionsFO4.pas line 2022")
@@ -122,11 +117,6 @@ pub fn wb_combined_mesh_id_to_str(_a_int: i64, _a_element: ElementArg, _a_type: 
     todo!("port wbCombinedMeshIDToStr from wbDefinitionsFO4.pas line 2566")
 }
 
-/// Upstream `wbConditionAliasToStr`, line 202 of `wbDefinitionsFO4.pas`.
-pub fn wb_condition_alias_to_str(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) -> String {
-    todo!("port wbConditionAliasToStr from wbDefinitionsFO4.pas line 202")
-}
-
 /// Upstream `wbConditionEventToInt`, line 900 of `wbDefinitionsFO4.pas`.
 pub fn wb_condition_event_to_int(_a_string: &str, _a_element: ElementArg) -> i64 {
     todo!("port wbConditionEventToInt from wbDefinitionsFO4.pas line 900")
@@ -145,16 +135,6 @@ pub fn wb_condition_function_to_int(_a_string: &str, _a_element: ElementArg) -> 
 /// Upstream `wbConditionFunctionToStr`, line 766 of `wbDefinitionsFO4.pas`.
 pub fn wb_condition_function_to_str(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) -> String {
     todo!("port wbConditionFunctionToStr from wbDefinitionsFO4.pas line 766")
-}
-
-/// Upstream `wbConditionOwnerToStr`, line 237 of `wbDefinitionsFO4.pas`.
-pub fn wb_condition_owner_to_str(
-    _a_value: &mut String,
-    _a_base_ptr: DataPtr,
-    _a_element: ElementArg,
-    _a_type: CallbackType,
-) {
-    todo!("port wbConditionOwnerToStr from wbDefinitionsFO4.pas line 237")
 }
 
 /// Upstream `wbConditionParam1Decider`, line 810 of `wbDefinitionsFO4.pas`.
@@ -187,29 +167,9 @@ pub fn wb_condition_string_to_int(_a_string: &str, _a_element: ElementArg) -> i6
     todo!("port wbConditionStringToInt from wbDefinitionsFO4.pas line 178")
 }
 
-/// Upstream `wbConditionStringToStr`, line 203 of `wbDefinitionsFO4.pas`.
-pub fn wb_condition_string_to_str(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) -> String {
-    todo!("port wbConditionStringToStr from wbDefinitionsFO4.pas line 203")
-}
-
-/// Upstream `wbConditionToStr`, line 236 of `wbDefinitionsFO4.pas`.
-pub fn wb_condition_to_str(_a_value: &mut String, _a_base_ptr: DataPtr, _a_element: ElementArg, _a_type: CallbackType) {
-    todo!("port wbConditionToStr from wbDefinitionsFO4.pas line 236")
-}
-
 /// Upstream `wbConditionTypeAfterSet`, line 56 of `wbDefinitionsFO4.pas`.
 pub fn wb_condition_type_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
     todo!("port wbConditionTypeAfterSet from wbDefinitionsFO4.pas line 56")
-}
-
-/// Upstream `wbConditionTypeToInt`, line 179 of `wbDefinitionsFO4.pas`.
-pub fn wb_condition_type_to_int(_a_string: &str, _a_element: ElementArg) -> i64 {
-    todo!("port wbConditionTypeToInt from wbDefinitionsFO4.pas line 179")
-}
-
-/// Upstream `wbConditionTypeToStr`, line 204 of `wbDefinitionsFO4.pas`.
-pub fn wb_condition_type_to_str(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) -> String {
-    todo!("port wbConditionTypeToStr from wbDefinitionsFO4.pas line 204")
 }
 
 /// Upstream `wbCoverLinksTo`, line 150 of `wbDefinitionsFO4.pas`.
@@ -422,16 +382,6 @@ pub fn wb_npc_after_load(_a_element: &ElementRef) {
     todo!("port wbNPCAfterLoad from wbDefinitionsFO4.pas line 2113")
 }
 
-/// Upstream `wbNPCPackageToStr`, line 242 of `wbDefinitionsFO4.pas`.
-pub fn wb_npc_package_to_str(
-    _a_value: &mut String,
-    _a_base_ptr: DataPtr,
-    _a_element: ElementArg,
-    _a_type: CallbackType,
-) {
-    todo!("port wbNPCPackageToStr from wbDefinitionsFO4.pas line 242")
-}
-
 /// Upstream `wbObjectModPropertyToInt`, line 2447 of `wbDefinitionsFO4.pas`.
 pub fn wb_object_mod_property_to_int(_a_string: &str, _a_element: ElementArg) -> i64 {
     todo!("port wbObjectModPropertyToInt from wbDefinitionsFO4.pas line 2447")
@@ -486,11 +436,6 @@ pub fn wb_package_data_input_value_type_after_set(
     todo!("port wbPackageDataInputValueTypeAfterSet from wbDefinitionsFO4.pas line 2373")
 }
 
-/// Upstream `wbPackageLocationAliasToStr`, line 216 of `wbDefinitionsFO4.pas`.
-pub fn wb_package_location_alias_to_str(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) -> String {
-    todo!("port wbPackageLocationAliasToStr from wbDefinitionsFO4.pas line 216")
-}
-
 /// Upstream `wbPackagePSDTMonthValueToInt`, line 193 of `wbDefinitionsFO4.pas`.
 pub fn wb_package_psdt_month_value_to_int(_a_string: &str, _a_element: ElementArg) -> i64 {
     todo!("port wbPackagePSDTMonthValueToInt from wbDefinitionsFO4.pas line 193")
@@ -521,29 +466,9 @@ pub fn wb_pub_pack_cnam_decider(_a_base_ptr: DataPtr, _a_element: ElementArg) ->
     todo!("port wbPubPackCNAMDecider from wbDefinitionsFO4.pas line 2334")
 }
 
-/// Upstream `wbQuestAliasToStr`, line 217 of `wbDefinitionsFO4.pas`.
-pub fn wb_quest_alias_to_str(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) -> String {
-    todo!("port wbQuestAliasToStr from wbDefinitionsFO4.pas line 217")
-}
-
-/// Upstream `wbQuestExternalAliasToStr`, line 218 of `wbDefinitionsFO4.pas`.
-pub fn wb_quest_external_alias_to_str(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) -> String {
-    todo!("port wbQuestExternalAliasToStr from wbDefinitionsFO4.pas line 218")
-}
-
 /// Upstream `wbQuestStageToInt`, line 180 of `wbDefinitionsFO4.pas`.
 pub fn wb_quest_stage_to_int(_a_string: &str, _a_element: ElementArg) -> i64 {
     todo!("port wbQuestStageToInt from wbDefinitionsFO4.pas line 180")
-}
-
-/// Upstream `wbQUSTAliasToStr`, line 244 of `wbDefinitionsFO4.pas`.
-pub fn wb_qust_alias_to_str(
-    _a_value: &mut String,
-    _a_base_ptr: DataPtr,
-    _a_element: ElementArg,
-    _a_type: CallbackType,
-) {
-    todo!("port wbQUSTAliasToStr from wbDefinitionsFO4.pas line 244")
 }
 
 /// Upstream `wbQUSTEventToStr`, line 245 of `wbDefinitionsFO4.pas`.
@@ -591,11 +516,6 @@ pub fn wb_regn_weather_dont_show(_a_element: ElementArg) -> bool {
     todo!("port wbREGNWeatherDontShow from wbDefinitionsFO4.pas line 113")
 }
 
-/// Upstream `wbSCENAliasLinksTo`, line 156 of `wbDefinitionsFO4.pas`.
-pub fn wb_scen_alias_links_to(_a_element: ElementArg) -> Option<ElementRef> {
-    todo!("port wbSCENAliasLinksTo from wbDefinitionsFO4.pas line 156")
-}
-
 /// Upstream `wbSCENBehaviorEnumAfterLoad`, line 3155 of `wbDefinitionsFO4.pas`.
 pub fn wb_scen_behavior_enum_after_load(_a_element: &ElementRef) {
     todo!("port wbSCENBehaviorEnumAfterLoad from wbDefinitionsFO4.pas line 3155")
@@ -604,11 +524,6 @@ pub fn wb_scen_behavior_enum_after_load(_a_element: &ElementRef) {
 /// Upstream `wbSceneActionTypeAfterSet`, line 65 of `wbDefinitionsFO4.pas`.
 pub fn wb_scene_action_type_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
     todo!("port wbSceneActionTypeAfterSet from wbDefinitionsFO4.pas line 65")
-}
-
-/// Upstream `wbSceneAliasToStr`, line 221 of `wbDefinitionsFO4.pas`.
-pub fn wb_scene_alias_to_str(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) -> String {
-    todo!("port wbSceneAliasToStr from wbDefinitionsFO4.pas line 221")
 }
 
 /// Upstream `wbScriptFragmentsEmptyScriptDecider`, line 279 of `wbDefinitionsFO4.pas`.
@@ -625,16 +540,6 @@ pub fn wb_script_fragments_quest_script_name_after_set(
     todo!("port wbScriptFragmentsQuestScriptNameAfterSet from wbDefinitionsFO4.pas line 66")
 }
 
-/// Upstream `wbScriptObjectAliasLinksTo`, line 157 of `wbDefinitionsFO4.pas`.
-pub fn wb_script_object_alias_links_to(_a_element: ElementArg) -> Option<ElementRef> {
-    todo!("port wbScriptObjectAliasLinksTo from wbDefinitionsFO4.pas line 157")
-}
-
-/// Upstream `wbScriptObjectAliasToStr`, line 222 of `wbDefinitionsFO4.pas`.
-pub fn wb_script_object_alias_to_str(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) -> String {
-    todo!("port wbScriptObjectAliasToStr from wbDefinitionsFO4.pas line 222")
-}
-
 /// Upstream `wbScriptPropertyDecider`, line 1662 of `wbDefinitionsFO4.pas`.
 pub fn wb_script_property_decider(_a_base_ptr: DataPtr, _a_element: ElementArg) -> i32 {
     todo!("port wbScriptPropertyDecider from wbDefinitionsFO4.pas line 1662")
@@ -648,11 +553,6 @@ pub fn wb_script_property_type_after_set(_a_element: &ElementRef, _a_old_value: 
 /// Upstream `wbSNDRDataDecider`, line 1638 of `wbDefinitionsFO4.pas`.
 pub fn wb_sndr_data_decider(_a_base_ptr: DataPtr, _a_element: ElementArg) -> i32 {
     todo!("port wbSNDRDataDecider from wbDefinitionsFO4.pas line 1638")
-}
-
-/// Upstream `wbStrToInt`, line 187 of `wbDefinitionsFO4.pas`.
-pub fn wb_str_to_int(_a_string: &str, _a_element: ElementArg) -> i64 {
-    todo!("port wbStrToInt from wbDefinitionsFO4.pas line 187")
 }
 
 /// Upstream `wbStringToInt`, line 1179 of `wbDefinitionsFO4.pas`.
