@@ -10,22 +10,27 @@ The official xEdit release build of the tag in `upstream-map.toml` is the oracle
 ## Running the harness
 
 ```
-cargo xtask parity dump [--game fo4|sse]... [--file <name>]... [--oracle-only] [--jobs <n>]
+cargo xtask parity dump [--game <game>]... [--file <name>]... [--oracle-only] [--jobs <n>]
+                        [--memory-budget <GiB>] [--max-memory <GiB>]
 ```
 
-The harness runs the oracle `xDump.exe` and the port's `xedit dump` on every vanilla plugin of the selected games and compares the outputs byte for byte. Without `--game` it checks all games. `--file` restricts the run to named plugins, vanilla or not. It prints the first differing line of each file, writes `target/parity/dump.json` and exits with an error when any file differs.
+The harness runs the oracle `xDump.exe` and the port's `xedit dump` on every vanilla plugin of the selected games and compares the outputs byte for byte. The games are `fo4`, `sse`, `tes3`, `tes4`, `fo3`, `fnv`, `tes5`, `tes5vr`, `fo4vr`, `fo76` and `sf1`. Without `--game` it checks every game whose data directory is set and prints a `skipped` line for the others. `--file` restricts the run to named plugins, vanilla or not. It prints the first differing line of each file, writes `target/parity/dump.json` and exits with an error when any file differs.
 
 Environment variables:
 
 | Variable | Content |
 | --- | --- |
 | `XEDIT_ORACLE_DIR` | Unpacked release archive of the baseline tag. |
-| `XEDIT_FO4_DATA`, `XEDIT_SSE_DATA` | `Data` directory of each game. |
+| `XEDIT_<GAME>_DATA` | `Data` directory of each game: `XEDIT_FO4_DATA`, `XEDIT_SSE_DATA`, `XEDIT_TES3_DATA` (Morrowind's `Data Files`), `XEDIT_TES4_DATA`, `XEDIT_FO3_DATA`, `XEDIT_FNV_DATA`, `XEDIT_TES5_DATA`, `XEDIT_TES5VR_DATA`, `XEDIT_FO4VR_DATA`, `XEDIT_FO76_DATA`, `XEDIT_SF1_DATA`. |
 | `XEDIT_PARITY_CACHE` | Cache directory. Optional; defaults to the user cache directory. |
 
-Oracle output is cached as `<cache>/<tag>/<game>/<file>.<hash>.oracle.txt`, so the oracle runs once per input file. A run that the oracle ended with `Unexpected Error` is kept as `<file>.<hash>.oracle.crashed.txt` and compared as a prefix: the port has to match it up to the crash and may continue, which the report shows as `equal-prefix`. The oracle is slow on large masters: it writes about 80 MB of dump per minute and needs more than ten minutes for `Fallout4.esm`. `--oracle-only` fills the cache without running the port. The port output of the last run is next to the oracle output as `.port.txt`.
+Oracle output is cached zstd-compressed as `<cache>/<tag>/<game>/<file>.<hash>.oracle.txt.zst`, so the oracle runs once per input file; plain `.oracle.txt` files from older runs are still read. A run that the oracle ended with `Unexpected Error` is kept as `<file>.<hash>.oracle.crashed.txt.zst` and compared as a prefix: the port has to match it up to the crash, and the rest of its output must still finish without an error, which the report shows as `equal-prefix`. The oracle is slow on large masters: it writes about 80 MB of dump per minute and needs more than ten minutes for `Fallout4.esm`. `--oracle-only` fills the cache without running the port. The port output is compared while the port writes it; it is kept only for a file that differs, as `.port.txt.zst` up to the first difference (`zstd -dc` reads it), next to the port's log `.port.log`.
 
-The harness runs `--jobs` files at a time; the default is 3. That assumes at most 4.5 GB of working set per port dump (`DLCCoast.esm`; `Skyrim.esm` peaks at 1.7 GB) next to the oracle, which fits in 32 GB of memory. Raise it only on a machine with more memory. The wall clock is bounded by the largest file: the port dumps `Skyrim.esm` (8.3 GB of text) in about 3 minutes and `Update.esm` in about 20 seconds on the reference machine.
+### Memory
+
+Every oracle and port process runs in a Windows job object that caps its committed memory at `--max-memory` (default: the budget), so a runaway dump fails alone instead of pushing the machine out of memory. A port that reaches the cap is reported as `port-memory-limit`; an oracle that reaches it is reported as `oracle-failed` and its output is not cached. The peak of each complete run is stored next to the cache as `.oracle.peak` and `.port.peak` and shown in `dump.json` as `oracle_peak` and `port_peak`.
+
+The processes that run at once stay within `--memory-budget` (default: three quarters of the installed memory). Each run reserves the peak its file had in the last run, or, before the first run, 6 times the size of the plugin and its game master; a file whose reservation exceeds the budget runs alone. `--jobs` (default 3) is only an upper bound on the parallel runs. The largest port peak of the Fallout 4 and Skyrim SE corpus is 1.6 GiB (`DLCCoast.esm`, `Fallout4.esm`). The wall clock is bounded by the largest file: the port dumps `Skyrim.esm` (8.3 GB of text) in about 3 minutes and `Update.esm` in about 20 seconds on the reference machine.
 
 Only the dump check exists so far. Add the other checks of the table below to `crates/xtask/src/parity.rs` in the phase that ports the feature.
 

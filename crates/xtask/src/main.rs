@@ -17,6 +17,7 @@
 //! `cargo xtask pascal-check <file>...` parses upstream Pascal units with the
 //! reader of the definition transpiler and reports the files that fail.
 
+mod memory;
 mod parity;
 mod pascal;
 mod portdefs;
