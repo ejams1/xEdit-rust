@@ -6,7 +6,8 @@
 
 //! The `dump` command: the element tree of a plugin as `xDump.exe` prints it
 //! in its plain mode (no report, no sizes, no hidden elements), with the
-//! summaries of the elements without a value.
+//! summaries of the elements without a value. The lines end with CRLF as
+//! the oracle writes them.
 
 use std::io::Write;
 
@@ -94,12 +95,12 @@ fn write_element(element: &ElementRef, indent: &str, out: &mut dyn Write) -> std
         }
         if !name.starts_with("Hidden: ") {
             if !value.is_empty() {
-                writeln!(out, ": {value}")?;
+                write!(out, ": {value}\r\n")?;
             } else if !name.is_empty() {
                 if summary.is_empty() {
-                    writeln!(out)?;
+                    out.write_all(b"\r\n")?;
                 } else {
-                    writeln!(out, " [S]: {summary}")?;
+                    write!(out, " [S]: {summary}\r\n")?;
                 }
             }
         }
