@@ -94,7 +94,7 @@ fn setup_language(mode: GameMode) {
 /// its masters is localized and a loose `.STRINGS` file is missing, the
 /// archives of each master and of the plugin (`<name>`, `<name> - Interface`,
 /// `<name> - Localization`, `<name> - Wwise*`) are added, then the data folder.
-fn load_resources(file: &FileImpl, path: &str, mode: GameMode) {
+pub(crate) fn load_resources(file: &FileImpl, path: &str, mode: GameMode) {
     let data_path = extract_file_path(path);
     set_data_path(&data_path);
     clear_containers();
@@ -163,7 +163,7 @@ pub fn dump_file(path: &str, mode: GameMode, out: &mut dyn Write) -> Result<(), 
 /// Port of the hardcoded load of `xDump.dpr`: when the game master is
 /// loaded, the embedded plugin of the hardcoded records loads in its place
 /// under the name of the game executable.
-fn load_hardcoded(mode: GameMode) -> Result<(), String> {
+pub(crate) fn load_hardcoded(mode: GameMode) -> Result<(), String> {
     if game_master_file().is_none() {
         return Ok(());
     }
