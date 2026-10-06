@@ -710,8 +710,37 @@ pub fn set_known_sub_record_signature(role: KnownSubRecord, signature: Signature
     KNOWN_SUB_RECORD_SIGNATURES_NOW.write().unwrap()[super::types::PascalEnum::ord(role)] = signature;
 }
 
+/// Upstream `TProc`: a procedure without arguments.
+pub type TProc = std::sync::Arc<dyn Fn() + Send + Sync>;
+
+static RESOURCES_LOADED_HANDLERS: Mutex<Vec<TProc>> = Mutex::new(Vec::new());
+
+/// Port of `wbRegisterResourcesLoadedHandler`: a definition unit that reads
+/// data from the resources (Starfield's Wwise sound bank index) runs once
+/// the archives and the data folder are added.
+pub fn wb_register_resources_loaded_handler(handler: Option<TProc>) {
+    if let Some(handler) = handler {
+        RESOURCES_LOADED_HANDLERS.lock().unwrap().push(handler);
+    }
+}
+
+/// Port of `wbResourcesLoaded`: runs the handlers in the order they were
+/// registered.
+pub fn wb_resources_loaded() {
+    let handlers = RESOURCES_LOADED_HANDLERS.lock().unwrap().clone();
+    for handler in handlers {
+        handler();
+    }
+}
+
+/// Forgets the handlers, for a new set of definitions.
+pub fn clear_resources_loaded_handlers() {
+    RESOURCES_LOADED_HANDLERS.lock().unwrap().clear();
+}
+
 /// Restores every setting of this module to its upstream default.
 pub fn reset() {
+    clear_resources_loaded_handlers();
     *KNOWN_SUB_RECORD_SIGNATURES_NOW.write().unwrap() = KNOWN_SUB_RECORD_SIGNATURES;
     set_encoding(Encoding::Mbcs(1252));
     set_encoding_trans(Encoding::Mbcs(1252));

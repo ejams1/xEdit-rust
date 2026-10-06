@@ -860,6 +860,13 @@ impl FileImpl {
         while offset < bytes.len() {
             create_record(self, &container, bytes, &mut offset, None)?;
         }
+        // `SortRecords` and `flActivateIndices` come before the group check:
+        // the sort of a merged group finds the record of a child group in
+        // this file.
+        let mut sorted = self.fl_records.read().unwrap().clone();
+        sorted.sort_by_key(|record| record.get_fixed_form_id().to_cardinal());
+        self.fl_sorted_records.set(sorted).ok();
+        self.activate_indices();
         // Port of the top level group check of `TwbFile.Scan` for the games
         // from Skyrim on: an empty top level group is removed, and a group
         // whose label appears again later in the file is merged into that
@@ -935,10 +942,6 @@ impl FileImpl {
                 groups.insert(sort_order, group);
             }
         }
-        let mut sorted = self.fl_records.read().unwrap().clone();
-        sorted.sort_by_key(|record| record.get_fixed_form_id().to_cardinal());
-        self.fl_sorted_records.set(sorted).ok();
-        self.activate_indices();
         Ok(())
     }
 
@@ -1413,11 +1416,10 @@ impl GroupRecordImpl {
         self.base.container()?.as_element_impl()?.group_record_impl()
     }
 
-    /// Port of `TwbGroupRecord.Sort` for the groups that sort by
-    /// `CompareGroupContents`. A topic group (type 7) sorts its INFOs by
-    /// their links instead, which xDump does not do without the load order
-    /// FormIDs, so it is left alone.
-    /// Port of `TwbGroupRecord.Sort` without `aForce`.
+    /// Port of `TwbGroupRecord.Sort` without `aForce`, for the groups that
+    /// sort by `CompareGroupContents`. A topic group (type 7) sorts its INFOs
+    /// by their links instead, which xDump does not do without the load
+    /// order FormIDs, so it is left alone.
     /// UPSTREAM-QUIRK: the merge of a duplicated top level group adds the
     /// records without clearing `gsSorted`, so a group that two duplicates
     /// merge into is sorted only after the first of them.
