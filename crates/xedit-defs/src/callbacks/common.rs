@@ -24,6 +24,8 @@ use xedit_core::interface::misc::int_to_hex64;
 use xedit_core::interface::string::to_comma_text;
 use xedit_core::interface::*;
 
+use crate::common::wb_package_schedule_month_enum;
+
 pub use super::common_stubs::*;
 
 /// Upstream `Sig2Int`.
@@ -2253,4 +2255,147 @@ pub fn wb_clmt_moons_phase_length(a_int: i64, _a_element: ElementArg, a_type: Ca
         }
         _ => String::new(),
     }
+}
+
+/// Upstream `wbREFRNavmeshTriangleToStr`: the triangle of the linked navmesh.
+pub fn wb_refr_navmesh_triangle_to_str(a_int: i64, a_element: ElementArg, a_type: CallbackType) -> String {
+    let mut result = match a_type {
+        CallbackType::ctToStr | CallbackType::ctToSummary | CallbackType::ctToEditValue => a_int.to_string(),
+        CallbackType::ctToSortKey => return int_to_hex64(a_int, 8),
+        _ => String::new(),
+    };
+    let Some(container) = wb_try_get_container_ref_from_union_or_value(a_element) else {
+        return result;
+    };
+    let navmesh = container.as_container().and_then(|container| container.get_element(0));
+    let Some(main_record) = wb_try_get_main_record(navmesh.as_ref(), "") else {
+        return result;
+    };
+    let main_record = main_record.get_winning_override();
+    if main_record.get_signature() != Signature::new(b"NAVM") {
+        match a_type {
+            CallbackType::ctToStr | CallbackType::ctToSummary => {
+                result = a_int.to_string();
+                if a_type == CallbackType::ctToStr {
+                    result.push_str(&format!(
+                        " <Warning: \"{}\" is not a Navmesh record>",
+                        main_record.get_short_name()
+                    ));
+                }
+            }
+            CallbackType::ctCheck => {
+                result = format!(
+                    "<Warning: \"{}\" is not a Navmesh record>",
+                    main_record.get_short_name()
+                );
+            }
+            _ => {}
+        }
+        return result;
+    }
+    if a_type == CallbackType::ctCheck {
+        let triangles = main_record
+            .get_element_by_path("NVTR")
+            .or_else(|| main_record.get_element_by_path("NVNM\\Triangles"))
+            .filter(|triangles| triangles.as_container().is_some());
+        if let Some(triangles) = triangles
+            && let Some(triangles) = triangles.as_container()
+            && a_int >= i64::from(triangles.get_element_count())
+        {
+            result = format!(
+                "<Warning: Navmesh triangle [{a_int}] not found in \"{}\">",
+                main_record.get_name()
+            );
+        }
+    }
+    result
+}
+
+/// Upstream `wbPackagePSDTMonthValueToStr`: the month, offset by one from
+/// form version 122.
+pub fn wb_package_psdt_month_value_to_str(a_int: i64, a_element: ElementArg, a_type: CallbackType) -> String {
+    let Some(main_record) = a_element.and_then(|element| element.get_containing_main_record()) else {
+        return format!("Unknown: {a_int}");
+    };
+    let a_int = if main_record.get_version() >= 122 {
+        a_int - 1
+    } else {
+        a_int
+    };
+    let Some(months) = wb_package_schedule_month_enum() else {
+        return String::new();
+    };
+    match a_type {
+        CallbackType::ctToStr | CallbackType::ctToSummary => {
+            months.to_string(a_int, a_element, a_type == CallbackType::ctToSummary)
+        }
+        CallbackType::ctToSortKey => int_to_hex64(a_int, 16),
+        CallbackType::ctCheck => months.check(a_int, a_element),
+        CallbackType::ctToEditValue => months.to_edit_value(a_int, a_element),
+        CallbackType::ctEditType => "ComboBox".to_owned(),
+        CallbackType::ctEditInfo => to_comma_text(&months.get_edit_info(a_element)),
+        _ => String::new(),
+    }
+}
+
+/// Upstream `wbPackagePSDTMonthValueToInt`.
+pub fn wb_package_psdt_month_value_to_int(a_string: &str, a_element: ElementArg) -> i64 {
+    let mut result = wb_package_schedule_month_enum()
+        .and_then(|months| months.find_name(a_string))
+        .unwrap_or_else(|| a_string.trim().parse().unwrap_or(0));
+    let Some(main_record) = a_element.and_then(|element| element.get_containing_main_record()) else {
+        return 0;
+    };
+    if main_record.get_version() >= 122 {
+        result += 1;
+    }
+    result
+}
+
+/// Upstream `wbQuestStageToInt`: the leading digits of the text.
+pub fn wb_quest_stage_to_int(a_string: &str, _a_element: ElementArg) -> i64 {
+    let digits: String = a_string.trim().chars().take_while(char::is_ascii_digit).collect();
+    digits.parse().unwrap_or(0)
+}
+
+/// Upstream `wbQUSTEventToStr`: warns about a quest the story manager
+/// does not know.
+///
+/// UPSTREAM-QUIRK: upstream looks through the references to the quest,
+/// which only exist after the references are built; the dump does not
+/// build them, so the text is never added.
+pub fn wb_qust_event_to_str(
+    _a_value: &mut String,
+    _a_base_ptr: DataPtr,
+    _a_element: ElementArg,
+    _a_type: CallbackType,
+) {
+}
+
+/// Upstream `wbTriangleLinksTo`: the triangle of the navmesh at the index.
+pub fn wb_triangle_links_to(a_element: ElementArg) -> Option<ElementRef> {
+    let element = a_element?;
+    element.get_container()?.as_container()?;
+    let main_record = element.get_containing_main_record()?;
+    let index = variant_int(&element.get_native_value());
+    let triangles = main_record.get_element_by_path("NVNM\\Triangles")?;
+    let triangles = triangles.as_container()?;
+    if index < 0 || index >= i64::from(triangles.get_element_count()) {
+        return None;
+    }
+    triangles.get_element(index as i32)
+}
+
+/// Upstream `wbVertexLinksTo`: the vertex of the navmesh at the index.
+pub fn wb_vertex_links_to(a_element: ElementArg) -> Option<ElementRef> {
+    let element = a_element?;
+    element.get_container()?.as_container()?;
+    let main_record = element.get_containing_main_record()?;
+    let vertices = main_record.get_element_by_path("NVNM\\Vertices")?;
+    let vertices = vertices.as_container()?;
+    let index = variant_int(&element.get_native_value());
+    if index < 0 || index >= i64::from(vertices.get_element_count()) {
+        return None;
+    }
+    vertices.get_element(index as i32)
 }

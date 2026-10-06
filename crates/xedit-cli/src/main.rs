@@ -57,14 +57,24 @@ fn run(action: Action) -> Result<Value, CommandError> {
 
 fn main() -> ExitCode {
     let cli = Cli::parse();
-    if let Action::Dump { game, file } = &cli.action {
+    if let Action::Dump { game, file } = cli.action {
         // The progress messages go to stderr like the log of xDump.
         xedit_session::dump::log_progress_to_stderr();
-        let result = xedit_session::dump::setup_game(game).and_then(|mode| {
-            let stdout = std::io::stdout();
-            let mut out = std::io::BufWriter::with_capacity(1 << 20, stdout.lock());
-            xedit_session::dump::dump_file(file, mode, &mut out)
-        });
+        // The element tree resolves deeply through the definitions, so the
+        // dump runs on a thread with a large stack.
+        let worker = std::thread::Builder::new()
+            .stack_size(1 << 30)
+            .spawn(move || {
+                xedit_session::dump::setup_game(&game).and_then(|mode| {
+                    let stdout = std::io::stdout();
+                    let mut out = std::io::BufWriter::with_capacity(1 << 20, stdout.lock());
+                    xedit_session::dump::dump_file(&file, mode, &mut out)
+                })
+            })
+            .expect("the dump thread");
+        let result = worker
+            .join()
+            .unwrap_or_else(|_| Err("the dump thread panicked".to_owned()));
         if let Err(error) = result {
             eprintln!("error: {error}");
             return ExitCode::FAILURE;

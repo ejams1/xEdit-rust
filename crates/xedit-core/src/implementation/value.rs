@@ -103,17 +103,25 @@ impl Cursor {
 /// of the data.
 pub(super) fn resolve(value_def: Arc<dyn ValueDef>, data: DataPtr, element: Option<&ElementRef>) -> Arc<dyn ValueDef> {
     let mut result = value_def;
-    loop {
-        let Some(resolvable) = result.as_resolvable_def() else {
-            return result;
-        };
-        // UPSTREAM-QUIRK: `BeginResolve` guards against recursion upstream;
-        // the definitions resolve from the data and the element directly.
+    // Port of `BeginResolve`: an element that is resolving a definition
+    // already does not resolve one that needs it, which stops the recursion
+    // of a decider that looks at the element.
+    let internal = element.and_then(|element| element.as_element_impl());
+    let mut can_resolve = false;
+    while let Some(resolvable) = result.as_resolvable_def() {
+        can_resolve = can_resolve || internal.is_some_and(|internal| internal.begin_resolve());
+        if resolvable.needs_element_to_resolve() && !can_resolve {
+            break;
+        }
         match resolvable.resolve_def(data, element) {
             Some(resolved) => result = resolved.clone(),
-            None => return result,
+            None => break,
         }
     }
+    if can_resolve && let Some(internal) = internal {
+        internal.end_resolve();
+    }
+    result
 }
 
 /// Port of `TwbValue`, `TwbStruct`, `TwbArray` and `TwbUnion` in one type.

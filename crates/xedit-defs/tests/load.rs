@@ -124,3 +124,111 @@ fn placed_record_names_its_base() {
     assert!(names.iter().any(|name| name.starts_with("NAME")), "{names:?}");
     assert!(refr.get_name().contains("Places"), "{}", refr.get_name());
 }
+
+#[test]
+fn race_tint_masks_resolve_by_path() {
+    let _guard = test_lock();
+    let Some(path) = plugin("XEDIT_SSE_DATA", "Update.esm") else {
+        return;
+    };
+    clear_record_defs();
+    xedit_core::implementation::clear_files_map();
+    set_game_mode(GameMode::gmSSE);
+    xedit_defs::tes5::define_tes5();
+    xedit_core::interface::init_records();
+    let file = wb_file(&path, i32::MAX, FileStates::empty()).unwrap();
+    let race = file
+        .record_by_form_id(xedit_core::interface::FormID::from_cardinal(0x00013741), true, true)
+        .expect("the BretonRace");
+    let race = race.get_winning_override();
+    eprintln!("winning in {:?}", race.get_file().map(|file| file.get_name()));
+    let names: Vec<String> = (0..race.get_element_count())
+        .filter_map(|index| race.get_element(index))
+        .map(|element| element.get_name())
+        .collect();
+    eprintln!("{names:?}");
+    let head_data = race.get_element_by_path("Head Data").expect("Head Data");
+    let names: Vec<String> = (0..head_data.as_container().unwrap().get_element_count())
+        .filter_map(|index| head_data.as_container().unwrap().get_element(index))
+        .map(|element| element.get_name())
+        .collect();
+    eprintln!("{names:?}");
+    let masks = race
+        .get_element_by_path(r"Head Data\Female Head Data\Tint Masks")
+        .expect("Tint Masks");
+    let masks = masks.as_container().unwrap();
+    assert!(masks.get_element_count() > 0);
+    let entry = masks.get_element(0).unwrap();
+    let entry = entry.as_container().unwrap();
+    eprintln!("{}", entry.get_element_edit_value(r"Tint Layer\TINP"));
+    assert_ne!(
+        entry.get_element_native_value(r"Tint Layer\TINI"),
+        xedit_core::interface::Variant::Empty
+    );
+}
+
+#[test]
+fn npc_tint_layer_names_the_mask() {
+    let _guard = test_lock();
+    let Some(path) = plugin("XEDIT_SSE_DATA", "Update.esm") else {
+        return;
+    };
+    clear_record_defs();
+    xedit_core::implementation::clear_files_map();
+    set_game_mode(GameMode::gmSSE);
+    xedit_defs::tes5::define_tes5();
+    xedit_core::interface::init_records();
+    let file = wb_file(&path, i32::MAX, FileStates::empty()).unwrap();
+    let npc = file
+        .record_by_form_id(xedit_core::interface::FormID::from_cardinal(0x0009F83A), true, true)
+        .expect("the NPC");
+    eprintln!("female={:?}", npc.get_element_edit_value(r"ACBS\Flags\Female"));
+    let tini = npc.get_element_by_path(r"Tint Layers\Layer\TINI").expect("the TINI");
+    eprintln!("tini value={}", tini.get_value());
+    eprintln!("tini native={:?}", tini.get_native_value());
+    let race = npc
+        .get_element_by_signature(xedit_core::interface::Signature::new(b"RNAM"))
+        .and_then(|element| element.get_links_to())
+        .and_then(|element| element.into_main_record())
+        .expect("the race")
+        .get_winning_override();
+    for sex in ["Male", "Female"] {
+        let masks = race
+            .get_element_by_path(&format!(r"Head Data\{sex} Head Data\Tint Masks"))
+            .expect("Tint Masks");
+        let masks = masks.as_container().unwrap();
+        let entries: Vec<String> = (0..masks.get_element_count())
+            .filter_map(|index| masks.get_element(index))
+            .map(|entry| {
+                let entry = entry.as_container().unwrap();
+                format!(
+                    "{:?}={}",
+                    entry.get_element_native_value(r"Tint Layer\TINI"),
+                    entry.get_element_edit_value(r"Tint Layer\TINP")
+                )
+            })
+            .collect();
+        eprintln!("{sex}: {entries:?}");
+    }
+}
+
+#[test]
+fn cloud_static_override_names_itself() {
+    let _guard = test_lock();
+    let Some(path) = plugin("XEDIT_SSE_DATA", "Update.esm") else {
+        return;
+    };
+    clear_record_defs();
+    xedit_core::implementation::clear_files_map();
+    set_game_mode(GameMode::gmSSE);
+    xedit_defs::tes5::define_tes5();
+    xedit_core::interface::init_records();
+    let file = wb_file(&path, i32::MAX, FileStates::empty()).unwrap();
+    let stat = file
+        .record_by_form_id(xedit_core::interface::FormID::from_cardinal(0x0002747D), true, true)
+        .expect("the STAT");
+    eprintln!("in {:?}", stat.get_file().map(|file| file.get_name()));
+    let master = stat.get_master_or_self();
+    eprintln!("master in {:?}", master.get_file().map(|file| file.get_name()));
+    eprintln!("name {}", stat.get_name());
+}
