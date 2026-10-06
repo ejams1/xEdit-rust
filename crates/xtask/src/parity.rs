@@ -694,8 +694,9 @@ fn run_oracle(case: &Case, runner: &Runner, dir: &Path, stem: &str) -> Result<Op
     // does on every Fallout 4 INFO with an alias condition) is kept as the
     // prefix the port has to match. A run that hit the memory cap says
     // nothing about the dump and is not kept.
-    let log_text = String::from_utf8_lossy(&fs::read(&log)?).into_owned();
-    let last = log_text.lines().last().unwrap_or_default();
+    // The log has a line per record; only its end is read and kept.
+    let log_tail = shrink_to_tail(&log, 64 * 1024)?;
+    let last = log_tail.lines().last().unwrap_or_default();
     if reached {
         let _ = fs::remove_file(&partial);
         bail!(
@@ -712,6 +713,24 @@ fn run_oracle(case: &Case, runner: &Runner, dir: &Path, stem: &str) -> Result<Op
         bail!("oracle did not finish: last log line: {last}");
     }
     Ok(peak)
+}
+
+/// Cuts the file down to its last `keep` bytes, from a line start, and
+/// returns them as text.
+fn shrink_to_tail(path: &Path, keep: u64) -> Result<String> {
+    use std::io::{Seek, SeekFrom};
+    let mut file = File::open(path)?;
+    let len = file.metadata()?.len();
+    file.seek(SeekFrom::Start(len.saturating_sub(keep)))?;
+    let mut tail = Vec::new();
+    file.read_to_end(&mut tail)?;
+    drop(file);
+    if len > keep {
+        let start = tail.iter().position(|&byte| byte == b'\n').map_or(0, |n| n + 1);
+        tail.drain(..start);
+        fs::write(path, &tail)?;
+    }
+    Ok(String::from_utf8_lossy(&tail).into_owned())
 }
 
 /// Describes the first line that differs, or returns `None` for equal files.

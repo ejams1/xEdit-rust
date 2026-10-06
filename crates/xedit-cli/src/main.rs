@@ -21,7 +21,7 @@ struct Cli {
     #[arg(long, global = true)]
     json: bool,
 
-    /// Game of the plugins to load: fo4, sse or tes5.
+    /// Game of the plugins to load, as the xDump switch: tes3, tes4, fo3, fnv, tes5, enderal, fo4, sse, tes5vr, enderalse, fo4vr, fo76 or sf1.
     #[arg(long, global = true)]
     game: Option<String>,
 
@@ -59,7 +59,7 @@ enum Action {
     },
     /// Write the element tree of a plugin as xDump prints it.
     Dump {
-        /// Game of the plugin: fo4, sse or tes5.
+        /// Game of the plugin, as for --game.
         #[arg(long)]
         game: String,
         /// Path of the plugin.

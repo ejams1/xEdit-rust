@@ -17,7 +17,7 @@ use xedit_core::interface::{
     Element, ElementRef, FileRef, FileStates, FormID, MainRecordRef, clear_files, record_by_load_order_form_id,
 };
 
-use crate::dump::{load_hardcoded, load_resources, setup_game};
+use crate::dump::{game_tag, load_hardcoded, load_resources, setup_game};
 use crate::{CommandError, NoParams, Registry, Session};
 
 impl Session {
@@ -33,7 +33,7 @@ impl Session {
         }
         if let (Some(file), Some(path)) = (files.last(), plugins.last()) {
             load_resources(file, path, mode);
-            load_hardcoded(mode)?;
+            load_hardcoded()?;
         }
         Ok(Self {
             game: Some(mode),
@@ -92,15 +92,6 @@ fn parse_form_id(text: &str) -> Result<FormID, CommandError> {
     u32::from_str_radix(digits, 16)
         .map(FormID::from_cardinal)
         .map_err(|_| CommandError::new("invalid_params", format!("{text} is not a hexadecimal FormID")))
-}
-
-fn game_tag(mode: GameMode) -> &'static str {
-    match mode {
-        GameMode::gmFO4 => "fo4",
-        GameMode::gmSSE => "sse",
-        GameMode::gmTES5 => "tes5",
-        _ => "unknown",
-    }
 }
 
 /// `session.info`.
