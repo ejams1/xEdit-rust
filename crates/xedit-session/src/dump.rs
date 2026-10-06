@@ -152,11 +152,18 @@ fn add_resource_archive(archive: &str) {
     }
 }
 
-/// Loads the plugin and writes its dump.
-pub fn dump_file(path: &str, mode: GameMode, out: &mut dyn Write) -> Result<(), String> {
+/// Loads the plugin with its masters, its resources and the hardcoded
+/// records, as `xDump.dpr` does before it starts the dump.
+pub fn load_file(path: &str, mode: GameMode) -> Result<Arc<FileImpl>, String> {
     let file = wb_file(path, i32::MAX, FileStates::empty()).map_err(|error| error.to_string())?;
     load_resources(&file, path, mode);
     load_hardcoded(mode)?;
+    Ok(file)
+}
+
+/// Loads the plugin and writes its dump.
+pub fn dump_file(path: &str, mode: GameMode, out: &mut dyn Write) -> Result<(), String> {
+    let file = load_file(path, mode)?;
     write_container(&file, out).map_err(|error| error.to_string())
 }
 
