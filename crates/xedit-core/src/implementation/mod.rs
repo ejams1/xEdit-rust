@@ -599,9 +599,15 @@ impl FileImpl {
         FileID::create_full(self.master_count() as i16)
     }
 
-    /// Port of `FindFormID` on the sorted records.
+    /// Port of `FindFormID` on the sorted records: a FormID past the
+    /// masters belongs to the file itself.
     fn find_form_id(&self, form_id: FormID) -> Option<Arc<MainRecordImpl>> {
         let sorted = self.fl_sorted_records.get()?;
+        let form_id = if self.is_new_record(form_id.file_id()) {
+            form_id.change_file_id(self.get_file_file_id())
+        } else {
+            form_id
+        };
         let index = sorted
             .binary_search_by_key(&form_id.to_cardinal(), |record| {
                 record.get_fixed_form_id().to_cardinal()
