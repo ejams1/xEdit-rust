@@ -183,20 +183,29 @@ impl GroupRecordStruct {
     }
 }
 
-/// Upstream `TwbSubRecordHeaderStruct`: a signature and a 16 bit size.
+/// Upstream `TwbSubRecordHeaderStruct`: a signature and a 16 bit size, a
+/// 32 bit size for Morrowind.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SubRecordHeaderStruct {
     pub signature: Signature,
-    pub data_size: u16,
+    pub data_size: u32,
 }
 
 impl SubRecordHeaderStruct {
-    pub const SIZE: usize = 6;
+    /// Port of `TwbSubRecordHeaderStruct.SizeOf`.
+    pub fn size() -> usize {
+        if game_mode() == GameMode::gmTES3 { 8 } else { 6 }
+    }
 
     pub fn parse(bytes: &[u8], offset: usize) -> Option<Self> {
+        let data_size = if game_mode() == GameMode::gmTES3 {
+            u32::from_le_bytes(bytes.get(offset + 4..offset + 8)?.try_into().ok()?)
+        } else {
+            u32::from(u16_at(bytes, offset + 4)?)
+        };
         Some(SubRecordHeaderStruct {
             signature: signature_at(bytes, offset)?,
-            data_size: u16_at(bytes, offset + 4)?,
+            data_size,
         })
     }
 }

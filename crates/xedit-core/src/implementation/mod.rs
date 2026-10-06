@@ -1337,6 +1337,9 @@ pub struct GroupRecordImpl {
     /// The range of the group in the file, header included.
     dc_base: usize,
     dc_end: usize,
+    /// Port of `gsSorted`: the group was sorted, and `sort` does nothing
+    /// until a change of its members clears it.
+    gr_sorted: AtomicBool,
 }
 
 impl GroupRecordImpl {
@@ -1366,6 +1369,7 @@ impl GroupRecordImpl {
             gr_struct,
             dc_base,
             dc_end,
+            gr_sorted: AtomicBool::new(false),
         });
         if gr_struct.group_type == 0 {
             let order = wb_get_group_order(gr_struct.label_signature());
@@ -1413,11 +1417,16 @@ impl GroupRecordImpl {
     /// `CompareGroupContents`. A topic group (type 7) sorts its INFOs by
     /// their links instead, which xDump does not do without the load order
     /// FormIDs, so it is left alone.
+    /// Port of `TwbGroupRecord.Sort` without `aForce`.
+    /// UPSTREAM-QUIRK: the merge of a duplicated top level group adds the
+    /// records without clearing `gsSorted`, so a group that two duplicates
+    /// merge into is sorted only after the first of them.
     pub(crate) fn sort(&self) {
-        if self.gr_struct.group_type == 7 {
+        if self.gr_struct.group_type == 7 || self.gr_sorted.load(Ordering::Relaxed) {
             return;
         }
         self.container.sort_by(compare_group_contents);
+        self.gr_sorted.store(true, Ordering::Relaxed);
     }
 }
 

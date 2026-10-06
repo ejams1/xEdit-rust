@@ -95,6 +95,7 @@ pub fn setup_game(game: &str) -> Result<GameMode, String> {
             xedit_defs::tes5::define_tes5
         }
         GameMode::gmFO4 | GameMode::gmFO4VR => xedit_defs::fo4::define_fo4,
+        GameMode::gmTES3 => xedit_defs::tes3::define_tes3,
         GameMode::gmTES4 => xedit_defs::tes4::define_tes4,
         GameMode::gmFO3 => xedit_defs::fo3::define_fo3,
         GameMode::gmFNV => xedit_defs::fnv::define_fnv,
