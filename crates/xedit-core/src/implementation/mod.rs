@@ -83,11 +83,11 @@ macro_rules! element_common {
         }
 
         fn get_conflict_priority(&self) -> ConflictPriority {
-            ConflictPriority::cpNormal
+            $crate::implementation::element_conflict_priority(self)
         }
 
         fn get_dont_show(&self) -> bool {
-            false
+            $crate::implementation::element_dont_show(self)
         }
 
         fn as_element_impl(&self) -> Option<&dyn ElementImpl> {
@@ -107,22 +107,22 @@ use xedit_io::{Encoding, MappedFile};
 
 use crate::delphi::path_file_name;
 use crate::interface::constructors::find_record_def;
-use crate::interface::def::{NamedDef, ValueDef};
+use crate::interface::def::{Def, NamedDef, ValueDef};
 use crate::interface::element::{
     Container, DataContainer, DataPtr, Element, ElementRef, File, FileRef, MainRecord, MainRecordRef,
 };
 use crate::interface::form_id::{FileID, FormID};
 use crate::interface::globals::{
-    create_contained_in, display_load_order_form_id, game_master_esm, header_signature, is_light_supported,
-    is_medium_supported, is_update_supported, pseudo_light, pseudo_medium, pseudo_update, size_of_main_record_struct,
-    vwd_as_quest_children, wb_get_group_order,
+    GameMode, create_contained_in, display_load_order_form_id, game_master_esm, game_mode, header_signature,
+    is_light_supported, is_medium_supported, is_update_supported, pseudo_light, pseudo_medium, pseudo_update,
+    size_of_main_record_struct, vwd_as_quest_children, wb_get_group_order,
 };
 use crate::interface::main_record::{MainRecordDef, main_record_header};
 use crate::interface::misc::{Variant, progress};
 use crate::interface::sub_record_group::RecordDef;
 use crate::interface::types::{ConflictPriority, ElementType, FileState, FileStates, Signature, TriBool};
 
-use self::structs::{GroupRecordStruct, MainRecordStruct};
+use self::structs::{GroupRecordStruct, MainRecordStruct, MainRecordStructFlags};
 
 /// The bytes of a plugin: the mapped file, or a buffer given to `wb_file`.
 pub enum FileBytes {
@@ -211,8 +211,9 @@ pub(crate) fn element_by_name(container: &dyn Container, name: &str) -> Option<E
 }
 
 /// Port of `ElementByPath` with `ResolveElementName`: the names separated by
-/// `\\`, with `.`, `..`, `[n]` for the element at a position, and a name of
-/// four characters that is also tried as a signature.
+/// `\\`, with `.`, `..`, `...` (this container or any parent), `[n]` for the
+/// element at a position, and a name of four characters that is also tried
+/// as a signature.
 pub(crate) fn element_by_path(container: &dyn Container, path: &str) -> Option<ElementRef> {
     let (first, rest) = match path.split_once('\\') {
         Some((first, rest)) => (first, Some(rest)),
@@ -223,6 +224,9 @@ pub(crate) fn element_by_path(container: &dyn Container, path: &str) -> Option<E
             Some(rest) => container.get_element_by_path(rest),
             None => None,
         };
+    }
+    if first == "..." {
+        return element_by_path_from_any_parent(container, rest.unwrap_or(""));
     }
     let element = if first == ".." {
         container.get_container()
@@ -238,6 +242,88 @@ pub(crate) fn element_by_path(container: &dyn Container, path: &str) -> Option<E
         Some(rest) => element?.as_container()?.get_element_by_path(rest),
         None => element,
     }
+}
+
+/// Port of the `...` case of `ResolveElementName`: the rest of the path is
+/// looked up from this container and from each of its parents in turn; a
+/// parent whose name is the next name of the path resolves the rest itself.
+fn element_by_path_from_any_parent(container: &dyn Container, rest: &str) -> Option<ElementRef> {
+    let (next_name, next_rest) = match rest.split_once('\\') {
+        Some((next_name, next_rest)) => (next_name.trim(), Some(next_rest)),
+        None => (rest.trim(), None),
+    };
+    if next_name.is_empty() {
+        return None;
+    }
+    let signature = Signature::from_str(next_name).ok();
+    // This container first, then each parent.
+    if let Some(found) = container.get_element_by_path(rest) {
+        return Some(found);
+    }
+    if container.get_name().eq_ignore_ascii_case(next_name)
+        || container.get_display_name(true).eq_ignore_ascii_case(next_name)
+        || (signature.is_some() && container.get_record_signature() == signature)
+    {
+        return match next_rest {
+            Some(next_rest) => container.get_element_by_path(next_rest),
+            None => None,
+        };
+    }
+    let mut current = container.get_container();
+    while let Some(element) = current {
+        let parent = element.as_container()?;
+        if let Some(found) = parent.get_element_by_path(rest) {
+            return Some(found);
+        }
+        if element.get_name().eq_ignore_ascii_case(next_name)
+            || element.get_display_name(true).eq_ignore_ascii_case(next_name)
+            || (signature.is_some() && element.get_record_signature() == signature)
+        {
+            return match next_rest {
+                Some(next_rest) => parent.get_element_by_path(next_rest),
+                None => Some(element),
+            };
+        }
+        current = element.get_container();
+    }
+    None
+}
+
+/// Port of `TwbElement.GetConflictPriority`: from the value definition,
+/// else the definition, with `cpFormID` resolved for the record.
+pub(crate) fn element_conflict_priority(element: &dyn ElementImpl) -> ConflictPriority {
+    let self_ref = element.self_element_ref();
+    let def: Option<Arc<dyn Def>> = match element.get_value_def() {
+        Some(value_def) => Some(value_def as Arc<dyn Def>),
+        None => element.get_def().map(|def| def as Arc<dyn Def>),
+    };
+    let mut result = ConflictPriority::cpNormal;
+    if let Some(def) = def {
+        result = def.get_conflict_priority(self_ref.as_ref());
+    }
+    if result == ConflictPriority::cpFormID {
+        result = ConflictPriority::cpCritical;
+        if let Some(main_record) = element.get_containing_main_record()
+            && matches!(main_record.get_signature().0.as_slice(), b"GMST" | b"DFOB")
+        {
+            result = ConflictPriority::cpBenign;
+        }
+    }
+    result
+}
+
+/// Port of `TwbElement.GetDontShow`: from the value definition, else the
+/// definition.
+pub(crate) fn element_dont_show(element: &dyn ElementImpl) -> bool {
+    let self_ref = element.self_element_ref();
+    if let Some(value_def) = element.get_value_def()
+        && value_def.get_dont_show(self_ref.as_ref())
+    {
+        return true;
+    }
+    element
+        .get_def()
+        .is_some_and(|def| def.get_dont_show(self_ref.as_ref()))
 }
 
 /// The fields of `TwbElement`.
@@ -1173,6 +1259,10 @@ impl MainRecordImpl {
 pub trait ElementImpl: Element {
     fn element_base(&self) -> &ElementBase;
 
+    /// The element as a reference, for the callbacks that take one. `None`
+    /// while the element is being created.
+    fn self_element_ref(&self) -> Option<ElementRef>;
+
     fn container_base(&self) -> Option<&ContainerBase> {
         None
     }
@@ -1253,6 +1343,10 @@ impl Element for FileImpl {
 }
 
 impl ElementImpl for FileImpl {
+    fn self_element_ref(&self) -> Option<ElementRef> {
+        self.self_ref.upgrade().map(|element| element as ElementRef)
+    }
+
     fn element_base(&self) -> &ElementBase {
         &self.base
     }
@@ -1267,10 +1361,6 @@ impl ElementImpl for FileImpl {
 }
 
 impl Container for FileImpl {
-    fn get_element_native_value(&self, _path: &str) -> Variant {
-        Variant::Empty
-    }
-
     fn get_element_by_name(&self, name: &str) -> Option<ElementRef> {
         element_by_name(self, name)
     }
@@ -1409,6 +1499,10 @@ impl Element for GroupRecordImpl {
 }
 
 impl ElementImpl for GroupRecordImpl {
+    fn self_element_ref(&self) -> Option<ElementRef> {
+        self.self_ref.upgrade().map(|element| element as ElementRef)
+    }
+
     fn element_base(&self) -> &ElementBase {
         &self.base
     }
@@ -1423,10 +1517,6 @@ impl ElementImpl for GroupRecordImpl {
 }
 
 impl Container for GroupRecordImpl {
-    fn get_element_native_value(&self, _path: &str) -> Variant {
-        Variant::Empty
-    }
-
     fn get_element_by_name(&self, name: &str) -> Option<ElementRef> {
         element_by_name(self, name)
     }
@@ -1543,6 +1633,10 @@ impl Element for MainRecordImpl {
 }
 
 impl ElementImpl for MainRecordImpl {
+    fn self_element_ref(&self) -> Option<ElementRef> {
+        self.self_ref.upgrade().map(|element| element as ElementRef)
+    }
+
     fn element_base(&self) -> &ElementBase {
         &self.base
     }
@@ -1557,11 +1651,6 @@ impl ElementImpl for MainRecordImpl {
 }
 
 impl Container for MainRecordImpl {
-    fn get_element_native_value(&self, path: &str) -> Variant {
-        self.get_element_by_path(path)
-            .map_or(Variant::Empty, |element| element.get_native_value())
-    }
-
     fn get_element_by_name(&self, name: &str) -> Option<ElementRef> {
         element_by_name(self, name)
     }
@@ -1640,6 +1729,47 @@ impl MainRecord for MainRecordImpl {
 
     fn get_is_partial_form(&self) -> bool {
         self.mr_struct.flags.is_partial_form()
+    }
+
+    fn get_flags(&self) -> MainRecordStructFlags {
+        self.mr_struct.flags
+    }
+
+    /// Port of `TwbMainRecord.GetCanBePartial`.
+    fn get_can_be_partial(&self) -> bool {
+        let Some(def) = &self.mr_def else { return false };
+        if !def.get_can_be_partial() {
+            return false;
+        }
+        if self.mr_struct.signature != Signature::new(b"CELL") {
+            return true;
+        }
+        let master_or_self = self.get_master_or_self();
+        // No partial for temporary exterior cells.
+        if !self.get_is_persistent() && master_or_self.get_grid_cell().is_some() {
+            return false;
+        }
+        // Only interior cells get here. No partial for interior cells in
+        // FO4 if they are not defined in Fallout4.esm.
+        if game_mode() == GameMode::gmFO4
+            && let Some(file) = master_or_self.get_file()
+            && !file.get_file_states().contains(FileState::fsIsGameMaster)
+        {
+            return false;
+        }
+        true
+    }
+
+    /// Port of `TwbMainRecord.GetGridCell`: the `XCLC` position of a cell.
+    fn get_grid_cell(&self) -> Option<(i32, i32)> {
+        if self.mr_struct.signature != Signature::new(b"CELL") {
+            return None;
+        }
+        let xclc = self.get_record_by_signature(Signature::new(b"XCLC"))?;
+        let xclc = xclc.as_container()?;
+        let x = xclc.get_element_native_value("X").as_ordinal()?;
+        let y = xclc.get_element_native_value("Y").as_ordinal()?;
+        Some((x as i32, y as i32))
     }
 
     fn get_is_persistent(&self) -> bool {

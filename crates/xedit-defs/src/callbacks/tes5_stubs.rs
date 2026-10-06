@@ -37,11 +37,6 @@ pub fn define_tes5_anonymous_9854(_a_element: ElementArg) -> Option<ElementRef> 
     todo!("port anonymous routine in define_tes5 from wbDefinitionsTES5.pas line 9854")
 }
 
-/// Upstream `wbACBSLevelDecider`, line 266 of `wbDefinitionsTES5.pas`.
-pub fn wb_acbs_level_decider(_a_base_ptr: DataPtr, _a_element: ElementArg) -> i32 {
-    todo!("port wbACBSLevelDecider from wbDefinitionsTES5.pas line 266")
-}
-
 /// Upstream `wbACBSLevelMultAfterLoad`, line 39 of `wbDefinitionsTES5.pas`.
 pub fn wb_acbs_level_mult_after_load(_a_element: &ElementRef) {
     todo!("port wbACBSLevelMultAfterLoad from wbDefinitionsTES5.pas line 39")
@@ -77,11 +72,6 @@ pub fn wb_book_data_flags_after_set(_a_element: &ElementRef, _a_old_value: &Vari
     todo!("port wbBOOKDataFlagsAfterSet from wbDefinitionsTES5.pas line 55")
 }
 
-/// Upstream `wbBOOKTeachesDecider`, line 1321 of `wbDefinitionsTES5.pas`.
-pub fn wb_book_teaches_decider(_a_base_ptr: DataPtr, _a_element: ElementArg) -> i32 {
-    todo!("port wbBOOKTeachesDecider from wbDefinitionsTES5.pas line 1321")
-}
-
 /// Upstream `wbBookTeachesDontSHow`, line 94 of `wbDefinitionsTES5.pas`.
 pub fn wb_book_teaches_dont_s_how(_a_element: ElementArg) -> bool {
     todo!("port wbBookTeachesDontSHow from wbDefinitionsTES5.pas line 94")
@@ -90,11 +80,6 @@ pub fn wb_book_teaches_dont_s_how(_a_element: ElementArg) -> bool {
 /// Upstream `wbCELLAfterLoad`, line 1773 of `wbDefinitionsTES5.pas`.
 pub fn wb_cell_after_load(_a_element: &ElementRef) {
     todo!("port wbCELLAfterLoad from wbDefinitionsTES5.pas line 1773")
-}
-
-/// Upstream `wbCellExteriorDontShow`, line 96 of `wbDefinitionsTES5.pas`.
-pub fn wb_cell_exterior_dont_show(_a_element: ElementArg) -> bool {
-    todo!("port wbCellExteriorDontShow from wbDefinitionsTES5.pas line 96")
 }
 
 /// Upstream `wbCellLightingIsRemovable`, line 136 of `wbDefinitionsTES5.pas`.
@@ -122,19 +107,9 @@ pub fn wb_clmt_time(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) 
     todo!("port wbClmtTime from wbDefinitionsTES5.pas line 201")
 }
 
-/// Upstream `wbCOEDOwnerDecider`, line 267 of `wbDefinitionsTES5.pas`.
-pub fn wb_coed_owner_decider(_a_base_ptr: DataPtr, _a_element: ElementArg) -> i32 {
-    todo!("port wbCOEDOwnerDecider from wbDefinitionsTES5.pas line 267")
-}
-
 /// Upstream `wbConditionAliasToStr`, line 202 of `wbDefinitionsTES5.pas`.
 pub fn wb_condition_alias_to_str(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) -> String {
     todo!("port wbConditionAliasToStr from wbDefinitionsTES5.pas line 202")
-}
-
-/// Upstream `wbConditionCompValueDecider`, line 268 of `wbDefinitionsTES5.pas`.
-pub fn wb_condition_comp_value_decider(_a_base_ptr: DataPtr, _a_element: ElementArg) -> i32 {
-    todo!("port wbConditionCompValueDecider from wbDefinitionsTES5.pas line 268")
 }
 
 /// Upstream `wbConditionEventToInt`, line 772 of `wbDefinitionsTES5.pas`.
@@ -177,19 +152,9 @@ pub fn wb_condition_param2_decider(_a_base_ptr: DataPtr, _a_element: ElementArg)
     todo!("port wbConditionParam2Decider from wbDefinitionsTES5.pas line 712")
 }
 
-/// Upstream `wbConditionParam3Decider`, line 269 of `wbDefinitionsTES5.pas`.
-pub fn wb_condition_param3_decider(_a_base_ptr: DataPtr, _a_element: ElementArg) -> i32 {
-    todo!("port wbConditionParam3Decider from wbDefinitionsTES5.pas line 269")
-}
-
 /// Upstream `wbConditionQuestStageToStr`, line 789 of `wbDefinitionsTES5.pas`.
 pub fn wb_condition_quest_stage_to_str(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) -> String {
     todo!("port wbConditionQuestStageToStr from wbDefinitionsTES5.pas line 789")
-}
-
-/// Upstream `wbConditionReferenceDecider`, line 270 of `wbDefinitionsTES5.pas`.
-pub fn wb_condition_reference_decider(_a_base_ptr: DataPtr, _a_element: ElementArg) -> i32 {
-    todo!("port wbConditionReferenceDecider from wbDefinitionsTES5.pas line 270")
 }
 
 /// Upstream `wbConditionRunOnAfterSet`, line 57 of `wbDefinitionsTES5.pas`.
@@ -307,11 +272,6 @@ pub fn wb_epfd_actor_value_to_str(_a_int: i64, _a_element: ElementArg, _a_type: 
     todo!("port wbEPFDActorValueToStr from wbDefinitionsTES5.pas line 889")
 }
 
-/// Upstream `wbEPFDDecider`, line 1278 of `wbDefinitionsTES5.pas`.
-pub fn wb_epfd_decider(_a_base_ptr: DataPtr, _a_element: ElementArg) -> i32 {
-    todo!("port wbEPFDDecider from wbDefinitionsTES5.pas line 1278")
-}
-
 /// Upstream `wbFlagNavmeshBoundingBoxDontSHow`, line 85 of `wbDefinitionsTES5.pas`.
 pub fn wb_flag_navmesh_bounding_box_dont_s_how(_a_element: ElementArg) -> bool {
     todo!("port wbFlagNavmeshBoundingBoxDontSHow from wbDefinitionsTES5.pas line 85")
@@ -327,21 +287,6 @@ pub fn wb_flag_navmesh_ground_dont_s_how(_a_element: ElementArg) -> bool {
     todo!("port wbFlagNavmeshGroundDontSHow from wbDefinitionsTES5.pas line 88")
 }
 
-/// Upstream `wbFlagPartialFormDontShow`, line 89 of `wbDefinitionsTES5.pas`.
-pub fn wb_flag_partial_form_dont_show(_a_element: ElementArg) -> bool {
-    todo!("port wbFlagPartialFormDontShow from wbDefinitionsTES5.pas line 89")
-}
-
-/// Upstream `wbFlagREFRInteriorDontShow`, line 83 of `wbDefinitionsTES5.pas`.
-pub fn wb_flag_refr_interior_dont_show(_a_element: ElementArg) -> bool {
-    todo!("port wbFlagREFRInteriorDontShow from wbDefinitionsTES5.pas line 83")
-}
-
-/// Upstream `wbFlagREFRSkyMarkerDontShow`, line 90 of `wbDefinitionsTES5.pas`.
-pub fn wb_flag_refr_sky_marker_dont_show(_a_element: ElementArg) -> bool {
-    todo!("port wbFlagREFRSkyMarkerDontShow from wbDefinitionsTES5.pas line 90")
-}
-
 /// Upstream `wbFLSTEDIDAfterSet`, line 1041 of `wbDefinitionsTES5.pas`.
 pub fn wb_flstedid_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
     todo!("port wbFLSTEDIDAfterSet from wbDefinitionsTES5.pas line 1041")
@@ -355,11 +300,6 @@ pub fn wb_flstlnam_is_sorted(_a_container: ElementArg) -> bool {
 /// Upstream `wbGMSTEDIDAfterSet`, line 1021 of `wbDefinitionsTES5.pas`.
 pub fn wb_gmstedid_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
     todo!("port wbGMSTEDIDAfterSet from wbDefinitionsTES5.pas line 1021")
-}
-
-/// Upstream `wbHideFFFF`, line 210 of `wbDefinitionsTES5.pas`.
-pub fn wb_hide_ffff(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) -> String {
-    todo!("port wbHideFFFF from wbDefinitionsTES5.pas line 210")
 }
 
 /// Upstream `wbINFOPNAMAfterSet`, line 997 of `wbDefinitionsTES5.pas`.
@@ -427,29 +367,9 @@ pub fn wb_mgef_assoc_item_after_set(_a_element: &ElementRef, _a_old_value: &Vari
     todo!("port wbMGEFAssocItemAfterSet from wbDefinitionsTES5.pas line 1177")
 }
 
-/// Upstream `wbMGEFAssocItemDecider`, line 1135 of `wbDefinitionsTES5.pas`.
-pub fn wb_mgef_assoc_item_decider(_a_base_ptr: DataPtr, _a_element: ElementArg) -> i32 {
-    todo!("port wbMGEFAssocItemDecider from wbDefinitionsTES5.pas line 1135")
-}
-
 /// Upstream `wbMGEFAV2WeightAfterSet`, line 1194 of `wbDefinitionsTES5.pas`.
 pub fn wb_mgefav2_weight_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
     todo!("port wbMGEFAV2WeightAfterSet from wbDefinitionsTES5.pas line 1194")
-}
-
-/// Upstream `wbNAVIIslandDataDecider`, line 275 of `wbDefinitionsTES5.pas`.
-pub fn wb_navi_island_data_decider(_a_base_ptr: DataPtr, _a_element: ElementArg) -> i32 {
-    todo!("port wbNAVIIslandDataDecider from wbDefinitionsTES5.pas line 275")
-}
-
-/// Upstream `wbNAVIParentDecider`, line 276 of `wbDefinitionsTES5.pas`.
-pub fn wb_navi_parent_decider(_a_base_ptr: DataPtr, _a_element: ElementArg) -> i32 {
-    todo!("port wbNAVIParentDecider from wbDefinitionsTES5.pas line 276")
-}
-
-/// Upstream `wbNavmeshGridCounter`, line 74 of `wbDefinitionsTES5.pas`.
-pub fn wb_navmesh_grid_counter(_a_base_ptr: DataPtr, _a_element: ElementArg) -> u32 {
-    todo!("port wbNavmeshGridCounter from wbDefinitionsTES5.pas line 74")
 }
 
 /// Upstream `wbNPCPackageToStr`, line 242 of `wbDefinitionsTES5.pas`.
@@ -460,11 +380,6 @@ pub fn wb_npc_package_to_str(
     _a_type: CallbackType,
 ) {
     todo!("port wbNPCPackageToStr from wbDefinitionsTES5.pas line 242")
-}
-
-/// Upstream `wbNVNMParentDecider`, line 277 of `wbDefinitionsTES5.pas`.
-pub fn wb_nvnm_parent_decider(_a_base_ptr: DataPtr, _a_element: ElementArg) -> i32 {
-    todo!("port wbNVNMParentDecider from wbDefinitionsTES5.pas line 277")
 }
 
 /// Upstream `wbPACKDateAfterLoad`, line 44 of `wbDefinitionsTES5.pas`.
@@ -506,11 +421,6 @@ pub fn wb_package_psdt_month_value_to_str(_a_int: i64, _a_element: ElementArg, _
     todo!("port wbPackagePSDTMonthValueToStr from wbDefinitionsTES5.pas line 228")
 }
 
-/// Upstream `wbPerkDATADecider`, line 1259 of `wbDefinitionsTES5.pas`.
-pub fn wb_perk_data_decider(_a_base_ptr: DataPtr, _a_element: ElementArg) -> i32 {
-    todo!("port wbPerkDATADecider from wbDefinitionsTES5.pas line 1259")
-}
-
 /// Upstream `wbPerkDATAQuestStageToStr`, line 917 of `wbDefinitionsTES5.pas`.
 pub fn wb_perk_data_quest_stage_to_str(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) -> String {
     todo!("port wbPerkDATAQuestStageToStr from wbDefinitionsTES5.pas line 917")
@@ -519,11 +429,6 @@ pub fn wb_perk_data_quest_stage_to_str(_a_int: i64, _a_element: ElementArg, _a_t
 /// Upstream `wbPERKPRKETypeAfterSet`, line 63 of `wbDefinitionsTES5.pas`.
 pub fn wb_perkprke_type_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
     todo!("port wbPERKPRKETypeAfterSet from wbDefinitionsTES5.pas line 63")
-}
-
-/// Upstream `wbPubPackCNAMDecider`, line 1893 of `wbDefinitionsTES5.pas`.
-pub fn wb_pub_pack_cnam_decider(_a_base_ptr: DataPtr, _a_element: ElementArg) -> i32 {
-    todo!("port wbPubPackCNAMDecider from wbDefinitionsTES5.pas line 1893")
 }
 
 /// Upstream `wbQuestAliasToStr`, line 217 of `wbDefinitionsTES5.pas`.
@@ -576,11 +481,6 @@ pub fn wb_refr_navmesh_triangle_to_str(_a_int: i64, _a_element: ElementArg, _a_t
     todo!("port wbREFRNavmeshTriangleToStr from wbDefinitionsTES5.pas line 219")
 }
 
-/// Upstream `wbREFRRecordFlagsDecider`, line 1950 of `wbDefinitionsTES5.pas`.
-pub fn wb_refr_record_flags_decider(_a_element: ElementArg) -> i32 {
-    todo!("port wbREFRRecordFlagsDecider from wbDefinitionsTES5.pas line 1950")
-}
-
 /// Upstream `wbREGNGrassDontShow`, line 107 of `wbDefinitionsTES5.pas`.
 pub fn wb_regn_grass_dont_show(_a_element: ElementArg) -> bool {
     todo!("port wbREGNGrassDontShow from wbDefinitionsTES5.pas line 107")
@@ -621,26 +521,6 @@ pub fn wb_scene_alias_to_str(_a_int: i64, _a_element: ElementArg, _a_type: Callb
     todo!("port wbSceneAliasToStr from wbDefinitionsTES5.pas line 221")
 }
 
-/// Upstream `wbScriptFragmentsInfoCounter`, line 75 of `wbDefinitionsTES5.pas`.
-pub fn wb_script_fragments_info_counter(_a_base_ptr: DataPtr, _a_element: ElementArg) -> u32 {
-    todo!("port wbScriptFragmentsInfoCounter from wbDefinitionsTES5.pas line 75")
-}
-
-/// Upstream `wbScriptFragmentsPackCounter`, line 76 of `wbDefinitionsTES5.pas`.
-pub fn wb_script_fragments_pack_counter(_a_base_ptr: DataPtr, _a_element: ElementArg) -> u32 {
-    todo!("port wbScriptFragmentsPackCounter from wbDefinitionsTES5.pas line 76")
-}
-
-/// Upstream `wbScriptFragmentsSceneCounter`, line 77 of `wbDefinitionsTES5.pas`.
-pub fn wb_script_fragments_scene_counter(_a_base_ptr: DataPtr, _a_element: ElementArg) -> u32 {
-    todo!("port wbScriptFragmentsSceneCounter from wbDefinitionsTES5.pas line 77")
-}
-
-/// Upstream `wbScriptObjFormatDecider`, line 280 of `wbDefinitionsTES5.pas`.
-pub fn wb_script_obj_format_decider(_a_base_ptr: DataPtr, _a_element: ElementArg) -> i32 {
-    todo!("port wbScriptObjFormatDecider from wbDefinitionsTES5.pas line 280")
-}
-
 /// Upstream `wbScriptObjectAliasLinksTo`, line 157 of `wbDefinitionsTES5.pas`.
 pub fn wb_script_object_alias_links_to(_a_element: ElementArg) -> Option<ElementRef> {
     todo!("port wbScriptObjectAliasLinksTo from wbDefinitionsTES5.pas line 157")
@@ -649,11 +529,6 @@ pub fn wb_script_object_alias_links_to(_a_element: ElementArg) -> Option<Element
 /// Upstream `wbScriptObjectAliasToStr`, line 222 of `wbDefinitionsTES5.pas`.
 pub fn wb_script_object_alias_to_str(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) -> String {
     todo!("port wbScriptObjectAliasToStr from wbDefinitionsTES5.pas line 222")
-}
-
-/// Upstream `wbScriptPropertyDecider`, line 1299 of `wbDefinitionsTES5.pas`.
-pub fn wb_script_property_decider(_a_base_ptr: DataPtr, _a_element: ElementArg) -> i32 {
-    todo!("port wbScriptPropertyDecider from wbDefinitionsTES5.pas line 1299")
 }
 
 /// Upstream `wbScriptPropertyTypeAfterSet`, line 67 of `wbDefinitionsTES5.pas`.
@@ -689,11 +564,6 @@ pub fn wb_tint_layer_to_str(_a_int: i64, _a_element: ElementArg, _a_type: Callba
 /// Upstream `wbTriangleLinksTo`, line 158 of `wbDefinitionsTES5.pas`.
 pub fn wb_triangle_links_to(_a_element: ElementArg) -> Option<ElementRef> {
     todo!("port wbTriangleLinksTo from wbDefinitionsTES5.pas line 158")
-}
-
-/// Upstream `wbTypeDecider`, line 1913 of `wbDefinitionsTES5.pas`.
-pub fn wb_type_decider(_a_base_ptr: DataPtr, _a_element: ElementArg) -> i32 {
-    todo!("port wbTypeDecider from wbDefinitionsTES5.pas line 1913")
 }
 
 /// Upstream `wbUpdateSameParentUnions`, line 68 of `wbDefinitionsTES5.pas`.

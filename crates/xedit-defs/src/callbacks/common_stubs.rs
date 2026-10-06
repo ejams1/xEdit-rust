@@ -12,61 +12,6 @@
 
 use xedit_core::interface::*;
 
-/// Upstream `wbABGRToStr`, line 234 of `wbDefinitionsCommon.pas`.
-pub fn wb_abgr_to_str(_a_value: &mut String, _a_base_ptr: DataPtr, _a_element: ElementArg, _a_type: CallbackType) {
-    todo!("port wbABGRToStr from wbDefinitionsCommon.pas line 234")
-}
-
-/// Upstream `wbBGRAToStr`, line 235 of `wbDefinitionsCommon.pas`.
-pub fn wb_bgra_to_str(_a_value: &mut String, _a_base_ptr: DataPtr, _a_element: ElementArg, _a_type: CallbackType) {
-    todo!("port wbBGRAToStr from wbDefinitionsCommon.pas line 235")
-}
-
-/// Upstream `wbCellGridIsRemovable`, line 135 of `wbDefinitionsCommon.pas`.
-pub fn wb_cell_grid_is_removable(_a_element: ElementArg) -> bool {
-    todo!("port wbCellGridIsRemovable from wbDefinitionsCommon.pas line 135")
-}
-
-/// Upstream `wbCellInteriorDontShow`, line 95 of `wbDefinitionsCommon.pas`.
-pub fn wb_cell_interior_dont_show(_a_element: ElementArg) -> bool {
-    todo!("port wbCellInteriorDontShow from wbDefinitionsCommon.pas line 95")
-}
-
-/// Upstream `wbFactionRelationToStr`, line 240 of `wbDefinitionsCommon.pas`.
-pub fn wb_faction_relation_to_str(
-    _a_value: &mut String,
-    _a_base_ptr: DataPtr,
-    _a_element: ElementArg,
-    _a_type: CallbackType,
-) {
-    todo!("port wbFactionRelationToStr from wbDefinitionsCommon.pas line 240")
-}
-
-/// Upstream `wbFileHashCallback`, line 208 of `wbDefinitionsCommon.pas`.
-pub fn wb_file_hash_callback(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) -> String {
-    todo!("port wbFileHashCallback from wbDefinitionsCommon.pas line 208")
-}
-
-/// Upstream `wbFolderHashCallback`, line 209 of `wbDefinitionsCommon.pas`.
-pub fn wb_folder_hash_callback(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) -> String {
-    todo!("port wbFolderHashCallback from wbDefinitionsCommon.pas line 209")
-}
-
-/// Upstream `wbLandNormalsGetCP`, line 128 of `wbDefinitionsCommon.pas`.
-pub fn wb_land_normals_get_cp(_a_element: ElementArg, _a_conflict_priority: &mut ConflictPriority) {
-    todo!("port wbLandNormalsGetCP from wbDefinitionsCommon.pas line 128")
-}
-
-/// Upstream `wbLANDTextureToStr`, line 4602 of `wbDefinitionsCommon.pas`.
-pub fn wb_land_texture_to_str(
-    _a_value: &mut String,
-    _a_base_ptr: DataPtr,
-    _a_element: ElementArg,
-    _a_type: CallbackType,
-) {
-    todo!("port wbLANDTextureToStr from wbDefinitionsCommon.pas line 4602")
-}
-
 /// Upstream `wbLGDIFiltersToStr`, line 212 of `wbDefinitionsCommon.pas`.
 pub fn wb_lgdi_filters_to_str(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) -> String {
     todo!("port wbLGDIFiltersToStr from wbDefinitionsCommon.pas line 212")
@@ -80,11 +25,6 @@ pub fn wb_lgdi_rank_slot_array_should_include(_a_base_ptr: DataPtr, _a_array: El
 /// Upstream `anonymous routine in wb_lgdi_slot_def`, line 7802 of `wbDefinitionsCommon.pas`.
 pub fn wb_lgdi_slot_def_anonymous_7802(_a_base_ptr: DataPtr, _a_element: ElementArg) -> bool {
     todo!("port anonymous routine in wb_lgdi_slot_def from wbDefinitionsCommon.pas line 7802")
-}
-
-/// Upstream `wbMHDTColumnsCounter`, line 73 of `wbDefinitionsCommon.pas`.
-pub fn wb_mhdt_columns_counter(_a_base_ptr: DataPtr, _a_element: ElementArg) -> u32 {
-    todo!("port wbMHDTColumnsCounter from wbDefinitionsCommon.pas line 73")
 }
 
 /// Upstream `anonymous routine in wb_model_info`, line 8545 of `wbDefinitionsCommon.pas`.
@@ -102,102 +42,12 @@ pub fn wb_model_info_anonymous_8585(
     todo!("port anonymous routine in wb_model_info from wbDefinitionsCommon.pas line 8585")
 }
 
-/// Upstream `wbModelInfoDecider`, line 272 of `wbDefinitionsCommon.pas`.
-pub fn wb_model_info_decider(_a_base_ptr: DataPtr, _a_element: ElementArg) -> i32 {
-    todo!("port wbModelInfoDecider from wbDefinitionsCommon.pas line 272")
-}
-
-/// Upstream `wbModelInfoDontShow`, line 104 of `wbDefinitionsCommon.pas`.
-pub fn wb_model_info_dont_show(_a_element: ElementArg) -> bool {
-    todo!("port wbModelInfoDontShow from wbDefinitionsCommon.pas line 104")
-}
-
-/// Upstream `wbModelInfoGetCP`, line 129 of `wbDefinitionsCommon.pas`.
-pub fn wb_model_info_get_cp(_a_element: ElementArg, _a_conflict_priority: &mut ConflictPriority) {
-    todo!("port wbModelInfoGetCP from wbDefinitionsCommon.pas line 129")
-}
-
-/// Upstream `wbNoFlagsDecider`, line 273 of `wbDefinitionsCommon.pas`.
-pub fn wb_no_flags_decider(_a_base_ptr: DataPtr, _a_element: ElementArg) -> i32 {
-    todo!("port wbNoFlagsDecider from wbDefinitionsCommon.pas line 273")
-}
-
-/// Upstream `wbREGNSoundDontShow`, line 112 of `wbDefinitionsCommon.pas`.
-pub fn wb_regn_sound_dont_show(_a_element: ElementArg) -> bool {
-    todo!("port wbREGNSoundDontShow from wbDefinitionsCommon.pas line 112")
-}
-
 /// Upstream `wbRPLDAfterLoad`, line 47 of `wbDefinitionsCommon.pas`.
 pub fn wb_rpld_after_load(_a_element: &ElementRef) {
     todo!("port wbRPLDAfterLoad from wbDefinitionsCommon.pas line 47")
 }
 
-/// Upstream `wbScaledInt4ToInt`, line 186 of `wbDefinitionsCommon.pas`.
-pub fn wb_scaled_int4_to_int(_a_string: &str, _a_element: ElementArg) -> i64 {
-    todo!("port wbScaledInt4ToInt from wbDefinitionsCommon.pas line 186")
-}
-
-/// Upstream `wbScaledInt4ToStr`, line 220 of `wbDefinitionsCommon.pas`.
-pub fn wb_scaled_int4_to_str(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) -> String {
-    todo!("port wbScaledInt4ToStr from wbDefinitionsCommon.pas line 220")
-}
-
 /// Upstream `wbStrToLGDIFilter`, line 188 of `wbDefinitionsCommon.pas`.
 pub fn wb_str_to_lgdi_filter(_a_string: &str, _a_element: ElementArg) -> i64 {
     todo!("port wbStrToLGDIFilter from wbDefinitionsCommon.pas line 188")
-}
-
-/// Upstream `wbTemplateActorDontShow`, line 114 of `wbDefinitionsCommon.pas`.
-pub fn wb_template_actor_dont_show(_a_element: ElementArg) -> bool {
-    todo!("port wbTemplateActorDontShow from wbDefinitionsCommon.pas line 114")
-}
-
-/// Upstream `wbVTXTPosition`, line 226 of `wbDefinitionsCommon.pas`.
-pub fn wb_vtxt_position(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) -> String {
-    todo!("port wbVTXTPosition from wbDefinitionsCommon.pas line 226")
-}
-
-/// Upstream `wbWeatherCloudColorsCounter`, line 78 of `wbDefinitionsCommon.pas`.
-pub fn wb_weather_cloud_colors_counter(_a_base_ptr: DataPtr, _a_element: ElementArg) -> u32 {
-    todo!("port wbWeatherCloudColorsCounter from wbDefinitionsCommon.pas line 78")
-}
-
-/// Upstream `wbWeatherCloudSpeedToInt`, line 192 of `wbDefinitionsCommon.pas`.
-pub fn wb_weather_cloud_speed_to_int(_a_string: &str, _a_element: ElementArg) -> i64 {
-    todo!("port wbWeatherCloudSpeedToInt from wbDefinitionsCommon.pas line 192")
-}
-
-/// Upstream `wbWeatherCloudSpeedToStr`, line 227 of `wbDefinitionsCommon.pas`.
-pub fn wb_weather_cloud_speed_to_str(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) -> String {
-    todo!("port wbWeatherCloudSpeedToStr from wbDefinitionsCommon.pas line 227")
-}
-
-/// Upstream `wbWeatherTimeOfDayDecider`, line 281 of `wbDefinitionsCommon.pas`.
-pub fn wb_weather_time_of_day_decider(_a_base_ptr: DataPtr, _a_element: ElementArg) -> i32 {
-    todo!("port wbWeatherTimeOfDayDecider from wbDefinitionsCommon.pas line 281")
-}
-
-/// Upstream `wbWorldColumnsCounter`, line 79 of `wbDefinitionsCommon.pas`.
-pub fn wb_world_columns_counter(_a_base_ptr: DataPtr, _a_element: ElementArg) -> u32 {
-    todo!("port wbWorldColumnsCounter from wbDefinitionsCommon.pas line 79")
-}
-
-/// Upstream `wbWorldLandDataIsRemovable`, line 138 of `wbDefinitionsCommon.pas`.
-pub fn wb_world_land_data_is_removable(_a_element: ElementArg) -> bool {
-    todo!("port wbWorldLandDataIsRemovable from wbDefinitionsCommon.pas line 138")
-}
-
-/// Upstream `wbWorldLODDataIsRemovable`, line 139 of `wbDefinitionsCommon.pas`.
-pub fn wb_world_lod_data_is_removable(_a_element: ElementArg) -> bool {
-    todo!("port wbWorldLODDataIsRemovable from wbDefinitionsCommon.pas line 139")
-}
-
-/// Upstream `wbWorldMapDataIsRemovable`, line 140 of `wbDefinitionsCommon.pas`.
-pub fn wb_world_map_data_is_removable(_a_element: ElementArg) -> bool {
-    todo!("port wbWorldMapDataIsRemovable from wbDefinitionsCommon.pas line 140")
-}
-
-/// Upstream `wbWorldRowsCounter`, line 80 of `wbDefinitionsCommon.pas`.
-pub fn wb_world_rows_counter(_a_base_ptr: DataPtr, _a_element: ElementArg) -> u32 {
-    todo!("port wbWorldRowsCounter from wbDefinitionsCommon.pas line 80")
 }
