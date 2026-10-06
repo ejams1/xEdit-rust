@@ -520,11 +520,12 @@ impl FileImpl {
     /// Port of `AddMainRecord`: keeps the record and registers it as the
     /// override of the record of a master with the same FormID.
     fn add_main_record(self: &Arc<Self>, record: Arc<MainRecordImpl>) {
-        self.fl_records.write().unwrap().push(record.clone());
         let form_id = record.get_fixed_form_id();
+        // The file header, with the null FormID, is not one of the records.
         if form_id.is_null() {
             return;
         }
+        self.fl_records.write().unwrap().push(record.clone());
         let file_id = form_id.file_id();
         let states = self.get_file_states();
         let hardcoded_elsewhere = form_id.is_hardcoded() && !states.contains(FileState::fsIsGameMaster);
