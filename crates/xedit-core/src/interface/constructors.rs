@@ -19,7 +19,7 @@ use std::sync::{Arc, RwLock};
 use super::array::{ArrayDef, ArrayDefArgs};
 use super::byte_array::{ByteArrayDef, CountCallback};
 use super::def::{
-    AfterLoadCallback, AfterSetCallback, DontShowCallback, EmptyDef, GetConflictPriority, NamedDefArgs, ValueDef,
+    AfterLoadCallback, AfterSetCallback, Def, DontShowCallback, EmptyDef, GetConflictPriority, NamedDefArgs, ValueDef,
 };
 use super::element::{DataPtr, ElementArg, ElementRef};
 use super::enum_def::{EnumClass, EnumDef, SparseName};
@@ -913,6 +913,28 @@ pub fn record_defs() -> Vec<(Signature, Arc<MainRecordDef>)> {
     RECORD_DEFS.read().unwrap().clone()
 }
 
+static RECORDS_INIT: RwLock<bool> = RwLock::new(false);
+
+/// Port of `wbInitRecords`: runs `InitFromParent` over every record
+/// definition and the main record header once, after the definitions of
+/// the game are complete, so that the flags that inherit up and down the
+/// definitions are in place. Upstream runs it before the first file loads.
+pub fn init_records() {
+    let mut done = RECORDS_INIT.write().unwrap();
+    if *done {
+        return;
+    }
+    *done = true;
+    for _looped in [false, true] {
+        for (_, def) in record_defs() {
+            def.init_from_parent();
+        }
+        if let Some(header) = super::main_record::main_record_header() {
+            header.init_from_parent();
+        }
+    }
+}
+
 /// Upstream `wbFindRecordDef`: the definition of the records with `signature`.
 pub fn find_record_def(signature: Signature) -> Option<Arc<MainRecordDef>> {
     let index = *RECORD_DEF_INDEX.read().unwrap().as_ref()?.get(&signature.to_int())?;
@@ -921,6 +943,7 @@ pub fn find_record_def(signature: Signature) -> Option<Arc<MainRecordDef>> {
 
 /// Empties upstream `wbRecordDefs`, for the tests.
 pub fn clear_record_defs() {
+    *RECORDS_INIT.write().unwrap() = false;
     RECORD_DEFS.write().unwrap().clear();
     *RECORD_DEF_INDEX.write().unwrap() = None;
 }

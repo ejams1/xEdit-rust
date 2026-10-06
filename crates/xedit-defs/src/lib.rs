@@ -11,5 +11,6 @@
 pub mod callbacks;
 pub mod common;
 pub mod fo4;
+pub mod hardcoded;
 pub mod signatures;
 pub mod tes5;

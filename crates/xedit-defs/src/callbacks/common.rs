@@ -14,10 +14,14 @@
 use std::sync::Arc;
 
 use xedit_core::delphi::{float_to_str_f_fixed, round, str_to_float};
+use xedit_core::interface::builders::wb_flags_unknown_is_unused;
+use xedit_core::interface::constructors::get_container_from_union;
 use xedit_core::interface::globals::{
-    GameMode, game_mode, is_fallout_nv, is_fallout3, is_morrowind, is_oblivion, is_skyrim,
+    GameMode, game_mode, is_fallout_nv, is_fallout3, is_fallout76, is_morrowind, is_oblivion, is_skyrim, is_starfield,
+    resolve_alias,
 };
 use xedit_core::interface::misc::int_to_hex64;
+use xedit_core::interface::string::to_comma_text;
 use xedit_core::interface::*;
 
 pub use super::common_stubs::*;
@@ -561,7 +565,7 @@ pub fn wb_to_string_from_links_to_main_record_name(
 
 /// Delphi `Integer(aVariant)` for the deciders: the integer of a number
 /// or flag value, 0 for anything else.
-fn variant_int(value: &Variant) -> i64 {
+pub fn variant_int(value: &Variant) -> i64 {
     match value {
         Variant::Float(float) => float.round() as i64,
         Variant::Str(text) => text.trim().parse().unwrap_or(0),
@@ -1307,5 +1311,758 @@ pub fn wb_world_map_data_is_removable(a_element: ElementArg) -> bool {
             .is_some_and(|main_record| main_record.get_record_by_signature(Signature::new(b"WNAM")).is_some())
     } else {
         parent_worldspace_flags(a_element) & 0x04 == 4
+    }
+}
+
+/// Delphi `StrToInt64`: decimal, or hexadecimal after `$`.
+fn str_to_int64(text: &str) -> Option<i64> {
+    let text = text.trim();
+    match text.strip_prefix('$') {
+        Some(hex) => i64::from_str_radix(hex, 16).ok(),
+        None => text.parse().ok(),
+    }
+}
+
+/// The quest record that `aQuestRef` is or links to, with the override the
+/// alias lookups use.
+fn alias_quest(a_quest_ref: &ElementRef) -> Option<MainRecordRef> {
+    let main_record = match a_quest_ref.clone().into_main_record() {
+        Some(main_record) => main_record,
+        None => a_quest_ref.get_links_to()?.into_main_record()?,
+    };
+    let main_record = if is_skyrim() {
+        main_record.get_winning_override()
+    } else {
+        // The winning quest override except for partial forms.
+        let winning = main_record.get_winning_override();
+        if winning.get_flags().0 & 0x0000_4000 == 0 {
+            winning
+        } else if main_record.get_flags().0 & 0x0000_4000 != 0 {
+            main_record.get_master_or_self()
+        } else {
+            main_record
+        }
+    };
+    Some(main_record)
+}
+
+/// The alias containers of a quest: the `ALST` struct of a collection
+/// alias, the alias itself otherwise.
+fn quest_aliases(main_record: &MainRecordRef) -> Vec<ElementRef> {
+    let Some(aliases) = main_record.get_element_by_name("Aliases") else {
+        return Vec::new();
+    };
+    let Some(aliases) = aliases.as_container() else {
+        return Vec::new();
+    };
+    let mut result = Vec::new();
+    for index in 0..aliases.get_element_count() {
+        let Some(mut alias) = aliases.get_element(index) else {
+            continue;
+        };
+        if alias.as_container().is_none() {
+            continue;
+        }
+        if alias.get_record_signature() == Some(Signature::new(b"ALCS"))
+            && let Some(alst) = alias
+                .as_container()
+                .and_then(|alias| alias.get_element_by_signature(Signature::new(b"ALST")))
+        {
+            if alst.as_container().is_none() {
+                continue;
+            }
+            alias = alst;
+        }
+        result.push(alias);
+    }
+    result
+}
+
+/// The alias ID: the first element of the alias.
+fn alias_id(alias: &ElementRef) -> i64 {
+    alias
+        .as_container()
+        .and_then(|alias| alias.get_element(0))
+        .map_or(0, |id| variant_int(&id.get_native_value()))
+}
+
+/// Upstream `wbAliasLinksTo`: the alias `aInt` of the quest.
+pub fn wb_alias_links_to(a_int: i64, a_quest_ref: ElementArg) -> Option<ElementRef> {
+    if a_int < 0 {
+        return None;
+    }
+    let main_record = alias_quest(a_quest_ref?)?;
+    if main_record.get_signature() != Signature::new(b"QUST") {
+        return None;
+    }
+    quest_aliases(&main_record)
+        .into_iter()
+        .find(|alias| alias_id(alias) == a_int)
+}
+
+/// Whether `aInt` is one of the fixed alias values of the game.
+fn is_fixed_alias(a_int: i64) -> bool {
+    a_int == -1 || (a_int == -2 && !is_skyrim()) || ((-5..=-3).contains(&a_int) && is_starfield())
+}
+
+/// Upstream `wbAliasToStr`: the text of the alias `aInt` of the quest
+/// `aQuestRef` (a quest record or a reference to one).
+pub fn wb_alias_to_str(a_int: i64, a_quest_ref: ElementArg, a_type: CallbackType) -> String {
+    let mut result = String::new();
+    match a_type {
+        CallbackType::ctToEditValue | CallbackType::ctToStr | CallbackType::ctToSummary => {
+            result = if a_int == -1 {
+                "None".to_owned()
+            } else if a_int == -2 && !is_skyrim() {
+                "Player".to_owned()
+            } else if a_int == -3 && is_starfield() {
+                "Non-Actor Track".to_owned()
+            } else if a_int == -4 && is_starfield() {
+                "Play Audio At Player(Voice Note)".to_owned()
+            } else if a_int == -5 && is_starfield() {
+                "Dialogue For Scene".to_owned()
+            } else {
+                let mut text = a_int.to_string();
+                if a_type == CallbackType::ctToStr {
+                    text.push_str(" <Warning: Could not resolve alias>");
+                }
+                text
+            };
+        }
+        CallbackType::ctToSortKey => return int_to_hex64(a_int, 8),
+        CallbackType::ctCheck if !is_fixed_alias(a_int) => {
+            result = format!("<Warning: Could not resolve alias [{a_int}]>");
+        }
+        _ => {}
+    }
+    // UPSTREAM-QUIRK: the operator precedence makes the edit type and edit
+    // info exits apply to the last comparison only.
+    if a_int == -1
+        || (a_int == -2 && !is_skyrim())
+        || (a_int == -3 && is_starfield())
+        || (a_int == -4 && is_starfield())
+        || (a_int == -5 && is_starfield() && a_type != CallbackType::ctEditType && a_type != CallbackType::ctEditInfo)
+    {
+        return result;
+    }
+    let Some(a_quest_ref) = a_quest_ref else { return result };
+    let Some(main_record) = alias_quest(a_quest_ref) else {
+        return result;
+    };
+    if main_record.get_signature() != Signature::new(b"QUST") {
+        match a_type {
+            CallbackType::ctToStr | CallbackType::ctToSummary => {
+                result = a_int.to_string();
+                if a_type == CallbackType::ctToStr {
+                    result.push_str(&format!(
+                        " <Warning: \"{}\" is not a Quest record>",
+                        main_record.get_short_name()
+                    ));
+                }
+            }
+            CallbackType::ctCheck => {
+                result = format!("<Warning: \"{}\" is not a Quest record>", main_record.get_short_name());
+            }
+            _ => {}
+        }
+        return result;
+    }
+    let mut edit_infos: Option<Vec<String>> = match a_type {
+        CallbackType::ctEditType => return "ComboBox".to_owned(),
+        CallbackType::ctEditInfo => Some(Vec::new()),
+        _ => None,
+    };
+    for alias in quest_aliases(&main_record) {
+        let id = alias_id(&alias);
+        if edit_infos.is_some() || id == a_int {
+            let name = alias
+                .as_container()
+                .map(|alias| alias.get_element_edit_value("ALID"))
+                .unwrap_or_default();
+            let mut text = format!("{id:0>3}");
+            if !name.is_empty() {
+                text = format!("{text} {name}");
+            }
+            if let Some(edit_infos) = &mut edit_infos {
+                edit_infos.push(text);
+            } else if id == a_int {
+                match a_type {
+                    CallbackType::ctToStr | CallbackType::ctToSummary | CallbackType::ctToEditValue => result = text,
+                    CallbackType::ctCheck => result = String::new(),
+                    _ => {}
+                }
+                return result;
+            }
+        }
+    }
+    match a_type {
+        CallbackType::ctToStr | CallbackType::ctToSummary => {
+            result = a_int.to_string();
+            if a_type == CallbackType::ctToStr {
+                result.push_str(&format!(
+                    " <Warning: Quest Alias [{a_int}] not found in \"{}\">",
+                    main_record.get_name()
+                ));
+            }
+        }
+        CallbackType::ctCheck => {
+            result = format!(
+                "<Warning: Quest Alias [{a_int}] not found in \"{}\">",
+                main_record.get_name()
+            );
+        }
+        CallbackType::ctEditInfo => {
+            let mut edit_infos = edit_infos.unwrap_or_default();
+            edit_infos.push("None".to_owned());
+            edit_infos.sort_by_key(|text| text.to_lowercase());
+            result = to_comma_text(&edit_infos);
+        }
+        _ => {}
+    }
+    result
+}
+
+/// Upstream `wbAliasToInt`: the ID from the text of an alias.
+pub fn wb_alias_to_int(a_string: &str, _a_element: ElementArg) -> i64 {
+    if a_string == "None" {
+        return -1;
+    }
+    if a_string == "Player" && !is_skyrim() {
+        return -2;
+    }
+    if is_starfield() {
+        match a_string {
+            "Non-Actor Track" => return -3,
+            "Play Audio At Player(Voice Note)" => return -4,
+            "Dialogue For Scene" => return -5,
+            _ => {}
+        }
+    }
+    let text = a_string.trim();
+    let digits: String = text.chars().take_while(|c| *c == '-' || c.is_ascii_digit()).collect();
+    digits.parse().unwrap_or(-1)
+}
+
+/// The text of an alias when they are not resolved: the ID.
+fn unresolved_alias_text(a_int: i64, a_type: CallbackType) -> String {
+    match a_type {
+        CallbackType::ctToSortKey => int_to_hex64(a_int, 8),
+        CallbackType::ctToStr | CallbackType::ctToSummary | CallbackType::ctToEditValue => a_int.to_string(),
+        _ => String::new(),
+    }
+}
+
+/// Upstream `wbConditionAliasToStr`: the alias of the quest the condition
+/// belongs to, found through the record that holds the condition.
+pub fn wb_condition_alias_to_str(a_int: i64, a_element: ElementArg, a_type: CallbackType) -> String {
+    let Some(element) = a_element else {
+        return String::new();
+    };
+    if !resolve_alias() {
+        return unresolved_alias_text(a_int, a_type);
+    }
+    let Some(main_record) = element.get_containing_main_record() else {
+        return String::new();
+    };
+    match main_record.get_signature().0.as_slice() {
+        b"QUST" => {
+            let quest: ElementRef = main_record;
+            wb_alias_to_str(a_int, Some(&quest), a_type)
+        }
+        b"SCEN" => wb_alias_to_str(
+            a_int,
+            main_record.get_element_by_signature(Signature::new(b"PNAM")).as_ref(),
+            a_type,
+        ),
+        b"PACK" => wb_alias_to_str(
+            a_int,
+            main_record.get_element_by_signature(Signature::new(b"QNAM")).as_ref(),
+            a_type,
+        ),
+        b"TERM" if is_fallout76() => wb_alias_to_str(
+            a_int,
+            main_record.get_element_by_signature(Signature::new(b"QNAM")).as_ref(),
+            a_type,
+        ),
+        b"INFO" => {
+            // The DIAL of the INFO.
+            let Some(topic) = main_record
+                .get_element_by_name("Topic")
+                .and_then(|topic| topic.get_links_to())
+                .and_then(|topic| topic.into_main_record())
+            else {
+                return String::new();
+            };
+            let Some(file) = element.get_file() else {
+                return String::new();
+            };
+            let Some(topic) = topic.get_highest_override_visible_for_file(&file) else {
+                return String::new();
+            };
+            wb_alias_to_str(
+                a_int,
+                topic.get_element_by_signature(Signature::new(b"QNAM")).as_ref(),
+                a_type,
+            )
+        }
+        _ => String::new(),
+    }
+}
+
+/// Upstream `wbPackageLocationAliasToStr`.
+pub fn wb_package_location_alias_to_str(a_int: i64, a_element: ElementArg, a_type: CallbackType) -> String {
+    let Some(element) = a_element else {
+        return String::new();
+    };
+    if !resolve_alias() {
+        return unresolved_alias_text(a_int, a_type);
+    }
+    let Some(main_record) = element.get_containing_main_record() else {
+        return String::new();
+    };
+    wb_alias_to_str(
+        a_int,
+        main_record.get_element_by_signature(Signature::new(b"QNAM")).as_ref(),
+        a_type,
+    )
+}
+
+/// Upstream `wbQuestAliasToStr`.
+pub fn wb_quest_alias_to_str(a_int: i64, a_element: ElementArg, a_type: CallbackType) -> String {
+    let Some(element) = a_element else {
+        return String::new();
+    };
+    if !resolve_alias() {
+        return unresolved_alias_text(a_int, a_type);
+    }
+    let Some(main_record) = element.get_containing_main_record() else {
+        return String::new();
+    };
+    let quest: ElementRef = main_record;
+    wb_alias_to_str(a_int, Some(&quest), a_type)
+}
+
+/// Upstream `wbQuestExternalAliasToStr`.
+///
+/// UPSTREAM-QUIRK: upstream never assigns the container it looks the
+/// `ALEQ` up in, so the resolved form is always empty.
+pub fn wb_quest_external_alias_to_str(a_int: i64, a_element: ElementArg, a_type: CallbackType) -> String {
+    if a_element.is_none() {
+        return String::new();
+    }
+    if resolve_alias() {
+        return String::new();
+    }
+    unresolved_alias_text(a_int, a_type)
+}
+
+/// Upstream `wbSceneAliasToStr`.
+pub fn wb_scene_alias_to_str(a_int: i64, a_element: ElementArg, a_type: CallbackType) -> String {
+    let Some(element) = a_element else {
+        return String::new();
+    };
+    if !resolve_alias() {
+        return unresolved_alias_text(a_int, a_type);
+    }
+    let Some(main_record) = element.get_containing_main_record() else {
+        return String::new();
+    };
+    wb_alias_to_str(
+        a_int,
+        main_record.get_element_by_signature(Signature::new(b"PNAM")).as_ref(),
+        a_type,
+    )
+}
+
+/// Upstream `wbScriptObjectAliasToStr`.
+pub fn wb_script_object_alias_to_str(a_int: i64, a_element: ElementArg, a_type: CallbackType) -> String {
+    let Some(element) = a_element else {
+        return String::new();
+    };
+    if !resolve_alias() {
+        return unresolved_alias_text(a_int, a_type);
+    }
+    let Some(container) = element.get_container() else {
+        return String::new();
+    };
+    wb_alias_to_str(
+        a_int,
+        container
+            .as_container()
+            .and_then(|container| container.get_element_by_name("FormID"))
+            .as_ref(),
+        a_type,
+    )
+}
+
+/// Upstream `wbSCENAliasLinksTo`.
+pub fn wb_scen_alias_links_to(a_element: ElementArg) -> Option<ElementRef> {
+    if !resolve_alias() {
+        return None;
+    }
+    let element = a_element?;
+    let main_record = element.get_containing_main_record()?;
+    let alias = element.get_native_value().as_ordinal()?;
+    wb_alias_links_to(
+        alias,
+        main_record.get_element_by_signature(Signature::new(b"PNAM")).as_ref(),
+    )
+}
+
+/// Upstream `wbScriptObjectAliasLinksTo`.
+pub fn wb_script_object_alias_links_to(a_element: ElementArg) -> Option<ElementRef> {
+    if !resolve_alias() {
+        return None;
+    }
+    let element = a_element?;
+    let container = wb_try_get_container_ref_from_union_or_value(Some(element))?;
+    let alias = element.get_native_value().as_ordinal()?;
+    wb_alias_links_to(
+        alias,
+        container
+            .as_container()
+            .and_then(|container| container.get_element_by_name("FormID"))
+            .as_ref(),
+    )
+}
+
+/// Upstream `wbConditionToStr`: the condition as an expression.
+pub fn wb_condition_to_str(a_value: &mut String, _a_base_ptr: DataPtr, a_element: ElementArg, a_type: CallbackType) {
+    let Some(container) = wb_try_set_container(a_element, a_type) else {
+        return;
+    };
+    let Some(container_ref) = container.as_container() else {
+        return;
+    };
+    let ctda: ElementRef = if game_mode() > GameMode::gmFNV {
+        let Some(ctda) = container_ref
+            .get_record_by_signature(Signature::new(b"CTDA"))
+            .filter(|ctda| ctda.as_container().is_some())
+        else {
+            return;
+        };
+        ctda
+    } else {
+        container.clone()
+    };
+    let Some(cer) = ctda.as_container() else { return };
+    let element = |index: i32| cer.get_element(index);
+    let typ = element(0).map_or(0, |e| variant_int(&e.get_native_value())) as u8;
+    let Some(func) = element(3) else { return };
+    let def_type = |e: &ElementRef| e.get_def().map(|def| def.get_def_type());
+    if cer.get_element_count() >= 9
+        && element(7).is_some_and(|e| def_type(&e) != Some(DefType::dtEmpty))
+        && element(8).is_some_and(|e| def_type(&e) != Some(DefType::dtEmpty))
+    {
+        let run_on = element(7).unwrap();
+        let mut run_on_int = variant_int(&run_on.get_native_value());
+        if is_fallout_nv() {
+            let func_int = variant_int(&func.get_native_value());
+            if func_int == 106 || func_int == 285 {
+                run_on_int = 0;
+            }
+        }
+        if run_on_int == 2 {
+            *a_value = format!("({})", element(8).map(|e| e.get_summary()).unwrap_or_default());
+        } else {
+            *a_value = run_on.get_summary().replace(' ', "");
+        }
+    } else if typ & 0x02 == 0 {
+        *a_value = "Subject".to_owned();
+    } else {
+        *a_value = "Target".to_owned();
+    }
+    a_value.push('.');
+    a_value.push_str(&func.get_summary());
+    if let Some(param1) = element(5)
+        && param1.get_conflict_priority() != ConflictPriority::cpIgnore
+    {
+        a_value.push('(');
+        a_value.push_str(&param1.get_summary());
+        if let Some(param2) = element(6)
+            && param2.get_conflict_priority() != ConflictPriority::cpIgnore
+        {
+            a_value.push_str(", ");
+            a_value.push_str(&param2.get_summary());
+        }
+        a_value.push(')');
+    }
+    match typ & 0xE0 {
+        0x00 => a_value.push_str(" = "),
+        0x20 => a_value.push_str(" <> "),
+        0x40 => a_value.push_str(" > "),
+        0x60 => a_value.push_str(" >= "),
+        0x80 => a_value.push_str(" < "),
+        0xA0 => a_value.push_str(" <= "),
+        _ => {}
+    }
+    a_value.push_str(&element(2).map(|e| e.get_summary()).unwrap_or_default());
+    if let Some(conditions) = container.get_container()
+        && let Some(conditions_ref) = conditions.as_container()
+    {
+        let count = conditions_ref.get_element_count();
+        if count < 2
+            || conditions_ref
+                .get_element(count - 1)
+                .is_some_and(|last| last.get_element_id() == container.get_element_id())
+        {
+            return;
+        }
+    }
+    if typ & 0x01 == 0 {
+        a_value.push_str(" AND");
+    } else {
+        a_value.push_str(" OR");
+    }
+}
+
+/// Upstream `wbConditionOwnerToStr`: the player for a null owner.
+pub fn wb_condition_owner_to_str(
+    a_value: &mut String,
+    _a_base_ptr: DataPtr,
+    a_element: ElementArg,
+    a_type: CallbackType,
+) {
+    let Some(element) = a_element else { return };
+    if variant_int(&element.get_native_value()) != 0 {
+        return;
+    }
+    if matches!(a_type, CallbackType::ctToStr | CallbackType::ctToSummary) {
+        *a_value = "Player [NPC_:00000000]".to_owned();
+    }
+}
+
+/// Upstream `wbConditionStringToStr`: the `CIS1` or `CIS2` text of the
+/// condition for the parameter.
+pub fn wb_condition_string_to_str(_a_int: i64, a_element: ElementArg, a_type: CallbackType) -> String {
+    let Some(element) = a_element else {
+        return String::new();
+    };
+    let Some(container) = get_container_from_union(element) else {
+        return String::new();
+    };
+    let Some(cer) = container.as_container() else {
+        return String::new();
+    };
+    match a_type {
+        CallbackType::ctToEditValue | CallbackType::ctToNativeValue | CallbackType::ctToSummary => {
+            let is_element = |index: i32| {
+                cer.get_element(index)
+                    .is_some_and(|other| other.get_element_id() == element.get_element_id())
+            };
+            if is_element(5) {
+                cer.get_element_edit_value("..\\CIS1")
+            } else if is_element(6) {
+                cer.get_element_edit_value("..\\CIS2")
+            } else {
+                String::new()
+            }
+        }
+        CallbackType::ctToSortKey => "0".to_owned(),
+        _ => String::new(),
+    }
+}
+
+/// Upstream `wbConditionTypeToStr`: the compare operator and the flags.
+pub fn wb_condition_type_to_str(a_int: i64, a_element: ElementArg, a_type: CallbackType) -> String {
+    let is_tes4_fo3 = |a: &'static str, b: &'static str| if game_mode() <= GameMode::gmFNV { a } else { b };
+    let flags = wb_flags_unknown_is_unused(
+        &[
+            "Or",
+            is_tes4_fo3("Run On Target", "Use Aliases"),
+            "Use Global",
+            is_tes4_fo3("", "Use Packdata"),
+            is_tes4_fo3("", "Swap Subject and Target"),
+        ],
+        false,
+    )
+    .expect("a flags definition");
+    match a_type {
+        CallbackType::ctEditType => "CheckComboBox".to_owned(),
+        CallbackType::ctEditInfo => is_tes4_fo3(
+            "\"Equal To\", \"Greater Than\", \"Less Than\", \"Or\", \"Run On Target\", \"Use Global\"",
+            "\"Equal To\", \"Greater Than\", \"Less Than\", \"Or\", \"Use Aliases\", \"Use Global\", \"Use Packdata\", \"Swap Subject and Target\"",
+        )
+        .to_owned(),
+        CallbackType::ctToEditValue => {
+            let mut result = *b"00000000";
+            match a_int & 224 {
+                0 => result[0] = b'1',
+                64 => result[1] = b'1',
+                96 => {
+                    result[0] = b'1';
+                    result[1] = b'1';
+                }
+                128 => result[2] = b'1',
+                160 => {
+                    result[0] = b'1';
+                    result[2] = b'1';
+                }
+                _ => {}
+            }
+            for (bit, index) in [(1, 3), (2, 4), (4, 5), (8, 6), (16, 7)] {
+                if a_int & bit != 0 {
+                    result[index] = b'1';
+                }
+            }
+            String::from_utf8_lossy(&result).into_owned()
+        }
+        CallbackType::ctToSortKey => int_to_hex64(a_int, 2),
+        CallbackType::ctCheck => {
+            let mut result = match a_int & 224 {
+                0 | 32 | 64 | 96 | 128 | 160 => String::new(),
+                _ => "<Unknown Compare Operator>".to_owned(),
+            };
+            let s = flags.check(a_int & 31, a_element);
+            if !s.is_empty() {
+                result = format!("{result} / {s}");
+            }
+            result
+        }
+        CallbackType::ctToStr | CallbackType::ctToSummary => {
+            let mut result = match a_int & 224 {
+                0 => "Equal To",
+                32 => "Not Equal To",
+                64 => "Greater Than",
+                96 => "Greater Than Or Equal To",
+                128 => "Less Than",
+                160 => "Less Than Or Equal To",
+                _ => "<Unknown Compare Operator>",
+            }
+            .to_owned();
+            let s = flags.to_string(a_int & 31, a_element, a_type == CallbackType::ctToSummary);
+            if !s.is_empty() {
+                result = format!("{result} / {s}");
+            }
+            result
+        }
+        _ => String::new(),
+    }
+}
+
+/// Upstream `wbConditionTypeToInt`: the value from the edit text of flags.
+pub fn wb_condition_type_to_int(a_string: &str, _a_element: ElementArg) -> i64 {
+    let s: Vec<u8> = format!("{a_string}00000000").into_bytes();
+    let bit = |index: usize| s[index] == b'1';
+    let mut result = if bit(0) {
+        if bit(1) {
+            if bit(2) { 0 } else { 96 }
+        } else if bit(2) {
+            160
+        } else {
+            0
+        }
+    } else if bit(1) {
+        if bit(2) { 32 } else { 64 }
+    } else if bit(2) {
+        128
+    } else {
+        32
+    };
+    // Or; Run On Target or Use Aliases; Use global; Use Packdata; Swap
+    // Subject and Target.
+    for (index, value) in [(3, 1), (4, 2), (5, 4), (6, 8), (7, 16)] {
+        if bit(index) {
+            result |= value;
+        }
+    }
+    result
+}
+
+/// Upstream `wbStrToInt`: the number before a space or colon, 0 otherwise.
+pub fn wb_str_to_int(a_string: &str, _a_element: ElementArg) -> i64 {
+    let end = a_string.find(' ').or_else(|| a_string.find(':'));
+    let text = match end {
+        Some(end) => &a_string[..end],
+        None => a_string,
+    };
+    str_to_int64(text).unwrap_or(0)
+}
+
+/// Upstream `wbNPCPackageToStr`: warns about a package owned by a quest.
+pub fn wb_npc_package_to_str(a_value: &mut String, _a_base_ptr: DataPtr, a_element: ElementArg, a_type: CallbackType) {
+    let Some(element) = a_element else { return };
+    let Some(pack_record) = element.get_links_to().and_then(|links_to| links_to.into_main_record()) else {
+        return;
+    };
+    let Some(qnam) = pack_record.get_element_by_signature(Signature::new(b"QNAM")) else {
+        return;
+    };
+    let Some(qust_record) = qnam.get_links_to().and_then(|links_to| links_to.into_main_record()) else {
+        return;
+    };
+    match a_type {
+        CallbackType::ctCheck => {
+            *a_value = format!(
+                "<Error: Package [{}] is owned by Quest [{}] and cannot be assigned to an NPC record>",
+                pack_record.get_editor_id(),
+                qust_record.get_editor_id()
+            );
+        }
+        CallbackType::ctToStr => {
+            *a_value = format!(
+                "{} <Error: Package is owned by Quest [{}] and cannot be assigned to an NPC record>",
+                element.get_edit_value(),
+                qust_record.get_editor_id()
+            );
+        }
+        _ => {}
+    }
+}
+
+/// Upstream `wbQUSTAliasToStr`: warns about an alias forced to none.
+pub fn wb_qust_alias_to_str(a_value: &mut String, _a_base_ptr: DataPtr, a_element: ElementArg, a_type: CallbackType) {
+    let Some(alias) = a_element else { return };
+    let Some(cer) = alias.as_container() else { return };
+    let Some(flags) = cer.get_element_by_signature(Signature::new(b"FNAM")) else {
+        return;
+    };
+    let flags_value = variant_int(&flags.get_native_value());
+    // Optional, or Forced By Aliases.
+    if flags_value & 0x2 != 0 || flags_value & 0x800 != 0 {
+        return;
+    }
+    let name = alias.get_name();
+    if name == "Reference Alias"
+        && [
+            "Specific Reference",
+            "Unique Actor",
+            "Unique Reference",
+            "Location Alias Reference",
+            "External Alias Reference",
+            "Create Reference To Object",
+            "Create Matching Ref",
+            "Find Matching Reference",
+            "Match Conditions",
+        ]
+        .iter()
+        .any(|member| cer.get_element_by_name(member).is_some())
+    {
+        return;
+    }
+    if name == "Location Alias"
+        && (cer.get_element_by_signature(Signature::new(b"ALFL")).is_some()
+            || [
+                "Reference Alias Location",
+                "External Alias Location",
+                "Find Matching Location",
+                "Match Conditions",
+            ]
+            .iter()
+            .any(|member| cer.get_element_by_name(member).is_some()))
+    {
+        return;
+    }
+    match a_type {
+        CallbackType::ctCheck => {
+            *a_value = format!("<Warning: {} is non-optional and Forced to NONE>", alias.get_summary());
+        }
+        CallbackType::ctToStr => {
+            *a_value = format!(
+                "{} <Warning: Alias is non-optional and Forced to NONE>",
+                alias.get_summary()
+            );
+        }
+        _ => {}
     }
 }

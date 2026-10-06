@@ -11,20 +11,28 @@
 
 use std::io::Write;
 use std::path::Path;
+use std::sync::Arc;
 
 use xedit_core::container_handler::{add_archive, add_folder, clear_containers};
 use xedit_core::delphi::{change_file_ext, extract_file_path};
-use xedit_core::implementation::{FileImpl, wb_file};
+use xedit_core::implementation::{FileBytes, FileImpl, game_master_file, wb_file, wb_file_compare};
 use xedit_core::interface::globals::{
-    GameMode, language, set_data_path, set_game_exe_name, set_game_master_esm, set_game_mode, set_game_name,
-    set_hide_unused, set_language, set_simple_records,
+    GameMode, game_exe_name, game_master_esm, language, set_data_path, set_game_exe_name, set_game_master_esm,
+    set_game_mode, set_game_name, set_hide_unused, set_language, set_simple_records,
 };
-use xedit_core::interface::misc::progress;
-use xedit_core::interface::{Container, Element, ElementRef, File, FileStates, clear_record_defs};
+use xedit_core::interface::misc::{progress, set_progress_callback};
+use xedit_core::interface::{
+    Container, Element, ElementRef, File, FileState, FileStates, clear_record_defs, init_records,
+};
 use xedit_core::localization::{
     add_default_l_encodings_if_missing, add_l_encoding_if_missing, install_localization_handler, set_l_encoding_default,
 };
 use xedit_io::Encoding;
+
+/// Sends the progress messages to stderr, like the log of xDump.
+pub fn log_progress_to_stderr() {
+    set_progress_callback(Some(Arc::new(|status: &str| eprintln!("{status}"))));
+}
 
 /// Port of the game setup of `xDump.dpr` for the plugins of a game.
 pub fn setup_game(game: &str) -> Result<GameMode, String> {
@@ -41,24 +49,25 @@ pub fn setup_game(game: &str) -> Result<GameMode, String> {
     match mode {
         GameMode::gmFO4 => {
             set_game_name("Fallout4");
-            set_game_exe_name("Fallout4");
+            set_game_exe_name("Fallout4.exe");
             set_game_master_esm("Fallout4.esm");
             xedit_defs::fo4::define_fo4();
         }
         GameMode::gmSSE => {
             set_game_name("Skyrim");
-            set_game_exe_name("SkyrimSE");
+            set_game_exe_name("SkyrimSE.exe");
             set_game_master_esm("Skyrim.esm");
             xedit_defs::tes5::define_tes5();
         }
         GameMode::gmTES5 => {
             set_game_name("Skyrim");
-            set_game_exe_name("TESV");
+            set_game_exe_name("TESV.exe");
             set_game_master_esm("Skyrim.esm");
             xedit_defs::tes5::define_tes5();
         }
         _ => unreachable!(),
     }
+    init_records();
     setup_language(mode);
     Ok(mode)
 }
@@ -142,7 +151,31 @@ fn add_resource_archive(archive: &str) {
 pub fn dump_file(path: &str, mode: GameMode, out: &mut dyn Write) -> Result<(), String> {
     let file = wb_file(path, i32::MAX, FileStates::empty()).map_err(|error| error.to_string())?;
     load_resources(&file, path, mode);
+    load_hardcoded(mode)?;
     write_container(&file, "", out).map_err(|error| error.to_string())
+}
+
+/// Port of the hardcoded load of `xDump.dpr`: when the game master is
+/// loaded, the embedded plugin of the hardcoded records loads in its place
+/// under the name of the game executable.
+fn load_hardcoded(mode: GameMode) -> Result<(), String> {
+    if game_master_file().is_none() {
+        return Ok(());
+    }
+    let Some(bytes) = xedit_defs::hardcoded::hardcoded_dat(mode) else {
+        return Ok(());
+    };
+    let mut states = FileStates::empty();
+    states.include(FileState::fsIsHardcoded);
+    wb_file_compare(
+        &game_exe_name(),
+        0,
+        Some(&game_master_esm()),
+        states,
+        FileBytes::Owned(bytes.to_vec()),
+    )
+    .map_err(|error| error.to_string())?;
+    Ok(())
 }
 
 /// Port of `WriteContainer`.
