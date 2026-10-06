@@ -176,6 +176,14 @@ impl InitOnce {
         init();
         self.0.store(Self::DONE, Ordering::Release);
     }
+
+    /// Port of the `csInitDone` removal in `DoReset`: the next `run` builds
+    /// again. Nothing happens while an init runs.
+    pub fn reset(&self) {
+        let _ = self
+            .0
+            .compare_exchange(Self::DONE, Self::NOT_STARTED, Ordering::AcqRel, Ordering::Acquire);
+    }
 }
 
 impl Default for InitOnce {
@@ -420,6 +428,11 @@ impl ContainerBase {
 
     pub(crate) fn elements(&self) -> Vec<ElementRef> {
         self.cnt_elements.read().unwrap().clone()
+    }
+
+    /// Port of `ReleaseElements`: the container gives up its elements.
+    pub(crate) fn release_elements(&self) -> Vec<ElementRef> {
+        std::mem::take(&mut *self.cnt_elements.write().unwrap())
     }
 
     /// Port of `TwbContainer.GetElementBySortOrder` after the init: the
@@ -1573,6 +1586,17 @@ impl MainRecordImpl {
                 }
             }
         });
+    }
+
+    /// Port of `TwbMainRecord.Reset` through `DoReset(False)`: the
+    /// subrecords built by `do_init` are released and the next use builds
+    /// them again. In Delphi this runs when the last `IwbContainerElementRef`
+    /// of the record goes away, which keeps the memory of a dump bounded to
+    /// one record at a time. The decompressed data stays: the elements borrow
+    /// it, so it cannot be reset without them.
+    pub fn reset(&self) {
+        self.container.release_elements();
+        self.mr_init.reset();
     }
 
     /// Port of the `TwbContainedInElement` creation in `TwbMainRecord.Init`:

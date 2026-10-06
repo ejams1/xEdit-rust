@@ -15,7 +15,7 @@ use std::sync::Arc;
 
 use xedit_core::container_handler::{add_archive, add_folder, clear_containers};
 use xedit_core::delphi::{change_file_ext, extract_file_path};
-use xedit_core::implementation::{FileBytes, FileImpl, game_master_file, wb_file, wb_file_compare};
+use xedit_core::implementation::{ElementImpl, FileBytes, FileImpl, game_master_file, wb_file, wb_file_compare};
 use xedit_core::interface::globals::{
     GameMode, game_exe_name, game_master_esm, language, set_create_contained_in, set_data_path, set_game_exe_name,
     set_game_master_esm, set_game_mode, set_game_name, set_hide_unused, set_language, set_simple_records,
@@ -244,6 +244,12 @@ fn write_element(element: &ElementRef, indent: &str, out: &mut dyn Write) -> std
         && !name.starts_with("Hidden: ")
     {
         write_elements(container, &indent, out)?;
+    }
+    // `WriteContainer` holds an `IwbContainerElementRef` on the record while
+    // it writes the elements; releasing it resets the record and frees the
+    // subrecords, so the dump never holds more than one record tree.
+    if let Some(record) = element.as_element_impl().and_then(ElementImpl::main_record_impl) {
+        record.reset();
     }
     Ok(())
 }
