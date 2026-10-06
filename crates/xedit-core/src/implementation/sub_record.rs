@@ -626,6 +626,14 @@ impl Element for SubRecordImpl {
         Some(self.sr_struct.signature)
     }
 
+    fn get_containing_sub_record(&self) -> Option<ElementRef> {
+        Some(self.element_ref())
+    }
+
+    fn get_sub_record_header_size(&self) -> Option<i32> {
+        Some(i32::from(self.sr_struct.data_size))
+    }
+
     /// Port of `TwbSubRecord.GetValue`: the value of the subrecord data.
     fn get_value(&self) -> String {
         let Some(value_def) = self.value_def() else {
@@ -689,6 +697,10 @@ impl Element for SubRecordImpl {
 }
 
 impl ElementImpl for SubRecordImpl {
+    fn self_element_ref(&self) -> Option<ElementRef> {
+        self.self_ref.upgrade().map(|element| element as ElementRef)
+    }
+
     fn container_base(&self) -> Option<&ContainerBase> {
         Some(&self.container)
     }
@@ -710,11 +722,6 @@ impl DataContainer for SubRecordImpl {
 
 macro_rules! container_by_elements {
     ($init:ident) => {
-        fn get_element_native_value(&self, path: &str) -> Variant {
-            self.get_element_by_path(path)
-                .map_or(Variant::Empty, |element| element.get_native_value())
-        }
-
         fn get_element_by_name(&self, name: &str) -> Option<ElementRef> {
             super::element_by_name(self, name)
         }
@@ -800,6 +807,10 @@ impl Element for SubRecordArrayImpl {
 }
 
 impl ElementImpl for SubRecordArrayImpl {
+    fn self_element_ref(&self) -> Option<ElementRef> {
+        self.self_ref.upgrade().map(|element| element as ElementRef)
+    }
+
     fn container_base(&self) -> Option<&ContainerBase> {
         Some(&self.container)
     }
@@ -866,6 +877,10 @@ impl Element for SubRecordStructImpl {
 }
 
 impl ElementImpl for SubRecordStructImpl {
+    fn self_element_ref(&self) -> Option<ElementRef> {
+        self.self_ref.upgrade().map(|element| element as ElementRef)
+    }
+
     fn container_base(&self) -> Option<&ContainerBase> {
         Some(&self.container)
     }

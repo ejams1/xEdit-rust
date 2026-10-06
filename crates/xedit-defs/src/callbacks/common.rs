@@ -13,7 +13,11 @@
 
 use std::sync::Arc;
 
-use xedit_core::interface::globals::{GameMode, game_mode, is_fallout3, is_oblivion, is_skyrim};
+use xedit_core::delphi::{float_to_str_f_fixed, round, str_to_float};
+use xedit_core::interface::globals::{
+    GameMode, game_mode, is_fallout_nv, is_fallout3, is_morrowind, is_oblivion, is_skyrim,
+};
+use xedit_core::interface::misc::int_to_hex64;
 use xedit_core::interface::*;
 
 pub use super::common_stubs::*;
@@ -552,5 +556,756 @@ pub fn wb_to_string_from_links_to_main_record_name(
     if !record_name.is_empty() {
         a_value.push(' ');
         a_value.push_str(&record_name);
+    }
+}
+
+/// Delphi `Integer(aVariant)` for the deciders: the integer of a number
+/// or flag value, 0 for anything else.
+fn variant_int(value: &Variant) -> i64 {
+    match value {
+        Variant::Float(float) => float.round() as i64,
+        Variant::Str(text) => text.trim().parse().unwrap_or(0),
+        other => other.as_ordinal().unwrap_or(0),
+    }
+}
+
+/// `Container.ElementNativeValues[aPath]` as an integer, 0 when missing.
+fn container_int(container: &ElementRef, path: &str) -> i64 {
+    container
+        .as_container()
+        .map_or(0, |container| variant_int(&container.get_element_native_value(path)))
+}
+
+/// Upstream `wbGetScriptObjFormat`: 1 when the `Object Format` of the
+/// enclosing subrecord is 1.
+pub fn wb_get_script_obj_format(a_element: ElementArg) -> i32 {
+    let mut container = a_element.and_then(|element| element.get_container());
+    while let Some(current) = &container
+        && current.get_element_type() != ElementType::etSubRecord
+    {
+        container = current.get_container();
+    }
+    let Some(container) = container else { return 0 };
+    if container_int(&container, "Object Format") == 1 {
+        1
+    } else {
+        0
+    }
+}
+
+/// Upstream `wbScriptObjFormatDecider`.
+pub fn wb_script_obj_format_decider(_a_base_ptr: DataPtr, a_element: ElementArg) -> i32 {
+    wb_get_script_obj_format(a_element)
+}
+
+/// The number of the low `count` bits set in the `Flags` of the container,
+/// shared by the script fragment counters.
+fn script_fragments_counter(a_element: ElementArg, count: u32) -> u32 {
+    let Some(container) = a_element.and_then(|element| element.get_container()) else {
+        return 0;
+    };
+    let flags = container_int(&container, "Flags");
+    (0..count).filter(|bit| flags >> bit & 1 == 1).count() as u32
+}
+
+/// Upstream `wbScriptFragmentsInfoCounter`.
+pub fn wb_script_fragments_info_counter(_a_base_ptr: DataPtr, a_element: ElementArg) -> u32 {
+    script_fragments_counter(a_element, 2)
+}
+
+/// Upstream `wbScriptFragmentsPackCounter`.
+pub fn wb_script_fragments_pack_counter(_a_base_ptr: DataPtr, a_element: ElementArg) -> u32 {
+    script_fragments_counter(a_element, 3)
+}
+
+/// Upstream `wbScriptFragmentsSceneCounter`.
+pub fn wb_script_fragments_scene_counter(_a_base_ptr: DataPtr, a_element: ElementArg) -> u32 {
+    script_fragments_counter(a_element, 2)
+}
+
+/// Upstream `wbNavmeshGridCounter`: the square of the `Divisor`.
+pub fn wb_navmesh_grid_counter(_a_base_ptr: DataPtr, a_element: ElementArg) -> u32 {
+    let Some(container) = a_element.and_then(|element| element.get_container()) else {
+        return 0;
+    };
+    let Some(grid_size) = container
+        .as_container()
+        .and_then(|container| container.get_element_by_name("Divisor"))
+    else {
+        return 0;
+    };
+    let grid_size = variant_int(&grid_size.get_native_value());
+    if !(0..=12).contains(&grid_size) {
+        return 0;
+    }
+    (grid_size * grid_size) as u32
+}
+
+/// Upstream `wbFlagREFRInteriorDontShow`: hidden unless the cell of the
+/// reference is an interior.
+pub fn wb_flag_refr_interior_dont_show(a_element: ElementArg) -> bool {
+    let Some(main_record) = a_element.and_then(|element| element.get_containing_main_record()) else {
+        return false;
+    };
+    let Some(cell) = main_record
+        .get_element_links_to("Cell")
+        .and_then(|cell| cell.into_main_record())
+    else {
+        return false;
+    };
+    variant_int(&cell.get_element_native_value("DATA")) & 0x1 != 0
+}
+
+/// Upstream `wbFlagPartialFormDontShow`.
+pub fn wb_flag_partial_form_dont_show(a_element: ElementArg) -> bool {
+    let Some(main_record) = a_element.and_then(|element| element.get_containing_main_record()) else {
+        return false;
+    };
+    if main_record.get_is_partial_form() {
+        return false;
+    }
+    !main_record.get_can_be_partial()
+}
+
+/// Upstream `wbFlagREFRSkyMarkerDontShow`: hidden unless the base record
+/// has the flag `$1000000`.
+pub fn wb_flag_refr_sky_marker_dont_show(a_element: ElementArg) -> bool {
+    let Some(main_record) = a_element.and_then(|element| element.get_containing_main_record()) else {
+        return false;
+    };
+    let Some(name) = main_record
+        .get_element_links_to("NAME")
+        .and_then(|name| name.into_main_record())
+    else {
+        return false;
+    };
+    name.get_flags().0 & 0x100_0000 == 0
+}
+
+/// Upstream `wbCellExteriorDontShow`: hidden for an exterior cell.
+pub fn wb_cell_exterior_dont_show(a_element: ElementArg) -> bool {
+    let Some(main_record) = a_element.and_then(|element| element.get_containing_main_record()) else {
+        return false;
+    };
+    let path = if is_morrowind() { "DATA\\Flags" } else { "DATA" };
+    variant_int(&main_record.get_element_native_value(path)) & 1 == 0
+}
+
+/// Upstream `wbHideFFFF`: `None` for `$FFFF`.
+pub fn wb_hide_ffff(a_int: i64, _a_element: ElementArg, a_type: CallbackType) -> String {
+    match a_type {
+        CallbackType::ctToSortKey => int_to_hex64(a_int, 4),
+        CallbackType::ctToStr | CallbackType::ctToSummary => {
+            if a_int == 0xFFFF {
+                "None".to_owned()
+            } else {
+                a_int.to_string()
+            }
+        }
+        _ => String::new(),
+    }
+}
+
+/// Upstream `wbACBSLevelDecider`: 1 for the PC level mult flag.
+pub fn wb_acbs_level_decider(_a_base_ptr: DataPtr, a_element: ElementArg) -> i32 {
+    let Some(container) = wb_try_get_container_from_union(a_element) else {
+        return 0;
+    };
+    if container_int(&container, "Flags") & 0x0000_0080 != 0 {
+        1
+    } else {
+        0
+    }
+}
+
+/// Upstream `wbCOEDOwnerDecider`: 1 for an NPC owner, 2 for a faction.
+pub fn wb_coed_owner_decider(_a_base_ptr: DataPtr, a_element: ElementArg) -> i32 {
+    let Some(container) = wb_try_get_container_from_union(a_element) else {
+        return 0;
+    };
+    let Some(main_record) = container
+        .as_container()
+        .and_then(|container| container.get_element_links_to("Owner"))
+        .and_then(|links_to| links_to.into_main_record())
+    else {
+        return 0;
+    };
+    match main_record.get_signature().0.as_slice() {
+        b"NPC_" => 1,
+        b"FACT" => 2,
+        _ => 0,
+    }
+}
+
+/// Upstream `wbConditionCompValueDecider`: 1 for the "use global" flag.
+pub fn wb_condition_comp_value_decider(_a_base_ptr: DataPtr, a_element: ElementArg) -> i32 {
+    let Some(container) = wb_try_get_container_from_union(a_element) else {
+        return 0;
+    };
+    if container_int(&container, "Type") & 4 != 0 {
+        1
+    } else {
+        0
+    }
+}
+
+/// Upstream `wbConditionParam3Decider`: the `Run On` value.
+pub fn wb_condition_param3_decider(_a_base_ptr: DataPtr, a_element: ElementArg) -> i32 {
+    let Some(container) = wb_try_get_container_from_union(a_element) else {
+        return 0;
+    };
+    container_int(&container, "Run On") as i32
+}
+
+/// Upstream `wbConditionReferenceDecider`: 1 when the condition runs on a reference.
+pub fn wb_condition_reference_decider(_a_base_ptr: DataPtr, a_element: ElementArg) -> i32 {
+    let Some(container) = wb_try_get_container_from_union(a_element) else {
+        return 0;
+    };
+    if is_fallout_nv() {
+        // IsFacingUp, IsLeftUp
+        let function = container_int(&container, "Function");
+        if function == 106 || function == 285 {
+            return 0;
+        }
+    }
+    if container_int(&container, "Run On") == 2 { 1 } else { 0 }
+}
+
+/// The container of the element, or the element itself when it is one.
+fn self_or_container(a_element: ElementArg) -> Option<ElementRef> {
+    let element = a_element?;
+    if element.as_container().is_some() {
+        Some(element.clone())
+    } else {
+        element.get_container()
+    }
+}
+
+/// Upstream `wbNAVIIslandDataDecider`: the `Has Island Data` value.
+pub fn wb_navi_island_data_decider(_a_base_ptr: DataPtr, a_element: ElementArg) -> i32 {
+    let Some(container) = self_or_container(a_element) else {
+        return 0;
+    };
+    let Some(element) = container
+        .as_container()
+        .and_then(|container| container.get_element_by_path("...\\Has Island Data"))
+    else {
+        return 0;
+    };
+    variant_int(&element.get_native_value()) as i32
+}
+
+/// Upstream `wbNAVIParentDecider`: 1 for an interior (no parent world).
+pub fn wb_navi_parent_decider(_a_base_ptr: DataPtr, a_element: ElementArg) -> i32 {
+    let Some(container) = self_or_container(a_element) else {
+        return 0;
+    };
+    let Some(element) = container
+        .as_container()
+        .and_then(|container| container.get_element_by_path("...\\Parent World"))
+    else {
+        return 0;
+    };
+    if variant_int(&element.get_native_value()) == 0 {
+        1
+    } else {
+        0
+    }
+}
+
+/// Upstream `wbNVNMParentDecider`: 1 for an interior cell.
+pub fn wb_nvnm_parent_decider(_a_base_ptr: DataPtr, a_element: ElementArg) -> i32 {
+    let Some(container) = a_element.and_then(|element| element.get_container()) else {
+        return 0;
+    };
+    let Some(parent) = container
+        .as_container()
+        .and_then(|container| container.get_element_by_name("Parent World"))
+    else {
+        return 0;
+    };
+    if variant_int(&parent.get_native_value()) == 0 {
+        1
+    } else {
+        0
+    }
+}
+
+/// Upstream `wbModelInfoDecider`: the model header format by the form
+/// version, checked against the data where a record of the other version
+/// range looks like the newer or the older format.
+pub fn wb_model_info_decider(a_base_ptr: DataPtr, a_element: ElementArg) -> i32 {
+    let Some(main_record) = a_element.and_then(|element| element.get_containing_main_record()) else {
+        return 0;
+    };
+    let version = main_record.get_version();
+    // Arbitary limit of 8 supported headers for now.
+    let first = a_base_ptr
+        .filter(|data| data.len() >= 4)
+        .map(|data| u32::from_le_bytes(data[..4].try_into().unwrap()));
+    if version >= 40 {
+        // Most likely older version format in FormVersion 40+ record.
+        if first.is_some_and(|first| first > 8) {
+            return 1;
+        }
+        3
+    } else if version >= 38 {
+        // Most likely newer version format in FormVersion 38-39 record.
+        if first.is_some_and(|first| first <= 8) {
+            return 1;
+        }
+        2
+    } else {
+        0
+    }
+}
+
+/// Upstream `wbModelInfoDontShow`: hidden before form version 38.
+pub fn wb_model_info_dont_show(a_element: ElementArg) -> bool {
+    if game_mode() < GameMode::gmTES5 {
+        return false;
+    }
+    match a_element.and_then(|element| element.get_containing_main_record()) {
+        Some(main_record) => main_record.get_version() < 38,
+        None => true,
+    }
+}
+
+/// Upstream `wbModelInfoGetCP`: ignored before form version 38.
+pub fn wb_model_info_get_cp(a_element: ElementArg, a_conflict_priority: &mut ConflictPriority) {
+    *a_conflict_priority = ConflictPriority::cpNormal;
+    if game_mode() < GameMode::gmTES5 {
+        return;
+    }
+    if let Some(main_record) = a_element.and_then(|element| element.get_containing_main_record())
+        && main_record.get_version() < 38
+    {
+        *a_conflict_priority = ConflictPriority::cpIgnore;
+    }
+}
+
+/// Upstream `wbLandNormalsGetCP`.
+///
+/// UPSTREAM-QUIRK: upstream raises the priority to normal when the record
+/// has conflicts; the conflict state is not ported, so it stays benign.
+pub fn wb_land_normals_get_cp(_a_element: ElementArg, a_conflict_priority: &mut ConflictPriority) {
+    *a_conflict_priority = ConflictPriority::cpBenign;
+}
+
+/// The data container two levels up (or three when the path is not found
+/// two levels up), as the row and column counters look for their bounds.
+fn counter_container(a_element: ElementArg, path: &str) -> Option<ElementRef> {
+    let container = a_element?.get_container()?;
+    container.as_data_container()?;
+    let mut container = container.get_container()?;
+    container.as_data_container()?;
+    if container.as_container()?.get_element_by_path(path).is_none() {
+        container = container.get_container()?;
+        container.as_data_container()?;
+    }
+    Some(container)
+}
+
+/// Upstream `wbMHDTColumnsCounter`: the columns of the max height data.
+pub fn wb_mhdt_columns_counter(_a_base_ptr: DataPtr, a_element: ElementArg) -> u32 {
+    let Some(container) = counter_container(a_element, "Dimensions\\Min\\X") else {
+        return 0;
+    };
+    let Some(container) = container.as_container() else {
+        return 0;
+    };
+    let Some(min_x) = container.get_element_by_path("Dimensions\\Min\\X") else {
+        return 0;
+    };
+    let min_x = min_x.get_native_value().as_ordinal().unwrap_or(0);
+    let Some(max_x) = container.get_element_by_path("Dimensions\\Max\\X") else {
+        return 0;
+    };
+    let max_x = max_x.get_native_value().as_ordinal().unwrap_or(0);
+    (max_x - min_x + 1) as u32
+}
+
+/// A worldspace bound as the counters read it: 0 for the extreme values.
+fn world_bound(container: &dyn Container, path: &str) -> Option<f64> {
+    let value = match container.get_element_by_path(path)?.get_native_value() {
+        Variant::Float(value) => value,
+        other => other.as_ordinal().unwrap_or(0) as f64,
+    };
+    if value == f64::from(f32::MAX) || value == f64::from(f32::MIN) {
+        Some(0.0)
+    } else {
+        Some(value)
+    }
+}
+
+/// Upstream `wbWorldColumnsCounter`.
+pub fn wb_world_columns_counter(_a_base_ptr: DataPtr, a_element: ElementArg) -> u32 {
+    let Some(container) = counter_container(a_element, "Worldspace Bounds\\NAM0\\X") else {
+        return 0;
+    };
+    let Some(container) = container.as_container() else {
+        return 0;
+    };
+    let Some(min_x) = world_bound(container, "Worldspace Bounds\\NAM0\\X") else {
+        return 0;
+    };
+    let Some(max_x) = world_bound(container, "Worldspace Bounds\\NAM9\\X") else {
+        return 0;
+    };
+    (round(max_x) - round(min_x) + 1) as u32
+}
+
+/// Upstream `wbWorldRowsCounter`.
+pub fn wb_world_rows_counter(_a_base_ptr: DataPtr, a_element: ElementArg) -> u32 {
+    let Some(container) = a_element
+        .and_then(|element| element.get_container())
+        .filter(|container| container.as_data_container().is_some())
+        .and_then(|container| container.get_container())
+        .filter(|container| container.as_data_container().is_some())
+    else {
+        return 0;
+    };
+    let Some(container) = container.as_container() else {
+        return 0;
+    };
+    let Some(min_y) = world_bound(container, "Worldspace Bounds\\NAM0\\Y") else {
+        return 0;
+    };
+    let Some(max_y) = world_bound(container, "Worldspace Bounds\\NAM9\\Y") else {
+        return 0;
+    };
+    (round(max_y) - round(min_y) + 1) as u32
+}
+
+/// Upstream `wbWeatherCloudColorsCounter`: 32 layers from form version 35.
+pub fn wb_weather_cloud_colors_counter(_a_base_ptr: DataPtr, a_element: ElementArg) -> u32 {
+    match a_element.and_then(|element| element.get_containing_main_record()) {
+        Some(main_record) if main_record.get_version() >= 35 => 32,
+        Some(_) => 4,
+        None => 0,
+    }
+}
+
+/// Upstream `wbNoFlagsDecider`: 1 when the `Flags` of the container are 0.
+pub fn wb_no_flags_decider(_a_base_ptr: DataPtr, a_element: ElementArg) -> i32 {
+    let Some(container) = wb_try_get_container_ref_from_union_or_value(a_element) else {
+        return 0;
+    };
+    let Some(flags) = container
+        .as_container()
+        .and_then(|container| container.get_element_by_path("Flags"))
+    else {
+        return 0;
+    };
+    if variant_int(&flags.get_native_value()) == 0 {
+        1
+    } else {
+        0
+    }
+}
+
+/// Upstream `wbWeatherTimeOfDayDecider`: 1 for the subrecord sizes with
+/// four values.
+pub fn wb_weather_time_of_day_decider(_a_base_ptr: DataPtr, a_element: ElementArg) -> i32 {
+    match a_element.and_then(|element| element.get_sub_record_header_size()) {
+        Some(64 | 160) => 1,
+        _ => 0,
+    }
+}
+
+/// Upstream `wbCellInteriorDontShow`: hidden for an interior cell.
+pub fn wb_cell_interior_dont_show(a_element: ElementArg) -> bool {
+    let Some(main_record) = a_element.and_then(|element| element.get_containing_main_record()) else {
+        return false;
+    };
+    let path = if is_morrowind() { "DATA\\Flags" } else { "DATA" };
+    variant_int(&main_record.get_element_native_value(path)) & 1 == 1
+}
+
+/// Upstream `wbGetREGNType`: the `RDAT\Type` of the region data entry
+/// that contains the element, -1 when there is none.
+pub fn wb_get_regn_type(a_element: ElementArg) -> i64 {
+    let mut container = a_element.cloned();
+    while let Some(current) = &container
+        && current.get_name() != "Region Data Entry"
+    {
+        container = current.get_container();
+    }
+    match container {
+        Some(container) => container_int(&container, "RDAT\\Type"),
+        None => -1,
+    }
+}
+
+/// Upstream `wbREGNSoundDontShow`.
+pub fn wb_regn_sound_dont_show(a_element: ElementArg) -> bool {
+    wb_get_regn_type(a_element) != 7
+}
+
+/// Upstream `wbTemplateActorDontShow`: hidden unless the template flag of
+/// the position of the element in its subrecord is set.
+pub fn wb_template_actor_dont_show(a_element: ElementArg) -> bool {
+    let Some(element) = a_element else { return false };
+    let Some(sub_record) = element.get_containing_sub_record() else {
+        return false;
+    };
+    let Some(sub_record) = sub_record.as_container() else {
+        return false;
+    };
+    let Some(main_record) = element.get_containing_main_record() else {
+        return false;
+    };
+    let template_flags = variant_int(&main_record.get_element_native_value("ACBS\\Template Flags")) as u32;
+    if template_flags == 0 {
+        return true;
+    }
+    let index = (0..sub_record.get_element_count()).find(|&index| {
+        sub_record
+            .get_element(index)
+            .is_some_and(|other| other.get_element_id() == element.get_element_id())
+    });
+    match index {
+        Some(index) => (template_flags >> index) & 1 == 0,
+        None => false,
+    }
+}
+
+/// Upstream `wbScaledInt4ToInt`.
+pub fn wb_scaled_int4_to_int(a_string: &str, _a_element: ElementArg) -> i64 {
+    round(str_to_float(a_string).unwrap_or(0.0) * 10000.0)
+}
+
+/// Upstream `wbScaledInt4ToStr`: the value divided by 10000.
+pub fn wb_scaled_int4_to_str(a_int: i64, _a_element: ElementArg, a_type: CallbackType) -> String {
+    match a_type {
+        CallbackType::ctToStr | CallbackType::ctToSummary | CallbackType::ctToEditValue => {
+            float_to_str_f_fixed(a_int as f64 / 10000.0, 4)
+        }
+        CallbackType::ctToSortKey => {
+            let mut result = float_to_str_f_fixed(a_int as f64 / 10000.0, 4);
+            if result.len() < 22 {
+                result = format!("{}{result}", "0".repeat(22 - result.len()));
+            }
+            format!("{}{result}", if a_int < 0 { '-' } else { '+' })
+        }
+        _ => String::new(),
+    }
+}
+
+/// Upstream `wbWeatherCloudSpeedToInt`.
+pub fn wb_weather_cloud_speed_to_int(a_string: &str, _a_element: ElementArg) -> i64 {
+    let value = str_to_float(a_string).unwrap_or(0.0) * 10.0 * 127.0 + 127.0;
+    round(value).min(254)
+}
+
+/// Upstream `wbWeatherCloudSpeedToStr`.
+pub fn wb_weather_cloud_speed_to_str(a_int: i64, _a_element: ElementArg, a_type: CallbackType) -> String {
+    match a_type {
+        CallbackType::ctToStr | CallbackType::ctToSummary | CallbackType::ctToEditValue => {
+            float_to_str_f_fixed((a_int - 127) as f64 / 127.0 / 10.0, 4)
+        }
+        _ => String::new(),
+    }
+}
+
+/// Upstream `wbVTXTPosition`: the row and column of a vertex texture position.
+pub fn wb_vtxt_position(a_int: i64, _a_element: ElementArg, a_type: CallbackType) -> String {
+    match a_type {
+        CallbackType::ctToSortKey => format!("{}{}", int_to_hex64(a_int / 17, 2), int_to_hex64(a_int % 17, 2)),
+        CallbackType::ctCheck => {
+            if !(0..=288).contains(&a_int) {
+                format!("<Out of range: {a_int}>")
+            } else {
+                String::new()
+            }
+        }
+        CallbackType::ctToStr | CallbackType::ctToSummary => format!("{a_int} -> {}:{}", a_int / 17, a_int % 17),
+        _ => String::new(),
+    }
+}
+
+/// The text of a file or folder hash that the containers do not resolve.
+fn hash_callback(a_int: i64, a_type: CallbackType) -> String {
+    // UPSTREAM-QUIRK: upstream resolves the hash through the container
+    // handler once the loader is done; the hash tables are not ported.
+    match a_type {
+        CallbackType::ctToSortKey => int_to_hex64(a_int, 16),
+        CallbackType::ctToStr | CallbackType::ctToSummary => {
+            if a_int > i64::from(u32::MAX) || a_type == CallbackType::ctToStr {
+                format!("{{{}}}", int_to_hex64(a_int, 16))
+            } else {
+                format!("{{{}}}", int_to_hex64(a_int, 8))
+            }
+        }
+        CallbackType::ctToEditValue => a_int.to_string(),
+        _ => String::new(),
+    }
+}
+
+/// Upstream `wbFileHashCallback`.
+pub fn wb_file_hash_callback(a_int: i64, _a_element: ElementArg, a_type: CallbackType) -> String {
+    hash_callback(a_int, a_type)
+}
+
+/// Upstream `wbFolderHashCallback`.
+pub fn wb_folder_hash_callback(a_int: i64, _a_element: ElementArg, a_type: CallbackType) -> String {
+    hash_callback(a_int, a_type)
+}
+
+/// The alpha element of a color, or `None` when it is ignored or unused.
+fn color_alpha(container: &dyn Container, index: i32) -> Option<ElementRef> {
+    let alpha = container.get_element(index)?;
+    if alpha.get_conflict_priority() <= ConflictPriority::cpIgnore
+        || alpha
+            .get_def()
+            .is_some_and(|def| def.get_def_type() == DefType::dtByteArray)
+    {
+        return None;
+    }
+    Some(alpha)
+}
+
+fn color_text(r: &str, g: &str, b: &str, alpha: Option<ElementRef>) -> String {
+    match alpha {
+        Some(alpha) => format!("RGBA({r}, {g}, {b}, {})", alpha.get_summary()),
+        None => format!("RGB({r}, {g}, {b})"),
+    }
+}
+
+/// Upstream `wbABGRToStr`.
+pub fn wb_abgr_to_str(a_value: &mut String, _a_base_ptr: DataPtr, a_element: ElementArg, a_type: CallbackType) {
+    let Some(container) = wb_try_set_container(a_element, a_type) else {
+        return;
+    };
+    let Some(container) = container.as_container() else {
+        return;
+    };
+    let summary = |index: i32| {
+        container
+            .get_element(index)
+            .map(|element| element.get_summary())
+            .unwrap_or_default()
+    };
+    let (b, g, r) = (summary(1), summary(2), summary(3));
+    *a_value = color_text(&r, &g, &b, color_alpha(container, 0));
+}
+
+/// Upstream `wbBGRAToStr`.
+pub fn wb_bgra_to_str(a_value: &mut String, _a_base_ptr: DataPtr, a_element: ElementArg, a_type: CallbackType) {
+    let Some(container) = wb_try_set_container(a_element, a_type) else {
+        return;
+    };
+    let Some(container) = container.as_container() else {
+        return;
+    };
+    if container.get_element_count() < 3 {
+        return;
+    }
+    let summary = |index: i32| {
+        container
+            .get_element(index)
+            .map(|element| element.get_summary())
+            .unwrap_or_default()
+    };
+    let (b, g, r) = (summary(0), summary(1), summary(2));
+    let alpha = if container.get_element_count() >= 4 {
+        color_alpha(container, 3)
+    } else {
+        None
+    };
+    *a_value = color_text(&r, &g, &b, alpha);
+}
+
+/// Upstream `wbFactionRelationToStr`: the reaction and the faction.
+pub fn wb_faction_relation_to_str(
+    a_value: &mut String,
+    _a_base_ptr: DataPtr,
+    a_element: ElementArg,
+    a_type: CallbackType,
+) {
+    let Some(container) = wb_try_set_container(a_element, a_type) else {
+        return;
+    };
+    let Some(container) = container.as_container() else {
+        return;
+    };
+    let Some(faction) = container.get_element(0) else {
+        return;
+    };
+    if faction.get_links_to().is_none() {
+        return;
+    }
+    let Some(reaction) = container.get_element(1) else {
+        return;
+    };
+    *a_value = faction.get_value();
+    if is_oblivion() {
+        let native_reaction = reaction.get_native_value().as_ordinal().unwrap_or(0);
+        *a_value = format!("{native_reaction} {a_value}");
+        if native_reaction >= 0 {
+            *a_value = format!("+{a_value}");
+        }
+        return;
+    }
+    let modifier = container
+        .get_element(2)
+        .map(|element| element.get_value())
+        .unwrap_or_default();
+    *a_value = format!("{modifier} {a_value}");
+}
+
+/// Upstream `wbLANDTextureToStr`: the default texture for a null texture.
+pub fn wb_land_texture_to_str(a_value: &mut String, _a_base_ptr: DataPtr, a_element: ElementArg, a_type: CallbackType) {
+    let Some(element) = a_element else { return };
+    if element.get_native_value().as_ordinal().unwrap_or(0) != 0 {
+        return;
+    }
+    let default_texture = match game_mode() {
+        GameMode::gmTES4 | GameMode::gmTES4R => "TerrainHDDirt01dds",
+        GameMode::gmFO3 | GameMode::gmFNV => "LDirtWasteland01",
+        GameMode::gmTES5 | GameMode::gmTES5VR | GameMode::gmSSE => "LDirt02",
+        GameMode::gmFO4 | GameMode::gmFO4VR => "LCWDefault01Grass01",
+        _ => "",
+    };
+    if matches!(a_type, CallbackType::ctToStr | CallbackType::ctToSummary) {
+        *a_value = format!("{default_texture} [LTEX:00000000]");
+    }
+}
+
+/// Upstream `wbCellGridIsRemovable`.
+pub fn wb_cell_grid_is_removable(a_element: ElementArg) -> bool {
+    a_element
+        .and_then(|element| element.get_containing_main_record())
+        .is_some_and(|main_record| variant_int(&main_record.get_element_native_value("DATA")) & 1 == 1)
+}
+
+/// The `Parent Worldspace\PNAM` flags of the containing worldspace.
+fn parent_worldspace_flags(a_element: ElementArg) -> i64 {
+    a_element
+        .and_then(|element| element.get_containing_main_record())
+        .map_or(0, |main_record| {
+            variant_int(&main_record.get_element_native_value("Parent Worldspace\\PNAM"))
+        })
+}
+
+/// Upstream `wbWorldLandDataIsRemovable`.
+pub fn wb_world_land_data_is_removable(a_element: ElementArg) -> bool {
+    parent_worldspace_flags(a_element) & 0x01 == 1
+}
+
+/// Upstream `wbWorldLODDataIsRemovable`.
+pub fn wb_world_lod_data_is_removable(a_element: ElementArg) -> bool {
+    parent_worldspace_flags(a_element) & 0x02 == 2
+}
+
+/// Upstream `wbWorldMapDataIsRemovable`.
+pub fn wb_world_map_data_is_removable(a_element: ElementArg) -> bool {
+    if is_oblivion() {
+        a_element
+            .and_then(|element| element.get_containing_main_record())
+            .is_some_and(|main_record| main_record.get_record_by_signature(Signature::new(b"WNAM")).is_some())
+    } else {
+        parent_worldspace_flags(a_element) & 0x04 == 4
     }
 }

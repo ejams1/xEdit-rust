@@ -106,6 +106,25 @@ pub trait Element: Send + Sync {
 
     fn get_containing_main_record(&self) -> Option<MainRecordRef>;
 
+    /// Upstream `ContainingSubRecord`: the subrecord that contains this
+    /// element, or the element itself when it is one.
+    fn get_containing_sub_record(&self) -> Option<ElementRef> {
+        let mut current = self.get_container();
+        while let Some(element) = current {
+            if element.get_element_type() == ElementType::etSubRecord {
+                return Some(element);
+            }
+            current = element.get_container();
+        }
+        None
+    }
+
+    /// Upstream `IwbSubRecord.SubRecordHeaderSize`: the data size from the
+    /// header of a subrecord, `None` for the other elements.
+    fn get_sub_record_header_size(&self) -> Option<i32> {
+        None
+    }
+
     fn get_path(&self) -> String;
 
     /// Whether the element stores an ID into the string tables.
@@ -240,6 +259,15 @@ pub trait MainRecord: Container {
     /// Upstream `MasterOrSelf`: the record this one overrides, or itself.
     fn get_master_or_self(&self) -> MainRecordRef;
 
+    /// Upstream `Flags`: the flags of the record header.
+    fn get_flags(&self) -> crate::implementation::structs::MainRecordStructFlags;
+
+    /// Upstream `CanBePartial`: whether the record may be a partial form.
+    fn get_can_be_partial(&self) -> bool;
+
+    /// Upstream `GetGridCell`: the grid position of an exterior cell.
+    fn get_grid_cell(&self) -> Option<(i32, i32)>;
+
     /// The override of this record in the last file that has one.
     fn get_winning_override(&self) -> MainRecordRef;
 
@@ -252,7 +280,31 @@ pub trait MainRecord: Container {
 pub trait Container: Element {
     /// Upstream `ElementNativeValues[aPath]`: the native value of the element
     /// at `path`, or an empty variant when there is none.
-    fn get_element_native_value(&self, path: &str) -> Variant;
+    fn get_element_native_value(&self, path: &str) -> Variant {
+        self.get_element_by_path(path)
+            .map_or(Variant::Empty, |element| element.get_native_value())
+    }
+
+    /// Upstream `ElementEditValues[aPath]`.
+    fn get_element_edit_value(&self, path: &str) -> String {
+        self.get_element_by_path(path)
+            .map_or_else(String::new, |element| element.get_edit_value())
+    }
+
+    /// Upstream `ElementLinksTo[aPath]`.
+    fn get_element_links_to(&self, path: &str) -> Option<ElementRef> {
+        self.get_element_by_path(path)?.get_links_to()
+    }
+
+    /// Upstream `ElementExists[aPath]`.
+    fn get_element_exists(&self, path: &str) -> bool {
+        self.get_element_by_path(path).is_some()
+    }
+
+    /// Upstream `ElementBySignature[aSignature]`.
+    fn get_element_by_signature(&self, signature: Signature) -> Option<ElementRef> {
+        self.get_record_by_signature(signature)
+    }
 
     /// Upstream `ElementByName[aName]`.
     fn get_element_by_name(&self, name: &str) -> Option<ElementRef>;

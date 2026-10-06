@@ -19,7 +19,7 @@ use crate::interface::element::{Container, DataContainer, DataPtr, Element, Elem
 use crate::interface::form_id::FormID;
 use crate::interface::globals::sort_sub_records;
 use crate::interface::misc::Variant;
-use crate::interface::types::{ConflictPriority, DefFlag, DefType, ElementType, TriBool};
+use crate::interface::types::{ConflictPriority, DefFlag, DefType, ElementType, TriBool, dt_non_values};
 
 use super::{ContainerBase, DataBlock, ElementBase, ElementImpl};
 
@@ -417,10 +417,30 @@ pub(super) fn union_do_init(
 
 impl Element for ValueImpl {
     element_common!(vb_base, own_values);
-    element_display_name!(vb_base);
 
     fn get_name(&self) -> String {
         self.vb.name()
+    }
+
+    /// Port of `TwbValueBase.GetDisplayName` without the dump offsets: the
+    /// name of the resolved definition, unless that is a container type
+    /// different from the definition of the element.
+    fn get_display_name(&self, use_suffix: bool) -> String {
+        let self_ref = self.element_ref();
+        let resolved = resolve(self.vb.vb_value_def.clone(), self.vb.data(), Some(&self_ref));
+        let same = std::ptr::addr_eq(Arc::as_ptr(&resolved), Arc::as_ptr(&self.vb.vb_value_def));
+        let mut result = if !same && dt_non_values().contains(resolved.get_def_type()) {
+            self.vb.vb_value_def.get_name().to_owned()
+        } else {
+            resolved.get_name().to_owned()
+        };
+        if use_suffix && !self.vb.e_name_suffix.is_empty() {
+            if !result.is_empty() {
+                result.push(' ');
+            }
+            result.push_str(&self.vb.e_name_suffix);
+        }
+        result
     }
 
     fn get_data_size(&self) -> i32 {
@@ -498,6 +518,10 @@ impl Element for ValueImpl {
 }
 
 impl ElementImpl for ValueImpl {
+    fn self_element_ref(&self) -> Option<ElementRef> {
+        self.self_ref.upgrade().map(|element| element as ElementRef)
+    }
+
     fn element_base(&self) -> &ElementBase {
         &self.vb.base
     }
@@ -514,11 +538,6 @@ impl DataContainer for ValueImpl {
 }
 
 impl Container for ValueImpl {
-    fn get_element_native_value(&self, path: &str) -> Variant {
-        self.get_element_by_path(path)
-            .map_or(Variant::Empty, |element| element.get_native_value())
-    }
-
     fn get_element_by_name(&self, name: &str) -> Option<ElementRef> {
         super::element_by_name(self, name)
     }

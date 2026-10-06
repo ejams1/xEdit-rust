@@ -27,11 +27,6 @@ pub fn define_fo4_anonymous_9638(_a_main_record: &MainRecordRef, _a_index_keys: 
     todo!("port anonymous routine in define_fo4 from wbDefinitionsFO4.pas line 9638")
 }
 
-/// Upstream `wbACBSLevelDecider`, line 266 of `wbDefinitionsFO4.pas`.
-pub fn wb_acbs_level_decider(_a_base_ptr: DataPtr, _a_element: ElementArg) -> i32 {
-    todo!("port wbACBSLevelDecider from wbDefinitionsFO4.pas line 266")
-}
-
 /// Upstream `wbACBSLevelMultAfterLoad`, line 39 of `wbDefinitionsFO4.pas`.
 pub fn wb_acbs_level_mult_after_load(_a_element: &ElementRef) {
     todo!("port wbACBSLevelMultAfterLoad from wbDefinitionsFO4.pas line 39")
@@ -82,11 +77,6 @@ pub fn wb_cell_combined_refs_counter(_a_base_ptr: DataPtr, _a_element: ElementAr
     todo!("port wbCELLCombinedRefsCounter from wbDefinitionsFO4.pas line 2530")
 }
 
-/// Upstream `wbCellExteriorDontShow`, line 96 of `wbDefinitionsFO4.pas`.
-pub fn wb_cell_exterior_dont_show(_a_element: ElementArg) -> bool {
-    todo!("port wbCellExteriorDontShow from wbDefinitionsFO4.pas line 96")
-}
-
 /// Upstream `wbCellLightingIsRemovable`, line 136 of `wbDefinitionsFO4.pas`.
 pub fn wb_cell_lighting_is_removable(_a_element: ElementArg) -> bool {
     todo!("port wbCellLightingIsRemovable from wbDefinitionsFO4.pas line 136")
@@ -122,11 +112,6 @@ pub fn wb_clmt_time(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) 
     todo!("port wbClmtTime from wbDefinitionsFO4.pas line 201")
 }
 
-/// Upstream `wbCOEDOwnerDecider`, line 267 of `wbDefinitionsFO4.pas`.
-pub fn wb_coed_owner_decider(_a_base_ptr: DataPtr, _a_element: ElementArg) -> i32 {
-    todo!("port wbCOEDOwnerDecider from wbDefinitionsFO4.pas line 267")
-}
-
 /// Upstream `wbCombinedMeshIDToInt`, line 2590 of `wbDefinitionsFO4.pas`.
 pub fn wb_combined_mesh_id_to_int(_a_string: &str, _a_element: ElementArg) -> i64 {
     todo!("port wbCombinedMeshIDToInt from wbDefinitionsFO4.pas line 2590")
@@ -140,11 +125,6 @@ pub fn wb_combined_mesh_id_to_str(_a_int: i64, _a_element: ElementArg, _a_type: 
 /// Upstream `wbConditionAliasToStr`, line 202 of `wbDefinitionsFO4.pas`.
 pub fn wb_condition_alias_to_str(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) -> String {
     todo!("port wbConditionAliasToStr from wbDefinitionsFO4.pas line 202")
-}
-
-/// Upstream `wbConditionCompValueDecider`, line 268 of `wbDefinitionsFO4.pas`.
-pub fn wb_condition_comp_value_decider(_a_base_ptr: DataPtr, _a_element: ElementArg) -> i32 {
-    todo!("port wbConditionCompValueDecider from wbDefinitionsFO4.pas line 268")
 }
 
 /// Upstream `wbConditionEventToInt`, line 900 of `wbDefinitionsFO4.pas`.
@@ -187,11 +167,6 @@ pub fn wb_condition_param2_decider(_a_base_ptr: DataPtr, _a_element: ElementArg)
     todo!("port wbConditionParam2Decider from wbDefinitionsFO4.pas line 839")
 }
 
-/// Upstream `wbConditionParam3Decider`, line 269 of `wbDefinitionsFO4.pas`.
-pub fn wb_condition_param3_decider(_a_base_ptr: DataPtr, _a_element: ElementArg) -> i32 {
-    todo!("port wbConditionParam3Decider from wbDefinitionsFO4.pas line 269")
-}
-
 /// Upstream `wbConditionQuestOverlay`, line 995 of `wbDefinitionsFO4.pas`.
 pub fn wb_condition_quest_overlay(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) -> i64 {
     todo!("port wbConditionQuestOverlay from wbDefinitionsFO4.pas line 995")
@@ -200,11 +175,6 @@ pub fn wb_condition_quest_overlay(_a_int: i64, _a_element: ElementArg, _a_type: 
 /// Upstream `wbConditionQuestStageToStr`, line 916 of `wbDefinitionsFO4.pas`.
 pub fn wb_condition_quest_stage_to_str(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) -> String {
     todo!("port wbConditionQuestStageToStr from wbDefinitionsFO4.pas line 916")
-}
-
-/// Upstream `wbConditionReferenceDecider`, line 270 of `wbDefinitionsFO4.pas`.
-pub fn wb_condition_reference_decider(_a_base_ptr: DataPtr, _a_element: ElementArg) -> i32 {
-    todo!("port wbConditionReferenceDecider from wbDefinitionsFO4.pas line 270")
 }
 
 /// Upstream `wbConditionRunOnAfterSet`, line 57 of `wbDefinitionsFO4.pas`.
@@ -337,11 +307,6 @@ pub fn wb_flag_navmesh_ground_dont_s_how(_a_element: ElementArg) -> bool {
     todo!("port wbFlagNavmeshGroundDontSHow from wbDefinitionsFO4.pas line 88")
 }
 
-/// Upstream `wbFlagPartialFormDontShow`, line 89 of `wbDefinitionsFO4.pas`.
-pub fn wb_flag_partial_form_dont_show(_a_element: ElementArg) -> bool {
-    todo!("port wbFlagPartialFormDontShow from wbDefinitionsFO4.pas line 89")
-}
-
 /// Upstream `wbFLSTEDIDAfterSet`, line 1259 of `wbDefinitionsFO4.pas`.
 pub fn wb_flstedid_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
     todo!("port wbFLSTEDIDAfterSet from wbDefinitionsFO4.pas line 1259")
@@ -360,11 +325,6 @@ pub fn wb_gmstedid_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a
 /// Upstream `wbHexStrToInt`, line 2673 of `wbDefinitionsFO4.pas`.
 pub fn wb_hex_str_to_int(_a_string: &str, _a_element: ElementArg) -> i64 {
     todo!("port wbHexStrToInt from wbDefinitionsFO4.pas line 2673")
-}
-
-/// Upstream `wbHideFFFF`, line 210 of `wbDefinitionsFO4.pas`.
-pub fn wb_hide_ffff(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) -> String {
-    todo!("port wbHideFFFF from wbDefinitionsFO4.pas line 210")
 }
 
 /// Upstream `wbIdleMarkerPNAMAfterSet`, line 59 of `wbDefinitionsFO4.pas`.
@@ -452,21 +412,6 @@ pub fn wb_morph_value_to_str(_a_int: i64, _a_element: ElementArg, _a_type: Callb
     todo!("port wbMorphValueToStr from wbDefinitionsFO4.pas line 2715")
 }
 
-/// Upstream `wbNAVIIslandDataDecider`, line 275 of `wbDefinitionsFO4.pas`.
-pub fn wb_navi_island_data_decider(_a_base_ptr: DataPtr, _a_element: ElementArg) -> i32 {
-    todo!("port wbNAVIIslandDataDecider from wbDefinitionsFO4.pas line 275")
-}
-
-/// Upstream `wbNAVIParentDecider`, line 276 of `wbDefinitionsFO4.pas`.
-pub fn wb_navi_parent_decider(_a_base_ptr: DataPtr, _a_element: ElementArg) -> i32 {
-    todo!("port wbNAVIParentDecider from wbDefinitionsFO4.pas line 276")
-}
-
-/// Upstream `wbNavmeshGridCounter`, line 74 of `wbDefinitionsFO4.pas`.
-pub fn wb_navmesh_grid_counter(_a_base_ptr: DataPtr, _a_element: ElementArg) -> u32 {
-    todo!("port wbNavmeshGridCounter from wbDefinitionsFO4.pas line 74")
-}
-
 /// Upstream `wbNoteTypeDecider`, line 274 of `wbDefinitionsFO4.pas`.
 pub fn wb_note_type_decider(_a_base_ptr: DataPtr, _a_element: ElementArg) -> i32 {
     todo!("port wbNoteTypeDecider from wbDefinitionsFO4.pas line 274")
@@ -485,11 +430,6 @@ pub fn wb_npc_package_to_str(
     _a_type: CallbackType,
 ) {
     todo!("port wbNPCPackageToStr from wbDefinitionsFO4.pas line 242")
-}
-
-/// Upstream `wbNVNMParentDecider`, line 277 of `wbDefinitionsFO4.pas`.
-pub fn wb_nvnm_parent_decider(_a_base_ptr: DataPtr, _a_element: ElementArg) -> i32 {
-    todo!("port wbNVNMParentDecider from wbDefinitionsFO4.pas line 277")
 }
 
 /// Upstream `wbObjectModPropertyToInt`, line 2447 of `wbDefinitionsFO4.pas`.
@@ -676,16 +616,6 @@ pub fn wb_script_fragments_empty_script_decider(_a_base_ptr: DataPtr, _a_element
     todo!("port wbScriptFragmentsEmptyScriptDecider from wbDefinitionsFO4.pas line 279")
 }
 
-/// Upstream `wbScriptFragmentsInfoCounter`, line 75 of `wbDefinitionsFO4.pas`.
-pub fn wb_script_fragments_info_counter(_a_base_ptr: DataPtr, _a_element: ElementArg) -> u32 {
-    todo!("port wbScriptFragmentsInfoCounter from wbDefinitionsFO4.pas line 75")
-}
-
-/// Upstream `wbScriptFragmentsPackCounter`, line 76 of `wbDefinitionsFO4.pas`.
-pub fn wb_script_fragments_pack_counter(_a_base_ptr: DataPtr, _a_element: ElementArg) -> u32 {
-    todo!("port wbScriptFragmentsPackCounter from wbDefinitionsFO4.pas line 76")
-}
-
 /// Upstream `wbScriptFragmentsQuestScriptNameAfterSet`, line 66 of `wbDefinitionsFO4.pas`.
 pub fn wb_script_fragments_quest_script_name_after_set(
     _a_element: &ElementRef,
@@ -693,16 +623,6 @@ pub fn wb_script_fragments_quest_script_name_after_set(
     _a_new_value: &Variant,
 ) {
     todo!("port wbScriptFragmentsQuestScriptNameAfterSet from wbDefinitionsFO4.pas line 66")
-}
-
-/// Upstream `wbScriptFragmentsSceneCounter`, line 77 of `wbDefinitionsFO4.pas`.
-pub fn wb_script_fragments_scene_counter(_a_base_ptr: DataPtr, _a_element: ElementArg) -> u32 {
-    todo!("port wbScriptFragmentsSceneCounter from wbDefinitionsFO4.pas line 77")
-}
-
-/// Upstream `wbScriptObjFormatDecider`, line 280 of `wbDefinitionsFO4.pas`.
-pub fn wb_script_obj_format_decider(_a_base_ptr: DataPtr, _a_element: ElementArg) -> i32 {
-    todo!("port wbScriptObjFormatDecider from wbDefinitionsFO4.pas line 280")
 }
 
 /// Upstream `wbScriptObjectAliasLinksTo`, line 157 of `wbDefinitionsFO4.pas`.
