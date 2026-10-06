@@ -353,9 +353,11 @@ fn record_position(main_record: &MainRecordRef) -> Option<(f64, f64, f64)> {
     if position.get_element_count() != 3 {
         return None;
     }
+    // `TwbVector` holds singles, so the rounded native values round again
+    // to single precision: 4095.9999997 is 4096 and lies in the next cell.
     let coordinate = |index| match position.get_element(index)?.get_native_value() {
-        Variant::Float(value) => Some(value),
-        Variant::Int(value) => Some(value as f64),
+        Variant::Float(value) => Some(f64::from(value as f32)),
+        Variant::Int(value) => Some(f64::from(value as f32)),
         _ => None,
     };
     Some((coordinate(0)?, coordinate(1)?, coordinate(2)?))
