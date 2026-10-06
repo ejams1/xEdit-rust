@@ -155,6 +155,10 @@ pub trait File: Container {
     /// Upstream `Encoding[aTranslatable]`: the encoding of the strings of the file.
     fn get_encoding(&self, translatable: bool) -> Encoding;
 
+    /// Upstream `RecordFromIndexByKey[aIndex, aKey]`: the record with the
+    /// key in the named index, in this file or one of its masters.
+    fn get_record_from_index_by_key(&self, index: i32, key: &str) -> Option<MainRecordRef>;
+
     fn get_is_localized(&self) -> bool;
 
     fn get_file_states(&self) -> FileStates;

@@ -19,8 +19,10 @@ use xedit_core::interface::string::to_comma_text;
 use xedit_core::interface::*;
 
 use super::common::{
-    variant_int, wb_try_get_container_from_union, wb_try_get_container_ref_from_union_or_value, wb_try_get_main_record,
+    collision_layer_links_to, index_key_from_ordinal, variant_int, wb_try_get_container_from_union,
+    wb_try_get_container_ref_from_union_or_value, wb_try_get_main_record,
 };
+use crate::common::{wb_idx_addon_node, wb_idx_collision_layer};
 use crate::signatures::{ANAM, NAME, PRKE, QUST};
 use crate::tes5::{
     TConditionParameterType, WB_CONDITION_FUNCTIONS, WB_EVENT_FUNCTION_ENUM, WB_EVENT_MEMBER_ENUM,
@@ -727,4 +729,97 @@ pub fn wb_perk_data_quest_stage_to_str(a_int: i64, a_element: ElementArg, a_type
         _ => {}
     }
     result
+}
+
+/// Upstream `wbEdgeLinksTo0`.
+pub fn wb_edge_links_to0(a_element: ElementArg) -> Option<ElementRef> {
+    super::common::wb_edge_links_to(0, a_element)
+}
+
+/// Upstream `wbEdgeToStr0`.
+pub fn wb_edge_to_str0(a_int: i64, a_element: ElementArg, a_type: CallbackType) -> String {
+    super::common::wb_edge_to_str(0, a_int, a_element, a_type)
+}
+
+/// Upstream `wbEdgeToInt0`.
+pub fn wb_edge_to_int0(a_string: &str, a_element: ElementArg) -> i64 {
+    super::common::wb_edge_to_int(0, a_string, a_element)
+}
+
+/// Upstream `wbVertexToStr0`.
+pub fn wb_vertex_to_str0(a_int: i64, a_element: ElementArg, a_type: CallbackType) -> String {
+    super::common::wb_vertex_to_str(0, a_int, a_element, a_type)
+}
+
+/// Upstream `wbVertexToInt0`.
+pub fn wb_vertex_to_int0(a_string: &str, a_element: ElementArg) -> i64 {
+    super::common::wb_vertex_to_int(0, a_string, a_element)
+}
+
+/// Upstream `wbEdgeLinksTo1`.
+pub fn wb_edge_links_to1(a_element: ElementArg) -> Option<ElementRef> {
+    super::common::wb_edge_links_to(1, a_element)
+}
+
+/// Upstream `wbEdgeToStr1`.
+pub fn wb_edge_to_str1(a_int: i64, a_element: ElementArg, a_type: CallbackType) -> String {
+    super::common::wb_edge_to_str(1, a_int, a_element, a_type)
+}
+
+/// Upstream `wbEdgeToInt1`.
+pub fn wb_edge_to_int1(a_string: &str, a_element: ElementArg) -> i64 {
+    super::common::wb_edge_to_int(1, a_string, a_element)
+}
+
+/// Upstream `wbVertexToStr1`.
+pub fn wb_vertex_to_str1(a_int: i64, a_element: ElementArg, a_type: CallbackType) -> String {
+    super::common::wb_vertex_to_str(1, a_int, a_element, a_type)
+}
+
+/// Upstream `wbVertexToInt1`.
+pub fn wb_vertex_to_int1(a_string: &str, a_element: ElementArg) -> i64 {
+    super::common::wb_vertex_to_int(1, a_string, a_element)
+}
+
+/// Upstream `wbEdgeLinksTo2`.
+pub fn wb_edge_links_to2(a_element: ElementArg) -> Option<ElementRef> {
+    super::common::wb_edge_links_to(2, a_element)
+}
+
+/// Upstream `wbEdgeToStr2`.
+pub fn wb_edge_to_str2(a_int: i64, a_element: ElementArg, a_type: CallbackType) -> String {
+    super::common::wb_edge_to_str(2, a_int, a_element, a_type)
+}
+
+/// Upstream `wbEdgeToInt2`.
+pub fn wb_edge_to_int2(a_string: &str, a_element: ElementArg) -> i64 {
+    super::common::wb_edge_to_int(2, a_string, a_element)
+}
+
+/// Upstream `wbVertexToStr2`.
+pub fn wb_vertex_to_str2(a_int: i64, a_element: ElementArg, a_type: CallbackType) -> String {
+    super::common::wb_vertex_to_str(2, a_int, a_element, a_type)
+}
+
+/// Upstream `wbVertexToInt2`.
+pub fn wb_vertex_to_int2(a_string: &str, a_element: ElementArg) -> i64 {
+    super::common::wb_vertex_to_int(2, a_string, a_element)
+}
+
+/// Upstream anonymous routine at line 6171 of `wbDefinitionsTES5.pas`: the
+/// `ADDN` index key.
+pub fn define_tes5_anonymous_6171(a_main_record: &MainRecordRef, a_index_keys: &mut IndexKeys) {
+    index_key_from_ordinal(a_main_record, a_index_keys, "DATA", wb_idx_addon_node());
+}
+
+/// Upstream anonymous routine at line 7697 of `wbDefinitionsTES5.pas`: the
+/// `COLL` index key.
+pub fn define_tes5_anonymous_7697(a_main_record: &MainRecordRef, a_index_keys: &mut IndexKeys) {
+    index_key_from_ordinal(a_main_record, a_index_keys, "BNAM", wb_idx_collision_layer());
+}
+
+/// Upstream anonymous routine at line 9854 of `wbDefinitionsTES5.pas`: the
+/// collision layer of `XTRI`.
+pub fn define_tes5_anonymous_9854(a_element: ElementArg) -> Option<ElementRef> {
+    collision_layer_links_to(a_element)
 }

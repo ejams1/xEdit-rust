@@ -162,15 +162,16 @@ impl GroupRecordStruct {
             1 => format!("GRUP World Children of [{:08X}]", self.label),
             2 => format!("GRUP Interior Cell Block {}", self.label),
             3 => format!("GRUP Interior Cell Sub-Block {}", self.label),
+            // `LongRecSmall(grsLabel).Hi` first, then `.Lo`.
             4 => format!(
                 "GRUP Exterior Cell Block {}, {}",
-                self.label as i16,
-                (self.label >> 16) as i16
+                (self.label >> 16) as i16,
+                self.label as i16
             ),
             5 => format!(
                 "GRUP Exterior Cell Sub-Block {}, {}",
-                self.label as i16,
-                (self.label >> 16) as i16
+                (self.label >> 16) as i16,
+                self.label as i16
             ),
             6 => format!("GRUP Cell Children of [{:08X}]", self.label),
             7 => format!("GRUP Topic Children of [{:08X}]", self.label),

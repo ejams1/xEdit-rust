@@ -2530,6 +2530,16 @@ pub fn wb_float_rgba(
     .map(|def| def as Arc<dyn ValueDef>)
 }
 
+/// Upstream `wbIdxAddonNode`, line 6502 of `wbDefinitionsCommon.pas`.
+pub fn wb_idx_addon_node() -> i32 {
+    wb_named_index("AddonNode", true)
+}
+
+/// Upstream `wbIdxCollisionLayer`, line 6507 of `wbDefinitionsCommon.pas`.
+pub fn wb_idx_collision_layer() -> i32 {
+    wb_named_index("CollisionLayer", true)
+}
+
 /// Upstream `wbActorImpactMaterialEnum`, line 6514 of `wbDefinitionsCommon.pas`.
 pub fn wb_actor_impact_material_enum() -> Option<Arc<EnumDef>> {
     wb_enum(&[

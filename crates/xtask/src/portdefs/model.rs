@@ -266,7 +266,7 @@ impl Symbols {
             "twbsignature" => Ty::Sig,
             "boolean" => Ty::Bool,
             "integer" | "cardinal" | "int64" | "uint64" | "byte" | "word" | "smallint" | "shortint" | "nativeint"
-            | "nativeuint" | "longint" | "longword" => Ty::Int,
+            | "nativeuint" | "longint" | "longword" | "twbnamedindex" => Ty::Int,
             "extended" | "double" | "single" => Ty::Float,
             "variant" => Ty::Named("variant".to_owned()),
             _ => match self.types.get(&name) {

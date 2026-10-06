@@ -99,6 +99,7 @@ macro_rules! element_common {
 pub mod sub_record;
 pub mod value;
 
+use std::collections::HashMap;
 use std::path::Path;
 use std::sync::atomic::{AtomicI32, Ordering};
 use std::sync::{Arc, OnceLock, RwLock, Weak};
@@ -115,12 +116,19 @@ use crate::interface::form_id::{FileID, FormID};
 use crate::interface::globals::{
     GameMode, create_contained_in, display_load_order_form_id, game_exe_name, game_master_esm, game_mode,
     header_signature, is_light_supported, is_medium_supported, is_update_supported, pseudo_light, pseudo_medium,
-    pseudo_update, size_of_main_record_struct, vwd_as_quest_children, wb_get_group_order,
+    pseudo_update, remove_offset_data, size_of_main_record_struct, track_all_editor_id, vwd_as_quest_children,
+    wb_get_group_order,
 };
-use crate::interface::main_record::{MainRecordDef, main_record_header};
+use crate::interface::integer::IntegerDefFormater;
+use crate::interface::main_record::{
+    IndexKeys, MainRecordDef, idx_editor_id, main_record_header, named_index_key, named_index_name,
+};
 use crate::interface::misc::{Variant, progress};
 use crate::interface::sub_record_group::RecordDef;
-use crate::interface::types::{ConflictPriority, ElementType, FileState, FileStates, Signature, TriBool};
+use crate::interface::types::PascalEnum;
+use crate::interface::types::{
+    ConflictPriority, DefFlag, ElementType, FileState, FileStates, KnownSubRecord, Signature, TriBool,
+};
 
 use self::structs::{GroupRecordStruct, MainRecordStruct, MainRecordStructFlags};
 
@@ -349,8 +357,9 @@ impl ElementBase {
     fn new(container: Option<&ElementRef>) -> Self {
         ElementBase {
             e_container: RwLock::new(container.map(Arc::downgrade)),
-            e_sort_order: AtomicI32::new(0),
-            e_memory_order: AtomicI32::new(0),
+            // `TwbElement.Create`: unset until the container assigns them.
+            e_sort_order: AtomicI32::new(i32::MAX),
+            e_memory_order: AtomicI32::new(i32::MIN),
             e_name_suffix: RwLock::new(String::new()),
             e_resolving: std::sync::atomic::AtomicBool::new(false),
         }
@@ -458,6 +467,10 @@ pub struct FileImpl {
     /// Port of `flInjectedRecords`: records of other files with FormIDs of
     /// this file, sorted by FormID.
     fl_injected_records: RwLock<Vec<Arc<MainRecordImpl>>>,
+    /// Port of `flRecordsIndices`: the records by key, per named index,
+    /// built once the file is scanned (`flIndicesActive`).
+    fl_records_indices: RwLock<Vec<HashMap<String, Arc<MainRecordImpl>>>>,
+    fl_indices_active: std::sync::atomic::AtomicBool,
 }
 
 static NEXT_LOAD_ORDER: AtomicI32 = AtomicI32::new(0);
@@ -781,7 +794,88 @@ impl FileImpl {
         let mut sorted = self.fl_records.read().unwrap().clone();
         sorted.sort_by_key(|record| record.get_fixed_form_id().to_cardinal());
         self.fl_sorted_records.set(sorted).ok();
+        self.activate_indices();
         Ok(())
+    }
+
+    /// Port of `flActivateIndices`: the keys of every record go into the
+    /// named indices.
+    fn activate_indices(self: &Arc<Self>) {
+        if self.fl_indices_active.swap(true, Ordering::AcqRel) {
+            return;
+        }
+        progress(&format!("[{}] Building string indices", self.get_name()));
+        let records = self.fl_records.read().unwrap().clone();
+        for record in &records {
+            let keys = record.activate_index_keys();
+            self.add_keys_to_indices(record, &keys);
+        }
+        progress(&format!("[{}] String indices built", self.get_name()));
+    }
+
+    /// Port of `flAddKeysToIndices`.
+    fn add_keys_to_indices(&self, record: &Arc<MainRecordImpl>, keys: &[(i32, String)]) {
+        if !self.fl_indices_active.load(Ordering::Acquire) {
+            return;
+        }
+        let mut indices = self.fl_records_indices.write().unwrap();
+        for (index, key) in keys {
+            let Ok(position) = usize::try_from(*index) else {
+                continue;
+            };
+            if position >= indices.len() {
+                indices.resize_with(position + 1, HashMap::new);
+            }
+            let key = named_index_key(*index, key);
+            if let Some(existing) = indices[position].get(&key) {
+                progress(&format!(
+                    "[{}] Duplicate Key in Index \"{}\": \"{}\" Existing: {} New: {}",
+                    self.get_name(),
+                    named_index_name(*index),
+                    key,
+                    existing.get_short_name(),
+                    record.get_short_name()
+                ));
+                continue;
+            }
+            indices[position].insert(key, record.clone());
+        }
+    }
+
+    /// Port of `flFindKeyInIndex`.
+    fn find_key_in_index(&self, index: i32, key: &str) -> Option<Arc<MainRecordImpl>> {
+        if !self.fl_indices_active.load(Ordering::Acquire) {
+            return None;
+        }
+        let indices = self.fl_records_indices.read().unwrap();
+        let records = indices.get(usize::try_from(index).ok()?)?;
+        records.get(&named_index_key(index, key)).cloned()
+    }
+
+    /// Port of `AddAllMastersToSet` with `SortByReverseLoadOrder`: every
+    /// master, direct or not, from the highest load order down.
+    fn all_masters(&self) -> Vec<Arc<FileImpl>> {
+        let mut result: Vec<Arc<FileImpl>> = Vec::new();
+        let mut pending = self.masters();
+        while let Some(master) = pending.pop() {
+            if result.iter().any(|known| Arc::ptr_eq(known, &master)) {
+                continue;
+            }
+            pending.extend(master.masters());
+            result.push(master);
+        }
+        result.sort_by_key(|master| std::cmp::Reverse(master.load_order()));
+        result
+    }
+
+    /// Port of `GetRecordFromIndexByKey`.
+    pub fn record_from_index_by_key(&self, index: i32, key: &str) -> Option<Arc<MainRecordImpl>> {
+        if let Some(record) = self.find_key_in_index(index, key) {
+            return Some(record);
+        }
+        self.all_masters()
+            .iter()
+            .find_map(|master| master.find_key_in_index(index, key))
     }
 
     /// Port of `AssignSlot` in `TwbFile.Scan`, for a file without masters
@@ -890,6 +984,11 @@ fn player_reference_group() -> Vec<u8> {
     group.extend_from_slice(&header);
     group.extend_from_slice(&record);
     group
+}
+
+/// Port of `StrRight`: the text padded on the left with spaces to `len`.
+fn str_right(text: &str, len: usize) -> String {
+    format!("{text:>len$}")
 }
 
 /// Port of `wbGetGameMasterFile`.
@@ -1002,6 +1101,8 @@ pub fn wb_file_compare(
         fl_load_finished: OnceLock::new(),
         fl_compare_to: compare_to.map(str::to_owned),
         fl_injected_records: RwLock::new(Vec::new()),
+        fl_records_indices: RwLock::new(Vec::new()),
+        fl_indices_active: std::sync::atomic::AtomicBool::new(false),
     });
     progress(&format!("[{}] Loading file", file.get_name()));
     FILES_MAP.write().unwrap().push(file.clone());
@@ -1140,6 +1241,8 @@ pub struct MainRecordImpl {
     mr_overrides: RwLock<Vec<Weak<MainRecordImpl>>>,
     /// Port of `mrFixedFormID`.
     mr_fixed_form_id: OnceLock<FormID>,
+    /// Port of `mrDisplayName`: cached for the records of official files.
+    mr_display_name: OnceLock<String>,
 }
 
 impl MainRecordImpl {
@@ -1186,6 +1289,7 @@ impl MainRecordImpl {
             mr_master: RwLock::new(None),
             mr_overrides: RwLock::new(Vec::new()),
             mr_fixed_form_id: OnceLock::new(),
+            mr_display_name: OnceLock::new(),
         });
         if let Some(parent) = container.as_container_base() {
             parent.add_element(record.clone());
@@ -1253,6 +1357,28 @@ impl MainRecordImpl {
         })
     }
 
+    /// Port of `ActivateIndexKeys` and `BuildIndexKeys`: the keys of the
+    /// record in the named indices, from the editor ID when the definition
+    /// indexes it and from the callback of the definition.
+    fn activate_index_keys(self: &Arc<Self>) -> Vec<(i32, String)> {
+        let Some(def) = &self.mr_def else {
+            return Vec::new();
+        };
+        let mut keys = IndexKeys::default();
+        let mut result = false;
+        if (def.get_contains_known_sub_record(KnownSubRecord::ksrEditorID) && track_all_editor_id())
+            || def.get_def_flags().contains(DefFlag::dfIndexEditorID)
+        {
+            result = true;
+            keys.set_key(idx_editor_id(), &self.get_editor_id());
+        }
+        let main_record: MainRecordRef = self.clone();
+        if def.build_index_keys(&main_record, &mut keys) {
+            result = true;
+        }
+        if result { keys.defined_keys() } else { Vec::new() }
+    }
+
     /// Port of `AddOverride`.
     fn add_override(self: &Arc<Self>, record: &Arc<MainRecordImpl>) {
         *record.mr_master.write().unwrap() = Some(Arc::downgrade(self));
@@ -1317,6 +1443,18 @@ impl MainRecordImpl {
             self.create_contained_in();
             self.create_record_header();
             sub_record::init_main_record(self);
+            // Port of the `wbRemoveOffsetData` step of `TwbMainRecord.Init`:
+            // the offsets of a worldspace are dropped.
+            if remove_offset_data() && self.mr_struct.signature == Signature::new(b"WRLD") {
+                let position = self
+                    .container
+                    .elements()
+                    .iter()
+                    .position(|element| element.get_record_signature() == Some(Signature::new(b"OFST")));
+                if let Some(position) = position {
+                    self.container.remove_element(position);
+                }
+            }
         });
     }
 
@@ -1589,6 +1727,11 @@ impl Container for FileImpl {
 }
 
 impl File for FileImpl {
+    fn get_record_from_index_by_key(&self, index: i32, key: &str) -> Option<MainRecordRef> {
+        self.record_from_index_by_key(index, key)
+            .map(|record| record as MainRecordRef)
+    }
+
     /// Port of `TwbFile.GetEncoding` without the overrides of the file.
     fn get_encoding(&self, translatable: bool) -> Encoding {
         if translatable {
@@ -1667,8 +1810,27 @@ impl Element for GroupRecordImpl {
     element_common!(element_base);
     element_display_name!(element_base);
 
+    /// Port of `TwbGroupRecord.GetName`: the label of a group of children
+    /// is the name of the record it belongs to.
     fn get_name(&self) -> String {
-        self.gr_struct.name()
+        let prefix = match self.gr_struct.group_type {
+            1 => "GRUP World Children of ",
+            6 => "GRUP Cell Children of ",
+            7 => "GRUP Topic Children of ",
+            8 => "GRUP Cell Persistent Children of ",
+            9 => "GRUP Cell Temporary Children of ",
+            10 if vwd_as_quest_children() => "GRUP Quest Children of ",
+            10 => "GRUP Cell Visible Distant Children of ",
+            _ => return self.gr_struct.name(),
+        };
+        let label = match crate::interface::constructors::wb_form_id() {
+            Some(formater) => {
+                let self_ref = self.self_ref.upgrade().map(|group| group as ElementRef);
+                IntegerDefFormater::to_string(&*formater, i64::from(self.gr_struct.label), self_ref.as_ref(), false)
+            }
+            None => format!("[{:08X}]", self.gr_struct.label),
+        };
+        format!("{prefix}{label}")
     }
 
     fn get_data_size(&self) -> i32 {
@@ -1766,15 +1928,67 @@ impl Element for MainRecordImpl {
     /// of references, cells and responses, or the summary. The special names
     /// of placed records and cells are not ported yet.
     fn get_display_name(&self, _use_suffix: bool) -> String {
+        if let Some(cached) = self.mr_display_name.get() {
+            return cached.clone();
+        }
         let mut result = self.get_full_name();
-        if result.is_empty() && self.mr_struct.signature == Signature::new(b"INFO") {
-            result = self
-                .get_element_by_path("Responses\\Response\\NAM1")
-                .map(|element| element.get_value())
-                .unwrap_or_default();
+        let signature = self.mr_struct.signature;
+        if result.is_empty() {
+            if matches!(
+                signature.0.as_slice(),
+                b"REFR"
+                    | b"PGRE"
+                    | b"PMIS"
+                    | b"ACHR"
+                    | b"ACRE"
+                    | b"PARW"
+                    | b"PBEA"
+                    | b"PFLA"
+                    | b"PCON"
+                    | b"PBAR"
+                    | b"PHZD"
+            ) {
+                if let Some(def) = &self.mr_def {
+                    let known = def.known_sub_record_signatures();
+                    let record = match self
+                        .get_element_by_name("Map Marker")
+                        .filter(|marker| marker.as_container().is_some())
+                    {
+                        Some(marker) => marker.as_container().and_then(|marker| {
+                            marker.get_record_by_signature(known[KnownSubRecord::ksrFullName.ord()])
+                        }),
+                        None => self.get_record_by_signature(known[KnownSubRecord::ksrBaseRecord.ord()]),
+                    };
+                    if let Some(record) = record {
+                        result = record.get_value().trim().to_owned();
+                    }
+                }
+            } else if signature == Signature::new(b"CELL") {
+                let in_world = self
+                    .base
+                    .container()
+                    .and_then(|container| container.as_element_impl()?.group_record_impl())
+                    .is_some_and(|group| group.group_type() == 1);
+                if in_world {
+                    result = "<Persistent Worldspace Cell>".to_owned();
+                } else if let Some((x, y)) = self.get_grid_cell() {
+                    result = format!("<{}, {}>", str_right(&x.to_string(), 3), str_right(&y.to_string(), 3));
+                }
+            } else if signature == Signature::new(b"INFO") {
+                result = self
+                    .get_element_by_path("Responses\\Response\\NAM1")
+                    .map(|element| element.get_value())
+                    .unwrap_or_default();
+            }
         }
         if result.is_empty() {
             result = self.get_summary();
+        }
+        if self
+            .file_impl()
+            .is_some_and(|file| file.get_file_states().contains(FileState::fsIsOfficial))
+        {
+            self.mr_display_name.set(result.clone()).ok();
         }
         result
     }
