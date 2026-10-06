@@ -435,6 +435,19 @@ impl ContainerBase {
         std::mem::take(&mut *self.cnt_elements.write().unwrap())
     }
 
+    /// Port of `RemoveElement` by element: removes the element itself,
+    /// not one that merely compares equal.
+    pub(crate) fn remove_element_by_identity(&self, element: &ElementRef) -> Option<ElementRef> {
+        let mut elements = self.cnt_elements.write().unwrap();
+        let index = elements.iter().position(|candidate| Arc::ptr_eq(candidate, element))?;
+        Some(elements.remove(index))
+    }
+
+    /// Port of `wbMergeSortPtr` on the elements: a stable sort.
+    pub(crate) fn sort_by(&self, compare: impl FnMut(&ElementRef, &ElementRef) -> std::cmp::Ordering) {
+        self.cnt_elements.write().unwrap().sort_by(compare);
+    }
+
     /// Port of `TwbContainer.GetElementBySortOrder` after the init: the
     /// element whose sort order is `sort_order`, which the caller has
     /// already reduced by the additional element count.
@@ -832,9 +845,12 @@ impl FileImpl {
             create_record(self, &container, bytes, &mut offset, None)?;
         }
         // Port of the top level group check of `TwbFile.Scan` for the games
-        // from Skyrim on: an empty top level group is removed.
+        // from Skyrim on: an empty top level group is removed, and a group
+        // whose label appears again later in the file is merged into that
+        // later group, which is then sorted.
         if is_skyrim() || is_fallout3() || is_fallout4() || is_fallout76() || is_starfield() {
             let elements = self.container.elements();
+            let mut groups: HashMap<i32, Arc<GroupRecordImpl>> = HashMap::new();
             for index in (1..elements.len()).rev() {
                 let Some(group) = elements[index]
                     .as_element_impl()
@@ -847,15 +863,60 @@ impl FileImpl {
                     ));
                     continue;
                 };
+                let name = group.get_name();
                 if group.get_element_count() == 0 {
-                    let name = group.get_name();
                     progress(&format!(
                         "[{}] Warning: File contains empty top level group: {name}",
                         self.get_name()
                     ));
-                    self.container.remove_element(index);
+                    self.container.remove_element_by_identity(&elements[index]);
                     progress(&format!("[{}] Removed empty group: {name}", self.get_name()));
+                    continue;
                 }
+                if group.group_type() != 0 {
+                    progress(&format!(
+                        "[{}] Error: File contains invalid top level group type {} for group: {name}",
+                        self.get_name(),
+                        group.group_type()
+                    ));
+                    continue;
+                }
+                let sort_order = group.base.e_sort_order.load(Ordering::Relaxed);
+                if sort_order < 0 {
+                    progress(&format!(
+                        "[{}] Error: File contains top level group without known sort order: {name}",
+                        self.get_name()
+                    ));
+                    continue;
+                }
+                if let Some(later) = groups.get(&sort_order).cloned() {
+                    progress(&format!(
+                        "[{}] Warning: File contains duplicated top level group: {name}",
+                        self.get_name()
+                    ));
+                    let later_ref: ElementRef = later.clone();
+                    if later.get_element_count() == 0 {
+                        self.container.remove_element_by_identity(&later_ref);
+                        groups.insert(sort_order, group);
+                    } else {
+                        let moved = group.container.release_elements();
+                        let count = moved.len();
+                        for element in moved {
+                            if let Some(element_impl) = element.as_element_impl() {
+                                element_impl.element_base().set_container(&later_ref);
+                            }
+                            later.container.add_element(element);
+                        }
+                        later.sort();
+                        progress(&format!(
+                            "[{}] Merged {count} record from duplicated group: {name}",
+                            self.get_name()
+                        ));
+                        self.container.remove_element_by_identity(&elements[index]);
+                    }
+                    continue;
+                }
+                groups.insert(sort_order, group);
             }
         }
         let mut sorted = self.fl_records.read().unwrap().clone();
@@ -1289,6 +1350,109 @@ impl GroupRecordImpl {
     fn parent_group(&self) -> Option<Arc<GroupRecordImpl>> {
         self.base.container()?.as_element_impl()?.group_record_impl()
     }
+
+    /// Port of `TwbGroupRecord.Sort` for the groups that sort by
+    /// `CompareGroupContents`. A topic group (type 7) sorts its INFOs by
+    /// their links instead, which xDump does not do without the load order
+    /// FormIDs, so it is left alone.
+    pub(crate) fn sort(&self) {
+        if self.gr_struct.group_type == 7 {
+            return;
+        }
+        self.container.sort_by(compare_group_contents);
+    }
+}
+
+/// Port of `FindSortElement`: a group of the children of a record sorts
+/// like that record.
+fn find_sort_element(element: &ElementRef) -> ElementRef {
+    element
+        .as_element_impl()
+        .and_then(|element| element.group_record_impl())
+        .and_then(|group| group.children_of())
+        .map_or_else(|| element.clone(), |record| record as ElementRef)
+}
+
+/// Port of `TwbMainRecord.GetSortPriority`.
+fn sort_priority(record: &MainRecordImpl) -> i32 {
+    match &record.mr_struct.signature.0 {
+        b"ROAD" | b"LAND" => -2,
+        b"CELL" | b"PGRD" | b"NAVM" => -1,
+        _ => 0,
+    }
+}
+
+/// Port of `CompareGroupContents`: the order of the elements of a group.
+/// Main records sort by priority, then FormID; the groups of the children
+/// of a record follow the record.
+fn compare_group_contents(a: &ElementRef, b: &ElementRef) -> std::cmp::Ordering {
+    use std::cmp::Ordering::{Equal, Greater, Less};
+    if Arc::ptr_eq(a, b) {
+        return Equal;
+    }
+    let sort_a = find_sort_element(a);
+    let sort_b = find_sort_element(b);
+    let mut result = sort_a.get_element_type().cmp(&sort_b.get_element_type());
+    if result == Equal {
+        let group_a = sort_a.as_element_impl().and_then(|element| element.group_record_impl());
+        let group_b = sort_b.as_element_impl().and_then(|element| element.group_record_impl());
+        let record_a = sort_a.as_element_impl().and_then(|element| element.main_record_impl());
+        let record_b = sort_b.as_element_impl().and_then(|element| element.main_record_impl());
+        if let (Some(group_a), Some(group_b)) = (&group_a, &group_b) {
+            result = match group_a.group_type() {
+                // `CompareText` on the signatures: case insensitive.
+                0 => group_a
+                    .gr_struct
+                    .label_signature()
+                    .to_string()
+                    .to_uppercase()
+                    .cmp(&group_b.gr_struct.label_signature().to_string().to_uppercase()),
+                2 | 3 => (group_a.group_label() as i32).cmp(&(group_b.group_label() as i32)),
+                4 | 5 => {
+                    // `LongRecSmall`: the high word, then the low word, as signed.
+                    let words = |label: u32| ((label >> 16) as u16 as i16, label as u16 as i16);
+                    words(group_a.group_label()).cmp(&words(group_b.group_label()))
+                }
+                _ => Equal,
+            };
+        } else if let (Some(record_a), Some(record_b)) = (&record_a, &record_b) {
+            result = sort_priority(record_a).cmp(&sort_priority(record_b));
+            if result == Equal {
+                result = if display_load_order_form_id() {
+                    record_a
+                        .get_load_order_form_id()
+                        .cmp(&record_b.get_load_order_form_id())
+                } else {
+                    record_a.get_fixed_form_id().cmp(&record_b.get_fixed_form_id())
+                };
+            }
+            if result == Equal {
+                result = record_a.get_element_id().cmp(&record_b.get_element_id());
+            }
+        }
+    }
+    if result == Equal {
+        let a_is_group = !Arc::ptr_eq(a, &sort_a);
+        let b_is_group = !Arc::ptr_eq(b, &sort_b);
+        result = match (a_is_group, b_is_group) {
+            (true, true) => {
+                // Both are groups of the same record.
+                let group_a = a.as_element_impl().and_then(|element| element.group_record_impl());
+                let group_b = b.as_element_impl().and_then(|element| element.group_record_impl());
+                match (group_a, group_b) {
+                    (Some(group_a), Some(group_b)) => group_a
+                        .group_type()
+                        .cmp(&group_b.group_type())
+                        .then(group_a.group_label().cmp(&group_b.group_label())),
+                    _ => Equal,
+                }
+            }
+            (true, false) => Greater,
+            (false, true) => Less,
+            (false, false) => Equal,
+        };
+    }
+    result
 }
 
 /// Port of `TwbMainRecord`, as far as the structure of the record goes.
