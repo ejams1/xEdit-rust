@@ -174,6 +174,34 @@ impl SubRecordImpl {
         });
     }
 
+    /// Port of `TwbSubRecord.MergeMultiple`: the elements of another
+    /// subrecord of an array that may repeat (`dfMergeIfMultiple`) join the
+    /// elements of this one, numbered from 0 again. An empty subrecord merges
+    /// without elements.
+    pub fn merge_multiple(&self, other: &SubRecordImpl) -> bool {
+        if other.dc_data_end <= other.dc_data_base {
+            return true;
+        }
+        let Some(def) = self.def() else { return false };
+        if !def.def_base().def_flags.contains(DefFlag::dfMergeIfMultiple) {
+            return false;
+        }
+        let Some(value_def) = self.value_def() else {
+            return false;
+        };
+        if value_def.get_def_type() != DefType::dtArray {
+            return false;
+        }
+        let self_ref = self.element_ref();
+        let mut cursor = Cursor {
+            block: other.block.clone(),
+            pos: other.dc_data_base,
+            end: other.dc_data_end,
+        };
+        array_do_init(&value_def, &self_ref, &self.file, &mut cursor);
+        true
+    }
+
     /// Port of `GetValueDef`: the value definition the subrecord data is
     /// read with. `None` when the value is a child element instead (a named
     /// value definition), like upstream `srValueDef`.
@@ -323,6 +351,7 @@ pub(super) fn create_sub_record_struct(
     let mut found_members: Vec<Option<ElementRef>> = vec![None; member_count];
     let mut current_def_pos = 0;
     let mut last_def: Option<Arc<dyn RecordMemberDef>> = None;
+    let mut last_element: Option<ElementRef> = None;
     while current_def_pos < member_count {
         let elements = owner_base.elements();
         let Some(element) = elements.get(pos) else { break };
@@ -357,13 +386,19 @@ pub(super) fn create_sub_record_struct(
         }
         let mut current_def = src_def.get_member(current_def_pos);
         if !current_def.can_handle(Some(&self_ref), signature, Some(element)) {
-            // UPSTREAM-QUIRK: `dfMergeIfMultiple` merges into the last
-            // element upstream; merging belongs to the write path.
+            // A repeated subrecord of an array that may repeat joins the
+            // last element.
             if let Some(last) = &last_def
                 && last.def_base().def_flags.contains(DefFlag::dfMergeIfMultiple)
                 && last.can_handle(Some(&self_ref), signature, Some(element))
+                && let Some(last_record) = last_element
+                    .as_ref()
+                    .and_then(|last| last.as_element_impl())
+                    .and_then(ElementImpl::sub_record_impl)
+                && last_record.merge_multiple(current_rec)
             {
-                progress(&format!("<Warning: merging of multiple {signature} is not ported>"));
+                owner_base.remove_element(pos);
+                continue;
             }
             current_def_pos += 1;
             continue;
@@ -399,9 +434,10 @@ pub(super) fn create_sub_record_struct(
             _ => panic!("Unexpected def type for SubRecord {signature}"),
         };
         new_element.set_orders(current_def_pos as i32);
-        found_members[current_def_pos] = Some(new_element);
+        found_members[current_def_pos] = Some(new_element.clone());
         let terminator = current_def.def_base().def_flags.contains(DefFlag::dfTerminator);
         last_def = Some(current_def);
+        last_element = Some(new_element);
         if terminator {
             break;
         }

@@ -40,6 +40,9 @@ struct Game {
     data_var: &'static str,
     /// Lower-case names of the vanilla plugins. A trailing `*` matches any rest.
     vanilla: &'static [&'static str],
+    /// Extensions of the saves and co-saves the oracle dumps (`-saves`); the
+    /// saves are in the folder of `XEDIT_<NAME>_SAVES`.
+    save_extensions: &'static [&'static str],
 }
 
 const SKYRIM_MASTERS: [&str; 5] = [
@@ -55,12 +58,14 @@ const GAMES: &[Game] = &[
         name: "fo4",
         mode: "FO4",
         data_var: "XEDIT_FO4_DATA",
+        save_extensions: &["fos", "f4se"],
         vanilla: &["fallout4.esm", "dlc*", "cc*"],
     },
     Game {
         name: "sse",
         mode: "SSE",
         data_var: "XEDIT_SSE_DATA",
+        save_extensions: &["ess", "skse"],
         vanilla: &[
             SKYRIM_MASTERS[0],
             SKYRIM_MASTERS[1],
@@ -75,18 +80,21 @@ const GAMES: &[Game] = &[
         name: "tes3",
         mode: "TES3",
         data_var: "XEDIT_TES3_DATA",
+        save_extensions: &[],
         vanilla: &["morrowind.esm", "tribunal.esm", "bloodmoon.esm"],
     },
     Game {
         name: "tes4",
         mode: "TES4",
         data_var: "XEDIT_TES4_DATA",
+        save_extensions: &["obse"],
         vanilla: &["oblivion.esm", "dlc*", "knights.esp"],
     },
     Game {
         name: "fo3",
         mode: "FO3",
         data_var: "XEDIT_FO3_DATA",
+        save_extensions: &["fose"],
         vanilla: &[
             "fallout3.esm",
             "anchorage.esm",
@@ -100,6 +108,7 @@ const GAMES: &[Game] = &[
         name: "fnv",
         mode: "FNV",
         data_var: "XEDIT_FNV_DATA",
+        save_extensions: &["fos", "nvse"],
         vanilla: &[
             "falloutnv.esm",
             "deadmoney.esm",
@@ -117,12 +126,14 @@ const GAMES: &[Game] = &[
         name: "tes5",
         mode: "TES5",
         data_var: "XEDIT_TES5_DATA",
+        save_extensions: &["ess", "skse"],
         vanilla: &SKYRIM_MASTERS,
     },
     Game {
         name: "tes5vr",
         mode: "TES5VR",
         data_var: "XEDIT_TES5VR_DATA",
+        save_extensions: &[],
         vanilla: &[
             SKYRIM_MASTERS[0],
             SKYRIM_MASTERS[1],
@@ -136,18 +147,21 @@ const GAMES: &[Game] = &[
         name: "fo4vr",
         mode: "FO4VR",
         data_var: "XEDIT_FO4VR_DATA",
+        save_extensions: &[],
         vanilla: &["fallout4.esm", "fallout4_vr.esm"],
     },
     Game {
         name: "fo76",
         mode: "FO76",
         data_var: "XEDIT_FO76_DATA",
+        save_extensions: &[],
         vanilla: &["seventysix.esm", "nw.esm"],
     },
     Game {
         name: "sf1",
         mode: "SF1",
         data_var: "XEDIT_SF1_DATA",
+        save_extensions: &[],
         vanilla: &[
             "starfield.esm",
             "constellation.esm",
@@ -162,6 +176,8 @@ const GAMES: &[Game] = &[
 const PLUGIN_EXTENSIONS: &[&str] = &["esm", "esl", "esp"];
 
 struct Options {
+    /// `parity saves`: the saves of the games instead of their plugins.
+    saves: bool,
     games: Vec<&'static Game>,
     /// Lower-case file names. Empty selects the whole corpus.
     files: Vec<String>,
@@ -180,6 +196,9 @@ struct Case {
     game: &'static Game,
     input: PathBuf,
     name: String,
+    /// The data folder: the folder of a plugin, the game data of a save.
+    data: PathBuf,
+    saves: bool,
 }
 
 /// What every check shares.
@@ -242,6 +261,36 @@ pub fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
             (None, false) => bail!("environment variable {} is not set", game.data_var),
         };
         let before = cases.len();
+        if options.saves {
+            let var = format!("XEDIT_{}_SAVES", game.name.to_uppercase());
+            let saves = match (std::env::var_os(&var), options.all_games) {
+                (Some(saves), _) => PathBuf::from(saves),
+                (None, true) => {
+                    println!("skipped       {}: {var} is not set", game.name);
+                    continue;
+                }
+                (None, false) => bail!("environment variable {var} is not set"),
+            };
+            for entry in fs::read_dir(&saves).with_context(|| format!("reading {}", saves.display()))? {
+                let input = entry?.path();
+                let name = input.file_name().unwrap().to_string_lossy().into_owned();
+                let is_save = input
+                    .extension()
+                    .and_then(|e| e.to_str())
+                    .is_some_and(|e| game.save_extensions.iter().any(|x| e.eq_ignore_ascii_case(x)));
+                if is_save && (options.files.is_empty() || options.files.contains(&name.to_lowercase())) {
+                    cases.push(Case {
+                        game,
+                        input,
+                        name,
+                        data: data.clone(),
+                        saves: true,
+                    });
+                }
+            }
+            ensure!(cases.len() > before, "no save found in {}", saves.display());
+            continue;
+        }
         for entry in fs::read_dir(&data).with_context(|| format!("reading {}", data.display()))? {
             let input = entry?.path();
             let name = input.file_name().unwrap().to_string_lossy().into_owned();
@@ -256,7 +305,13 @@ pub fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
                 options.files.contains(&lower)
             };
             if is_plugin && selected {
-                cases.push(Case { game, input, name });
+                cases.push(Case {
+                    game,
+                    input,
+                    name,
+                    data: data.clone(),
+                    saves: false,
+                });
             }
         }
         ensure!(cases.len() > before, "no corpus file found in {}", data.display());
@@ -328,7 +383,7 @@ pub fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
     };
     let report_dir = root.join("target/parity");
     fs::create_dir_all(&report_dir)?;
-    let report_file = report_dir.join("dump.json");
+    let report_file = report_dir.join(if options.saves { "saves.json" } else { "dump.json" });
     fs::write(&report_file, serde_json::to_string_pretty(&report)?)?;
     println!("{equal} of {} equal. Report: {}", outcomes.len(), report_file.display());
     if !options.oracle_only {
@@ -338,10 +393,15 @@ pub fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
 }
 
 fn parse(args: &[&str]) -> Result<Options> {
-    const USAGE: &str = "usage: cargo xtask parity dump [--game <game>]... [--file <name>]... [--oracle-only] \
-                         [--jobs <n>] [--memory-budget <GiB>] [--max-memory <GiB>]";
-    let ["dump", rest @ ..] = args else { bail!(USAGE) };
+    const USAGE: &str = "usage: cargo xtask parity dump|saves [--game <game>]... [--file <name>]... \
+                         [--oracle-only] [--jobs <n>] [--memory-budget <GiB>] [--max-memory <GiB>]";
+    let (saves, rest) = match args {
+        ["dump", rest @ ..] => (false, rest),
+        ["saves", rest @ ..] => (true, rest),
+        _ => bail!(USAGE),
+    };
     let mut options = Options {
+        saves,
         games: Vec::new(),
         files: Vec::new(),
         oracle_only: false,
@@ -376,7 +436,10 @@ fn parse(args: &[&str]) -> Result<Options> {
         }
     }
     if options.games.is_empty() {
-        options.games = GAMES.iter().collect();
+        options.games = GAMES
+            .iter()
+            .filter(|game| !saves || !game.save_extensions.is_empty())
+            .collect();
         options.all_games = true;
     }
     Ok(options)
@@ -559,7 +622,11 @@ fn run_limited<T>(
 }
 
 fn check(case: &Case, runner: &Runner) -> Result<Outcome> {
-    let dir = runner.cache.join(case.game.mode);
+    let dir = if case.saves {
+        runner.cache.join(format!("{}-saves", case.game.mode))
+    } else {
+        runner.cache.join(case.game.mode)
+    };
     fs::create_dir_all(&dir)?;
     let stem = format!("{}.{:016x}", case.name, content_hash(&case.input)?);
     let mut outcome = Outcome {
@@ -589,8 +656,14 @@ fn check(case: &Case, runner: &Runner) -> Result<Outcome> {
     let port_out = dir.join(format!("{stem}.port.txt.zst"));
     let port_log = dir.join(format!("{stem}.port.log"));
     let mut command = Command::new(port);
+    if case.saves {
+        command
+            .args(["saves", "dump", "--game", case.game.mode, "--data"])
+            .arg(&case.data);
+    } else {
+        command.args(["dump", "--game", case.game.mode]);
+    }
     command
-        .args(["dump", "--game", case.game.mode])
         .arg(&case.input)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
@@ -669,18 +742,16 @@ fn run_oracle(case: &Case, runner: &Runner, dir: &Path, stem: &str) -> Result<Op
     let partial = dir.join(format!("{stem}.oracle.{}.partial.zst", std::process::id()));
     let log = dir.join(format!("{stem}.oracle.{}.log", std::process::id()));
     let mut command = Command::new(&runner.oracle);
+    command.arg(format!("-{}", case.game.mode));
+    if case.saves {
+        command.arg("-saves");
+    }
     command
-        .arg(format!("-{}", case.game.mode))
         .arg("-q")
-        // The masters of a plugin that is not the game master load from the
-        // data path; without it the oracle fails on the hardcoded records.
-        .arg(format!(
-            "-D:{}",
-            case.input
-                .parent()
-                .map(|dir| dir.display().to_string())
-                .unwrap_or_default()
-        ))
+        // The masters of a plugin that is not the game master, and the
+        // plugins of a save, load from the data path; without it the oracle
+        // fails on the hardcoded records.
+        .arg(format!("-D:{}", case.data.display()))
         .arg(&case.input)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())

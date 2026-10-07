@@ -658,6 +658,13 @@ impl DataContainer for ValueImpl {
     fn get_data(&self) -> DataPtr<'_> {
         self.vb.data()
     }
+
+    fn get_block(&self) -> Option<&[u8]> {
+        Some(match self.vb.decompressed.get() {
+            Some(block) => block.as_slice(),
+            None => self.vb.block.as_slice(),
+        })
+    }
 }
 
 impl Container for ValueImpl {

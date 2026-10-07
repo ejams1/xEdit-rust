@@ -90,9 +90,15 @@ struct SaveDefinitions {
 
 /// The save definitions of a game, `None` for a game without saves.
 fn save_definitions(mode: GameMode) -> Option<SaveDefinitions> {
+    use xedit_defs::callbacks::fnvsaves::{define_fnv_saves, switch_to_fnv_co_save};
     use xedit_defs::callbacks::fo4saves::{define_fo4_saves, switch_to_fo4_co_save};
     use xedit_defs::callbacks::tes5saves::{define_tes5_saves, switch_to_tes5_co_save};
     match mode {
+        GameMode::gmFNV => Some(SaveDefinitions {
+            define: Some(define_fnv_saves),
+            switch_to_co_save: switch_to_fnv_co_save,
+            co_save_extension: "nvse",
+        }),
         GameMode::gmFO4 => Some(SaveDefinitions {
             define: Some(define_fo4_saves),
             switch_to_co_save: switch_to_fo4_co_save,
