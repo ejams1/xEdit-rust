@@ -169,6 +169,21 @@ impl LenStringDef {
 impl Def for LenStringDef {
     value_def_plumbing!(Def);
 
+    /// Port of `TwbLenStringDef.CanAssign`: any kind of string.
+    /// UPSTREAM-QUIRK: upstream reads the type of a `nil` definition, which
+    /// raises; here it can not be assigned.
+    fn can_assign(&self, _element: ElementArg, _index: i32, def: Option<&dyn Def>) -> bool {
+        if super::def::def_dont_assign(self) {
+            return false;
+        }
+        def.is_some_and(|def| {
+            matches!(
+                def.get_def_type(),
+                DefType::dtString | DefType::dtLString | DefType::dtLenString
+            )
+        })
+    }
+
     fn get_def_type(&self) -> DefType {
         DefType::dtLenString
     }

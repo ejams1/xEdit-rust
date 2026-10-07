@@ -13,11 +13,11 @@ use super::def::{
     Def, DefBase, DefCell, DefKind, DefRef, DontShowCallback, GetConflictPriority, NamedDef, NamedDefArgs,
     NamedDefBase, ValueDef, ValueDefBase, get_root, set_parent, value_def_plumbing,
 };
-use super::element::{DataPtr, ElementArg};
+use super::element::{DataPtr, ElementArg, ElementRef};
 use super::formaters::{editable_unless_internal_only, formater_impls, formater_plumbing};
 use super::globals::{report_mode, report_unknown_flags, show_flag_enum_value};
 use super::integer::{IntegerDefFormater, integer_def_formater_create};
-use super::misc::{EditError, get_unknown_int_string, str_to_int_def};
+use super::misc::{EditError, Variant, get_unknown_int_string, str_to_int_def};
 use super::types::{CallbackType, ConflictPriority, DefFlag, DefType, EditType, ElementType, IntType};
 
 /// The `(0x00000001)` suffix that `wbShowFlagEnumValue` adds to flag `index`.
@@ -389,6 +389,34 @@ impl FlagsDef {
 impl Def for FlagsDef {
     formater_plumbing!();
 
+    /// Port of `TwbFlagsDef.CanAssign`: flags with the same names, or one
+    /// flag of the same base flags.
+    fn can_assign(&self, _element: ElementArg, _index: i32, def: Option<&dyn Def>) -> bool {
+        if super::def::def_dont_assign(self) {
+            return false;
+        }
+        let Some(def) = def else { return false };
+        let name = |flags: &FlagsDef, index: usize| {
+            (index < flags.get_flag_count() as usize).then(|| flags.get_flag(index, false))
+        };
+        if let Some(other) = def.as_flags_def() {
+            if other.get_flag_count() != self.get_flag_count() {
+                return false;
+            }
+            let roots_equal = get_root(&self.def_ref()).equals(Some(&*get_root(&other.def_ref())));
+            roots_equal || (0..self.get_flag_count() as usize).all(|i| name(other, i) == name(self, i))
+        } else if let Some(flag_def) = def.as_flag_def() {
+            let other = flag_def.get_flags_def();
+            if !self.get_base_flags_def().equals(Some(&*other.get_base_flags_def())) {
+                return false;
+            }
+            let index = usize::try_from(flag_def.get_flag_index()).unwrap_or(usize::MAX);
+            name(&other, index).is_some() && name(&other, index) == name(self, index)
+        } else {
+            false
+        }
+    }
+
     fn get_def_type(&self) -> DefType {
         DefType::dtIntegerFormater
     }
@@ -467,6 +495,29 @@ impl Def for FlagsDef {
 formater_impls!(FlagsDef);
 
 impl IntegerDefFormater for FlagsDef {
+    /// Port of `TwbFlagsDef.Assign`: a flag sets its bit, anything else
+    /// assigns the edit value unless only the sort key is assigned.
+    fn assign(
+        &self,
+        target: &ElementRef,
+        _index: i32,
+        source: Option<&ElementRef>,
+        only_sk: bool,
+    ) -> Result<Option<ElementRef>, EditError> {
+        let flag_index = source
+            .and_then(|source| source.get_value_def())
+            .and_then(|def| def.as_flag_def().map(FlagDef::get_flag_index));
+        if let Some(flag_index) = flag_index {
+            let value = target.get_native_value().as_ordinal().unwrap_or(0) | (1i64 << flag_index);
+            target.set_native_value(Variant::Int(value))?;
+            return Ok(None);
+        }
+        if !only_sk {
+            return super::def::def_assign(target, source);
+        }
+        Ok(None)
+    }
+
     fn to_string(&self, int: i64, element: ElementArg, for_summary: bool) -> String {
         let int = int & !self.flg_unused_mask;
         let mut shown = Vec::new();

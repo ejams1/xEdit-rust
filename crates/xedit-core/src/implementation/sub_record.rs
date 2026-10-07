@@ -12,14 +12,16 @@ use std::sync::{Arc, RwLock, Weak};
 
 use crate::interface::def::{NamedDef, ValueDef};
 use crate::interface::element::{
-    Container, DataContainer, DataPtr, Element, ElementRef, FileRef, MainRecord, MainRecordRef,
+    Container, CopyArgs, DataContainer, DataPtr, Element, ElementRef, FileRef, MainRecord, MainRecordRef,
 };
 use crate::interface::form_id::FormID;
-use crate::interface::globals::{ignore_records, sort_sub_records};
+use crate::interface::globals::{always_fast_assign, edit_allowed, ignore_records, is_internal_edit, sort_sub_records};
 use crate::interface::misc::{EditError, Variant, progress};
 use crate::interface::sub_record::RecordMemberDef;
 use crate::interface::sub_record_group::RecordDef;
-use crate::interface::types::{CallbackType, ConflictPriority, DefFlag, DefType, ElementType, Signature, TriBool};
+use crate::interface::types::{
+    ASSIGN_ADD, ASSIGN_THIS, CallbackType, ConflictPriority, DefFlag, DefType, ElementType, Signature, TriBool,
+};
 
 use super::edit::{self, Storage};
 use super::structs::SubRecordHeaderStruct;
@@ -328,6 +330,287 @@ impl SubRecordImpl {
         Ok(result)
     }
 
+    /// Port of `TwbSubRecord.AssignInternal`: an array takes the entries
+    /// of the source or adds one; any other value assigns as a container.
+    fn assign_internal_impl(
+        &self,
+        mut index: i32,
+        source: Option<&ElementRef>,
+        only_sk: bool,
+    ) -> Result<Option<ElementRef>, EditError> {
+        if !is_internal_edit() && !edit_allowed() {
+            return Err(format!("{} can not be assigned.", self.get_name()));
+        }
+        self.do_init();
+        let Some(value_def) = self.value_def() else {
+            if super::assign::container_can_assign_internal(self, index, source, false) {
+                return super::assign::container_assign_internal(self, index, source, only_sk);
+            }
+            return Ok(None);
+        };
+        if value_def.get_def_type() != DefType::dtArray {
+            return super::assign::container_assign_internal(self, index, source, only_sk);
+        }
+        // An entry added without a source is `Add`, which `array_assign_add`
+        // ports.
+        if index == ASSIGN_ADD && source.is_none() {
+            return self.array_assign_add();
+        }
+        let Some(array_def) = value_def.as_array_def() else {
+            return Ok(None);
+        };
+        let self_ref = self.element_ref();
+        let source_def = source.and_then(|source| super::assign::assign_def(&**source));
+        let source_def_ref = super::assign::as_def(&source_def);
+        let mut result = None;
+        if index == ASSIGN_THIS
+            && let Some(source) = source
+            && value_def.can_assign(Some(&self_ref), index, source_def_ref)
+        {
+            if only_sk {
+                return Ok(None);
+            }
+            let source_container = source.as_container();
+            let source_count = source_container.map_or(0, |container| container.get_element_count());
+            let fast = self
+                .def()
+                .is_some_and(|def| def.def_base().def_flags.contains(DefFlag::dfFastAssign))
+                || value_def.def_base().def_flags.contains(DefFlag::dfFastAssign)
+                || always_fast_assign();
+            let source_data = source.as_data_container().and_then(|data| data.get_data());
+            if fast && source.as_data_container().is_some() {
+                self.set_modified(true);
+                self.invalidate_storage();
+                self.release_and_detach();
+                self.storage.set(Vec::new());
+                self.storage.set_invalid(false);
+                let size = usize::try_from(source.get_data_size()).unwrap_or(0);
+                if let Some(mut bytes) = self.request_storage_change_impl(size) {
+                    if let Some(data) = source_data {
+                        let len = size.min(data.len());
+                        bytes[..len].copy_from_slice(&data[..len]);
+                    }
+                    self.commit_storage_impl(bytes);
+                }
+                self.reset_and_init();
+                let children = self.container.elements();
+                if let Some(source_container) = source_container {
+                    for (i, child) in children.iter().enumerate() {
+                        if let Some(source_child) = source_container.get_element(i as i32) {
+                            child.assign(ASSIGN_THIS, Some(&source_child), only_sk);
+                        }
+                    }
+                }
+            } else if value_def.get_is_variable_size() {
+                self.set_modified(true);
+                self.invalidate_storage();
+                self.container.release_elements();
+                self.storage.set(Vec::new());
+                self.storage.set_invalid(false);
+                if array_def.get_count() < 0 {
+                    // UPSTREAM-QUIRK: four bytes, whatever the size of the
+                    // count prefix.
+                    if let Some(bytes) = self.request_storage_change_impl(4) {
+                        self.commit_storage_impl(bytes);
+                    }
+                } else if array_def.get_count() > 0 {
+                    edit::value_set_to_default_internal(self)?;
+                }
+                let mut copy_count = source_count;
+                if array_def.get_count() > 0 && copy_count > array_def.get_count() {
+                    copy_count = array_def.get_count();
+                }
+                if let Some(source_container) = source_container {
+                    for i in 0..copy_count {
+                        let Some(source_child) = source_container.get_element(i) else {
+                            continue;
+                        };
+                        match self.container.element_at(i as usize) {
+                            Some(child) if child.get_element_type() != ElementType::etStringListTerminator => {
+                                child.assign(ASSIGN_THIS, Some(&source_child), only_sk);
+                            }
+                            _ => {
+                                self.assign(i, Some(&source_child), only_sk);
+                            }
+                        }
+                    }
+                }
+            } else if let Some(source_container) = source_container {
+                for i in 0..source_count {
+                    if let (Some(child), Some(source_child)) =
+                        (self.container.element_at(i as usize), source_container.get_element(i))
+                    {
+                        child.assign(ASSIGN_THIS, Some(&source_child), only_sk);
+                    }
+                }
+            }
+        } else {
+            if index == ASSIGN_THIS && source.is_some_and(|source| source.as_main_record().is_some()) {
+                index = ASSIGN_ADD;
+            }
+            if index >= 0
+                && array_def.get_count() <= 0
+                && (index == ASSIGN_ADD
+                    || array_def
+                        .get_element()
+                        .can_assign(Some(&self_ref), ASSIGN_THIS, source_def_ref))
+            {
+                let sorted = sort_sub_records() && array_def.get_sorted();
+                let suffix = if sorted {
+                    String::new()
+                } else {
+                    format!("#{}", self.container.element_count())
+                };
+                if self.container.cnt_as_created_empty.load(Ordering::Relaxed) {
+                    self.set_modified(true);
+                    self.container.cnt_as_created_empty.store(false, Ordering::Relaxed);
+                    result = self.container.element_at(0);
+                    if let Some(result) = &result {
+                        result.assign(ASSIGN_THIS, source, only_sk);
+                    }
+                } else if source.is_none_or(|source| source.get_element_type() != ElementType::etStringListTerminator)
+                    && let Some(element_def) = super::value::ValueImpl::array_entry_def(&value_def, source)
+                {
+                    let element = super::value::ValueImpl::create_from(
+                        &self_ref,
+                        &self.file,
+                        element_def,
+                        source,
+                        only_sk,
+                        &suffix,
+                    )?;
+                    result = Some(element as ElementRef);
+                }
+            }
+        }
+        edit::check_count(self, Some(&value_def));
+        edit::check_terminator(self, Some(&value_def));
+        Ok(result)
+    }
+
+    /// Port of `TwbSubRecord.CanAssignInternal`.
+    fn can_assign_internal_impl(&self, index: i32, source: Option<&ElementRef>, check_dont_show: bool) -> bool {
+        if !is_internal_edit()
+            && (!edit_allowed()
+                || self
+                    .def()
+                    .is_some_and(|def| def.def_base().def_flags.contains(DefFlag::dfInternalEditOnly)))
+        {
+            return false;
+        }
+        if !super::assign::parent_allows_edit(self) {
+            return false;
+        }
+        if check_dont_show && self.get_dont_show() {
+            return false;
+        }
+        self.do_init();
+        let is_array = self.sr_is_array.load(Ordering::Relaxed);
+        let value_def = self.value_def();
+        let array_def = value_def
+            .as_ref()
+            .filter(|_| is_array)
+            .and_then(|def| def.as_array_def());
+        let Some(source) = source else {
+            return is_array && index == ASSIGN_ADD && array_def.is_some_and(|array| array.get_count() <= 0);
+        };
+        let source_def = super::assign::assign_def(&**source);
+        let source_def = super::assign::as_def(&source_def);
+        let self_ref = self.element_ref();
+        if let (Some(value_def), Some(array_def)) = (&value_def, array_def) {
+            value_def.can_assign(Some(&self_ref), index, source_def)
+                || (array_def.get_count() <= 0
+                    && array_def
+                        .get_element()
+                        .can_assign(Some(&self_ref), ASSIGN_THIS, source_def))
+        } else {
+            super::assign::container_can_assign_internal(self, index, Some(source), check_dont_show)
+                || self
+                    .def()
+                    .is_some_and(|def| def.can_assign(Some(&self_ref), index, source_def))
+        }
+    }
+
+    /// Port of `TwbSubRecord.AddIfMissingInternal`: an entry of an array, or
+    /// a member of a structure, takes the value of the source.
+    fn add_if_missing_internal_impl(
+        &self,
+        source: &ElementRef,
+        args: &CopyArgs,
+    ) -> Result<Option<ElementRef>, EditError> {
+        if !is_internal_edit() && !edit_allowed() {
+            return Err(format!("{} can not be modified.", self.get_name()));
+        }
+        self.do_init();
+        let not_implemented = || Err(format!("{}.AddIfMissingInternal is not implemented", self.get_name()));
+        let Some(value_def) = self.value_def() else {
+            return not_implemented();
+        };
+        let self_ref = self.element_ref();
+        match value_def.get_def_type() {
+            DefType::dtArray => {
+                let sorted = sort_sub_records() && value_def.as_array_def().is_some_and(|array| array.get_sorted());
+                if sorted && let Some(found) = super::value::find_by_sort_key(&self.container, source) {
+                    if args.deep_copy {
+                        found.assign(ASSIGN_THIS, Some(source), false);
+                    }
+                    return Ok(Some(found));
+                }
+                let suffix = if sorted {
+                    String::new()
+                } else {
+                    format!("#{}", self.container.element_count())
+                };
+                let mut result = None;
+                if source.get_element_type() != ElementType::etStringListTerminator {
+                    if self.container.cnt_as_created_empty.load(Ordering::Relaxed) {
+                        self.set_modified(true);
+                        result = self.container.element_at(0);
+                        self.container.cnt_as_created_empty.store(false, Ordering::Relaxed);
+                        if let Some(result) = &result {
+                            result.assign(ASSIGN_THIS, Some(source), !args.deep_copy);
+                        }
+                    } else if let Some(element_def) = super::value::ValueImpl::array_entry_def(&value_def, Some(source))
+                    {
+                        let element = super::value::ValueImpl::create_from(
+                            &self_ref,
+                            &self.file,
+                            element_def,
+                            Some(source),
+                            !args.deep_copy,
+                            &suffix,
+                        )?;
+                        result = Some(element as ElementRef);
+                    }
+                }
+                edit::check_count(self, Some(&value_def));
+                edit::check_terminator(self, Some(&value_def));
+                Ok(result)
+            }
+            DefType::dtStruct | DefType::dtStructChapter => {
+                let result = self.container.element_by_sort_order(source.get_sort_order());
+                let Some(result) = result else {
+                    return Err(format!("{} has no member for {}", self.get_name(), source.get_name()));
+                };
+                // A flags value is not copied into when only the sort key is.
+                if !args.deep_copy
+                    && result
+                        .get_value_def()
+                        .and_then(|def| {
+                            let integer = def.as_integer_def()?;
+                            integer.get_formater(Some(&result))
+                        })
+                        .is_some_and(|formater| formater.as_flags_def().is_some())
+                {
+                    return Ok(Some(result));
+                }
+                result.assign(ASSIGN_THIS, Some(source), !args.deep_copy);
+                Ok(Some(result))
+            }
+            _ => not_implemented(),
+        }
+    }
+
     /// Port of `TwbSubRecord.MergeMultiple`: the elements of another
     /// subrecord of an array that may repeat (`dfMergeIfMultiple`) join the
     /// elements of this one, numbered from 0 again. An empty subrecord merges
@@ -463,6 +746,156 @@ impl SubRecordArrayImpl {
         Ok(Some(element))
     }
 
+    /// Port of `UpdateNameSuffixes`: the elements are numbered.
+    fn update_name_suffixes(&self) {
+        for (index, element) in self.container.elements().iter().enumerate() {
+            if let Some(element) = element.as_element_impl() {
+                element.element_base().set_name_suffix(&format!("#{index}"));
+            }
+        }
+    }
+
+    /// Port of `TwbSubRecordArray.AssignInternal`.
+    fn assign_internal_impl(
+        &self,
+        index: i32,
+        source: Option<&ElementRef>,
+        only_sk: bool,
+    ) -> Result<Option<ElementRef>, EditError> {
+        if !is_internal_edit() && !edit_allowed() {
+            return Err(format!("{} can not be assigned.", self.get_name()));
+        }
+        let Some(array_def) = self.arc_def.as_sub_record_array_def() else {
+            return Ok(None);
+        };
+        // An entry added without a source is `Add`.
+        if index >= 0 && source.is_none() {
+            return self.member_assign_add();
+        }
+        let self_ref: ElementRef = self.self_ref.upgrade().expect("the array is alive");
+        let source_def = source.and_then(|source| source.get_def());
+        let source_def = source_def.as_deref().map(|def| def.as_dyn_def());
+        let element_def = array_def.get_element().clone();
+        let mut result = None;
+        if index == ASSIGN_THIS
+            && let Some(source) = source
+            && self.arc_def.can_assign(Some(&self_ref), index, source_def)
+        {
+            if only_sk {
+                return Ok(None);
+            }
+            self.set_modified(true);
+            self.invalidate_storage();
+            self.container.release_elements();
+            if let Some(source_container) = source.as_container() {
+                for i in 0..source_container.get_element_count() {
+                    if let Some(source_child) = source_container.get_element(i) {
+                        self.assign(i, Some(&source_child), only_sk);
+                    }
+                }
+            }
+        } else if let Some(source) = source
+            && ((index >= 0 && element_def.can_assign(Some(&self_ref), ASSIGN_THIS, source_def))
+                || (index == ASSIGN_THIS && element_def.can_assign(Some(&self_ref), index, source_def)))
+        {
+            let element = if self.container.cnt_as_created_empty.load(Ordering::Relaxed) {
+                self.set_modified(true);
+                self.container.cnt_as_created_empty.store(false, Ordering::Relaxed);
+                self.container.element_at(0)
+            } else {
+                let mut member = element_def;
+                while member.get_def_type() == DefType::dtSubRecordUnion {
+                    let signature = source.get_has_signature().unwrap_or(Signature::new(b"NONE"));
+                    member = member
+                        .as_record_def()
+                        .and_then(|union| union.get_member_for(Some(&self_ref), signature, Some(source)))
+                        .ok_or_else(|| format!("{} has no member for {}", self.get_name(), source.get_name()))?;
+                }
+                Some(create_member_new(&self_ref, &self.container, &self.file, member)?)
+            };
+            if let Some(element) = &element {
+                element.assign(ASSIGN_THIS, Some(source), only_sk);
+                self.container.cnt_as_created_empty.store(false, Ordering::Relaxed);
+            }
+            self.update_name_suffixes();
+            result = element;
+        }
+        // The sort of a sorted array by sort keys is not ported yet.
+        Ok(result)
+    }
+
+    /// Port of `TwbSubRecordArray.CanAssignInternal`.
+    fn can_assign_internal_impl(&self, index: i32, source: Option<&ElementRef>, check_dont_show: bool) -> bool {
+        if !is_internal_edit()
+            && (!edit_allowed() || self.arc_def.def_base().def_flags.contains(DefFlag::dfInternalEditOnly))
+        {
+            return false;
+        }
+        if !super::assign::parent_allows_edit(self) {
+            return false;
+        }
+        if check_dont_show && self.get_dont_show() {
+            return false;
+        }
+        let Some(source) = source else {
+            return index >= 0;
+        };
+        let Some(array_def) = self.arc_def.as_sub_record_array_def() else {
+            return false;
+        };
+        let self_ref: Option<ElementRef> = self.self_ref.upgrade().map(|array| array as ElementRef);
+        let source_def = source.get_def();
+        let source_def = source_def.as_deref().map(|def| def.as_dyn_def());
+        if self.arc_def.can_assign(self_ref.as_ref(), index, source_def) {
+            return true;
+        }
+        let element_def = array_def.get_element();
+        element_def.can_assign(self_ref.as_ref(), ASSIGN_THIS, source_def)
+            && !(check_dont_show && element_def.get_dont_show(Some(source)))
+    }
+
+    /// Port of `TwbSubRecordArray.AddIfMissingInternal`.
+    fn add_if_missing_internal_impl(
+        &self,
+        source: &ElementRef,
+        args: &CopyArgs,
+    ) -> Result<Option<ElementRef>, EditError> {
+        if !is_internal_edit() && !edit_allowed() {
+            return Err(format!("{} can not be assigned.", self.get_name()));
+        }
+        let Some(array_def) = self.arc_def.as_sub_record_array_def() else {
+            return Ok(None);
+        };
+        let self_ref: ElementRef = self.self_ref.upgrade().expect("the array is alive");
+        let sorted = sort_sub_records() && array_def.get_sorted(Some(&self_ref));
+        if sorted
+            && !args.as_new
+            && let Some(found) = super::value::find_by_sort_key(&self.container, source)
+        {
+            if args.deep_copy {
+                found.assign(ASSIGN_THIS, Some(source), false);
+            }
+            return Ok(Some(found));
+        }
+        let result = if self.container.cnt_as_created_empty.load(Ordering::Relaxed) {
+            self.set_modified(true);
+            self.container.cnt_as_created_empty.store(false, Ordering::Relaxed);
+            self.container.element_at(0)
+        } else {
+            Some(create_member_new(
+                &self_ref,
+                &self.container,
+                &self.file,
+                array_def.get_element().clone(),
+            )?)
+        };
+        if let Some(result) = &result {
+            result.assign(ASSIGN_THIS, Some(source), !args.deep_copy);
+        }
+        self.update_name_suffixes();
+        Ok(result)
+    }
+
     pub(super) fn do_process(&self, self_ref: &ElementRef, container: &ContainerBase, mut pos: usize) {
         let Some(array_def) = self.arc_def.as_sub_record_array_def() else {
             return;
@@ -519,6 +952,22 @@ impl SubRecordArrayImpl {
                 element.element_base().set_name_suffix(&format!("#{index}"));
             }
         }
+    }
+}
+
+/// The `case Member.DefType of` of the assign methods: a subrecord, a
+/// subrecord array or a subrecord structure made from its definition.
+pub(super) fn create_member_new(
+    owner: &ElementRef,
+    owner_base: &ContainerBase,
+    file: &Weak<super::FileImpl>,
+    def: Arc<dyn RecordMemberDef>,
+) -> Result<ElementRef, EditError> {
+    match def.get_def_type() {
+        DefType::dtSubRecord => SubRecordImpl::create_new(owner, owner_base, file, def),
+        DefType::dtSubRecordArray => create_sub_record_array_new(owner, owner_base, def, file),
+        DefType::dtSubRecordStruct => create_sub_record_struct_new(owner, owner_base, def, file),
+        other => Err(format!("unexpected member type {other:?} in {}", owner.get_name())),
     }
 }
 
@@ -624,6 +1073,274 @@ impl SubRecordStructImpl {
             }
         }
         Ok(())
+    }
+}
+
+impl SubRecordStructImpl {
+    /// Port of `TwbSubRecordStruct.Add`: the member with the signature,
+    /// added when it is missing.
+    fn add_by_name(&self, name: &str) -> Result<Option<ElementRef>, EditError> {
+        if !self.parent_editable() {
+            return Err(format!("\"{}\" is not editable", self.get_name()));
+        }
+        let Ok(signature) = Signature::from_str(&name.chars().take(4).collect::<String>()) else {
+            return Ok(None);
+        };
+        if name.chars().count() < 4 {
+            return Ok(None);
+        }
+        if let Some(found) = self.get_element_by_signature(signature) {
+            return Ok(Some(found));
+        }
+        let self_ref: ElementRef = self.self_ref.upgrade().expect("the structure is alive");
+        let Some(src_def) = self.src_def.as_record_def() else {
+            return Ok(None);
+        };
+        let index = src_def.get_member_index_for(Some(&self_ref), signature, None);
+        if index < 0 {
+            return Ok(None);
+        }
+        self.assign(index, None, false);
+        Ok(self.get_element_by_signature(signature))
+    }
+
+    /// `IsElementEditable(nil)` of the structure itself.
+    fn parent_editable(&self) -> bool {
+        super::assign::container_is_element_editable(self, None)
+    }
+
+    /// Port of `TwbSubRecordStruct.AssignInternal`.
+    fn assign_internal_impl(
+        &self,
+        index: i32,
+        source: Option<&ElementRef>,
+        only_sk: bool,
+    ) -> Result<Option<ElementRef>, EditError> {
+        if !is_internal_edit() && !edit_allowed() {
+            return Err(format!("{} can not be assigned.", self.get_name()));
+        }
+        let Some(src_def) = self.src_def.as_record_def() else {
+            return Ok(None);
+        };
+        let self_ref: ElementRef = self.self_ref.upgrade().expect("the structure is alive");
+        let mut result = None;
+        if index == ASSIGN_THIS {
+            if let Some(source) = source
+                && !self
+                    .src_def
+                    .equals(source.get_def().as_deref().map(|def| def.as_dyn_def()))
+            {
+                // A member of a union of structures switches to the member
+                // the source is.
+                let source_def = source.get_def().and_then(|def| def.def_ref().into_record_member_def());
+                let union_of = |def: &dyn crate::interface::def::Def| {
+                    def.get_parent()
+                        .filter(|parent| parent.as_sub_record_union_def().is_some())
+                };
+                if let Some(source_def) = source_def
+                    && let (Some(own_union), Some(source_union)) =
+                        (union_of(self.src_def.as_dyn_def()), union_of(source_def.as_dyn_def()))
+                    && own_union.equals(Some(&*source_union))
+                    && let Some(container) = self.base.container()
+                    && let Some(container_impl) = container.as_element_impl()
+                    && let Some(container_base) = container_impl.container_base()
+                {
+                    let replacement = create_member_new(&container, container_base, &self.file, source_def)?;
+                    if let Some(replacement_impl) = replacement.as_element_impl() {
+                        replacement_impl.set_sort_and_memory_order(self.get_sort_order());
+                    }
+                    replacement.assign(ASSIGN_THIS, Some(source), only_sk);
+                    container_impl.remove_child(&self_ref, true);
+                    if let Some(container) = container.as_container() {
+                        container.sort_by_sort_order();
+                    }
+                }
+                return Ok(None);
+            }
+            self.set_modified(true);
+            self.invalidate_storage();
+            self.container.release_elements();
+            self.add_required_elements()?;
+            if let Some(source_container) = source.and_then(|source| source.as_container()) {
+                for i in 0..source_container.get_element_count() {
+                    let Some(child) = source_container.get_element(i) else {
+                        continue;
+                    };
+                    if !only_sk || self.get_is_in_sk(child.get_sort_order()) {
+                        self.assign(child.get_sort_order(), Some(&child), only_sk);
+                    }
+                }
+            }
+        } else if index >= 0 && index < src_def.get_member_count() {
+            let mut member = src_def.get_member(index as usize);
+            let source_def = source.and_then(|source| source.get_def());
+            let source_def_ref = source_def.as_deref().map(|def| def.as_dyn_def());
+            if source.is_none() || member.can_assign(Some(&self_ref), ASSIGN_THIS, source_def_ref) {
+                let existing = self.container.element_by_sort_order(index);
+                if let Some(existing) = existing {
+                    if let Some(source) = source {
+                        existing.assign(ASSIGN_THIS, Some(source), only_sk);
+                    }
+                    result = Some(existing);
+                } else {
+                    if member.get_def_type() == DefType::dtSubRecordUnion {
+                        match source_def.and_then(|def| def.def_ref().into_record_member_def()) {
+                            Some(source_member) => member = source_member,
+                            None => {
+                                while member.get_def_type() == DefType::dtSubRecordUnion {
+                                    member = member
+                                        .as_record_def()
+                                        .map(|union| union.get_member(0))
+                                        .ok_or_else(|| format!("{} has an empty union member", self.get_name()))?;
+                                }
+                            }
+                        }
+                    }
+                    let element = create_member_new(&self_ref, &self.container, &self.file, member)?;
+                    if let Some(element_impl) = element.as_element_impl() {
+                        element_impl.element_base().e_sort_order.store(index, Ordering::Relaxed);
+                    }
+                    if let Some(source) = source {
+                        element.assign(ASSIGN_THIS, Some(source), only_sk);
+                    }
+                    result = Some(element);
+                }
+            }
+        }
+        edit::sort_sub_records_of(self);
+        Ok(result)
+    }
+
+    /// Port of `TwbSubRecordStruct.CanAssignInternal`.
+    fn can_assign_internal_impl(&self, index: i32, source: Option<&ElementRef>, check_dont_show: bool) -> bool {
+        if !is_internal_edit()
+            && (!edit_allowed() || self.src_def.def_base().def_flags.contains(DefFlag::dfInternalEditOnly))
+        {
+            return false;
+        }
+        if !super::assign::parent_allows_edit(self) {
+            return false;
+        }
+        if check_dont_show && self.get_dont_show() {
+            return false;
+        }
+        let Some(src_def) = self.src_def.as_record_def() else {
+            return false;
+        };
+        let self_ref: Option<ElementRef> = self.self_ref.upgrade().map(|structure| structure as ElementRef);
+        let member_ok = |index: i32| {
+            let member = src_def.get_member(index as usize);
+            !(check_dont_show && member.get_dont_show(self_ref.as_ref()))
+                && (is_internal_edit() || !member.def_base().def_flags.contains(DefFlag::dfInternalEditOnly))
+        };
+        let Some(source) = source else {
+            return index >= 0
+                && index < src_def.get_member_count()
+                && self.container.element_by_sort_order(index).is_none()
+                && member_ok(index);
+        };
+        let source_def = source.get_def();
+        let source_def_ref = source_def.as_deref().map(|def| def.as_dyn_def());
+        if index == ASSIGN_THIS {
+            if self.src_def.equals(source_def_ref) {
+                return true;
+            }
+            let union_of = |def: &dyn crate::interface::def::Def| {
+                def.get_parent()
+                    .filter(|parent| parent.as_sub_record_union_def().is_some())
+            };
+            return match (union_of(self.src_def.as_dyn_def()), source_def_ref.and_then(union_of)) {
+                (Some(own), Some(other)) => own.equals(Some(&*other)),
+                _ => false,
+            };
+        }
+        index >= 0
+            && index < src_def.get_member_count()
+            && src_def
+                .get_member(index as usize)
+                .can_assign(self_ref.as_ref(), ASSIGN_THIS, source_def_ref)
+            && member_ok(index)
+    }
+
+    /// Port of `TwbSubRecordStruct.AddIfMissingInternal`.
+    fn add_if_missing_internal_impl(
+        &self,
+        source: &ElementRef,
+        args: &CopyArgs,
+    ) -> Result<Option<ElementRef>, EditError> {
+        if !is_internal_edit() && !edit_allowed() {
+            return Err(format!("{} can not be assigned.", self.get_name()));
+        }
+        let index = source.get_sort_order();
+        if let Some(result) = self.container.element_by_sort_order(index) {
+            result.assign(ASSIGN_THIS, Some(source), !args.deep_copy);
+            return Ok(Some(result));
+        }
+        self.assign(index, Some(source), !args.deep_copy);
+        let result = self.container.element_by_sort_order(index);
+        edit::sort_sub_records_of(self);
+        Ok(result)
+    }
+
+    /// Port of `TwbSubRecordStruct.TryAssignMembers`: the members of the
+    /// source go into the members with the same name, and the first
+    /// member of the sort key into the first member of this sort key.
+    pub fn try_assign_members(&self, source: &ElementRef) {
+        let Some(source_container) = source.as_container() else {
+            return;
+        };
+        let Some(source_def) = source.get_def() else { return };
+        let Some(source_record_def) = source_def.as_record_def() else {
+            return;
+        };
+        let Some(own_def) = self.src_def.as_record_def() else {
+            return;
+        };
+        for i in 0..source_container.get_element_count() {
+            let Some(source_element) = source_container.get_element(i) else {
+                continue;
+            };
+            let target = self.get_element_by_name(&source_element.get_name());
+            if let Some(target) = target
+                && target.can_assign(ASSIGN_THIS, Some(&source_element), false)
+            {
+                target.assign(ASSIGN_THIS, Some(&source_element), false);
+                continue;
+            }
+            let Some(source_element_def) = source_element.get_def() else {
+                continue;
+            };
+            let target_index = (0..own_def.get_member_count()).find(|&j| {
+                let member = own_def.get_member(j as usize);
+                member.get_name() == source_element_def.get_name()
+                    && member.can_assign(None, ASSIGN_THIS, Some(source_element_def.as_dyn_def()))
+            });
+            if let Some(target_index) = target_index {
+                self.assign(target_index, Some(&source_element), false);
+            }
+        }
+        let (Some(own_struct), Some(source_struct)) = (
+            self.src_def.as_sub_record_struct_def(),
+            source_def.as_sub_record_struct_def(),
+        ) else {
+            return;
+        };
+        if !own_struct.has_sort_key()
+            || !source_struct.has_sort_key()
+            || own_struct.get_sort_key_count(false) < 1
+            || source_struct.get_sort_key_count(false) < 1
+        {
+            return;
+        }
+        let target_index = own_struct.get_sort_key(0, false);
+        let source_index = source_struct.get_sort_key(0, false);
+        let target_member = own_def.get_member(target_index as usize);
+        let source_member = source_record_def.get_member(source_index as usize);
+        if target_member.can_assign(None, ASSIGN_THIS, Some(source_member.as_dyn_def()))
+            && let Some(source_element) = source_container.get_element_by_sort_order(source_index)
+        {
+            self.assign(target_index, Some(&source_element), false);
+        }
     }
 }
 
@@ -857,7 +1574,7 @@ pub(super) fn init_main_record(record: &Arc<MainRecordImpl>) {
                 current_rec.set_def(current_def.clone());
                 let known = mr_def.known_sub_record_signatures();
                 if signature == known[0] {
-                    record.set_editor_id(mr_def.get_editor_id(element));
+                    record.cache_editor_id(mr_def.get_editor_id(element));
                 } else if signature == known[1] {
                     record.set_full_name(element.get_edit_value());
                 }
@@ -1228,6 +1945,59 @@ impl ElementImpl for SubRecordImpl {
         self.array_assign_add()
     }
 
+    fn assign_internal(
+        &self,
+        index: i32,
+        source: Option<&ElementRef>,
+        only_sk: bool,
+    ) -> Result<Option<ElementRef>, EditError> {
+        self.assign_internal_impl(index, source, only_sk)
+    }
+
+    fn can_assign_internal(&self, index: i32, source: Option<&ElementRef>, check_dont_show: bool) -> bool {
+        self.can_assign_internal_impl(index, source, check_dont_show)
+    }
+
+    fn add_if_missing_internal(&self, source: &ElementRef, args: &CopyArgs) -> Result<Option<ElementRef>, EditError> {
+        self.add_if_missing_internal_impl(source, args)
+    }
+
+    /// Port of `TwbSubRecord.CanContainFormIDs`.
+    fn can_contain_form_ids(&self) -> bool {
+        self.def()
+            .is_some_and(|def| def.def_base().def_flags.contains(DefFlag::dfCanContainFormID))
+    }
+
+    /// Port of `TwbSubRecord.IsElementRemovable`: an entry of an array that
+    /// may shrink.
+    fn is_element_removable(&self, element: &ElementRef) -> bool {
+        let Some(value_def) = self.value_def() else {
+            return false;
+        };
+        let flags = value_def.def_base().def_flags.get();
+        let mut result = self.is_element_editable(Some(element))
+            && self.sr_is_array.load(Ordering::Relaxed)
+            && !flags.contains(DefFlag::dfArrayStaticSize)
+            && value_def.as_array_def().is_some_and(|array| array.get_count() <= 0)
+            && (flags.contains(DefFlag::dfArrayCanBeEmpty) || self.container.element_count() > 1);
+        if result && flags.contains(DefFlag::dfRemoveLastOnly) {
+            result = self
+                .container
+                .elements()
+                .last()
+                .is_some_and(|last| Arc::ptr_eq(last, element));
+        }
+        result
+    }
+
+    /// Port of `TwbSubRecord.BeforeActualRemove`: the counters along the
+    /// count paths of an array go to zero.
+    fn before_actual_remove(&self) {
+        if let Some(array_def) = self.value_def().as_ref().and_then(|def| def.as_array_def()) {
+            edit::zero_count_paths(self, array_def.get_count_paths());
+        }
+    }
+
     fn add_string_list_terminator(&self) {
         let self_ref = self.element_ref();
         super::value::create_string_list_terminator(&self_ref, &self.file);
@@ -1424,8 +2194,60 @@ impl ElementImpl for SubRecordArrayImpl {
         self.member_assign_add()
     }
 
-    fn add_impl(&self, _name: &str, _silent: bool) -> Result<Option<ElementRef>, EditError> {
-        self.member_assign_add()
+    /// Port of `TwbSubRecordArray.Add`: `Assign(StrToIntDef(aName,
+    /// wbAssignAdd), nil, False)`.
+    fn add_impl(&self, name: &str, _silent: bool) -> Result<Option<ElementRef>, EditError> {
+        Ok(self.assign(name.trim().parse().unwrap_or(ASSIGN_ADD), None, false))
+    }
+
+    fn assign_internal(
+        &self,
+        index: i32,
+        source: Option<&ElementRef>,
+        only_sk: bool,
+    ) -> Result<Option<ElementRef>, EditError> {
+        self.assign_internal_impl(index, source, only_sk)
+    }
+
+    fn can_assign_internal(&self, index: i32, source: Option<&ElementRef>, check_dont_show: bool) -> bool {
+        self.can_assign_internal_impl(index, source, check_dont_show)
+    }
+
+    fn add_if_missing_internal(&self, source: &ElementRef, args: &CopyArgs) -> Result<Option<ElementRef>, EditError> {
+        self.add_if_missing_internal_impl(source, args)
+    }
+
+    /// Port of `TwbSubRecordArray.CanContainFormIDs`.
+    fn can_contain_form_ids(&self) -> bool {
+        self.arc_def.def_base().def_flags.contains(DefFlag::dfCanContainFormID)
+    }
+
+    /// Port of `TwbSubRecordArray.IsElementRemovable`: an entry beyond the
+    /// count the array must have.
+    fn is_element_removable(&self, element: &ElementRef) -> bool {
+        let count = self
+            .arc_def
+            .as_sub_record_array_def()
+            .map_or(0, |array| array.get_count());
+        let flags = self.arc_def.def_base().def_flags.get();
+        let mut result = self.is_element_editable(Some(element))
+            && !flags.contains(DefFlag::dfArrayStaticSize)
+            && self.container.element_count() as i32 > count.max(1);
+        if result && flags.contains(DefFlag::dfRemoveLastOnly) {
+            result = self
+                .container
+                .elements()
+                .last()
+                .is_some_and(|last| Arc::ptr_eq(last, element));
+        }
+        result
+    }
+
+    /// Port of `TwbSubRecordArray.BeforeActualRemove`.
+    fn before_actual_remove(&self) {
+        if let Some(array_def) = self.arc_def.as_sub_record_array_def() {
+            edit::zero_count_paths(self, array_def.get_count_paths());
+        }
     }
 
     /// Port of `TwbSubRecordArray.DoAfterSet`.
@@ -1529,6 +2351,59 @@ impl Element for SubRecordStructImpl {
 impl ElementImpl for SubRecordStructImpl {
     fn as_this(&self) -> &dyn ElementImpl {
         self
+    }
+
+    fn add_impl(&self, name: &str, _silent: bool) -> Result<Option<ElementRef>, EditError> {
+        self.add_by_name(name)
+    }
+
+    fn assign_internal(
+        &self,
+        index: i32,
+        source: Option<&ElementRef>,
+        only_sk: bool,
+    ) -> Result<Option<ElementRef>, EditError> {
+        self.assign_internal_impl(index, source, only_sk)
+    }
+
+    fn can_assign_internal(&self, index: i32, source: Option<&ElementRef>, check_dont_show: bool) -> bool {
+        self.can_assign_internal_impl(index, source, check_dont_show)
+    }
+
+    fn add_if_missing_internal(&self, source: &ElementRef, args: &CopyArgs) -> Result<Option<ElementRef>, EditError> {
+        self.add_if_missing_internal_impl(source, args)
+    }
+
+    /// Port of `TwbSubRecordStruct.CanContainFormIDs`.
+    fn can_contain_form_ids(&self) -> bool {
+        self.src_def.def_base().def_flags.contains(DefFlag::dfCanContainFormID)
+    }
+
+    /// Port of `TwbSubRecordStruct.GetIsInSK`.
+    fn get_is_in_sk(&self, sort_order: i32) -> bool {
+        self.src_def
+            .as_sub_record_struct_def()
+            .is_some_and(|def| def.has_sort_key() && def.is_in_sk(sort_order))
+    }
+
+    /// Port of `TwbSubRecordStruct.IsElementRemovable`: a member that is not
+    /// required and not the first one of an ordered structure.
+    fn is_element_removable(&self, element: &ElementRef) -> bool {
+        let first_fixed = !(self.src_def.as_record_def().is_some_and(|def| def.allow_unordered())
+            || self
+                .src_def
+                .def_base()
+                .def_flags
+                .contains(DefFlag::dfStructFirstNotRequired));
+        let is_first = self
+            .container
+            .elements()
+            .first()
+            .is_some_and(|first| Arc::ptr_eq(first, element));
+        self.is_element_editable(Some(element))
+            && self.container.element_count() > 1
+            && !(first_fixed && is_first)
+            && !element.get_def().is_some_and(|def| def.def_base().def_required())
     }
 
     fn self_element_ref(&self) -> Option<ElementRef> {

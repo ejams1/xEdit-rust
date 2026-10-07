@@ -481,6 +481,31 @@ struct SummaryState {
 impl Def for StructDef {
     value_def_plumbing!(Def);
 
+    /// Port of `TwbStructDef.CanAssign`: a structure with as many members
+    /// that can take each other.
+    fn can_assign(&self, element: ElementArg, index: i32, def: Option<&dyn Def>) -> bool {
+        if super::def::def_dont_assign(self) {
+            return false;
+        }
+        let Some(other) = def.and_then(|def| def.as_struct_def()) else {
+            return false;
+        };
+        if index != super::types::ASSIGN_THIS || self.get_member_count() != other.get_member_count() {
+            return false;
+        }
+        if self.equals(def) {
+            return true;
+        }
+        let count = usize::try_from(self.get_member_count()).unwrap_or(0);
+        (0..count).all(|i| {
+            self.get_member(i).can_assign(
+                element,
+                super::types::ASSIGN_THIS,
+                Some(other.get_member(i).as_dyn_def()),
+            )
+        })
+    }
+
     fn get_def_type(&self) -> DefType {
         if self.st_chapter.is_some() {
             DefType::dtStructChapter

@@ -170,12 +170,55 @@ pub trait Element: Send + Sync {
     /// Upstream `MarkModifiedRecursive(AllElementTypes)`.
     fn mark_modified_recursive(&self) {}
 
-    /// Upstream `Assign(Low(Integer), aSource, False)` (`wbAssignThis`) with
-    /// a source element: the element takes the value of the source, member
-    /// by member for a container. The default of `TwbDef.Assign` is the
-    /// edit value of the source.
+    /// Upstream `Assign(wbAssignThis, aSource, False)`: the element takes
+    /// the value of the source, member by member for a container. Upstream
+    /// reports a failure instead of raising it, so this never fails.
     fn assign_from(&self, source: &ElementRef) -> Result<(), EditError> {
-        self.set_edit_value(&source.get_edit_value())
+        self.assign(super::types::ASSIGN_THIS, Some(source), false);
+        Ok(())
+    }
+
+    /// Upstream `Assign(aIndex, aElement, aOnlySK)`: the element takes the
+    /// value of `source` (`ASSIGN_THIS`), adds an entry to an array
+    /// (`ASSIGN_ADD`) or adds the member at a position of its definition.
+    /// Returns the element that took the value, when there is one. A failure
+    /// is reported (`Error assigning to ...`) and gives `None`, as upstream.
+    fn assign(&self, index: i32, source: Option<&ElementRef>, only_sk: bool) -> Option<ElementRef> {
+        let element = self.as_element_impl()?;
+        crate::implementation::assign::assign(element, index, source, only_sk)
+    }
+
+    /// Upstream `CanAssign(aIndex, aElement, aCheckDontShow)`.
+    fn can_assign(&self, index: i32, source: Option<&ElementRef>, check_dont_show: bool) -> bool {
+        self.as_element_impl()
+            .is_some_and(|element| crate::implementation::assign::can_assign(element, index, source, check_dont_show))
+    }
+
+    /// Upstream `IsRemovable`: whether `remove` may take the element out of
+    /// its container, as the editor asks before it removes an element.
+    fn get_is_removable(&self) -> bool {
+        self.as_element_impl()
+            .is_some_and(crate::implementation::assign::element_is_removable)
+    }
+
+    /// Upstream `AddIfMissing`: the copy of `source` in this container, made
+    /// when it is missing (see [`CopyArgs`]).
+    fn add_if_missing(&self, source: &ElementRef, args: &CopyArgs) -> Result<Option<ElementRef>, EditError> {
+        match self.as_element_impl() {
+            Some(element) => crate::implementation::copy::add_if_missing(element, source, args),
+            None => Ok(None),
+        }
+    }
+
+    /// Upstream `CopyInto(aFile, aAsNew, aDeepCopy, aPrefixRemove,
+    /// aSuffixRemove, aPrefix, aSuffix)`: the element copied into `file`,
+    /// as an override or as a new record, with the masters it needs. The
+    /// error is the message of the upstream exception.
+    fn copy_into(&self, file: &FileRef, args: &CopyArgs) -> Result<Option<ElementRef>, EditError> {
+        match self.as_element_impl() {
+            Some(element) => crate::implementation::copy::copy_into(element, file, args),
+            None => Ok(None),
+        }
     }
 
     /// Upstream `RequestStorageChange(aBasePtr, aEndPtr, aNewSize)`: makes
@@ -244,6 +287,29 @@ pub trait Element: Send + Sync {
     fn as_element_impl(&self) -> Option<&dyn crate::implementation::ElementImpl> {
         None
     }
+}
+
+/// The options of a copy (`CopyInto`, `AddIfMissing`,
+/// `wbCopyElementToFile`).
+#[derive(Debug, Clone, Default)]
+pub struct CopyArgs {
+    /// Upstream `aAsNew`: the copy is a new record with a new FormID, not
+    /// an override.
+    pub as_new: bool,
+    /// Upstream `aDeepCopy`: the copy takes the contents of the source, and
+    /// a record copied into a file takes the children of its child group.
+    pub deep_copy: bool,
+    /// Upstream `aPrefixRemove`: removed from the start of the editor ID.
+    pub prefix_remove: String,
+    /// Upstream `aSuffixRemove`: removed from the end of the editor ID.
+    pub suffix_remove: String,
+    /// Upstream `aPrefix`: put before the editor ID.
+    pub prefix: String,
+    /// Upstream `aSuffix`: put after the editor ID.
+    pub suffix: String,
+    /// Upstream `aAllowOverwrite`: a record the target has already is
+    /// replaced (`wbCanOverwrite`).
+    pub allow_overwrite: bool,
 }
 
 /// Upstream `IwbFile`.
@@ -480,11 +546,7 @@ pub trait Container: Element {
             Some((name, rest)) => (name, Some(rest)),
             None => (path, None),
         };
-        let element = match name {
-            "." => self.as_container_ref(),
-            ".." => self.get_container(),
-            _ => self.get_element_by_name(name),
-        };
+        let element = self.resolve_element_name(name);
         match (element, rest) {
             (None, None) => self.set_member_edit_value(name, value),
             (None, Some(_)) => Ok(()),
@@ -502,11 +564,7 @@ pub trait Container: Element {
             Some((name, rest)) => (name, Some(rest)),
             None => (path, None),
         };
-        let element = match name {
-            "." => self.as_container_ref(),
-            ".." => self.get_container(),
-            _ => self.get_element_by_name(name),
-        };
+        let element = self.resolve_element_name(name);
         match (element, rest) {
             (None, None) => self.set_member_native_value(name, value),
             (None, Some(_)) => Ok(()),
@@ -516,6 +574,24 @@ pub trait Container: Element {
                 None => Ok(()),
             },
         }
+    }
+
+    /// Port of `ResolveElementName` for one name of a path: `.`, `..`,
+    /// `[n]` for the element at a position, a name, else a name of four
+    /// characters as a signature (`ElementBySignature`).
+    fn resolve_element_name(&self, name: &str) -> Option<ElementRef> {
+        let element = match name {
+            "." => self.as_container_ref(),
+            ".." => self.get_container(),
+            _ => match name.strip_prefix('[').and_then(|index| index.strip_suffix(']')) {
+                Some(index) => self.get_element(index.parse().unwrap_or(0)),
+                None => self.get_element_by_name(name),
+            },
+        };
+        element.or_else(|| {
+            let bytes: [u8; 4] = name.as_bytes().try_into().ok()?;
+            self.get_element_by_signature(Signature::new(&bytes))
+        })
     }
 
     /// This container as an element reference, for the `.` path.

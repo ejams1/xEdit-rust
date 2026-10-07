@@ -200,6 +200,49 @@ enum RecordsAction {
         #[arg(long)]
         depth: Option<usize>,
     },
+    /// Copy a record into a plugin as an override or a new record (records.copy, xEdit's CopyInto). Needs --edit unless --dry-run.
+    Copy {
+        /// Load order FormID of the record to copy as hexadecimal digits.
+        form_id: String,
+        /// Plugin to copy into.
+        #[arg(long)]
+        to: String,
+        /// Plugin the record is seen from (that version is copied); the last loaded plugin when omitted.
+        #[arg(long)]
+        from: Option<String>,
+        /// Copy as a new record with a new FormID instead of an override.
+        #[arg(long)]
+        as_new: bool,
+        /// Copy the records of the child group too (the references of a cell, the responses of a topic).
+        #[arg(long)]
+        deep: bool,
+        /// Text put before the editor ID of the copy.
+        #[arg(long, default_value = "")]
+        prefix: String,
+        /// Text put after the editor ID of the copy.
+        #[arg(long, default_value = "")]
+        suffix: String,
+        /// Text removed from the start of the editor ID of the copy.
+        #[arg(long, default_value = "")]
+        prefix_remove: String,
+        /// Text removed from the end of the editor ID of the copy.
+        #[arg(long, default_value = "")]
+        suffix_remove: String,
+        /// Report the masters the copy needs and whether the target has the record, but copy nothing.
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Remove a record and its child group from a plugin (records.delete, xEdit's Remove). Needs --edit unless --dry-run.
+    Delete {
+        /// Load order FormID as hexadecimal digits.
+        form_id: String,
+        /// Plugin whose version of the record is removed; the only loaded plugin when omitted.
+        #[arg(long)]
+        file: Option<String>,
+        /// Report the record, but remove nothing.
+        #[arg(long)]
+        dry_run: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -235,6 +278,35 @@ enum ElementsAction {
         #[arg(long)]
         default: bool,
         /// Report the element and what would change, but change nothing.
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Add a member, an array entry or a child record (elements.add, xEdit's Add). Needs --edit unless --dry-run.
+    Add {
+        /// Load order FormID of the record as hexadecimal digits.
+        form_id: String,
+        /// What to add: a member name or signature (EDID, FULL), a child record signature of a cell, topic, worldspace or quest (REFR, INFO, CELL[3,-2], CELL[P]), or an array position.
+        name: String,
+        /// Path of the container inside the record to add to; the record itself when omitted.
+        #[arg(long)]
+        path: Option<String>,
+        /// Plugin the record is seen from; the last loaded plugin when omitted.
+        #[arg(long)]
+        file: Option<String>,
+        /// Report the container, but add nothing.
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Remove an element of a record by its path (elements.remove, xEdit's Remove). Needs --edit unless --dry-run.
+    Remove {
+        /// Load order FormID of the record as hexadecimal digits.
+        form_id: String,
+        /// Path of the element inside the record, with \\ between the names.
+        path: String,
+        /// Plugin the record is seen from; the last loaded plugin when omitted.
+        #[arg(long)]
+        file: Option<String>,
+        /// Report the element, but remove nothing.
         #[arg(long)]
         dry_run: bool,
     },
@@ -318,6 +390,27 @@ fn command_of(action: Action) -> Result<(String, Value), CommandError> {
                 "records.get".to_owned(),
                 json!({ "form_id": form_id, "file": file, "depth": depth }),
             ),
+            RecordsAction::Copy {
+                form_id,
+                to,
+                from,
+                as_new,
+                deep,
+                prefix,
+                suffix,
+                prefix_remove,
+                suffix_remove,
+                dry_run,
+            } => (
+                "records.copy".to_owned(),
+                json!({ "form_id": form_id, "to": to, "from": from, "as_new": as_new, "deep": deep,
+                        "prefix": prefix, "suffix": suffix, "prefix_remove": prefix_remove,
+                        "suffix_remove": suffix_remove, "dry_run": dry_run }),
+            ),
+            RecordsAction::Delete { form_id, file, dry_run } => (
+                "records.delete".to_owned(),
+                json!({ "form_id": form_id, "file": file, "dry_run": dry_run }),
+            ),
         },
         Action::Elements { action } => match action {
             ElementsAction::Get {
@@ -353,6 +446,25 @@ fn command_of(action: Action) -> Result<(String, Value), CommandError> {
                     json!({ "form_id": form_id, "path": path, "file": file, "value": value, "dry_run": dry_run }),
                 )
             }
+            ElementsAction::Add {
+                form_id,
+                name,
+                path,
+                file,
+                dry_run,
+            } => (
+                "elements.add".to_owned(),
+                json!({ "form_id": form_id, "name": name, "path": path, "file": file, "dry_run": dry_run }),
+            ),
+            ElementsAction::Remove {
+                form_id,
+                path,
+                file,
+                dry_run,
+            } => (
+                "elements.remove".to_owned(),
+                json!({ "form_id": form_id, "path": path, "file": file, "dry_run": dry_run }),
+            ),
         },
         Action::Masters { action } => match action {
             MastersAction::Add {

@@ -11,14 +11,16 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Weak};
 
-use super::def::{Def, DefBase, DefCell, DefKind, DefRef, NamedDef, NamedDefArgs, NamedDefBase, set_parent};
+use super::def::{
+    Def, DefBase, DefCell, DefKind, DefRef, NamedDef, NamedDefArgs, NamedDefBase, def_dont_assign, set_parent,
+};
 use super::element::{ElementArg, ElementRef, MainRecordRef};
 use super::globals::{hide_ignored, never_sorted, report_mode, report_required};
 use super::struct_def::{from_array, set_array_entry, trim};
 use super::sub_record::{
     RecordMemberDef, SignatureDef, record_member_def_to_summary, record_member_plumbing, signature_def_get_full_name,
 };
-use super::types::{ConflictPriority, DefFlag, DefType, ElementType, Signature};
+use super::types::{ASSIGN_ADD, ASSIGN_THIS, ConflictPriority, DefFlag, DefType, ElementType, Signature};
 
 /// Decides whether a subrecord array is sorted, from its container.
 pub type IsSortedCallback = Arc<dyn Fn(ElementArg) -> bool + Send + Sync>;
@@ -279,8 +281,41 @@ impl SubRecordArrayDef {
     }
 }
 
+/// The member by member test of `CanAssign` for two record definitions with
+/// the same member count.
+fn record_members_can_assign(own: &dyn RecordDef, other: &dyn Def, element: ElementArg, index: i32) -> bool {
+    let Some(other) = other.as_record_def() else {
+        return false;
+    };
+    if own.get_member_count() != other.get_member_count() {
+        return false;
+    }
+    let count = usize::try_from(own.get_member_count()).unwrap_or(0);
+    (0..count).all(|i| {
+        own.get_member(i)
+            .can_assign(element, index, Some(other.get_member(i).as_dyn_def()))
+    })
+}
+
 impl Def for SubRecordArrayDef {
     record_member_plumbing!(Def);
+
+    /// Port of `TwbSubRecordArrayDef.CanAssign`.
+    fn can_assign(&self, element: ElementArg, index: i32, def: Option<&dyn Def>) -> bool {
+        if def_dont_assign(self) {
+            return false;
+        }
+        if index == ASSIGN_THIS {
+            def.and_then(|def| def.as_sub_record_array_def()).is_some_and(|other| {
+                self.get_element()
+                    .can_assign(element, index, Some(other.get_element().as_dyn_def()))
+            })
+        } else if index == ASSIGN_ADD {
+            self.get_element().can_assign(element, ASSIGN_THIS, def)
+        } else {
+            false
+        }
+    }
 
     fn get_def_type(&self) -> DefType {
         DefType::dtSubRecordArray
@@ -633,6 +668,20 @@ impl SubRecordStructDef {
 impl Def for SubRecordStructDef {
     record_member_plumbing!(Def);
 
+    /// Port of `TwbSubRecordStructDef.CanAssign`.
+    fn can_assign(&self, element: ElementArg, index: i32, def: Option<&dyn Def>) -> bool {
+        if def_dont_assign(self) {
+            return false;
+        }
+        let Some(other) = def.filter(|def| def.as_sub_record_struct_def().is_some()) else {
+            return false;
+        };
+        if self.equals(def) {
+            return true;
+        }
+        record_members_can_assign(self, other, element, index)
+    }
+
     fn get_def_type(&self) -> DefType {
         DefType::dtSubRecordStruct
     }
@@ -880,6 +929,25 @@ impl SubRecordUnionDef {
 
 impl Def for SubRecordUnionDef {
     record_member_plumbing!(Def);
+
+    /// Port of `TwbSubRecordUnionDef.CanAssign`: a member that can take the
+    /// definition, or a union of members that can take each other.
+    fn can_assign(&self, element: ElementArg, index: i32, def: Option<&dyn Def>) -> bool {
+        if def_dont_assign(self) {
+            return false;
+        }
+        let count = usize::try_from(self.get_member_count()).unwrap_or(0);
+        if (0..count).any(|i| self.get_member(i).can_assign(element, index, def)) {
+            return true;
+        }
+        let Some(other) = def.filter(|def| def.as_sub_record_union_def().is_some()) else {
+            return false;
+        };
+        if self.equals(def) {
+            return true;
+        }
+        record_members_can_assign(self, other, element, index)
+    }
 
     fn get_def_type(&self) -> DefType {
         DefType::dtSubRecordUnion

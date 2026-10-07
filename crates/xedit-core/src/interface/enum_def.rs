@@ -282,6 +282,20 @@ impl EnumDef {
 impl Def for EnumDef {
     formater_plumbing!();
 
+    /// Port of `TwbEnumDef.CanAssign`: an enumeration with the same names.
+    fn can_assign(&self, _element: ElementArg, _index: i32, def: Option<&dyn Def>) -> bool {
+        if super::def::def_dont_assign(self) {
+            return false;
+        }
+        let Some(other) = def.and_then(|def| def.as_enum_def()) else {
+            return false;
+        };
+        if other.get_name_count() != self.get_name_count() {
+            return false;
+        }
+        self.equals(def) || (0..i64::from(self.get_name_count())).all(|i| other.get_name_of(i) == self.get_name_of(i))
+    }
+
     fn get_def_type(&self) -> DefType {
         DefType::dtIntegerFormater
     }

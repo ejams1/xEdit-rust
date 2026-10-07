@@ -538,6 +538,20 @@ impl MainRecordDef {
         }
     }
 
+    /// Upstream `SetEditorID`: the subrecord takes the editor ID, through the
+    /// callback of the definition; an empty editor ID removes it.
+    pub fn set_editor_id(&self, sub_record: &ElementRef, editor_id: &str) -> Result<(), super::misc::EditError> {
+        if let Some(callback) = self.rec_set_editor_id_callback.load().as_deref() {
+            callback(sub_record, editor_id);
+            return Ok(());
+        }
+        if editor_id.is_empty() {
+            sub_record.remove();
+            return Ok(());
+        }
+        sub_record.set_edit_value(editor_id)
+    }
+
     /// Upstream `GetEditorID`: the editor ID from the subrecord that holds it.
     pub fn get_editor_id(&self, sub_record: &ElementRef) -> String {
         match self.rec_get_editor_id_callback.load().as_deref() {

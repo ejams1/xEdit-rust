@@ -431,6 +431,21 @@ impl ArrayDef {
 impl Def for ArrayDef {
     value_def_plumbing!(Def);
 
+    /// Port of `TwbArrayDef.CanAssign`: an array of as many elements whose
+    /// element definitions can take each other.
+    fn can_assign(&self, element: ElementArg, index: i32, def: Option<&dyn Def>) -> bool {
+        if super::def::def_dont_assign(self) {
+            return false;
+        }
+        index == super::types::ASSIGN_THIS
+            && def.and_then(|def| def.as_array_def()).is_some_and(|other| {
+                (self.get_count() <= 0 || self.get_count() == other.get_count())
+                    && self
+                        .get_element()
+                        .can_assign(element, index, Some(other.get_element().as_dyn_def()))
+            })
+    }
+
     fn get_def_type(&self) -> DefType {
         DefType::dtArray
     }

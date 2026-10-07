@@ -116,6 +116,11 @@ impl GuidDef {
 impl Def for GuidDef {
     value_def_plumbing!(Def);
 
+    /// Port of `TwbGuidDef.CanAssign`, which has no `dfDontAssign` test.
+    fn can_assign(&self, _element: ElementArg, _index: i32, def: Option<&dyn Def>) -> bool {
+        def.and_then(|def| def.as_guid_def()).is_some()
+    }
+
     fn get_def_type(&self) -> DefType {
         DefType::dtGuid
     }
