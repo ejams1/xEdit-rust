@@ -13,7 +13,7 @@ use std::sync::{Arc, Weak};
 use super::array::ArrayDef;
 use super::def::{
     Def, DefBase, DefCell, DefKind, DefRef, DefSetters, LinksToCallback, NamedDef, NamedDefArgs, NamedDefBase,
-    NamedDefSetters, ToStrCallback, ValueDef, ValueDefSetters, set_parent,
+    NamedDefSetters, ToStrCallback, ValueDef, ValueDefSetters, def_dont_assign, set_parent,
 };
 use super::element::{ElementArg, ElementRef};
 use super::enum_def::EnumDef;
@@ -407,6 +407,24 @@ impl SubRecordDef {
 
 impl Def for SubRecordDef {
     record_member_plumbing!(Def);
+
+    /// Port of `TwbSubRecordDef.CanAssign`.
+    fn can_assign(&self, element: ElementArg, index: i32, def: Option<&dyn Def>) -> bool {
+        if def_dont_assign(self) {
+            return false;
+        }
+        let value = self.get_value();
+        match def.and_then(|def| def.as_sub_record_def()) {
+            Some(sub_record_def) => {
+                self.equals(def)
+                    || value.is_some_and(|value| {
+                        let other = sub_record_def.get_value();
+                        value.can_assign(element, index, other.as_deref().map(|other| other.as_dyn_def()))
+                    })
+            }
+            None => value.is_some_and(|value| value.can_assign(element, index, def)),
+        }
+    }
 
     fn get_def_type(&self) -> DefType {
         DefType::dtSubRecord

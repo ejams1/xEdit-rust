@@ -402,6 +402,10 @@ pub trait Def: Send + Sync + 'static {
         None
     }
 
+    fn as_callback_def(&self) -> Option<&super::formaters::CallbackDef> {
+        None
+    }
+
     fn into_integer_def_formater(self: Arc<Self>) -> Option<Arc<dyn IntegerDefFormater>> {
         None
     }
@@ -414,6 +418,15 @@ pub trait Def: Send + Sync + 'static {
     /// Port of `TwbDef.Equals`.
     fn equals(&self, def: Option<&dyn Def>) -> bool {
         def.is_some_and(|def| def.get_def_id() == self.get_def_id())
+    }
+
+    /// Port of `CanAssign(aElement, aIndex, aDef)`: whether an element of
+    /// this definition can take the value of an element of `def`. `index`
+    /// is [`ASSIGN_THIS`](super::types::ASSIGN_THIS),
+    /// [`ASSIGN_ADD`](super::types::ASSIGN_ADD) or a member index. The
+    /// default is `TwbDef`'s.
+    fn can_assign(&self, _element: ElementArg, _index: i32, _def: Option<&dyn Def>) -> bool {
+        false
     }
 
     fn get_conflict_priority(&self, element: ElementArg) -> ConflictPriority {
@@ -594,6 +607,20 @@ pub fn def_init_from_parent_after_children(def: &dyn Def) {
         let parent_flags = &parent.def_base().def_flags;
         parent_flags.set(parent_flags.get() | (base.def_flags.get() & def_flags_inherit_down()));
     }
+}
+
+/// Port of `TwbDef.Assign`: the target takes the edit value of the source.
+/// UPSTREAM-QUIRK: upstream reads the edit value of a `nil` source, which
+/// raises an access violation; the error is that exception.
+pub fn def_assign(target: &ElementRef, source: Option<&ElementRef>) -> Result<Option<ElementRef>, EditError> {
+    let source = source.ok_or_else(|| "Access violation: no source to assign from".to_owned())?;
+    target.set_edit_value(&source.get_edit_value())?;
+    Ok(None)
+}
+
+/// The `dfDontAssign in defFlags` test at the top of every `CanAssign`.
+pub fn def_dont_assign(def: &dyn Def) -> bool {
+    def.def_base().def_flags.contains(DefFlag::dfDontAssign)
 }
 
 /// Port of `TwbDef.GetRoot`: the definition this one was cloned from, transitively.
@@ -1165,6 +1192,19 @@ pub trait ValueDef: NamedDef {
             .as_deref()
             .cloned()
             .unwrap_or_default()
+    }
+
+    /// Port of `Assign(aTarget, aIndex, aSource, aOnlySK)`: `target` takes
+    /// the value of `source`. The default is `TwbDef`'s, the edit value of
+    /// the source.
+    fn assign(
+        &self,
+        target: &ElementRef,
+        _index: i32,
+        source: Option<&ElementRef>,
+        _only_sk: bool,
+    ) -> Result<Option<ElementRef>, EditError> {
+        def_assign(target, source)
     }
 
     /// Port of `FromEditValue`: writes the value given as edit text into the

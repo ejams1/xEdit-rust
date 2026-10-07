@@ -371,6 +371,35 @@ pub(crate) fn set_native_value(element: &dyn ElementImpl, value: Variant) -> Res
     result
 }
 
+/// Port of `TwbDataContainer.CopyFrom`: the data of the element becomes a
+/// copy of `bytes`.
+pub(crate) fn copy_from(element: &dyn ElementImpl, bytes: &[u8]) -> Result<(), EditError> {
+    if !is_internal_edit() && !edit_allowed() {
+        return Err(format!("{} can not be edited.", element.get_name()));
+    }
+    if let Some(container) = element.as_container() {
+        container.get_element_count();
+    }
+    begin_update(element);
+    let result = (|| {
+        if element.get_value_def().is_none() {
+            return Err(format!("{} can not be edited", element.get_name()));
+        }
+        let old = element.get_native_value();
+        if let Some(mut storage) = element.request_storage_change_impl(bytes.len()) {
+            storage.copy_from_slice(bytes);
+            element.commit_storage_impl(storage);
+        }
+        element.set_modified(true);
+        let new = element.get_native_value();
+        element.do_after_set(&old, &new);
+        element.notify_changed();
+        Ok(())
+    })();
+    end_update(element);
+    result
+}
+
 /// Port of `TwbElement.SetToDefault`.
 pub(crate) fn set_to_default(element: &dyn ElementImpl) -> Result<(), EditError> {
     begin_update(element);
@@ -458,9 +487,16 @@ pub(crate) fn remove(element: &dyn ElementImpl) {
     let Some(container_impl) = container.as_element_impl() else {
         return;
     };
+    // `TwbMainRecord.Remove` first takes the record out of its file.
+    if let Some(record) = element.main_record_impl()
+        && let Err(error) = record.remove_from_file()
+    {
+        crate::interface::misc::progress(&error);
+    }
     begin_update(container_impl);
     element.set_modified(true);
     invalidate_parent_storage(element);
+    element.before_actual_remove();
     container_impl.remove_child(&this, true);
     end_update(container_impl);
 }
@@ -527,6 +563,25 @@ pub(crate) fn update_count_via_paths(element: &dyn ElementImpl, paths: Vec<Strin
         }
         if let Some(counter) = container.get_element_by_path(&path) {
             let _ = counter.set_native_value(Variant::Int(i64::from(count)));
+        }
+    }
+}
+
+/// Port of the `BeforeActualRemove` of the arrays: the counters along the
+/// count paths go to zero, when they exist.
+pub(crate) fn zero_count_paths(element: &dyn ElementImpl, paths: Vec<String>) {
+    let Some(container) = element.element_base().container() else {
+        return;
+    };
+    let Some(container) = container.as_container() else {
+        return;
+    };
+    for path in paths {
+        if path.is_empty() {
+            continue;
+        }
+        if let Some(counter) = container.get_element_by_path(&path) {
+            let _ = counter.set_native_value(Variant::Int(0));
         }
     }
 }

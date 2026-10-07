@@ -1176,7 +1176,8 @@ status = "pending"
 source = "mniModGroupsAbleClick"
 
 [gui."xEdit/xeMainForm.dfm:mniNavAdd:OnClick"]
-status = "pending"
+status = "covered"
+command = "elements.add"
 source = "mniNavAddClick"
 
 [gui."xEdit/xeMainForm.dfm:mniNavAddMasters:OnClick"]
@@ -1260,11 +1261,13 @@ status = "pending"
 source = "mniNavCompareToClick"
 
 [gui."xEdit/xeMainForm.dfm:mniNavCopyAsNewRecord:OnClick"]
-status = "pending"
+status = "covered"
+command = "records.copy"
 source = "mniNavCopyIntoClick"
 
 [gui."xEdit/xeMainForm.dfm:mniNavCopyAsOverride:OnClick"]
-status = "pending"
+status = "covered"
+command = "records.copy"
 source = "mniNavCopyIntoClick"
 
 [gui."xEdit/xeMainForm.dfm:mniNavCopyAsOverrideWithOverwrite:OnClick"]
@@ -1300,7 +1303,8 @@ status = "pending"
 source = "mniNavCreateSEQFileClick"
 
 [gui."xEdit/xeMainForm.dfm:mniNavDeepCopyAsOverride:OnClick"]
-status = "pending"
+status = "covered"
+command = "records.copy"
 source = "mniNavCopyIntoClick"
 
 [gui."xEdit/xeMainForm.dfm:mniNavDeepCopyAsOverrideWithOverwriting:OnClick"]
@@ -1404,7 +1408,8 @@ status = "pending"
 source = "mniNavRaceLVLIsClick"
 
 [gui."xEdit/xeMainForm.dfm:mniNavRemove:OnClick"]
-status = "pending"
+status = "covered"
+command = "records.delete"
 source = "mniNavRemoveClick"
 
 [gui."xEdit/xeMainForm.dfm:mniNavRemoveIdenticalToMaster:OnClick"]
@@ -1462,7 +1467,8 @@ status = "pending"
 source = "mniRefByCompareSelectedClick"
 
 [gui."xEdit/xeMainForm.dfm:mniRefByCopyAsNewInto:OnClick"]
-status = "pending"
+status = "covered"
+command = "records.copy"
 source = "mniRefByCopyIntoClick"
 
 [gui."xEdit/xeMainForm.dfm:mniRefByCopyDisabledOverrideInto:OnClick"]
@@ -1470,7 +1476,8 @@ status = "pending"
 source = "mniRefByCopyDisabledOverrideIntoClick"
 
 [gui."xEdit/xeMainForm.dfm:mniRefByCopyOverrideInto:OnClick"]
-status = "pending"
+status = "covered"
+command = "records.copy"
 source = "mniRefByCopyIntoClick"
 
 [gui."xEdit/xeMainForm.dfm:mniRefByCopyOverrideIntoWithOverwriting:OnClick"]
@@ -1478,7 +1485,8 @@ status = "pending"
 source = "mniRefByCopyIntoClick"
 
 [gui."xEdit/xeMainForm.dfm:mniRefByDeepCopyOverrideInto:OnClick"]
-status = "pending"
+status = "covered"
+command = "records.copy"
 source = "mniRefByCopyIntoClick"
 
 [gui."xEdit/xeMainForm.dfm:mniRefByDeepCopyOverrideIntoWithOverwriting:OnClick"]
@@ -3442,7 +3450,8 @@ status = "pending"
 source = "wbGetVersionNumber"
 
 [script."xejviScriptAdapterContainer:cUnit.Add:function"]
-status = "pending"
+status = "covered"
+command = "elements.add"
 source = "IwbContainer_Add"
 
 [script."xejviScriptAdapterContainer:cUnit.AddElement:function"]
@@ -3514,7 +3523,8 @@ status = "pending"
 source = "IwbContainer_RemoveByIndex"
 
 [script."xejviScriptAdapterContainer:cUnit.RemoveElement:function"]
-status = "pending"
+status = "covered"
+command = "elements.remove"
 source = "IwbContainer_RemoveElement"
 
 [script."xejviScriptAdapterContainer:cUnit.ReverseElements:function"]
@@ -4124,11 +4134,13 @@ status = "pending"
 source = "IwbElement_PathName"
 
 [script."xejviScriptAdapterElement:cUnit.Remove:function"]
-status = "pending"
+status = "covered"
+command = "elements.remove"
 source = "IwbElement_Remove"
 
 [script."xejviScriptAdapterElement:cUnit.ReportRequiredMasters:function"]
-status = "pending"
+status = "covered"
+command = "records.copy"
 source = "IwbElement_ReportRequiredMasters"
 
 [script."xejviScriptAdapterElement:cUnit.SetEditValue:function"]
@@ -4163,15 +4175,18 @@ status = "pending"
 source = "IwbElement_TemplateAssign"
 
 [script."xejviScriptAdapterElement:cUnit.wbCopyElementToFile:function"]
-status = "pending"
+status = "covered"
+command = "records.copy"
 source = "_wbCopyElementToFile"
 
 [script."xejviScriptAdapterElement:cUnit.wbCopyElementToFileWithPrefix:function"]
-status = "pending"
+status = "covered"
+command = "records.copy"
 source = "_wbCopyElementToFileWithPrefix"
 
 [script."xejviScriptAdapterElement:cUnit.wbCopyElementToFileWithPrefixAndSuffix:function"]
-status = "pending"
+status = "covered"
+command = "records.copy"
 source = "_wbCopyElementToFileWithPrefixAndSuffix"
 
 [script."xejviScriptAdapterElement:cUnit.wbCopyElementToRecord:function"]
@@ -4339,7 +4354,8 @@ status = "pending"
 source = "_AddNewFileName"
 
 [script."xejviScriptAdapterHost:cUnit.AddRequiredElementMasters:function"]
-status = "pending"
+status = "covered"
+command = "records.copy"
 source = "_AddRequiredElementMasters"
 
 [script."xejviScriptAdapterHost:cUnit.ApplyFilter:function"]

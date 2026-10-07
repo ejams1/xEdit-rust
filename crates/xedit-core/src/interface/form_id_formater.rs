@@ -21,7 +21,7 @@ use super::form_id::{FileID, FormID, MastersUpdate, UsedMasters, mark_used_maste
 use super::formaters::{editable_unless_internal_only, formater_impls, formater_plumbing};
 use super::globals::{disable_form_id_check, display_load_order_form_id, pretty_form_id};
 use super::integer::{IntegerDefFormater, integer_def_formater_create};
-use super::misc::{EditError, int_to_hex64, str_to_int64};
+use super::misc::{EditError, Variant, int_to_hex64, str_to_int64};
 use super::string::to_comma_text;
 use super::types::{DefFlag, DefType, EditType, ElementType, EnumSet, FileState, Signature};
 
@@ -424,6 +424,33 @@ fn signatures_comma_text(signatures: &[Signature]) -> String {
 impl Def for FormIDDefFormater {
     formater_plumbing!();
 
+    /// Port of `TwbFormIDDefFormater.CanAssign` and `TwbFormIDChecked.CanAssign`:
+    /// a FormID or a main record, which for a checked FormID must have a
+    /// valid signature.
+    fn can_assign(&self, _element: ElementArg, _index: i32, def: Option<&dyn Def>) -> bool {
+        if super::def::def_dont_assign(self) {
+            return false;
+        }
+        if self.class.is_checked() && !disable_form_id_check() {
+            if let Some(main_record_def) = def.and_then(|def| def.as_main_record_def()) {
+                use super::sub_record::SignatureDef;
+                return self.is_valid(main_record_def.get_default_signature());
+            }
+            if let Some(other) = def.and_then(|def| def.as_form_id_def_formater())
+                && other.class.is_checked()
+            {
+                let null = Signature::new(b"NULL");
+                let target = Signature::new(b"TRGT");
+                return other
+                    .fidc_valid_refs
+                    .iter()
+                    .filter(|signature| **signature != null && **signature != target)
+                    .any(|signature| self.fidc_valid_refs.binary_search(signature).is_ok());
+            }
+        }
+        def.is_some_and(|def| def.as_form_id_def_formater().is_some() || def.as_main_record_def().is_some())
+    }
+
     fn get_def_type(&self) -> DefType {
         DefType::dtIntegerFormater
     }
@@ -630,6 +657,63 @@ impl IntegerDefFormater for FormIDDefFormater {
         if value != 0 {
             mark_used_master(masters, (value >> 24) as usize);
         }
+    }
+
+    /// Port of `TwbFormIDDefFormater.Assign`: the FormID of the source (a
+    /// FormID element, or a main record) as the file of the target stores
+    /// it.
+    fn assign(
+        &self,
+        target: &ElementRef,
+        _index: i32,
+        source: Option<&ElementRef>,
+        _only_sk: bool,
+    ) -> Result<Option<ElementRef>, EditError> {
+        let native = match source {
+            Some(source) => {
+                let mut form_id = match source.clone().into_main_record() {
+                    Some(main_record) => {
+                        if !self.is_valid_main_record(&main_record) {
+                            return Ok(None);
+                        }
+                        main_record.get_load_order_form_id()
+                    }
+                    None => {
+                        let native = source.get_native_value().as_ordinal().unwrap_or(0);
+                        let form_id = FormID::from_cardinal(native as u32);
+                        if form_id.is_hardcoded() || form_id.is_none() {
+                            form_id
+                        } else {
+                            let file = source.get_file().ok_or_else(|| "Source has no File".to_owned())?;
+                            file.file_form_id_to_load_order_form_id(form_id, source.get_masters_updated())?
+                        }
+                    }
+                };
+                let flags = self.def.def_flags.get();
+                if !flags.contains(DefFlag::dfUseLoadOrder) && !(form_id.is_hardcoded() || form_id.is_none()) {
+                    let file = target.get_file().ok_or_else(|| "Target has no File".to_owned())?;
+                    if flags.contains(DefFlag::dfUnmappedFormID) {
+                        if form_id.file_id().full_slot() != 0 {
+                            return Err("Unmapped FormIDs must belong to File ID [00]".to_owned());
+                        }
+                        let states = file.get_file_states();
+                        if !states.contains(FileState::fsIsGameMaster)
+                            && !states.contains(FileState::fsIsHardcoded)
+                            && file
+                                .get_master(0, true)
+                                .is_none_or(|master| !master.get_file_states().contains(FileState::fsIsGameMaster))
+                        {
+                            return Err("Unmapped FormIDs can only be different from 00000000 in modules which have the game master as their first master.".to_owned());
+                        }
+                    }
+                    form_id = file.load_order_form_id_to_file_form_id(form_id, target.get_masters_updated())?;
+                }
+                form_id.to_cardinal()
+            }
+            None => 0,
+        };
+        target.set_native_value(Variant::UInt(u64::from(native)))?;
+        Ok(None)
     }
 
     fn to_string(&self, int: i64, element: ElementArg, for_summary: bool) -> String {

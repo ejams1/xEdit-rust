@@ -146,6 +146,16 @@ impl Def for IntegerDefFormaterUnion {
     formater_plumbing!();
     formater_type_name!("TwbIntegerDefFormaterUnion");
 
+    /// Port of `TwbIntegerDefFormaterUnion.CanAssign`: the member the
+    /// decider picks decides.
+    fn can_assign(&self, element: ElementArg, index: i32, def: Option<&dyn Def>) -> bool {
+        if super::def::def_dont_assign(self) {
+            return false;
+        }
+        self.decide_member(element)
+            .is_some_and(|member| member.can_assign(element, index, def))
+    }
+
     fn get_def_type(&self) -> DefType {
         DefType::dtIntegerFormaterUnion
     }
@@ -164,6 +174,20 @@ impl Def for IntegerDefFormaterUnion {
 formater_impls!(IntegerDefFormaterUnion);
 
 impl IntegerDefFormater for IntegerDefFormaterUnion {
+    /// Port of `TwbIntegerDefFormaterUnion.Assign`.
+    fn assign(
+        &self,
+        target: &ElementRef,
+        index: i32,
+        source: Option<&ElementRef>,
+        only_sk: bool,
+    ) -> Result<Option<ElementRef>, EditError> {
+        match self.decide_member(Some(target)) {
+            Some(member) => member.assign(target, index, source, only_sk),
+            None => Ok(None),
+        }
+    }
+
     fn to_string(&self, int: i64, element: ElementArg, for_summary: bool) -> String {
         match self.decide_member(element) {
             Some(member) => member.to_string(int, element, for_summary),
@@ -497,6 +521,11 @@ macro_rules! div_formater {
             formater_plumbing!();
             formater_type_name!($class_name);
 
+            /// Port of `TwbDivDef.CanAssign` and `TwbDivFDef.CanAssign`.
+            fn can_assign(&self, _element: ElementArg, _index: i32, _def: Option<&dyn Def>) -> bool {
+                !super::def::def_dont_assign(self)
+            }
+
             fn get_def_type(&self) -> DefType {
                 DefType::dtIntegerFormater
             }
@@ -583,6 +612,11 @@ impl Def for MulDef {
     formater_plumbing!();
     formater_type_name!("TwbMulDef");
 
+    /// Port of `TwbMulDef.CanAssign`.
+    fn can_assign(&self, _element: ElementArg, _index: i32, _def: Option<&dyn Def>) -> bool {
+        !super::def::def_dont_assign(self)
+    }
+
     fn get_def_type(&self) -> DefType {
         DefType::dtIntegerFormater
     }
@@ -661,6 +695,20 @@ impl CallbackDef {
 impl Def for CallbackDef {
     formater_plumbing!();
     formater_type_name!("TwbCallbackDef");
+
+    fn as_callback_def(&self) -> Option<&CallbackDef> {
+        Some(self)
+    }
+
+    /// Port of `TwbCallbackDef.CanAssign`: a callback definition with the
+    /// same callback.
+    fn can_assign(&self, _element: ElementArg, _index: i32, def: Option<&dyn Def>) -> bool {
+        if super::def::def_dont_assign(self) {
+            return false;
+        }
+        def.and_then(|def| def.as_callback_def())
+            .is_some_and(|other| Arc::ptr_eq(other.get_callback(), &self.cd_to_str))
+    }
 
     fn get_def_type(&self) -> DefType {
         DefType::dtIntegerFormater

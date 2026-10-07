@@ -11,6 +11,7 @@
 pub mod batch;
 pub mod commands;
 pub mod dump;
+pub mod edit;
 pub mod masters;
 pub mod save;
 
@@ -117,6 +118,7 @@ impl Registry {
         let mut registry = Self::default();
         registry.register("system.version", "Report the xEdit version.", false, version);
         commands::register(&mut registry);
+        edit::register(&mut registry);
         save::register(&mut registry);
         masters::register(&mut registry);
         registry

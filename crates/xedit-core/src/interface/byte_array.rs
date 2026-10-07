@@ -143,6 +143,19 @@ fn read_prefix(data: &[u8], size: usize) -> i64 {
 impl Def for ByteArrayDef {
     value_def_plumbing!(Def);
 
+    /// Port of `TwbByteArrayDef.CanAssign`: a byte array that fits.
+    fn can_assign(&self, _element: ElementArg, _index: i32, def: Option<&dyn Def>) -> bool {
+        if super::def::def_dont_assign(self) {
+            return false;
+        }
+        let Some(other) = def.and_then(|def| def.as_byte_array_def()) else {
+            return false;
+        };
+        self.bad_size <= 0
+            || other.get_is_variable_size()
+            || i64::from(other.get_default_size(None, None)) <= self.bad_size
+    }
+
     fn get_def_type(&self) -> DefType {
         DefType::dtByteArray
     }

@@ -17,12 +17,16 @@ use std::sync::{Arc, OnceLock, RwLock, Weak};
 use xedit_io::compression::CompressionType;
 
 use crate::interface::def::{EmptyDef, NamedDef, NamedDefArgs, ValueDef};
-use crate::interface::element::{Container, DataContainer, DataPtr, Element, ElementRef, FileRef, MainRecordRef};
+use crate::interface::element::{
+    Container, CopyArgs, DataContainer, DataPtr, Element, ElementRef, FileRef, MainRecordRef,
+};
 use crate::interface::form_id::FormID;
-use crate::interface::globals::{hide_never_show, sort_sub_records};
+use crate::interface::globals::{edit_allowed, hide_never_show, is_internal_edit, sort_sub_records};
 use crate::interface::misc::{EditError, Variant};
 use crate::interface::struct_def::ChapterKind;
-use crate::interface::types::{ConflictPriority, DefFlag, DefType, ElementType, TriBool, dt_non_values};
+use crate::interface::types::{
+    ASSIGN_ADD, ASSIGN_THIS, ConflictPriority, DefFlag, DefType, ElementType, TriBool, dt_non_values,
+};
 
 use super::edit::{self, Storage};
 use super::{ContainerBase, DataBlock, ElementBase, ElementImpl};
@@ -55,6 +59,8 @@ pub struct ValueBase {
     /// Whether this is the `TwbRecordHeaderStruct` of a main record, whose
     /// flag edits go into the record header.
     pub(super) record_header: AtomicBool,
+    /// Whether this is the `TwbContainedInElement` of a main record.
+    pub(super) contained_in: AtomicBool,
 }
 
 impl ValueBase {
@@ -81,6 +87,7 @@ impl ValueBase {
             storage: Storage::default(),
             arr_size_prefix: AtomicUsize::new(0),
             record_header: AtomicBool::new(false),
+            contained_in: AtomicBool::new(false),
         }
     }
 
@@ -306,6 +313,260 @@ impl ValueImpl {
         Ok(element)
     }
 
+    /// Port of `TwbValueBase.Create(aContainer, aValueDef, aSource, aOnlySK,
+    /// aNameSuffix)` with a source: an element without data takes storage
+    /// of its default size, its default value and then the value of the
+    /// source. Without a source it is `create_new`.
+    pub(super) fn create_from(
+        container: &ElementRef,
+        file: &Weak<super::FileImpl>,
+        value_def: Arc<dyn ValueDef>,
+        source: Option<&ElementRef>,
+        only_sk: bool,
+        name_suffix: &str,
+    ) -> Result<Arc<ValueImpl>, EditError> {
+        let Some(source) = source else {
+            return ValueImpl::create_new(container, file, value_def, name_suffix);
+        };
+        let block = DataBlock::Buffer(Arc::new(Vec::new()));
+        let mut cursor = Cursor { block, pos: 0, end: 0 };
+        let element = create_value_element(container, file, &mut cursor, value_def, name_suffix);
+        element.vb.storage.detach();
+        let result = (|| {
+            let size = usize::try_from(element.get_data_size()).unwrap_or(0);
+            if let Some(bytes) = edit::request_storage_change(&*element, size) {
+                element.vb.storage.set(bytes);
+            }
+            edit::set_to_default(&*element)?;
+            element.assign(ASSIGN_THIS, Some(source), only_sk);
+            element.set_modified(true);
+            Ok(())
+        })();
+        if let Err(error) = result {
+            let element_ref: ElementRef = element.clone();
+            if let Some(container) = container.as_element_impl() {
+                container.remove_child(&element_ref, false);
+            }
+            return Err(error);
+        }
+        Ok(element)
+    }
+
+    /// The element definition of an array as `AssignInternal` and
+    /// `AddIfMissingInternal` create an entry with, resolved without data.
+    pub(super) fn array_entry_def(
+        array_def: &Arc<dyn ValueDef>,
+        source: Option<&ElementRef>,
+    ) -> Option<Arc<dyn ValueDef>> {
+        let array = array_def.as_array_def()?;
+        let mut element_def = array.get_element().clone();
+        if element_def.get_def_type() == DefType::dtResolvable {
+            element_def = resolve(element_def, None, source);
+        }
+        if element_def.def_base().def_flags.contains(DefFlag::dfUnionStaticResolve) {
+            element_def = resolve(element_def, None, source);
+        }
+        Some(element_def)
+    }
+
+    /// Port of `TwbArray.AssignInternal`.
+    fn array_assign_internal(
+        &self,
+        index: i32,
+        source: Option<&ElementRef>,
+        only_sk: bool,
+    ) -> Result<Option<ElementRef>, EditError> {
+        if !is_internal_edit() && !edit_allowed() {
+            return Err(format!("{} can not be assigned.", self.get_name()));
+        }
+        // An entry added without a source is `Add`, which `assign_add` ports.
+        if index == ASSIGN_ADD && source.is_none() {
+            return self.assign_add();
+        }
+        self.do_init();
+        let value_def = self.vb.vb_value_def.clone();
+        let Some(array_def) = value_def.as_array_def() else {
+            return Ok(None);
+        };
+        let self_ref = self.element_ref();
+        let source_def = source.and_then(|source| source.get_value_def());
+        let source_def_ref = source_def.as_deref().map(|def| def.as_dyn_def());
+        let mut result = None;
+        if index == ASSIGN_THIS
+            && let Some(source) = source
+            && value_def.can_assign(Some(&self_ref), index, source_def_ref)
+        {
+            if only_sk {
+                return Ok(None);
+            }
+            let source_container = source.as_container();
+            let source_count = source_container.map_or(0, |container| container.get_element_count());
+            if value_def.get_is_variable_size() {
+                self.set_modified(true);
+                self.invalidate_storage();
+                self.vb.container.release_elements();
+                self.vb.storage.set(Vec::new());
+                self.vb.storage.set_invalid(false);
+                if array_def.get_count() < 0 {
+                    let size = usize::try_from(source.get_data_size()).unwrap_or(0);
+                    let size = if size > 0 {
+                        size
+                    } else {
+                        usize::try_from(array_def.get_prefix_size(None)).unwrap_or(0)
+                    };
+                    if let Some(mut bytes) = self.request_storage_change_impl(size) {
+                        if source.get_data_size() > 0
+                            && let Some(data) = source.as_data_container().and_then(|data| data.get_data())
+                        {
+                            let len = size.min(data.len());
+                            bytes[..len].copy_from_slice(&data[..len]);
+                        }
+                        self.commit_storage_impl(bytes);
+                    }
+                }
+                self.notify_changed();
+                if let Some(source_container) = source_container {
+                    for i in 0..source_count {
+                        if let Some(source_child) = source_container.get_element(i) {
+                            self.assign(i, Some(&source_child), only_sk);
+                        }
+                    }
+                }
+            } else if let Some(source_container) = source_container {
+                for i in 0..source_count {
+                    let (Some(source_child), Some(target)) =
+                        (source_container.get_element(i), self.get_element_by_memory_order(i))
+                    else {
+                        continue;
+                    };
+                    target.assign(ASSIGN_THIS, Some(&source_child), only_sk);
+                }
+            }
+        } else if index >= 0
+            && array_def.get_count() <= 0
+            && (index == ASSIGN_ADD
+                || array_def
+                    .get_element()
+                    .can_assign(Some(&self_ref), ASSIGN_THIS, source_def_ref))
+        {
+            let sorted = sort_sub_records() && array_def.get_sorted();
+            let suffix = if sorted {
+                String::new()
+            } else {
+                format!("#{}", self.vb.container.element_count())
+            };
+            let is_terminator =
+                source.is_some_and(|source| source.get_element_type() == ElementType::etStringListTerminator);
+            if !is_terminator && let Some(element_def) = ValueImpl::array_entry_def(&value_def, source) {
+                let element = ValueImpl::create_from(&self_ref, &self.vb.file, element_def, source, only_sk, &suffix)?;
+                result = Some(element as ElementRef);
+            }
+        }
+        edit::check_count(self, Some(&value_def));
+        edit::check_terminator(self, Some(&value_def));
+        Ok(result)
+    }
+
+    /// Port of `TwbArray.CanAssignInternal`.
+    fn array_can_assign_internal(&self, index: i32, source: Option<&ElementRef>, check_dont_show: bool) -> bool {
+        if !is_internal_edit()
+            && (!edit_allowed()
+                || self
+                    .vb
+                    .vb_value_def
+                    .def_base()
+                    .def_flags
+                    .contains(DefFlag::dfInternalEditOnly))
+        {
+            return false;
+        }
+        if !super::assign::parent_allows_edit(self) {
+            return false;
+        }
+        if check_dont_show && self.get_dont_show() {
+            return false;
+        }
+        let Some(array_def) = self.vb.vb_value_def.as_array_def() else {
+            return false;
+        };
+        let Some(source) = source else {
+            return index == ASSIGN_ADD && array_def.get_count() <= 0;
+        };
+        let self_ref = self.element_ref();
+        let source_def = source.get_value_def();
+        let source_def = source_def.as_deref().map(|def| def.as_dyn_def());
+        self.vb.vb_value_def.can_assign(Some(&self_ref), index, source_def)
+            || (array_def.get_count() <= 0
+                && array_def
+                    .get_element()
+                    .can_assign(Some(&self_ref), ASSIGN_THIS, source_def))
+    }
+
+    /// Port of `TwbArray.AddIfMissingInternal`: a copy of the source as a
+    /// new entry, or the entry with the same sort key of a sorted array.
+    fn array_add_if_missing_internal(
+        &self,
+        source: &ElementRef,
+        args: &CopyArgs,
+    ) -> Result<Option<ElementRef>, EditError> {
+        if !is_internal_edit() && !edit_allowed() {
+            return Err(format!("{} can not be modified.", self.get_name()));
+        }
+        self.do_init();
+        let value_def = self.vb.vb_value_def.clone();
+        let sorted = sort_sub_records() && value_def.as_array_def().is_some_and(|array| array.get_sorted());
+        if sorted && let Some(found) = find_by_sort_key(&self.vb.container, source) {
+            if args.deep_copy {
+                found.assign(ASSIGN_THIS, Some(source), false);
+            }
+            return Ok(Some(found));
+        }
+        let suffix = if sorted {
+            String::new()
+        } else {
+            format!("#{}", self.vb.container.element_count())
+        };
+        let self_ref = self.element_ref();
+        let mut result = None;
+        if source.get_element_type() != ElementType::etStringListTerminator
+            && let Some(element_def) = ValueImpl::array_entry_def(&value_def, Some(source))
+        {
+            let element = ValueImpl::create_from(
+                &self_ref,
+                &self.vb.file,
+                element_def,
+                Some(source),
+                !args.deep_copy,
+                &suffix,
+            )?;
+            result = Some(element as ElementRef);
+        }
+        edit::check_count(self, Some(&value_def));
+        edit::check_terminator(self, Some(&value_def));
+        Ok(result)
+    }
+
+    /// Port of `TwbRecordHeaderStruct.AddIfMissingInternal`: the member of
+    /// the record header takes the value of the source.
+    fn record_header_add_if_missing_internal(
+        &self,
+        source: &ElementRef,
+        args: &CopyArgs,
+    ) -> Result<Option<ElementRef>, EditError> {
+        if !is_internal_edit() && !edit_allowed() {
+            return Err(format!("{} can not be assigned.", self.get_name()));
+        }
+        self.do_init();
+        if self.vb.vb_value_def.as_struct_def().is_none() {
+            return Ok(None);
+        }
+        let result = self.vb.container.element_by_sort_order(source.get_sort_order());
+        if let Some(result) = &result {
+            result.assign(ASSIGN_THIS, Some(source), !args.deep_copy);
+        }
+        Ok(result)
+    }
+
     /// Makes `bytes` the data of the element and builds the elements again
     /// over it (`InformStorage` on the record header, a `Reset; Init`).
     pub(super) fn replace_data(&self, bytes: Vec<u8>) {
@@ -416,12 +677,46 @@ impl ValueImpl {
         Some(self.vb.decompressed.get_or_init(|| block).clone())
     }
 
+    /// The union step of `TwbContainer.AssignInternal`: the element the
+    /// union was decided with goes, and the union is decided again without
+    /// data (`UnionDoInit` with `nil`), from the elements around it.
+    pub(super) fn union_reinit_without_data(&self) {
+        if self.kind != ValueKind::Union {
+            return;
+        }
+        self.do_init();
+        if self.vb.container.element_count() == 1 {
+            self.vb.container.remove_element(0);
+        }
+        if self.vb.container.element_count() == 0 {
+            let self_ref = self.element_ref();
+            let mut cursor = Cursor {
+                block: DataBlock::Buffer(Arc::new(Vec::new())),
+                pos: 0,
+                end: 0,
+            };
+            union_do_init(&self.vb.vb_value_def, &self_ref, &self.vb.file, &mut cursor);
+        }
+    }
+
     /// Port of `TwbValueBase.GetValue`.
     pub fn get_value(&self) -> String {
         self.do_init();
         let self_ref = self.element_ref();
         self.vb.vb_value_def.to_string(self.data(), Some(&self_ref))
     }
+}
+
+/// Port of `FindBySortKey` on the elements of a sorted container: the
+/// element with the sort key of `source`.
+/// UPSTREAM-QUIRK: upstream searches the sorted elements by binary search;
+/// a linear search finds the same element while the keys are unique.
+pub(super) fn find_by_sort_key(container: &ContainerBase, source: &ElementRef) -> Option<ElementRef> {
+    let key = source.get_sort_key(false);
+    container
+        .elements()
+        .into_iter()
+        .find(|element| element.get_sort_key(false) == key)
 }
 
 /// Port of `TwbContainedInElement.Create`: a value over the label of the
@@ -441,6 +736,7 @@ pub(super) fn create_contained_in_element(
     element.set_sort_and_memory_order(-2);
     // `TwbContainedInElement.Create` passes `aDontCompare`.
     element.vb.dont_save.store(true, Ordering::Relaxed);
+    element.vb.contained_in.store(true, Ordering::Relaxed);
     element
 }
 
@@ -947,6 +1243,103 @@ impl ElementImpl for ValueImpl {
 
     fn add_impl(&self, _name: &str, _silent: bool) -> Result<Option<ElementRef>, EditError> {
         self.assign_add()
+    }
+
+    /// Port of `TwbArray.AssignInternal` and
+    /// `TwbStringListTerminator.AssignInternal`; the other values are
+    /// `TwbContainer`'s.
+    fn assign_internal(
+        &self,
+        index: i32,
+        source: Option<&ElementRef>,
+        only_sk: bool,
+    ) -> Result<Option<ElementRef>, EditError> {
+        match self.kind {
+            ValueKind::Array => self.array_assign_internal(index, source, only_sk),
+            ValueKind::Terminator => Ok(None),
+            _ => super::assign::container_assign_internal(self, index, source, only_sk),
+        }
+    }
+
+    /// Port of `TwbArray.CanAssignInternal` and
+    /// `TwbStringListTerminator.CanAssignInternal`.
+    fn can_assign_internal(&self, index: i32, source: Option<&ElementRef>, check_dont_show: bool) -> bool {
+        match self.kind {
+            ValueKind::Array => self.array_can_assign_internal(index, source, check_dont_show),
+            ValueKind::Terminator => false,
+            _ => super::assign::container_can_assign_internal(self, index, source, check_dont_show),
+        }
+    }
+
+    /// Port of `TwbRecordHeaderStruct.IsElementEditable` (only the record
+    /// flags) and `TwbContainedInElement.IsElementEditable` (nothing).
+    fn is_element_editable(&self, element: Option<&ElementRef>) -> bool {
+        if self.vb.contained_in.load(Ordering::Relaxed) {
+            return false;
+        }
+        if self.vb.record_header.load(Ordering::Relaxed) {
+            let flags = element
+                .and_then(|element| element.get_value_def())
+                .is_some_and(|def| def.get_name().eq_ignore_ascii_case("Record Flags"));
+            return flags && super::assign::parent_allows_edit(self);
+        }
+        super::assign::container_is_element_editable(self, element)
+    }
+
+    /// Port of `TwbArray.IsElementRemovable`.
+    fn is_element_removable(&self, element: &ElementRef) -> bool {
+        if self.kind != ValueKind::Array {
+            return false;
+        }
+        let value_def = &self.vb.vb_value_def;
+        let mut result = self.is_element_editable(Some(element))
+            && !value_def.def_base().def_flags.contains(DefFlag::dfArrayStaticSize)
+            && value_def.as_array_def().is_some_and(|array| array.get_count() <= 0);
+        if result && value_def.def_base().def_flags.contains(DefFlag::dfRemoveLastOnly) {
+            result = self
+                .vb
+                .container
+                .elements()
+                .last()
+                .is_some_and(|last| Arc::ptr_eq(last, element));
+        }
+        result
+    }
+
+    /// Port of `TwbValueBase.CanContainFormIDs`, and of the record header
+    /// and the contained-in element, which hold none.
+    fn can_contain_form_ids(&self) -> bool {
+        if self.vb.record_header.load(Ordering::Relaxed) || self.vb.contained_in.load(Ordering::Relaxed) {
+            return false;
+        }
+        self.vb
+            .vb_value_def
+            .def_base()
+            .def_flags
+            .contains(DefFlag::dfCanContainFormID)
+    }
+
+    /// Port of `AddIfMissingInternal` of `TwbArray` and
+    /// `TwbRecordHeaderStruct`; the other values raise (the flags of
+    /// `TwbValue` are not child elements in the port).
+    fn add_if_missing_internal(&self, source: &ElementRef, args: &CopyArgs) -> Result<Option<ElementRef>, EditError> {
+        if self.vb.record_header.load(Ordering::Relaxed) {
+            return self.record_header_add_if_missing_internal(source, args);
+        }
+        match self.kind {
+            ValueKind::Array => self.array_add_if_missing_internal(source, args),
+            _ => Err(format!("{}.AddIfMissingInternal is not implemented", self.get_name())),
+        }
+    }
+
+    /// Port of `TwbArray.BeforeActualRemove`: the counters along the count
+    /// paths go to zero.
+    fn before_actual_remove(&self) {
+        if self.kind == ValueKind::Array
+            && let Some(array_def) = self.vb.vb_value_def.as_array_def()
+        {
+            edit::zero_count_paths(self, array_def.get_count_paths());
+        }
     }
 
     fn add_string_list_terminator(&self) {

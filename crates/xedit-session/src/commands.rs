@@ -72,7 +72,7 @@ impl Session {
         }
     }
 
-    fn record(&self, form_id: &str, file: Option<&str>) -> Result<MainRecordRef, CommandError> {
+    pub(crate) fn record(&self, form_id: &str, file: Option<&str>) -> Result<MainRecordRef, CommandError> {
         let form_id = parse_form_id(form_id)?;
         let seen_from: Option<FileRef> = match file {
             Some(name) => Some(self.file(Some(name))? as FileRef),
@@ -91,7 +91,7 @@ impl Session {
 }
 
 /// A load order FormID as eight hexadecimal digits.
-fn parse_form_id(text: &str) -> Result<FormID, CommandError> {
+pub(crate) fn parse_form_id(text: &str) -> Result<FormID, CommandError> {
     let digits = text.trim().trim_start_matches("0x");
     u32::from_str_radix(digits, 16)
         .map(FormID::from_cardinal)
@@ -179,7 +179,7 @@ pub struct RecordSummary {
     pub file: String,
 }
 
-fn summary_of(record: &MainRecordRef) -> RecordSummary {
+pub(crate) fn summary_of(record: &MainRecordRef) -> RecordSummary {
     RecordSummary {
         form_id: record.get_load_order_form_id().to_string(false),
         signature: record.get_signature().to_string(),
@@ -314,7 +314,7 @@ fn native_json(variant: Variant) -> Value {
     }
 }
 
-fn node_of(element: &ElementRef, depth: Option<usize>) -> ElementNode {
+pub(crate) fn node_of(element: &ElementRef, depth: Option<usize>) -> ElementNode {
     let name = element.get_name();
     let display_name = element.get_display_name(true);
     let value = element.get_value();

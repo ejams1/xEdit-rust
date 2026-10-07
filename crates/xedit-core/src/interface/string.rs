@@ -535,6 +535,17 @@ fn script_sort_key(s: &str) -> String {
 impl Def for StringDef {
     value_def_plumbing!(Def);
 
+    /// Port of `TwbStringDef.CanAssign`: a string that fits.
+    fn can_assign(&self, _element: ElementArg, _index: i32, def: Option<&dyn Def>) -> bool {
+        if super::def::def_dont_assign(self) {
+            return false;
+        }
+        def.and_then(|def| def.as_string_def()).is_some_and(|other| {
+            let size = self.get_string_size();
+            size == 0 || other.get_string_size() == 0 || size <= other.get_string_size()
+        })
+    }
+
     fn get_def_type(&self) -> DefType {
         if self.class.is_localized() {
             DefType::dtLString

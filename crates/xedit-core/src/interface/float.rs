@@ -355,6 +355,14 @@ impl FloatDef {
 impl Def for FloatDef {
     value_def_plumbing!(Def);
 
+    /// Port of `TwbFloatDef.CanAssign`: any float.
+    fn can_assign(&self, _element: ElementArg, _index: i32, def: Option<&dyn Def>) -> bool {
+        if super::def::def_dont_assign(self) {
+            return false;
+        }
+        def.and_then(|def| def.as_float_def()).is_some()
+    }
+
     fn get_def_type(&self) -> DefType {
         DefType::dtFloat
     }
@@ -374,6 +382,32 @@ impl NamedDef for FloatDef {
 
 impl ValueDef for FloatDef {
     value_def_plumbing!(ValueDef);
+
+    /// Port of `TwbFloatDef.Assign`: a float of the same definition copies
+    /// its bytes, so that the value does not go through its text.
+    fn assign(
+        &self,
+        target: &ElementRef,
+        _index: i32,
+        source: Option<&ElementRef>,
+        _only_sk: bool,
+    ) -> Result<Option<ElementRef>, EditError> {
+        if let Some(source) = source
+            && let (Some(target_impl), Some(source_data)) = (target.as_element_impl(), source.as_data_container())
+            && target.as_data_container().is_some()
+            && self.equals(target.get_value_def().as_deref().map(|def| def.as_dyn_def()))
+            && self.equals(source.get_value_def().as_deref().map(|def| def.as_dyn_def()))
+            && let Some(bytes) = source_data.get_data()
+        {
+            let size = self.get_default_size(None, None);
+            if source.get_data_size() == size {
+                let bytes = bytes[..(size as usize).min(bytes.len())].to_vec();
+                crate::implementation::edit::copy_from(target_impl, &bytes)?;
+                return Ok(None);
+            }
+        }
+        super::def::def_assign(target, source)
+    }
 
     /// Port of the override of `SetDefaultNativeValue`, which sets `fdDefault`.
     fn apply_default_native_value(&self, value: Variant) {

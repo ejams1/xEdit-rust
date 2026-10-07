@@ -303,6 +303,23 @@ impl Def for UnionDef {
     value_def_plumbing!(Def);
     resolvable_def_methods!();
 
+    /// Port of `TwbUnionDef.CanAssign`: a member of either union that the
+    /// other can take.
+    fn can_assign(&self, element: ElementArg, index: i32, def: Option<&dyn Def>) -> bool {
+        if super::def::def_dont_assign(self) {
+            return false;
+        }
+        match def.and_then(|def| def.as_union_def()) {
+            Some(other) => {
+                self.equals(def)
+                    || (0..usize::try_from(other.get_member_count()).unwrap_or(0))
+                        .any(|i| self.can_assign(element, index, Some(other.get_member(i).as_dyn_def())))
+            }
+            None => (0..usize::try_from(self.get_member_count()).unwrap_or(0))
+                .any(|i| self.get_member(i).can_assign(element, index, def)),
+        }
+    }
+
     fn get_def_type(&self) -> DefType {
         DefType::dtUnion
     }
@@ -503,6 +520,25 @@ impl RecursiveDef {
 impl Def for RecursiveDef {
     value_def_plumbing!(Def);
     resolvable_def_methods!();
+
+    /// Port of `TwbResolvableDef.CanAssign`: the definitions both resolve
+    /// to decide.
+    fn can_assign(&self, element: ElementArg, index: i32, def: Option<&dyn Def>) -> bool {
+        if super::def::def_dont_assign(self) {
+            return false;
+        }
+        let Some(own) = self.resolve_def(None, element) else {
+            return false;
+        };
+        let recursive = def
+            .filter(|def| def.as_resolvable_def().is_some() && def.get_def_type() == DefType::dtResolvable)
+            .and_then(|def| def.as_resolvable_def())
+            .and_then(|resolvable| resolvable.resolve_def(None, element).cloned());
+        match recursive {
+            Some(source) => own.can_assign(element, index, Some(source.as_dyn_def())),
+            None => own.can_assign(element, index, def),
+        }
+    }
 
     fn get_def_type(&self) -> DefType {
         DefType::dtResolvable

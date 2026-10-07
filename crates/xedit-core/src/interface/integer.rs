@@ -11,8 +11,8 @@ use std::sync::{Arc, Weak};
 
 use super::def::request_storage;
 use super::def::{
-    Def, DefBase, DefCell, DefKind, DefRef, NamedDef, NamedDefArgs, NamedDefBase, ValueDef, ValueDefBase, set_parent,
-    value_def_plumbing,
+    Def, DefBase, DefCell, DefKind, DefRef, NamedDef, NamedDefArgs, NamedDefBase, ValueDef, ValueDefBase, def_assign,
+    def_dont_assign, set_parent, value_def_plumbing,
 };
 use super::element::{DataPtr, ElementArg, ElementRef};
 use super::form_id::{MastersUpdate, UsedMasters};
@@ -91,6 +91,18 @@ pub trait IntegerDefFormater: NamedDef {
     /// `None` when the formater is not a union.
     fn decide(&self, _element: ElementArg) -> Option<Option<Arc<dyn IntegerDefFormater>>> {
         None
+    }
+
+    /// Port of `TwbIntegerDefFormater.Assign`, which is `TwbDef.Assign`: the
+    /// edit value of the source.
+    fn assign(
+        &self,
+        target: &ElementRef,
+        _index: i32,
+        source: Option<&ElementRef>,
+        _only_sk: bool,
+    ) -> Result<Option<ElementRef>, EditError> {
+        def_assign(target, source)
     }
 }
 
@@ -331,6 +343,29 @@ impl IntegerDef {
 impl Def for IntegerDef {
     value_def_plumbing!(Def);
 
+    /// Port of `TwbIntegerDef.CanAssign`: the formaters decide.
+    fn can_assign(&self, element: ElementArg, index: i32, def: Option<&dyn Def>) -> bool {
+        if def_dont_assign(self) {
+            return false;
+        }
+        match def.and_then(|def| def.as_integer_def()) {
+            Some(integer_def) => {
+                let other = integer_def.get_formater(element);
+                if let Some(formater) = self.in_formater() {
+                    formater.can_assign(element, index, other.as_deref().map(|other| other.as_dyn_def()))
+                } else if let Some(other) = other {
+                    let own = self.get_formater(element);
+                    other.can_assign(element, index, own.as_deref().map(|own| own.as_dyn_def()))
+                } else {
+                    true
+                }
+            }
+            None => self
+                .in_formater()
+                .is_some_and(|formater| formater.can_assign(element, index, def)),
+        }
+    }
+
     fn get_def_type(&self) -> DefType {
         DefType::dtInteger
     }
@@ -424,6 +459,20 @@ impl ValueDef for IntegerDef {
     fn find_used_masters(&self, data: DataPtr, element: ElementArg, masters: &mut UsedMasters) {
         if let Some(formater) = self.in_formater() {
             formater.find_used_masters(self.to_int(data, element), element, masters);
+        }
+    }
+
+    /// Port of `TwbIntegerDef.Assign`: the formater assigns.
+    fn assign(
+        &self,
+        target: &ElementRef,
+        index: i32,
+        source: Option<&ElementRef>,
+        only_sk: bool,
+    ) -> Result<Option<ElementRef>, EditError> {
+        match self.in_formater() {
+            Some(formater) => formater.assign(target, index, source, only_sk),
+            None => def_assign(target, source),
         }
     }
 
