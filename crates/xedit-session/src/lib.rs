@@ -8,6 +8,7 @@
 //! the MCP server and the GUI call commands and nothing else, so each of them
 //! covers the same set of operations.
 
+pub mod batch;
 pub mod commands;
 pub mod dump;
 pub mod save;
@@ -18,6 +19,8 @@ use schemars::{JsonSchema, Schema, schema_for};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+
+pub use batch::{BatchCommand, batch_from_value, parse_batch};
 
 /// State shared by all commands of one run: the game and the plugins
 /// loaded with `Session::load`.
@@ -89,6 +92,18 @@ struct Command {
     handler: Handler,
 }
 
+/// A command as listed by `Registry::commands`.
+pub struct CommandInfo<'a> {
+    pub name: &'static str,
+    pub summary: &'static str,
+    /// Whether the command changes plugin data or files.
+    pub mutates: bool,
+    /// JSON Schema of the parameters.
+    pub request: &'a Schema,
+    /// JSON Schema of the result.
+    pub response: &'a Schema,
+}
+
 /// The set of commands a session accepts.
 #[derive(Default)]
 pub struct Registry {
@@ -155,6 +170,18 @@ impl Registry {
     /// Whether the command `name` changes plugin data or files.
     pub fn mutates(&self, name: &str) -> Option<bool> {
         self.commands.get(name).map(|command| command.mutates)
+    }
+
+    /// Every command in name order, for front ends that generate their own
+    /// surface from the registry (the daemon, the MCP server).
+    pub fn commands(&self) -> impl Iterator<Item = CommandInfo<'_>> {
+        self.commands.iter().map(|(name, command)| CommandInfo {
+            name,
+            summary: command.summary,
+            mutates: command.mutates,
+            request: &command.request,
+            response: &command.response,
+        })
     }
 
     /// Describes every command with its request and response JSON Schema.

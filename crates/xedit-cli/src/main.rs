@@ -2,11 +2,18 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
+mod engine;
+mod mcp;
+mod pipe;
+mod rpc;
+mod serve;
+
+use std::io::BufReader;
 use std::process::ExitCode;
 
 use clap::{Parser, Subcommand};
 use serde_json::{Value, json};
-use xedit_session::{CommandError, Registry, Session};
+use xedit_session::{CommandError, Registry, parse_batch};
 
 /// The dump allocates and frees millions of small strings and element
 /// nodes; mimalloc serves them faster than the Windows heap.
@@ -105,6 +112,14 @@ enum Action {
         #[arg(long)]
         keep_going: bool,
     },
+    /// Keep the session loaded and answer JSON-RPC requests, one per line, on stdio or a named pipe. Every command is a method; see rpc.discover.
+    Serve {
+        /// Listen on the Windows named pipe \\.\pipe\NAME instead of stdio.
+        #[arg(long)]
+        pipe: Option<String>,
+    },
+    /// Serve the commands as Model Context Protocol tools on stdio. The plugins load when the first tool is called.
+    Mcp,
 }
 
 #[derive(Subcommand)]
@@ -223,7 +238,12 @@ enum ElementsAction {
 /// The command name and parameters of a subcommand.
 fn command_of(action: Action) -> Result<(String, Value), CommandError> {
     Ok(match action {
-        Action::Dump { .. } | Action::Saves { .. } | Action::Schema | Action::Batch { .. } => {
+        Action::Dump { .. }
+        | Action::Saves { .. }
+        | Action::Schema
+        | Action::Batch { .. }
+        | Action::Serve { .. }
+        | Action::Mcp => {
             unreachable!("handled before")
         }
         Action::Session {
@@ -309,37 +329,6 @@ fn command_of(action: Action) -> Result<(String, Value), CommandError> {
     })
 }
 
-/// One command of a batch: `{"command": name, "params": {...}}`.
-struct BatchCommand {
-    command: String,
-    params: Value,
-}
-
-/// The commands of a batch, from its JSON text.
-fn parse_batch(text: &str) -> Result<Vec<BatchCommand>, CommandError> {
-    let invalid = |message: String| CommandError::new("invalid_params", message);
-    let value: Value = serde_json::from_str(text).map_err(|e| invalid(format!("the batch is not valid JSON: {e}")))?;
-    let Value::Array(items) = value else {
-        return Err(invalid("the batch must be a JSON array of commands".to_owned()));
-    };
-    items
-        .into_iter()
-        .enumerate()
-        .map(|(index, item)| {
-            let command = item["command"]
-                .as_str()
-                .ok_or_else(|| invalid(format!("command {index} has no \"command\" name")))?
-                .to_owned();
-            let params = match &item["params"] {
-                Value::Null => json!({}),
-                params @ Value::Object(_) => params.clone(),
-                _ => return Err(invalid(format!("command {index}: \"params\" must be an object"))),
-            };
-            Ok(BatchCommand { command, params })
-        })
-        .collect()
-}
-
 fn run(game: Option<String>, load: Vec<String>, edit: bool, action: Action) -> Result<Value, CommandError> {
     let registry = Registry::standard();
     if let Action::Schema = action {
@@ -359,28 +348,11 @@ fn run(game: Option<String>, load: Vec<String>, edit: bool, action: Action) -> R
         }
         _ => None,
     };
-    let mut session = match game {
-        Some(game) => Session::load(&game, &load).map_err(|message| CommandError::new("load_failed", message))?,
-        None if load.is_empty() => Session::default(),
-        None => return Err(CommandError::new("invalid_params", "--load needs --game")),
-    };
-    session.allow_edit(edit);
+    let mut session = engine::open_session(game.as_deref(), &load, edit)?;
     if let Some((commands, keep_going)) = batch {
         // Every command runs in the one session, so an edit is visible to
         // the commands after it and a save at the end writes it.
-        let mut results = Vec::with_capacity(commands.len());
-        for command in commands {
-            match registry.call(&mut session, &command.command, command.params) {
-                Ok(result) => results.push(json!({ "ok": true, "command": command.command, "result": result })),
-                Err(error) => {
-                    results.push(json!({ "ok": false, "command": command.command, "error": error }));
-                    if !keep_going {
-                        break;
-                    }
-                }
-            }
-        }
-        return Ok(Value::Array(results));
+        return Ok(registry.run_batch(&mut session, commands, keep_going));
     }
     let (name, params) = command_of(action)?;
     registry.call(&mut session, &name, params)
@@ -409,8 +381,60 @@ fn run_dump(dump: impl FnOnce(&mut dyn std::io::Write) -> Result<(), String> + S
     ExitCode::SUCCESS
 }
 
+/// `xedit serve`: the session stays loaded, the commands are JSON-RPC methods.
+fn run_serve(
+    game: Option<String>,
+    load: Vec<String>,
+    edit: bool,
+    pipe: Option<String>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let engine = engine::Engine::open(game.as_deref(), &load, edit)?;
+    let mut handler = serve::ServeHandler::new(engine);
+    match pipe {
+        None => rpc::serve_lines(
+            BufReader::new(std::io::stdin().lock()),
+            std::io::stdout().lock(),
+            &mut handler,
+        )?,
+        Some(name) => pipe::listen(&name, |file| {
+            rpc::serve_lines(BufReader::new(&file), &file, &mut handler)?;
+            Ok(!handler.shutdown_requested())
+        })?,
+    }
+    Ok(())
+}
+
+/// `xedit mcp`: the registry as MCP tools on stdio.
+fn run_mcp(game: Option<String>, load: Vec<String>, edit: bool) -> Result<(), Box<dyn std::error::Error>> {
+    if game.is_none() && !load.is_empty() {
+        return Err(CommandError::new("invalid_params", "--load needs --game").into());
+    }
+    let mut handler = mcp::McpHandler::new(engine::Engine::lazy(game, load, edit));
+    rpc::serve_lines(
+        BufReader::new(std::io::stdin().lock()),
+        std::io::stdout().lock(),
+        &mut handler,
+    )?;
+    Ok(())
+}
+
 fn main() -> ExitCode {
     let cli = Cli::parse();
+    if matches!(cli.action, Action::Serve { .. } | Action::Mcp) {
+        // stdout carries the protocol; the progress of a load goes to stderr.
+        xedit_session::dump::log_progress_to_stderr();
+        let outcome = match cli.action {
+            Action::Serve { pipe } => run_serve(cli.game, cli.load, cli.edit, pipe),
+            _ => run_mcp(cli.game, cli.load, cli.edit),
+        };
+        return match outcome {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(error) => {
+                eprintln!("error: {error}");
+                ExitCode::FAILURE
+            }
+        };
+    }
     if let Action::Dump { game, file } = cli.action {
         return run_dump(move |out| {
             let mode = xedit_session::dump::setup_game(&game)?;
