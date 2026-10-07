@@ -10,14 +10,17 @@ use std::sync::{Arc, Weak};
 
 use xedit_io::Encoding;
 
+use super::def::request_storage;
 use super::def::{
     Def, DefBase, DefCell, DefKind, DefRef, NamedDef, NamedDefArgs, NamedDefBase, ValueDef, ValueDefBase, set_parent,
     value_def_plumbing,
 };
 use super::element::{DataPtr, ElementArg, bytes_after};
 use super::globals::{check_expected_bytes, is_internal_edit};
-use super::misc::{Variant, progress};
-use super::string::{StringDefFormater, base_string_get_edit_info, base_string_get_edit_type, bsd_get_encoding};
+use super::misc::{EditError, Variant, progress, variant_to_string};
+use super::string::{
+    StringDefFormater, TERMINATOR, base_string_get_edit_info, base_string_get_edit_type, bsd_get_encoding,
+};
 use super::types::{CallbackType, DefFlag, DefType, EditType};
 
 /// Upstream `TwbLenStringDef`.
@@ -269,6 +272,47 @@ impl ValueDef for LenStringDef {
             to_str(&mut result, data, element, CallbackType::ctToNativeValue);
         }
         Variant::Str(result)
+    }
+
+    /// Port of `TwbLenStringDef.FromEditValue`: the length, then the text in
+    /// the encoding of the file.
+    fn from_edit_value(&self, _data: DataPtr, element: ElementArg, value: &str) -> Result<(), EditError> {
+        let text = match self.bsd_formater.load().as_deref() {
+            Some(formater) => formater.str_from_edit_value(value, element),
+            None => value.to_owned(),
+        };
+        let mut text_bytes = bsd_get_encoding(&self.def, &self.bsd_encoding_override, element).get_bytes(&text);
+        if self.def.def_flags.contains(DefFlag::dfHasZeroTerminator) && text_bytes.last().is_none_or(|&last| last != 0)
+        {
+            text_bytes.push(0);
+        }
+        let len = text_bytes.len();
+        let offset = self.get_prefix_offset() as usize;
+        let terminator = usize::from(self.nd.nd_terminator);
+        let (element, mut bytes) = request_storage(element, len + offset + terminator)?;
+        let prefix = (len as u32).to_le_bytes();
+        let prefix_len = self.get_prefix_len() as usize;
+        bytes[..prefix_len].copy_from_slice(&prefix[..prefix_len]);
+        bytes[offset..offset + len].copy_from_slice(&text_bytes);
+        if self.nd.nd_terminator {
+            // UPSTREAM-QUIRK: upstream writes the terminator one byte past
+            // the storage; it goes into the last byte here.
+            bytes[offset + len] = TERMINATOR;
+        }
+        element.commit_storage(bytes);
+        Ok(())
+    }
+
+    fn from_native_value(&self, data: DataPtr, element: ElementArg, value: Variant) -> Result<(), EditError> {
+        self.from_edit_value(data, element, &variant_to_string(&value))
+    }
+
+    fn set_to_default(&self, data: DataPtr, element: ElementArg) -> Result<bool, EditError> {
+        let changed = data.is_none() || !self.to_string(data, element).is_empty();
+        if changed {
+            self.from_edit_value(data, element, "")?;
+        }
+        Ok(changed)
     }
 
     fn get_is_editable(&self, _data: DataPtr, _element: ElementArg) -> bool {

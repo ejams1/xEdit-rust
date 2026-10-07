@@ -406,6 +406,59 @@ pub fn half_to_float(bits: u16) -> f32 {
     f32::from_bits(single)
 }
 
+/// Port of `FloatToHalf` for a double: the exponent range is checked on the
+/// double, then the single conversion runs.
+pub fn float_to_half(value: f64) -> u16 {
+    let bits = value.to_bits();
+    let exponent = ((bits >> 52) & 0x7FF) as i32 - 1023;
+    if exponent < -126 {
+        0
+    } else if exponent > 127 {
+        if exponent == 1024 && bits & 0x000F_FFFF_FFFF_FFFF != 0 {
+            HALF_NAN
+        } else if bits & 0x8000_0000_0000_0000 == 0 {
+            HALF_POS_INF
+        } else {
+            HALF_NEG_INF
+        }
+    } else {
+        single_to_half(value as f32)
+    }
+}
+
+/// Upstream `HalfNaN`, `HalfPosInf` and `HalfNegInf`.
+pub const HALF_NAN: u16 = 0x7FFF;
+pub const HALF_POS_INF: u16 = 0x7C00;
+pub const HALF_NEG_INF: u16 = 0xFC00;
+
+/// Port of `FloatToHalf` for a single: Jeroen van der Zijp's table
+/// conversion, computed instead of tabled. The mantissa is truncated, not
+/// rounded, as the tables do.
+pub fn single_to_half(value: f32) -> u16 {
+    let bits = value.to_bits();
+    let exp_sign = bits >> 23;
+    let exponent = (exp_sign & 0xFF) as i32 - 127;
+    let sign = ((exp_sign & 0x100) << 7) as u16;
+    let mantissa = bits & 0x007F_FFFF;
+    let (base, shift): (u16, u32) = if exponent < -24 {
+        // Too small: signed zero.
+        (sign, 24)
+    } else if exponent < -14 {
+        // Subnormal half: the leading bit of the single is explicit.
+        let base = sign | (0x0400u16 >> (-14 - exponent) as u32);
+        (base, (-1 - exponent) as u32)
+    } else if exponent <= 15 {
+        (sign | (((exponent + 15) as u16) << 10), 13)
+    } else if exponent < 128 {
+        // Too large: infinity.
+        (sign | 0x7C00, 24)
+    } else {
+        // Infinity or NaN: the mantissa bits that fit stay.
+        (sign | 0x7C00, 13)
+    };
+    base.wrapping_add((mantissa >> shift) as u16)
+}
+
 /// Port of `IntPower`.
 pub fn int_power(base: f64, exponent: i32) -> f64 {
     let mut y = exponent.unsigned_abs();
@@ -475,6 +528,12 @@ pub fn single_same_value(a: f64, b: f64) -> bool {
     const SINGLE_RESOLUTION: f32 = 0.000_000_5;
     let (a, b) = (a as f32, b as f32);
     (a - b).abs() <= (a.abs().min(b.abs()) * SINGLE_RESOLUTION).max(SINGLE_RESOLUTION)
+}
+
+/// Port of `SameValue` for doubles with the default epsilon.
+pub fn same_value(a: f64, b: f64) -> bool {
+    const DOUBLE_RESOLUTION: f64 = 1E-15;
+    (a - b).abs() <= (a.abs().min(b.abs()) * DOUBLE_RESOLUTION).max(DOUBLE_RESOLUTION)
 }
 
 /// Port of `Round`: rounds half to even, as the default FPU rounding mode does.

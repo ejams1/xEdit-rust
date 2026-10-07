@@ -86,6 +86,62 @@ impl MainRecordStructFlags {
     pub fn is_ignored(self) -> bool {
         self.0 & 0x0000_1000 != 0
     }
+
+    fn set_bit(&mut self, bit: u32, value: bool) {
+        if value {
+            self.0 |= bit;
+        } else {
+            self.0 &= !bit;
+        }
+    }
+
+    pub fn set_esm(&mut self, value: bool) {
+        self.set_bit(0x0000_0001, value);
+    }
+
+    pub fn set_deleted(&mut self, value: bool) {
+        self.set_bit(0x0000_0020, value);
+    }
+
+    pub fn set_persistent(&mut self, value: bool) {
+        self.set_bit(0x0000_0400, value);
+    }
+
+    pub fn set_compressed(&mut self, value: bool) {
+        self.set_bit(0x0004_0000, value);
+    }
+
+    pub fn set_visible_when_distant(&mut self, value: bool) {
+        self.set_bit(0x0000_8000, value);
+    }
+
+    pub fn set_partial_form(&mut self, value: bool) {
+        self.set_bit(0x0000_4000, value);
+    }
+
+    /// Port of `SetLight`: nothing happens where the game has no light flag.
+    pub fn set_light(&mut self, value: bool) {
+        if is_light_supported() {
+            let bit = if is_starfield() { 0x0000_0100 } else { 0x0000_0200 };
+            self.set_bit(bit, value);
+        }
+    }
+
+    pub fn set_medium(&mut self, value: bool) {
+        if is_medium_supported() {
+            self.set_bit(0x0000_0400, value);
+        }
+    }
+
+    pub fn set_update(&mut self, value: bool) {
+        if is_update_supported() {
+            if is_starfield() {
+                self.set_bit(0x0000_0200, value);
+            } else if vresl() {
+                self.set_bit(0x0010_0000, value);
+            }
+        }
+    }
 }
 
 /// Upstream `TwbMainRecordStruct`: the header of a main record. The TES4

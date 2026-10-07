@@ -17,7 +17,7 @@ use super::element::{DataPtr, ElementArg};
 use super::formaters::{editable_unless_internal_only, formater_impls, formater_plumbing};
 use super::globals::{report_mode, report_unknown_flags, show_flag_enum_value};
 use super::integer::{IntegerDefFormater, integer_def_formater_create};
-use super::misc::{get_unknown_int_string, str_to_int_def};
+use super::misc::{EditError, get_unknown_int_string, str_to_int_def};
 use super::types::{CallbackType, ConflictPriority, DefFlag, DefType, EditType, ElementType, IntType};
 
 /// The `(0x00000001)` suffix that `wbShowFlagEnumValue` adds to flag `index`.
@@ -567,6 +567,23 @@ impl IntegerDefFormater for FlagsDef {
                 s
             })
             .collect()
+    }
+
+    /// Port of `TwbFlagsDef.FromEditValue`: one character per flag, `0` or `1`.
+    fn from_edit_value(&self, value: &str, _element: ElementArg) -> Result<i64, EditError> {
+        let mut result: i64 = 0;
+        for (index, character) in value.chars().enumerate() {
+            match character {
+                '0' => {}
+                '1' => {
+                    if index < 64 {
+                        result |= 1i64 << index;
+                    }
+                }
+                other => return Err(format!("\"{other}\" is not a valid character for a flag")),
+            }
+        }
+        Ok(result & !self.flg_unused_mask)
     }
 
     fn to_edit_value(&self, int: i64, _element: ElementArg) -> String {

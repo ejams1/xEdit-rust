@@ -285,6 +285,131 @@ pub fn get_unknown_int_string(int: i64) -> String {
     result
 }
 
+/// The message of the exception upstream raises when an edit fails.
+pub type EditError = String;
+
+impl Variant {
+    /// Port of `VarIsOrdinal`.
+    pub fn is_ordinal(&self) -> bool {
+        matches!(self, Variant::Bool(_) | Variant::Int(_) | Variant::UInt(_))
+    }
+
+    /// Port of `VarSameValue`: two variants with the same value, numbers
+    /// compared as numbers.
+    pub fn same_value(&self, other: &Variant) -> bool {
+        match (self.as_number(), other.as_number()) {
+            (Some(a), Some(b)) => a == b,
+            _ => match (self, other) {
+                (Variant::Str(a), Variant::Str(b)) => a == b,
+                (Variant::Str(a), other) | (other, Variant::Str(a)) => other
+                    .as_number()
+                    .is_some_and(|number| variant_to_f64(&Variant::Str(a.clone())) == Ok(number)),
+                _ => self == other,
+            },
+        }
+    }
+
+    /// The value as a number, for the comparisons of Delphi variants.
+    pub fn as_number(&self) -> Option<f64> {
+        match self {
+            Variant::Bool(value) => Some(if *value { -1.0 } else { 0.0 }),
+            Variant::Int(value) => Some(*value as f64),
+            Variant::UInt(value) => Some(*value as f64),
+            Variant::Float(value) => Some(*value),
+            Variant::Empty | Variant::Str(_) | Variant::Bytes(_) => None,
+        }
+    }
+}
+
+/// Port of `StrToInt64`: a decimal integer, or a hexadecimal one after `$`
+/// or `0x`. The error is the message of the `EConvertError`.
+pub fn str_to_int64(text: &str) -> Result<i64, EditError> {
+    let trimmed = text.trim_matches(' ');
+    let (negative, rest) = match trimmed.strip_prefix('-') {
+        Some(rest) => (true, rest),
+        None => (false, trimmed.strip_prefix('+').unwrap_or(trimmed)),
+    };
+    let hex = rest
+        .strip_prefix('$')
+        .or_else(|| rest.strip_prefix("0x"))
+        .or_else(|| rest.strip_prefix("0X"));
+    let parsed = match hex {
+        Some(hex) => u64::from_str_radix(hex, 16).ok(),
+        None => rest.parse::<u64>().ok(),
+    };
+    match parsed {
+        Some(value) if !rest.is_empty() => {
+            let value = value as i64;
+            Ok(if negative { value.wrapping_neg() } else { value })
+        }
+        _ => Err(format!("'{text}' is not a valid integer value")),
+    }
+}
+
+/// A Delphi `Variant` converted to `Int64`: the number, a boolean as 0 or
+/// 1, a float rounded, a string parsed as an integer; `Unassigned` is 0.
+pub fn variant_to_i64(value: &Variant) -> Result<i64, EditError> {
+    match value {
+        Variant::Empty => Ok(0),
+        Variant::Bool(value) => Ok(i64::from(*value)),
+        Variant::Int(value) => Ok(*value),
+        Variant::UInt(value) => Ok(*value as i64),
+        Variant::Float(value) => Ok(crate::delphi::round(*value)),
+        Variant::Str(text) => str_to_int64(text),
+        Variant::Bytes(_) => Err("Could not convert variant of type (Array Byte) into type (Int64)".to_owned()),
+    }
+}
+
+/// A Delphi `Variant` converted to `Extended`.
+pub fn variant_to_f64(value: &Variant) -> Result<f64, EditError> {
+    match value {
+        Variant::Empty => Ok(0.0),
+        Variant::Bool(value) => Ok(if *value { 1.0 } else { 0.0 }),
+        Variant::Int(value) => Ok(*value as f64),
+        Variant::UInt(value) => Ok(*value as f64),
+        Variant::Float(value) => Ok(*value),
+        Variant::Str(text) => {
+            crate::delphi::str_to_float(text).ok_or_else(|| format!("'{text}' is not a valid floating point value"))
+        }
+        Variant::Bytes(_) => Err("Could not convert variant of type (Array Byte) into type (Double)".to_owned()),
+    }
+}
+
+/// A Delphi `Variant` converted to `string`.
+pub fn variant_to_string(value: &Variant) -> String {
+    match value {
+        Variant::Empty => String::new(),
+        Variant::Bool(value) => if *value { "True" } else { "False" }.to_owned(),
+        Variant::Int(value) => value.to_string(),
+        Variant::UInt(value) => value.to_string(),
+        Variant::Float(value) => crate::delphi::float_to_str(*value),
+        Variant::Str(text) => text.clone(),
+        Variant::Bytes(bytes) => bytes
+            .iter()
+            .map(|byte| format!("{byte:02X}"))
+            .collect::<Vec<_>>()
+            .join(" "),
+    }
+}
+
+/// Port of `WriteIntegerCounter`: a count of 6, 14 or 30 bits in as many
+/// bytes as it needs, most significant byte first. Returns the bytes.
+// UPSTREAM-QUIRK: the three byte case shifts the fourth byte of the value
+// (always zero there) instead of the third, so a count that needs three
+// bytes loses its high bits.
+pub fn write_integer_counter(value: i64) -> Vec<u8> {
+    let bytes = value.to_le_bytes();
+    if bytes[3] > 0 {
+        vec![(bytes[3] << 2) | 3, bytes[2], bytes[1], bytes[0]]
+    } else if bytes[2] > 0 {
+        vec![(bytes[3] << 2) | 2, bytes[1], bytes[0]]
+    } else if bytes[1] > 0 {
+        vec![(bytes[1] << 2) | 1, bytes[0]]
+    } else {
+        vec![bytes[0] << 2]
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

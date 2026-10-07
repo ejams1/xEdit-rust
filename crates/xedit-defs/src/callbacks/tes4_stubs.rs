@@ -10,39 +10,6 @@
 
 #![allow(clippy::all, unused_variables, unused_imports)]
 
+use std::sync::Arc;
+
 use xedit_core::interface::*;
-
-/// Upstream `wbCELLAfterLoad`, line 644 of `wbDefinitionsTES4.pas`.
-pub fn wb_cell_after_load(_a_element: &ElementRef) {
-    todo!("port wbCELLAfterLoad from wbDefinitionsTES4.pas line 644")
-}
-
-/// Upstream `wbEFITAfterLoad`, line 687 of `wbDefinitionsTES4.pas`.
-pub fn wb_efit_after_load(_a_element: &ElementRef) {
-    todo!("port wbEFITAfterLoad from wbDefinitionsTES4.pas line 687")
-}
-
-/// Upstream `wbLVLAfterLoad`, line 782 of `wbDefinitionsTES4.pas`.
-pub fn wb_lvl_after_load(_a_element: &ElementRef) {
-    todo!("port wbLVLAfterLoad from wbDefinitionsTES4.pas line 782")
-}
-
-/// Upstream `wbMGEFAfterLoad`, line 805 of `wbDefinitionsTES4.pas`.
-pub fn wb_mgef_after_load(_a_element: &ElementRef) {
-    todo!("port wbMGEFAfterLoad from wbDefinitionsTES4.pas line 805")
-}
-
-/// Upstream `wbPGRDAfterLoad`, line 908 of `wbDefinitionsTES4.pas`.
-pub fn wb_pgrd_after_load(_a_element: &ElementRef) {
-    todo!("port wbPGRDAfterLoad from wbDefinitionsTES4.pas line 908")
-}
-
-/// Upstream `wbPGRIPointerAfterLoad`, line 969 of `wbDefinitionsTES4.pas`.
-pub fn wb_pgri_pointer_after_load(_a_element: &ElementRef) {
-    todo!("port wbPGRIPointerAfterLoad from wbDefinitionsTES4.pas line 969")
-}
-
-/// Upstream `wbREFRAfterLoad`, line 999 of `wbDefinitionsTES4.pas`.
-pub fn wb_refr_after_load(_a_element: &ElementRef) {
-    todo!("port wbREFRAfterLoad from wbDefinitionsTES4.pas line 999")
-}

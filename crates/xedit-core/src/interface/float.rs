@@ -9,16 +9,18 @@
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Weak};
 
+use super::def::request_storage;
 use super::def::{
     Def, DefBase, DefKind, DefRef, NamedDef, NamedDefArgs, NamedDefBase, ValueDef, ValueDefBase, value_def_plumbing,
 };
 use super::element::{DataPtr, ElementArg, ElementRef};
+use super::globals::IGNORE_STRING_VALUE;
 use super::globals::{check_expected_bytes, is_internal_edit};
-use super::misc::{Variant, length, shorten_text};
+use super::misc::{EditError, Variant, length, shorten_text, variant_to_f64};
 use super::types::{CallbackType, DefFlag, DefType, pascal_enum};
 use crate::delphi::{
-    HALF_MAX_VALUE, HALF_MIN_VALUE, MAX_DOUBLE, MAX_SINGLE, float_to_str, float_to_str_f_fixed, half_to_float,
-    round_to_ex, single_same_value,
+    HALF_MAX_VALUE, HALF_MIN_VALUE, HALF_NAN, HALF_NEG_INF, HALF_POS_INF, MAX_DOUBLE, MAX_SINGLE, float_to_half,
+    float_to_str, float_to_str_f_fixed, half_to_float, round_to_ex, same_value, single_same_value, str_to_float,
 };
 
 pascal_enum! {
@@ -110,6 +112,105 @@ impl FloatDef {
 
     pub fn fd_default(&self) -> f64 {
         f64::from_bits(self.fd_default.load(Ordering::Relaxed))
+    }
+
+    /// The bytes of a number in the layout of the kind.
+    fn bits_of(&self, value: f64) -> Vec<u8> {
+        match self.fd_kind {
+            FloatKind::fkHalf => float_to_half(value).to_le_bytes().to_vec(),
+            FloatKind::fkSingle => (value as f32).to_le_bytes().to_vec(),
+            FloatKind::fkDouble => value.to_le_bytes().to_vec(),
+        }
+    }
+
+    /// Upstream `HalfNaN`, `SingleNaN` and `DoubleNaN` (`0.0/0.0`).
+    fn nan_bits(&self) -> Vec<u8> {
+        match self.fd_kind {
+            FloatKind::fkHalf => HALF_NAN.to_le_bytes().to_vec(),
+            FloatKind::fkSingle => 0xFFC0_0000u32.to_le_bytes().to_vec(),
+            FloatKind::fkDouble => 0xFFF8_0000_0000_0000u64.to_le_bytes().to_vec(),
+        }
+    }
+
+    fn infinity_bits(&self, negative: bool) -> Vec<u8> {
+        match self.fd_kind {
+            FloatKind::fkHalf => if negative { HALF_NEG_INF } else { HALF_POS_INF }
+                .to_le_bytes()
+                .to_vec(),
+            FloatKind::fkSingle => if negative { f32::NEG_INFINITY } else { f32::INFINITY }
+                .to_le_bytes()
+                .to_vec(),
+            FloatKind::fkDouble => if negative { f64::NEG_INFINITY } else { f64::INFINITY }
+                .to_le_bytes()
+                .to_vec(),
+        }
+    }
+
+    /// Upstream `HalfMaxValue`, `$7F7FFFFF` and `$7FEFFFFFFFFFFFFF`, or the
+    /// minimum patterns.
+    fn max_bits(&self, negative: bool) -> Vec<u8> {
+        match (self.fd_kind, negative) {
+            (FloatKind::fkHalf, false) => HALF_MAX_VALUE.to_le_bytes().to_vec(),
+            (FloatKind::fkHalf, true) => HALF_MIN_VALUE.to_le_bytes().to_vec(),
+            (FloatKind::fkSingle, false) => 0x7F7F_FFFFu32.to_le_bytes().to_vec(),
+            (FloatKind::fkSingle, true) => 0xFF7F_FFFFu32.to_le_bytes().to_vec(),
+            (FloatKind::fkDouble, false) => 0x7FEF_FFFF_FFFF_FFFFu64.to_le_bytes().to_vec(),
+            (FloatKind::fkDouble, true) => 0xFFEF_FFFF_FFFF_FFFFu64.to_le_bytes().to_vec(),
+        }
+    }
+
+    /// Port of `TwbFloatDef.FromValue`: zero, infinity and NaN as their
+    /// patterns, a value beyond the range of the kind clamped to its
+    /// extreme pattern, else the value rounded to the digits, divided by
+    /// the scale, normalized and stored.
+    pub fn from_value(&self, value: f64, data: DataPtr, element: ElementArg) -> Result<(), EditError> {
+        let size = self.get_default_size(data, element) as usize;
+        let (element_ref, mut bytes) = request_storage(element, size)?;
+        let stored: Vec<u8> = if value == 0.0 || value.is_subnormal() {
+            self.bits_of(0.0)
+        } else if value.is_infinite() {
+            self.infinity_bits(value.is_sign_negative())
+        } else if value.is_nan() {
+            self.nan_bits()
+        } else {
+            let (max, min_same) = match self.fd_kind {
+                FloatKind::fkHalf => (
+                    f64::from(HALF_MAX_VALUE),
+                    single_same_value(value, f64::from(HALF_MIN_VALUE)) || value < f64::from(HALF_MIN_VALUE),
+                ),
+                FloatKind::fkSingle => (MAX_SINGLE, single_same_value(value, -MAX_SINGLE) || value < -MAX_SINGLE),
+                FloatKind::fkDouble => (MAX_DOUBLE, same_value(value, -MAX_DOUBLE) || value < -MAX_DOUBLE),
+            };
+            let max_same = match self.fd_kind {
+                FloatKind::fkDouble => same_value(value, max),
+                _ => single_same_value(value, max),
+            };
+            if max_same || value > max {
+                self.max_bits(false)
+            } else if min_same {
+                self.max_bits(true)
+            } else {
+                let mut value = value;
+                if self.fd_digits >= 0 {
+                    value = round_to_ex(value, -self.fd_digits);
+                }
+                if self.fd_scale != 1.0 {
+                    value /= self.fd_scale;
+                }
+                if let Some(normalizer) = &self.fd_normalizer {
+                    value = normalizer(element, value);
+                }
+                self.bits_of(value)
+            }
+        };
+        let len = stored.len().min(bytes.len());
+        bytes[..len].copy_from_slice(&stored[..len]);
+        if self.nd.nd_terminator && !bytes.is_empty() {
+            let last = bytes.len() - 1;
+            bytes[last] = super::string::TERMINATOR;
+        }
+        element_ref.commit_storage(bytes);
+        Ok(())
     }
 
     pub fn get_kind(&self) -> FloatKind {
@@ -403,6 +504,84 @@ impl ValueDef for FloatDef {
         } else {
             Variant::Float(value)
         }
+    }
+
+    /// Port of `TwbFloatDef.FromEditValue`: the special texts `NaN`, `Inf`,
+    /// `-Inf`, `Default`, `Max` and `Min`, an empty text as zero, else the
+    /// number.
+    fn from_edit_value(&self, data: DataPtr, element: ElementArg, value: &str) -> Result<(), EditError> {
+        let size = self.get_default_size(data, element) as usize;
+        let (element_ref, mut bytes) = request_storage(element, size)?;
+        let mut text = value.to_owned();
+        if let Some(to_str) = self.nd.nd_to_str.load().as_deref() {
+            to_str(&mut text, data, element, CallbackType::ctFromEditValue);
+        }
+        let text = text.trim();
+        let special: Option<Vec<u8>> = if text == IGNORE_STRING_VALUE {
+            return Ok(());
+        } else if text.is_empty() {
+            Some(self.bits_of(0.0))
+        } else if text.eq_ignore_ascii_case("NaN") {
+            Some(self.nan_bits())
+        } else if text.eq_ignore_ascii_case("Inf") || text.eq_ignore_ascii_case("+Inf") {
+            Some(self.infinity_bits(false))
+        } else if text.eq_ignore_ascii_case("-Inf") {
+            Some(self.infinity_bits(true))
+        } else if text.eq_ignore_ascii_case("Default") || text.eq_ignore_ascii_case("Max") {
+            Some(self.max_bits(false))
+        } else if text.eq_ignore_ascii_case("Min") {
+            Some(self.max_bits(true))
+        } else {
+            None
+        };
+        match special {
+            Some(special) => {
+                let len = special.len().min(bytes.len());
+                bytes[..len].copy_from_slice(&special[..len]);
+                if self.nd.nd_terminator && !bytes.is_empty() {
+                    let last = bytes.len() - 1;
+                    bytes[last] = super::string::TERMINATOR;
+                }
+                element_ref.commit_storage(bytes);
+                Ok(())
+            }
+            None => {
+                let number =
+                    str_to_float(text).ok_or_else(|| format!("'{text}' is not a valid floating point value"))?;
+                self.from_value(number, data, element)
+            }
+        }
+    }
+
+    fn from_native_value(&self, data: DataPtr, element: ElementArg, value: Variant) -> Result<(), EditError> {
+        let number = match value {
+            Variant::Empty => f64::NAN,
+            other => variant_to_f64(&other)?,
+        };
+        self.from_value(number, data, element)
+    }
+
+    fn set_to_default(&self, data: DataPtr, element: ElementArg) -> Result<bool, EditError> {
+        if self.set_to_default_callback(data, element) {
+            return Ok(true);
+        }
+        if let Some(result) = self.set_to_default_edit_value(data, element) {
+            return result;
+        }
+        let value = match self.to_native_value(data, element) {
+            Variant::Float(value) => value,
+            _ => 0.0,
+        };
+        let default = self.fd_default();
+        let same = match self.fd_kind {
+            FloatKind::fkHalf | FloatKind::fkSingle => single_same_value(value, default),
+            FloatKind::fkDouble => same_value(value, default),
+        };
+        let changed = data.is_none() || !same;
+        if changed {
+            self.from_native_value(data, element, Variant::Float(default))?;
+        }
+        Ok(changed)
     }
 
     fn get_is_editable(&self, _data: DataPtr, _element: ElementArg) -> bool {

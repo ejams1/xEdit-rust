@@ -7,12 +7,16 @@
 //! The callbacks of `wbDefinitionsTES3.pas` that are ported by hand. The
 //! ones that are not ported yet are stubs in `tes3_stubs.rs`.
 
+// The stubs of the callbacks not ported yet; empty once every callback is ported.
+#[allow(unused_imports)]
 pub use super::tes3_stubs::*;
 
 use xedit_core::interface::main_record::GridCell;
 use xedit_core::interface::*;
 
-use super::common::{variant_int, wb_try_get_container_from_union, wb_try_set_container};
+use super::common::{
+    variant_int, wb_try_get_container_from_union, wb_try_get_container_with_valid_main_record, wb_try_set_container,
+};
 
 /// The native value at `path` of the container of the element, as an
 /// integer (`Integer(aElement.Container.ElementNativeValues[aPath])`).
@@ -308,4 +312,172 @@ pub fn define_tes3_anonymous_2251(a_sub_record: &ElementRef) -> String {
         .as_container()
         .map(|container| container.get_element_edit_value("Name"))
         .unwrap_or_default()
+}
+
+// ----- the editing callbacks -----
+
+use super::common::{
+    as_container_ref, path_edit, path_int, path_native, remove_member, set_native, set_path_edit, set_path_native,
+    with_internal_edit,
+};
+
+/// Upstream anonymous `SetEditorIDCallback` of a script: the editor ID is
+/// the `Name` of the `SCHD` subrecord.
+pub fn define_tes3_anonymous_2254(a_sub_record: &ElementRef, a_editor_id: &str) {
+    set_path_edit(a_sub_record, "Name", a_editor_id);
+}
+
+/// Upstream `wbCELLAfterLoad`: an interior cell's `INTV` becomes `WHGT`.
+pub fn wb_cell_after_load(a_element: &ElementRef) {
+    with_internal_edit(|| {
+        let Some(record) = wb_try_get_container_with_valid_main_record(Some(a_element)) else {
+            return;
+        };
+        let record: ElementRef = record;
+        if path_int(&record, "DATA\\Flags") & 1 != 0
+            && record
+                .as_container()
+                .and_then(|c| c.get_element_by_signature(Signature::new(b"WHGT")))
+                .is_none()
+        {
+            set_path_native(&record, "WHGT", path_native(&record, "INTV"));
+            remove_member(&record, "INTV");
+        }
+    });
+}
+
+/// Upstream `wbDeletedAfterLoad`: `DELE` is zero.
+pub fn wb_deleted_after_load(a_element: &ElementRef) {
+    with_internal_edit(|| {
+        let Some(record) = wb_try_get_container_with_valid_main_record(Some(a_element)) else {
+            return;
+        };
+        let record: ElementRef = record;
+        if record
+            .as_container()
+            .and_then(|c| c.get_element_by_signature(Signature::new(b"DELE")))
+            .is_some()
+        {
+            set_path_native(&record, "DELE", 0i64);
+        }
+    });
+}
+
+/// Upstream `wbEffectRangeAfterLoad`: a range of 0 becomes 1.
+pub fn wb_effect_range_after_load(a_element: &ElementRef) {
+    with_internal_edit(|| {
+        if a_element.as_container().is_none() {
+            return;
+        }
+        if path_edit(a_element, "Range") == "0" {
+            set_path_native(a_element, "Range", 1i64);
+        }
+    });
+}
+
+/// Upstream `wbEffectRangeAfterSet`: the range resets.
+pub fn wb_effect_range_after_set(a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
+    if let Some(range) = a_element
+        .get_container()
+        .and_then(|container| container.as_container()?.get_element_by_name("Range"))
+    {
+        let _ = range.set_to_default();
+    }
+}
+
+/// Upstream `wbForwardForReal`: the text up to the first zero byte goes
+/// into the `Target` (or `Sound`) member.
+pub fn wb_forward_for_real(a_element: &ElementRef) {
+    with_internal_edit(|| {
+        let value = a_element.get_value();
+        if value.is_empty() {
+            return;
+        }
+        let Some(container) = a_element.get_container() else {
+            return;
+        };
+        let Some(container) = container.as_container() else {
+            return;
+        };
+        let Some(target) = container
+            .get_element_by_name("Target")
+            .or_else(|| container.get_element_by_name("Sound"))
+        else {
+            return;
+        };
+        // UPSTREAM-QUIRK: `Copy(s, 0, i)` keeps the zero byte that ends the text.
+        let end = value.find('\0').map_or(value.len(), |position| position + 1);
+        set_native(&target, value[..end].to_owned());
+    });
+}
+
+/// Upstream `wbGlobalAfterLoad`: the broken float of a short global is zero.
+pub fn wb_global_after_load(a_element: &ElementRef) {
+    with_internal_edit(|| {
+        let Some(record) = wb_try_get_container_with_valid_main_record(Some(a_element)) else {
+            return;
+        };
+        let record: ElementRef = record;
+        let by_signature = |signature: &[u8; 4]| {
+            record
+                .as_container()
+                .and_then(|c| c.get_element_by_signature(Signature::new(signature)))
+        };
+        let (Some(fltv), Some(fnam)) = (by_signature(b"FLTV"), by_signature(b"FNAM")) else {
+            return;
+        };
+        if fnam.get_value() != "Short" {
+            return;
+        }
+        let native = fltv.get_native_value();
+        let number = native.as_number();
+        if number == Some((-92233720368547758.1f32) as f64) || number == Some(0.04) || fltv.get_value() == "NaN" {
+            set_path_native(&record, "FLTV", 0i64);
+        }
+    });
+}
+
+/// Upstream `wbIngredientAfterLoad`: the skill and attribute of each effect
+/// follow the magic effect.
+pub fn wb_ingredient_after_load(a_element: &ElementRef) {
+    with_internal_edit(|| {
+        let Some(record) = wb_try_get_container_with_valid_main_record(Some(a_element)) else {
+            return;
+        };
+        let record: ElementRef = record;
+        for index in 0..4 {
+            let effect = path_int(&record, &format!("IRDT\\Effects\\Magic Effects\\Magic Effect #{index}"));
+            let skill = format!("IRDT\\Effects\\Skills\\Skill #{index}");
+            let attribute = format!("IRDT\\Effects\\Attributes\\Attribute #{index}");
+            match effect {
+                17 | 22 | 74 | 79 => set_path_native(&record, &skill, -1i64),
+                21 | 26 | 78 | 83 => set_path_native(&record, &attribute, -1i64),
+                _ => {
+                    set_path_native(&record, &skill, -1i64);
+                    set_path_native(&record, &attribute, -1i64);
+                }
+            }
+        }
+    });
+}
+
+/// Upstream `wbTES3AfterLoad`: the ESM flag of the header record follows
+/// the flags in `HEDR`.
+pub fn wb_tes3_after_load(a_element: &ElementRef) {
+    with_internal_edit(|| {
+        let Some(main_record) = wb_try_get_container_with_valid_main_record(Some(a_element)) else {
+            return;
+        };
+        let record: ElementRef = main_record.clone();
+        if record
+            .as_container()
+            .and_then(|c| c.get_element_by_signature(Signature::new(b"HEDR")))
+            .is_some()
+            && path_int(&record, "HEDR\\Record Flags") & 1 == 1
+            && let Some(record_impl) = record.as_element_impl().and_then(|e| e.main_record_impl())
+        {
+            record_impl.set_is_esm(true);
+        }
+        let _ = as_container_ref(&record);
+    });
 }

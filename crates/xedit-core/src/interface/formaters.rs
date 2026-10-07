@@ -14,7 +14,7 @@ use super::def::{Def, DefBase, DefKind, DefRef, NamedDef, NamedDefBase, set_pare
 use super::element::{ElementArg, ElementRef};
 use super::globals::is_internal_edit;
 use super::integer::{IntegerDefFormater, integer_def_formater_create};
-use super::misc::int_to_hex64;
+use super::misc::{EditError, int_to_hex64, str_to_int64};
 use super::types::{CallbackType, DefFlag, DefType, EditType, Signature};
 use crate::delphi::{float_to_str_f_fixed, round, str_to_float};
 
@@ -215,6 +215,13 @@ impl IntegerDefFormater for IntegerDefFormaterUnion {
         }
     }
 
+    fn from_edit_value(&self, value: &str, element: ElementArg) -> Result<i64, EditError> {
+        match self.decide_member(element) {
+            Some(member) => member.from_edit_value(value, element),
+            None => Ok(0),
+        }
+    }
+
     fn get_is_editable(&self, int: i64, element: ElementArg) -> bool {
         let result = match self.decide_member(element) {
             Some(member) => member.get_is_editable(int, element),
@@ -334,6 +341,13 @@ impl IntegerDefFormater for Str4 {
         str4_to_string(int)
     }
 
+    /// Port of `TwbStr4.FromEditValue`: the four characters reversed.
+    fn from_edit_value(&self, value: &str, _element: ElementArg) -> Result<i64, EditError> {
+        let mut bytes = four_characters(value)?;
+        bytes.reverse();
+        Ok(i64::from(u32::from_le_bytes(bytes)))
+    }
+
     fn get_is_editable(&self, _int: i64, _element: ElementArg) -> bool {
         editable_unless_internal_only(&self.def)
     }
@@ -386,6 +400,11 @@ impl IntegerDefFormater for Char4 {
 
     fn to_edit_value(&self, int: i64, _element: ElementArg) -> String {
         Self::characters(int)
+    }
+
+    /// Port of `TwbChar4.FromEditValue`.
+    fn from_edit_value(&self, value: &str, _element: ElementArg) -> Result<i64, EditError> {
+        Ok(i64::from(u32::from_le_bytes(four_characters(value)?)))
     }
 
     fn get_is_editable(&self, _int: i64, _element: ElementArg) -> bool {
@@ -482,6 +501,14 @@ macro_rules! div_formater {
                 self.display(int)
             }
 
+            /// Port of `FromEditValue`: the number multiplied by the divisor,
+            /// rounded.
+            fn from_edit_value(&self, value: &str, _element: ElementArg) -> Result<i64, EditError> {
+                let number =
+                    str_to_float(value).ok_or_else(|| format!("'{value}' is not a valid floating point value"))?;
+                Ok(round(number * self.divisor()))
+            }
+
             fn get_is_editable(&self, _int: i64, _element: ElementArg) -> bool {
                 editable_unless_internal_only(&self.def)
             }
@@ -559,6 +586,15 @@ impl IntegerDefFormater for MulDef {
 
     fn to_edit_value(&self, int: i64, _element: ElementArg) -> String {
         self.display(int)
+    }
+
+    /// Port of `TwbMulDef.FromEditValue`: the integer divided by the factor.
+    fn from_edit_value(&self, value: &str, _element: ElementArg) -> Result<i64, EditError> {
+        let factor = i64::from(self.md_value);
+        if factor == 0 {
+            return Err("Division by zero".to_owned());
+        }
+        Ok(str_to_int64(value)? / factor)
     }
 
     fn get_is_editable(&self, _int: i64, _element: ElementArg) -> bool {
@@ -660,9 +696,29 @@ impl IntegerDefFormater for CallbackDef {
         if result.is_empty() { int.to_string() } else { result }
     }
 
+    fn from_edit_value(&self, value: &str, element: ElementArg) -> Result<i64, EditError> {
+        match &self.cd_to_int {
+            Some(to_int) => Ok(to_int(value, element)),
+            None => str_to_int64(value),
+        }
+    }
+
     fn get_is_editable(&self, _int: i64, _element: ElementArg) -> bool {
         editable_unless_internal_only(&self.def)
     }
+}
+
+/// The bytes of a four character edit value, or the blank signature for an
+/// empty one.
+fn four_characters(value: &str) -> Result<[u8; 4], EditError> {
+    if value.is_empty() {
+        return Ok(*b"    ");
+    }
+    let bytes = value.as_bytes();
+    if bytes.len() != 4 {
+        return Err("The value must be exactly 4 characters".to_owned());
+    }
+    Ok([bytes[0], bytes[1], bytes[2], bytes[3]])
 }
 
 /// Port of assigning to `TStrings.CommaText` and reading the items back.

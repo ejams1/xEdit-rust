@@ -32,6 +32,18 @@ pub struct Session {
 }
 
 impl Session {
+    /// A session over files that are loaded already, in load order.
+    pub fn with_files(
+        game: xedit_core::interface::globals::GameMode,
+        files: Vec<std::sync::Arc<xedit_core::implementation::FileImpl>>,
+    ) -> Self {
+        Self {
+            game: Some(game),
+            files,
+            edit_allowed: false,
+        }
+    }
+
     /// Allows the mutating commands to change files and plugin data.
     pub fn allow_edit(&mut self, allowed: bool) {
         self.edit_allowed = allowed;

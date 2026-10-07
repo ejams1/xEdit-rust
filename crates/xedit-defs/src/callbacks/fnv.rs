@@ -7,6 +7,8 @@
 //! The callbacks of `wbDefinitionsFNV.pas` that are ported by hand. The
 //! ones that are not ported yet are stubs in `fnv_stubs.rs`.
 
+// The stubs of the callbacks not ported yet; empty once every callback is ported.
+#[allow(unused_imports)]
 pub use super::fnv_stubs::*;
 
 use xedit_core::delphi::round;
@@ -17,7 +19,8 @@ use xedit_core::interface::string::to_comma_text;
 use xedit_core::interface::*;
 
 use super::common::{
-    variant_int, wb_try_get_container_from_union, wb_try_get_container_ref_from_union_or_value, wb_try_get_main_record,
+    variant_int, wb_try_get_container_from_union, wb_try_get_container_ref_from_union_or_value,
+    wb_try_get_container_with_valid_main_record, wb_try_get_main_record,
 };
 use crate::fnv::{
     WB_CONDITION_FUNCTIONS, WB_PERK_CONDITION, WB_PERK_ENTRY_POINTS, WB_PERK_FUNCTIONS, wb_condition_desc_from_index,
@@ -1136,4 +1139,198 @@ pub fn wb_condition_quest_objective_to_str(a_int: i64, a_element: ElementArg, a_
         }
         _ => result,
     }
+}
+
+// ----- the editing callbacks -----
+
+use super::common::{
+    add_member, as_container_ref, cell_after_load_fallout3, condition_after_load_fallout3, efit_after_load,
+    efsh_after_load_fallout3, element_at, element_count, embedded_script_after_load, fact_after_load_fallout3,
+    flst_edid_after_set, gmst_edid_after_set, head_parts_after_set, info_after_load_fallout3, mgef_after_load_fallout3,
+    mgef_archtype_after_set, mgef_assoc_item_after_set, npc_after_load_fallout3, pack_after_load_fallout3, path_exists,
+    perk_data_function_after_set, perk_entry_point_after_set, perk_epft_after_set, refr_after_load_fallout3,
+    remove_member, set_path_native, weap_after_load_fallout3, with_internal_edit,
+};
+
+/// Upstream `wbConditionAfterLoad`.
+pub fn wb_condition_after_load(a_element: &ElementRef) {
+    condition_after_load_fallout3(a_element);
+}
+
+/// Upstream `wbHeadPartsAfterSet`.
+pub fn wb_head_parts_after_set(a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
+    head_parts_after_set(a_element);
+}
+
+/// Upstream `wbGMSTEDIDAfterSet`.
+pub fn wb_gmstedid_after_set(a_element: &ElementRef, a_old_value: &Variant, a_new_value: &Variant) {
+    gmst_edid_after_set(a_element, a_old_value, a_new_value);
+}
+
+/// Upstream `wbFLSTEDIDAfterSet`.
+pub fn wb_flstedid_after_set(a_element: &ElementRef, a_old_value: &Variant, a_new_value: &Variant) {
+    flst_edid_after_set(a_element, a_old_value, a_new_value);
+}
+
+/// Upstream `wbMGEFFAssocItemAfterSet`.
+pub fn wb_mgeff_assoc_item_after_set(a_element: &ElementRef, _a_old_value: &Variant, a_new_value: &Variant) {
+    mgef_assoc_item_after_set(a_element, a_new_value, "Archtype");
+}
+
+/// Upstream `wbMGEFArchtypeAfterSet`.
+pub fn wb_mgef_archtype_after_set(a_element: &ElementRef, a_old_value: &Variant, a_new_value: &Variant) {
+    mgef_archtype_after_set(
+        a_element,
+        a_old_value,
+        a_new_value,
+        &[(11, 48), (12, 49), (24, 47), (36, 51)],
+    );
+}
+
+/// Upstream `wbPERKEntryPointAfterSet`.
+pub fn wb_perk_entry_point_after_set(a_element: &ElementRef, a_old_value: &Variant, a_new_value: &Variant) {
+    let entry_points: Vec<(usize, i64)> = WB_PERK_ENTRY_POINTS
+        .iter()
+        .map(|entry| (entry.condition as usize, entry.function_type as i64))
+        .collect();
+    let conditions: Vec<(i64, &str, &str)> = WB_PERK_CONDITION
+        .iter()
+        .map(|condition| (i64::from(condition.count), condition.caption2, condition.caption3))
+        .collect();
+    let functions: Vec<i64> = WB_PERK_FUNCTIONS
+        .iter()
+        .map(|function| function.function_type as i64)
+        .collect();
+    perk_entry_point_after_set(
+        a_element,
+        a_old_value,
+        a_new_value,
+        &entry_points,
+        &conditions,
+        &functions,
+    );
+}
+
+/// Upstream `wbPerkDATAFunctionAfterSet`.
+pub fn wb_perk_data_function_after_set(a_element: &ElementRef, a_old_value: &Variant, a_new_value: &Variant) {
+    let param_types: Vec<i64> = WB_PERK_FUNCTIONS
+        .iter()
+        .map(|function| function.param_type as i64)
+        .collect();
+    perk_data_function_after_set(a_element, a_old_value, a_new_value, &param_types);
+}
+
+/// Upstream `wbPerkEPFTAfterSet`.
+pub fn wb_perk_epft_after_set(a_element: &ElementRef, a_old_value: &Variant, a_new_value: &Variant) {
+    perk_epft_after_set(a_element, a_old_value, a_new_value);
+}
+
+/// Upstream `wbMGEFAfterLoad`.
+pub fn wb_mgef_after_load(a_element: &ElementRef) {
+    mgef_after_load_fallout3(
+        a_element,
+        &[
+            (1, -1),
+            (2, -1),
+            (3, -1),
+            (13, -1),
+            (16, -1),
+            (17, -1),
+            (18, -1),
+            (19, -1),
+            (30, -1),
+            (31, -1),
+            (32, -1),
+            (33, -1),
+            (35, -1),
+            (11, 48),
+            (12, 49),
+            (24, 47),
+            (36, 51),
+        ],
+    );
+}
+
+/// Upstream `wbPACKAfterLoad`.
+pub fn wb_pack_after_load(a_element: &ElementRef) {
+    pack_after_load_fallout3(a_element);
+}
+
+/// Upstream `wbNPCAfterLoad`.
+pub fn wb_npc_after_load(a_element: &ElementRef) {
+    npc_after_load_fallout3(a_element);
+}
+
+/// Upstream `wbREFRAfterLoad`.
+pub fn wb_refr_after_load(a_element: &ElementRef) {
+    refr_after_load_fallout3(a_element);
+}
+
+/// Upstream `wbINFOAfterLoad`.
+pub fn wb_info_after_load(a_element: &ElementRef) {
+    info_after_load_fallout3(a_element);
+}
+
+/// Upstream `wbCELLAfterLoad`.
+pub fn wb_cell_after_load(a_element: &ElementRef) {
+    cell_after_load_fallout3(a_element);
+}
+
+/// Upstream `wbEmbeddedScriptAfterLoad`.
+pub fn wb_embedded_script_after_load(a_element: &ElementRef) {
+    embedded_script_after_load(a_element);
+}
+
+/// Upstream `wbWEAPAfterLoad`.
+pub fn wb_weap_after_load(a_element: &ElementRef) {
+    weap_after_load_fallout3(a_element, true);
+}
+
+/// Upstream `wbEFSHAfterLoad`.
+pub fn wb_efsh_after_load(a_element: &ElementRef) {
+    efsh_after_load_fallout3(a_element);
+}
+
+/// Upstream `wbFACTAfterLoad`.
+pub fn wb_fact_after_load(a_element: &ElementRef) {
+    fact_after_load_fallout3(a_element);
+}
+
+/// Upstream `wbEFITAfterLoad`.
+pub fn wb_efit_after_load(a_element: &ElementRef) {
+    efit_after_load(a_element);
+}
+
+/// Upstream `wbWATRAfterLoad`: a legacy `DATA - Visual Data` becomes
+/// `DNAM`, with the old damage moved into `DATA - Damage` and the noise
+/// amplitudes set.
+pub fn wb_watr_after_load(a_element: &ElementRef) {
+    with_internal_edit(|| {
+        let Some(record) = wb_try_get_container_with_valid_main_record(Some(a_element)) else {
+            return;
+        };
+        let record: ElementRef = record;
+        if path_exists(&record, "DNAM") {
+            return;
+        }
+        let Some(old) = remove_member(&record, "DATA - Visual Data").and_then(|old| as_container_ref(&old)) else {
+            return;
+        };
+        let Some(new) = add_member(&record, "DNAM").and_then(|new| as_container_ref(&new)) else {
+            return;
+        };
+        for index in 0..element_count(&old).min(element_count(&new)) {
+            let (Some(source), Some(target)) = (element_at(&old, index), element_at(&new, index)) else {
+                continue;
+            };
+            if source.get_name() == "Damage (Old Format)" {
+                set_path_native(&record, "DATA - Damage", source.get_native_value());
+            } else {
+                let _ = target.assign_from(&source);
+            }
+        }
+        set_path_native(&new, "Noise Properties - Noise Layer One - Amplitude Scale", 1.0f64);
+        set_path_native(&new, "Noise Properties - Noise Layer Two - Amplitude Scale", 0.5f64);
+        set_path_native(&new, "Noise Properties - Noise Layer Three - Amplitude Scale", 0.25f64);
+    });
 }

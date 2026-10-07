@@ -12,6 +12,7 @@
 //! use. The write path (`write`) saves a file whose records are unmodified
 //! or rebuilt from their elements.
 
+pub mod edit;
 pub mod structs;
 pub mod write;
 
@@ -101,12 +102,80 @@ macro_rules! element_common {
         fn as_element_impl(&self) -> Option<&dyn ElementImpl> {
             Some(self)
         }
+
+        fn get_sort_order(&self) -> i32 {
+            self.$base()
+                .e_sort_order
+                .load(std::sync::atomic::Ordering::Relaxed)
+        }
+
+        fn set_edit_value(&self, value: &str) -> Result<(), EditError> {
+            $crate::implementation::ElementImpl::set_edit_value_impl(self, value)
+        }
+
+        fn set_native_value(&self, value: Variant) -> Result<(), EditError> {
+            $crate::implementation::ElementImpl::set_native_value_impl(self, value)
+        }
+
+        fn set_to_default(&self) -> Result<(), EditError> {
+            $crate::implementation::edit::set_to_default(self)
+        }
+
+        fn get_is_editable(&self) -> bool {
+            $crate::implementation::ElementImpl::get_is_editable_impl(self)
+        }
+
+        fn remove(&self) {
+            $crate::implementation::edit::remove(self)
+        }
+
+        fn request_storage_change(&self, new_size: usize) -> Option<Vec<u8>> {
+            $crate::implementation::ElementImpl::request_storage_change_impl(self, new_size)
+        }
+
+        fn commit_storage(&self, bytes: Vec<u8>) {
+            $crate::implementation::ElementImpl::commit_storage_impl(self, bytes)
+        }
+
+        fn set_sort_order(&self, order: i32) {
+            self.$base()
+                .e_sort_order
+                .store(order, std::sync::atomic::Ordering::Relaxed);
+        }
+
+        fn begin_update(&self) {
+            $crate::implementation::edit::begin_update(self)
+        }
+
+        fn end_update(&self) {
+            $crate::implementation::edit::end_update(self)
+        }
+
+        fn set_data_size(&self, size: i32) -> Result<(), EditError> {
+            $crate::implementation::ElementImpl::set_data_size_impl(self, size)
+        }
+
+        fn get_sort_key(&self, extended: bool) -> String {
+            $crate::implementation::ElementImpl::get_sort_key_impl(self, extended)
+        }
+
+        fn mark_modified_recursive(&self) {
+            $crate::implementation::write::mark_modified_recursive(
+                self,
+                <$crate::interface::types::ElementType as $crate::interface::types::PascalEnum>::ALL,
+            )
+        }
+
+        fn assign_from(&self, source: &ElementRef) -> Result<(), EditError> {
+            $crate::implementation::ElementImpl::assign_from_impl(self, source)
+        }
     };
 }
 
 pub mod sub_record;
 pub mod value;
 
+pub use edit::Storage;
 pub use write::{ElementState, ResetModified, SaveError};
 
 use std::collections::HashMap;
@@ -125,17 +194,18 @@ use crate::interface::element::{
 };
 use crate::interface::form_id::{FileID, FormID};
 use crate::interface::globals::{
-    GameMode, ToolSource, create_contained_in, data_path, display_load_order_form_id, extract_info, file_chapters,
-    file_header, file_magic, file_plugins, game_exe_name, game_master_esm, game_mode, has_added_light_support,
-    header_signature, is_fallout3, is_fallout4, is_fallout76, is_light_supported, is_medium_supported, is_skyrim,
-    is_starfield, is_update_supported, pseudo_light, pseudo_medium, pseudo_update, remove_offset_data,
-    size_of_main_record_struct, tool_source, track_all_editor_id, vwd_as_quest_children, wb_get_group_order,
+    GameMode, ToolSource, create_contained_in, data_path, display_load_order_form_id, edit_allowed, extract_info,
+    file_chapters, file_header, file_magic, file_plugins, fill_inoa, fill_inom, game_exe_name, game_master_esm,
+    game_mode, has_added_light_support, header_signature, is_fallout3, is_fallout4, is_fallout76, is_internal_edit,
+    is_light_supported, is_medium_supported, is_skyrim, is_starfield, is_update_supported, pseudo_light, pseudo_medium,
+    pseudo_update, remove_offset_data, size_of_main_record_struct, tool_source, track_all_editor_id,
+    vwd_as_quest_children, wb_get_group_order,
 };
 use crate::interface::integer::IntegerDefFormater;
 use crate::interface::main_record::{
     IndexKeys, MainRecordDef, idx_editor_id, main_record_header, named_index_key, named_index_name,
 };
-use crate::interface::misc::{Variant, progress};
+use crate::interface::misc::{EditError, Variant, progress};
 use crate::interface::sub_record_group::RecordDef;
 use crate::interface::types::{
     ConflictPriority, DefFlag, ElementType, FileState, FileStates, KnownSubRecord, Signature, TriBool,
@@ -380,6 +450,9 @@ pub struct ElementBase {
     /// Port of the save states of `eStates`: `esModified`,
     /// `esInternalModified` and `esUnsaved`, as bits of [`ElementState`].
     pub(crate) e_states: std::sync::atomic::AtomicU32,
+    /// Port of `eUpdateCount`: while above zero, change notifications and
+    /// the modified state of the parent are deferred to `EndUpdate`.
+    pub(crate) e_update_count: AtomicI32,
 }
 
 impl ElementBase {
@@ -392,6 +465,7 @@ impl ElementBase {
             e_name_suffix: RwLock::new(String::new()),
             e_resolving: std::sync::atomic::AtomicBool::new(false),
             e_states: std::sync::atomic::AtomicU32::new(0),
+            e_update_count: AtomicI32::new(0),
         }
     }
 
@@ -431,6 +505,9 @@ impl ElementBase {
 #[derive(Default)]
 pub struct ContainerBase {
     cnt_elements: RwLock<Vec<ElementRef>>,
+    /// Port of `csAsCreatedEmpty`: the one element an array of variable
+    /// size was created with, which the first `Assign` takes over.
+    pub(crate) cnt_as_created_empty: AtomicBool,
 }
 
 impl ContainerBase {
@@ -478,6 +555,11 @@ impl ContainerBase {
     /// Port of `wbMergeSortPtr` on the elements: a stable sort.
     pub(crate) fn sort_by(&self, compare: impl FnMut(&ElementRef, &ElementRef) -> std::cmp::Ordering) {
         self.cnt_elements.write().unwrap().sort_by(compare);
+    }
+
+    /// Port of `ReverseElements`.
+    pub(crate) fn reverse(&self) {
+        self.cnt_elements.write().unwrap().reverse();
     }
 
     /// Port of `TwbContainer.GetElementBySortOrder` after the init: the
@@ -1046,6 +1128,12 @@ impl FileImpl {
                         self.get_name()
                     ));
                     self.container.remove_element_by_identity(&elements[index]);
+                    // `GroupRecord.Remove` under `wbBeginInternalEdit(True)`.
+                    let internal = crate::interface::globals::begin_internal_edit(true);
+                    self.set_modified(true);
+                    if internal {
+                        crate::interface::globals::end_internal_edit();
+                    }
                     progress(&format!("[{}] Removed empty group: {name}", self.get_name()));
                     continue;
                 }
@@ -1071,8 +1159,14 @@ impl FileImpl {
                         self.get_name()
                     ));
                     let later_ref: ElementRef = later.clone();
+                    // Upstream merges under `wbBeginInternalEdit(True)`: the
+                    // group that takes the records and the file are modified
+                    // internally, so the save writes the merged group with
+                    // its new size.
+                    let internal = crate::interface::globals::begin_internal_edit(true);
                     if later.get_element_count() == 0 {
                         self.container.remove_element_by_identity(&later_ref);
+                        self.set_modified(true);
                         groups.insert(sort_order, group);
                     } else {
                         let moved = group.container.release_elements();
@@ -1084,11 +1178,16 @@ impl FileImpl {
                             later.container.add_element(element);
                         }
                         later.sort();
+                        later.set_modified(true);
                         progress(&format!(
                             "[{}] Merged {count} record from duplicated group: {name}",
                             self.get_name()
                         ));
                         self.container.remove_element_by_identity(&elements[index]);
+                        self.set_modified(true);
+                    }
+                    if internal {
+                        crate::interface::globals::end_internal_edit();
                     }
                     continue;
                 }
@@ -1193,7 +1292,7 @@ impl FileImpl {
             return Ok(());
         }
         NEXT_LOAD_ORDER.fetch_max(load_order + 1, Ordering::Relaxed);
-        let flags = header.mr_struct.flags;
+        let flags = header.mr_struct().flags;
         let file_id = if is_light_supported()
             || pseudo_light()
             || is_medium_supported()
@@ -1490,7 +1589,7 @@ pub struct GroupRecordImpl {
     base: ElementBase,
     container: ContainerBase,
     file: Weak<FileImpl>,
-    gr_struct: GroupRecordStruct,
+    gr_struct: RwLock<GroupRecordStruct>,
     /// The range of the group in the file, header included.
     dc_base: usize,
     dc_end: usize,
@@ -1523,7 +1622,7 @@ impl GroupRecordImpl {
             base: ElementBase::new(Some(container)),
             container: ContainerBase::default(),
             file: Arc::downgrade(file),
-            gr_struct,
+            gr_struct: RwLock::new(gr_struct),
             dc_base,
             dc_end,
             gr_sorted: AtomicBool::new(false),
@@ -1548,22 +1647,32 @@ impl GroupRecordImpl {
         Ok(group)
     }
 
+    /// Port of `grStruct`: the group header as it is now.
+    pub fn gr_struct(&self) -> GroupRecordStruct {
+        *self.gr_struct.read().unwrap()
+    }
+
+    /// Port of `SetGroupLabel`.
+    pub(crate) fn set_group_label(&self, label: u32) {
+        self.gr_struct.write().unwrap().label = label;
+    }
+
     pub fn group_type(&self) -> i32 {
-        self.gr_struct.group_type
+        self.gr_struct().group_type
     }
 
     pub fn group_label(&self) -> u32 {
-        self.gr_struct.label
+        self.gr_struct().label
     }
 
     /// Port of `ChildrenOf`: the record the group holds the children of,
     /// for the group types whose label is a FormID.
     pub fn children_of(&self) -> Option<Arc<MainRecordImpl>> {
-        if !matches!(self.gr_struct.group_type, 1 | 6..=10) {
+        if !matches!(self.gr_struct().group_type, 1 | 6..=10) {
             return None;
         }
         let file = self.file.upgrade()?;
-        file.record_by_form_id(FormID::from_cardinal(self.gr_struct.label), true, true)
+        file.record_by_form_id(FormID::from_cardinal(self.gr_struct().label), true, true)
     }
 
     fn parent_group(&self) -> Option<Arc<GroupRecordImpl>> {
@@ -1578,7 +1687,7 @@ impl GroupRecordImpl {
     /// records without clearing `gsSorted`, so a group that two duplicates
     /// merge into is sorted only after the first of them.
     pub(crate) fn sort(&self) {
-        if self.gr_struct.group_type == 7 || self.gr_sorted.load(Ordering::Relaxed) {
+        if self.gr_struct().group_type == 7 || self.gr_sorted.load(Ordering::Relaxed) {
             return;
         }
         self.container.sort_by(compare_group_contents);
@@ -1598,7 +1707,7 @@ fn find_sort_element(element: &ElementRef) -> ElementRef {
 
 /// Port of `TwbMainRecord.GetSortPriority`.
 fn sort_priority(record: &MainRecordImpl) -> i32 {
-    match &record.mr_struct.signature.0 {
+    match &record.mr_struct().signature.0 {
         b"ROAD" | b"LAND" => -2,
         b"CELL" | b"PGRD" | b"NAVM" => -1,
         _ => 0,
@@ -1625,11 +1734,11 @@ fn compare_group_contents(a: &ElementRef, b: &ElementRef) -> std::cmp::Ordering 
             result = match group_a.group_type() {
                 // `CompareText` on the signatures: case insensitive.
                 0 => group_a
-                    .gr_struct
+                    .gr_struct()
                     .label_signature()
                     .to_string()
                     .to_uppercase()
-                    .cmp(&group_b.gr_struct.label_signature().to_string().to_uppercase()),
+                    .cmp(&group_b.gr_struct().label_signature().to_string().to_uppercase()),
                 2 | 3 => (group_a.group_label() as i32).cmp(&(group_b.group_label() as i32)),
                 4 | 5 => {
                     // `LongRecSmall`: the high word, then the low word, as signed.
@@ -1692,7 +1801,9 @@ pub struct MainRecordImpl {
     container: ContainerBase,
     file: Weak<FileImpl>,
     bytes: Arc<FileBytes>,
-    mr_struct: MainRecordStruct,
+    /// Port of `mrStruct`: the header, which the edits change in place
+    /// (`MakeHeaderWriteable`).
+    mr_struct: RwLock<MainRecordStruct>,
     mr_def: Option<Arc<MainRecordDef>>,
     /// The range of the record data in the file, after the header.
     dc_data_base: usize,
@@ -1717,8 +1828,9 @@ pub struct MainRecordImpl {
     mr_overrides: RwLock<Vec<Weak<MainRecordImpl>>>,
     /// Port of `mrFixedFormID`.
     mr_fixed_form_id: OnceLock<FormID>,
-    /// Port of `mrDisplayName`: cached for the records of official files.
-    mr_display_name: OnceLock<String>,
+    /// Port of `mrDisplayName`: cached for the records of official files,
+    /// dropped when a named subrecord changes.
+    mr_display_name: RwLock<Option<String>>,
     /// Port of `mrPrecombinedCellID` and `mrPrecombinedID` with the
     /// `mrsHasPrecombinedMesh` state: the cell and mesh of a precombined
     /// reference, checked once.
@@ -1746,7 +1858,7 @@ impl MainRecordImpl {
             progress(&format!("Error: unknown record type {}", mr_struct.signature));
         }
         if let Some(prev) = prev_main_record
-            && prev.mr_struct.form_id == mr_struct.form_id
+            && prev.mr_struct().form_id == mr_struct.form_id
         {
             // Port of `EwbSkipLoad` for a duplicate FormID: the record is skipped.
             progress(&format!(
@@ -1761,7 +1873,7 @@ impl MainRecordImpl {
             container: ContainerBase::default(),
             file: Arc::downgrade(file),
             bytes: file.fl_bytes.clone(),
-            mr_struct,
+            mr_struct: RwLock::new(mr_struct),
             mr_def,
             dc_data_base,
             dc_data_end,
@@ -1775,7 +1887,7 @@ impl MainRecordImpl {
             mr_master: RwLock::new(None),
             mr_overrides: RwLock::new(Vec::new()),
             mr_fixed_form_id: OnceLock::new(),
-            mr_display_name: OnceLock::new(),
+            mr_display_name: RwLock::new(None),
             mr_precombined: OnceLock::new(),
             mr_ofst_removed: AtomicBool::new(false),
         });
@@ -1788,15 +1900,20 @@ impl MainRecordImpl {
     }
 
     pub fn get_signature(&self) -> Signature {
-        self.mr_struct.signature
+        self.mr_struct().signature
     }
 
     pub fn form_id(&self) -> FormID {
-        self.mr_struct.form_id
+        self.mr_struct().form_id
     }
 
-    pub fn header_struct(&self) -> &MainRecordStruct {
-        &self.mr_struct
+    pub fn header_struct(&self) -> MainRecordStruct {
+        self.mr_struct()
+    }
+
+    /// Port of `mrStruct`: the header as it is now.
+    pub fn mr_struct(&self) -> MainRecordStruct {
+        *self.mr_struct.read().unwrap()
     }
 
     pub fn def(&self) -> Option<&Arc<MainRecordDef>> {
@@ -1852,7 +1969,7 @@ impl MainRecordImpl {
     /// masters.
     pub fn get_fixed_form_id(&self) -> FormID {
         *self.mr_fixed_form_id.get_or_init(|| {
-            let mut result = self.mr_struct.form_id;
+            let mut result = self.mr_struct().form_id;
             let Some(file) = self.file.upgrade() else {
                 return result;
             };
@@ -1903,7 +2020,7 @@ impl MainRecordImpl {
             }
             self.file.upgrade()?;
             if !matches!(
-                self.mr_struct.signature.0.as_slice(),
+                self.mr_struct().signature.0.as_slice(),
                 b"REFR" | b"PGRE" | b"PMIS" | b"PARW" | b"PBEA" | b"PFLA" | b"PCON" | b"PBAR" | b"PHZD"
             ) {
                 return None;
@@ -1923,11 +2040,11 @@ impl MainRecordImpl {
                 .container()
                 .and_then(|container| container.as_element_impl()?.group_record_impl())
                 .and_then(|group| group.children_of())?;
-            let cell_form_id = cell.mr_struct.form_id;
+            let cell_form_id = cell.mr_struct().form_id;
             // Port of `PrecombinedCache`: the references of the cell, kept
             // between the records of the same cell and file.
             let file_name = self.file.upgrade().map(|file| file.get_name()).unwrap_or_default();
-            let own = self.mr_struct.form_id.to_cardinal();
+            let own = self.mr_struct().form_id.to_cardinal();
             let mut cache = PRECOMBINED_CACHE.lock().unwrap();
             if cache
                 .as_ref()
@@ -1965,6 +2082,27 @@ impl MainRecordImpl {
                 .find(|(reference, _)| *reference == own)
                 .map(|(_, id)| (cell_form_id.object_id(), *id))
         })
+    }
+
+    /// Port of `Master` (`mrMaster`): the record this one overrides.
+    pub(crate) fn master(&self) -> Option<Arc<MainRecordImpl>> {
+        self.mr_master.read().unwrap().as_ref().and_then(Weak::upgrade)
+    }
+
+    /// Port of `Overrides` (`mrOverrides`), in load order.
+    pub(crate) fn overrides(&self) -> Vec<Arc<MainRecordImpl>> {
+        self.mr_overrides
+            .read()
+            .unwrap()
+            .iter()
+            .filter_map(Weak::upgrade)
+            .collect()
+    }
+
+    /// Port of `IsWinningOverride`: no override in a later file.
+    pub(crate) fn is_winning_override(self: &Arc<Self>) -> bool {
+        let winning = self.get_winning_override();
+        winning.get_element_id() == self.get_element_id()
     }
 
     /// Port of `AddOverride`.
@@ -2005,14 +2143,14 @@ impl MainRecordImpl {
 
     /// Port of `GetShortNameInternal` without `wbDisplayShorterNames`.
     fn short_name_internal(&self) -> String {
-        let mut result = self.mr_struct.signature.to_string();
+        let mut result = self.mr_struct().signature.to_string();
         if let Some(def) = &self.mr_def {
             result = format!("{result} - {}", def.get_name());
         }
         if display_load_order_form_id() {
             result = format!("{result} [{}]", self.get_load_order_form_id().to_string(true));
         } else {
-            result = format!("{result} [{}]", self.mr_struct.form_id.to_string(true));
+            result = format!("{result} [{}]", self.mr_struct().form_id.to_string(true));
         }
         let editor_id = self.get_editor_id();
         if !editor_id.is_empty() {
@@ -2039,7 +2177,7 @@ impl MainRecordImpl {
             self.mr_names_known.store(true, Ordering::Release);
             // Port of the `wbRemoveOffsetData` step of `TwbMainRecord.Init`:
             // the offsets of a worldspace are dropped.
-            if remove_offset_data() && self.mr_struct.signature == Signature::new(b"WRLD") {
+            if remove_offset_data() && self.mr_struct().signature == Signature::new(b"WRLD") {
                 let position = self
                     .container
                     .elements()
@@ -2059,6 +2197,12 @@ impl MainRecordImpl {
                     self.mr_ofst_removed.store(true, Ordering::Relaxed);
                 }
             }
+            // `mrDef.AfterLoad(Self)`, before the required members are added.
+            if let Some(def) = &self.mr_def {
+                let self_ref: ElementRef = self.clone();
+                def.after_load(&self_ref);
+            }
+            sub_record::add_required_members(self);
         });
     }
 
@@ -2144,20 +2288,262 @@ impl MainRecordImpl {
         };
         let Some(header_def) = header_def else { return };
         let header_size = size_of_main_record_struct() as usize;
-        let Some(start) = self.dc_data_base.checked_sub(header_size) else {
-            return;
-        };
+        // The element reads the header from `mrStruct`, so that the edits of
+        // the header (`MakeHeaderWriteable`) and of the element agree.
+        let bytes = self.mr_struct().to_bytes();
         let self_ref: ElementRef = self.clone();
         let mut cursor = value::Cursor {
-            block: DataBlock::File(self.bytes.clone()),
-            pos: start,
-            end: start + header_size,
+            block: DataBlock::Buffer(Arc::new(bytes)),
+            pos: 0,
+            end: header_size,
         };
         let element =
             value::create_value_element(&self_ref, &self.file, &mut cursor, header_def as Arc<dyn ValueDef>, "");
         element.set_sort_and_memory_order(-1);
         // `Include(dcFlags, dcfDontSave)`: the header is written from `mrStruct`.
         element.vb.dont_save.store(true, Ordering::Relaxed);
+        element.vb.record_header.store(true, Ordering::Relaxed);
+    }
+
+    /// The record header element (`GetElementBySortOrder(-1 + additional)`).
+    fn record_header_element(&self) -> Option<Arc<value::ValueImpl>> {
+        self.container
+            .elements()
+            .into_iter()
+            .find(|element| element.get_sort_order() == -1)
+            .and_then(|element| element.as_element_impl()?.value_impl())
+    }
+
+    /// Port of `MakeHeaderWriteable`: the record is modified, and the
+    /// header element reads the header again after `change` edits it.
+    pub(crate) fn make_header_writeable(self: &Arc<Self>, change: impl FnOnce(&mut MainRecordStruct)) {
+        self.do_init();
+        self.set_modified(true);
+        edit::invalidate_parent_storage(&**self);
+        change(&mut self.mr_struct.write().unwrap());
+        self.refresh_record_header();
+    }
+
+    /// Port of `InformStorage` on the record header element: its data is
+    /// `mrStruct` again, and its elements are built over it.
+    fn refresh_record_header(&self) {
+        if let Some(header) = self.record_header_element() {
+            header.replace_data(self.mr_struct().to_bytes());
+        }
+    }
+
+    /// Port of `SetIsCompressed`.
+    pub fn set_is_compressed(self: &Arc<Self>, value: bool) {
+        if value != self.mr_struct().flags.is_compressed() {
+            self.make_header_writeable(|header| header.flags.set_compressed(value));
+        }
+    }
+
+    /// Port of `SetIsESM`.
+    pub fn set_is_esm(self: &Arc<Self>, value: bool) {
+        if value != self.mr_struct().flags.is_esm() {
+            self.make_header_writeable(|header| header.flags.set_esm(value));
+        }
+    }
+
+    /// Port of `SetIsLight`.
+    pub fn set_is_light(self: &Arc<Self>, value: bool) {
+        if value != self.mr_struct().flags.is_light() {
+            self.make_header_writeable(|header| header.flags.set_light(value));
+        }
+    }
+
+    /// Port of `SetIsUpdate`.
+    pub fn set_is_update(self: &Arc<Self>, value: bool) {
+        if value != self.mr_struct().flags.is_update() {
+            self.make_header_writeable(|header| header.flags.set_update(value));
+        }
+    }
+
+    /// Port of `SetIsPersistent`, without the move between the cell child
+    /// groups (`UpdateCellChildGroup`), which comes with the next step.
+    pub fn set_is_persistent(self: &Arc<Self>, value: bool) {
+        if value != self.mr_struct().flags.is_persistent() {
+            self.make_header_writeable(|header| header.flags.set_persistent(value));
+        }
+    }
+
+    /// Port of `SetIsVisibleWhenDistant`, without `UpdateCellChildGroup`.
+    pub fn set_is_visible_when_distant(self: &Arc<Self>, value: bool) {
+        if value != self.mr_struct().flags.is_visible_when_distant() {
+            self.make_header_writeable(|header| header.flags.set_visible_when_distant(value));
+        }
+    }
+
+    /// Port of `ClampFormID`: a FormID beyond the masters of the file is
+    /// moved to the file itself, and the child group follows.
+    pub(crate) fn clamp_form_id(self: &Arc<Self>, index: i32) {
+        if game_mode() == GameMode::gmTES3 || crate::interface::globals::complex_file_file_id() {
+            return;
+        }
+        let form_id = self.mr_struct().form_id;
+        let slot = i32::from(form_id.file_id().full_slot());
+        if slot > index {
+            let clamped = form_id.change_file_id(FileID::create_full(index as i16));
+            self.make_header_writeable(|header| header.form_id = clamped);
+            if let Some(group) = self.child_group() {
+                group.set_group_label(clamped.to_cardinal());
+            }
+        } else if slot == index
+            && let Some(group) = self.child_group()
+        {
+            group.set_group_label(form_id.to_cardinal());
+        }
+    }
+
+    /// Port of `TwbRecordHeaderStruct.ElementChanged`: an edit of the
+    /// `Record Flags` of the header element goes into `mrStruct`, with the
+    /// ESM flag kept off outside the file header.
+    pub(crate) fn record_header_changed(self: &Arc<Self>, child: &ElementRef) {
+        let Some(header) = self.record_header_element() else {
+            return;
+        };
+        let is_flags = child
+            .get_def()
+            .is_some_and(|def| def.get_name().eq_ignore_ascii_case("Record Flags"));
+        if is_flags
+            && let Some(data) = child.as_data_container().and_then(|data| data.get_data())
+            && data.len() >= 4
+        {
+            let mut flags = MainRecordStructFlags(u32::from_le_bytes([data[0], data[1], data[2], data[3]]));
+            if flags.is_esm() && self.mr_struct().signature != header_signature() {
+                flags.set_esm(false);
+            }
+            let old = self.mr_struct().flags;
+            // The deleted, partial form, persistent and visible when distant
+            // flags change through their setters, which keep the record's
+            // state in step; the first two are not ported yet and keep
+            // their value.
+            flags.set_deleted(old.is_deleted());
+            flags.set_partial_form(old.is_partial_form());
+            let persistent = flags.is_persistent();
+            let visible_when_distant = flags.is_visible_when_distant();
+            flags.set_persistent(old.is_persistent());
+            flags.set_visible_when_distant(old.is_visible_when_distant());
+            self.make_header_writeable(|header| header.flags = flags);
+            if !old.is_deleted() {
+                self.set_is_persistent(persistent);
+                self.set_is_visible_when_distant(visible_when_distant);
+            }
+        }
+        header.replace_data(self.mr_struct().to_bytes());
+    }
+
+    /// Port of `TwbMainRecord.Add` for the members of the record. The
+    /// children of a cell, a topic, a worldspace or a quest (placed
+    /// records, responses, cells, scenes) are added in the next step.
+    pub(crate) fn add(self: &Arc<Self>, name: &str, _silent: bool) -> Result<Option<ElementRef>, EditError> {
+        if !is_internal_edit() && (!edit_allowed() || !self.get_is_editable_impl()) {
+            return Err(format!("{} can not be edited", self.get_name()));
+        }
+        if self.get_is_deleted() {
+            return Ok(None);
+        }
+        let signature = self.mr_struct().signature;
+        let prefix: String = name.chars().take(4).collect();
+        let child = |signatures: &[&str]| {
+            signatures
+                .iter()
+                .any(|candidate| candidate.eq_ignore_ascii_case(&prefix))
+        };
+        let placed = [
+            "NAVM", "PGRD", "LAND", "REFR", "PGRE", "PMIS", "ACRE", "ACHR", "PARW", "PBEA", "PFLA", "PCON", "PBAR",
+            "PHZD",
+        ];
+        if (signature == Signature::new(b"CELL") && child(&placed))
+            || (signature == Signature::new(b"DIAL") && child(&["INFO"]))
+            || (signature == Signature::new(b"WRLD") && child(&["ROAD", "CELL"]))
+            || (vwd_as_quest_children() && signature == Signature::new(b"QUST") && child(&["DLBR", "DIAL", "SCEN"]))
+        {
+            return Err(format!(
+                "adding {name} to {} is not ported yet: the child groups come with the next step",
+                self.get_name()
+            ));
+        }
+        let Some(mr_def) = &self.mr_def else { return Ok(None) };
+        self.do_init();
+        let count = usize::try_from(mr_def.get_member_count()).unwrap_or(0);
+        for index in 0..count {
+            let member = mr_def.get_member(index);
+            if member.get_name().eq_ignore_ascii_case(name)
+                || member.get_default_signature().to_string().eq_ignore_ascii_case(name)
+            {
+                let sort_order = index as i32;
+                if let Some(existing) = self.container.element_by_sort_order(sort_order) {
+                    return Ok(Some(existing));
+                }
+                self.assign_member(index)?;
+                return Ok(self.container.element_by_sort_order(sort_order));
+            }
+        }
+        Ok(None)
+    }
+
+    /// Port of `TwbMainRecord.AssignInternal(aIndex, nil, False)` for a
+    /// member index: the member is created from its definition when the
+    /// record does not have it.
+    pub(crate) fn assign_member(self: &Arc<Self>, index: usize) -> Result<Option<ElementRef>, EditError> {
+        if !is_internal_edit() && !edit_allowed() {
+            return Err(format!("{} can not be assigned.", self.get_name()));
+        }
+        let Some(mr_def) = &self.mr_def else { return Ok(None) };
+        let index_i32 = index as i32;
+        if self.get_is_deleted() {
+            let base_record = game_mode() >= GameMode::gmFO4
+                && mr_def.get_known_sub_record_member_index(KnownSubRecord::ksrBaseRecord) == index_i32;
+            if !base_record {
+                return Ok(None);
+            }
+        }
+        if self.get_is_partial_form() {
+            let mut keep = mr_def.get_known_sub_record_member_index(KnownSubRecord::ksrEditorID) == index_i32;
+            if !keep && (fill_inom() || fill_inoa()) && self.mr_struct().signature == Signature::new(b"DIAL") {
+                let member = mr_def.get_member(index);
+                let signature = member.get_default_signature();
+                keep = (fill_inom() && signature == Signature::new(b"INOM"))
+                    || (fill_inoa() && signature == Signature::new(b"INOA"));
+            }
+            if !keep {
+                return Ok(None);
+            }
+        }
+        self.do_init();
+        if index >= usize::try_from(mr_def.get_member_count()).unwrap_or(0) {
+            return Ok(None);
+        }
+        if let Some(existing) = self.container.element_by_sort_order(index_i32) {
+            return Ok(Some(existing));
+        }
+        let mut member = mr_def.get_member(index);
+        if member.get_def_type() == DefType::dtSubRecordUnion {
+            member = member
+                .as_record_def()
+                .map(|union| union.get_member(0))
+                .ok_or_else(|| format!("{} has an empty union member", self.get_name()))?;
+        }
+        let self_ref: ElementRef = self.clone();
+        let element: ElementRef = match member.get_def_type() {
+            DefType::dtSubRecord => {
+                sub_record::SubRecordImpl::create_new(&self_ref, &self.container, &self.file, member)?
+            }
+            DefType::dtSubRecordArray => {
+                sub_record::create_sub_record_array_new(&self_ref, &self.container, member, &self.file)?
+            }
+            DefType::dtSubRecordStruct => {
+                sub_record::create_sub_record_struct_new(&self_ref, &self.container, member, &self.file)?
+            }
+            other => return Err(format!("unexpected member type {other:?} in {}", self.get_name())),
+        };
+        if let Some(element_impl) = element.as_element_impl() {
+            element_impl.set_sort_and_memory_order(index_i32);
+        }
+        edit::sort_sub_records_of(&**self);
+        Ok(Some(element))
     }
 
     fn self_arc(&self) -> Arc<Self> {
@@ -2176,7 +2562,7 @@ impl MainRecordImpl {
             .iter()
             .position(|element| std::ptr::addr_eq(Arc::as_ptr(element), self as *const Self))?;
         let group = elements.get(index + 1)?.as_element_impl()?.group_record_impl()?;
-        if !matches!(group.group_type(), 1 | 6 | 7) || group.group_label() != self.mr_struct.form_id.to_cardinal() {
+        if !matches!(group.group_type(), 1 | 6 | 7) || group.group_label() != self.mr_struct().form_id.to_cardinal() {
             return None;
         }
         Some(group)
@@ -2209,8 +2595,8 @@ impl MainRecordImpl {
                 Err(error) => {
                     progress(&format!(
                         "<Error decompressing [{}:{}]: {error}>",
-                        self.mr_struct.signature,
-                        self.mr_struct.form_id.to_string(false)
+                        self.mr_struct().signature,
+                        self.mr_struct().form_id.to_string(false)
                     ));
                     None
                 }
@@ -2229,7 +2615,7 @@ impl MainRecordImpl {
     /// element tree reads it through `data_block`, which `reset` releases.
     pub fn data(&self) -> DataPtr<'_> {
         let raw = self.raw_data()?;
-        if !self.mr_struct.flags.is_compressed() {
+        if !self.mr_struct().flags.is_compressed() {
             return Some(raw);
         }
         self.mr_pinned_data
@@ -2241,7 +2627,7 @@ impl MainRecordImpl {
     /// The size of the record data, decompressed when the record is
     /// compressed.
     fn data_len(&self) -> Option<usize> {
-        if self.mr_struct.flags.is_compressed() {
+        if self.mr_struct().flags.is_compressed() {
             self.decompressed().map(|data| data.len())
         } else {
             self.raw_data().map(<[u8]>::len)
@@ -2250,7 +2636,7 @@ impl MainRecordImpl {
 
     /// The block the data of the record lives in, with the data range.
     pub(crate) fn data_block(&self) -> Option<(DataBlock, usize, usize)> {
-        if self.mr_struct.flags.is_compressed() {
+        if self.mr_struct().flags.is_compressed() {
             let storage = self.decompressed()?;
             let len = storage.len();
             Some((DataBlock::Buffer(storage), 0, len))
@@ -2302,6 +2688,10 @@ pub trait ElementImpl: Element {
     }
 
     fn sub_record_array_impl(&self) -> Option<&sub_record::SubRecordArrayImpl> {
+        None
+    }
+
+    fn value_impl(&self) -> Option<Arc<value::ValueImpl>> {
         None
     }
 
@@ -2372,6 +2762,225 @@ pub trait ElementImpl: Element {
             .and_then(|this| this.as_element_impl())
             .map_or(0, write::container_counted_record_count)
     }
+
+    // ----- the editing path (`edit`) -----
+
+    /// The storage of a data container (`dcDataStorage`); `None` for an
+    /// element without data of its own.
+    fn storage(&self) -> Option<&edit::Storage> {
+        None
+    }
+
+    /// Port of `GetDataPrefixSize`: the bytes before the elements that the
+    /// element keeps itself, such as the count of an array.
+    fn get_data_prefix_size(&self) -> usize {
+        0
+    }
+
+    /// The data without rebuilding stale storage (`dcDataBasePtr` read
+    /// directly): the storage, else the bytes as loaded.
+    fn raw_data(&self) -> DataPtr<'_> {
+        None
+    }
+
+    /// The data with stale storage rebuilt first (`GetDataBasePtr`).
+    fn current_data(&self) -> DataPtr<'_> {
+        self.update_storage_from_elements();
+        self.raw_data()
+    }
+
+    /// Port of `dcfDontSave` with `dfDontSave`: the element is not written
+    /// and not merged into its container's data.
+    fn dont_save(&self) -> bool {
+        false
+    }
+
+    /// Port of `csInitializing`: the elements are being built.
+    fn init_running(&self) -> bool {
+        false
+    }
+
+    /// Port of `IsFlags`: a value whose elements are its flags.
+    fn is_flags(&self) -> bool {
+        false
+    }
+
+    /// Port of `UpdateStorageFromElements`.
+    fn update_storage_from_elements(&self) {
+        if let Some(this) = self.as_dyn_element_impl()
+            && let Some(this) = this.as_element_impl()
+        {
+            edit::update_storage_from_elements(this);
+        }
+    }
+
+    /// Port of `InvalidateStorage`.
+    fn invalidate_storage(&self) {
+        if let Some(this) = self.as_dyn_element_impl()
+            && let Some(this) = this.as_element_impl()
+        {
+            edit::invalidate_storage(this);
+        }
+    }
+
+    fn request_storage_change_impl(&self, new_size: usize) -> Option<Vec<u8>> {
+        let this = self.as_dyn_element_impl()?;
+        edit::request_storage_change(this.as_element_impl()?, new_size)
+    }
+
+    fn commit_storage_impl(&self, bytes: Vec<u8>) {
+        if let Some(storage) = self.storage() {
+            storage.set(bytes);
+        }
+    }
+
+    fn update_ended(&self) {
+        edit::update_ended(self.as_this())
+    }
+
+    fn notify_changed(&self) {
+        edit::notify_changed(self.as_this())
+    }
+
+    fn notify_changed_internal(&self) {
+        edit::notify_changed_internal(self.as_this())
+    }
+
+    /// Port of `ElementChanged`: a child changed.
+    fn element_changed(&self, _child: &ElementRef) {
+        self.notify_changed();
+    }
+
+    fn do_after_set(&self, old: &Variant, new: &Variant) {
+        edit::do_after_set(self.as_this(), old, new)
+    }
+
+    /// `Reset; Init` after a change of the data: the elements are built
+    /// again over the current data.
+    fn reset_and_init(&self) {}
+
+    /// Port of `DoReset(True)` before `SetToDefault`: the elements are
+    /// released.
+    fn release_and_detach(&self) {}
+
+    /// Port of `TwbValue.SetEditValue`'s `RecreateFlags` for a flags value.
+    fn after_value_changed(&self) {
+        if self.is_flags() {
+            self.reset_and_init();
+        }
+    }
+
+    /// The tail of `TwbSubRecord.SetToDefaultInternal` for an array.
+    fn after_set_to_default(&self) -> Result<(), EditError> {
+        Ok(())
+    }
+
+    fn set_edit_value_impl(&self, _value: &str) -> Result<(), EditError> {
+        Err(format!("{} can not be edited.", self.get_name()))
+    }
+
+    fn set_native_value_impl(&self, _value: Variant) -> Result<(), EditError> {
+        Err(format!("{} can not be edited.", self.get_name()))
+    }
+
+    /// Port of `SetToDefaultInternal`. The default is `TwbContainer`'s.
+    fn set_to_default_internal(&self) -> Result<(), EditError> {
+        edit::container_set_to_default_internal(self.as_this())
+    }
+
+    /// Port of `IsEditable`. The default is `TwbElement`'s.
+    fn get_is_editable_impl(&self) -> bool {
+        crate::interface::globals::is_internal_edit()
+    }
+
+    /// Port of `TwbContainer.RemoveElement(aElement, aMarkModified)`.
+    fn remove_child(&self, child: &ElementRef, mark_modified: bool) -> Option<ElementRef> {
+        edit::container_remove_child(self.as_this(), child, mark_modified)
+    }
+
+    /// Port of `Add(aName, aSilent)`.
+    fn add_impl(&self, _name: &str, _silent: bool) -> Result<Option<ElementRef>, EditError> {
+        Ok(None)
+    }
+
+    /// Port of `Assign(wbAssignAdd, nil, False)`: one element added to an
+    /// array from its definition alone.
+    fn assign_add(&self) -> Result<Option<ElementRef>, EditError> {
+        Ok(None)
+    }
+
+    /// Port of `TwbStringListTerminator.Create(Self)`.
+    fn add_string_list_terminator(&self) {}
+
+    /// Port of `TwbDataContainer.SetDataSize`: the data is resized and the
+    /// elements are built again over it.
+    fn set_data_size_impl(&self, size: i32) -> Result<(), EditError> {
+        if self.storage().is_none() {
+            return Err(format!("{} can not be resized.", self.get_name()));
+        }
+        if size == self.get_data_size() {
+            return Ok(());
+        }
+        let size = usize::try_from(size).map_err(|_| format!("{} can not take a negative size", self.get_name()))?;
+        let Some(bytes) = self.request_storage_change_impl(size) else {
+            return Err(format!("{} can not be resized.", self.get_name()));
+        };
+        self.commit_storage_impl(bytes);
+        self.reset_and_init();
+        Ok(())
+    }
+
+    /// Port of `GetSortKeyInternal`. The default is empty.
+    fn get_sort_key_impl(&self, _extended: bool) -> String {
+        String::new()
+    }
+
+    /// Port of `Assign(wbAssignThis, aSource, False)`: the edit value of the
+    /// source, or the members one by one for a container without a value.
+    fn assign_from_impl(&self, source: &ElementRef) -> Result<(), EditError> {
+        let has_value = self.get_value_def().is_some();
+        let children = self.container_base().map(|base| base.elements()).unwrap_or_default();
+        if !has_value
+            && !children.is_empty()
+            && let Some(source_container) = source.as_container()
+        {
+            for (index, child) in children.iter().enumerate() {
+                if let Some(source_child) = source_container.get_element(index as i32) {
+                    child.assign_from(&source_child)?;
+                }
+            }
+            return Ok(());
+        }
+        self.set_edit_value(&source.get_edit_value())
+    }
+
+    /// Port of `TwbContainer.RemoveElement(aPos, aMarkModified)`.
+    fn remove_child_at(&self, index: i32, mark_modified: bool) -> Option<ElementRef> {
+        let base = self.container_base()?;
+        let child = base.element_at(usize::try_from(index).ok()?)?;
+        self.remove_child(&child, mark_modified)
+    }
+
+    /// Port of `TwbContainer.ReverseElements`.
+    fn reverse_elements_impl(&self) {
+        if let Some(base) = self.container_base() {
+            base.reverse();
+            self.set_modified(true);
+            self.invalidate_storage();
+        }
+    }
+
+    /// Port of `TwbContainer.SortBySortOrder`.
+    fn sort_by_sort_order_impl(&self) {
+        if let Some(base) = self.container_base() {
+            self.set_modified(true);
+            base.sort_by(|a, b| a.get_sort_order().cmp(&b.get_sort_order()));
+            self.invalidate_storage();
+        }
+    }
+
+    /// This element as the trait object the `edit` functions take.
+    fn as_this(&self) -> &dyn ElementImpl;
 }
 
 trait ElementImplCasts {
@@ -2423,6 +3032,10 @@ impl Element for FileImpl {
 }
 
 impl ElementImpl for FileImpl {
+    fn as_this(&self) -> &dyn ElementImpl {
+        self
+    }
+
     fn self_element_ref(&self) -> Option<ElementRef> {
         self.self_ref.upgrade().map(|element| element as ElementRef)
     }
@@ -2512,11 +3125,11 @@ impl File for FileImpl {
 
     fn get_is_localized(&self) -> bool {
         self.header()
-            .is_some_and(|header| header.mr_struct.flags.is_localized())
+            .is_some_and(|header| header.mr_struct().flags.is_localized())
     }
 
     fn get_is_esm(&self) -> bool {
-        self.header().is_some_and(|header| header.mr_struct.flags.is_esm())
+        self.header().is_some_and(|header| header.mr_struct().flags.is_esm())
     }
 
     fn get_record_count(&self) -> i32 {
@@ -2573,6 +3186,16 @@ impl File for FileImpl {
     }
 
     /// Port of `FileFormIDtoLoadOrderFormID`.
+    fn load_order_form_id_to_file_form_id(&self, form_id: FormID, _new: bool) -> Result<FormID, String> {
+        FileImpl::load_order_form_id_to_file_form_id(self, form_id).ok_or_else(|| {
+            format!(
+                "FormID [{}] can not be mapped to file FormID for file \"{}\"",
+                form_id.to_string(true),
+                self.get_name()
+            )
+        })
+    }
+
     fn file_form_id_to_load_order_form_id(&self, form_id: FormID, _new: bool) -> Result<FormID, String> {
         let mut result = form_id;
         if result.object_id() < 0x800 {
@@ -2601,7 +3224,7 @@ impl Element for GroupRecordImpl {
     /// Port of `TwbGroupRecord.GetName`: the label of a group of children
     /// is the name of the record it belongs to.
     fn get_name(&self) -> String {
-        let prefix = match self.gr_struct.group_type {
+        let prefix = match self.gr_struct().group_type {
             1 => "GRUP World Children of ",
             6 => "GRUP Cell Children of ",
             7 => "GRUP Topic Children of ",
@@ -2609,14 +3232,14 @@ impl Element for GroupRecordImpl {
             9 => "GRUP Cell Temporary Children of ",
             10 if vwd_as_quest_children() => "GRUP Quest Children of ",
             10 => "GRUP Cell Visible Distant Children of ",
-            _ => return self.gr_struct.name(),
+            _ => return self.gr_struct().name(),
         };
         let label = match crate::interface::constructors::wb_form_id() {
             Some(formater) => {
                 let self_ref = self.self_ref.upgrade().map(|group| group as ElementRef);
-                IntegerDefFormater::to_string(&*formater, i64::from(self.gr_struct.label), self_ref.as_ref(), false)
+                IntegerDefFormater::to_string(&*formater, i64::from(self.gr_struct().label), self_ref.as_ref(), false)
             }
-            None => format!("[{:08X}]", self.gr_struct.label),
+            None => format!("[{:08X}]", self.gr_struct().label),
         };
         format!("{prefix}{label}")
     }
@@ -2647,6 +3270,10 @@ impl Element for GroupRecordImpl {
 }
 
 impl ElementImpl for GroupRecordImpl {
+    fn as_this(&self) -> &dyn ElementImpl {
+        self
+    }
+
     fn self_element_ref(&self) -> Option<ElementRef> {
         self.self_ref.upgrade().map(|element| element as ElementRef)
     }
@@ -2728,11 +3355,11 @@ impl Element for MainRecordImpl {
     /// of references, cells and responses, or the summary. The special names
     /// of placed records and cells are not ported yet.
     fn get_display_name(&self, _use_suffix: bool) -> String {
-        if let Some(cached) = self.mr_display_name.get() {
+        if let Some(cached) = self.mr_display_name.read().unwrap().as_ref() {
             return cached.clone();
         }
         let mut result = self.get_full_name();
-        let signature = self.mr_struct.signature;
+        let signature = self.mr_struct().signature;
         if result.is_empty() {
             if matches!(
                 signature.0.as_slice(),
@@ -2788,7 +3415,7 @@ impl Element for MainRecordImpl {
             .file_impl()
             .is_some_and(|file| file.get_file_states().contains(FileState::fsIsOfficial))
         {
-            self.mr_display_name.set(result.clone()).ok();
+            *self.mr_display_name.write().unwrap() = Some(result.clone());
         }
         result
     }
@@ -2816,7 +3443,7 @@ impl Element for MainRecordImpl {
     }
 
     fn get_record_signature(&self) -> Option<Signature> {
-        Some(self.mr_struct.signature)
+        Some(self.mr_struct().signature)
     }
 
     fn get_file(&self) -> Option<FileRef> {
@@ -2845,6 +3472,10 @@ impl Element for MainRecordImpl {
 }
 
 impl ElementImpl for MainRecordImpl {
+    fn as_this(&self) -> &dyn ElementImpl {
+        self
+    }
+
     fn self_element_ref(&self) -> Option<ElementRef> {
         self.self_ref.upgrade().map(|element| element as ElementRef)
     }
@@ -2873,9 +3504,105 @@ impl ElementImpl for MainRecordImpl {
     fn get_counted_record_count(&self) -> u32 {
         1
     }
+
+    fn init_running(&self) -> bool {
+        self.mr_init.is_running()
+    }
+
+    /// Port of `TwbMainRecord.ElementChanged`: the names cached from the
+    /// editor ID and full name subrecords follow a change.
+    fn element_changed(&self, child: &ElementRef) {
+        if let (Some(sub_record), Some(def)) = (
+            child.as_element_impl().and_then(ElementImpl::sub_record_impl),
+            &self.mr_def,
+        ) {
+            let known = def.known_sub_record_signatures();
+            let signature = sub_record.get_signature();
+            let mut relevant = true;
+            if signature == known[KnownSubRecord::ksrEditorID.ord()] {
+                self.set_editor_id(def.get_editor_id(child));
+            } else if signature == known[KnownSubRecord::ksrFullName.ord()] {
+                self.set_full_name(child.get_edit_value());
+            } else if signature != known[KnownSubRecord::ksrBaseRecord.ord()]
+                && signature != known[KnownSubRecord::ksrGridCell.ord()]
+            {
+                relevant = false;
+            }
+            if relevant {
+                *self.mr_display_name.write().unwrap() = None;
+            }
+        }
+        self.notify_changed();
+    }
+
+    /// Port of `TwbMainRecord.DoAfterSet` without the cell child group
+    /// update of a moved reference.
+    fn do_after_set(&self, old: &Variant, new: &Variant) {
+        self.self_arc().do_init();
+        edit::do_after_set(self, old, new);
+    }
+
+    /// Port of `TwbMainRecord.RemoveElement(aPos, aMarkModified)`: the
+    /// cached names of a removed named subrecord are dropped.
+    fn remove_child(&self, child: &ElementRef, mark_modified: bool) -> Option<ElementRef> {
+        let removed = edit::container_remove_child(self, child, mark_modified)?;
+        if mark_modified
+            && let (Some(sub_record), Some(def)) = (
+                removed.as_element_impl().and_then(ElementImpl::sub_record_impl),
+                &self.mr_def,
+            )
+        {
+            let known = def.known_sub_record_signatures();
+            let signature = sub_record.get_signature();
+            if signature == known[KnownSubRecord::ksrEditorID.ord()] {
+                self.set_editor_id(String::new());
+            } else if signature == known[KnownSubRecord::ksrFullName.ord()] {
+                self.set_full_name(String::new());
+            }
+            *self.mr_display_name.write().unwrap() = None;
+        }
+        Some(removed)
+    }
+
+    /// Port of `TwbMainRecord.GetIsEditable`.
+    fn get_is_editable_impl(&self) -> bool {
+        if is_internal_edit() {
+            return true;
+        }
+        if self
+            .mr_def
+            .as_ref()
+            .is_some_and(|def| def.def_base().def_internal_edit_only())
+        {
+            return false;
+        }
+        true
+    }
+
+    fn add_impl(&self, name: &str, silent: bool) -> Result<Option<ElementRef>, EditError> {
+        self.self_arc().add(name, silent)
+    }
+
+    /// Port of `TwbMainRecord.SetEditValue`: the FormID of the record, which
+    /// comes with the FormID step.
+    fn set_edit_value_impl(&self, _value: &str) -> Result<(), EditError> {
+        Err("FormID can only be edited with the FormID step of the write path".to_owned())
+    }
 }
 
 impl Container for MainRecordImpl {
+    fn as_container_ref(&self) -> Option<ElementRef> {
+        self.self_element_ref()
+    }
+
+    fn add(&self, name: &str, silent: bool) -> Result<Option<ElementRef>, EditError> {
+        self.add_impl(name, silent)
+    }
+
+    fn remove_element_at(&self, index: i32, mark_modified: bool) -> Option<ElementRef> {
+        self.remove_child_at(index, mark_modified)
+    }
+
     fn get_element_by_name(&self, name: &str) -> Option<ElementRef> {
         element_by_name(self, name)
     }
@@ -2930,7 +3657,7 @@ impl DataContainer for MainRecordImpl {
 impl MainRecord for MainRecordImpl {
     /// Port of `GetLoadOrderFormID`.
     fn get_form_id(&self) -> FormID {
-        self.mr_struct.form_id
+        self.mr_struct().form_id
     }
 
     fn get_has_precombined_mesh(&self) -> bool {
@@ -2977,7 +3704,7 @@ impl MainRecord for MainRecordImpl {
     }
 
     fn get_signature(&self) -> Signature {
-        self.mr_struct.signature
+        self.mr_struct().signature
     }
 
     fn get_editor_id(&self) -> String {
@@ -2994,11 +3721,11 @@ impl MainRecord for MainRecordImpl {
     /// Port of `TwbMainRecord.GetIsPartialForm`: only a record whose
     /// definition allows partial forms is one.
     fn get_is_partial_form(&self) -> bool {
-        self.mr_def.as_ref().is_some_and(|def| def.get_can_be_partial()) && self.mr_struct.flags.is_partial_form()
+        self.mr_def.as_ref().is_some_and(|def| def.get_can_be_partial()) && self.mr_struct().flags.is_partial_form()
     }
 
     fn get_flags(&self) -> MainRecordStructFlags {
-        self.mr_struct.flags
+        self.mr_struct().flags
     }
 
     /// Port of `TwbMainRecord.GetCanBePartial`.
@@ -3007,7 +3734,7 @@ impl MainRecord for MainRecordImpl {
         if !def.get_can_be_partial() {
             return false;
         }
-        if self.mr_struct.signature != Signature::new(b"CELL") {
+        if self.mr_struct().signature != Signature::new(b"CELL") {
             return true;
         }
         let master_or_self = self.get_master_or_self();
@@ -3028,7 +3755,7 @@ impl MainRecord for MainRecordImpl {
 
     /// Port of `TwbMainRecord.GetGridCell`: the `XCLC` position of a cell.
     fn get_grid_cell(&self) -> Option<(i32, i32)> {
-        if self.mr_struct.signature != Signature::new(b"CELL") {
+        if self.mr_struct().signature != Signature::new(b"CELL") {
             return None;
         }
         let xclc = self.get_record_by_signature(Signature::new(b"XCLC"))?;
@@ -3039,18 +3766,26 @@ impl MainRecord for MainRecordImpl {
     }
 
     fn get_is_persistent(&self) -> bool {
-        self.mr_struct.flags.is_persistent()
+        self.mr_struct().flags.is_persistent()
     }
 
     fn get_version(&self) -> u32 {
-        u32::from(self.mr_struct.version)
+        u32::from(self.mr_struct().version)
     }
 
     fn get_is_deleted(&self) -> bool {
-        self.mr_struct.flags.is_deleted()
+        self.mr_struct().flags.is_deleted()
     }
 
     /// Port of `GetMasterOrSelf`.
+    fn get_is_master(&self) -> bool {
+        self.master().is_none()
+    }
+
+    fn set_is_compressed(&self, value: bool) {
+        self.self_arc().set_is_compressed(value);
+    }
+
     fn get_master_or_self(&self) -> MainRecordRef {
         let master = self.mr_master.read().unwrap().as_ref().and_then(Weak::upgrade);
         master.unwrap_or_else(|| self.self_arc()) as MainRecordRef

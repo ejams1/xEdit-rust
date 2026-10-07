@@ -64,7 +64,7 @@ Callbacks that cache per-record data (tint layers, face morphs) keep their cache
 - `wbIsSkyrim`, `wbIsFallout4` and the other game checks are functions of the game mode, not constants; use the `is_*` functions from `globals`.
 - Floats print through `RoundToEx` with the single-precision power of ten and 18 scaled digits (`delphi.rs`); do not format a float in a callback with Rust's formatting. Use `float_to_str_f_fixed` or `format_general`.
 - Angles normalize with `TWO_PI`, which is twice the single-precision pi, as upstream.
-- Stubs for after-load and after-set callbacks are not reached by the read path and stay stubs until the write path needs them.
+- `AfterLoad` and `AfterSet` callbacks run on the write path (`AfterLoad` on every load under `wbAllowInternalEdit`, `AfterSet` on every `SetEditValue`), so every one of them is ported; the stub files are empty. The helpers `with_internal_edit`, `set_native`, `set_path_native`, `path_int`, `add_member` and `remove_member` in `callbacks/common.rs` mirror the Pascal idioms (`wbBeginInternalEdit`, `ElementNativeValues[...] :=`, `Add`, `RemoveElement`); bodies that several games share live in `callbacks/common.rs` under a name without the `wb` prefix, and each game's `pub fn wb_...` calls them, because the stub exclusion needs the `pub fn` in the game's own hand file.
 
 ## Adding a game unit
 

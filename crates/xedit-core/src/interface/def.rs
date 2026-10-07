@@ -47,7 +47,7 @@ use super::guid::GuidDef;
 use super::integer::{IntegerDefFormater, IntegerDefInterface};
 use super::len_string::LenStringDef;
 use super::main_record::MainRecordDef;
-use super::misc::{Variant, shorten_text};
+use super::misc::{EditError, Variant, shorten_text};
 use super::resolvable::{ResolvableDef, UnionDef};
 use super::string::{StringDef, StringDefFormater};
 use super::struct_def::StructDef;
@@ -1036,11 +1036,30 @@ impl ValueDefBase {
     }
 }
 
+/// The element whose data a setter changes: upstream passes the element
+/// itself and fails without one.
+pub fn edit_element(element: ElementArg<'_>) -> Result<&ElementRef, EditError> {
+    element.ok_or_else(|| "the value has no element to edit".to_owned())
+}
+
+/// Port of `aElement.RequestStorageChange(aBasePtr, aEndPtr, aNewSize)`: the
+/// data of the element as a buffer of `new_size` bytes, which the caller
+/// fills and commits with `Element::commit_storage`.
+pub fn request_storage(element: ElementArg<'_>, new_size: usize) -> Result<(ElementRef, Vec<u8>), EditError> {
+    let element = edit_element(element)?;
+    let bytes = element
+        .request_storage_change(new_size)
+        .ok_or_else(|| format!("{} can not be edited.", element.get_name()))?;
+    Ok((element.clone(), bytes))
+}
+
 /// Upstream `IwbValueDef`, implemented by `TwbValueDef`.
 ///
-/// The methods that change data (`FromEditValue`, `FromNativeValue`,
-/// `SetLinksTo`, `MastersUpdated`, `FindUsedMasters`, `CompareExchangeFormID`,
-/// `PrepareSave`) come with the write path.
+/// The methods that change data through the masters (`SetLinksTo`,
+/// `MastersUpdated`, `FindUsedMasters`, `CompareExchangeFormID`,
+/// `PrepareSave`) come with the later steps of the write path.
+// The `from_*` methods keep the upstream names (`FromEditValue`).
+#[allow(clippy::wrong_self_convention)]
 pub trait ValueDef: NamedDef {
     fn value_def_base(&self) -> &ValueDefBase;
 
@@ -1132,11 +1151,71 @@ pub trait ValueDef: NamedDef {
             .unwrap_or_default()
     }
 
-    fn set_to_default(&self, data: DataPtr, element: ElementArg) -> bool {
+    /// Port of `FromEditValue`: writes the value given as edit text into the
+    /// data of `element`. The default is `TwbValueDef`'s, which raises.
+    fn from_edit_value(&self, _data: DataPtr, _element: ElementArg, _value: &str) -> Result<(), EditError> {
+        Err(format!("{} is not editable.", self.get_name()))
+    }
+
+    /// Port of `FromNativeValue`.
+    fn from_native_value(&self, _data: DataPtr, _element: ElementArg, _value: Variant) -> Result<(), EditError> {
+        Err(format!("{} is not editable.", self.get_name()))
+    }
+
+    /// Port of `SetToDefault`: writes the default value and reports whether
+    /// anything changed. The base runs the callback of the definition only.
+    fn set_to_default(&self, data: DataPtr, element: ElementArg) -> Result<bool, EditError> {
+        Ok(self.set_to_default_callback(data, element))
+    }
+
+    /// The `vdSetToDefault` callback, which every override tries first.
+    fn set_to_default_callback(&self, data: DataPtr, element: ElementArg) -> bool {
         match self.value_def_base().vd_set_to_default.load().as_deref() {
             Some(callback) => callback(data, element),
             None => false,
         }
+    }
+
+    /// Port of the `vdsHasDefaultEditValue` branch of `SetToDefault`: the
+    /// edit value is compared with the default and written when it differs.
+    /// `None` when the definition has no default edit value.
+    fn set_to_default_edit_value(&self, data: DataPtr, element: ElementArg) -> Option<Result<bool, EditError>> {
+        let base = self.value_def_base();
+        if !base.vd_states.contains(ValueDefState::vdsHasDefaultEditValue) {
+            return None;
+        }
+        let default = base
+            .vd_default_edit_value
+            .load()
+            .as_deref()
+            .cloned()
+            .unwrap_or_default();
+        let changed = data.is_none() || self.to_edit_value(data, element) != default;
+        Some(if changed {
+            self.from_edit_value(data, element, &default).map(|()| true)
+        } else {
+            Ok(false)
+        })
+    }
+
+    /// The same for a default native value (`vdsHasDefaultNativeValue`).
+    fn set_to_default_native_value(&self, data: DataPtr, element: ElementArg) -> Option<Result<bool, EditError>> {
+        let base = self.value_def_base();
+        if !base.vd_states.contains(ValueDefState::vdsHasDefaultNativeValue) {
+            return None;
+        }
+        let default = base
+            .vd_default_native_value
+            .load()
+            .as_deref()
+            .cloned()
+            .unwrap_or_default();
+        let changed = data.is_none() || self.to_native_value(data, element) != default;
+        Some(if changed {
+            self.from_native_value(data, element, default).map(|()| true)
+        } else {
+            Ok(false)
+        })
     }
 
     fn get_element_map(&self) -> &[u32] {
@@ -1363,6 +1442,11 @@ impl ValueDef for EmptyDef {
 
     fn get_can_be_zero_size(&self) -> bool {
         true
+    }
+
+    /// Port of `TwbEmptyDef.FromEditValue`: nothing to store.
+    fn from_edit_value(&self, _data: DataPtr, _element: ElementArg, _value: &str) -> Result<(), EditError> {
+        Ok(())
     }
 
     fn get_is_editable(&self, _data: DataPtr, _element: ElementArg) -> bool {

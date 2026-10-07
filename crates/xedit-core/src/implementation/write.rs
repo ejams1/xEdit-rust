@@ -7,12 +7,12 @@
 //! Port of the save path of `wbImplementation.pas`: the modified states of
 //! `TwbElement`, `PrepareSave`, `WriteToStream` and the CRC32 of a file.
 //!
-//! State: a file whose records are unmodified, or modified only by what the
-//! load does itself (the offsets a worldspace drops), writes the bytes
-//! upstream writes. A record written from its elements copies each
-//! unmodified subrecord raw; the edits that change element data come with
-//! the editing step of phase 3, which also lifts the `Unsupported` errors of
-//! `prepare_save` where upstream edits the file header on save.
+//! State: a file writes the bytes upstream writes, with the edits upstream
+//! makes to the file header on save (the ESM and Light flags that follow
+//! the extension, the record count in `HEDR`, the interior cell count in
+//! `INCC`, the `ONAM` list of a master, a FormID clamped to the masters).
+//! A record written from its elements copies each unmodified subrecord raw
+//! and writes a changed one from its storage (`edit`).
 
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
@@ -21,8 +21,9 @@ use crate::interface::element::{Container, Element, ElementRef, File};
 use crate::interface::globals::{
     GameMode, allow_esp_masters_on_save, always_save_onam, always_save_onam_force, app_name, clamp_form_id,
     complex_file_file_id, delay_load_records, game_mode, game_name, has_added_optimized_support, header_signature,
-    is_fallout3, is_fallout4, is_fallout76, is_light_supported, is_skyrim, is_starfield, red_pill,
-    size_of_main_record_struct, tool_name, vwd_as_quest_children, vwd_in_temporary, wb_group_order_count,
+    is_fallout3, is_fallout4, is_fallout76, is_light_supported, is_skyrim, is_starfield, master_update_filter_onam,
+    master_update_fix_persistence, red_pill, size_of_main_record_struct, tool_name, vwd_as_quest_children,
+    vwd_in_temporary, wb_group_order_count,
 };
 use crate::interface::types::{ElementType, FileState, Signature};
 
@@ -43,6 +44,12 @@ pub enum ElementState {
     esInternalModified = 2,
     /// A change that is not on disk yet.
     esUnsaved = 4,
+    /// Port of `esChangeNotified`: a change notification waits for the end
+    /// of the update.
+    esChangeNotified = 8,
+    /// Port of `esModifiedUpdated`: the parent is told of the modification
+    /// at the end of the update.
+    esModifiedUpdated = 16,
 }
 
 /// Port of `TwbResetModified`: what a save does to the modified states.
@@ -115,7 +122,11 @@ pub(crate) fn element_set_modified(element: &dyn ElementImpl, value: bool) {
         base.include_state(ElementState::esUnsaved);
     }
     base.include_state(ElementState::esModified);
-    element.set_parent_modified();
+    if base.e_update_count.load(Ordering::Relaxed) > 0 {
+        base.include_state(ElementState::esModifiedUpdated);
+    } else {
+        element.set_parent_modified();
+    }
 }
 
 /// Port of `MarkModifiedRecursive`: the elements of the given types below
@@ -200,9 +211,9 @@ pub(crate) fn container_counted_record_count(element: &dyn ElementImpl) -> u32 {
 }
 
 /// Port of `TwbDataContainer.WriteToStreamInternal` for an element whose
-/// data is `data`: a modified element writes its elements (its storage is
-/// never valid in this version, as after `InvalidateStorage`), an
-/// unmodified one copies its data.
+/// data is `data`: a modified element writes its data when it has any
+/// (its storage, rebuilt from the elements when a child changed), else its
+/// elements; an unmodified one copies its data.
 pub(crate) fn data_container_write_to_stream(
     element: &dyn ElementImpl,
     data: Option<&[u8]>,
@@ -217,12 +228,20 @@ pub(crate) fn data_container_write_to_stream(
     let old_len = out.len();
     let expected = usize::try_from(element.get_data_size()).unwrap_or(0);
     if element.element_base().has_state(ElementState::esModified) {
-        container_write_to_stream(element, out, reset)?;
-        if out.len() == old_len
-            && let Some(data) = data
-        {
-            let size = expected.min(data.len());
-            out.extend_from_slice(&data[..size]);
+        match data {
+            Some(data) if !data.is_empty() => {
+                out.extend_from_slice(data);
+                element.element_base().reset_modified(reset);
+            }
+            _ => {
+                container_write_to_stream(element, out, reset)?;
+                if out.len() == old_len
+                    && let Some(data) = data
+                {
+                    let size = expected.min(data.len());
+                    out.extend_from_slice(&data[..size]);
+                }
+            }
         }
     } else {
         if let Some(data) = data
@@ -306,7 +325,7 @@ impl GroupRecordImpl {
     /// elements, and the size patched when the group changed.
     pub(crate) fn write_to_stream_impl(&self, out: &mut Vec<u8>, reset: ResetModified) -> Result<(), SaveError> {
         let start = out.len();
-        out.extend_from_slice(&self.gr_struct.to_bytes());
+        out.extend_from_slice(&self.gr_struct().to_bytes());
         for child in self.container.elements() {
             child
                 .as_element_impl()
@@ -317,12 +336,38 @@ impl GroupRecordImpl {
             let size = u32::try_from(out.len() - start)
                 .map_err(|_| SaveError::Refused(format!("{} is too large for a group", self.get_name())))?;
             out[start + 4..start + 8].copy_from_slice(&size.to_le_bytes());
-        } else if out.len() - start != self.gr_struct.group_size as usize {
+        } else if out.len() - start != self.gr_struct().group_size as usize {
+            let modified = self
+                .container
+                .elements()
+                .iter()
+                .filter(|child| {
+                    child
+                        .as_element_impl()
+                        .is_some_and(|child| child.element_base().has_state(ElementState::esModified))
+                })
+                .map(|child| child.get_name())
+                .take(5)
+                .collect::<Vec<_>>();
+            let children = self.container.elements();
+            let header_sum: usize = children
+                .iter()
+                .filter_map(|child| child.as_element_impl()?.main_record_impl())
+                .map(|record| size_of_main_record_struct() as usize + record.mr_struct().data_size as usize)
+                .sum();
+            let groups = children
+                .iter()
+                .filter(|child| child.get_element_type() == ElementType::etGroupRecord)
+                .count();
             return Err(SaveError::Internal(format!(
-                "{}: wrote {} bytes for a group of {}",
+                "{}: wrote {} bytes for a group of {} while the group is not modified; {} children ({} groups), record headers sum to {}; modified records: {}",
                 self.get_full_path(),
                 out.len() - start,
-                self.gr_struct.group_size
+                self.gr_struct().group_size,
+                children.len(),
+                groups,
+                header_sum,
+                modified.join(", ")
             )));
         }
         self.base.reset_modified(reset);
@@ -396,8 +441,8 @@ impl MainRecordImpl {
         if self.base.has_state(ElementState::esModified) {
             self.do_init();
             let start = out.len();
-            out.extend_from_slice(&self.mr_struct.to_bytes());
-            if self.mr_struct.flags.is_compressed() {
+            out.extend_from_slice(&self.mr_struct().to_bytes());
+            if self.mr_struct().flags.is_compressed() {
                 let mut data = Vec::new();
                 container_write_to_stream(&**self, &mut data, reset)?;
                 let size = u32::try_from(data.len())
@@ -418,12 +463,12 @@ impl MainRecordImpl {
                 .raw_record_bytes()
                 .ok_or_else(|| SaveError::Internal(format!("{} has no data", self.get_full_path())))?;
             out.extend_from_slice(raw);
-            if raw.len() != header_size + self.mr_struct.data_size as usize {
+            if raw.len() != header_size + self.mr_struct().data_size as usize {
                 return Err(SaveError::Internal(format!(
                     "{}: {} bytes loaded for a record of {}",
                     self.get_full_path(),
                     raw.len(),
-                    self.mr_struct.data_size
+                    self.mr_struct().data_size
                 )));
             }
         }
@@ -435,7 +480,7 @@ impl MainRecordImpl {
     /// that may hold it, and a worldspace whose offsets were dropped marks
     /// its children modified so that their groups are sized again.
     pub(crate) fn prepare_save_impl(self: &Arc<Self>) -> Result<(), SaveError> {
-        let signature = self.mr_struct.signature;
+        let signature = self.mr_struct().signature;
         let path = || self.get_full_path();
         if signature == header_signature() {
             let in_file = self
@@ -448,14 +493,14 @@ impl MainRecordImpl {
                     path()
                 )));
             }
-            if !self.mr_struct.form_id.is_null() {
+            if !self.mr_struct().form_id.is_null() {
                 return Err(SaveError::Refused(format!(
                     "File Header record \"{}\" can not have a FormID.",
                     path()
                 )));
             }
         } else {
-            if self.mr_struct.form_id.is_null() {
+            if self.mr_struct().form_id.is_null() {
                 return Err(SaveError::Refused(format!("Record \"{}\" must have a FormID.", path())));
             }
             let group = self
@@ -471,10 +516,10 @@ impl MainRecordImpl {
                 ))
             };
             let is = |expected: &[u8; 4]| signature == Signature::new(expected);
-            let flags = self.mr_struct.flags;
+            let flags = self.mr_struct().flags;
             match group.group_type() {
                 0 => {
-                    if group.gr_struct.label_signature() != signature {
+                    if group.gr_struct().label_signature() != signature {
                         return Err(not_in());
                     }
                 }
@@ -631,13 +676,13 @@ impl FileImpl {
                     first.get_name()
                 ))
             })?;
-        if header.mr_struct.signature != header_signature() {
+        if header.mr_struct().signature != header_signature() {
             return Err(SaveError::Refused(format!(
                 "File {name} has invalid record {} with invalid signature as file header.",
                 first.get_name()
             )));
         }
-        if header.mr_struct.flags.0 & 0x10 != 0 && !has_added_optimized_support() {
+        if header.mr_struct().flags.0 & 0x10 != 0 && !has_added_optimized_support() {
             return Err(SaveError::Refused(format!(
                 "Modules with the \"Optimized\" file flag set can not be saved in {}",
                 Self::app_and_tool_name()
@@ -648,16 +693,33 @@ impl FileImpl {
             .ok_or_else(|| SaveError::Refused(format!("File {name} has a file header with missing HEDR subrecord")))?;
 
         let extension = self.extension();
-        let flags = header.mr_struct.flags;
-        if extension == ".esm" && !flags.is_esm() {
-            return Err(SaveError::Unsupported(format!(
-                "{name} has the .esm extension without the ESM flag; setting the flag on save is not ported yet"
-            )));
+        // The edits of the header run as ordinary edits, as upstream (an
+        // internal edit would let `Assign` zero the first ONAM entry); the
+        // edit flag is set for their duration so that a dry run without it
+        // builds the same bytes as a save.
+        let was_allowed = crate::interface::globals::edit_allowed();
+        crate::interface::globals::set_edit_allowed(true);
+        let result = self.prepare_save_header(&header, &hedr, &extension, &name);
+        crate::interface::globals::set_edit_allowed(was_allowed);
+        result
+    }
+
+    /// The part of `TwbFile.PrepareSave` that edits the file header.
+    fn prepare_save_header(
+        self: &Arc<Self>,
+        header: &Arc<MainRecordImpl>,
+        hedr: &ElementRef,
+        extension: &str,
+        name: &str,
+    ) -> Result<(), SaveError> {
+        let edit_error = |error: String| SaveError::Internal(format!("{name}: {error}"));
+        let elements = self.container.elements();
+        if extension == ".esm" {
+            header.set_is_esm(true);
         }
-        if is_light_supported() && extension == ".esl" && !(flags.is_esm() && flags.is_light()) {
-            return Err(SaveError::Unsupported(format!(
-                "{name} has the .esl extension without the ESM and Light flags; setting them on save is not ported yet"
-            )));
+        if is_light_supported() && extension == ".esl" {
+            header.set_is_esm(true);
+            header.set_is_light(true);
         }
         if !allow_esp_masters_on_save() && self.masters().iter().any(|master| master.extension() == ".esp") {
             return Err(SaveError::Refused(format!(
@@ -666,10 +728,9 @@ impl FileImpl {
             )));
         }
         if is_starfield() {
+            let flags = header.mr_struct().flags;
             if flags.is_update() && (flags.is_light() || flags.is_medium()) {
-                return Err(SaveError::Unsupported(format!(
-                    "{name} has the Update flag with the Small or Medium flag; clearing it on save is not ported yet"
-                )));
+                header.set_is_update(false);
             }
             if extension == ".esp" {
                 if flags.is_light() || flags.is_medium() {
@@ -678,11 +739,14 @@ impl FileImpl {
                     ));
                 }
                 if flags.is_esm() {
-                    return Err(SaveError::Unsupported(format!(
-                        "{name} is an .esp with the ESM flag; clearing it on save is not ported yet"
-                    )));
+                    crate::interface::misc::progress(&format!(
+                        "{} .esp files must not have ESM flag. Removing.",
+                        game_name()
+                    ));
+                    header.set_is_esm(false);
                 }
             }
+            let flags = header.mr_struct().flags;
             if flags.is_light() && flags.is_medium() {
                 return Err(SaveError::Refused(
                     "Small or medium flags are mutually exclusive. Modules cannot be both.".to_owned(),
@@ -702,7 +766,7 @@ impl FileImpl {
             if self.masters().iter().any(|master| {
                 master
                     .header()
-                    .is_some_and(|header| header.mr_struct.flags.is_blueprint())
+                    .is_some_and(|header| header.mr_struct().flags.is_blueprint())
             }) {
                 return Err(SaveError::Refused(format!(
                     "{} modules must never have any blueprint masters.",
@@ -753,7 +817,7 @@ impl FileImpl {
             *slot = true;
             // Every worldspace is initialized, so that its offsets are
             // dropped and its child groups sorted.
-            if group.gr_struct.label_signature() == Signature::new(b"WRLD") {
+            if group.gr_struct().label_signature() == Signature::new(b"WRLD") {
                 for child in group.container.elements() {
                     if let Some(record) = child.as_element_impl().and_then(ElementImpl::main_record_impl) {
                         record.get_element_count();
@@ -782,24 +846,21 @@ impl FileImpl {
         if record_count < 1 {
             return Err(SaveError::Refused(format!("File {name} has an invalid record count")));
         }
-        let counted = (record_count - 1).to_string();
-        let stored = hedr
+        // `HEDR.Elements[1].EditValue := IntToStr(Pred(RecordCount))`.
+        let count = hedr
             .as_container()
             .and_then(|hedr| hedr.get_element(1))
-            .map(|count| count.get_edit_value())
-            .unwrap_or_default();
-        if stored != counted {
-            return Err(SaveError::Unsupported(format!(
-                "{name}: HEDR holds {stored} records and the file has {counted}; updating the count on save is not ported yet"
-            )));
-        }
+            .ok_or_else(|| SaveError::Refused(format!("File {name} has a HEDR subrecord without a record count")))?;
+        count
+            .set_edit_value(&(record_count - 1).to_string())
+            .map_err(edit_error)?;
 
         if is_skyrim() || is_fallout3() || is_fallout4() || is_fallout76() || is_starfield() {
             if !is_fallout3() {
                 let cells = self
                     .records()
                     .iter()
-                    .filter(|record| record.mr_struct.signature == Signature::new(b"CELL"))
+                    .filter(|record| record.mr_struct().signature == Signature::new(b"CELL"))
                     .filter(|record| {
                         let interior = record
                             .get_element_native_value("DATA")
@@ -809,62 +870,38 @@ impl FileImpl {
                         super::trim_initialized_records(64, None);
                         interior
                     })
-                    .count()
-                    .to_string();
-                let stored = header
+                    .count();
+                // INCC is a required member, so the load added it when the
+                // file lacked it; upstream fails on a header without it.
+                let incc = header
                     .get_record_by_signature(Signature::new(b"INCC"))
-                    .map(|incc| incc.get_edit_value());
-                if stored.as_deref() != Some(cells.as_str()) {
-                    return Err(SaveError::Unsupported(format!(
-                        "{name}: INCC holds {} interior cells and the file has {cells}; updating the count on save is not ported yet",
-                        stored.unwrap_or_else(|| "no".to_owned())
-                    )));
-                }
+                    .ok_or_else(|| SaveError::Internal(format!("File {name} has a file header without INCC")))?;
+                incc.set_edit_value(&cells.to_string()).map_err(edit_error)?;
             }
-            if header.get_record_by_signature(Signature::new(b"ONAM")).is_some() {
-                return Err(SaveError::Unsupported(format!(
-                    "{name}: the file header holds ONAM entries, which upstream rebuilds on save; that is not ported yet"
-                )));
-            }
-            if always_save_onam() || always_save_onam_force() || flags.is_esm() || extension == ".esm" {
-                let master_count = self.master_count();
-                let needs_onam = self.records().iter().any(|record| {
-                    let form_id = record.get_fixed_form_id();
-                    i32::from(form_id.file_id().full_slot()) < master_count
-                        && onam_signature(record.mr_struct.signature)
-                        && !record.mr_struct.flags.is_persistent()
-                });
-                if needs_onam {
-                    return Err(SaveError::Unsupported(format!(
-                        "{name}: upstream writes ONAM entries for its overridden placed records on save; that is not ported yet"
-                    )));
-                }
-            }
+            self.rebuild_onam(header, extension).map_err(edit_error)?;
         }
 
         if clamp_form_id() || self.get_file_states().contains(FileState::fsIsDeltaPatch) {
-            let mut index = self.master_count();
+            let mut index = header
+                .get_element_by_name("Master Files")
+                .and_then(|masters| masters.as_container().map(|m| m.get_element_count()))
+                .unwrap_or(0);
             if self.get_file_states().contains(FileState::fsIsDeltaPatch) {
                 index -= 1;
             }
-            if game_mode() != GameMode::gmTES3 && !complex_file_file_id() {
-                let records = self.records();
-                let clamped = records
-                    .iter()
-                    .find(|record| i32::from(record.mr_struct.form_id.file_id().full_slot()) > index);
-                if let Some(record) = clamped {
-                    return Err(SaveError::Unsupported(format!(
-                        "{name}: {} has a FormID beyond the masters, which upstream clamps on save; that is not ported yet",
-                        record.get_name()
-                    )));
-                }
+            for record in self.records() {
+                record.clamp_form_id(index);
             }
         }
 
+        let flags = header.mr_struct().flags;
         if complex_file_file_id() {
             if !red_pill() {
                 for master in self.masters() {
-                    if master.header().is_some_and(|header| header.mr_struct.flags.is_update()) {
+                    if master
+                        .header()
+                        .is_some_and(|header| header.mr_struct().flags.is_update())
+                    {
                         return Err(SaveError::Refused(format!(
                             "Modules with Update flagged modules as masters can't be saved in {}",
                             Self::app_and_tool_name()
@@ -915,12 +952,148 @@ impl FileImpl {
                     return Err(SaveError::Refused(format!(
                         "Record {} has invalid ObjectID {:06X} for an update module. You will not be able to save this file with Update flag active",
                         record.get_name(),
-                        record.mr_struct.form_id.to_cardinal() & 0x00FF_FFFF
+                        record.mr_struct().form_id.to_cardinal() & 0x00FF_FFFF
                     )));
                 }
             }
         }
         Ok(())
+    }
+}
+
+impl FileImpl {
+    /// The `ONAM` part of `TwbFile.PrepareSave`: the list is dropped and
+    /// built again from the overridden temporary placed records of every
+    /// master, in FormID order, for a master or when the game always saves
+    /// it. A record whose master is persistent is made persistent too
+    /// (`wbMasterUpdateFixPersistence`). `UpdateRefs` is not ported.
+    fn rebuild_onam(self: &Arc<Self>, header: &Arc<MainRecordImpl>, extension: &str) -> Result<(), String> {
+        header.begin_update();
+        let result = (|| {
+            while header.remove_element_by_name("ONAM").is_some() {}
+            let Some(master_files) = header
+                .get_element_by_name("Master Files")
+                .filter(|masters| masters.as_container().is_some())
+            else {
+                return Ok(());
+            };
+            let master_count = master_files.as_container().map_or(0, |m| m.get_element_count());
+            let records = self.records();
+            let writes_onam = always_save_onam()
+                || always_save_onam_force()
+                || header.mr_struct().flags.is_esm()
+                || extension == ".esm";
+            let mut onams: Option<ElementRef> = None;
+            let mut j = 0usize;
+            for i in 0..master_count {
+                let is_container = master_files
+                    .as_container()
+                    .and_then(|m| m.get_element(i))
+                    .is_some_and(|master| master.as_container().is_some());
+                if is_container {
+                    if let Some(onams) = &onams
+                        && let Some(onams) = onams.as_element_impl()
+                    {
+                        onams.begin_update();
+                    }
+                    let result = (|| -> Result<(), String> {
+                        if !writes_onam {
+                            return Ok(());
+                        }
+                        while j < records.len() {
+                            let current = records[j].clone();
+                            let form_id = current.get_fixed_form_id();
+                            let file_id = i32::from(form_id.file_id().full_slot());
+                            if file_id > i {
+                                break;
+                            }
+                            j += 1;
+                            if !onam_signature(current.mr_struct().signature) {
+                                continue;
+                            }
+                            if master_update_filter_onam() && !current.is_winning_override() {
+                                continue;
+                            }
+                            // ONAMs are for overridden temporary refs only.
+                            if current.mr_struct().flags.is_persistent() {
+                                continue;
+                            }
+                            let new_onam: ElementRef = match &onams {
+                                None => {
+                                    let list = header
+                                        .add("ONAM", true)?
+                                        .filter(|list| list.as_container().is_some())
+                                        .ok_or_else(|| "the file header did not add ONAM".to_owned())?;
+                                    if let Some(list_impl) = list.as_element_impl() {
+                                        list_impl.begin_update();
+                                    }
+                                    let first = list
+                                        .as_container()
+                                        .and_then(|list| list.get_element(0))
+                                        .ok_or_else(|| "the new ONAM list has no element".to_owned())?;
+                                    onams = Some(list);
+                                    first
+                                }
+                                Some(list) => loop {
+                                    let added = list
+                                        .as_element_impl()
+                                        .ok_or_else(|| "the ONAM list has no edit path".to_owned())?
+                                        .assign_add()?
+                                        .ok_or_else(|| "the ONAM list did not add an element".to_owned())?;
+                                    if added.get_native_value().as_ordinal() == Some(0) {
+                                        break added;
+                                    }
+                                },
+                            };
+                            new_onam.set_native_value(crate::interface::misc::Variant::UInt(u64::from(
+                                form_id.to_cardinal(),
+                            )))?;
+
+                            if master_update_fix_persistence()
+                                && !current.mr_struct().flags.is_persistent()
+                                && let Some(master) = current.master()
+                            {
+                                let set_persistent = if master.mr_struct().flags.is_persistent() {
+                                    true
+                                } else {
+                                    let mut found = false;
+                                    for override_ in master.overrides() {
+                                        if Arc::ptr_eq(&override_, &current) {
+                                            break;
+                                        }
+                                        if override_.mr_struct().flags.is_persistent() {
+                                            found = true;
+                                            break;
+                                        }
+                                    }
+                                    found
+                                };
+                                if set_persistent {
+                                    crate::interface::misc::progress(&format!(
+                                        "Setting Persistent: {}",
+                                        current.get_name()
+                                    ));
+                                    current.set_is_persistent(true);
+                                }
+                            }
+                        }
+                        Ok(())
+                    })();
+                    if let Some(onams) = &onams
+                        && let Some(onams) = onams.as_element_impl()
+                    {
+                        onams.end_update();
+                    }
+                    result?;
+                }
+                if j >= records.len() {
+                    break;
+                }
+            }
+            Ok(())
+        })();
+        header.end_update();
+        result
     }
 }
 

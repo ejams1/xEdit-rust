@@ -14,7 +14,7 @@ use super::def::{
 };
 use super::element::{DataPtr, ElementArg, ElementRef};
 use super::globals::is_internal_edit;
-use super::misc::Variant;
+use super::misc::{EditError, Variant};
 use super::types::{
     CallbackType, DefFlag, DefType, DefTypes, EditType, ElementType, EnumSet, def_flags_inherit_down,
     def_flags_inherit_up,
@@ -174,6 +174,30 @@ macro_rules! resolvable_value_def_methods {
             match self.resolve_def(data, element) {
                 Some(value_def) => value_def.to_native_value(data, element),
                 None => Variant::Str(String::new()),
+            }
+        }
+
+        fn from_edit_value(&self, data: DataPtr, element: ElementArg, value: &str) -> Result<(), EditError> {
+            match self.resolve_def(data, element) {
+                Some(value_def) => value_def.from_edit_value(data, element, value),
+                None => Err("Union could not be resolved".to_owned()),
+            }
+        }
+
+        fn from_native_value(&self, data: DataPtr, element: ElementArg, value: Variant) -> Result<(), EditError> {
+            match self.resolve_def(data, element) {
+                Some(value_def) => value_def.from_native_value(data, element, value),
+                None => Err("Union could not be resolved".to_owned()),
+            }
+        }
+
+        fn set_to_default(&self, data: DataPtr, element: ElementArg) -> Result<bool, EditError> {
+            if self.set_to_default_callback(data, element) {
+                return Ok(true);
+            }
+            match self.resolve_def(data, element) {
+                Some(value_def) => value_def.set_to_default(data, element),
+                None => Ok(false),
             }
         }
 
