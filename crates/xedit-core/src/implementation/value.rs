@@ -43,6 +43,9 @@ pub struct ValueBase {
     /// The decompressed data of a compressed structure (`dcDataStorage`),
     /// which replaces the data of the element once it is initialized.
     decompressed: OnceLock<DataBlock>,
+    /// Port of `dcfDontSave` and `dcfDontCompare`: the element is not
+    /// written. Set for the record header and the contained-in element.
+    pub(super) dont_save: AtomicBool,
 }
 
 impl ValueBase {
@@ -65,6 +68,7 @@ impl ValueBase {
             init: super::InitOnce::new(),
             optional_and_missing: AtomicBool::new(false),
             decompressed: OnceLock::new(),
+            dont_save: AtomicBool::new(false),
         }
     }
 
@@ -324,6 +328,8 @@ pub(super) fn create_contained_in_element(
         kind: ValueKind::Value,
     });
     element.set_sort_and_memory_order(-2);
+    // `TwbContainedInElement.Create` passes `aDontCompare`.
+    element.vb.dont_save.store(true, Ordering::Relaxed);
     element
 }
 
@@ -651,6 +657,19 @@ impl ElementImpl for ValueImpl {
 
     fn container_base(&self) -> Option<&ContainerBase> {
         Some(&self.vb.container)
+    }
+
+    /// Port of `TwbDataContainer.WriteToStreamInternal` for a value, and of
+    /// `TwbStringListTerminator.WriteToStreamInternal` for the terminator.
+    fn write_to_stream(&self, out: &mut Vec<u8>, reset: super::ResetModified) -> Result<(), super::SaveError> {
+        if self.kind == ValueKind::Terminator {
+            out.push(0);
+            self.vb.base.reset_modified(reset);
+            return Ok(());
+        }
+        let dont_save = self.vb.dont_save.load(Ordering::Relaxed)
+            || self.vb.vb_value_def.def_base().def_flags.contains(DefFlag::dfDontSave);
+        super::write::data_container_write_to_stream(self, self.vb.data(), dont_save, out, reset)
     }
 }
 

@@ -10,8 +10,8 @@
 
 use crate::interface::form_id::FormID;
 use crate::interface::globals::{
-    GameMode, game_mode, is_light_supported, is_medium_supported, is_starfield, is_update_supported,
-    size_of_main_record_struct, vresl,
+    GameMode, game_mode, is_blueprint_supported, is_light_supported, is_medium_supported, is_starfield,
+    is_update_supported, size_of_main_record_struct, vresl,
 };
 use crate::interface::types::Signature;
 
@@ -70,6 +70,15 @@ impl MainRecordStructFlags {
             && ((is_starfield() && self.0 & 0x0000_0200 != 0) || (vresl() && self.0 & 0x0010_0000 != 0))
     }
 
+    pub fn is_visible_when_distant(self) -> bool {
+        self.0 & 0x0000_8000 != 0
+    }
+
+    /// The blueprint flag of the file header, Starfield.
+    pub fn is_blueprint(self) -> bool {
+        is_blueprint_supported() && self.0 & 0x0000_0800 != 0
+    }
+
     pub fn is_partial_form(self) -> bool {
         self.0 & 0x0000_4000 != 0
     }
@@ -125,6 +134,29 @@ impl MainRecordStruct {
             vcs2,
         })
     }
+
+    /// The header as the bytes `WriteToStream` writes: `wbSizeOfMainRecordStruct`
+    /// bytes in the layout `parse` reads.
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let size = size_of_main_record_struct() as usize;
+        let mut bytes = Vec::with_capacity(size);
+        bytes.extend_from_slice(&self.signature.0);
+        bytes.extend_from_slice(&self.data_size.to_le_bytes());
+        if game_mode() == GameMode::gmTES3 {
+            bytes.extend_from_slice(&self.vcs1.to_le_bytes());
+            bytes.extend_from_slice(&self.flags.0.to_le_bytes());
+        } else {
+            bytes.extend_from_slice(&self.flags.0.to_le_bytes());
+            bytes.extend_from_slice(&self.form_id.to_cardinal().to_le_bytes());
+            bytes.extend_from_slice(&self.vcs1.to_le_bytes());
+        }
+        if size >= 24 {
+            bytes.extend_from_slice(&self.version.to_le_bytes());
+            bytes.extend_from_slice(&self.vcs2.to_le_bytes());
+        }
+        bytes.resize(size, 0);
+        bytes
+    }
 }
 
 /// Upstream `TwbGroupRecordStruct`: the header of a group record.
@@ -148,6 +180,21 @@ impl GroupRecordStruct {
             stamp: u32_at(bytes, offset + 16)?,
             unknown: u32_at(bytes, offset + 20)?,
         })
+    }
+
+    /// The header as the bytes `WriteToStream` writes: `GRUP` and the
+    /// fields that fit `wbSizeOfMainRecordStruct` (20 bytes for Oblivion,
+    /// without the last field).
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut bytes = Vec::with_capacity(24);
+        bytes.extend_from_slice(b"GRUP");
+        bytes.extend_from_slice(&self.group_size.to_le_bytes());
+        bytes.extend_from_slice(&self.label.to_le_bytes());
+        bytes.extend_from_slice(&(self.group_type as u32).to_le_bytes());
+        bytes.extend_from_slice(&self.stamp.to_le_bytes());
+        bytes.extend_from_slice(&self.unknown.to_le_bytes());
+        bytes.truncate(size_of_main_record_struct() as usize);
+        bytes
     }
 
     /// The label as a signature, which it is for a top level group.
@@ -207,5 +254,18 @@ impl SubRecordHeaderStruct {
             signature: signature_at(bytes, offset)?,
             data_size,
         })
+    }
+
+    /// The header as the bytes `WriteToStream` writes. A size over 16 bits
+    /// is the caller's problem (`XXXX`); it is truncated here.
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut bytes = Vec::with_capacity(8);
+        bytes.extend_from_slice(&self.signature.0);
+        if game_mode() == GameMode::gmTES3 {
+            bytes.extend_from_slice(&self.data_size.to_le_bytes());
+        } else {
+            bytes.extend_from_slice(&(self.data_size as u16).to_le_bytes());
+        }
+        bytes
     }
 }

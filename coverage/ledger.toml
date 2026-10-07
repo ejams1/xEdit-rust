@@ -1138,8 +1138,10 @@ status = "pending"
 source = "mniMainPluggyLinkClick"
 
 [gui."xEdit/xeMainForm.dfm:mniMainSave:OnClick"]
-status = "pending"
+status = "covered"
+command = "files.save"
 source = "mniMainSaveClick"
+note = "Saves one file per call; the dialog that picks several files is presentation."
 
 [gui."xEdit/xeMainForm.dfm:mniMarkallfileswithoutONAMasmodified:OnClick"]
 status = "pending"

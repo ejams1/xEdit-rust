@@ -10,6 +10,7 @@
 
 pub mod commands;
 pub mod dump;
+pub mod save;
 
 use std::collections::BTreeMap;
 
@@ -24,6 +25,22 @@ use serde_json::{Value, json};
 pub struct Session {
     game: Option<xedit_core::interface::globals::GameMode>,
     files: Vec<std::sync::Arc<xedit_core::implementation::FileImpl>>,
+    /// Whether commands that change plugin data or files may run for real
+    /// (the `--edit` flag of the CLI). Without it a mutating command runs
+    /// only as a dry run.
+    edit_allowed: bool,
+}
+
+impl Session {
+    /// Allows the mutating commands to change files and plugin data.
+    pub fn allow_edit(&mut self, allowed: bool) {
+        self.edit_allowed = allowed;
+        xedit_core::interface::globals::set_edit_allowed(allowed);
+    }
+
+    pub fn edit_allowed(&self) -> bool {
+        self.edit_allowed
+    }
 }
 
 /// A command failure. `code` is stable and safe to match on.
@@ -72,6 +89,7 @@ impl Registry {
         let mut registry = Self::default();
         registry.register("system.version", "Report the xEdit version.", false, version);
         commands::register(&mut registry);
+        save::register(&mut registry);
         registry
     }
 
@@ -103,13 +121,28 @@ impl Registry {
         assert!(previous.is_none(), "command {name} registered twice");
     }
 
-    /// Runs the command `name` with JSON `params`.
+    /// Runs the command `name` with JSON `params`. A mutating command needs
+    /// the edit flag of the session unless its `dry_run` parameter is set.
     pub fn call(&self, session: &mut Session, name: &str, params: Value) -> Result<Value, CommandError> {
         let command = self
             .commands
             .get(name)
             .ok_or_else(|| CommandError::new("unknown_command", format!("no command named {name}")))?;
+        if command.mutates && !session.edit_allowed {
+            let dry_run = params.get("dry_run").and_then(Value::as_bool).unwrap_or(false);
+            if !dry_run {
+                return Err(CommandError::new(
+                    "edit_required",
+                    format!("{name} changes plugin data or files: pass --edit, or dry_run for a report only"),
+                ));
+            }
+        }
         (command.handler)(session, params)
+    }
+
+    /// Whether the command `name` changes plugin data or files.
+    pub fn mutates(&self, name: &str) -> Option<bool> {
+        self.commands.get(name).map(|command| command.mutates)
     }
 
     /// Describes every command with its request and response JSON Schema.

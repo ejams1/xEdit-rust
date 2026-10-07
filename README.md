@@ -16,6 +16,12 @@ The build plan is in [docs/PLAN.md](docs/PLAN.md).
 - Stay mergeable with upstream. One Rust module per Pascal unit with matching names, and `upstream-map.toml` records the last upstream commit merged into each, so upstream changes map onto the port line by line.
 - Get faster than upstream once parity holds
 
+## Status
+
+- Phases 0 to 2 of the plan are done: every game mode from Morrowind to Starfield and every save format load and dump like the release build, verified file by file against it on the local game installs.
+- Phase 3 (write path and daemon) is in progress. `xedit save` writes a loaded plugin back as xEdit saves it, with `--dry-run` and an explicit `--edit` flag; the round-trip check (`cargo xtask parity roundtrip`) compares the result with the input. Element editing, masters, FormIDs, the daemon and the MCP server are not there yet.
+- Later phases (analysis and tool modes, archives and assets, scripting, GUI, performance, release) have not started.
+
 ## Non-goals
 
 - No new file formats, record definitions or game support beyond what the baseline tag ships. New upstream releases are taken in through the sync procedure, not ahead of it.

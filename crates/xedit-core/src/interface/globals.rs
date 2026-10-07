@@ -512,6 +512,11 @@ pub fn wb_get_group_order(a_signature: Signature) -> i32 {
 }
 
 /// Empties the group order, for the tests.
+/// Upstream `wbGroupOrder.Count`: the number of top level group signatures.
+pub fn wb_group_order_count() -> i32 {
+    GROUP_ORDER.read().unwrap().len() as i32
+}
+
 pub fn clear_group_order() {
     GROUP_ORDER.write().unwrap().clear();
 }

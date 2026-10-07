@@ -128,6 +128,20 @@ impl SubRecordImpl {
         self.block.as_slice().get(self.dc_data_base..self.dc_data_end)
     }
 
+    /// The header as loaded (`srStruct`).
+    pub(super) fn header_struct(&self) -> SubRecordHeaderStruct {
+        self.sr_struct
+    }
+
+    /// The bytes of the header as loaded (`dcBasePtr^`), before the data.
+    pub(super) fn header_bytes(&self) -> &[u8] {
+        let size = SubRecordHeaderStruct::size();
+        self.block
+            .as_slice()
+            .get(self.dc_data_base - size..self.dc_data_base)
+            .unwrap_or(&[])
+    }
+
     fn element_ref(&self) -> ElementRef {
         self.self_ref.upgrade().expect("a subrecord is alive while it is used")
     }
@@ -769,6 +783,10 @@ impl ElementImpl for SubRecordImpl {
 
     fn element_base(&self) -> &ElementBase {
         &self.base
+    }
+
+    fn write_to_stream(&self, out: &mut Vec<u8>, reset: super::ResetModified) -> Result<(), super::SaveError> {
+        self.write_to_stream_impl(out, reset)
     }
 }
 

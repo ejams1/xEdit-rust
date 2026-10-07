@@ -10,8 +10,8 @@ The official xEdit release build of the tag in `upstream-map.toml` is the oracle
 ## Running the harness
 
 ```
-cargo xtask parity dump|saves [--game <game>]... [--file <name>]... [--oracle-only] [--jobs <n>]
-                              [--memory-budget <GiB>] [--max-memory <GiB>] [--oracle-timeout <minutes>]
+cargo xtask parity dump|saves|roundtrip [--game <game>]... [--file <name>]... [--oracle-only] [--jobs <n>]
+                                        [--memory-budget <GiB>] [--max-memory <GiB>] [--oracle-timeout <minutes>]
 ```
 
 The harness runs the oracle `xDump.exe` and the port's `xedit dump` on every vanilla plugin of the selected games and compares the outputs byte for byte. The games are `fo4`, `sse`, `tes3`, `tes4`, `fo3`, `fnv`, `tes5`, `tes5vr`, `fo4vr`, `fo76` and `sf1`. Without `--game` it checks every game whose data directory is set and prints a `skipped` line for the others. `--file` restricts the run to named plugins, vanilla or not. It prints the first differing line of each file, writes `target/parity/dump.json` and exits with an error when any file differs.
@@ -35,7 +35,24 @@ The processes that run at once stay within `--memory-budget` (default: three qua
 
 `parity saves` runs `xDump.exe -saves` and `xedit saves dump` on every save and co-save in the save folder of each game (`.fos`, `.ess`, `.f4se`, `.skse`, `.nvse`, `.fose`, `.obse`), with the game's data folder as `-D:` and `--data`, and caches the oracle output under `<cache>/<tag>/<game>-saves`. The report is `target/parity/saves.json`. The oracle is far too slow on Skyrim LE saves to finish: it raises an exception for every hardcoded FormID it cannot resolve (see `using-xedit-cli`) and writes about 1 KB per second, where the port writes 140 MB for `quicksave.ess`. `--oracle-timeout <minutes>` stops the oracle after that long and keeps its output as `<file>.<hash>.oracle.timeout.txt.zst`, compared as a prefix like a crashed run (`equal-prefix`). The Skyrim LE saves were checked with `--oracle-timeout 15`; delete the `.oracle.timeout.txt.zst` of a save to extend its prefix. Oblivion saves need `XEDIT_TES4_SAVES` (`.ess`, `.obse`) and Fallout 3 saves `XEDIT_FO3_SAVES` (`.fos`, `.fose`); on this machine both folders are under `M:\projects\saves`.
 
-Only the dump checks exist so far. Add the other checks of the table below to `crates/xtask/src/parity.rs` in the phase that ports the feature.
+### Round trip
+
+`parity roundtrip` runs `xedit --edit --game <game> --load <plugin> save --no-backup --output <cache>/<tag>/<game>-roundtrip/<file>.<hash>.saved` on every corpus plugin and compares the saved bytes with the input, byte for byte. No oracle binary runs: the input file is the oracle, which holds exactly where xEdit writes a loaded file back unchanged. The report is `target/parity/roundtrip.json` and the statuses are:
+
+- `equal`: identical bytes; the saved file is deleted.
+- `ofst-dropped`: the saved file is the input without the `OFST` subrecord (and its `XXXX` size prefix) of every worldspace, with the record and group sizes adjusted. xEdit drops those offsets when it loads a worldspace and writes the record without them, so this is the expected result for a file that overrides a worldspace; the harness rebuilds the expected bytes from the input and compares. Not counted as passing until the oracle's own save confirms it (step 6 of phase 3).
+- `different`: the first differing offset is printed and the saved file kept. Investigate as any difference, but check first whether upstream itself changes the file on save in a way the input cannot show: after a `PrepareSave` on a modified file it marks the children of a worldspace whose offsets were dropped modified (every record under it is rebuilt, compressed records are compressed again with libdeflate level 12), it rebuilds the `ONAM` list of a master, and it writes a group in its sorted order. Those files need the oracle's own saved bytes, which step 6 adds (the GUI build driven headlessly on a copy of the corpus).
+- `refused`: the port refused the save with an upstream `PrepareSave` message, which the oracle gives for the same file (a Starfield blueprint module, for example). Counted as passing.
+- `unsupported`: upstream would edit the file header on save (the `HEDR` record count, `INCC`, `ONAM`, a flag, a clamped FormID) and this version cannot yet. Not passing; the element editing step of phase 3 removes these.
+- `port-failed`, `port-memory-limit`: as for the dump.
+
+The saves run under the same memory cap and budget as the dumps and reuse the `.port.peak` files. The port's log of each save is `<file>.<hash>.port.log` next to the saved file.
+
+#### Step 1 results (2026-10-07)
+
+249 plugins of 11 games in 1.5 minutes: 132 `equal`, 38 `ofst-dropped`, 2 `refused` (the Starfield blueprint masters), 77 `unsupported`, 0 `different`. The `unsupported` saves are the header edits upstream makes on save: 39 `ONAM` rebuilds, 34 `HEDR` record counts that differ from the loaded tree because the load drops empty top level groups and merges duplicated ones (verified on `Dragonborn.esm`: the raw file holds an empty `AVIF` group the oracle and the port both drop, so the count is one less), the ESM flag of the 3 Morrowind masters, one clamped FormID (`FalloutNV`). The numbers are also in the phase 3 status of `docs/PLAN.md`.
+
+The other checks of the table below are added to `crates/xtask/src/parity.rs` in the phase that ports the feature.
 
 ## Running the oracle
 
