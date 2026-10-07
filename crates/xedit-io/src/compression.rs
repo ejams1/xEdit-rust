@@ -4,15 +4,14 @@
 
 // Ported from xEdit: Core/wbCompression.pas
 
-//! Decompression of record data, compressed structures and archive files.
+//! Decompression of record data, compressed structures and archive files,
+//! and the zlib compression of record data for the write path.
 //!
-//! Only the decompression half of the upstream unit is ported. Compression
-//! comes with the write path, because its output must be byte-identical to
-//! libdeflate, zlib and LZ4 HC.
+//! LZ4 and LZ4F compression (archives) are not ported yet.
 
 use std::io::Read;
 
-use libdeflater::{DecompressionError, Decompressor};
+use libdeflater::{CompressionLvl, Compressor, DecompressionError, Decompressor};
 use lz4_flex::frame::FrameDecoder;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -27,6 +26,14 @@ pub enum CompressionType {
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("{0}")]
 pub struct CompressionError(pub String);
+
+/// Upstream `LIBDEFLATE_MAX_DATASIZE`: libdeflate compresses data up to this
+/// size, zlib beyond it.
+const LIBDEFLATE_MAX_DATASIZE: usize = 8 * 1024 * 1024;
+/// Upstream `LIBDEFLATE_COMPRESSION_LEVEL`: the highest libdeflate level.
+const LIBDEFLATE_COMPRESSION_LEVEL: i32 = 12;
+/// Upstream `ZLIB_COMPRESSION_LEVEL`: `Z_BEST_COMPRESSION`.
+const ZLIB_COMPRESSION_LEVEL: i32 = 9;
 
 const COMPRESSION_TYPE_NAME: [(CompressionType, &str); 4] = [
     (CompressionType::None, "None"),
@@ -50,6 +57,39 @@ impl CompressionType {
             .find(|(_, candidate)| candidate.eq_ignore_ascii_case(name))
             .map(|(compression, _)| *compression)
             .ok_or_else(|| CompressionError(format!("Unknown compression type: {name}")))
+    }
+
+    /// Port of `TwbCompression.Compress` for record data: zlib through
+    /// libdeflate at its highest level for data up to
+    /// `LIBDEFLATE_MAX_DATASIZE`, zlib level 9 beyond.
+    ///
+    /// UPSTREAM-QUIRK: above 8 MiB upstream switches to System.ZLib's
+    /// `compress2` at level 9, whose deflate stream differs from libdeflate's.
+    /// The port stays with libdeflate at level 9 there; a record that large is
+    /// not known in any game file, so the difference has not been observed.
+    pub fn compress(self, src: &[u8]) -> Result<Vec<u8>, CompressionError> {
+        match self {
+            CompressionType::ZLib => {
+                let level = if src.len() <= LIBDEFLATE_MAX_DATASIZE {
+                    LIBDEFLATE_COMPRESSION_LEVEL
+                } else {
+                    ZLIB_COMPRESSION_LEVEL
+                };
+                let level = CompressionLvl::new(level)
+                    .map_err(|_| CompressionError(format!("LibDeflate error: invalid level {level}")))?;
+                let mut compressor = Compressor::new(level);
+                let mut out = vec![0u8; compressor.zlib_compress_bound(src.len())];
+                let size = compressor
+                    .zlib_compress(src, &mut out)
+                    .map_err(|error| CompressionError(format!("LibDeflate error: {error:?}")))?;
+                out.truncate(size);
+                Ok(out)
+            }
+            _ => Err(CompressionError(format!(
+                "Compression type {} is not ported yet",
+                self.name()
+            ))),
+        }
     }
 
     /// Decompresses `src` into `dst`. The decompressed data must fill `dst` exactly.
@@ -103,6 +143,14 @@ mod tests {
     use super::*;
 
     const TEXT: &[u8] = b"xEdit xEdit xEdit xEdit xEdit xEdit xEdit xEdit";
+
+    #[test]
+    fn zlib_compression_round_trips() {
+        let compressed = CompressionType::ZLib.compress(TEXT).unwrap();
+        let mut out = vec![0u8; TEXT.len()];
+        CompressionType::ZLib.decompress(&compressed, &mut out).unwrap();
+        assert_eq!(out, TEXT);
+    }
 
     #[test]
     fn names_round_trip() {

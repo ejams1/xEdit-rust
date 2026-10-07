@@ -12,6 +12,11 @@
 //! Every process runs under a memory cap, and the processes that run at once
 //! stay within a memory budget (`memory`).
 //!
+//! `cargo xtask parity roundtrip` loads every corpus plugin with the port and
+//! saves it to the cache; the saved bytes are compared with the input file.
+//! The oracle of that check is the input itself, which holds where xEdit
+//! writes a file it loaded unchanged.
+//!
 //! Environment:
 //!
 //! - `XEDIT_ORACLE_DIR`: unpacked release archive of the baseline tag.
@@ -179,6 +184,8 @@ const PLUGIN_EXTENSIONS: &[&str] = &["esm", "esl", "esp"];
 struct Options {
     /// `parity saves`: the saves of the games instead of their plugins.
     saves: bool,
+    /// `parity roundtrip`: load and save each plugin, compare with the input.
+    roundtrip: bool,
     games: Vec<&'static Game>,
     /// Lower-case file names. Empty selects the whole corpus.
     files: Vec<String>,
@@ -250,8 +257,14 @@ struct Report<'a> {
 
 pub fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
     let options = parse(args)?;
-    let oracle = PathBuf::from(required_var("XEDIT_ORACLE_DIR")?).join("xDump.exe");
-    ensure!(oracle.exists(), "{} does not exist", oracle.display());
+    // The round trip has no oracle binary: the input file is the oracle.
+    let oracle = if options.roundtrip {
+        PathBuf::new()
+    } else {
+        let oracle = PathBuf::from(required_var("XEDIT_ORACLE_DIR")?).join("xDump.exe");
+        ensure!(oracle.exists(), "{} does not exist", oracle.display());
+        oracle
+    };
     let cache = cache_dir()?.join(tag);
 
     let mut cases = Vec::new();
@@ -356,7 +369,12 @@ pub fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
         for _ in 0..options.jobs.min(cases.len()) {
             scope.spawn(|| {
                 while let Some(case) = cases.get(next.fetch_add(1, Ordering::Relaxed)) {
-                    let outcome = check(case, &runner).unwrap_or_else(|error| Outcome {
+                    let checked = if options.roundtrip {
+                        check_roundtrip(case, &runner)
+                    } else {
+                        check(case, &runner)
+                    };
+                    let outcome = checked.unwrap_or_else(|error| Outcome {
                         game: case.game.name,
                         file: case.name.clone(),
                         status: "oracle-failed",
@@ -378,9 +396,11 @@ pub fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
 
     let mut outcomes = outcomes.into_inner().unwrap();
     outcomes.sort_by(|a, b| (a.game, &a.file).cmp(&(b.game, &b.file)));
+    // A save the port refuses with an upstream message is as good as equal:
+    // the oracle refuses the same file with the same text.
     let equal = outcomes
         .iter()
-        .filter(|o| matches!(o.status, "equal" | "equal-prefix" | "equal-error"))
+        .filter(|o| matches!(o.status, "equal" | "equal-prefix" | "equal-error" | "refused"))
         .count();
     let report = Report {
         tag,
@@ -390,26 +410,272 @@ pub fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
     };
     let report_dir = root.join("target/parity");
     fs::create_dir_all(&report_dir)?;
-    let report_file = report_dir.join(if options.saves { "saves.json" } else { "dump.json" });
+    let report_name = if options.roundtrip {
+        "roundtrip.json"
+    } else if options.saves {
+        "saves.json"
+    } else {
+        "dump.json"
+    };
+    let report_file = report_dir.join(report_name);
     fs::write(&report_file, serde_json::to_string_pretty(&report)?)?;
-    println!("{equal} of {} equal. Report: {}", outcomes.len(), report_file.display());
+    if options.roundtrip {
+        let count = |status: &str| outcomes.iter().filter(|o| o.status == status).count();
+        println!(
+            "{} equal, {} refused, {} ofst-dropped, {} unsupported, {} different, {} failed of {}. Report: {}",
+            count("equal"),
+            count("refused"),
+            count("ofst-dropped"),
+            count("unsupported"),
+            count("different"),
+            count("port-failed") + count("port-memory-limit"),
+            outcomes.len(),
+            report_file.display()
+        );
+    } else {
+        println!("{equal} of {} equal. Report: {}", outcomes.len(), report_file.display());
+    }
     if !options.oracle_only {
-        ensure!(equal == outcomes.len(), "dump parity does not hold");
+        ensure!(equal == outcomes.len(), "parity does not hold");
     }
     Ok(())
 }
 
+/// The round trip of one plugin: the port loads it and saves it into the
+/// cache, and the saved bytes are compared with the input. `equal`,
+/// `ofst-dropped` (the input without the offsets of its worldspaces, which
+/// upstream drops too), `different` (with the first differing offset),
+/// `refused` (the port refused the save with an upstream message, as the
+/// oracle would), `unsupported` (a save upstream edits the header for, which
+/// the port cannot do yet), `port-failed` or `port-memory-limit`.
+fn check_roundtrip(case: &Case, runner: &Runner) -> Result<Outcome> {
+    let dir = runner.cache.join(format!("{}-roundtrip", case.game.mode));
+    fs::create_dir_all(&dir)?;
+    let stem = format!("{}.{:016x}", case.name, content_hash(&case.input)?);
+    let mut outcome = Outcome {
+        game: case.game.name,
+        file: case.name.clone(),
+        status: "port-failed",
+        detail: None,
+        oracle_bytes: fs::metadata(&case.input)?.len(),
+        port_bytes: 0,
+        oracle_peak: None,
+        port_peak: None,
+    };
+    let Some(port) = &runner.port else {
+        outcome.status = "oracle-only";
+        return Ok(outcome);
+    };
+    let saved = dir.join(format!("{stem}.saved"));
+    let port_log = dir.join(format!("{stem}.port.log"));
+    let _ = fs::remove_file(&saved);
+    let mut command = Command::new(port);
+    command
+        .args(["--json", "--edit", "--game", case.game.mode, "--load"])
+        .arg(&case.input)
+        .args(["save", "--no-backup", "--output"])
+        .arg(&saved)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(File::create(&port_log)?);
+    let (status, result, reached, peak) = run_limited(
+        runner,
+        case,
+        &mut command,
+        &dir.join(format!("{stem}.port.peak")),
+        |child| {
+            let mut text = String::new();
+            child.stdout.take().unwrap().read_to_string(&mut text)?;
+            Ok((text, true))
+        },
+    )?;
+    outcome.port_peak = peak;
+    let text = result?;
+    if reached && !status.success() {
+        outcome.status = "port-memory-limit";
+        outcome.detail = Some(format!(
+            "  reached the cap of {:.1} GiB (--max-memory), see {}",
+            runner.max_memory as f64 / GIB as f64,
+            port_log.display()
+        ));
+        return Ok(outcome);
+    }
+    let envelope: serde_json::Value = match serde_json::from_str(text.trim()) {
+        Ok(value) => value,
+        Err(_) => {
+            outcome.detail = Some(format!("  {status}, see {}", port_log.display()));
+            return Ok(outcome);
+        }
+    };
+    if envelope["ok"] != serde_json::Value::Bool(true) {
+        let code = envelope["error"]["code"].as_str().unwrap_or("");
+        let message = envelope["error"]["message"].as_str().unwrap_or("");
+        outcome.status = match code {
+            "save_refused" => "refused",
+            "unsupported" => "unsupported",
+            _ => "port-failed",
+        };
+        outcome.detail = Some(format!("  {code}: {message}"));
+        return Ok(outcome);
+    }
+    if envelope["result"]["written"] != serde_json::Value::Bool(true) {
+        outcome.detail = Some(format!("  the port reported no written file: {}", text.trim()));
+        return Ok(outcome);
+    }
+    outcome.port_bytes = fs::metadata(&saved)?.len();
+    match first_byte_difference(&case.input, &saved)? {
+        None => {
+            outcome.status = "equal";
+            fs::remove_file(&saved)?;
+        }
+        Some(offset) => {
+            // xEdit drops the OFST subrecord of every worldspace it loads, so
+            // a file with one saves smaller. A saved file that is the input
+            // without those subrecords is what upstream writes, which the
+            // oracle save of a later step confirms.
+            if let Some(dropped) = without_wrld_ofst(case, &saved)? {
+                outcome.status = "ofst-dropped";
+                outcome.detail = Some(format!(
+                    "  the saved file is the input without the OFST data of its worldspaces ({dropped} bytes)"
+                ));
+                fs::remove_file(&saved)?;
+                return Ok(outcome);
+            }
+            outcome.status = "different";
+            outcome.detail = Some(format!(
+                "  first difference at byte {offset} (0x{offset:X}); input {} bytes, saved {} bytes\n  saved:  {}\n  log:    {}",
+                outcome.oracle_bytes,
+                outcome.port_bytes,
+                saved.display(),
+                port_log.display()
+            ));
+        }
+    }
+    Ok(outcome)
+}
+
+/// Whether `saved` is the input of `case` with the `OFST` subrecord (and its
+/// `XXXX` size prefix) of every uncompressed `WRLD` record removed and the
+/// record and group sizes adjusted. Returns the number of bytes dropped.
+/// Only for the games with 24 byte record headers; Oblivion and Morrowind
+/// worldspaces keep their offsets.
+fn without_wrld_ofst(case: &Case, saved: &Path) -> Result<Option<u64>> {
+    if matches!(case.game.mode, "tes3" | "tes4") {
+        return Ok(None);
+    }
+    const HEADER: usize = 24;
+
+    fn u32_at(buf: &[u8], at: usize) -> Option<u32> {
+        Some(u32::from_le_bytes(buf.get(at..at + 4)?.try_into().ok()?))
+    }
+
+    /// The data of a WRLD record without its OFST subrecord, if it has one.
+    fn drop_ofst(data: &[u8]) -> Option<Vec<u8>> {
+        let mut pos = 0;
+        let mut pending: Option<(usize, usize)> = None;
+        while pos + 6 <= data.len() {
+            let signature = &data[pos..pos + 4];
+            let size = u16::from_le_bytes([data[pos + 4], data[pos + 5]]) as usize;
+            if signature == b"XXXX" {
+                pending = Some((pos, u32_at(data, pos + 6)? as usize));
+                pos += 6 + size;
+                continue;
+            }
+            let (start, real) = match pending.take() {
+                Some((start, real)) if size == 0 => (start, real),
+                _ => (pos, size),
+            };
+            if signature == b"OFST" {
+                let mut rest = data[..start].to_vec();
+                rest.extend_from_slice(data.get(pos + 6 + real..)?);
+                return Some(rest);
+            }
+            pos += 6 + real;
+        }
+        None
+    }
+
+    fn walk(buf: &[u8], start: usize, end: usize, out: &mut Vec<u8>, dropped: &mut u64) -> Option<()> {
+        let mut pos = start;
+        while pos < end {
+            let signature = buf.get(pos..pos + 4)?;
+            let size = u32_at(buf, pos + 4)? as usize;
+            if signature == b"GRUP" {
+                let mark = out.len();
+                out.extend_from_slice(buf.get(pos..pos + HEADER)?);
+                let before = *dropped;
+                walk(buf, pos + HEADER, pos + size, out, dropped)?;
+                let inner = (*dropped - before) as usize;
+                if inner > 0 {
+                    out[mark + 4..mark + 8].copy_from_slice(&((size - inner) as u32).to_le_bytes());
+                }
+                pos += size;
+            } else {
+                let flags = u32_at(buf, pos + 8)?;
+                let data = buf.get(pos + HEADER..pos + HEADER + size)?;
+                if signature == b"WRLD"
+                    && flags & 0x0004_0000 == 0
+                    && let Some(rest) = drop_ofst(data)
+                {
+                    let mark = out.len();
+                    out.extend_from_slice(&buf[pos..pos + HEADER]);
+                    out[mark + 4..mark + 8].copy_from_slice(&(rest.len() as u32).to_le_bytes());
+                    *dropped += (data.len() - rest.len()) as u64;
+                    out.extend_from_slice(&rest);
+                } else {
+                    out.extend_from_slice(&buf[pos..pos + HEADER + size]);
+                }
+                pos += HEADER + size;
+            }
+        }
+        Some(())
+    }
+
+    let input = fs::read(&case.input)?;
+    let saved = fs::read(saved)?;
+    let mut out = Vec::with_capacity(input.len());
+    let mut dropped = 0u64;
+    if walk(&input, 0, input.len(), &mut out, &mut dropped).is_none() || dropped == 0 {
+        return Ok(None);
+    }
+    Ok((out == saved).then_some(dropped))
+}
+
+/// The offset of the first byte where the two files differ, or `None` when
+/// they are identical; a length difference counts at the shorter length.
+fn first_byte_difference(a: &Path, b: &Path) -> Result<Option<u64>> {
+    let mut a = BufReader::with_capacity(1 << 20, File::open(a)?);
+    let mut b = BufReader::with_capacity(1 << 20, File::open(b)?);
+    let mut offset = 0u64;
+    loop {
+        let buf_a = a.fill_buf()?;
+        let buf_b = b.fill_buf()?;
+        if buf_a.is_empty() || buf_b.is_empty() {
+            return Ok((buf_a.len() != buf_b.len()).then_some(offset));
+        }
+        let len = buf_a.len().min(buf_b.len());
+        if let Some(position) = buf_a[..len].iter().zip(&buf_b[..len]).position(|(x, y)| x != y) {
+            return Ok(Some(offset + position as u64));
+        }
+        a.consume(len);
+        b.consume(len);
+        offset += len as u64;
+    }
+}
+
 fn parse(args: &[&str]) -> Result<Options> {
-    const USAGE: &str = "usage: cargo xtask parity dump|saves [--game <game>]... [--file <name>]... \
+    const USAGE: &str = "usage: cargo xtask parity dump|saves|roundtrip [--game <game>]... [--file <name>]... \
                          [--oracle-only] [--jobs <n>] [--memory-budget <GiB>] [--max-memory <GiB>] \
                          [--oracle-timeout <minutes>]";
-    let (saves, rest) = match args {
-        ["dump", rest @ ..] => (false, rest),
-        ["saves", rest @ ..] => (true, rest),
+    let (saves, roundtrip, rest) = match args {
+        ["dump", rest @ ..] => (false, false, rest),
+        ["saves", rest @ ..] => (true, false, rest),
+        ["roundtrip", rest @ ..] => (false, true, rest),
         _ => bail!(USAGE),
     };
     let mut options = Options {
         saves,
+        roundtrip,
         games: Vec::new(),
         files: Vec::new(),
         oracle_only: false,

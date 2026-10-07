@@ -29,6 +29,10 @@ struct Cli {
     #[arg(long, global = true)]
     load: Vec<String>,
 
+    /// Allow the commands that change plugin data or files to do so. Without it they only run with --dry-run.
+    #[arg(long, global = true)]
+    edit: bool,
+
     #[command(subcommand)]
     action: Action,
 }
@@ -61,6 +65,21 @@ enum Action {
     Saves {
         #[command(subcommand)]
         action: SavesAction,
+    },
+    /// Write a loaded plugin to disk as xEdit saves it (files.save).
+    Save {
+        /// Plugin name; the only loaded plugin when omitted.
+        #[arg(long)]
+        file: Option<String>,
+        /// Path to write to; the loaded path when omitted.
+        #[arg(long)]
+        output: Option<String>,
+        /// Build the file and report its size and CRC32, but write nothing.
+        #[arg(long)]
+        dry_run: bool,
+        /// Do not move an existing file at the output path to the backup folder.
+        #[arg(long)]
+        no_backup: bool,
     },
     /// Write the element tree of a plugin as xDump prints it.
     Dump {
@@ -219,6 +238,15 @@ fn command_of(action: Action) -> Result<(String, Value), CommandError> {
             "elements.get".to_owned(),
             json!({ "form_id": form_id, "path": path, "file": file, "depth": depth }),
         ),
+        Action::Save {
+            file,
+            output,
+            dry_run,
+            no_backup,
+        } => (
+            "files.save".to_owned(),
+            json!({ "file": file, "output": output, "dry_run": dry_run, "backup": !no_backup }),
+        ),
         Action::Call { name, params } => {
             let params = serde_json::from_str(&params)
                 .map_err(|e| CommandError::new("invalid_params", format!("--params is not valid JSON: {e}")))?;
@@ -227,7 +255,7 @@ fn command_of(action: Action) -> Result<(String, Value), CommandError> {
     })
 }
 
-fn run(game: Option<String>, load: Vec<String>, action: Action) -> Result<Value, CommandError> {
+fn run(game: Option<String>, load: Vec<String>, edit: bool, action: Action) -> Result<Value, CommandError> {
     let registry = Registry::standard();
     if let Action::Schema = action {
         return Ok(registry.catalogue());
@@ -238,6 +266,7 @@ fn run(game: Option<String>, load: Vec<String>, action: Action) -> Result<Value,
         None if load.is_empty() => Session::default(),
         None => return Err(CommandError::new("invalid_params", "--load needs --game")),
     };
+    session.allow_edit(edit);
     registry.call(&mut session, &name, params)
 }
 
@@ -281,7 +310,10 @@ fn main() -> ExitCode {
             xedit_session::dump::dump_save(&file, &data, mode, out)
         });
     }
-    let outcome = run(cli.game, cli.load, cli.action);
+    // The progress messages of a load and a save go to stderr like the log
+    // of xEdit; the result goes to stdout.
+    xedit_session::dump::log_progress_to_stderr();
+    let outcome = run(cli.game, cli.load, cli.edit, cli.action);
     match (&outcome, cli.json) {
         (Ok(result), true) => println!("{}", json!({ "ok": true, "result": result })),
         (Ok(result), false) => println!("{result:#}"),

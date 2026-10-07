@@ -9,9 +9,11 @@
 //! State: the binary scan of a file into its header record, group records
 //! and main records, with the record data kept as ranges of the mapped
 //! file, and the subrecords of a record grouped by its definition on first
-//! use. The values come next.
+//! use. The write path (`write`) saves a file whose records are unmodified
+//! or rebuilt from their elements.
 
 pub mod structs;
+pub mod write;
 
 /// The value accessors of an element without a value.
 macro_rules! element_no_values {
@@ -104,6 +106,8 @@ macro_rules! element_common {
 
 pub mod sub_record;
 pub mod value;
+
+pub use write::{ElementState, ResetModified, SaveError};
 
 use std::collections::HashMap;
 use std::path::Path;
@@ -373,6 +377,9 @@ pub struct ElementBase {
     /// Port of `esResolving` in `eStates`: set while a definition resolves
     /// through this element, so that a nested resolve stops.
     e_resolving: std::sync::atomic::AtomicBool,
+    /// Port of the save states of `eStates`: `esModified`,
+    /// `esInternalModified` and `esUnsaved`, as bits of [`ElementState`].
+    pub(crate) e_states: std::sync::atomic::AtomicU32,
 }
 
 impl ElementBase {
@@ -384,6 +391,7 @@ impl ElementBase {
             e_memory_order: AtomicI32::new(i32::MIN),
             e_name_suffix: RwLock::new(String::new()),
             e_resolving: std::sync::atomic::AtomicBool::new(false),
+            e_states: std::sync::atomic::AtomicU32::new(0),
         }
     }
 
@@ -524,6 +532,9 @@ pub struct FileImpl {
     /// built once the file is scanned (`flIndicesActive`).
     fl_records_indices: RwLock<Vec<HashMap<String, Arc<MainRecordImpl>>>>,
     fl_indices_active: std::sync::atomic::AtomicBool,
+    /// Port of `flCRC32`: the CRC32 of the file as loaded, computed on first
+    /// use, replaced by the CRC32 of the bytes of the last save.
+    pub(crate) fl_crc32: std::sync::atomic::AtomicU32,
 }
 
 static NEXT_LOAD_ORDER: AtomicI32 = AtomicI32::new(0);
@@ -549,6 +560,10 @@ fn find_in_files_map(file_name: &str) -> Option<Arc<FileImpl>> {
 }
 
 impl FileImpl {
+    fn self_arc(&self) -> Arc<Self> {
+        self.self_ref.upgrade().expect("a file is alive while it is used")
+    }
+
     pub fn file_name(&self) -> &str {
         &self.fl_file_name
     }
@@ -1436,6 +1451,7 @@ pub fn wb_file_compare(
         fl_injected_records: RwLock::new(Vec::new()),
         fl_records_indices: RwLock::new(Vec::new()),
         fl_indices_active: std::sync::atomic::AtomicBool::new(false),
+        fl_crc32: std::sync::atomic::AtomicU32::new(0),
     });
     progress(&format!("[{}] Loading file", file.get_name()));
     FILES_MAP.write().unwrap().push(file.clone());
@@ -1707,6 +1723,9 @@ pub struct MainRecordImpl {
     /// `mrsHasPrecombinedMesh` state: the cell and mesh of a precombined
     /// reference, checked once.
     mr_precombined: OnceLock<Option<(u32, u32)>>,
+    /// Port of `mrsOFSTRemoved` in `mrStates`: the init dropped the offsets
+    /// of a worldspace, and `PrepareSave` marks its children modified.
+    mr_ofst_removed: AtomicBool,
 }
 
 impl MainRecordImpl {
@@ -1758,6 +1777,7 @@ impl MainRecordImpl {
             mr_fixed_form_id: OnceLock::new(),
             mr_display_name: OnceLock::new(),
             mr_precombined: OnceLock::new(),
+            mr_ofst_removed: AtomicBool::new(false),
         });
         if let Some(parent) = container.as_container_base() {
             parent.add_element(record.clone());
@@ -2026,7 +2046,17 @@ impl MainRecordImpl {
                     .iter()
                     .position(|element| element.get_record_signature() == Some(Signature::new(b"OFST")));
                 if let Some(position) = position {
+                    // Upstream removes the subrecord inside
+                    // `wbBeginInternalEdit(True)`, so the record is modified
+                    // internally (`esInternalModified`, not `esUnsaved`) and is
+                    // written from its elements on save.
+                    let internal = crate::interface::globals::begin_internal_edit(true);
                     self.container.remove_element(position);
+                    self.set_modified(true);
+                    if internal {
+                        crate::interface::globals::end_internal_edit();
+                    }
+                    self.mr_ofst_removed.store(true, Ordering::Relaxed);
                 }
             }
         });
@@ -2042,6 +2072,11 @@ impl MainRecordImpl {
     pub fn reset(&self) {
         // A record whose init runs keeps its elements and data.
         if self.mr_init.is_running() {
+            return;
+        }
+        // Port of the `esModified` check of `TwbContainer.DoReset`: a modified
+        // record keeps its elements, which hold the change.
+        if self.base.has_state(ElementState::esModified) {
             return;
         }
         self.container.release_elements();
@@ -2121,12 +2156,30 @@ impl MainRecordImpl {
         let element =
             value::create_value_element(&self_ref, &self.file, &mut cursor, header_def as Arc<dyn ValueDef>, "");
         element.set_sort_and_memory_order(-1);
+        // `Include(dcFlags, dcfDontSave)`: the header is written from `mrStruct`.
+        element.vb.dont_save.store(true, Ordering::Relaxed);
     }
 
     fn self_arc(&self) -> Arc<Self> {
         self.self_ref
             .upgrade()
             .expect("a main record is alive while it is used")
+    }
+
+    /// Port of `GetChildGroup` (`mrGroup`): the group of the children of
+    /// this record, which follows it in its container.
+    pub fn child_group(&self) -> Option<Arc<GroupRecordImpl>> {
+        let container = self.base.container()?;
+        let base = container.as_element_impl()?.container_base()?;
+        let elements = base.elements();
+        let index = elements
+            .iter()
+            .position(|element| std::ptr::addr_eq(Arc::as_ptr(element), self as *const Self))?;
+        let group = elements.get(index + 1)?.as_element_impl()?.group_record_impl()?;
+        if !matches!(group.group_type(), 1 | 6 | 7) || group.group_label() != self.mr_struct.form_id.to_cardinal() {
+            return None;
+        }
+        Some(group)
     }
 
     /// The record data as stored in the file, after the header.
@@ -2257,6 +2310,68 @@ pub trait ElementImpl: Element {
         self.element_base().e_sort_order.store(order, Ordering::Relaxed);
         self.element_base().e_memory_order.store(order, Ordering::Relaxed);
     }
+
+    // ----- the write path (`write`) -----
+
+    /// This element as a trait object, for the shared defaults below.
+    fn as_dyn_element_impl(&self) -> Option<ElementRef> {
+        self.self_element_ref()
+    }
+
+    /// Port of `TwbElement.SetModified`: marks the element and its
+    /// containers modified. `false` does nothing, as upstream.
+    fn set_modified(&self, value: bool) {
+        if let Some(this) = self.as_dyn_element_impl()
+            && let Some(this) = this.as_element_impl()
+        {
+            write::element_set_modified(this, value);
+        }
+    }
+
+    /// Port of `TwbElement.SetParentModified`.
+    fn set_parent_modified(&self) {
+        if let Some(container) = self.element_base().container()
+            && let Some(container) = container.as_element_impl()
+        {
+            container.set_modified(true);
+        }
+    }
+
+    /// Port of `WriteToStream` with `WriteToStreamInternal`: appends the
+    /// bytes of the element to `out`. The default is `TwbContainer`'s:
+    /// the elements in order, then the states reset.
+    fn write_to_stream(&self, out: &mut Vec<u8>, reset: ResetModified) -> Result<(), SaveError> {
+        let this = self
+            .as_dyn_element_impl()
+            .ok_or_else(|| SaveError::Internal("an element was written while being created".to_owned()))?;
+        let this = this
+            .as_element_impl()
+            .ok_or_else(|| SaveError::Internal("an element without a write path".to_owned()))?;
+        write::container_write_to_stream(this, out, reset)
+    }
+
+    /// Port of `PrepareSave`. The default is `TwbContainer`'s: the elements
+    /// in reverse order, unless the records load delayed and this element
+    /// is unmodified.
+    fn prepare_save(&self) -> Result<(), SaveError> {
+        match self
+            .as_dyn_element_impl()
+            .as_ref()
+            .and_then(|this| this.as_element_impl())
+        {
+            Some(this) => write::container_prepare_save(this),
+            None => Ok(()),
+        }
+    }
+
+    /// Port of `GetCountedRecordCount`: the records and groups below this
+    /// element, as the file header counts them.
+    fn get_counted_record_count(&self) -> u32 {
+        self.as_dyn_element_impl()
+            .as_ref()
+            .and_then(|this| this.as_element_impl())
+            .map_or(0, write::container_counted_record_count)
+    }
 }
 
 trait ElementImplCasts {
@@ -2318,6 +2433,16 @@ impl ElementImpl for FileImpl {
 
     fn file_impl(&self) -> Option<Arc<FileImpl>> {
         self.self_ref.upgrade()
+    }
+
+    fn write_to_stream(&self, _out: &mut Vec<u8>, _reset: ResetModified) -> Result<(), SaveError> {
+        Err(SaveError::Internal(
+            "a file is written with FileImpl::write_to_bytes, not as an element".to_owned(),
+        ))
+    }
+
+    fn prepare_save(&self) -> Result<(), SaveError> {
+        self.self_arc().prepare_save_impl()
     }
 
     fn container_base(&self) -> Option<&ContainerBase> {
@@ -2537,6 +2662,18 @@ impl ElementImpl for GroupRecordImpl {
     fn container_base(&self) -> Option<&ContainerBase> {
         Some(&self.container)
     }
+
+    fn write_to_stream(&self, out: &mut Vec<u8>, reset: ResetModified) -> Result<(), SaveError> {
+        self.write_to_stream_impl(out, reset)
+    }
+
+    fn prepare_save(&self) -> Result<(), SaveError> {
+        self.prepare_save_impl()
+    }
+
+    fn get_counted_record_count(&self) -> u32 {
+        self.counted_record_count_impl()
+    }
 }
 
 impl Container for GroupRecordImpl {
@@ -2722,6 +2859,19 @@ impl ElementImpl for MainRecordImpl {
 
     fn main_record_impl(&self) -> Option<Arc<MainRecordImpl>> {
         self.self_ref.upgrade()
+    }
+
+    fn write_to_stream(&self, out: &mut Vec<u8>, reset: ResetModified) -> Result<(), SaveError> {
+        self.self_arc().write_to_stream_impl(out, reset)
+    }
+
+    fn prepare_save(&self) -> Result<(), SaveError> {
+        self.self_arc().prepare_save_impl()
+    }
+
+    /// Port of `TwbMainRecord.GetCountedRecordCount`: the record itself.
+    fn get_counted_record_count(&self) -> u32 {
+        1
     }
 }
 

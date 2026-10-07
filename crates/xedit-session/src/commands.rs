@@ -35,9 +35,12 @@ impl Session {
             load_resources(file, path, &xedit_core::delphi::extract_file_path(path), mode);
             load_hardcoded()?;
         }
+        // The save path reads the per-game settings of the editor.
+        crate::save::apply_edit_settings(mode);
         Ok(Self {
             game: Some(mode),
             files,
+            edit_allowed: false,
         })
     }
 
@@ -48,7 +51,7 @@ impl Session {
 
     /// The loaded file with the name, or the only loaded file when no name
     /// is given.
-    fn file(&self, name: Option<&str>) -> Result<Arc<FileImpl>, CommandError> {
+    pub(crate) fn file(&self, name: Option<&str>) -> Result<Arc<FileImpl>, CommandError> {
         self.mode()?;
         match name {
             Some(name) => self

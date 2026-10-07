@@ -50,7 +50,7 @@ status = "pending"
 [units."Core/wbCompression.pas"]
 status = "pending"
 rust = "crates/xedit-io/src/compression.rs"
-note = "Decompression is ported. Compression comes with the write path in phase 3."
+note = "Decompression and the zlib compression of record data (libdeflate level 12 up to 8 MiB) are ported. LZ4 compression for archives is pending."
 
 [units."Core/wbDDS.pas"]
 status = "pending"
@@ -164,6 +164,8 @@ note = "The embedded plugins of the hardcoded records of each game are ported; t
 
 [units."Core/wbHash.pas"]
 status = "pending"
+rust = "crates/xedit-io/src/hash.rs"
+note = "TwbHash.CRC32 is ported for the save path. The BSA hashes and xxHash come with the archives."
 
 [units."Core/wbHelpers.pas"]
 status = "pending"
@@ -171,7 +173,7 @@ status = "pending"
 [units."Core/wbImplementation.pas"]
 status = "pending"
 rust = "crates/xedit-core/src/implementation"
-note = "The structure scan of a file, the records, subrecords, values, unions, the record header and the contained-in element are ported for reading. Editing, references and everything else are pending."
+note = "The structure scan of a file, the records, subrecords, values, unions, the record header and the contained-in element are ported for reading. The save path (implementation/write.rs: the modified states, PrepareSave, WriteToStream, the CRC32) is ported for unmodified records and records rebuilt from unmodified subrecords; PrepareSave reports where upstream would edit the header. Element editing, references and everything else are pending."
 
 [units."Core/wbInterface.pas"]
 status = "pending"
@@ -468,6 +470,8 @@ status = "pending"
 
 [units."xEdit/xeInit.pas"]
 status = "pending"
+rust = "crates/xedit-session/src/save.rs"
+note = "The per-game settings the save path reads (apply_edit_settings) are ported. Startup and the command line are pending."
 
 [units."xEdit/xeLODGenForm.pas"]
 status = "pending"
@@ -486,6 +490,8 @@ status = "pending"
 
 [units."xEdit/xeMainForm.pas"]
 status = "pending"
+rust = "crates/xedit-session/src/save.rs"
+note = "SaveChanged is ported as files.save (one file per call, atomic rename instead of the queued rename). The form itself is pending."
 
 [units."xEdit/xeModGroupEditForm.pas"]
 status = "pending"
