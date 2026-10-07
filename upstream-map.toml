@@ -95,6 +95,8 @@ note = "Dump parity holds for the vanilla masters. The definitions are generated
 
 [units."Core/wbDefinitionsFO3Saves.pas"]
 status = "pending"
+rust = "crates/xedit-defs/src/fo3saves.rs"
+note = "The saves and FOSE co-saves of Fallout 3, not verified: no saves were available. The callbacks that are the same upstream call the Fallout New Vegas ones."
 
 [units."Core/wbDefinitionsFO4.pas"]
 status = "pending"
@@ -138,6 +140,8 @@ note = "Dump parity holds for the vanilla masters. The definitions are generated
 
 [units."Core/wbDefinitionsTES4Saves.pas"]
 status = "pending"
+rust = "crates/xedit-defs/src/tes4saves.rs"
+note = "The saves and OBSE co-saves of Oblivion, not verified: no saves were available."
 
 [units."Core/wbDefinitionsTES5.pas"]
 status = "pending"
