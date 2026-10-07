@@ -37,6 +37,10 @@ pub fn actor_value_enum() -> Option<Arc<EnumDef>> {
     ACTOR_VALUE_ENUM.read().unwrap().clone()
 }
 
+/// The message of the access violation of the oracle when a hardcoded
+/// FormID is looked up without a game master file.
+const NIL_GAME_MASTER_FILE: &str = "Access violation at address 0000000000713B9B in module 'xDump.exe' (offset 313B9B). Read of address 0000000000000000";
+
 const ACVA: Signature = Signature::new(b"ACVA");
 const NULL: Signature = Signature::new(b"NULL");
 const TRGT: Signature = Signature::new(b"TRGT");
@@ -260,8 +264,10 @@ impl FormIDDefFormater {
         if form_id.is_hardcoded() {
             match get_game_master_file() {
                 Some(master) => master.get_record_by_form_id(*form_id, true, false),
-                // Upstream fails without a game master file.
-                None => Ok(None),
+                // UPSTREAM-QUIRK: without a game master file, such as for a
+                // save whose plugins are not found, upstream reads through a
+                // nil interface; the oracle reports this access violation.
+                None => Err(NIL_GAME_MASTER_FILE.to_owned()),
             }
         } else {
             file.get_record_by_form_id(*form_id, true, masters_updated)

@@ -11,6 +11,7 @@
 pub mod callbacks;
 pub mod common;
 pub mod fnv;
+pub mod fnvsaves;
 pub mod fo3;
 pub mod fo4;
 pub mod fo4saves;
@@ -22,3 +23,4 @@ pub mod signatures;
 pub mod tes3;
 pub mod tes4;
 pub mod tes5;
+pub mod tes5saves;

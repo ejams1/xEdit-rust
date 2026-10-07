@@ -10,15 +10,17 @@
 #[allow(unused_imports)]
 pub use super::fo4saves_stubs::*;
 
+use std::sync::Arc;
 use std::sync::atomic::{AtomicI64, Ordering};
 
 use xedit_core::interface::globals::{
-    bytes_to_group, set_extract_info, set_file_chapters, set_file_header, set_file_magic, set_file_plugins,
+    bytes_to_dump, bytes_to_group, bytes_to_skip, set_extract_info, set_file_chapters, set_file_header, set_file_magic,
+    set_file_plugins,
 };
 use xedit_core::interface::*;
 
 use super::save_interface::{
-    initialize_save_ref_id_array, initialize_save_worldspace_array, initialize_vm_array_table,
+    get_save_ref_id, initialize_save_ref_id_array, initialize_save_worldspace_array, initialize_vm_array_table,
     initialize_vm_object_array, initialize_vm_object_detached_array, initialize_vm_type_array,
     query_count_for_vm_array_handle, wb_find_save_element,
 };
@@ -55,23 +57,23 @@ pub fn switch_to_fo4_co_save() {
 
 /// Upstream `wbChangedFormOffset`: the chapter types of the changed forms
 /// start here.
-const CHANGED_FORM_OFFSET: i32 = 10000;
+pub(crate) const CHANGED_FORM_OFFSET: i32 = 10000;
 
 /// The lengths of the tables that the `AfterLoad` callbacks set once,
 /// upstream `VMTypeCount` and the others; -1 until then.
-static VM_TYPE_COUNT: AtomicI64 = AtomicI64::new(-1);
-static WORLDSPACE_TABLE_COUNT: AtomicI64 = AtomicI64::new(-1);
-static REF_ID_TABLE_COUNT: AtomicI64 = AtomicI64::new(-1);
-static VM_OBJECT_ARRAY_COUNT: AtomicI64 = AtomicI64::new(-1);
-static VM_SUPPLEMENT_OBJECT_ARRAY_COUNT: AtomicI64 = AtomicI64::new(-1);
-static VM_OBJECT_DETACHED_ARRAY_COUNT: AtomicI64 = AtomicI64::new(-1);
-static VM_ARRAY_TABLE_COUNT: AtomicI64 = AtomicI64::new(-1);
-static STACK_TABLE_COUNT: AtomicI64 = AtomicI64::new(-1);
+pub(crate) static VM_TYPE_COUNT: AtomicI64 = AtomicI64::new(-1);
+pub(crate) static WORLDSPACE_TABLE_COUNT: AtomicI64 = AtomicI64::new(-1);
+pub(crate) static REF_ID_TABLE_COUNT: AtomicI64 = AtomicI64::new(-1);
+pub(crate) static VM_OBJECT_ARRAY_COUNT: AtomicI64 = AtomicI64::new(-1);
+pub(crate) static VM_SUPPLEMENT_OBJECT_ARRAY_COUNT: AtomicI64 = AtomicI64::new(-1);
+pub(crate) static VM_OBJECT_DETACHED_ARRAY_COUNT: AtomicI64 = AtomicI64::new(-1);
+pub(crate) static VM_ARRAY_TABLE_COUNT: AtomicI64 = AtomicI64::new(-1);
+pub(crate) static STACK_TABLE_COUNT: AtomicI64 = AtomicI64::new(-1);
 /// Upstream `LastRegistrationStart`.
-static LAST_REGISTRATION_START: AtomicI64 = AtomicI64::new(0);
+pub(crate) static LAST_REGISTRATION_START: AtomicI64 = AtomicI64::new(0);
 
 /// `Element.NativeValue` as an integer, 0 without the element.
-fn native(element: Option<ElementRef>) -> i64 {
+pub(crate) fn native(element: Option<ElementRef>) -> i64 {
     match element.map(|element| element.get_native_value()) {
         Some(Variant::Float(value)) => value as i64,
         Some(value) => value.as_ordinal().unwrap_or(0),
@@ -80,7 +82,7 @@ fn native(element: Option<ElementRef>) -> i64 {
 }
 
 /// The element count of a data container, 0 for anything else.
-fn data_element_count(element: Option<ElementRef>) -> i64 {
+pub(crate) fn data_element_count(element: Option<ElementRef>) -> i64 {
     element
         .as_ref()
         .and_then(|element| element.as_data_container())
@@ -88,7 +90,7 @@ fn data_element_count(element: Option<ElementRef>) -> i64 {
 }
 
 /// The file the element is in: the last container up the tree.
-fn root(element: &ElementRef) -> ElementRef {
+pub(crate) fn root(element: &ElementRef) -> ElementRef {
     let mut result = element.clone();
     while let Some(container) = result.get_container() {
         result = container;
@@ -97,7 +99,7 @@ fn root(element: &ElementRef) -> ElementRef {
 }
 
 /// `Container.ElementByPath[path].NativeValue` from the file of the element.
-fn root_value(element: &ElementRef, path: &str) -> Option<i64> {
+pub(crate) fn root_value(element: &ElementRef, path: &str) -> Option<i64> {
     let root = root(element);
     let found = root.as_container()?.get_element_by_path(path)?;
     Some(native(Some(found)))
@@ -105,19 +107,19 @@ fn root_value(element: &ElementRef, path: &str) -> Option<i64> {
 
 /// The child `child` of the save element `name` (`wbFindSaveElement`), when
 /// that element is a data container.
-fn save_child(name: &str, element: &ElementRef, child: &str) -> Option<ElementRef> {
+pub(crate) fn save_child(name: &str, element: &ElementRef, child: &str) -> Option<ElementRef> {
     let found = wb_find_save_element(name, element);
     found.as_data_container()?.get_element_by_name(child)
 }
 
 /// The native value of `save_child`.
-fn save_value(name: &str, element: &ElementRef, child: &str) -> Option<i64> {
+pub(crate) fn save_value(name: &str, element: &ElementRef, child: &str) -> Option<i64> {
     save_child(name, element, child).map(|child| native(Some(child)))
 }
 
 /// Port of `SaveVersionDecider`: 1 when the save version is above the
 /// minimum.
-fn save_version_decider(minimum: i64, a_element: ElementArg) -> i32 {
+pub(crate) fn save_version_decider(minimum: i64, a_element: ElementArg) -> i32 {
     let Some(element) = a_element else { return 0 };
     match root_value(element, "Save File Header\\Header\\Version") {
         Some(version) if version > minimum => 1,
@@ -127,7 +129,7 @@ fn save_version_decider(minimum: i64, a_element: ElementArg) -> i32 {
 
 /// Port of `SaveFormVersionDecider`: 1 when the form version is above the
 /// minimum.
-fn save_form_version_decider(minimum: i64, a_element: ElementArg) -> i32 {
+pub(crate) fn save_form_version_decider(minimum: i64, a_element: ElementArg) -> i32 {
     let Some(element) = a_element else { return 0 };
     match root_value(element, "Save File Header\\Form Version") {
         Some(version) if version > minimum => 1,
@@ -153,7 +155,7 @@ pub fn save_form_version_greater_than10_decider(_a_base_ptr: DataPtr, a_element:
 
 /// A decider that is 1 when the bits of the mask are all set in the child
 /// of the save element.
-fn save_bits_decider(name: &str, child: &str, mask: i64, a_element: ElementArg) -> i32 {
+pub(crate) fn save_bits_decider(name: &str, child: &str, mask: i64, a_element: ElementArg) -> i32 {
     let Some(element) = a_element else { return 0 };
     match save_value(name, element, child) {
         Some(value) if value & mask == mask => 1,
@@ -162,7 +164,7 @@ fn save_bits_decider(name: &str, child: &str, mask: i64, a_element: ElementArg) 
 }
 
 /// A decider that is 1 when the child of the save element is not 0.
-fn save_nonzero_decider(name: &str, child: &str, a_element: ElementArg) -> i32 {
+pub(crate) fn save_nonzero_decider(name: &str, child: &str, a_element: ElementArg) -> i32 {
     let Some(element) = a_element else { return 0 };
     match save_value(name, element, child) {
         Some(value) if value != 0 => 1,
@@ -171,13 +173,13 @@ fn save_nonzero_decider(name: &str, child: &str, a_element: ElementArg) -> i32 {
 }
 
 /// A decider that is the value of the child of the save element.
-fn save_value_decider(name: &str, child: &str, a_element: ElementArg) -> i32 {
+pub(crate) fn save_value_decider(name: &str, child: &str, a_element: ElementArg) -> i32 {
     let Some(element) = a_element else { return 0 };
     save_value(name, element, child).unwrap_or(0) as i32
 }
 
 /// A counter that is the value of the child of the save element.
-fn save_value_counter(name: &str, child: &str, a_element: ElementArg) -> u32 {
+pub(crate) fn save_value_counter(name: &str, child: &str, a_element: ElementArg) -> u32 {
     let Some(element) = a_element else { return 0 };
     save_value(name, element, child).unwrap_or(0) as u32
 }
@@ -310,7 +312,7 @@ pub fn array_table_entry_optional_string_decider(_a_base_ptr: DataPtr, a_element
 }
 
 /// An `AfterLoad` that keeps the length of the table once.
-fn table_after_load(count: &AtomicI64, a_element: &ElementRef) -> bool {
+pub(crate) fn table_after_load(count: &AtomicI64, a_element: &ElementRef) -> bool {
     if count.load(Ordering::Relaxed) >= 0 {
         return false;
     }
@@ -399,7 +401,7 @@ pub fn type_table1_counter(_a_base_ptr: DataPtr, a_element: ElementArg) -> u32 {
 
 /// A counter that is the length of the table once its `AfterLoad` ran, else
 /// the element count of the table in the Papyrus structure.
-fn table_counter(count: &AtomicI64, path: &str, a_element: ElementArg) -> u32 {
+pub(crate) fn table_counter(count: &AtomicI64, path: &str, a_element: ElementArg) -> u32 {
     let count = count.load(Ordering::Relaxed);
     if count >= 0 {
         return count as u32;
@@ -528,7 +530,7 @@ pub fn stack_table_data_entry_stack_extra_decider(_a_base_ptr: DataPtr, a_elemen
 }
 
 /// The string native value of the child of the save element.
-fn save_string(name: &str, element: &ElementRef, child: &str) -> Option<String> {
+pub(crate) fn save_string(name: &str, element: &ElementRef, child: &str) -> Option<String> {
     save_child(name, element, child).map(|child| match child.get_native_value() {
         Variant::Str(text) => text,
         _ => child.get_value(),
@@ -688,7 +690,7 @@ pub fn global_data_get_chapter_type(_a_base_ptr: DataPtr, a_element: ElementArg)
 
 /// The middle word of a value such as `1001 (0x3E9) Name`: the text after
 /// the first blank, up to the next blank.
-fn chapter_type_word(mut text: String) -> String {
+pub(crate) fn chapter_type_word(mut text: String) -> String {
     if text.len() > 1
         && let Some(blank) = text.find(' ')
     {
@@ -719,7 +721,7 @@ pub fn global_data_get_chapter_type_name(a_base_ptr: DataPtr, a_element: Element
 
 /// Port of `ChangedFormGetRawType`: the type byte of the changed form, with
 /// the changed form itself.
-fn changed_form_get_raw_type(element: &ElementRef) -> (i32, ElementRef) {
+pub(crate) fn changed_form_get_raw_type(element: &ElementRef) -> (i32, ElementRef) {
     const OFFSET_TYPE: usize = 7;
     let changed_form = wb_find_save_element("Changed Form", element);
     let kind = changed_form
@@ -740,7 +742,7 @@ pub fn global_data_sizer(a_base_ptr: DataPtr, _a_element: ElementArg, compressed
 }
 
 /// The unsigned integer of `size` bytes (1, 2 or 4) at `offset`.
-fn sized_value(data: &[u8], offset: usize, size_length: i32) -> Option<i64> {
+pub(crate) fn sized_value(data: &[u8], offset: usize, size_length: i32) -> Option<i64> {
     Some(match size_length {
         0 => i64::from(*data.get(offset)?),
         1 => i64::from(u16::from_le_bytes(data.get(offset..offset + 2)?.try_into().ok()?)),
@@ -819,9 +821,18 @@ pub fn changed_form_get_chapter_type(_a_base_ptr: DataPtr, a_element: ElementArg
 
 /// Upstream `ChangedFormGetChapterTypeName`.
 pub fn changed_form_get_chapter_type_name(a_base_ptr: DataPtr, a_element: ElementArg) -> String {
+    changed_form_chapter_type_name(WB_CHANGE_TYPES.get(), a_base_ptr, a_element)
+}
+
+/// Port of `ChangedFormGetChapterTypeName` with the change types of the game.
+pub(crate) fn changed_form_chapter_type_name(
+    change_types: Option<Arc<EnumDef>>,
+    a_base_ptr: DataPtr,
+    a_element: ElementArg,
+) -> String {
     let kind = changed_form_get_chapter_type(a_base_ptr, a_element);
     let mut result = String::new();
-    if let Some(change_types) = WB_CHANGE_TYPES.get()
+    if let Some(change_types) = change_types
         && kind >= CHANGED_FORM_OFFSET
         && kind < CHANGED_FORM_OFFSET + change_types.get_name_count()
     {
@@ -910,7 +921,7 @@ pub fn changed_form_flags_decider(_a_base_ptr: DataPtr, a_element: ElementArg) -
 
 /// Port of `ChangedFlagXXDecider`: 1 when one of the bits of the mask is set
 /// in the change flags of the changed form.
-fn changed_flag_xx_decider(mask: i64, a_element: ElementArg) -> i32 {
+pub(crate) fn changed_flag_xx_decider(mask: i64, a_element: ElementArg) -> i32 {
     let Some(element) = a_element else { return 0 };
     match save_value("Changed Form", element, "Change Flags") {
         Some(flags) if flags & mask != 0 => 1,
@@ -1175,14 +1186,14 @@ pub fn changed_form_extra_decider(_a_base_ptr: DataPtr, a_element: ElementArg) -
 
 /// The distance from `origin` to `pointer` in the same data, as upstream
 /// subtracts pointers in 32 bits.
-fn consumed(pointer: DataPtr, origin: DataPtr) -> u32 {
+pub(crate) fn consumed(pointer: DataPtr, origin: DataPtr) -> u32 {
     let address = |data: DataPtr| data.map_or(0, |data| data.as_ptr() as usize);
     address(pointer).wrapping_sub(address(origin)) as u32
 }
 
 /// The data length of the `CForm Data`: the uncompressed length, or the
 /// length when that is 0.
-fn cform_data_length(element: &ElementRef) -> u32 {
+pub(crate) fn cform_data_length(element: &ElementRef) -> u32 {
     let cform = wb_find_save_element("CForm Data", element);
     let Some(container) = cform.as_data_container() else {
         return 0;
@@ -1205,7 +1216,7 @@ fn cform_data_length(element: &ElementRef) -> u32 {
 }
 
 /// Port of `ChangedFormRemainingDataFromHereCounter`.
-fn changed_form_remaining_data_from_here_counter(a_base_ptr: DataPtr, element: &ElementRef) -> u32 {
+pub(crate) fn changed_form_remaining_data_from_here_counter(a_base_ptr: DataPtr, element: &ElementRef) -> u32 {
     let mut result = cform_data_length(element);
     if result > 0 {
         let data = wb_find_save_element("Changed Form Data", element);
@@ -1255,7 +1266,7 @@ pub fn changed_form_cell_is_interior_decider(a_base_ptr: DataPtr, a_element: Ele
 }
 
 /// Port of `DataLengthCounter`.
-fn data_length_counter(name: &str, a_element: ElementArg, modifier: i32) -> u32 {
+pub(crate) fn data_length_counter(name: &str, a_element: ElementArg, modifier: i32) -> u32 {
     let Some(element) = a_element else { return 0 };
     let Some(length) = save_value(name, element, "DataLength") else {
         return 0;
@@ -1269,7 +1280,7 @@ fn data_length_counter(name: &str, a_element: ElementArg, modifier: i32) -> u32 
 }
 
 /// Port of `DataLengthRemainderCounter`.
-fn data_length_remainder_counter(name: &str, a_element: ElementArg, modifier: i32) -> u32 {
+pub(crate) fn data_length_remainder_counter(name: &str, a_element: ElementArg, modifier: i32) -> u32 {
     let Some(element) = a_element else { return 0 };
     let found = wb_find_save_element(name, element);
     let Some(container) = found.as_data_container() else {
@@ -1356,4 +1367,88 @@ pub fn f4_se_reg_key_decider(_a_base_ptr: DataPtr, _a_element: ElementArg) -> i3
 /// Upstream `F4SERegDataDecider`.
 pub fn f4_se_reg_data_decider(_a_base_ptr: DataPtr, _a_element: ElementArg) -> i32 {
     i32::from(LAST_REGISTRATION_START.load(Ordering::Relaxed) == 8)
+}
+
+/// Upstream `SaveFormVersionGreaterThan35Decider`: above 36, as upstream.
+pub fn save_form_version_greater_than35_decider(_a_base_ptr: DataPtr, a_element: ElementArg) -> i32 {
+    save_form_version_decider(36, a_element)
+}
+
+/// Upstream `SaveFormVersionGreaterThan72Decider`: above 73, as upstream.
+pub fn save_form_version_greater_than72_decider(_a_base_ptr: DataPtr, a_element: ElementArg) -> i32 {
+    save_form_version_decider(73, a_element)
+}
+
+/// Upstream `VersionGreaterThan3Decider`.
+pub fn version_greater_than3_decider(_a_base_ptr: DataPtr, a_element: ElementArg) -> i32 {
+    let Some(element) = a_element else { return 0 };
+    match save_value("Papyrus Struct", element, "Save File Version") {
+        Some(version) if version > 3 => 1,
+        _ => 0,
+    }
+}
+
+/// Upstream `VersionGreaterThan4Decider`.
+pub fn version_greater_than4_decider(_a_base_ptr: DataPtr, a_element: ElementArg) -> i32 {
+    let Some(element) = a_element else { return 0 };
+    match save_value("Papyrus Struct", element, "Save File Version") {
+        Some(version) if version > 4 => 1,
+        _ => 0,
+    }
+}
+
+/// Upstream `FirstCountCounter`.
+pub fn first_count_counter(_a_base_ptr: DataPtr, a_element: ElementArg) -> u32 {
+    save_value_counter("Dual RefID Table", "First Count", a_element)
+}
+
+/// Upstream `SecondCountCounter`.
+pub fn second_count_counter(_a_base_ptr: DataPtr, a_element: ElementArg) -> u32 {
+    save_value_counter("Dual RefID Table", "Second Count", a_element)
+}
+
+/// Upstream `Unknown1000_00001Decider`.
+pub fn unknown1000_00001_decider(_a_base_ptr: DataPtr, a_element: ElementArg) -> i32 {
+    let Some(element) = a_element else { return 0 };
+    match save_value("Unknown1000_0000", element, "Unknown1000_00000") {
+        Some(0) | None => 0,
+        Some(_) => 1,
+    }
+}
+
+/// Upstream `SkipCounter`: the bytes to skip (`-bts`).
+pub fn skip_counter(_a_base_ptr: DataPtr, _a_element: ElementArg) -> u32 {
+    bytes_to_skip() as u32
+}
+
+/// Upstream `DumpCounter`: the groups of bytes to dump (`-btd`), else all
+/// the remaining data.
+pub fn dump_counter(a_base_ptr: DataPtr, _a_element: ElementArg) -> u32 {
+    let group = bytes_to_group() as u32;
+    if bytes_to_dump() == 0xFFFF_FFFF {
+        a_base_ptr.map_or(0, <[u8]>::len) as u32 / group + 1
+    } else {
+        bytes_to_dump() as u32 / group + 1
+    }
+}
+
+/// Upstream `PlayerRefIndex`: the reference ID of the player once found.
+static PLAYER_REF_INDEX: AtomicI64 = AtomicI64::new(0);
+
+/// Upstream `IsActorPlayerDecider`: 1 for the changed form of the player.
+pub fn is_actor_player_decider(_a_base_ptr: DataPtr, a_element: ElementArg) -> i32 {
+    /// Upstream `wbPlayerRefID`.
+    const PLAYER_REF_ID: u32 = 0x14;
+    let Some(element) = a_element else { return 0 };
+    let Some(id) = save_value("Changed Form", element, "RefID") else {
+        return 0;
+    };
+    let id = id as i32 as i64;
+    if id <= 0 {
+        return 0;
+    }
+    if PLAYER_REF_INDEX.load(Ordering::Relaxed) == 0 && id >> 22 == 0 && get_save_ref_id(id as u32) == PLAYER_REF_ID {
+        PLAYER_REF_INDEX.store(id, Ordering::Relaxed);
+    }
+    i32::from(id == PLAYER_REF_INDEX.load(Ordering::Relaxed))
 }
