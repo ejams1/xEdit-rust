@@ -79,9 +79,8 @@ pub fn setup_saves(game: &str, path: &str) -> Result<GameMode, String> {
 
 /// The save definitions of a game.
 struct SaveDefinitions {
-    /// The definitions of the saves; Fallout 3 and Oblivion only have the
-    /// co-save ones, on top of the plugin definitions.
-    define: Option<fn()>,
+    /// The definitions of the saves.
+    define: fn(),
     /// The switch to the definitions of the co-saves.
     switch_to_co_save: fn(),
     /// The extension of the co-saves of the script extender.
@@ -91,21 +90,33 @@ struct SaveDefinitions {
 /// The save definitions of a game, `None` for a game without saves.
 fn save_definitions(mode: GameMode) -> Option<SaveDefinitions> {
     use xedit_defs::callbacks::fnvsaves::{define_fnv_saves, switch_to_fnv_co_save};
+    use xedit_defs::callbacks::fo3saves::{define_fo3_saves, switch_to_fo3_co_save};
     use xedit_defs::callbacks::fo4saves::{define_fo4_saves, switch_to_fo4_co_save};
+    use xedit_defs::callbacks::tes4saves::{define_tes4_saves, switch_to_tes4_co_save};
     use xedit_defs::callbacks::tes5saves::{define_tes5_saves, switch_to_tes5_co_save};
     match mode {
+        GameMode::gmTES4 => Some(SaveDefinitions {
+            define: define_tes4_saves,
+            switch_to_co_save: switch_to_tes4_co_save,
+            co_save_extension: "obse",
+        }),
+        GameMode::gmFO3 => Some(SaveDefinitions {
+            define: define_fo3_saves,
+            switch_to_co_save: switch_to_fo3_co_save,
+            co_save_extension: "fose",
+        }),
         GameMode::gmFNV => Some(SaveDefinitions {
-            define: Some(define_fnv_saves),
+            define: define_fnv_saves,
             switch_to_co_save: switch_to_fnv_co_save,
             co_save_extension: "nvse",
         }),
         GameMode::gmFO4 => Some(SaveDefinitions {
-            define: Some(define_fo4_saves),
+            define: define_fo4_saves,
             switch_to_co_save: switch_to_fo4_co_save,
             co_save_extension: "f4se",
         }),
         GameMode::gmTES5 | GameMode::gmEnderal | GameMode::gmSSE | GameMode::gmEnderalSE => Some(SaveDefinitions {
-            define: Some(define_tes5_saves),
+            define: define_tes5_saves,
             switch_to_co_save: switch_to_tes5_co_save,
             co_save_extension: "skse",
         }),
@@ -175,12 +186,12 @@ fn setup(game: &str, save: Option<&str>) -> Result<GameMode, String> {
             let is_co_save = Path::new(path)
                 .extension()
                 .is_some_and(|extension| extension.eq_ignore_ascii_case(saves.co_save_extension));
-            match saves.define {
-                Some(define_saves) => define_saves(),
-                // The game has no save definitions, only co-save ones.
-                None if is_co_save => define(),
-                None => return Err(format!("Save are not supported yet \"{path}\"")),
+            // The oracle warns that the saves of Fallout 3 and Oblivion are
+            // not supported yet, and reads them all the same.
+            if !is_co_save && matches!(mode, GameMode::gmFO3 | GameMode::gmTES4) {
+                eprintln!("Save are not supported yet \"{path}\". Please check the command line parameters.");
             }
+            (saves.define)();
             if is_co_save {
                 (saves.switch_to_co_save)();
             }
