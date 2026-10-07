@@ -11,7 +11,7 @@ The official xEdit release build of the tag in `upstream-map.toml` is the oracle
 
 ```
 cargo xtask parity dump|saves [--game <game>]... [--file <name>]... [--oracle-only] [--jobs <n>]
-                              [--memory-budget <GiB>] [--max-memory <GiB>]
+                              [--memory-budget <GiB>] [--max-memory <GiB>] [--oracle-timeout <minutes>]
 ```
 
 The harness runs the oracle `xDump.exe` and the port's `xedit dump` on every vanilla plugin of the selected games and compares the outputs byte for byte. The games are `fo4`, `sse`, `tes3`, `tes4`, `fo3`, `fnv`, `tes5`, `tes5vr`, `fo4vr`, `fo76` and `sf1`. Without `--game` it checks every game whose data directory is set and prints a `skipped` line for the others. `--file` restricts the run to named plugins, vanilla or not. It prints the first differing line of each file, writes `target/parity/dump.json` and exits with an error when any file differs.
@@ -33,7 +33,7 @@ Every oracle and port process runs in a Windows job object that caps its committ
 
 The processes that run at once stay within `--memory-budget` (default: three quarters of the installed memory). Each run reserves the peak its file had in the last run, or, before the first run, 6 times the size of the plugin and its game master; a file whose reservation exceeds the budget runs alone. `--jobs` (default 3) is only an upper bound on the parallel runs. The largest port peak of the Fallout 4 and Skyrim SE corpus is 1.6 GiB (`DLCCoast.esm`, `Fallout4.esm`). The wall clock is bounded by the largest file: the port dumps `Skyrim.esm` (8.3 GB of text) in about 3 minutes and `Update.esm` in about 20 seconds on the reference machine.
 
-`parity saves` runs `xDump.exe -saves` and `xedit saves dump` on every save and co-save in the save folder of each game (`.fos`, `.ess`, `.f4se`, `.skse`, `.nvse`, `.fose`, `.obse`), with the game's data folder as `-D:` and `--data`, and caches the oracle output under `<cache>/<tag>/<game>-saves`. The report is `target/parity/saves.json`. The oracle is slow on uncompressed Skyrim LE saves (more than 15 minutes for 40 MB of output). Oblivion saves need `XEDIT_TES4_SAVES` (`.ess`, `.obse`) and Fallout 3 saves `XEDIT_FO3_SAVES` (`.fos`, `.fose`); on this machine both folders are under `M:\projects\saves`.
+`parity saves` runs `xDump.exe -saves` and `xedit saves dump` on every save and co-save in the save folder of each game (`.fos`, `.ess`, `.f4se`, `.skse`, `.nvse`, `.fose`, `.obse`), with the game's data folder as `-D:` and `--data`, and caches the oracle output under `<cache>/<tag>/<game>-saves`. The report is `target/parity/saves.json`. The oracle is far too slow on Skyrim LE saves to finish: it raises an exception for every hardcoded FormID it cannot resolve (see `using-xedit-cli`) and writes about 1 KB per second, where the port writes 140 MB for `quicksave.ess`. `--oracle-timeout <minutes>` stops the oracle after that long and keeps its output as `<file>.<hash>.oracle.timeout.txt.zst`, compared as a prefix like a crashed run (`equal-prefix`). The Skyrim LE saves were checked with `--oracle-timeout 15`; delete the `.oracle.timeout.txt.zst` of a save to extend its prefix. Oblivion saves need `XEDIT_TES4_SAVES` (`.ess`, `.obse`) and Fallout 3 saves `XEDIT_FO3_SAVES` (`.fos`, `.fose`); on this machine both folders are under `M:\projects\saves`.
 
 Only the dump checks exist so far. Add the other checks of the table below to `crates/xtask/src/parity.rs` in the phase that ports the feature.
 
