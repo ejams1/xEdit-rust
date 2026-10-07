@@ -11,6 +11,7 @@
 pub mod batch;
 pub mod commands;
 pub mod dump;
+pub mod masters;
 pub mod save;
 
 use std::collections::BTreeMap;
@@ -117,6 +118,7 @@ impl Registry {
         registry.register("system.version", "Report the xEdit version.", false, version);
         commands::register(&mut registry);
         save::register(&mut registry);
+        masters::register(&mut registry);
         registry
     }
 
