@@ -9,7 +9,9 @@
 use std::cmp::Ordering;
 use std::fmt;
 
-use super::globals::{is_light_supported, is_medium_supported, pretty_form_id, pseudo_light, pseudo_medium};
+use super::globals::{
+    complex_file_file_id, is_light_supported, is_medium_supported, pretty_form_id, pseudo_light, pseudo_medium,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[allow(non_camel_case_types)]
@@ -368,8 +370,144 @@ pub struct SlotCounts {
 }
 
 impl SlotCounts {
+    /// Port of `TwbSlotCounts.Create`: the masters counted by module type
+    /// under `wbComplexFileFileID`, else all as full masters.
+    // UPSTREAM-QUIRK: `Full` and `Medium` are bytes, so a count of 256
+    // wraps to 0.
+    pub fn create(module_types: impl IntoIterator<Item = ModuleType>) -> Self {
+        let mut result = Self::default();
+        if complex_file_file_id() {
+            for module_type in module_types {
+                match module_type {
+                    ModuleType::mtFull => result.full = result.full.wrapping_add(1),
+                    ModuleType::mtMedium => result.medium = result.medium.wrapping_add(1),
+                    ModuleType::mtLight => result.light += 1,
+                }
+            }
+        } else {
+            result.full = module_types.into_iter().count() as u8;
+        }
+        result
+    }
+
     pub fn total(self) -> i16 {
         i16::from(self.full) + i16::from(self.medium) + self.light
+    }
+}
+
+/// The arguments of `MastersUpdated(aOld, aNew, aOldCount, aNewCount)`: the
+/// FileIDs of the masters that moved, each with its new FileID, and the
+/// number of masters before and after the change. A FileID at or past the
+/// old count is the file itself, which moves to the new count.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct MastersUpdate {
+    pub old: Vec<FileID>,
+    pub new: Vec<FileID>,
+    pub old_count: SlotCounts,
+    pub new_count: SlotCounts,
+}
+
+impl MastersUpdate {
+    /// Port of `FixupFormID` with these arguments.
+    pub fn fixup(&self, form_id: FormID, allow_hardcoded_range_use: bool) -> FormID {
+        fixup_form_id(
+            form_id,
+            &self.old,
+            &self.new,
+            self.old_count,
+            self.new_count,
+            allow_hardcoded_range_use,
+        )
+    }
+}
+
+/// Port of `FixupFormID`: a file FormID after the masters of its file
+/// changed. The null, player and none FormIDs and the hardcoded range keep
+/// their value (the hardcoded range loses its FileID unless the file may use
+/// that range itself); a FileID past the old masters, the file itself, moves
+/// to the new count; a FileID of `old` takes the FileID at the same index of
+/// `new`.
+pub fn fixup_form_id(
+    form_id: FormID,
+    old: &[FileID],
+    new: &[FileID],
+    old_count: SlotCounts,
+    new_count: SlotCounts,
+    allow_hardcoded_range_use: bool,
+) -> FormID {
+    let mut result = form_id;
+    if result.is_null() || result.is_player() || result.is_none() {
+        return result;
+    }
+    if result.object_id() < 0x800 {
+        if allow_hardcoded_range_use {
+            if result.is_hardcoded() {
+                return result;
+            }
+        } else {
+            result.set_file_id(FileID::null());
+            return result;
+        }
+    }
+    let file_id = result.file_id();
+    let mut old_total = old_count.total();
+    let mut new_total = new_count.total();
+    let mut slot = file_id.full_slot();
+    if complex_file_file_id() {
+        match file_id.module_type() {
+            ModuleType::mtFull => {
+                old_total = i16::from(old_count.full);
+                new_total = i16::from(new_count.full);
+                slot = file_id.full_slot();
+            }
+            ModuleType::mtMedium => {
+                old_total = i16::from(old_count.medium);
+                new_total = i16::from(new_count.medium);
+                slot = file_id.medium_slot();
+            }
+            ModuleType::mtLight => {
+                old_total = old_count.light;
+                new_total = new_count.light;
+                slot = file_id.light_slot();
+            }
+        }
+    }
+    let create_by_type = |module_type: ModuleType, slot: i16| match module_type {
+        ModuleType::mtFull => FileID::create_full(slot),
+        ModuleType::mtMedium => FileID::create_medium(slot),
+        ModuleType::mtLight => FileID::create_light(slot),
+    };
+    if new_total > old_total && slot >= old_total {
+        result.set_file_id(create_by_type(file_id.module_type(), new_total));
+        return result;
+    }
+    if let Some(index) = old.iter().position(|old| *old == file_id) {
+        result.set_file_id(new[index]);
+        return result;
+    }
+    if new_total < old_total && slot >= old_total {
+        result.set_file_id(create_by_type(file_id.module_type(), new_total));
+    }
+    result
+}
+
+/// Port of `TwbUsedMasters`: a flag per master index, set by
+/// `FindUsedMasters` for every master a FormID of the file points to.
+pub type UsedMasters = Vec<bool>;
+
+/// The number of entries of `TwbUsedMasters` (`array[0..4610]`).
+pub const USED_MASTERS_LEN: usize = 4611;
+
+/// A `TwbUsedMasters` with every flag cleared (`FillChar(UsedMasters, 0)`).
+pub fn new_used_masters() -> UsedMasters {
+    vec![false; USED_MASTERS_LEN]
+}
+
+/// Sets the flag of `index` when it is in range. Upstream writes the array
+/// without a range check; every index it computes is below its length.
+pub fn mark_used_master(masters: &mut UsedMasters, index: usize) {
+    if let Some(flag) = masters.get_mut(index) {
+        *flag = true;
     }
 }
 
@@ -512,5 +650,52 @@ mod tests {
         assert_eq!(CRC32::assign_from_string("F88D204"), None);
         assert_eq!(CRC32(0xF88D_2046).to_string(), "F88D2046");
         assert!(CRC32(1).is_valid() && !CRC32(0).is_valid() && !CRC32(0xFFFF_FFFF).is_valid());
+    }
+
+    #[test]
+    fn fixup_form_id_follows_the_masters() {
+        let _guard = test_lock();
+        set_game_mode(GameMode::gmSSE);
+        let counts = |full: u8| SlotCounts {
+            full,
+            ..SlotCounts::default()
+        };
+        let fixup = |form_id: u32, old: &[i16], new: &[i16], old_count: u8, new_count: u8, allow: bool| {
+            let old: Vec<FileID> = old.iter().map(|&slot| FileID::create_full(slot)).collect();
+            let new: Vec<FileID> = new.iter().map(|&slot| FileID::create_full(slot)).collect();
+            fixup_form_id(
+                FormID::from_cardinal(form_id),
+                &old,
+                &new,
+                counts(old_count),
+                counts(new_count),
+                allow,
+            )
+            .to_cardinal()
+        };
+        // A master added: the file itself moves past it, the masters stay.
+        assert_eq!(fixup(0x0100_0803, &[], &[], 1, 2, false), 0x0200_0803);
+        assert_eq!(fixup(0x0000_0803, &[], &[], 1, 2, false), 0x0000_0803);
+        // Masters swapped.
+        assert_eq!(fixup(0x0000_0803, &[0, 1], &[1, 0], 2, 2, false), 0x0100_0803);
+        // A master removed: the file itself moves down to the new count.
+        assert_eq!(fixup(0x0200_0803, &[1], &[0], 2, 1, false), 0x0100_0803);
+        assert_eq!(fixup(0x0100_0803, &[1], &[0], 2, 1, false), 0x0000_0803);
+        // The special FormIDs and the hardcoded range.
+        assert_eq!(fixup(0, &[], &[], 1, 2, false), 0);
+        assert_eq!(fixup(0x14, &[], &[], 1, 2, false), 0x14);
+        assert_eq!(fixup(0xFFFF_FFFF, &[], &[], 1, 2, false), 0xFFFF_FFFF);
+        assert_eq!(fixup(0x0100_0123, &[], &[], 1, 2, false), 0x0000_0123);
+        assert_eq!(fixup(0x0100_0123, &[], &[], 1, 2, true), 0x0200_0123);
+        assert_eq!(fixup(0x0000_0123, &[], &[], 1, 2, true), 0x0000_0123);
+    }
+
+    #[test]
+    fn slot_counts_count_every_master_as_full_without_complex_file_ids() {
+        let _guard = test_lock();
+        set_game_mode(GameMode::gmSSE);
+        let counts = SlotCounts::create([ModuleType::mtFull, ModuleType::mtLight, ModuleType::mtFull]);
+        assert_eq!(counts.full, 3);
+        assert_eq!(counts.total(), 3);
     }
 }

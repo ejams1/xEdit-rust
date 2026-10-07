@@ -13,6 +13,7 @@
 //! or rebuilt from their elements.
 
 pub mod edit;
+pub mod masters;
 pub mod structs;
 pub mod write;
 
@@ -597,8 +598,9 @@ pub struct FileImpl {
     /// need a strong reference to the file.
     fl_bytes: Arc<FileBytes>,
     fl_records: RwLock<Vec<Arc<MainRecordImpl>>>,
-    /// Port of `SortRecords`: the records by FormID, for the lookups.
-    fl_sorted_records: OnceLock<Vec<Arc<MainRecordImpl>>>,
+    /// Port of `SortRecords`: the records by FormID, for the lookups, sorted
+    /// again when the masters change.
+    fl_sorted_records: RwLock<Option<Vec<Arc<MainRecordImpl>>>>,
     fl_masters: RwLock<Vec<Arc<FileImpl>>>,
     fl_load_finished: OnceLock<()>,
     /// The header version, read once the header exists: a loaded file does
@@ -771,7 +773,8 @@ impl FileImpl {
     /// Port of `FindFormID` on the sorted records: a FormID past the
     /// masters belongs to the file itself.
     fn find_form_id(&self, form_id: FormID) -> Option<Arc<MainRecordImpl>> {
-        let sorted = self.fl_sorted_records.get()?;
+        let sorted = self.fl_sorted_records.read().unwrap();
+        let sorted = sorted.as_ref()?;
         let form_id = if self.is_new_record(form_id.file_id()) {
             form_id.change_file_id(self.get_file_file_id())
         } else {
@@ -875,6 +878,15 @@ impl FileImpl {
 
     pub fn masters(&self) -> Vec<Arc<FileImpl>> {
         self.fl_masters.read().unwrap().clone()
+    }
+
+    /// Port of `SortRecords`: `flRecords` in FormID order (a stable sort by
+    /// the fixed FormID), which the lookups by FormID search.
+    pub fn sort_records(&self) {
+        let mut sorted = self.fl_records.read().unwrap().clone();
+        sorted.sort_by_key(|record| record.get_fixed_form_id().to_cardinal());
+        *self.fl_records.write().unwrap() = sorted.clone();
+        *self.fl_sorted_records.write().unwrap() = Some(sorted);
     }
 
     /// Port of `AddMaster` by file name: loads the master from the directory
@@ -1097,10 +1109,7 @@ impl FileImpl {
         // `SortRecords` sorts `flRecords` itself, so the indices take the
         // records in FormID order: of records with the same key, the one with
         // the lowest FormID is kept.
-        let mut sorted = self.fl_records.read().unwrap().clone();
-        sorted.sort_by_key(|record| record.get_fixed_form_id().to_cardinal());
-        *self.fl_records.write().unwrap() = sorted.clone();
-        self.fl_sorted_records.set(sorted).ok();
+        self.sort_records();
         self.activate_indices();
         // Port of the top level group check of `TwbFile.Scan` for the games
         // from Skyrim on: an empty top level group is removed, and a group
@@ -1542,7 +1551,7 @@ pub fn wb_file_compare(
         fl_states: RwLock::new(fl_states),
         fl_bytes: Arc::new(bytes),
         fl_records: RwLock::new(Vec::new()),
-        fl_sorted_records: OnceLock::new(),
+        fl_sorted_records: RwLock::new(None),
         fl_masters: RwLock::new(Vec::new()),
         fl_load_finished: OnceLock::new(),
         fl_version: OnceLock::new(),
@@ -1794,6 +1803,9 @@ enum DataStorage {
     Failed,
 }
 
+/// The value of `mr_fixed_form_id` before the fixed FormID is computed.
+const UNSET_FIXED_FORM_ID: u64 = u64::MAX;
+
 /// Port of `TwbMainRecord`, as far as the structure of the record goes.
 pub struct MainRecordImpl {
     self_ref: Weak<MainRecordImpl>,
@@ -1826,8 +1838,9 @@ pub struct MainRecordImpl {
     /// Port of `mrMaster` and `mrOverrides`.
     mr_master: RwLock<Option<Weak<MainRecordImpl>>>,
     mr_overrides: RwLock<Vec<Weak<MainRecordImpl>>>,
-    /// Port of `mrFixedFormID`.
-    mr_fixed_form_id: OnceLock<FormID>,
+    /// Port of `mrFixedFormID`: the fixed FormID once computed, or
+    /// `UNSET_FIXED_FORM_ID`; cleared when the FormID changes.
+    mr_fixed_form_id: std::sync::atomic::AtomicU64,
     /// Port of `mrDisplayName`: cached for the records of official files,
     /// dropped when a named subrecord changes.
     mr_display_name: RwLock<Option<String>>,
@@ -1886,7 +1899,7 @@ impl MainRecordImpl {
             mr_builds: std::sync::atomic::AtomicU32::new(0),
             mr_master: RwLock::new(None),
             mr_overrides: RwLock::new(Vec::new()),
-            mr_fixed_form_id: OnceLock::new(),
+            mr_fixed_form_id: std::sync::atomic::AtomicU64::new(UNSET_FIXED_FORM_ID),
             mr_display_name: RwLock::new(None),
             mr_precombined: OnceLock::new(),
             mr_ofst_removed: AtomicBool::new(false),
@@ -1968,7 +1981,11 @@ impl MainRecordImpl {
     /// hardcoded range, and the file's own FileID for a slot beyond the
     /// masters.
     pub fn get_fixed_form_id(&self) -> FormID {
-        *self.mr_fixed_form_id.get_or_init(|| {
+        let cached = self.mr_fixed_form_id.load(Ordering::Acquire);
+        if cached != UNSET_FIXED_FORM_ID {
+            return FormID::from_cardinal(cached as u32);
+        }
+        let result = (|| {
             let mut result = self.mr_struct().form_id;
             let Some(file) = self.file.upgrade() else {
                 return result;
@@ -1986,7 +2003,17 @@ impl MainRecordImpl {
                 result = result.change_file_id(file.get_file_file_id());
             }
             result
-        })
+        })();
+        self.mr_fixed_form_id
+            .store(u64::from(result.to_cardinal()), Ordering::Release);
+        result
+    }
+
+    /// Port of `mrFixedFormID := TwbFormID.Null`: the fixed FormID is
+    /// computed again on the next use, after the FormID or the masters
+    /// changed.
+    pub(crate) fn clear_fixed_form_id(&self) {
+        self.mr_fixed_form_id.store(UNSET_FIXED_FORM_ID, Ordering::Release);
     }
 
     /// Port of `ActivateIndexKeys` and `BuildIndexKeys`: the keys of the

@@ -20,6 +20,7 @@ use super::def::{
     value_def_plumbing,
 };
 use super::element::{DataPtr, ElementArg, ElementRef};
+use super::form_id::{MastersUpdate, UsedMasters, mark_used_master};
 use super::formaters::comma_text;
 use super::globals::{check_non_cpn_chars, encoding, encoding_trans, is_internal_edit, show_string_bytes};
 use super::misc::{EditError, Variant, localization_get_value, progress, variant_to_string};
@@ -310,6 +311,28 @@ impl StringDef {
         }
     }
 
+    /// The code of a dynamic magic effect (`$80000000` set) when the data,
+    /// trimmed as `TwbStringMgefCodeDef` trims it, is four bytes long.
+    fn mgef_dynamic_code(&self, data: DataPtr) -> Option<u32> {
+        let bytes = data.unwrap_or_default();
+        let mut len = bytes.len();
+        if self.sd_size > 0 && len > self.sd_size as usize {
+            len = self.sd_size as usize;
+        }
+        if self.sd_forward {
+            len = bytes[..len].iter().position(|&byte| byte == 0).unwrap_or(len);
+        } else {
+            while len > 0 && bytes[len - 1] == 0 {
+                len -= 1;
+            }
+        }
+        if len != 4 {
+            return None;
+        }
+        let code = u32::from_le_bytes(bytes[..4].try_into().ok()?);
+        (code & 0x8000_0000 != 0).then_some(code)
+    }
+
     /// Port of `TwbStringMgefCodeDef.ToStringNative`.
     fn mgef_code_to_string_native(&self, data: DataPtr, element: ElementArg, transform: StringTransformType) -> String {
         use StringTransformType::*;
@@ -549,6 +572,49 @@ impl NamedDef for StringDef {
 
 impl ValueDef for StringDef {
     value_def_plumbing!(ValueDef);
+
+    /// Port of `TwbStringMgefCodeDef.MastersUpdated`: the file index in the
+    /// low byte of a dynamic magic effect code follows the masters.
+    /// Upstream writes the code in place; here it goes through the storage.
+    fn masters_updated(&self, data: DataPtr, element: ElementArg, update: &MastersUpdate) -> Result<bool, EditError> {
+        if self.class != StringClass::MgefCode {
+            return Ok(false);
+        }
+        let Some(code) = self.mgef_dynamic_code(data) else {
+            return Ok(false);
+        };
+        let index = i16::from((code & 0xFF) as u8);
+        let (old_total, new_total) = (update.old_count.total(), update.new_count.total());
+        let new_index = if new_total > old_total && index >= old_total {
+            Some(new_total)
+        } else if let Some(position) = update.old.iter().position(|old| old.full_slot() == index) {
+            Some(update.new[position].full_slot())
+        } else if new_total < old_total && index >= old_total {
+            Some(new_total)
+        } else {
+            None
+        };
+        let Some(new_index) = new_index else {
+            return Ok(false);
+        };
+        let new_code = (code & 0xFFFF_FF00) | (new_index as u32 & 0xFF);
+        let size = data.map_or(0, <[u8]>::len);
+        let (element, mut bytes) = request_storage(element, size)?;
+        bytes[..4].copy_from_slice(&new_code.to_le_bytes());
+        element.commit_storage(bytes);
+        // UPSTREAM-QUIRK: the result is true even when the index is the same.
+        Ok(true)
+    }
+
+    /// Port of `TwbStringMgefCodeDef.FindUsedMasters`.
+    fn find_used_masters(&self, data: DataPtr, _element: ElementArg, masters: &mut UsedMasters) {
+        if self.class != StringClass::MgefCode {
+            return;
+        }
+        if let Some(code) = self.mgef_dynamic_code(data) {
+            mark_used_master(masters, (code & 0xFF) as usize);
+        }
+    }
 
     fn to_string(&self, data: DataPtr, element: ElementArg) -> String {
         let mut result = self.to_string_transform(data, element, StringTransformType::ttToString);

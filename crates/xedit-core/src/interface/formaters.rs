@@ -12,6 +12,7 @@ use std::sync::{Arc, Weak};
 
 use super::def::{Def, DefBase, DefKind, DefRef, NamedDef, NamedDefBase, set_parent};
 use super::element::{ElementArg, ElementRef};
+use super::form_id::{MastersUpdate, UsedMasters};
 use super::globals::is_internal_edit;
 use super::integer::{IntegerDefFormater, integer_def_formater_create};
 use super::misc::{EditError, int_to_hex64, str_to_int64};
@@ -232,6 +233,23 @@ impl IntegerDefFormater for IntegerDefFormaterUnion {
 
     fn get_links_to(&self, int: i64, element: ElementArg) -> Option<ElementRef> {
         self.decide_member(element)?.get_links_to(int, element)
+    }
+
+    /// Port of `TwbIntegerDefFormaterUnion.MastersUpdated`.
+    // UPSTREAM-QUIRK: without a member for the element the result is 0, so
+    // the integer is set to 0.
+    fn masters_updated(&self, int: i64, element: ElementArg, update: &MastersUpdate) -> i64 {
+        match self.decide_member(element) {
+            Some(member) => member.masters_updated(int, element, update),
+            None => 0,
+        }
+    }
+
+    /// Port of `TwbIntegerDefFormaterUnion.FindUsedMasters`.
+    fn find_used_masters(&self, int: i64, element: ElementArg, masters: &mut UsedMasters) {
+        if let Some(member) = self.decide_member(element) {
+            member.find_used_masters(int, element, masters);
+        }
     }
 
     fn is_union(&self) -> bool {

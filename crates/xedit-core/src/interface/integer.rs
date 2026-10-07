@@ -15,6 +15,7 @@ use super::def::{
     value_def_plumbing,
 };
 use super::element::{DataPtr, ElementArg, ElementRef};
+use super::form_id::{MastersUpdate, UsedMasters};
 use super::globals::{check_expected_bytes, is_internal_edit};
 use super::misc::{
     EditError, Variant, int_to_hex64, read_integer_counter, read_integer_counter_size, read_integer24, str_to_int64,
@@ -26,9 +27,8 @@ pub type IntOverlayCallback = Arc<dyn Fn(i64, ElementArg, CallbackType) -> i64 +
 
 /// Upstream `IwbIntegerDefFormater`, implemented by `TwbIntegerDefFormater`.
 ///
-/// The methods that change data (`FromEditValue`, `FromLinksTo`,
-/// `MastersUpdated`, `FindUsedMasters`, `CompareExchangeFormID`) come with the
-/// write path.
+/// `FromLinksTo` and `CompareExchangeFormID` come with the later steps of
+/// the write path.
 #[allow(clippy::wrong_self_convention)]
 pub trait IntegerDefFormater: NamedDef {
     /// Port of `ToString`: the display value of `int`.
@@ -41,6 +41,15 @@ pub trait IntegerDefFormater: NamedDef {
     }
 
     fn build_ref(&self, _int: i64, _element: ElementArg) {}
+
+    /// Port of `MastersUpdated`: the integer after the masters of the file
+    /// changed. The base keeps it.
+    fn masters_updated(&self, int: i64, _element: ElementArg, _update: &MastersUpdate) -> i64 {
+        int
+    }
+
+    /// Port of `FindUsedMasters`. The base flags nothing.
+    fn find_used_masters(&self, _int: i64, _element: ElementArg, _masters: &mut UsedMasters) {}
 
     fn get_edit_type(&self, _element: ElementArg) -> EditType {
         EditType::etDefault
@@ -395,6 +404,28 @@ impl NamedDef for IntegerDef {
 
 impl ValueDef for IntegerDef {
     value_def_plumbing!(ValueDef);
+
+    /// Port of `TwbIntegerDef.MastersUpdated`: the formater rewrites the
+    /// integer, which is written back when it changed.
+    fn masters_updated(&self, data: DataPtr, element: ElementArg, update: &MastersUpdate) -> Result<bool, EditError> {
+        let Some(formater) = self.in_formater() else {
+            return Ok(false);
+        };
+        let old = self.to_int(data, element);
+        let new = formater.masters_updated(old, element, update);
+        if old == new {
+            return Ok(false);
+        }
+        self.from_int(new, data, element)?;
+        Ok(true)
+    }
+
+    /// Port of `TwbIntegerDef.FindUsedMasters`.
+    fn find_used_masters(&self, data: DataPtr, element: ElementArg, masters: &mut UsedMasters) {
+        if let Some(formater) = self.in_formater() {
+            formater.find_used_masters(self.to_int(data, element), element, masters);
+        }
+    }
 
     /// Port of the override of `SetDefaultNativeValue`, which sets `inDefault`.
     fn apply_default_native_value(&self, value: Variant) {
