@@ -2841,8 +2841,10 @@ impl MainRecord for MainRecordImpl {
         self.short_name_internal()
     }
 
+    /// Port of `TwbMainRecord.GetIsPartialForm`: only a record whose
+    /// definition allows partial forms is one.
     fn get_is_partial_form(&self) -> bool {
-        self.mr_struct.flags.is_partial_form()
+        self.mr_def.as_ref().is_some_and(|def| def.get_can_be_partial()) && self.mr_struct.flags.is_partial_form()
     }
 
     fn get_flags(&self) -> MainRecordStructFlags {

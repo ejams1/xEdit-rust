@@ -2024,7 +2024,15 @@ pub fn wb_qust_alias_to_str(a_value: &mut String, _a_base_ptr: DataPtr, a_elemen
     let Some(flags) = cer.get_element_by_signature(Signature::new(b"FNAM")) else {
         return;
     };
-    let flags_value = variant_int(&flags.get_native_value());
+    // UPSTREAM-QUIRK: a subrecord whose value is an element of its own, such
+    // as the flags union of Fallout 76, has the native value Null, and
+    // `Null and $2 <> 0` is true under the loose null rules of Delphi: the
+    // alias counts as optional.
+    let native = flags.get_native_value();
+    if native == Variant::Empty && flags.get_element_type() == ElementType::etSubRecord {
+        return;
+    }
+    let flags_value = variant_int(&native);
     // Optional, or Forced By Aliases.
     if flags_value & 0x2 != 0 || flags_value & 0x800 != 0 {
         return;

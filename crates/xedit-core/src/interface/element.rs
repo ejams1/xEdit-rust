@@ -435,4 +435,21 @@ pub trait Container: Element {
 pub trait DataContainer: Container {
     /// The bytes from upstream `DataBasePtr` up to `DataEndPtr`.
     fn get_data(&self) -> DataPtr<'_>;
+
+    /// All the bytes the data of the element is part of, for the callbacks
+    /// that read before their data pointer as upstream does with pointer
+    /// arithmetic. `None` when the element does not keep them.
+    fn get_block(&self) -> Option<&[u8]> {
+        None
+    }
+}
+
+/// The bytes at `offset` before the start of `data`, read from the block of
+/// `element` that `data` is part of: upstream `PByte(aBasePtr) - offset`.
+pub fn bytes_before<'a>(data: DataPtr<'a>, element: &'a ElementRef, offset: usize, len: usize) -> Option<&'a [u8]> {
+    let data = data?;
+    let block = element.as_data_container()?.get_block()?;
+    let start = (data.as_ptr() as usize).checked_sub(block.as_ptr() as usize)?;
+    let begin = start.checked_sub(offset)?;
+    block.get(begin..begin + len)
 }

@@ -12,7 +12,7 @@
 //! functions as `pending`, keeps every existing entry, and lists entries that
 //! upstream no longer has.
 //!
-//! `cargo xtask parity dump` compares the port with the oracle. See `parity`.
+//! `cargo xtask parity dump` and `parity saves` compare the port with the oracle. See `parity`.
 //!
 //! `cargo xtask pascal-check <file>...` parses upstream Pascal units with the
 //! reader of the definition transpiler and reports the files that fail.
@@ -133,7 +133,7 @@ fn main() -> Result<()> {
             parity::run(&root, &map.upstream.tag, rest)
         }
         _ => bail!(
-            "usage: cargo xtask check | cargo xtask sync <upstream checkout> [commit] | cargo xtask parity dump [options]"
+            "usage: cargo xtask check | cargo xtask sync <upstream checkout> [commit] | cargo xtask parity dump|saves [options]"
         ),
     }
 }
