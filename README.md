@@ -5,14 +5,16 @@ The build plan is in [docs/PLAN.md](docs/PLAN.md).
 
 ## Goals
 
-- Port xEdit to Rust with 1:1 functionality: every game mode from Oblivion to Starfield, every save format, every tool mode and command-line switch, the scripting host, the side tools (BSArch, BSArchPro, Sniff, xDump, LODGen) and the GUI.
-- Match the upstream release build exactly. The official binaries of the baseline tag (`xedit-4.1.5q`) are the oracle; a differential harness compares the port's output with theirs on the real game files, and each phase closes only when its parity gate holds. Upstream quirks are reproduced, not corrected.
+- Port xEdit to Rust with 1:1 functionality*
+  - Morrowind and Enderal support coming later
+- Match the upstream release build exactly
+  - The official binaries of the baseline tag (`xedit-4.1.5q`) are the oracle; a differential harness compares the port's output with theirs on the real game files, and each phase closes only when its parity gate holds. Upstream quirks are reproduced, not corrected.
 - Keep existing scripts, plugins and workflows working. Compatibility with xEdit behaviour, its Pascal scripts and the files it writes wins over every other concern.
 - Be easier to contribute to than the Delphi original: a modern toolchain (`cargo build`, `cargo test`, clippy, one command for the parity check), no proprietary compiler, typed interfaces instead of 103 COM-style interfaces in one 50,000-line unit, and a module per upstream unit so the Pascal source stays a readable map of the Rust.
 - Expose every operation through the `xedit` CLI as a typed command with `--json` output, stable error codes and a printable schema (`xedit schema`), so that an AI agent can discover and drive the whole tool without the GUI.
-- Make mutation safe for agents: an explicit edit flag, `--dry-run`, structured outcomes, atomic saves, and a long-lived session (`xedit serve`, `xedit mcp`) that runs the same commands.
+  - Make mutation safe for agents: an explicit edit flag, `--dry-run`, structured outcomes, atomic saves, and a long-lived session (`xedit serve`, `xedit mcp`) that runs the same commands.
 - Stay mergeable with upstream. One Rust module per Pascal unit with matching names, and `upstream-map.toml` records the last upstream commit merged into each, so upstream changes map onto the port line by line.
-- Get faster than upstream once parity holds, through concurrency and SIMD, never before.
+- Get faster than upstream once parity holds
 
 ## Non-goals
 
