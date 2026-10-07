@@ -1006,6 +1006,7 @@ dependencies = [
  "clap",
  "mimalloc",
  "serde_json",
+ "windows-sys",
  "xedit-session",
 ]
 
