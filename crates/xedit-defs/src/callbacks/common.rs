@@ -17,8 +17,8 @@ use xedit_core::delphi::{float_to_str_f_fixed, format_general, round, str_to_flo
 use xedit_core::interface::builders::wb_flags_unknown_is_unused;
 use xedit_core::interface::constructors::get_container_from_union;
 use xedit_core::interface::globals::{
-    GameMode, cs, game_mode, is_fallout_nv, is_fallout3, is_fallout76, is_morrowind, is_oblivion, is_skyrim,
-    is_starfield, resolve_alias,
+    GameMode, cell_size_factor, cs, game_mode, is_fallout_nv, is_fallout3, is_fallout76, is_morrowind, is_oblivion,
+    is_skyrim, is_starfield, resolve_alias,
 };
 use xedit_core::interface::misc::{int_to_hex64, str_to_int_def};
 use xedit_core::interface::string::to_comma_text;
@@ -328,10 +328,10 @@ pub fn wb_pgrd_add_info(a_main_record: &MainRecordRef) -> String {
     in_container(element_edit_value(a_main_record, "Cell"))
 }
 
-/// Upstream `wbPositionToGridCell` with `wbCellSizeFactor` of 4096.
+/// Upstream `wbPositionToGridCell`.
 fn position_to_grid_cell(x: f64, y: f64) -> (i32, i32) {
     let cell = |value: f64| {
-        let scaled = value / 4096.0;
+        let scaled = value / cell_size_factor();
         let mut result = scaled.trunc() as i32;
         if value < 0.0 && scaled.fract() != 0.0 {
             result -= 1;
@@ -1370,7 +1370,7 @@ fn quest_aliases(main_record: &MainRecordRef) -> Vec<ElementRef> {
         if alias.as_container().is_none() {
             continue;
         }
-        if alias.get_record_signature() == Some(Signature::new(b"ALCS"))
+        if alias.get_has_signature() == Some(Signature::new(b"ALCS"))
             && let Some(alst) = alias
                 .as_container()
                 .and_then(|alias| alias.get_element_by_signature(Signature::new(b"ALST")))
@@ -3052,7 +3052,7 @@ pub fn wb_lgdi_filters_to_str(a_int: i64, a_element: ElementArg, a_type: Callbac
     let Some(main_record) = element.get_containing_main_record() else {
         return result;
     };
-    let has_signature = |element: Option<ElementRef>| element.and_then(|element| element.get_record_signature());
+    let has_signature = |element: Option<ElementRef>| element.and_then(|element| element.get_has_signature());
     let Some(base) = has_signature(filter.get_container())
         .or_else(|| has_signature(filter.get_container().and_then(|container| container.get_container())))
     else {

@@ -71,6 +71,24 @@ pub trait Element: Send + Sync {
         None
     }
 
+    /// Upstream `BaseName`: the name without the suffix of an array element.
+    fn get_base_name(&self) -> String {
+        self.get_name()
+    }
+
+    /// Upstream `Skipped`: the contents of the element are not read, such
+    /// as a subrecord on the ignore list of its record.
+    fn get_skipped(&self) -> bool {
+        false
+    }
+
+    /// Upstream `IwbHasSignature.Signature`: the signature of a record or
+    /// subrecord, or of the first record of a subrecord structure or array
+    /// (`NONE` without one). `None` for the elements without a signature.
+    fn get_has_signature(&self) -> Option<Signature> {
+        self.get_record_signature()
+    }
+
     /// Upstream `Value`: the value as the dump shows it. Empty for an
     /// element without a value.
     fn get_value(&self) -> String {
@@ -376,9 +394,12 @@ pub trait Container: Element {
         self.get_element_by_path(path).is_some()
     }
 
-    /// Upstream `ElementBySignature[aSignature]`.
+    /// Upstream `ElementBySignature[aSignature]`: the first element with the
+    /// signature, a subrecord structure or array by its first record.
     fn get_element_by_signature(&self, signature: Signature) -> Option<ElementRef> {
-        self.get_record_by_signature(signature)
+        (0..self.get_element_count())
+            .filter_map(|index| self.get_element(index))
+            .find(|element| element.get_has_signature() == Some(signature))
     }
 
     /// Upstream `ElementByName[aName]`.

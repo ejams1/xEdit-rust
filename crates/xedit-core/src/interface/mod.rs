@@ -52,7 +52,10 @@ pub use main_record::*;
 pub use misc::{Global, Variant};
 pub use resolvable::*;
 pub use string::*;
-pub use struct_def::{StructDef, StructDefArgs, StructSizeCallback};
+pub use struct_def::{
+    ChapterDef, ChapterKind, GetChapterNameCallback, GetChapterTypeCallback, GetChapterTypeNameCallback, SizeCallback,
+    StructDef, StructDefArgs, StructSizeCallback,
+};
 pub use sub_record::*;
 pub use sub_record_group::*;
 pub use types::*;

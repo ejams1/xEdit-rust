@@ -113,6 +113,7 @@ use std::sync::{Arc, OnceLock, RwLock, Weak};
 use xedit_io::{Encoding, MappedFile};
 
 use crate::delphi::{int_power, path_file_name, round};
+use crate::interface::builders::{wb_array_count, wb_len_string};
 use crate::interface::constructors::find_record_def;
 use crate::interface::def::{Def, NamedDef, ValueDef};
 use crate::interface::element::{
@@ -120,10 +121,11 @@ use crate::interface::element::{
 };
 use crate::interface::form_id::{FileID, FormID};
 use crate::interface::globals::{
-    GameMode, create_contained_in, display_load_order_form_id, game_exe_name, game_master_esm, game_mode,
-    has_added_light_support, header_signature, is_fallout3, is_fallout4, is_fallout76, is_light_supported,
-    is_medium_supported, is_skyrim, is_starfield, is_update_supported, pseudo_light, pseudo_medium, pseudo_update,
-    remove_offset_data, size_of_main_record_struct, track_all_editor_id, vwd_as_quest_children, wb_get_group_order,
+    GameMode, ToolSource, create_contained_in, data_path, display_load_order_form_id, extract_info, file_chapters,
+    file_header, file_magic, file_plugins, game_exe_name, game_master_esm, game_mode, has_added_light_support,
+    header_signature, is_fallout3, is_fallout4, is_fallout76, is_light_supported, is_medium_supported, is_skyrim,
+    is_starfield, is_update_supported, pseudo_light, pseudo_medium, pseudo_update, remove_offset_data,
+    size_of_main_record_struct, tool_source, track_all_editor_id, vwd_as_quest_children, wb_get_group_order,
 };
 use crate::interface::integer::IntegerDefFormater;
 use crate::interface::main_record::{
@@ -131,10 +133,10 @@ use crate::interface::main_record::{
 };
 use crate::interface::misc::{Variant, progress};
 use crate::interface::sub_record_group::RecordDef;
-use crate::interface::types::PascalEnum;
 use crate::interface::types::{
     ConflictPriority, DefFlag, ElementType, FileState, FileStates, KnownSubRecord, Signature, TriBool,
 };
+use crate::interface::types::{DefType, PascalEnum};
 
 use self::structs::{GroupRecordStruct, MainRecordStruct, MainRecordStructFlags};
 
@@ -810,7 +812,131 @@ impl FileImpl {
         Ok(())
     }
 
+    /// Port of `TwbFileSource.Scan`: a save or co-save is its header and the
+    /// chapters of the game. The plugins the header lists load as masters
+    /// from the data folder when they exist there.
+    fn scan_save(self: &Arc<Self>) -> Result<(), LoadError> {
+        let container = self.element_ref();
+        let file = Arc::downgrade(self);
+        *self.fl_load_order_file_id.write().unwrap() = FileID::create_full(0xFF);
+        let unexpected = || LoadError(format!("Unexpected error reading file \"{}\"", self.fl_file_name));
+        let header_def = file_header().ok_or_else(unexpected)?;
+        let mut cursor = value::Cursor {
+            block: DataBlock::File(self.fl_bytes.clone()),
+            pos: 0,
+            end: self.fl_bytes.as_slice().len(),
+        };
+        let header = value::create_value_element(&container, &file, &mut cursor, header_def, "");
+        let header: ElementRef = header;
+        // Port of `TwbFileHeader.GetFileMagic`.
+        let magic = match header.as_container().and_then(|header| header.get_element(0)) {
+            Some(magic) => match magic.get_native_value() {
+                Variant::Str(text) => text,
+                _ => magic.get_value(),
+            },
+            None => String::new(),
+        };
+        if magic != file_magic() {
+            return Err(LoadError(format!(
+                "Expected header Magic {}, found {magic} in file \"{}\"",
+                file_magic(),
+                self.fl_file_name
+            )));
+        }
+        if self.fl_states.read().unwrap().contains(FileState::fsOnlyHeader) {
+            return Ok(());
+        }
+        let plugins = file_plugins();
+        let master_files: Option<ElementRef> = match plugins.strip_prefix("Absolute:") {
+            Some(offset) => {
+                // A co-save lists its plugins at a fixed offset, outside of
+                // its chapters: the array is not an element of the file.
+                let offset = offset.trim().parse::<usize>().map_err(|_| unexpected())?;
+                let modules = wb_array_count(
+                    "Modules",
+                    wb_len_string("PluginName", 2, ConflictPriority::cpNormal, false, None, None)
+                        .map(|def| def as Arc<dyn ValueDef>),
+                    -4,
+                    ConflictPriority::cpNormal,
+                    false,
+                    None,
+                    None,
+                )
+                .ok_or_else(unexpected)?;
+                let mut cursor = value::Cursor {
+                    block: DataBlock::File(self.fl_bytes.clone()),
+                    pos: offset.min(self.fl_bytes.as_slice().len()),
+                    end: self.fl_bytes.as_slice().len(),
+                };
+                let modules: ElementRef =
+                    value::create_value_element(&container, &file, &mut cursor, modules as Arc<dyn ValueDef>, "");
+                self.container.remove_element_by_identity(&modules);
+                Some(modules)
+            }
+            None => header
+                .as_container()
+                .and_then(|header| header.get_element_by_name(&plugins)),
+        };
+        if let Some(master_files) = master_files
+            && let Some(master_files) = master_files.as_container()
+        {
+            for index in 0..master_files.get_element_count() {
+                let Some(master) = master_files.get_element(index) else {
+                    continue;
+                };
+                let path = format!("{}{}", data_path(), master.get_edit_value());
+                if Path::new(&path).is_file() {
+                    self.add_master_path(&path)?;
+                }
+            }
+        }
+        let chapters = file_chapters().ok_or_else(unexpected)?;
+        let extract_info = extract_info();
+        for index in 0..usize::try_from(chapters.get_member_count()).unwrap_or(0) {
+            let mut member = chapters.get_member(index).clone();
+            if member.get_def_type() == DefType::dtResolvable {
+                member = value::resolve(member, cursor.data(), Some(&container));
+            }
+            if member.def_base().def_flags.contains(DefFlag::dfUnionStaticResolve) {
+                member = value::resolve(member, cursor.data(), Some(&container));
+            }
+            let element = value::create_value_element(&container, &file, &mut cursor, member, "");
+            if extract_info.contains(&(index as u8)) {
+                element.do_init();
+            }
+        }
+        for (index, element) in self.container.elements().iter().enumerate() {
+            if let Some(element) = element.as_element_impl() {
+                element
+                    .element_base()
+                    .e_sort_order
+                    .store(index as i32, Ordering::Relaxed);
+            }
+        }
+        Ok(())
+    }
+
+    /// Port of `AddMaster` with the full path of a plugin that a save lists.
+    fn add_master_path(self: &Arc<Self>, path: &str) -> Result<(), LoadError> {
+        progress(&format!(
+            "[{}] Adding master \"{}\"",
+            self.get_name(),
+            path_file_name(path)
+        ));
+        let master = match find_in_files_map(path) {
+            Some(master) => master,
+            None => wb_file(path, i32::MAX, FileStates::empty())?,
+        };
+        self.fl_masters.write().unwrap().push(master);
+        Ok(())
+    }
+
     fn scan_records(self: &Arc<Self>) -> Result<(), LoadError> {
+        // Port of the choice of `wbFile`: a file that is not a module is a
+        // `TwbFileSource`, a save or co-save.
+        if tool_source() == ToolSource::tsSaves && !is_module(&self.fl_file_name) {
+            return self.scan_save();
+        }
         let bytes = self.fl_bytes.as_slice();
         let container = self.element_ref();
         let mut offset = 0;
@@ -2205,7 +2331,7 @@ impl Container for FileImpl {
     }
 
     fn get_element_by_path(&self, path: &str) -> Option<ElementRef> {
-        self.get_element_by_name(path)
+        element_by_path(self, path)
     }
 
     fn get_element_count(&self) -> i32 {
@@ -2820,4 +2946,15 @@ impl MainRecord for MainRecordImpl {
             .get_links_to()?
             .into_main_record()
     }
+}
+
+/// Port of `wbIsModule`: the game executable, or a plugin by its extension,
+/// also when it is ghosted.
+fn is_module(file_name: &str) -> bool {
+    let lower = file_name.to_ascii_lowercase();
+    let base = lower.strip_suffix(".ghost").unwrap_or(&lower);
+    path_file_name(file_name).eq_ignore_ascii_case(&game_exe_name())
+        || [".esp", ".esm", ".esl", ".esu"]
+            .iter()
+            .any(|extension| base.ends_with(extension))
 }

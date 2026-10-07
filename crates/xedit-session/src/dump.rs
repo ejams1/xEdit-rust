@@ -20,9 +20,9 @@ use xedit_core::implementation::{
     wb_file_compare,
 };
 use xedit_core::interface::globals::{
-    GameMode, clear_resources_loaded_handlers, game_exe_name, game_master_esm, game_name, language,
+    GameMode, ToolSource, clear_resources_loaded_handlers, game_exe_name, game_master_esm, game_name, language,
     set_create_contained_in, set_data_path, set_game_exe_name, set_game_master_esm, set_game_mode, set_game_name,
-    set_hide_unused, set_language, set_simple_records, wb_resources_loaded,
+    set_hide_unused, set_language, set_simple_records, set_tool_source, wb_resources_loaded,
 };
 use xedit_core::interface::misc::{progress, set_progress_callback};
 use xedit_core::interface::{
@@ -67,6 +67,41 @@ pub fn game_tag(mode: GameMode) -> &'static str {
 /// Port of the game setup of `xDump.dpr` for the plugins of a game: the
 /// names of the game, its executable and its master, and the definitions.
 pub fn setup_game(game: &str) -> Result<GameMode, String> {
+    setup(game, None)
+}
+
+/// Port of the game setup of `xDump.dpr -saves` for a save or co-save of a
+/// game: the save definitions, switched to the co-save ones for the
+/// extension of the script extender.
+pub fn setup_saves(game: &str, path: &str) -> Result<GameMode, String> {
+    setup(game, Some(path))
+}
+
+/// The save definitions of a game.
+struct SaveDefinitions {
+    /// The definitions of the saves; Fallout 3 and Oblivion only have the
+    /// co-save ones, on top of the plugin definitions.
+    define: Option<fn()>,
+    /// The switch to the definitions of the co-saves.
+    switch_to_co_save: fn(),
+    /// The extension of the co-saves of the script extender.
+    co_save_extension: &'static str,
+}
+
+/// The save definitions of a game, `None` for a game without saves.
+fn save_definitions(mode: GameMode) -> Option<SaveDefinitions> {
+    use xedit_defs::callbacks::fo4saves::{define_fo4_saves, switch_to_fo4_co_save};
+    match mode {
+        GameMode::gmFO4 => Some(SaveDefinitions {
+            define: Some(define_fo4_saves),
+            switch_to_co_save: switch_to_fo4_co_save,
+            co_save_extension: "f4se",
+        }),
+        _ => None,
+    }
+}
+
+fn setup(game: &str, save: Option<&str>) -> Result<GameMode, String> {
     let tag = game.to_ascii_lowercase();
     let Some(&(_, mode)) = GAMES.iter().find(|(name, _)| *name == tag) else {
         let tags: Vec<&str> = GAMES.iter().map(|(tag, _)| *tag).collect();
@@ -116,7 +151,29 @@ pub fn setup_game(game: &str) -> Result<GameMode, String> {
     set_game_master_esm(&master_esm.map_or_else(|| format!("{game_name}.esm"), str::to_owned));
     clear_record_defs();
     clear_resources_loaded_handlers();
-    define();
+    match save {
+        None => {
+            set_tool_source(ToolSource::tsPlugins);
+            define();
+        }
+        Some(path) => {
+            set_tool_source(ToolSource::tsSaves);
+            let saves =
+                save_definitions(mode).ok_or_else(|| format!("the save definitions of {tag} are not ported yet"))?;
+            let is_co_save = Path::new(path)
+                .extension()
+                .is_some_and(|extension| extension.eq_ignore_ascii_case(saves.co_save_extension));
+            match saves.define {
+                Some(define_saves) => define_saves(),
+                // The game has no save definitions, only co-save ones.
+                None if is_co_save => define(),
+                None => return Err(format!("Save are not supported yet \"{path}\"")),
+            }
+            if is_co_save {
+                (saves.switch_to_co_save)();
+            }
+        }
+    }
     init_records();
     setup_language(mode);
     Ok(mode)
@@ -153,9 +210,12 @@ fn setup_language(mode: GameMode) {
 /// its masters is localized and a loose `.STRINGS` file is missing, the
 /// archives of each master and of the plugin (`<name>`, `<name> - Interface`,
 /// `<name> - Localization`, `<name> - Wwise*`) are added, then the data folder.
-pub(crate) fn load_resources(file: &FileImpl, path: &str, mode: GameMode) {
-    let data_path = extract_file_path(path);
+pub(crate) fn load_resources(file: &FileImpl, path: &str, data_path: &str, mode: GameMode) {
+    let data_path = data_path.to_owned();
     set_data_path(&data_path);
+    // The loose strings files are looked for next to the file, which for a
+    // save is not the data folder.
+    let file_path = extract_file_path(path);
     clear_containers();
     let mut names: Vec<String> = file.masters().iter().map(|master| master.get_name()).collect();
     names.push(file.get_name());
@@ -163,7 +223,7 @@ pub(crate) fn load_resources(file: &FileImpl, path: &str, mode: GameMode) {
     let load_archives = is_localized
         && names.iter().any(|name| {
             let strings = format!(
-                "{data_path}Strings\\{}_{}.STRINGS",
+                "{file_path}Strings\\{}_{}.STRINGS",
                 change_file_ext(name, ""),
                 language()
             );
@@ -216,9 +276,23 @@ fn add_resource_archive(archive: &str) {
 /// records, as `xDump.dpr` does before it starts the dump.
 pub fn load_file(path: &str, mode: GameMode) -> Result<Arc<FileImpl>, String> {
     let file = wb_file(path, i32::MAX, FileStates::empty()).map_err(|error| error.to_string())?;
-    load_resources(&file, path, mode);
+    load_resources(&file, path, &extract_file_path(path), mode);
     load_hardcoded()?;
     Ok(file)
+}
+
+/// Loads a save or co-save with the plugins it lists from `data_path`, the
+/// resources and the hardcoded records, and writes its dump.
+pub fn dump_save(path: &str, data_path: &str, mode: GameMode, out: &mut dyn Write) -> Result<(), String> {
+    let mut data_path = data_path.to_owned();
+    if !data_path.ends_with(['\\', '/']) {
+        data_path.push('\\');
+    }
+    set_data_path(&data_path);
+    let file = wb_file(path, i32::MAX, FileStates::empty()).map_err(|error| error.to_string())?;
+    load_resources(&file, path, &data_path, mode);
+    load_hardcoded()?;
+    write_container(&file, out).map_err(|error| error.to_string())
 }
 
 /// Loads the plugin and writes its dump.
@@ -350,7 +424,12 @@ fn write_element(
     if let Some(container) = element.as_container()
         && !name.starts_with("Hidden: ")
     {
-        write_elements(container, child_depth, record, out)?;
+        if element.get_skipped() {
+            write_indent(out, child_depth)?;
+            out.write_all(b"<contents skipped>\r\n")?;
+        } else {
+            write_elements(container, child_depth, record, out)?;
+        }
     }
     // `WriteContainer` holds an `IwbContainerElementRef` on the record while
     // it writes the elements; releasing it resets the record and frees the

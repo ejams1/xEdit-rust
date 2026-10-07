@@ -17,7 +17,7 @@ use crate::interface::globals::{ignore_records, sort_sub_records};
 use crate::interface::misc::{Variant, progress};
 use crate::interface::sub_record::RecordMemberDef;
 use crate::interface::sub_record_group::RecordDef;
-use crate::interface::types::{ConflictPriority, DefFlag, DefType, ElementType, Signature, TriBool};
+use crate::interface::types::{CallbackType, ConflictPriority, DefFlag, DefType, ElementType, Signature, TriBool};
 
 use super::structs::SubRecordHeaderStruct;
 use super::value::{Cursor, array_do_init, create_value_element, resolve, struct_do_init, union_do_init};
@@ -644,6 +644,10 @@ impl Element for SubRecordImpl {
         Some(self.sr_struct.signature)
     }
 
+    fn get_skipped(&self) -> bool {
+        self.skipped()
+    }
+
     fn get_containing_sub_record(&self) -> Option<ElementRef> {
         Some(self.element_ref())
     }
@@ -781,6 +785,27 @@ impl Element for SubRecordArrayImpl {
     element_common!(element_base);
     element_display_name!(element_base);
 
+    /// Port of `GetSignature`: the signature of the first record.
+    fn get_has_signature(&self) -> Option<Signature> {
+        Some(
+            self.container
+                .elements()
+                .iter()
+                .find_map(|element| element.get_record_signature())
+                .unwrap_or(Signature::new(b"NONE")),
+        )
+    }
+
+    /// Port of `TwbSubRecordArray.GetValue`: the `ToStr` callback of the
+    /// definition.
+    fn get_value(&self) -> String {
+        let self_ref = self.self_ref.upgrade().map(|array| array as ElementRef);
+        let mut result = String::new();
+        self.arc_def
+            .call_to_str(&mut result, self_ref.as_ref(), CallbackType::ctToStr);
+        result
+    }
+
     /// Port of `TwbSubRecordArray.GetSummary`.
     fn get_summary(&self) -> String {
         let self_ref = self.self_ref.upgrade().map(|array| array as ElementRef);
@@ -850,6 +875,27 @@ impl Container for SubRecordArrayImpl {
 impl Element for SubRecordStructImpl {
     element_common!(element_base);
     element_display_name!(element_base);
+
+    /// Port of `GetSignature`: the signature of the first record.
+    fn get_has_signature(&self) -> Option<Signature> {
+        Some(
+            self.container
+                .elements()
+                .iter()
+                .find_map(|element| element.get_record_signature())
+                .unwrap_or(Signature::new(b"NONE")),
+        )
+    }
+
+    /// Port of `TwbSubRecordStruct.GetValue`: the `ToStr` callback of the
+    /// definition.
+    fn get_value(&self) -> String {
+        let self_ref = self.self_ref.upgrade().map(|structure| structure as ElementRef);
+        let mut result = String::new();
+        self.src_def
+            .call_to_str(&mut result, self_ref.as_ref(), CallbackType::ctToStr);
+        result
+    }
 
     /// Port of `TwbSubRecordStruct.GetSummary`.
     fn get_summary(&self) -> String {

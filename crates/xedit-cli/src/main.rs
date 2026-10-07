@@ -57,6 +57,11 @@ enum Action {
         #[command(subcommand)]
         action: ElementsAction,
     },
+    /// Save files.
+    Saves {
+        #[command(subcommand)]
+        action: SavesAction,
+    },
     /// Write the element tree of a plugin as xDump prints it.
     Dump {
         /// Game of the plugin, as for --game.
@@ -72,6 +77,21 @@ enum Action {
         /// Command parameters as a JSON object.
         #[arg(long, default_value = "{}")]
         params: String,
+    },
+}
+
+#[derive(Subcommand)]
+enum SavesAction {
+    /// Write the element tree of a save or co-save as `xDump -saves` prints it.
+    Dump {
+        /// Game of the save, as for --game.
+        #[arg(long)]
+        game: String,
+        /// Data folder of the game, where the plugins the save lists are.
+        #[arg(long)]
+        data: String,
+        /// Path of the save or co-save.
+        file: String,
     },
 }
 
@@ -155,7 +175,7 @@ enum ElementsAction {
 /// The command name and parameters of a subcommand.
 fn command_of(action: Action) -> Result<(String, Value), CommandError> {
     Ok(match action {
-        Action::Dump { .. } | Action::Schema => unreachable!("handled before"),
+        Action::Dump { .. } | Action::Saves { .. } | Action::Schema => unreachable!("handled before"),
         Action::Session {
             action: SessionAction::Info,
         } => ("session.info".to_owned(), json!({})),
@@ -221,31 +241,45 @@ fn run(game: Option<String>, load: Vec<String>, action: Action) -> Result<Value,
     registry.call(&mut session, &name, params)
 }
 
+/// Runs a dump on a thread with a large stack, because the element tree
+/// resolves deeply through the definitions. The progress messages go to
+/// stderr like the log of xDump.
+fn run_dump(dump: impl FnOnce(&mut dyn std::io::Write) -> Result<(), String> + Send + 'static) -> ExitCode {
+    xedit_session::dump::log_progress_to_stderr();
+    let worker = std::thread::Builder::new()
+        .stack_size(1 << 30)
+        .spawn(move || {
+            let stdout = std::io::stdout();
+            let mut out = std::io::BufWriter::with_capacity(1 << 20, stdout.lock());
+            dump(&mut out)
+        })
+        .expect("the dump thread");
+    let result = worker
+        .join()
+        .unwrap_or_else(|_| Err("the dump thread panicked".to_owned()));
+    if let Err(error) = result {
+        eprintln!("error: {error}");
+        return ExitCode::FAILURE;
+    }
+    ExitCode::SUCCESS
+}
+
 fn main() -> ExitCode {
     let cli = Cli::parse();
     if let Action::Dump { game, file } = cli.action {
-        // The progress messages go to stderr like the log of xDump.
-        xedit_session::dump::log_progress_to_stderr();
-        // The element tree resolves deeply through the definitions, so the
-        // dump runs on a thread with a large stack.
-        let worker = std::thread::Builder::new()
-            .stack_size(1 << 30)
-            .spawn(move || {
-                xedit_session::dump::setup_game(&game).and_then(|mode| {
-                    let stdout = std::io::stdout();
-                    let mut out = std::io::BufWriter::with_capacity(1 << 20, stdout.lock());
-                    xedit_session::dump::dump_file(&file, mode, &mut out)
-                })
-            })
-            .expect("the dump thread");
-        let result = worker
-            .join()
-            .unwrap_or_else(|_| Err("the dump thread panicked".to_owned()));
-        if let Err(error) = result {
-            eprintln!("error: {error}");
-            return ExitCode::FAILURE;
-        }
-        return ExitCode::SUCCESS;
+        return run_dump(move |out| {
+            let mode = xedit_session::dump::setup_game(&game)?;
+            xedit_session::dump::dump_file(&file, mode, out)
+        });
+    }
+    if let Action::Saves {
+        action: SavesAction::Dump { game, data, file },
+    } = cli.action
+    {
+        return run_dump(move |out| {
+            let mode = xedit_session::dump::setup_saves(&game, &file)?;
+            xedit_session::dump::dump_save(&file, &data, mode, out)
+        });
     }
     let outcome = run(cli.game, cli.load, cli.action);
     match (&outcome, cli.json) {

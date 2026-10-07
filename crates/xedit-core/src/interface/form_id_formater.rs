@@ -4,10 +4,10 @@
 
 // Ported from xEdit: Core/wbInterface.pas
 
-//! `TwbFormIDDefFormater` with `TwbFormIDChecked` and `TwbFormIDCheckedST`.
+//! `TwbFormIDDefFormater` with `TwbFormIDChecked`, `TwbFormIDCheckedST` and
+//! `TwbRefID`, the reference IDs of save files.
 //!
-//! Not ported yet: `TwbRefID`, which only save files use, the lookup of actor
-//! value records (`FindRecordForAVCode`) of Fallout 3 and New Vegas, the report
+//! Not ported yet: the lookup of actor value records (`FindRecordForAVCode`) of Fallout 3 and New Vegas, the report
 //! mode statistics and `GetEditInfo`.
 
 use std::sync::{Arc, RwLock, Weak};
@@ -54,6 +54,9 @@ pub enum FormIDClass {
     /// `TwbFormIDCheckedST`: checked, and the sort key starts with the position
     /// of the signature in the list of valid signatures.
     CheckedST,
+    /// `TwbRefID`: a reference ID of a save file, an index into the FormID
+    /// array of the save or a FormID of the game master.
+    RefID,
 }
 
 impl FormIDClass {
@@ -62,11 +65,12 @@ impl FormIDClass {
             FormIDClass::FormID => "TwbFormIDDefFormater",
             FormIDClass::Checked => "TwbFormIDChecked",
             FormIDClass::CheckedST => "TwbFormIDCheckedST",
+            FormIDClass::RefID => "TwbRefID",
         }
     }
 
     fn is_checked(self) -> bool {
-        self != FormIDClass::FormID
+        matches!(self, FormIDClass::Checked | FormIDClass::CheckedST)
     }
 }
 
@@ -107,6 +111,11 @@ impl FormIDDefFormater {
         no_reach: bool,
     ) -> Arc<Self> {
         Self::new(FormIDClass::Checked, valid_refs, valid_flst_refs, persistent, no_reach)
+    }
+
+    /// Port of `TwbRefID.Create`.
+    pub fn create_ref_id() -> Arc<Self> {
+        Self::new(FormIDClass::RefID, &[], &[], false, false)
     }
 
     /// Port of `TwbFormIDCheckedST.Create`.
@@ -432,8 +441,25 @@ impl Def for FormIDDefFormater {
 
 formater_impls!(FormIDDefFormater);
 
-impl IntegerDefFormater for FormIDDefFormater {
-    fn to_string(&self, int: i64, element: ElementArg, for_summary: bool) -> String {
+/// Upstream `wbRefIDArray`: the FormIDs that the reference IDs of the save
+/// file index.
+static REF_ID_ARRAY: RwLock<Vec<u32>> = RwLock::new(Vec::new());
+
+/// Port of `InitializeRefIDArray`.
+pub fn initialize_ref_id_array(array: Vec<u32>) {
+    *REF_ID_ARRAY.write().unwrap() = array;
+}
+
+/// The FormID at index `value - 1` of `wbRefIDArray`, when `value` is below
+/// its length as upstream checks it.
+fn ref_id_array_entry(value: i64) -> Option<i64> {
+    let array = REF_ID_ARRAY.read().unwrap();
+    (value < array.len() as i64).then(|| i64::from(array[(value - 1) as usize]))
+}
+
+impl FormIDDefFormater {
+    /// Port of `TwbFormIDDefFormater.ToString`.
+    fn form_id_to_string(&self, int: i64, element: ElementArg, for_summary: bool) -> String {
         let mut form_id = FormID::from_cardinal(int as u32);
         if (form_id.is_hardcoded() || form_id.is_none()) && self.is_valid(ACVA) {
             return if int == -1 || int == 0xFF || int == 0xFFFF_FFFF {
@@ -494,6 +520,77 @@ impl IntegerDefFormater for FormIDDefFormater {
         result
     }
 
+    /// Port of `TwbRefID.ToString`.
+    fn ref_id_to_string(&self, int: i64, element: ElementArg, for_summary: bool) -> String {
+        // The first two bits are the key.
+        let key = int >> 22;
+        let value = int & 0x003F_FFFF;
+        let result = match key {
+            0 if value == 0 => "[00000000] NULL".to_owned(),
+            0 => match ref_id_array_entry(value) {
+                Some(form_id) => {
+                    let text = self.form_id_to_string(form_id, element, for_summary);
+                    // `Copy` of Delphi: the bracketed FormID becomes the raw one.
+                    let open = text.find('[').map_or(0, |index| index + 1);
+                    let close = text.find(']').unwrap_or(0);
+                    format!("{}{}{}", &text[..open], int_to_hex64(form_id, 8), &text[close..])
+                }
+                None => format!("[{}] Index in FormID Array", int_to_hex64(value - 1, 8)),
+            },
+            1 => self.form_id_to_string(value, element, for_summary),
+            2 => format!("[FF{}] Created FormID", int_to_hex64(value, 6)),
+            _ => format!("[{}]  <Error: bad key for RefID {key}>", int_to_hex64(int, 8)),
+        };
+        let result = format!("{int} {result}");
+        self.used(element, &result);
+        result
+    }
+
+    /// Port of `TwbFormIDDefFormater.BuildRef`.
+    fn form_id_build_ref(&self, int: i64, element: ElementArg) {
+        if self.def.def_flags.contains(DefFlag::dfExcludeFromBuildRef) {
+            return;
+        }
+        if (int < 0x800 || int == 0xFFFF_FFFF) && self.is_valid(ACVA) {
+            return;
+        }
+        if self.use_load_order() {
+            return;
+        }
+        if int != 0
+            && let Some(element) = element
+        {
+            element.add_referenced_from_id(FormID::from_cardinal(int as u32));
+        }
+    }
+
+    /// Port of `TwbRefID.BuildRef`.
+    fn ref_id_build_ref(&self, int: i64, element: ElementArg) {
+        if self.def.def_flags.contains(DefFlag::dfExcludeFromBuildRef) {
+            return;
+        }
+        let key = int >> 22;
+        let value = int & 0x003F_FFFF;
+        match key {
+            0 if value > 0 => {
+                if let Some(form_id) = ref_id_array_entry(value) {
+                    self.form_id_build_ref(form_id, element);
+                }
+            }
+            1 => self.form_id_build_ref(value, element),
+            _ => {}
+        }
+    }
+}
+
+impl IntegerDefFormater for FormIDDefFormater {
+    fn to_string(&self, int: i64, element: ElementArg, for_summary: bool) -> String {
+        if self.class == FormIDClass::RefID {
+            return self.ref_id_to_string(int, element, for_summary);
+        }
+        self.form_id_to_string(int, element, for_summary)
+    }
+
     fn to_sort_key(&self, int: i64, element: ElementArg) -> String {
         let mut form_id = FormID::from_cardinal(int as u32);
         let mut main_record = None;
@@ -536,19 +633,10 @@ impl IntegerDefFormater for FormIDDefFormater {
     }
 
     fn build_ref(&self, int: i64, element: ElementArg) {
-        if self.def.def_flags.contains(DefFlag::dfExcludeFromBuildRef) {
-            return;
-        }
-        if (int < 0x800 || int == 0xFFFF_FFFF) && self.is_valid(ACVA) {
-            return;
-        }
-        if self.use_load_order() {
-            return;
-        }
-        if int != 0
-            && let Some(element) = element
-        {
-            element.add_referenced_from_id(FormID::from_cardinal(int as u32));
+        if self.class == FormIDClass::RefID {
+            self.ref_id_build_ref(int, element);
+        } else {
+            self.form_id_build_ref(int, element);
         }
     }
 

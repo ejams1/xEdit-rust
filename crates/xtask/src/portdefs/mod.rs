@@ -431,9 +431,22 @@ fn definition_symbols(upstream: &Path, unit_name: &str) -> Result<(Symbols, Unit
         let reflection = read_unit(upstream, "Core/wbDefinitionsReflection.pas")?;
         symbols.add_unit(&reflection, false);
     }
+    // A save unit uses the save interface and the definitions of its game.
+    if let Some(game_unit) = save_game_unit(unit_name) {
+        let save_interface = read_unit(upstream, "Core/wbSaveInterface.pas")?;
+        symbols.add_unit(&save_interface, false);
+        let game = read_unit(upstream, &format!("Core/{game_unit}.pas"))?;
+        symbols.add_unit(&game, false);
+    }
     let unit = read_unit(upstream, &format!("Core/{unit_name}.pas"))?;
     symbols.add_unit(&unit, true);
     Ok((symbols, unit))
+}
+
+/// The game unit of a save unit: `wbDefinitionsFO4Saves` uses
+/// `wbDefinitionsFO4`.
+fn save_game_unit(unit_name: &str) -> Option<&str> {
+    unit_name.strip_suffix("Saves")
 }
 
 /// Whether the routine of a definition unit is written by the transpiler:
@@ -484,6 +497,9 @@ fn emit_unit(upstream: &Path, unit_name: &str, out: &Path, stubs: &Path, ported:
         if unit_name == "wbDefinitionsSF1" {
             ported_files.push(dir.join("reflection.rs"));
             ported_files.push(dir.join("reflection_stubs.rs"));
+        }
+        if save_game_unit(unit_name).is_some() {
+            ported_files.push(dir.join("save_interface.rs"));
         }
     }
     let mut ported: HashSet<String> = HashSet::new();
@@ -685,6 +701,12 @@ use crate::signatures::*;
     }
     if module == "sf1" {
         text.push_str("use crate::callbacks::reflection::*;\nuse crate::reflection::*;\n");
+    }
+    if let Some(game_unit) = save_game_unit(unit_name) {
+        text.push_str(&format!(
+            "use crate::callbacks::save_interface::*;\nuse crate::{}::*;\n",
+            unit_module(game_unit)
+        ));
     }
     text.push_str(&format!("use crate::callbacks::{module}::*;\n"));
     text

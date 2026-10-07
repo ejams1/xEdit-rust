@@ -13,7 +13,7 @@
 //! mode, as upstream does. Tests that change a setting must hold
 //! [`test_lock`] so that they do not run in parallel.
 
-use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU8, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI32, AtomicI64, AtomicU8, AtomicU32, Ordering};
 use std::sync::{Mutex, MutexGuard, RwLock};
 
 use xedit_io::Encoding;
@@ -26,6 +26,9 @@ macro_rules! atomic_type {
     };
     (i32) => {
         AtomicI32
+    };
+    (i64) => {
+        AtomicI64
     };
 }
 
@@ -84,6 +87,14 @@ macro_rules! string_globals {
 
 globals! {
     force_terminate, set_force_terminate, wbForceTerminate: bool = false;
+    /// Whether a save loads an empty plugin in the place of a missing one.
+    use_false_plugins, set_use_false_plugins, wbUseFalsePlugins: bool = false;
+    /// The bytes of a save that the `Unused` array skips (`-bts`).
+    bytes_to_skip, set_bytes_to_skip, wbBytesToSkip: i64 = 0;
+    /// The bytes of a save that the `Remaining` array dumps (`-btd`).
+    bytes_to_dump, set_bytes_to_dump, wbBytesToDump: i64 = 0xFFFF_FFFF;
+    /// The size of the groups of bytes that the `Remaining` array dumps.
+    bytes_to_group, set_bytes_to_group, wbBytesToGroup: i64 = 4;
     display_load_order_form_id, set_display_load_order_form_id, wbDisplayLoadOrderFormID: bool = false;
     pretty_form_id, set_pretty_form_id, wbPrettyFormID: bool = false;
     simple_records, set_simple_records, wbSimpleRecords: bool = true;
@@ -303,6 +314,8 @@ globals! {
 }
 
 string_globals! {
+    /// The magic of the save files of the game (`TESV_SAVEGAME`).
+    file_magic, set_file_magic, wbFileMagic;
     sub_mode, set_sub_mode, wbSubMode;
     app_name, set_app_name, wbAppName;
     application_title, set_application_title, wbApplicationTitle;
@@ -772,6 +785,60 @@ pub fn test_lock() -> MutexGuard<'static, ()> {
     let guard = LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
     reset();
     guard
+}
+
+/// Upstream `wbFilePlugins`: the name of the plugin list in the header of a
+/// save, or `Absolute:<offset>` for a co-save. `None` is the default.
+static FILE_PLUGINS: RwLock<Option<String>> = RwLock::new(None);
+
+/// Upstream `wbFilePlugins`.
+pub fn file_plugins() -> String {
+    FILE_PLUGINS
+        .read()
+        .unwrap()
+        .clone()
+        .unwrap_or_else(|| "Master Files".to_owned())
+}
+
+/// Sets upstream `wbFilePlugins`.
+pub fn set_file_plugins(value: &str) {
+    *FILE_PLUGINS.write().unwrap() = Some(value.to_owned());
+}
+
+static FILE_HEADER: RwLock<Option<std::sync::Arc<super::struct_def::StructDef>>> = RwLock::new(None);
+static FILE_CHAPTERS: RwLock<Option<std::sync::Arc<super::struct_def::StructDef>>> = RwLock::new(None);
+static EXTRACT_INFO: RwLock<Vec<u8>> = RwLock::new(Vec::new());
+
+/// Upstream `wbFileHeader`: the header structure of a save file.
+pub fn file_header() -> Option<std::sync::Arc<super::struct_def::StructDef>> {
+    FILE_HEADER.read().unwrap().clone()
+}
+
+/// Sets upstream `wbFileHeader`.
+pub fn set_file_header(value: Option<std::sync::Arc<super::struct_def::StructDef>>) {
+    *FILE_HEADER.write().unwrap() = value;
+}
+
+/// Upstream `wbFileChapters`: the structure whose members follow the header
+/// of a save file.
+pub fn file_chapters() -> Option<std::sync::Arc<super::struct_def::StructDef>> {
+    FILE_CHAPTERS.read().unwrap().clone()
+}
+
+/// Sets upstream `wbFileChapters`.
+pub fn set_file_chapters(value: Option<std::sync::Arc<super::struct_def::StructDef>>) {
+    *FILE_CHAPTERS.write().unwrap() = value;
+}
+
+/// Upstream `wbExtractInfo`: the chapters of a save that are initialized
+/// while the file loads.
+pub fn extract_info() -> Vec<u8> {
+    EXTRACT_INFO.read().unwrap().clone()
+}
+
+/// Sets upstream `wbExtractInfo`.
+pub fn set_extract_info(value: &[u8]) {
+    *EXTRACT_INFO.write().unwrap() = value.to_vec();
 }
 
 #[cfg(test)]
