@@ -25,6 +25,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, Command, ExitStatus, Stdio};
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, bail, ensure};
 use serde::Serialize;
@@ -189,6 +190,9 @@ struct Options {
     memory_budget: Option<u64>,
     /// Cap on the committed memory of one process.
     max_memory: Option<u64>,
+    /// `--oracle-timeout`: the oracle is stopped after this long and its
+    /// output so far is kept as a prefix.
+    oracle_timeout: Option<Duration>,
 }
 
 /// One corpus file and where its outputs go.
@@ -208,6 +212,7 @@ struct Runner {
     cache: PathBuf,
     budget: Budget,
     max_memory: u64,
+    oracle_timeout: Option<Duration>,
 }
 
 /// Expected peak of a dump whose peak was never measured, as a multiple of
@@ -337,6 +342,7 @@ pub fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
         cache,
         budget: Budget::new(budget),
         max_memory: options.max_memory.unwrap_or(budget),
+        oracle_timeout: options.oracle_timeout,
     };
     println!(
         "memory budget {:.1} GiB, at most {:.1} GiB per process",
@@ -395,7 +401,8 @@ pub fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
 
 fn parse(args: &[&str]) -> Result<Options> {
     const USAGE: &str = "usage: cargo xtask parity dump|saves [--game <game>]... [--file <name>]... \
-                         [--oracle-only] [--jobs <n>] [--memory-budget <GiB>] [--max-memory <GiB>]";
+                         [--oracle-only] [--jobs <n>] [--memory-budget <GiB>] [--max-memory <GiB>] \
+                         [--oracle-timeout <minutes>]";
     let (saves, rest) = match args {
         ["dump", rest @ ..] => (false, rest),
         ["saves", rest @ ..] => (true, rest),
@@ -411,6 +418,7 @@ fn parse(args: &[&str]) -> Result<Options> {
         all_games: false,
         memory_budget: None,
         max_memory: None,
+        oracle_timeout: None,
     };
     let gib = |value: Option<&&str>| -> Result<u64> {
         let value: f64 = value.context(USAGE)?.parse()?;
@@ -433,6 +441,11 @@ fn parse(args: &[&str]) -> Result<Options> {
             "--jobs" => options.jobs = rest.next().context(USAGE)?.parse::<usize>()?.max(1),
             "--memory-budget" => options.memory_budget = Some(gib(rest.next())?),
             "--max-memory" => options.max_memory = Some(gib(rest.next())?),
+            "--oracle-timeout" => {
+                let minutes: f64 = rest.next().context(USAGE)?.parse()?;
+                ensure!(minutes > 0.0, "the oracle timeout must be positive");
+                options.oracle_timeout = Some(Duration::from_secs_f64(minutes * 60.0));
+            }
             _ => bail!(USAGE),
         }
     }
@@ -523,6 +536,7 @@ impl OracleOutput {
         [
             ("oracle.txt.zst", false),
             ("oracle.crashed.txt.zst", true),
+            ("oracle.timeout.txt.zst", true),
             ("oracle.txt", false),
             ("oracle.crashed.txt", true),
         ]
@@ -783,13 +797,28 @@ fn run_oracle(case: &Case, runner: &Runner, dir: &Path, stem: &str) -> Result<Op
         &dir.join(format!("{stem}.oracle.peak")),
         |child| {
             let mut encoder = zstd::Encoder::new(File::create(&partial)?, 3)?;
-            std::io::copy(&mut child.stdout.take().unwrap(), &mut encoder)?;
+            let mut stdout = child.stdout.take().unwrap();
+            let start = Instant::now();
+            let mut buffer = vec![0u8; 1 << 20];
+            let mut timed_out = false;
+            loop {
+                let read = stdout.read(&mut buffer)?;
+                if read == 0 {
+                    break;
+                }
+                encoder.write_all(&buffer[..read])?;
+                if runner.oracle_timeout.is_some_and(|timeout| start.elapsed() > timeout) {
+                    timed_out = true;
+                    let _ = child.kill();
+                    break;
+                }
+            }
             encoder.finish()?;
-            Ok(((), true))
+            Ok((timed_out, true))
         },
     )
     .with_context(|| format!("running {}", runner.oracle.display()))?;
-    copied?;
+    let timed_out = copied?;
     // xDump exits with 0 after an exception. A complete run ends its log with
     // "All Done."; a run that died with an access violation (which the oracle
     // does on every Fallout 4 INFO with an alias condition) is kept as the
@@ -804,6 +833,13 @@ fn run_oracle(case: &Case, runner: &Runner, dir: &Path, stem: &str) -> Result<Op
             "oracle reached the memory cap of {:.1} GiB (--max-memory), last log line: {last}",
             runner.max_memory as f64 / GIB as f64
         );
+    }
+    // The output of an oracle run that was stopped at --oracle-timeout is
+    // kept as the prefix the port has to match (the oracle needs hours for
+    // a Skyrim LE save, which raises an exception per FormID).
+    if timed_out {
+        keep_partial(&partial, &dir.join(format!("{stem}.oracle.timeout.txt.zst")))?;
+        return Ok(peak);
     }
     ensure!(status.success(), "oracle failed: {status}, last log line: {last}");
     // An I/O error (1450, insufficient system resources, under memory
