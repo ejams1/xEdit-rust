@@ -144,7 +144,7 @@ pub fn twb_array_def_create_count(
             a_terminator,
         ),
         ArrayDefArgs {
-            element: a_element.expect("the element of an array definition"),
+            element: a_element,
             count: a_count,
             count_callback: None,
             labels: strings(a_labels),
@@ -184,7 +184,7 @@ pub fn twb_array_def_create_count_callback(
             a_terminator,
         ),
         ArrayDefArgs {
-            element: a_element.expect("the element of an array definition"),
+            element: a_element,
             count: 0,
             count_callback: a_count_callback,
             labels: strings(a_labels),

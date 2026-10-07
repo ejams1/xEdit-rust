@@ -593,7 +593,7 @@ mod tests {
         let array: Arc<dyn ValueDef> = ArrayDef::create(
             args("Items"),
             ArrayDefArgs {
-                element: int("Item"),
+                element: Some(int("Item")),
                 count: 0,
                 count_callback: None,
                 labels: Vec::new(),

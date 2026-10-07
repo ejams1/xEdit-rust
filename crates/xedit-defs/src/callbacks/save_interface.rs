@@ -32,8 +32,11 @@ static OBJECT_DETACHED_HANDLE_TABLE: RwLock<Vec<ObjectHandle>> = RwLock::new(Vec
 /// Upstream `ahfVMArrayHandleTable`: the script arrays and their counts.
 static ARRAY_HANDLE_TABLE: RwLock<Vec<(i64, i64)>> = RwLock::new(Vec::new());
 
-/// Upstream `sifSaveWorldspaceArray`: the values of the visited worldspaces.
-static SAVE_WORLDSPACE_ARRAY: RwLock<Vec<String>> = RwLock::new(Vec::new());
+/// Upstream `sifSaveWorldspaceArray`: the elements of the visited
+/// worldspaces. Their values are read when a worldspace index is shown, as
+/// upstream does: reading them here, while the save loads, would resolve the
+/// names of the worldspace records before their strings are loaded.
+static SAVE_WORLDSPACE_ARRAY: RwLock<Vec<ElementRef>> = RwLock::new(Vec::new());
 
 /// Upstream `SaveRefIDArray`.
 static SAVE_REF_ID_ARRAY: RwLock<Vec<u32>> = RwLock::new(Vec::new());
@@ -123,10 +126,7 @@ pub fn initialize_vm_array_table(a_container: &ElementRef) {
 pub fn initialize_save_worldspace_array(a_container: &ElementRef) {
     let mut table = SAVE_WORLDSPACE_ARRAY.write().unwrap();
     if table.is_empty() {
-        *table = elements(a_container)
-            .iter()
-            .map(|element| element.get_value())
-            .collect();
+        *table = elements(a_container);
     }
 }
 
@@ -241,9 +241,13 @@ fn worldspace_index_to_string(a_int: i64, _a_element: ElementArg, a_type: Callba
     if a_type == CallbackType::ctToSortKey {
         return int_to_hex64(a_int, 8);
     }
-    let table = SAVE_WORLDSPACE_ARRAY.read().unwrap();
-    if a_int > 0 && a_int as usize <= table.len() {
-        format!("[{}] {}", int_to_hex64(a_int, 8), table[a_int as usize - 1])
+    let element = SAVE_WORLDSPACE_ARRAY
+        .read()
+        .unwrap()
+        .get((a_int - 1).max(0) as usize)
+        .cloned();
+    if let (true, Some(element)) = (a_int > 0, element) {
+        format!("[{}] {}", int_to_hex64(a_int, 8), element.get_value())
     } else {
         format!("[{}] <no such worldspace>", int_to_hex64(a_int, 8))
     }

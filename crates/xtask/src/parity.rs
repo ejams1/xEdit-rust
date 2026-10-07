@@ -87,14 +87,14 @@ const GAMES: &[Game] = &[
         name: "tes4",
         mode: "TES4",
         data_var: "XEDIT_TES4_DATA",
-        save_extensions: &["obse"],
+        save_extensions: &["ess", "obse"],
         vanilla: &["oblivion.esm", "dlc*", "knights.esp"],
     },
     Game {
         name: "fo3",
         mode: "FO3",
         data_var: "XEDIT_FO3_DATA",
-        save_extensions: &["fose"],
+        save_extensions: &["fos", "fose"],
         vanilla: &[
             "fallout3.esm",
             "anchorage.esm",
@@ -220,8 +220,9 @@ struct Outcome {
     game: &'static str,
     file: String,
     /// `equal`, `equal-prefix` (the oracle crashed and the port matches its
-    /// output up to the crash), `different`, `oracle-failed`, `port-failed`
-    /// or `oracle-only`.
+    /// output up to the crash), `equal-error` (the oracle stopped with an
+    /// exception and the port stopped with the same message after the same
+    /// output), `different`, `oracle-failed`, `port-failed` or `oracle-only`.
     status: &'static str,
     #[serde(skip_serializing_if = "Option::is_none")]
     detail: Option<String>,
@@ -373,7 +374,7 @@ pub fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
     outcomes.sort_by(|a, b| (a.game, &a.file).cmp(&(b.game, &b.file)));
     let equal = outcomes
         .iter()
-        .filter(|o| o.status == "equal" || o.status == "equal-prefix")
+        .filter(|o| matches!(o.status, "equal" | "equal-prefix" | "equal-error"))
         .count();
     let report = Report {
         tag,
@@ -509,10 +510,16 @@ fn content_hash(path: &Path) -> Result<u64> {
 struct OracleOutput {
     path: PathBuf,
     crashed: bool,
+    /// The message of the exception that ended a crashed run, when the run
+    /// recorded it (`<stem>.oracle.error`).
+    error: Option<String>,
 }
 
 impl OracleOutput {
     fn find(dir: &Path, stem: &str) -> Option<Self> {
+        let error = fs::read_to_string(dir.join(format!("{stem}.oracle.error")))
+            .ok()
+            .and_then(|line| oracle_error_message(&line).map(str::to_owned));
         [
             ("oracle.txt.zst", false),
             ("oracle.crashed.txt.zst", true),
@@ -523,6 +530,7 @@ impl OracleOutput {
         .map(|(suffix, crashed)| Self {
             path: dir.join(format!("{stem}.{suffix}")),
             crashed,
+            error: error.clone(),
         })
         .find(|output| output.path.exists())
     }
@@ -711,6 +719,18 @@ fn check(case: &Case, runner: &Runner) -> Result<Outcome> {
         return Ok(outcome);
     }
     if !status.success() && difference.is_none() {
+        // An oracle run that stopped with an exception (a save whose header
+        // magic is not the one its definitions expect) is matched by a port
+        // run that stops with the same message after the same output.
+        let port_error = last_line(&port_log)?;
+        if let (Some(expected), Some(actual)) = (&oracle_out.error, port_error.strip_prefix("error: "))
+            && expected == actual
+        {
+            outcome.status = "equal-error";
+            outcome.detail = Some(format!("  both stopped with: {actual}"));
+            fs::remove_file(&port_out)?;
+            return Ok(outcome);
+        }
         outcome.status = "port-failed";
         outcome.detail = Some(format!("  {status}, see {}", port_log.display()));
         return Ok(outcome);
@@ -786,10 +806,17 @@ fn run_oracle(case: &Case, runner: &Runner, dir: &Path, stem: &str) -> Result<Op
         );
     }
     ensure!(status.success(), "oracle failed: {status}, last log line: {last}");
+    // An I/O error (1450, insufficient system resources, under memory
+    // pressure) says nothing about the dump: the run is not kept.
+    if last.contains("Unexpected Error: <EInOutError:") {
+        let _ = fs::remove_file(&partial);
+        bail!("oracle did not finish: last log line: {last}");
+    }
     if last.ends_with("All Done.") {
         keep_partial(&partial, &dir.join(format!("{stem}.oracle.txt.zst")))?;
     } else if last.contains("Unexpected Error") {
         keep_partial(&partial, &dir.join(format!("{stem}.oracle.crashed.txt.zst")))?;
+        fs::write(dir.join(format!("{stem}.oracle.error")), last)?;
     } else {
         bail!("oracle did not finish: last log line: {last}");
     }
@@ -805,6 +832,30 @@ fn keep_partial(partial: &Path, cached: &Path) -> Result<()> {
     }
     fs::rename(partial, cached)?;
     Ok(())
+}
+
+/// The message of the exception that ended an oracle run, from the last line
+/// of its log: `<time> Unexpected Error: <EClass: message>`.
+fn oracle_error_message(line: &str) -> Option<&str> {
+    let rest = line.trim_end().split_once("Unexpected Error: <")?.1;
+    Some(rest.strip_suffix('>')?.split_once(": ")?.1)
+}
+
+/// The last non-empty line of a log.
+fn last_line(path: &Path) -> Result<String> {
+    use std::io::{Seek, SeekFrom};
+    let mut file = File::open(path)?;
+    let len = file.metadata()?.len();
+    file.seek(SeekFrom::Start(len.saturating_sub(64 * 1024)))?;
+    let mut tail = Vec::new();
+    file.read_to_end(&mut tail)?;
+    let tail = String::from_utf8_lossy(&tail);
+    Ok(tail
+        .lines()
+        .rev()
+        .find(|line| !line.trim().is_empty())
+        .unwrap_or_default()
+        .to_owned())
 }
 
 /// Cuts the file down to its last `keep` bytes, from a line start, and
@@ -859,6 +910,16 @@ fn first_difference(mut oracle: impl BufRead, mut port: impl BufRead, prefix: bo
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn oracle_error_message_is_the_text_of_the_exception() {
+        let line = r#"<00:00:00.271> Unexpected Error: <Exception: Expected header Magic FO3SAVEGAME, found TES4SAVEGAM in file "C:\Saves\Save 1.ess">"#;
+        assert_eq!(
+            oracle_error_message(line),
+            Some(r#"Expected header Magic FO3SAVEGAME, found TES4SAVEGAM in file "C:\Saves\Save 1.ess""#)
+        );
+        assert_eq!(oracle_error_message("<00:00:01.000> All Done."), None);
+    }
 
     fn diff_files(oracle: &Path, port: &Path, prefix: bool) -> Result<Option<String>> {
         first_difference(
