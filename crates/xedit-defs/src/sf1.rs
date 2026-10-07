@@ -16109,22 +16109,7 @@ pub fn define_sf1() {
     .map(|def| def.include_flag_when(DefFlag::dfCollapsed, collapse_traversal()))
     .map(|def| def.include_flag_when(DefFlag::dfExcludeFromBuildRef, true));
     let wb_angle_to_str: Option<ToStrCallback> = Some(Arc::new(define_sf1_anonymous_6020));
-    let wb_lon_lan_func = |a_is_lat: bool| -> Option<ToStrCallback> {
-        let mut result: Option<ToStrCallback> = Default::default();
-        let mut lo_full: i32 = 360;
-        if a_is_lat {
-            lo_full = (lo_full / 2);
-        }
-        let mut lo_half: i32 = (lo_full / 2);
-        let mut lo_neg_dir: String = "W".to_owned();
-        let mut lo_pos_dir: String = "E".to_owned();
-        if a_is_lat {
-            lo_neg_dir = "S".to_owned();
-            lo_pos_dir = "N".to_owned();
-        }
-        result = Some(Arc::new(define_sf1_anonymous_6090));
-        result
-    };
+    let wb_lon_lan_func = define_sf1_wb_lon_lan_func;
     let mut wb_longitude_to_str: Option<ToStrCallback> = wb_lon_lan_func(false);
     let mut wb_latitude_to_str: Option<ToStrCallback> = wb_lon_lan_func(true);
     let mut wb_longitude_double: Option<Arc<FloatDef>> = wb_double_scale(
@@ -26264,11 +26249,7 @@ pub fn define_sf1() {
         None,
         None,
     );
-    let wb_race_override_dont_show = |a_flag: u8| -> Option<DontShowCallback> {
-        let mut result: Option<DontShowCallback> = Default::default();
-        result = Some(Arc::new(define_sf1_anonymous_8169));
-        result
-    };
+    let wb_race_override_dont_show = define_sf1_wb_race_override_dont_show;
     let mut wb_racedat2_flags: Option<Arc<FlagsDef>> = wb_flags_unknown_is_unused(
         &[
             "Playable",

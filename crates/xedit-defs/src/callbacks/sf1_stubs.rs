@@ -14,101 +14,6 @@ use std::sync::Arc;
 
 use xedit_core::interface::*;
 
-/// Upstream `anonymous routine in define_sf1`, line 10083 of `wbDefinitionsSF1.pas`.
-pub fn define_sf1_anonymous_10083(_a_element: ElementArg) -> Option<ElementRef> {
-    todo!("port anonymous routine in define_sf1 from wbDefinitionsSF1.pas line 10083")
-}
-
-/// Upstream `anonymous routine in define_sf1`, line 10364 of `wbDefinitionsSF1.pas`.
-pub fn define_sf1_anonymous_10364(_a_element: ElementArg) -> Option<ElementRef> {
-    todo!("port anonymous routine in define_sf1 from wbDefinitionsSF1.pas line 10364")
-}
-
-/// Upstream `anonymous routine in define_sf1`, line 10392 of `wbDefinitionsSF1.pas`.
-pub fn define_sf1_anonymous_10392(
-    _a_value: &mut String,
-    _a_base_ptr: DataPtr,
-    _a_element: ElementArg,
-    _a_type: CallbackType,
-) {
-    todo!("port anonymous routine in define_sf1 from wbDefinitionsSF1.pas line 10392")
-}
-
-/// Upstream `anonymous routine in define_sf1`, line 10407 of `wbDefinitionsSF1.pas`.
-pub fn define_sf1_anonymous_10407(_a_element: ElementArg) -> Option<ElementRef> {
-    todo!("port anonymous routine in define_sf1 from wbDefinitionsSF1.pas line 10407")
-}
-
-/// Upstream `anonymous routine in define_sf1`, line 10451 of `wbDefinitionsSF1.pas`.
-pub fn define_sf1_anonymous_10451(
-    _a_value: &mut String,
-    _a_base_ptr: DataPtr,
-    _a_element: ElementArg,
-    _a_type: CallbackType,
-) {
-    todo!("port anonymous routine in define_sf1 from wbDefinitionsSF1.pas line 10451")
-}
-
-/// Upstream `anonymous routine in define_sf1`, line 10462 of `wbDefinitionsSF1.pas`.
-pub fn define_sf1_anonymous_10462(_a_element: ElementArg) -> bool {
-    todo!("port anonymous routine in define_sf1 from wbDefinitionsSF1.pas line 10462")
-}
-
-/// Upstream `anonymous routine in define_sf1`, line 10470 of `wbDefinitionsSF1.pas`.
-pub fn define_sf1_anonymous_10470(_a_element: ElementArg) -> bool {
-    todo!("port anonymous routine in define_sf1 from wbDefinitionsSF1.pas line 10470")
-}
-
-/// Upstream `anonymous routine in define_sf1`, line 10500 of `wbDefinitionsSF1.pas`.
-pub fn define_sf1_anonymous_10500(_a_main_record: &MainRecordRef, _a_index_keys: &mut IndexKeys) {
-    todo!("port anonymous routine in define_sf1 from wbDefinitionsSF1.pas line 10500")
-}
-
-/// Upstream `anonymous routine in define_sf1`, line 10716 of `wbDefinitionsSF1.pas`.
-pub fn define_sf1_anonymous_10716(_a_base_ptr: DataPtr, _a_element: ElementArg) -> i32 {
-    todo!("port anonymous routine in define_sf1 from wbDefinitionsSF1.pas line 10716")
-}
-
-/// Upstream `anonymous routine in define_sf1`, line 11367 of `wbDefinitionsSF1.pas`.
-pub fn define_sf1_anonymous_11367(_a_main_record: &MainRecordRef, _a_index_keys: &mut IndexKeys) {
-    todo!("port anonymous routine in define_sf1 from wbDefinitionsSF1.pas line 11367")
-}
-
-/// Upstream `anonymous routine in define_sf1`, line 12787 of `wbDefinitionsSF1.pas`.
-pub fn define_sf1_anonymous_12787(_a_container: ElementArg) -> i32 {
-    todo!("port anonymous routine in define_sf1 from wbDefinitionsSF1.pas line 12787")
-}
-
-/// Upstream `anonymous routine in define_sf1`, line 12846 of `wbDefinitionsSF1.pas`.
-pub fn define_sf1_anonymous_12846(_a_container: ElementArg) -> i32 {
-    todo!("port anonymous routine in define_sf1 from wbDefinitionsSF1.pas line 12846")
-}
-
-/// Upstream `anonymous routine in define_sf1`, line 13034 of `wbDefinitionsSF1.pas`.
-pub fn define_sf1_anonymous_13034(_a_element: ElementArg) -> Option<ElementRef> {
-    todo!("port anonymous routine in define_sf1 from wbDefinitionsSF1.pas line 13034")
-}
-
-/// Upstream `anonymous routine in define_sf1`, line 13965 of `wbDefinitionsSF1.pas`.
-pub fn define_sf1_anonymous_13965(_a_element: ElementArg) -> Option<ElementRef> {
-    todo!("port anonymous routine in define_sf1 from wbDefinitionsSF1.pas line 13965")
-}
-
-/// Upstream `anonymous routine in define_sf1`, line 18163 of `wbDefinitionsSF1.pas`.
-pub fn define_sf1_anonymous_18163(_a_main_record: &MainRecordRef, _a_index_keys: &mut IndexKeys) {
-    todo!("port anonymous routine in define_sf1 from wbDefinitionsSF1.pas line 18163")
-}
-
-/// Upstream `anonymous routine in define_sf1`, line 2493 of `wbDefinitionsSF1.pas`.
-pub fn define_sf1_anonymous_2493(_a_element: ElementArg) -> Option<ElementRef> {
-    todo!("port anonymous routine in define_sf1 from wbDefinitionsSF1.pas line 2493")
-}
-
-/// Upstream `anonymous routine in define_sf1`, line 4990 of `wbDefinitionsSF1.pas`.
-pub fn define_sf1_anonymous_4990(_a_element: ElementArg) -> bool {
-    todo!("port anonymous routine in define_sf1 from wbDefinitionsSF1.pas line 4990")
-}
-
 /// Upstream `anonymous routine in define_sf1`, line 5247 of `wbDefinitionsSF1.pas`.
 pub fn define_sf1_anonymous_5247(_a_element: &ElementRef) {
     todo!("port anonymous routine in define_sf1 from wbDefinitionsSF1.pas line 5247")
@@ -129,144 +34,14 @@ pub fn define_sf1_anonymous_5287(_a_element: &ElementRef, _a_old_value: &Variant
     todo!("port anonymous routine in define_sf1 from wbDefinitionsSF1.pas line 5287")
 }
 
-/// Upstream `anonymous routine in define_sf1`, line 5367 of `wbDefinitionsSF1.pas`.
-pub fn define_sf1_anonymous_5367(_a_base_ptr: DataPtr, _a_element: ElementArg) -> i32 {
-    todo!("port anonymous routine in define_sf1 from wbDefinitionsSF1.pas line 5367")
-}
-
-/// Upstream `anonymous routine in define_sf1`, line 5930 of `wbDefinitionsSF1.pas`.
-pub fn define_sf1_anonymous_5930(_a_element: ElementArg) -> Option<ElementRef> {
-    todo!("port anonymous routine in define_sf1 from wbDefinitionsSF1.pas line 5930")
-}
-
-/// Upstream `anonymous routine in define_sf1`, line 6020 of `wbDefinitionsSF1.pas`.
-pub fn define_sf1_anonymous_6020(
-    _a_value: &mut String,
-    _a_base_ptr: DataPtr,
-    _a_element: ElementArg,
-    _a_type: CallbackType,
-) {
-    todo!("port anonymous routine in define_sf1 from wbDefinitionsSF1.pas line 6020")
-}
-
-/// Upstream `anonymous routine in define_sf1`, line 6090 of `wbDefinitionsSF1.pas`.
-pub fn define_sf1_anonymous_6090(
-    _a_value: &mut String,
-    _a_base_ptr: DataPtr,
-    _a_element: ElementArg,
-    _a_type: CallbackType,
-) {
-    todo!("port anonymous routine in define_sf1 from wbDefinitionsSF1.pas line 6090")
-}
-
-/// Upstream `anonymous routine in define_sf1`, line 7405 of `wbDefinitionsSF1.pas`.
-pub fn define_sf1_anonymous_7405(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) -> String {
-    todo!("port anonymous routine in define_sf1 from wbDefinitionsSF1.pas line 7405")
-}
-
-/// Upstream `anonymous routine in define_sf1`, line 8169 of `wbDefinitionsSF1.pas`.
-pub fn define_sf1_anonymous_8169(_a_element: ElementArg) -> bool {
-    todo!("port anonymous routine in define_sf1 from wbDefinitionsSF1.pas line 8169")
-}
-
-/// Upstream `anonymous routine in define_sf1`, line 8798 of `wbDefinitionsSF1.pas`.
-pub fn define_sf1_anonymous_8798(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) -> String {
-    todo!("port anonymous routine in define_sf1 from wbDefinitionsSF1.pas line 8798")
-}
-
-/// Upstream `anonymous routine in define_sf1`, line 9243 of `wbDefinitionsSF1.pas`.
-pub fn define_sf1_anonymous_9243(_a_element: ElementArg) -> Option<ElementRef> {
-    todo!("port anonymous routine in define_sf1 from wbDefinitionsSF1.pas line 9243")
-}
-
-/// Upstream `anonymous routine in define_sf1`, line 9708 of `wbDefinitionsSF1.pas`.
-pub fn define_sf1_anonymous_9708(_a_main_record: &MainRecordRef, _a_index_keys: &mut IndexKeys) {
-    todo!("port anonymous routine in define_sf1 from wbDefinitionsSF1.pas line 9708")
-}
-
-/// Upstream `wbBFCDAT2Decider`, line 1535 of `wbDefinitionsSF1.pas`.
-pub fn wb_bfcdat2_decider(_a_base_ptr: DataPtr, _a_element: ElementArg) -> i32 {
-    todo!("port wbBFCDAT2Decider from wbDefinitionsSF1.pas line 1535")
-}
-
-/// Upstream `wbBFCDATADecider`, line 1495 of `wbDefinitionsSF1.pas`.
-pub fn wb_bfcdata_decider(_a_base_ptr: DataPtr, _a_element: ElementArg) -> i32 {
-    todo!("port wbBFCDATADecider from wbDefinitionsSF1.pas line 1495")
-}
-
-/// Upstream `wbBIOMScaleToStr`, line 999 of `wbDefinitionsSF1.pas`.
-pub fn wb_biom_scale_to_str(
-    _a_value: &mut String,
-    _a_base_ptr: DataPtr,
-    _a_element: ElementArg,
-    _a_type: CallbackType,
-) {
-    todo!("port wbBIOMScaleToStr from wbDefinitionsSF1.pas line 999")
-}
-
-/// Upstream `wbBOOKTeachesDecider`, line 1936 of `wbDefinitionsSF1.pas`.
-pub fn wb_book_teaches_decider(_a_base_ptr: DataPtr, _a_element: ElementArg) -> i32 {
-    todo!("port wbBOOKTeachesDecider from wbDefinitionsSF1.pas line 1936")
-}
-
 /// Upstream `wbCELLDATAAfterSet`, line 1990 of `wbDefinitionsSF1.pas`.
 pub fn wb_celldata_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
     todo!("port wbCELLDATAAfterSet from wbDefinitionsSF1.pas line 1990")
 }
 
-/// Upstream `wbCLFMColorToInt`, line 1875 of `wbDefinitionsSF1.pas`.
-pub fn wb_clfm_color_to_int(_a_string: &str, _a_element: ElementArg) -> i64 {
-    todo!("port wbCLFMColorToInt from wbDefinitionsSF1.pas line 1875")
-}
-
-/// Upstream `wbCLFMColorToStr`, line 1845 of `wbDefinitionsSF1.pas`.
-pub fn wb_clfm_color_to_str(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) -> String {
-    todo!("port wbCLFMColorToStr from wbDefinitionsSF1.pas line 1845")
-}
-
 /// Upstream `wbConditionEventToInt`, line 923 of `wbDefinitionsSF1.pas`.
 pub fn wb_condition_event_to_int(_a_string: &str, _a_element: ElementArg) -> i64 {
     todo!("port wbConditionEventToInt from wbDefinitionsSF1.pas line 923")
-}
-
-/// Upstream `wbConditionEventToStr`, line 885 of `wbDefinitionsSF1.pas`.
-pub fn wb_condition_event_to_str(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) -> String {
-    todo!("port wbConditionEventToStr from wbDefinitionsSF1.pas line 885")
-}
-
-/// Upstream `wbConditionFunctionToInt`, line 821 of `wbDefinitionsSF1.pas`.
-pub fn wb_condition_function_to_int(_a_string: &str, _a_element: ElementArg) -> i64 {
-    todo!("port wbConditionFunctionToInt from wbDefinitionsSF1.pas line 821")
-}
-
-/// Upstream `wbConditionFunctionToStr`, line 789 of `wbDefinitionsSF1.pas`.
-pub fn wb_condition_function_to_str(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) -> String {
-    todo!("port wbConditionFunctionToStr from wbDefinitionsSF1.pas line 789")
-}
-
-/// Upstream `wbConditionParam1Decider`, line 831 of `wbDefinitionsSF1.pas`.
-pub fn wb_condition_param1_decider(_a_base_ptr: DataPtr, _a_element: ElementArg) -> i32 {
-    todo!("port wbConditionParam1Decider from wbDefinitionsSF1.pas line 831")
-}
-
-/// Upstream `wbConditionParam2Decider`, line 862 of `wbDefinitionsSF1.pas`.
-pub fn wb_condition_param2_decider(_a_base_ptr: DataPtr, _a_element: ElementArg) -> i32 {
-    todo!("port wbConditionParam2Decider from wbDefinitionsSF1.pas line 862")
-}
-
-/// Upstream `wbConditionQuestOverlay`, line 939 of `wbDefinitionsSF1.pas`.
-pub fn wb_condition_quest_overlay(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) -> i64 {
-    todo!("port wbConditionQuestOverlay from wbDefinitionsSF1.pas line 939")
-}
-
-/// Upstream `wbConditionQuestStageToStr`, line 1160 of `wbDefinitionsSF1.pas`.
-pub fn wb_condition_quest_stage_to_str(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) -> String {
-    todo!("port wbConditionQuestStageToStr from wbDefinitionsSF1.pas line 1160")
-}
-
-/// Upstream `wbEPFDDecider`, line 1801 of `wbDefinitionsSF1.pas`.
-pub fn wb_epfd_decider(_a_base_ptr: DataPtr, _a_element: ElementArg) -> i32 {
-    todo!("port wbEPFDDecider from wbDefinitionsSF1.pas line 1801")
 }
 
 /// Upstream `wbFLSTEDIDAfterSet`, line 1426 of `wbDefinitionsSF1.pas`.
@@ -294,64 +69,9 @@ pub fn wb_gpog_type_after_set_callback(_a_element: &ElementRef, _a_old_value: &V
     todo!("port wbGPOGTypeAfterSetCallback from wbDefinitionsSF1.pas line 1362")
 }
 
-/// Upstream `wbHexStrToInt`, line 2219 of `wbDefinitionsSF1.pas`.
-pub fn wb_hex_str_to_int(_a_string: &str, _a_element: ElementArg) -> i64 {
-    todo!("port wbHexStrToInt from wbDefinitionsSF1.pas line 2219")
-}
-
-/// Upstream `wbINFOGroupDecider`, line 1571 of `wbDefinitionsSF1.pas`.
-pub fn wb_info_group_decider(_a_base_ptr: DataPtr, _a_element: ElementArg) -> i32 {
-    todo!("port wbINFOGroupDecider from wbDefinitionsSF1.pas line 1571")
-}
-
-/// Upstream `wbINNRTargetDecider`, line 1820 of `wbDefinitionsSF1.pas`.
-pub fn wb_innr_target_decider(_a_base_ptr: DataPtr, _a_element: ElementArg) -> i32 {
-    todo!("port wbINNRTargetDecider from wbDefinitionsSF1.pas line 1820")
-}
-
-/// Upstream `wbIntToHexStr`, line 2210 of `wbDefinitionsSF1.pas`.
-pub fn wb_int_to_hex_str(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) -> String {
-    todo!("port wbIntToHexStr from wbDefinitionsSF1.pas line 2210")
-}
-
 /// Upstream `wbMGEFArchtypeAfterSet`, line 1722 of `wbDefinitionsSF1.pas`.
 pub fn wb_mgef_archtype_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
     todo!("port wbMGEFArchtypeAfterSet from wbDefinitionsSF1.pas line 1722")
-}
-
-/// Upstream `wbMGEFAssocItemDecider1`, line 1588 of `wbDefinitionsSF1.pas`.
-pub fn wb_mgef_assoc_item_decider1(_a_base_ptr: DataPtr, _a_element: ElementArg) -> i32 {
-    todo!("port wbMGEFAssocItemDecider1 from wbDefinitionsSF1.pas line 1588")
-}
-
-/// Upstream `wbMGEFAssocItemDecider2`, line 1633 of `wbDefinitionsSF1.pas`.
-pub fn wb_mgef_assoc_item_decider2(_a_base_ptr: DataPtr, _a_element: ElementArg) -> i32 {
-    todo!("port wbMGEFAssocItemDecider2 from wbDefinitionsSF1.pas line 1633")
-}
-
-/// Upstream `wbMGEFAssocItemDecider3`, line 1673 of `wbDefinitionsSF1.pas`.
-pub fn wb_mgef_assoc_item_decider3(_a_base_ptr: DataPtr, _a_element: ElementArg) -> i32 {
-    todo!("port wbMGEFAssocItemDecider3 from wbDefinitionsSF1.pas line 1673")
-}
-
-/// Upstream `wbObjectModPropertiesDecider`, line 2091 of `wbDefinitionsSF1.pas`.
-pub fn wb_object_mod_properties_decider(_a_base_ptr: DataPtr, _a_element: ElementArg) -> i32 {
-    todo!("port wbObjectModPropertiesDecider from wbDefinitionsSF1.pas line 2091")
-}
-
-/// Upstream `wbOMODDataFunctionTypeDecider`, line 2068 of `wbDefinitionsSF1.pas`.
-pub fn wb_omod_data_function_type_decider(_a_base_ptr: DataPtr, _a_element: ElementArg) -> i32 {
-    todo!("port wbOMODDataFunctionTypeDecider from wbDefinitionsSF1.pas line 2068")
-}
-
-/// Upstream `wbOMODDataPropertyValue1Decider`, line 2113 of `wbDefinitionsSF1.pas`.
-pub fn wb_omod_data_property_value1_decider(_a_base_ptr: DataPtr, _a_element: ElementArg) -> i32 {
-    todo!("port wbOMODDataPropertyValue1Decider from wbDefinitionsSF1.pas line 2113")
-}
-
-/// Upstream `wbOMODDataPropertyValue2Decider`, line 2141 of `wbDefinitionsSF1.pas`.
-pub fn wb_omod_data_property_value2_decider(_a_base_ptr: DataPtr, _a_element: ElementArg) -> i32 {
-    todo!("port wbOMODDataPropertyValue2Decider from wbDefinitionsSF1.pas line 2141")
 }
 
 /// Upstream `wbPackageDataInputValueTypeAfterSet`, line 2049 of `wbDefinitionsSF1.pas`.
@@ -363,77 +83,12 @@ pub fn wb_package_data_input_value_type_after_set(
     todo!("port wbPackageDataInputValueTypeAfterSet from wbDefinitionsSF1.pas line 2049")
 }
 
-/// Upstream `wbPerkDATADecider`, line 1781 of `wbDefinitionsSF1.pas`.
-pub fn wb_perk_data_decider(_a_base_ptr: DataPtr, _a_element: ElementArg) -> i32 {
-    todo!("port wbPerkDATADecider from wbDefinitionsSF1.pas line 1781")
-}
-
-/// Upstream `wbPubPackCNAMDecider`, line 2006 of `wbDefinitionsSF1.pas`.
-pub fn wb_pub_pack_cnam_decider(_a_base_ptr: DataPtr, _a_element: ElementArg) -> i32 {
-    todo!("port wbPubPackCNAMDecider from wbDefinitionsSF1.pas line 2006")
-}
-
-/// Upstream `wbQuestAliasExternalAliasLinksTo`, line 1179 of `wbDefinitionsSF1.pas`.
-pub fn wb_quest_alias_external_alias_links_to(_a_element: ElementArg) -> Option<ElementRef> {
-    todo!("port wbQuestAliasExternalAliasLinksTo from wbDefinitionsSF1.pas line 1179")
-}
-
-/// Upstream `wbREFRRecordFlagsDecider`, line 2162 of `wbDefinitionsSF1.pas`.
-pub fn wb_refr_record_flags_decider(_a_element: ElementArg) -> i32 {
-    todo!("port wbREFRRecordFlagsDecider from wbDefinitionsSF1.pas line 2162")
-}
-
-/// Upstream `wbSameQuestAliasLinksTo`, line 1197 of `wbDefinitionsSF1.pas`.
-pub fn wb_same_quest_alias_links_to(_a_element: ElementArg) -> Option<ElementRef> {
-    todo!("port wbSameQuestAliasLinksTo from wbDefinitionsSF1.pas line 1197")
-}
-
 /// Upstream `wbSCENTimelineTypeAfterSet`, line 1384 of `wbDefinitionsSF1.pas`.
 pub fn wb_scen_timeline_type_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
     todo!("port wbSCENTimelineTypeAfterSet from wbDefinitionsSF1.pas line 1384")
 }
 
-/// Upstream `wbScriptPropertyDecider`, line 1909 of `wbDefinitionsSF1.pas`.
-pub fn wb_script_property_decider(_a_base_ptr: DataPtr, _a_element: ElementArg) -> i32 {
-    todo!("port wbScriptPropertyDecider from wbDefinitionsSF1.pas line 1909")
-}
-
-/// Upstream `wbStarIDToStr`, line 1211 of `wbDefinitionsSF1.pas`.
-pub fn wb_star_id_to_str(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) -> String {
-    todo!("port wbStarIDToStr from wbDefinitionsSF1.pas line 1211")
-}
-
-/// Upstream `wbStrToStarID`, line 1266 of `wbDefinitionsSF1.pas`.
-pub fn wb_str_to_star_id(_a_string: &str, _a_element: ElementArg) -> i64 {
-    todo!("port wbStrToStarID from wbDefinitionsSF1.pas line 1266")
-}
-
-/// Upstream `wbStringToInt`, line 1174 of `wbDefinitionsSF1.pas`.
-pub fn wb_string_to_int(_a_string: &str, _a_element: ElementArg) -> i64 {
-    todo!("port wbStringToInt from wbDefinitionsSF1.pas line 1174")
-}
-
 /// Upstream `wbTMLMTypeAfterSet`, line 1314 of `wbDefinitionsSF1.pas`.
 pub fn wb_tmlm_type_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
     todo!("port wbTMLMTypeAfterSet from wbDefinitionsSF1.pas line 1314")
-}
-
-/// Upstream `wbTMLMTypeDontShow`, line 1290 of `wbDefinitionsSF1.pas`.
-pub fn wb_tmlm_type_dont_show(_a_element: ElementArg) -> bool {
-    todo!("port wbTMLMTypeDontShow from wbDefinitionsSF1.pas line 1290")
-}
-
-/// Upstream `wbTMLMTypeUnionDecider`, line 1303 of `wbDefinitionsSF1.pas`.
-pub fn wb_tmlm_type_union_decider(_a_container: ElementArg) -> i32 {
-    todo!("port wbTMLMTypeUnionDecider from wbDefinitionsSF1.pas line 1303")
-}
-
-/// Upstream `wbTypeDecider`, line 2031 of `wbDefinitionsSF1.pas`.
-pub fn wb_type_decider(_a_base_ptr: DataPtr, _a_element: ElementArg) -> i32 {
-    todo!("port wbTypeDecider from wbDefinitionsSF1.pas line 2031")
-}
-
-/// Upstream `wbVLMSTypeDecider`, line 1745 of `wbDefinitionsSF1.pas`.
-pub fn wb_vlms_type_decider(_a_base_ptr: DataPtr, _a_element: ElementArg) -> i32 {
-    todo!("port wbVLMSTypeDecider from wbDefinitionsSF1.pas line 1745")
 }

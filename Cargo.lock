@@ -1024,6 +1024,7 @@ version = "0.1.0"
 dependencies = [
  "serde_json",
  "xedit-core",
+ "xedit-io",
 ]
 
 [[package]]

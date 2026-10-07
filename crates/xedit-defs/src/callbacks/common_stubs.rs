@@ -39,24 +39,9 @@ pub fn wb_condition_run_on_after_set(_a_element: &ElementRef, _a_old_value: &Var
     todo!("port wbConditionRunOnAfterSet from wbDefinitionsCommon.pas line 57")
 }
 
-/// Upstream `wbConditionSummaryLinksTo`, line 149 of `wbDefinitionsCommon.pas`.
-pub fn wb_condition_summary_links_to(_a_element: ElementArg) -> Option<ElementRef> {
-    todo!("port wbConditionSummaryLinksTo from wbDefinitionsCommon.pas line 149")
-}
-
 /// Upstream `wbConditionTypeAfterSet`, line 56 of `wbDefinitionsCommon.pas`.
 pub fn wb_condition_type_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
     todo!("port wbConditionTypeAfterSet from wbDefinitionsCommon.pas line 56")
-}
-
-/// Upstream `wbCrowdPropertyToStr`, line 238 of `wbDefinitionsCommon.pas`.
-pub fn wb_crowd_property_to_str(
-    _a_value: &mut String,
-    _a_base_ptr: DataPtr,
-    _a_element: ElementArg,
-    _a_type: CallbackType,
-) {
-    todo!("port wbCrowdPropertyToStr from wbDefinitionsCommon.pas line 238")
 }
 
 /// Upstream `wbDialogueTextAfterLoad`, line 41 of `wbDefinitionsCommon.pas`.
@@ -74,16 +59,6 @@ pub fn wb_dobj_objects_after_load(_a_element: &ElementRef) {
     todo!("port wbDOBJObjectsAfterLoad from wbDefinitionsCommon.pas line 42")
 }
 
-/// Upstream `wbFlagNavmeshIgnoreErosionDontSHow`, line 87 of `wbDefinitionsCommon.pas`.
-pub fn wb_flag_navmesh_ignore_erosion_dont_s_how(_a_element: ElementArg) -> bool {
-    todo!("port wbFlagNavmeshIgnoreErosionDontSHow from wbDefinitionsCommon.pas line 87")
-}
-
-/// Upstream `wbFlagNavmeshOnlyCutDontSHow`, line 86 of `wbDefinitionsCommon.pas`.
-pub fn wb_flag_navmesh_only_cut_dont_s_how(_a_element: ElementArg) -> bool {
-    todo!("port wbFlagNavmeshOnlyCutDontSHow from wbDefinitionsCommon.pas line 86")
-}
-
 /// Upstream `wbIdleMarkerPNAMAfterSet`, line 59 of `wbDefinitionsCommon.pas`.
 pub fn wb_idle_marker_pnam_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
     todo!("port wbIdleMarkerPNAMAfterSet from wbDefinitionsCommon.pas line 59")
@@ -94,31 +69,6 @@ pub fn wb_idle_marker_qnam_after_set(_a_element: &ElementRef, _a_old_value: &Var
     todo!("port wbIdleMarkerQNAMAfterSet from wbDefinitionsCommon.pas line 60")
 }
 
-/// Upstream `wbINFOAliasToStr`, line 211 of `wbDefinitionsCommon.pas`.
-pub fn wb_info_alias_to_str(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) -> String {
-    todo!("port wbINFOAliasToStr from wbDefinitionsCommon.pas line 211")
-}
-
-/// Upstream `wbIntPrefixedStrToInt`, line 184 of `wbDefinitionsCommon.pas`.
-pub fn wb_int_prefixed_str_to_int(_a_string: &str, _a_element: ElementArg) -> i64 {
-    todo!("port wbIntPrefixedStrToInt from wbDefinitionsCommon.pas line 184")
-}
-
-/// Upstream `wbLGDIFiltersToStr`, line 212 of `wbDefinitionsCommon.pas`.
-pub fn wb_lgdi_filters_to_str(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) -> String {
-    todo!("port wbLGDIFiltersToStr from wbDefinitionsCommon.pas line 212")
-}
-
-/// Upstream `wbLGDIRankSlotArrayShouldInclude`, line 170 of `wbDefinitionsCommon.pas`.
-pub fn wb_lgdi_rank_slot_array_should_include(_a_base_ptr: DataPtr, _a_array: ElementArg) -> bool {
-    todo!("port wbLGDIRankSlotArrayShouldInclude from wbDefinitionsCommon.pas line 170")
-}
-
-/// Upstream `anonymous routine in wb_lgdi_slot_def`, line 7802 of `wbDefinitionsCommon.pas`.
-pub fn wb_lgdi_slot_def_anonymous_7802(_a_base_ptr: DataPtr, _a_element: ElementArg) -> bool {
-    todo!("port anonymous routine in wb_lgdi_slot_def from wbDefinitionsCommon.pas line 7802")
-}
-
 /// Upstream `wbMESGAfterLoad`, line 43 of `wbDefinitionsCommon.pas`.
 pub fn wb_mesg_after_load(_a_element: &ElementRef) {
     todo!("port wbMESGAfterLoad from wbDefinitionsCommon.pas line 43")
@@ -127,26 +77,6 @@ pub fn wb_mesg_after_load(_a_element: &ElementRef) {
 /// Upstream `wbMESGDNAMAfterSet`, line 61 of `wbDefinitionsCommon.pas`.
 pub fn wb_mesgdnam_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
     todo!("port wbMESGDNAMAfterSet from wbDefinitionsCommon.pas line 61")
-}
-
-/// Upstream `wbNPCFaceDialLinksTo`, line 154 of `wbDefinitionsCommon.pas`.
-pub fn wb_npc_face_dial_links_to(_a_element: ElementArg) -> Option<ElementRef> {
-    todo!("port wbNPCFaceDialLinksTo from wbDefinitionsCommon.pas line 154")
-}
-
-/// Upstream `wbNPCFaceDialToStr`, line 213 of `wbDefinitionsCommon.pas`.
-pub fn wb_npc_face_dial_to_str(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) -> String {
-    todo!("port wbNPCFaceDialToStr from wbDefinitionsCommon.pas line 213")
-}
-
-/// Upstream `wbNPCFaceMorphLinksTo`, line 155 of `wbDefinitionsCommon.pas`.
-pub fn wb_npc_face_morph_links_to(_a_element: ElementArg) -> Option<ElementRef> {
-    todo!("port wbNPCFaceMorphLinksTo from wbDefinitionsCommon.pas line 155")
-}
-
-/// Upstream `wbNPCFaceMorphToStr`, line 214 of `wbDefinitionsCommon.pas`.
-pub fn wb_npc_face_morph_to_str(_a_int: i64, _a_element: ElementArg, _a_type: CallbackType) -> String {
-    todo!("port wbNPCFaceMorphToStr from wbDefinitionsCommon.pas line 214")
 }
 
 /// Upstream `wbPACKDateAfterLoad`, line 44 of `wbDefinitionsCommon.pas`.
@@ -236,11 +166,6 @@ pub fn wb_world_after_load(_a_element: &ElementRef) {
 /// Upstream `wbWorldAfterSet`, line 69 of `wbDefinitionsCommon.pas`.
 pub fn wb_world_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
     todo!("port wbWorldAfterSet from wbDefinitionsCommon.pas line 69")
-}
-
-/// Upstream `wbWwiseKeywordMappingSoundDecider`, line 282 of `wbDefinitionsCommon.pas`.
-pub fn wb_wwise_keyword_mapping_sound_decider(_a_base_ptr: DataPtr, _a_element: ElementArg) -> i32 {
-    todo!("port wbWwiseKeywordMappingSoundDecider from wbDefinitionsCommon.pas line 282")
 }
 
 /// Upstream `wbWwiseKeywordMappingTemplateAfterSet`, line 70 of `wbDefinitionsCommon.pas`.

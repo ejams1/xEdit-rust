@@ -9,3 +9,4 @@ repository.workspace = true
 [dependencies]
 serde_json = { version = "1.0.151", features = ["preserve_order"] }
 xedit-core = { path = "../xedit-core" }
+xedit-io = { path = "../xedit-io" }

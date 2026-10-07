@@ -101,6 +101,10 @@ pub trait Element: Send + Sync {
     /// The element that contains this one.
     fn get_container(&self) -> Option<ElementRef>;
 
+    /// Upstream `MemoryOrder`: the position of the element in the data of
+    /// its container.
+    fn get_memory_order(&self) -> i32;
+
     /// Upstream `_File`: the file that contains this element.
     fn get_file(&self) -> Option<FileRef>;
 
