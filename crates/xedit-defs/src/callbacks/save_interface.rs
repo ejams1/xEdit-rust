@@ -401,10 +401,20 @@ pub fn wb_co_save_array_type_name(a_base_ptr: DataPtr, _a_element: ElementArg) -
     }
 }
 
-/// Upstream `wbCoSaveArrayTypeEnum`.
-pub fn wb_co_save_array_type_enum() -> Option<Arc<EnumDef>> {
-    wb_enum(&["Invalid", "Numeric", "Form", "String", "Array"])
+/// Upstream `wbCoSaveArrayTypeEnum`, which the initialization of the unit
+/// creates once.
+pub struct CoSaveArrayTypeEnum(std::sync::OnceLock<Option<Arc<EnumDef>>>);
+
+impl CoSaveArrayTypeEnum {
+    pub fn get(&self) -> Option<Arc<EnumDef>> {
+        self.0
+            .get_or_init(|| wb_enum(&["Invalid", "Numeric", "Form", "String", "Array"]))
+            .clone()
+    }
 }
+
+/// Upstream `wbCoSaveArrayTypeEnum`.
+pub static WB_CO_SAVE_ARRAY_TYPE_ENUM: CoSaveArrayTypeEnum = CoSaveArrayTypeEnum(std::sync::OnceLock::new());
 
 /// Port of `ToBeDeterminedDecider`.
 pub fn to_be_determined_decider(_a_base_ptr: DataPtr, _a_element: ElementArg) -> i32 {
