@@ -111,6 +111,22 @@ const CALLBACKS: &[(&str, &str)] = &[
         "(a_value: &mut String, a_base_ptr: DataPtr, a_element: ElementArg, a_type: CallbackType)",
     ),
     ("twbuniondecider", "(a_base_ptr: DataPtr, a_element: ElementArg) -> i32"),
+    (
+        "twbsizecallback",
+        "(a_base_ptr: DataPtr, a_element: ElementArg, compressed_size: &mut i32) -> u32",
+    ),
+    (
+        "twbgetchaptertypecallback",
+        "(a_base_ptr: DataPtr, a_element: ElementArg) -> i32",
+    ),
+    (
+        "twbgetchaptertypenamecallback",
+        "(a_base_ptr: DataPtr, a_element: ElementArg) -> String",
+    ),
+    (
+        "twbgetchapternamecallback",
+        "(a_base_ptr: DataPtr, a_element: ElementArg) -> String",
+    ),
     ("twbruniondecider", "(a_container: ElementArg) -> i32"),
     (
         "twbmainrecordgetformidcallback",
@@ -608,6 +624,23 @@ impl<'a> Emitter<'a> {
                     out.push_str(&format!("{pad}{setter}({});\n", self.expr_to(value, &target, cx)?));
                     return Ok(());
                 }
+                // `def.TreeHead := True` and `def.TreeBranch := True`, the
+                // tree flags of the save definitions.
+                if let Expr::Member { base, name } = target
+                    && let Some(setter) = match name.to_ascii_lowercase().as_str() {
+                        "treehead" => Some("set_tree_head"),
+                        "treebranch" => Some("set_tree_branch"),
+                        _ => None,
+                    }
+                {
+                    let def = self.expr(base, cx)?;
+                    let value = self.condition(value, cx)?;
+                    out.push_str(&format!(
+                        "{pad}if let Some(def) = &{} {{\n{pad}    def.{setter}({value});\n{pad}}}\n",
+                        def.code
+                    ));
+                    return Ok(());
+                }
                 // `wbKnownSubRecordSignatures[ksrRole] := 'SIGN'`, which only
                 // Morrowind does.
                 if let Expr::Index { base, args } = target
@@ -714,7 +747,11 @@ impl<'a> Emitter<'a> {
                     ));
                 }
                 _ => {
-                    let value = self.expr(expr, cx)?;
+                    let mut value = self.expr(expr, cx)?;
+                    // A procedure named without arguments is its call.
+                    if let (Ty::Routine(_), Expr::Ident(name)) = (&value.ty, expr) {
+                        value = self.call(name, &[], cx)?;
+                    }
                     out.push_str(&format!("{pad}{};\n", value.code));
                 }
             },

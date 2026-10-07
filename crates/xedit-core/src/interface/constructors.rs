@@ -38,7 +38,10 @@ use super::main_record::{AddInfoCallback, MainRecordDef, MainRecordDefArgs, add_
 use super::misc::{int_to_hex64, str_to_int_def};
 use super::resolvable::{RecursiveDef, UnionDecider, UnionDef};
 use super::string::{StringClass, StringDef};
-use super::struct_def::{StructDef, StructDefArgs};
+use super::struct_def::{
+    ChapterDef, ChapterKind, GetChapterNameCallback, GetChapterTypeCallback, GetChapterTypeNameCallback, SizeCallback,
+    StructDef, StructDefArgs,
+};
 use super::sub_record::{RecordMemberDef, SubRecordDef};
 use super::sub_record_group::{
     IsSortedCallback, RUnionDecider, SubRecordArrayDef, SubRecordStructDef, SubRecordUnionDef,
@@ -108,10 +111,6 @@ fn sparse_names(has_summary: bool, sparse: &[VarRec]) -> Vec<SparseName> {
             SparseName::with_summary(*index, name, summary)
         })
         .collect()
-}
-
-fn not_ported(class: &str, reason: &str) -> ! {
-    panic!("{class} is not ported: {reason}")
 }
 
 // ----- constructors -----
@@ -596,56 +595,68 @@ pub fn twb_recursive_def_create(
 }
 
 pub fn twb_ref_id_create() -> Option<Arc<dyn IntegerDefFormater>> {
-    not_ported("TwbRefID", "only save files use it")
+    Some(FormIDDefFormater::create_ref_id())
 }
 
 pub fn twb_str4_create() -> Option<Arc<Str4>> {
     Some(Str4::create())
 }
 
-/// The compressed structures of save files share one signature upstream.
-#[allow(clippy::too_many_arguments)]
-fn struct_c_def(class: &str) -> ! {
-    not_ported(class, "only save files use it")
-}
-
+/// Port of `TwbStructCDef.Create` and its descendants, which share one
+/// signature upstream.
 macro_rules! struct_c_constructor {
-    ($name:ident, $class:literal) => {
+    ($name:ident, $kind:expr) => {
         #[allow(clippy::too_many_arguments)]
         pub fn $name(
-            _a_priority: ConflictPriority,
-            _a_required: bool,
-            _a_name: &str,
-            _a_members: &[Option<Arc<dyn ValueDef>>],
-            _a_sort_key: &[i32],
-            _a_ex_sort_key: &[i32],
-            _a_optional_from_element: i32,
-            _a_dont_show: Option<DontShowCallback>,
-            _a_after_load: Option<AfterLoadCallback>,
-            _a_after_set: Option<AfterSetCallback>,
-            _a_size_call_back: Option<SizeCallback>,
-            _a_get_chapter_type: Option<GetChapterTypeCallback>,
-            _a_get_chapter_type_name: Option<GetChapterTypeNameCallback>,
-            _a_get_chapter_name: Option<GetChapterNameCallback>,
-            _a_get_cp: Option<GetConflictPriority>,
+            a_priority: ConflictPriority,
+            a_required: bool,
+            a_name: &str,
+            a_members: &[Option<Arc<dyn ValueDef>>],
+            a_sort_key: &[i32],
+            a_ex_sort_key: &[i32],
+            a_optional_from_element: i32,
+            a_dont_show: Option<DontShowCallback>,
+            a_after_load: Option<AfterLoadCallback>,
+            a_after_set: Option<AfterSetCallback>,
+            a_size_call_back: Option<SizeCallback>,
+            a_get_chapter_type: Option<GetChapterTypeCallback>,
+            a_get_chapter_type_name: Option<GetChapterTypeNameCallback>,
+            a_get_chapter_name: Option<GetChapterNameCallback>,
+            a_get_cp: Option<GetConflictPriority>,
         ) -> Option<Arc<StructDef>> {
-            struct_c_def($class)
+            Some(StructDef::create(
+                named(
+                    a_priority,
+                    a_required,
+                    a_name,
+                    a_after_load,
+                    a_after_set,
+                    a_dont_show,
+                    a_get_cp,
+                    false,
+                ),
+                StructDefArgs {
+                    members: assigned(a_members),
+                    sort_key: a_sort_key.to_vec(),
+                    ex_sort_key: a_ex_sort_key.to_vec(),
+                    element_map: Vec::new(),
+                    optional_from_element: a_optional_from_element,
+                    chapter: Some(ChapterDef {
+                        kind: $kind,
+                        size_callback: a_size_call_back,
+                        get_chapter_type: a_get_chapter_type,
+                        get_chapter_type_name: a_get_chapter_type_name,
+                        get_chapter_name: a_get_chapter_name,
+                    }),
+                },
+            ))
         }
     };
 }
 
-/// Upstream `TwbSizeCallback`, for the save file structures that are not ported.
-pub type SizeCallback = Arc<dyn Fn(ElementArg) -> i64 + Send + Sync>;
-/// Upstream `TwbGetChapterTypeCallback`, for the save file structures that are not ported.
-pub type GetChapterTypeCallback = Arc<dyn Fn(ElementArg) -> i32 + Send + Sync>;
-/// Upstream `TwbGetChapterTypeNameCallback`, for the save file structures that are not ported.
-pub type GetChapterTypeNameCallback = Arc<dyn Fn(ElementArg) -> String + Send + Sync>;
-/// Upstream `TwbGetChapterNameCallback`, for the save file structures that are not ported.
-pub type GetChapterNameCallback = Arc<dyn Fn(ElementArg) -> String + Send + Sync>;
-
-struct_c_constructor!(twb_struct_c_def_create, "TwbStructCDef");
-struct_c_constructor!(twb_struct_z_def_create, "TwbStructZDef");
-struct_c_constructor!(twb_struct_lz_def_create, "TwbStructLZDef");
+struct_c_constructor!(twb_struct_c_def_create, ChapterKind::Chapter);
+struct_c_constructor!(twb_struct_z_def_create, ChapterKind::ZLib);
+struct_c_constructor!(twb_struct_lz_def_create, ChapterKind::Lz4);
 
 #[allow(clippy::too_many_arguments)]
 pub fn twb_struct_def_create(
@@ -679,6 +690,7 @@ pub fn twb_struct_def_create(
             ex_sort_key: a_ex_sort_key.to_vec(),
             element_map: a_element_map.iter().map(|&index| index as u32).collect(),
             optional_from_element: a_optional_from_element,
+            chapter: None,
         },
     ))
 }
@@ -1026,9 +1038,16 @@ pub fn wb_form_id() -> Option<Arc<FormIDDefFormater>> {
     Some(shared.get_or_insert_with(FormIDDefFormater::create).clone())
 }
 
-/// Upstream `wbRefID` without arguments.
+static REF_ID: RwLock<Option<Arc<FormIDDefFormater>>> = RwLock::new(None);
+
+/// Upstream `wbRefID` without arguments: one shared formater, except in
+/// report mode.
 pub fn wb_ref_id() -> Option<Arc<dyn IntegerDefFormater>> {
-    not_ported("TwbRefID", "only save files use it")
+    if report_mode() {
+        return Some(FormIDDefFormater::create_ref_id());
+    }
+    let mut shared = REF_ID.write().unwrap();
+    Some(shared.get_or_insert_with(FormIDDefFormater::create_ref_id).clone())
 }
 
 /// Upstream `wbNeverShow`.

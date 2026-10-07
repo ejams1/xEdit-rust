@@ -13,6 +13,7 @@ pub mod common;
 pub mod fnv;
 pub mod fo3;
 pub mod fo4;
+pub mod fo4saves;
 pub mod fo76;
 pub mod hardcoded;
 pub mod reflection;

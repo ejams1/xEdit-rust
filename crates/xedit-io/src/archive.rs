@@ -7,8 +7,7 @@
 //! Reading the files of a BSA (Morrowind excluded) or a general BA2
 //! archive: the parts the localization and the resource lookup need.
 //!
-//! Not ported: Morrowind archives, the DX10 texture archives, the Starfield
-//! formats, and writing.
+//! Not ported: Morrowind archives, the DX10 texture archives and writing.
 
 use std::collections::HashMap;
 use std::path::Path;
@@ -232,11 +231,25 @@ fn read_ba2(bytes: &[u8], name: &str) -> Result<HashMap<String, Entry>, ArchiveE
             String::from_utf8_lossy(kind)
         )));
     }
+    let version = u32_at(bytes, 4).ok_or_else(bad)?;
     let file_count = u32_at(bytes, 12).ok_or_else(bad)? as usize;
     let name_table_offset = u64_at(bytes, 16).ok_or_else(bad)? as usize;
+    // Starfield archives (versions 2 and 3) add a value that is always 1,
+    // and version 3 the compression method, where 3 is LZ4.
+    let mut header_size = 24;
+    let mut compression = CompressionType::ZLib;
+    if matches!(version, 2 | 3) {
+        header_size += 8;
+    }
+    if version == 3 {
+        if u32_at(bytes, header_size).ok_or_else(bad)? == 3 {
+            compression = CompressionType::LZ4;
+        }
+        header_size += 4;
+    }
     let mut records = Vec::with_capacity(file_count);
     for index in 0..file_count {
-        let record = 24 + index * 36;
+        let record = header_size + index * 36;
         let offset = u64_at(bytes, record + 16).ok_or_else(bad)?;
         let packed_size = u32_at(bytes, record + 24).ok_or_else(bad)?;
         let unpacked_size = u32_at(bytes, record + 28).ok_or_else(bad)?;
@@ -252,7 +265,7 @@ fn read_ba2(bytes: &[u8], name: &str) -> Result<HashMap<String, Entry>, ArchiveE
             Entry {
                 offset,
                 size: packed_size,
-                compression: Some(CompressionType::ZLib),
+                compression: Some(compression),
                 embedded_name: false,
                 unpacked_size: Some(unpacked_size),
             }

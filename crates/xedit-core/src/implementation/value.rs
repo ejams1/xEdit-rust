@@ -8,17 +8,20 @@
 //! elements of the values inside a subrecord, built from the value
 //! definitions over the data of the subrecord.
 //!
-//! Not ported yet: flags as array elements (`wbFlagsAsArray`), the sorting
-//! of sorted arrays, chapters and the compressed structures of save files.
+//! Not ported yet: flags as array elements (`wbFlagsAsArray`) and the
+//! sorting of sorted arrays.
 
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, RwLock, Weak};
+use std::sync::{Arc, OnceLock, RwLock, Weak};
+
+use xedit_io::compression::CompressionType;
 
 use crate::interface::def::{EmptyDef, NamedDef, NamedDefArgs, ValueDef};
 use crate::interface::element::{Container, DataContainer, DataPtr, Element, ElementRef, FileRef, MainRecordRef};
 use crate::interface::form_id::FormID;
-use crate::interface::globals::{hide_never_show, sort_sub_records};
+use crate::interface::globals::{ToolSource, hide_never_show, sort_sub_records, tool_source};
 use crate::interface::misc::Variant;
+use crate::interface::struct_def::ChapterKind;
 use crate::interface::types::{ConflictPriority, DefFlag, DefType, ElementType, TriBool, dt_non_values};
 
 use super::{ContainerBase, DataBlock, ElementBase, ElementImpl};
@@ -37,6 +40,9 @@ pub struct ValueBase {
     e_name_suffix: String,
     init: super::InitOnce,
     optional_and_missing: AtomicBool,
+    /// The decompressed data of a compressed structure (`dcDataStorage`),
+    /// which replaces the data of the element once it is initialized.
+    decompressed: OnceLock<DataBlock>,
 }
 
 impl ValueBase {
@@ -58,6 +64,7 @@ impl ValueBase {
             e_name_suffix: name_suffix.to_owned(),
             init: super::InitOnce::new(),
             optional_and_missing: AtomicBool::new(false),
+            decompressed: OnceLock::new(),
         }
     }
 
@@ -66,6 +73,9 @@ impl ValueBase {
     }
 
     pub fn data(&self) -> DataPtr<'_> {
+        if let Some(block) = self.decompressed.get() {
+            return Some(block.as_slice());
+        }
         let (start, end) = self.range()?;
         self.block.as_slice().get(start..end)
     }
@@ -224,6 +234,15 @@ impl ValueImpl {
                 pos: start,
                 end,
             };
+            if self.kind == ValueKind::Struct
+                && let Some(block) = self.decompress_if_needed(&self_ref)
+            {
+                cursor = Cursor {
+                    pos: 0,
+                    end: block.as_slice().len(),
+                    block,
+                };
+            }
             match self.kind {
                 ValueKind::Value => {}
                 ValueKind::Struct => struct_do_init(&self.vb.vb_value_def, &self_ref, &self.vb.file, &mut cursor),
@@ -235,11 +254,51 @@ impl ValueImpl {
                 }
                 ValueKind::Terminator => {}
             }
+            // `StructDoInit`, `ArrayDoInit` and `UnionDoInit` end with the
+            // `AfterLoad` of the definition. The callbacks of the plugin
+            // definitions only act while editing, so only the save
+            // definitions, which fill their lookup tables there, get the call.
+            if tool_source() == ToolSource::tsSaves
+                && matches!(self.kind, ValueKind::Struct | ValueKind::Array | ValueKind::Union)
+            {
+                self.vb.vb_value_def.after_load(&self_ref);
+            }
         });
     }
 
     pub fn value_def(&self) -> &Arc<dyn ValueDef> {
         &self.vb.vb_value_def
+    }
+
+    /// Port of `TwbStruct.DecompressIfNeeded` and `GetIsCompressed`: the
+    /// decompressed data of a `TwbStructZDef` or `TwbStructLZDef` whose size
+    /// callback gives an uncompressed size. Upstream passes the first four
+    /// bytes of the compressed data as the size of the output, and the
+    /// decompression fails unless the output has exactly that size; the
+    /// structure then has no data.
+    fn decompress_if_needed(&self, self_ref: &ElementRef) -> Option<DataBlock> {
+        let struct_def = self.vb.vb_value_def.as_struct_def()?;
+        let compression = match struct_def.chapter()?.kind {
+            ChapterKind::Chapter => return None,
+            ChapterKind::ZLib => CompressionType::ZLib,
+            ChapterKind::Lz4 => CompressionType::LZ4,
+        };
+        let mut compressed_size = 0;
+        let uncompressed_size = struct_def.get_sizing(self.vb.data(), Some(self_ref), &mut compressed_size);
+        if uncompressed_size == 0 {
+            return None;
+        }
+        let data = self.vb.data().unwrap_or_default();
+        let output_size = data
+            .get(..4)
+            .map_or(0, |bytes| u32::from_le_bytes(bytes.try_into().unwrap()));
+        let mut output = vec![0u8; uncompressed_size as usize];
+        let decompressed = output_size == uncompressed_size && compression.decompress(data, &mut output).is_ok();
+        if !decompressed {
+            output.clear();
+        }
+        let block = DataBlock::Buffer(Arc::new(output));
+        Some(self.vb.decompressed.get_or_init(|| block).clone())
     }
 
     /// Port of `TwbValueBase.GetValue`.
@@ -474,6 +533,11 @@ impl Element for ValueImpl {
         self.vb.name()
     }
 
+    /// Port of `TwbValueBase.GetBaseName`: the name of the definition.
+    fn get_base_name(&self) -> String {
+        self.vb.vb_value_def.get_name().to_owned()
+    }
+
     /// Port of `TwbValueBase.GetDisplayName` without the dump offsets: the
     /// name of the resolved definition, unless that is a container type
     /// different from the definition of the element.
@@ -508,6 +572,9 @@ impl Element for ValueImpl {
     fn get_element_type(&self) -> ElementType {
         match self.kind {
             ValueKind::Value => ElementType::etValue,
+            ValueKind::Struct if self.vb.vb_value_def.get_def_type() == DefType::dtStructChapter => {
+                ElementType::etStructChapter
+            }
             ValueKind::Struct => ElementType::etStruct,
             ValueKind::Array => ElementType::etArray,
             ValueKind::Union => ElementType::etUnion,

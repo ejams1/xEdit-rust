@@ -4,10 +4,8 @@
 
 // Ported from xEdit: Core/wbInterface.pas
 
-//! `TwbStructDef`.
-//!
-//! `TwbStructCDef` and its descendants are the chapters of save files and come
-//! with the save game definitions.
+//! `TwbStructDef`, and `TwbStructCDef`, `TwbStructZDef` and `TwbStructLZDef`,
+//! the chapters and compressed structures of save files.
 
 use std::sync::{Arc, Weak};
 
@@ -20,6 +18,37 @@ use super::globals::hide_ignored;
 use super::types::{CallbackType, ConflictPriority, DefFlag, DefType, ElementType};
 
 pub type StructSizeCallback = Arc<dyn Fn(DataPtr, ElementArg) -> u32 + Send + Sync>;
+
+/// Upstream `TwbSizeCallback`: the uncompressed size of a chapter, with the
+/// compressed size in the last argument.
+pub type SizeCallback = Arc<dyn Fn(DataPtr, ElementArg, &mut i32) -> u32 + Send + Sync>;
+/// Upstream `TwbGetChapterTypeCallback`.
+pub type GetChapterTypeCallback = Arc<dyn Fn(DataPtr, ElementArg) -> i32 + Send + Sync>;
+/// Upstream `TwbGetChapterTypeNameCallback`.
+pub type GetChapterTypeNameCallback = Arc<dyn Fn(DataPtr, ElementArg) -> String + Send + Sync>;
+/// Upstream `TwbGetChapterNameCallback`.
+pub type GetChapterNameCallback = Arc<dyn Fn(DataPtr, ElementArg) -> String + Send + Sync>;
+
+/// Which of the chapter structures of save files a structure is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ChapterKind {
+    /// `TwbStructCDef`.
+    Chapter,
+    /// `TwbStructZDef`: the data is compressed with zlib.
+    ZLib,
+    /// `TwbStructLZDef`: the data is compressed with LZ4.
+    Lz4,
+}
+
+/// The fields of `TwbStructCDef`.
+#[derive(Clone)]
+pub struct ChapterDef {
+    pub kind: ChapterKind,
+    pub size_callback: Option<SizeCallback>,
+    pub get_chapter_type: Option<GetChapterTypeCallback>,
+    pub get_chapter_type_name: Option<GetChapterTypeNameCallback>,
+    pub get_chapter_name: Option<GetChapterNameCallback>,
+}
 
 /// The data from `offset` on, as upstream `PByte(aBasePtr) + offset` with the
 /// same end pointer. A base pointer past the end gives empty data.
@@ -66,6 +95,8 @@ pub struct StructDefArgs {
     pub ex_sort_key: Vec<i32>,
     pub element_map: Vec<u32>,
     pub optional_from_element: i32,
+    /// The chapter fields of a `TwbStructCDef`, `None` for a plain structure.
+    pub chapter: Option<ChapterDef>,
 }
 
 /// Upstream `TwbStructDef`: members that follow each other in the data.
@@ -85,6 +116,7 @@ pub struct StructDef {
     st_summary_max_depth: DefCell<Vec<i32>>,
     st_summary_delimiter: DefCell<String>,
     st_size_callback: DefCell<StructSizeCallback>,
+    st_chapter: Option<ChapterDef>,
 }
 
 impl StructDef {
@@ -118,6 +150,7 @@ impl StructDef {
                 st_summary_max_depth: DefCell::default(),
                 st_summary_delimiter: DefCell::new(Some(" ".to_owned())),
                 st_size_callback: DefCell::default(),
+                st_chapter: structure.chapter,
             }
         });
         DefBase::after_construction(&*this);
@@ -134,6 +167,7 @@ impl StructDef {
                 ex_sort_key: source.st_ex_sort_key.clone(),
                 element_map: source.st_element_map.clone(),
                 optional_from_element: source.st_optional_from_element,
+                chapter: source.st_chapter.clone(),
             },
         );
         ValueDefBase::after_clone(&*this, source);
@@ -164,6 +198,63 @@ impl StructDef {
 
     pub fn get_optional_from_element(&self) -> i32 {
         self.st_optional_from_element
+    }
+
+    /// The chapter fields, for a `TwbStructCDef`.
+    pub fn chapter(&self) -> Option<&ChapterDef> {
+        self.st_chapter.as_ref()
+    }
+
+    /// Port of `TwbStructCDef.GetSizing`: the uncompressed size, with the
+    /// compressed size in `compressed_size`.
+    pub fn get_sizing(&self, data: DataPtr, element: ElementArg, compressed_size: &mut i32) -> u32 {
+        match self
+            .st_chapter
+            .as_ref()
+            .and_then(|chapter| chapter.size_callback.as_ref())
+        {
+            Some(callback) => callback(data, element, compressed_size),
+            None => {
+                *compressed_size = -1;
+                0
+            }
+        }
+    }
+
+    /// Port of `TwbStructCDef.GetChapterType`.
+    pub fn get_chapter_type(&self, data: DataPtr, element: ElementArg) -> i32 {
+        match self
+            .st_chapter
+            .as_ref()
+            .and_then(|chapter| chapter.get_chapter_type.as_ref())
+        {
+            Some(callback) => callback(data, element),
+            None => -1,
+        }
+    }
+
+    /// Port of `TwbStructCDef.GetChapterTypeName`.
+    pub fn get_chapter_type_name(&self, data: DataPtr, element: ElementArg) -> String {
+        match self
+            .st_chapter
+            .as_ref()
+            .and_then(|chapter| chapter.get_chapter_type_name.as_ref())
+        {
+            Some(callback) => callback(data, element),
+            None => self.get_chapter_type(data, element).to_string(),
+        }
+    }
+
+    /// Port of `TwbStructCDef.GetChapterName`.
+    pub fn get_chapter_name(&self, data: DataPtr, element: ElementArg) -> String {
+        let chapter = self.st_chapter.as_ref();
+        if let Some(callback) = chapter.and_then(|chapter| chapter.get_chapter_name.as_ref()) {
+            callback(data, element)
+        } else if let Some(callback) = chapter.and_then(|chapter| chapter.get_chapter_type_name.as_ref()) {
+            callback(data, element)
+        } else {
+            self.get_name().to_owned()
+        }
     }
 
     fn unlocked(self: Arc<Self>) -> Arc<Self> {
@@ -391,11 +482,19 @@ impl Def for StructDef {
     value_def_plumbing!(Def);
 
     fn get_def_type(&self) -> DefType {
-        DefType::dtStruct
+        if self.st_chapter.is_some() {
+            DefType::dtStructChapter
+        } else {
+            DefType::dtStruct
+        }
     }
 
     fn get_def_type_name(&self) -> String {
-        "Structure".to_owned()
+        if self.st_chapter.is_some() {
+            "Chapter".to_owned()
+        } else {
+            "Structure".to_owned()
+        }
     }
 
     fn as_struct_def(&self) -> Option<&StructDef> {
@@ -503,6 +602,14 @@ impl ValueDef for StructDef {
     fn get_size(&self, data: DataPtr, element: ElementArg) -> i32 {
         if let Some(callback) = self.st_size_callback.load().as_deref() {
             return callback(data, element) as i32;
+        }
+        // A chapter is as long as the compressed size of its size callback.
+        if self.st_chapter.is_some() {
+            let mut size = 0;
+            self.get_sizing(data, element, &mut size);
+            if size > 0 {
+                return size;
+            }
         }
         let len = data.map_or(0, <[u8]>::len);
         if (data.is_none() || len == 0) && self.get_is_variable_size_internal() {

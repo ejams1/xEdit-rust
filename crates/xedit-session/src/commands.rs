@@ -32,7 +32,7 @@ impl Session {
             files.push(file);
         }
         if let (Some(file), Some(path)) = (files.last(), plugins.last()) {
-            load_resources(file, path, mode);
+            load_resources(file, path, &xedit_core::delphi::extract_file_path(path), mode);
             load_hardcoded()?;
         }
         Ok(Self {
