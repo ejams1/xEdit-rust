@@ -17,15 +17,17 @@ use xedit_core::delphi::{float_to_str_f_fixed, format_general, round, str_to_flo
 use xedit_core::interface::builders::wb_flags_unknown_is_unused;
 use xedit_core::interface::constructors::get_container_from_union;
 use xedit_core::interface::globals::{
-    GameMode, cell_size_factor, cs, game_mode, is_fallout_nv, is_fallout3, is_fallout76, is_morrowind, is_oblivion,
-    is_skyrim, is_starfield, resolve_alias,
+    GameMode, begin_internal_edit, cell_size_factor, cs, end_internal_edit, game_mode, is_fallout_nv, is_fallout3,
+    is_fallout4, is_fallout76, is_morrowind, is_oblivion, is_skyrim, is_starfield, remove_offset_data, resolve_alias,
 };
-use xedit_core::interface::misc::{int_to_hex64, str_to_int_def};
+use xedit_core::interface::misc::{EditError, int_to_hex64, progress, str_to_int_def};
 use xedit_core::interface::string::to_comma_text;
 use xedit_core::interface::*;
 
 use crate::common::{wb_idx_addon_node, wb_idx_collision_layer, wb_package_schedule_month_enum};
 
+// The stubs of the callbacks not ported yet; empty once every callback is ported.
+#[allow(unused_imports)]
 pub use super::common_stubs::*;
 
 /// Upstream `Sig2Int`.
@@ -3372,4 +3374,1493 @@ pub fn wb_int_prefixed_str_to_int(a_string: &str, _a_element: ElementArg) -> i64
         .find(|c: char| c != '-' && !c.is_ascii_digit())
         .unwrap_or(text.len());
     i64::from(str_to_int_def(&text[..end], 0))
+}
+
+// ----- the editing callbacks: helpers -----
+
+/// `if wbBeginInternalEdit then try ... finally wbEndInternalEdit end`.
+pub fn with_internal_edit(body: impl FnOnce()) {
+    if begin_internal_edit(false) {
+        body();
+        end_internal_edit();
+    }
+}
+
+/// `wbBeginInternalEdit(True)`.
+pub fn with_forced_internal_edit(body: impl FnOnce()) {
+    if begin_internal_edit(true) {
+        body();
+        end_internal_edit();
+    }
+}
+
+/// An edit a callback made that failed: upstream lets the exception out of
+/// the callback; the port reports it on the progress output and goes on.
+fn report_edit(result: Result<(), EditError>) {
+    if let Err(error) = result {
+        progress(&format!("<Error in a definition callback: {error}>"));
+    }
+}
+
+/// `aElement.NativeValue := aValue` in a callback.
+pub fn set_native(element: &ElementRef, value: impl Into<Variant>) {
+    report_edit(element.set_native_value(value.into()));
+}
+
+/// `aElement.EditValue := aValue` in a callback.
+pub fn set_edit(element: &ElementRef, value: &str) {
+    report_edit(element.set_edit_value(value));
+}
+
+/// `aContainer.ElementNativeValues[aPath] := aValue`.
+pub fn set_path_native(container: &ElementRef, path: &str, value: impl Into<Variant>) {
+    if let Some(container) = container.as_container() {
+        report_edit(container.set_element_native_value(path, value.into()));
+    }
+}
+
+/// `aContainer.ElementEditValues[aPath] := aValue`.
+pub fn set_path_edit(container: &ElementRef, path: &str, value: &str) {
+    if let Some(container) = container.as_container() {
+        report_edit(container.set_element_edit_value(path, value));
+    }
+}
+
+/// `aContainer.ElementNativeValues[aPath]`.
+pub fn path_native(container: &ElementRef, path: &str) -> Variant {
+    container
+        .as_container()
+        .map_or(Variant::Empty, |container| container.get_element_native_value(path))
+}
+
+/// `aContainer.ElementNativeValues[aPath]` as an integer, 0 when missing.
+pub fn path_int(container: &ElementRef, path: &str) -> i64 {
+    variant_int(&path_native(container, path))
+}
+
+/// `aContainer.ElementEditValues[aPath]`.
+pub fn path_edit(container: &ElementRef, path: &str) -> String {
+    container
+        .as_container()
+        .map_or_else(String::new, |container| container.get_element_edit_value(path))
+}
+
+/// `aContainer.ElementExists[aPath]`.
+pub fn path_exists(container: &ElementRef, path: &str) -> bool {
+    container
+        .as_container()
+        .is_some_and(|container| container.get_element_exists(path))
+}
+
+/// `aContainer.Add(aName, True)`; a failure is reported.
+pub fn add_member(container: &ElementRef, name: &str) -> Option<ElementRef> {
+    match container.as_container()?.add(name, true) {
+        Ok(element) => element,
+        Err(error) => {
+            report_edit(Err(error));
+            None
+        }
+    }
+}
+
+/// `aContainer.RemoveElement(aName)`.
+pub fn remove_member(container: &ElementRef, name: &str) -> Option<ElementRef> {
+    container.as_container()?.remove_element_by_name(name)
+}
+
+/// `aElement.Container` as a container element.
+pub fn container_of(element: &ElementRef) -> Option<ElementRef> {
+    element
+        .get_container()
+        .filter(|container| container.as_container().is_some())
+}
+
+/// `Supports(aElement, IwbContainerElementRef, Container)`.
+pub fn as_container_ref(element: &ElementRef) -> Option<ElementRef> {
+    element.as_container().map(|_| element.clone())
+}
+
+/// `aContainer.Elements[aIndex]`.
+pub fn element_at(container: &ElementRef, index: i32) -> Option<ElementRef> {
+    container.as_container()?.get_element(index)
+}
+
+/// `aContainer.ElementCount`.
+pub fn element_count(container: &ElementRef) -> i32 {
+    container
+        .as_container()
+        .map_or(0, |container| container.get_element_count())
+}
+
+/// A variant as the text a Delphi `string` assignment gives it.
+pub fn variant_text(value: &Variant) -> String {
+    xedit_core::interface::misc::variant_to_string(value)
+}
+
+/// A variant as a floating point number, 0 when it is not one.
+pub fn variant_float(value: &Variant) -> f64 {
+    value.as_number().unwrap_or(0.0)
+}
+
+// ----- the editing callbacks of wbDefinitionsCommon -----
+
+/// Upstream `wbACBSLevelMultAfterLoad`: the level multiplier is kept between
+/// 100 and 10000.
+pub fn wb_acbs_level_mult_after_load(a_element: &ElementRef) {
+    with_internal_edit(|| {
+        if variant_int(&a_element.get_native_value()) > 10000 {
+            set_native(a_element, 10000i64);
+        }
+        if variant_int(&a_element.get_native_value()) < 100 {
+            set_native(a_element, 100i64);
+        }
+    });
+}
+
+/// Upstream `wbACBSLevelMultAfterSet`.
+pub fn wb_acbs_level_mult_after_set(a_element: &ElementRef, a_old_value: &Variant, a_new_value: &Variant) {
+    if a_old_value.same_value(a_new_value) {
+        return;
+    }
+    with_internal_edit(|| {
+        if a_element.get_name() == "Level Mult" {
+            let new_value = variant_int(a_new_value);
+            if new_value > 10000 {
+                set_native(a_element, 10000i64);
+            }
+            if new_value < 100 {
+                set_native(a_element, 100i64);
+            }
+        }
+    });
+}
+
+/// Upstream `wbAVIFSkillAfterLoad`: a skill beyond 3 becomes 0.
+pub fn wb_avif_skill_after_load(a_element: &ElementRef) {
+    with_internal_edit(|| {
+        if variant_int(&a_element.get_native_value()) > 3 {
+            set_native(a_element, 0i64);
+        }
+    });
+}
+
+/// Upstream `wbDialogueTextAfterLoad`: the text is trimmed in a file that
+/// is not localized, unless it is a single blank.
+pub fn wb_dialogue_text_after_load(a_element: &ElementRef) {
+    if a_element.get_edit_value() == " " {
+        return;
+    }
+    with_internal_edit(|| {
+        let Some(file) = a_element.get_file() else { return };
+        if !file.get_is_localized() {
+            let trimmed = a_element.get_edit_value().trim().to_owned();
+            set_edit(a_element, &trimmed);
+        }
+    });
+}
+
+/// Upstream `wbDialogueTextAfterSet`.
+pub fn wb_dialogue_text_after_set(a_element: &ElementRef, a_old_value: &Variant, a_new_value: &Variant) {
+    if a_old_value.same_value(a_new_value) {
+        return;
+    }
+    if a_element.get_edit_value() == " " {
+        return;
+    }
+    with_internal_edit(|| {
+        let Some(file) = a_element.get_file() else { return };
+        if !file.get_is_localized() {
+            set_edit(a_element, variant_text(a_new_value).trim());
+        }
+    });
+}
+
+/// Upstream `wbDOBJObjectsAfterLoad`: the default object entries with an
+/// unused slot are dropped.
+pub fn wb_dobj_objects_after_load(a_element: &ElementRef) {
+    with_internal_edit(|| {
+        let Some(array) = as_container_ref(a_element) else {
+            return;
+        };
+        array.begin_update();
+        for index in (0..element_count(&array)).rev() {
+            if let Some(entry) = element_at(&array, index).and_then(|entry| as_container_ref(&entry))
+                && path_int(&entry, "Use") == 0
+            {
+                array.as_container().and_then(|c| c.remove_element_at(index, true));
+            }
+        }
+        array.end_update();
+    });
+}
+
+/// Upstream `wbMESGAfterLoad`: a message box has no display time.
+pub fn wb_mesg_after_load(a_element: &ElementRef) {
+    with_internal_edit(|| {
+        let Some(main_record) = a_element.get_containing_main_record() else {
+            return;
+        };
+        let main_record: ElementRef = main_record;
+        if path_int(&main_record, "DNAM") & 1 != 0 && path_exists(&main_record, "TNAM") {
+            remove_member(&main_record, "TNAM");
+        }
+    });
+}
+
+/// The body of `wbPACKDateAfterLoad` and `wbPACKDateAfterSet`: the day is
+/// kept within the month.
+fn pack_date_clamp(a_element: &ElementRef) {
+    let Some(main_record) = a_element.get_containing_main_record() else {
+        return;
+    };
+    with_internal_edit(|| {
+        let month = container_of(a_element)
+            .and_then(|container| container.as_container()?.get_element_by_name("Month"))
+            .map_or(0, |month| variant_int(&month.get_native_value()));
+        let month = if main_record.get_version() < 122 {
+            month + 1
+        } else {
+            month
+        };
+        let max_date: i64 = match month {
+            2 => 28,
+            4 | 6 | 9 | 11 => 30,
+            _ => 31,
+        };
+        if variant_int(&a_element.get_native_value()) > max_date {
+            set_native(a_element, max_date);
+        }
+        if variant_int(&a_element.get_native_value()) < 0 {
+            set_native(a_element, 0i64);
+        }
+    });
+}
+
+/// Upstream `wbPACKDateAfterLoad`.
+pub fn wb_pack_date_after_load(a_element: &ElementRef) {
+    pack_date_clamp(a_element);
+}
+
+/// Upstream `wbPACKDateAfterSet`.
+pub fn wb_pack_date_after_set(a_element: &ElementRef, a_old_value: &Variant, a_new_value: &Variant) {
+    if a_old_value.same_value(a_new_value) {
+        return;
+    }
+    pack_date_clamp(a_element);
+}
+
+/// Upstream `wbPNDTAfterLoad`: a master record keeps `CNAM` and drops
+/// `EOVR`, an override the other way round; entries without a worldspace
+/// are dropped.
+pub fn wb_pndt_after_load(a_element: &ElementRef) {
+    with_internal_edit(|| {
+        let Some(main_record) = a_element.as_main_record() else {
+            return;
+        };
+        let record: ElementRef = a_element.clone();
+        let record_container = record.as_container().expect("a main record is a container");
+        let mut cnam = record_container.get_element_by_signature(Signature::new(b"CNAM"));
+        let mut eovr = record_container.get_element_by_signature(Signature::new(b"EOVR"));
+        let prune = |list: &ElementRef| {
+            for index in (0..element_count(list)).rev() {
+                if let Some(worldspace) = element_at(list, index)
+                    && element_at(&worldspace, 1).is_some_and(|slot| variant_int(&slot.get_native_value()) == 0)
+                {
+                    worldspace.remove();
+                }
+            }
+        };
+        if main_record.get_is_master() {
+            if cnam.is_none() {
+                cnam = add_member(&record, "CNAM");
+            }
+            if let Some(cnam) = &cnam {
+                prune(cnam);
+            }
+            if let Some(eovr) = eovr {
+                eovr.remove();
+            }
+        } else {
+            if eovr.is_none() {
+                eovr = add_member(&record, "EOVR");
+            }
+            if let Some(eovr) = &eovr {
+                prune(eovr);
+            }
+            if let Some(cnam) = cnam {
+                cnam.remove();
+            }
+        }
+    });
+}
+
+/// Upstream `wbRecipeCategoryDataAfterLoad`: only the lowest bit stays.
+pub fn wb_recipe_category_data_after_load(a_element: &ElementRef) {
+    with_internal_edit(|| {
+        if variant_int(&a_element.get_native_value()) & 1 == 0 {
+            set_native(a_element, 0i64);
+        }
+        if variant_int(&a_element.get_native_value()) & 1 == 1 {
+            set_native(a_element, 1i64);
+        }
+    });
+}
+
+/// Upstream `wbRPLDAfterLoad`: the points of a region are reversed when
+/// the first is beyond the last.
+pub fn wb_rpld_after_load(a_element: &ElementRef) {
+    with_internal_edit(|| {
+        let Some(list) = as_container_ref(a_element) else {
+            return;
+        };
+        let count = element_count(&list);
+        let mut needs_flip = false;
+        if count > 1 {
+            let coordinate = |index: i32, member: i32| -> f64 {
+                element_at(&list, index)
+                    .and_then(|point| element_at(&point, member))
+                    .and_then(|value| str_to_float(&value.get_value()))
+                    .unwrap_or(0.0)
+            };
+            let (a, b) = (coordinate(0, 0), coordinate(count - 1, 0));
+            if a == b {
+                needs_flip = coordinate(0, 1) > coordinate(count - 1, 1);
+            } else if a > b {
+                needs_flip = true;
+            }
+        }
+        if needs_flip && let Some(container) = list.as_container() {
+            container.reverse_elements();
+        }
+    });
+}
+
+/// Upstream `wbScrollCastAfterLoad`: the cast type of a scroll is always 3.
+pub fn wb_scroll_cast_after_load(a_element: &ElementRef) {
+    with_internal_edit(|| {
+        if variant_int(&a_element.get_native_value()) != 3 {
+            set_native(a_element, 3i64);
+        }
+    });
+}
+
+/// Upstream `wbScrollTypeAfterLoad`: the type of a scroll is always 0.
+pub fn wb_scroll_type_after_load(a_element: &ElementRef) {
+    with_internal_edit(|| {
+        if variant_int(&a_element.get_native_value()) != 0 {
+            set_native(a_element, 0i64);
+        }
+    });
+}
+
+/// Upstream `wbSOUNAfterLoad`: a legacy `SNDD` becomes `SNDX`.
+pub fn wb_soun_after_load(a_element: &ElementRef) {
+    with_internal_edit(|| {
+        if a_element.as_main_record().is_none() {
+            return;
+        }
+        let record = a_element.clone();
+        if !path_exists(&record, "SNDD") {
+            return;
+        }
+        let container = record.as_container().expect("a main record is a container");
+        if container.get_element_by_signature(Signature::new(b"SNDX")).is_none() {
+            add_member(&record, "SNDX");
+        }
+        let (Some(sndx), Some(sndd)) = (
+            container.get_element_by_signature(Signature::new(b"SNDX")),
+            container.get_element_by_signature(Signature::new(b"SNDD")),
+        ) else {
+            return;
+        };
+        for index in 0..element_count(&sndd) {
+            if let (Some(target), Some(source)) = (element_at(&sndx, index), element_at(&sndd, index)) {
+                report_edit(target.assign_from(&source));
+            }
+        }
+        remove_member(&record, "SNDD");
+    });
+}
+
+/// Upstream `wbWorldAfterLoad`: the members that follow the parent flags,
+/// the offset data dropped from a worldspace of the game master, and a
+/// warning for abnormally large worldspace bounds.
+pub fn wb_world_after_load(a_element: &ElementRef) {
+    wb_world_after_set(a_element, &Variant::Int(0), &Variant::Int(1));
+    with_internal_edit(|| {
+        let Some(main_record) = a_element.as_main_record() else {
+            return;
+        };
+        let record = a_element.clone();
+        if remove_offset_data() {
+            if (is_skyrim() || is_fallout4() || is_fallout76())
+                && main_record.get_file().is_some_and(|file| file.get_load_order() == 0)
+            {
+                remove_member(&record, "Large References");
+            }
+            if is_fallout4() || is_fallout76() || is_starfield() {
+                remove_member(&record, "CLSZ");
+            }
+            if is_fallout76() {
+                remove_member(&record, "VISI");
+            }
+        }
+        let out_of_range = |value: i64| !(-256..=256).contains(&value);
+        if let Some(bounds) = record
+            .as_container()
+            .and_then(|c| c.get_element_by_name("Worldspace Bounds"))
+            .and_then(|bounds| as_container_ref(&bounds))
+        {
+            let bound = |path: &str| i64::from(str_to_int_def(&path_edit(&bounds, path), 0));
+            if out_of_range(bound("NAM0\\X"))
+                || out_of_range(bound("NAM0\\Y"))
+                || out_of_range(bound("NAM9\\X"))
+                || out_of_range(bound("NAM9\\Y"))
+            {
+                progress(&format!(
+                    "<Warning: Worldspace Bounds in {} are abnormally large and can cause performance issues in game>",
+                    a_element.get_name()
+                ));
+            }
+        }
+    });
+}
+
+/// Upstream `wbWorldAfterSet`: the members a worldspace has follow the
+/// flags of its parent worldspace.
+pub fn wb_world_after_set(a_element: &ElementRef, a_old_value: &Variant, a_new_value: &Variant) {
+    if a_old_value.same_value(a_new_value) {
+        return;
+    }
+    with_internal_edit(|| {
+        let Some(record) = as_container_ref(a_element) else {
+            return;
+        };
+        let container = record.as_container().expect("checked above");
+        if is_oblivion() {
+            if container.get_record_by_signature(Signature::new(b"WNAM")).is_some() {
+                remove_member(&record, "CNAM");
+                remove_member(&record, "NAM2");
+                remove_member(&record, "ICON");
+                remove_member(&record, "MNAM");
+            } else {
+                add_member(&record, "CNAM");
+                add_member(&record, "NAM2");
+                add_member(&record, "MNAM");
+            }
+        } else if container.get_element_by_name("Parent Worldspace").is_some() {
+            let flags = path_int(&record, "Parent Worldspace\\PNAM");
+            if flags & 0x01 == 1 {
+                remove_member(&record, "DNAM");
+            } else {
+                add_member(&record, "DNAM");
+            }
+            if flags & 0x02 == 2 {
+                remove_member(&record, "LOD Data");
+            } else {
+                add_member(&record, "LOD Data");
+            }
+            if flags & 0x04 == 4 {
+                if is_fallout3() {
+                    remove_member(&record, "Icon");
+                } else {
+                    remove_member(&record, "ICON");
+                }
+                remove_member(&record, "MNAM");
+            } else {
+                add_member(&record, "MNAM");
+            }
+            if flags & 0x08 == 8 {
+                remove_member(&record, "NAM2");
+            } else {
+                add_member(&record, "NAM2");
+            }
+            if flags & 0x10 == 16 {
+                remove_member(&record, "CNAM");
+            } else if !is_starfield() {
+                add_member(&record, "CNAM");
+            }
+            if is_fallout3() && flags & 0x20 == 32 {
+                remove_member(&record, "INAM");
+            } else {
+                add_member(&record, "INAM");
+            }
+        } else {
+            add_member(&record, "DNAM");
+            add_member(&record, "LOD Data");
+            add_member(&record, "MNAM");
+            add_member(&record, "NAM2");
+            if !is_starfield() {
+                add_member(&record, "CNAM");
+            }
+            if is_fallout3() {
+                add_member(&record, "INAM");
+            }
+        }
+    });
+}
+
+/// Upstream `wbBOOKDataFlagsAfterSet`: the "teaches skill" and "teaches
+/// spell" flags exclude each other.
+pub fn wb_book_data_flags_after_set(a_element: &ElementRef, a_old_value: &Variant, a_new_value: &Variant) {
+    if a_old_value.same_value(a_new_value) {
+        return;
+    }
+    with_internal_edit(|| {
+        wb_update_same_parent_unions(a_element, a_old_value, a_new_value);
+        let native = variant_int(&a_element.get_native_value());
+        let (old, new) = (variant_int(a_old_value), variant_int(a_new_value));
+        if old & 0x1 == 0 && new & 0x1 != 0 && new & 0x4 != 0 {
+            set_native(a_element, native ^ 0x4);
+        }
+        if old & 0x4 == 0 && new & 0x4 != 0 && new & 0x1 != 0 {
+            set_native(a_element, native ^ 0x1);
+        }
+    });
+}
+
+/// Upstream `wbConditionTypeAfterSet`: the comparison value is reset when
+/// "use global" changes, and the "run on target" flag of Fallout 3 moves
+/// into `Run On`.
+pub fn wb_condition_type_after_set(a_element: &ElementRef, a_old_value: &Variant, a_new_value: &Variant) {
+    if a_old_value.same_value(a_new_value) {
+        return;
+    }
+    with_internal_edit(|| {
+        let Some(container) = as_container_ref(a_element) else {
+            return;
+        };
+        let (old, new) = (variant_int(a_old_value), variant_int(a_new_value));
+        if old & 4 != new & 4 {
+            set_path_native(&container, "..\\Comparison Value", 0i64);
+        }
+        if new & 2 != 0 && is_fallout3() {
+            set_path_native(&container, "..\\Run On", 1i64);
+            if path_int(&container, "..\\Run On") == 1 {
+                set_native(a_element, (new as u8 & !2u8) as i64);
+            }
+        }
+    });
+}
+
+/// Upstream `wbConditionRunOnAfterSet`: the reference is cleared unless
+/// the condition runs on a reference.
+pub fn wb_condition_run_on_after_set(a_element: &ElementRef, a_old_value: &Variant, a_new_value: &Variant) {
+    if a_old_value.same_value(a_new_value) {
+        return;
+    }
+    with_internal_edit(|| {
+        if variant_int(a_new_value) != 2
+            && let Some(container) = container_of(a_element)
+        {
+            set_path_native(&container, "Reference", 0i64);
+        }
+    });
+}
+
+/// Upstream `wbIdleMarkerPNAMAfterSet`: `PNAM` and `QNAM` exclude each other.
+pub fn wb_idle_marker_pnam_after_set(a_element: &ElementRef, a_old_value: &Variant, a_new_value: &Variant) {
+    if a_old_value.same_value(a_new_value) {
+        return;
+    }
+    with_internal_edit(|| {
+        if let Some(record) = a_element.get_containing_main_record()
+            && let Some(qnam) = record.get_element_by_signature(Signature::new(b"QNAM"))
+        {
+            qnam.remove();
+        }
+    });
+}
+
+/// Upstream `wbIdleMarkerQNAMAfterSet`.
+pub fn wb_idle_marker_qnam_after_set(a_element: &ElementRef, a_old_value: &Variant, a_new_value: &Variant) {
+    if a_old_value.same_value(a_new_value) {
+        return;
+    }
+    with_internal_edit(|| {
+        if let Some(record) = a_element.get_containing_main_record()
+            && let Some(pnam) = record.get_element_by_signature(Signature::new(b"PNAM"))
+        {
+            pnam.remove();
+        }
+    });
+}
+
+/// Upstream `wbMESGDNAMAfterSet`: a message box loses its display time, a
+/// notification gets one.
+pub fn wb_mesgdnam_after_set(a_element: &ElementRef, a_old_value: &Variant, a_new_value: &Variant) {
+    if a_old_value.same_value(a_new_value) {
+        return;
+    }
+    with_internal_edit(|| {
+        let Some(record) = a_element.get_containing_main_record() else {
+            return;
+        };
+        let record: ElementRef = record;
+        if variant_int(&a_element.get_native_value()) & 1 != 0 {
+            remove_member(&record, "TNAM");
+        } else {
+            add_member(&record, "TNAM");
+        }
+    });
+}
+
+/// Upstream `wbPERKPRKETypeAfterSet`: the effect data follows the type of
+/// the perk effect.
+pub fn wb_perkprke_type_after_set(a_element: &ElementRef, a_old_value: &Variant, a_new_value: &Variant) {
+    if a_old_value.same_value(a_new_value) {
+        return;
+    }
+    with_internal_edit(|| {
+        let Some(effect) = container_of(a_element).and_then(|prke| container_of(&prke)) else {
+            return;
+        };
+        remove_member(&effect, "DATA");
+        add_member(&effect, "DATA");
+        remove_member(&effect, "Perk Conditions");
+        remove_member(&effect, "Entry Point Function Parameters");
+        if variant_int(a_new_value) != 2 {
+            return;
+        }
+        add_member(&effect, "EPFT");
+        set_path_native(&effect, "DATA\\Entry Point\\Function", 2i64);
+    });
+}
+
+/// Upstream `wbPERKPRUCAfterSet`: at most 255.
+pub fn wb_perkpruc_after_set(a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
+    with_internal_edit(|| {
+        if variant_int(&a_element.get_native_value()) > 255 {
+            set_native(a_element, 255i64);
+        }
+    });
+}
+
+/// Upstream `wbSceneActionTypeAfterSet`: the type specific data of a scene
+/// action is dropped when it no longer matches the type.
+pub fn wb_scene_action_type_after_set(a_element: &ElementRef, a_old_value: &Variant, a_new_value: &Variant) {
+    if !(a_old_value.is_ordinal() && a_new_value.is_ordinal()) {
+        return;
+    }
+    if a_old_value.same_value(a_new_value) {
+        return;
+    }
+    let Some(container) = container_of(a_element) else {
+        return;
+    };
+    // Sort order 8: 'Type Specific Action'.
+    if let Some(data) = container.as_container().and_then(|c| c.get_element_by_sort_order(8))
+        && data.get_name() != a_element.get_value()
+    {
+        data.remove();
+    }
+}
+
+/// Upstream `wbScriptFragmentsQuestScriptNameAfterSet`: the script resets
+/// when the name appears or disappears.
+pub fn wb_script_fragments_quest_script_name_after_set(
+    a_element: &ElementRef,
+    a_old_value: &Variant,
+    a_new_value: &Variant,
+) {
+    if a_old_value == a_new_value {
+        return;
+    }
+    let (old, new) = (variant_text(a_old_value), variant_text(a_new_value));
+    if old.is_empty() != new.is_empty()
+        && let Some(script) = container_of(a_element).and_then(|c| c.as_container()?.get_element_by_name("Script"))
+    {
+        report_edit(script.set_to_default());
+    }
+}
+
+/// Upstream `wbScriptPropertyTypeAfterSet`: the value resets with the type.
+pub fn wb_script_property_type_after_set(a_element: &ElementRef, a_old_value: &Variant, a_new_value: &Variant) {
+    if a_old_value == a_new_value {
+        return;
+    }
+    if let Some(value) = container_of(a_element).and_then(|c| c.as_container()?.get_element_by_name("Value")) {
+        report_edit(value.set_to_default());
+    }
+}
+
+/// Upstream `wbUpdateSameParentUnions`: the unions of the container decide
+/// again. The port resolves a union on every read, so there is nothing to
+/// refresh beyond touching the elements.
+pub fn wb_update_same_parent_unions(a_element: &ElementRef, a_old_value: &Variant, a_new_value: &Variant) {
+    if a_old_value.same_value(a_new_value) {
+        return;
+    }
+    with_internal_edit(|| {
+        if let Some(container) = container_of(a_element) {
+            for index in 0..element_count(&container) {
+                if let Some(element) = element_at(&container, index) {
+                    let _ = element.get_value_def();
+                }
+            }
+        }
+    });
+}
+
+/// Upstream `wbWwiseKeywordMappingTemplateAfterSet`: the sound mappings
+/// are dropped when the template changes.
+pub fn wb_wwise_keyword_mapping_template_after_set(
+    a_element: &ElementRef,
+    a_old_value: &Variant,
+    a_new_value: &Variant,
+) {
+    if a_old_value.same_value(a_new_value) {
+        return;
+    }
+    with_internal_edit(|| {
+        if let Some(sounds) =
+            container_of(a_element).and_then(|c| c.as_container()?.get_element_by_path("Sound Mappings"))
+        {
+            sounds.remove();
+        }
+    });
+}
+
+/// Upstream `wbStrToLGDIFilter`: the leading digits of the text.
+pub fn wb_str_to_lgdi_filter(a_string: &str, _a_element: ElementArg) -> i64 {
+    let digits: String = a_string.trim().chars().take_while(char::is_ascii_digit).collect();
+    i64::from(str_to_int_def(&digits, 0))
+}
+
+// ----- the bodies the game units share -----
+
+/// `wbGMSTEDIDAfterSet` of every game: the value subrecord is rebuilt when
+/// the first character of the editor ID, which gives the type, changes.
+pub fn gmst_edid_after_set(a_element: &ElementRef, a_old_value: &Variant, a_new_value: &Variant) {
+    if a_old_value.same_value(a_new_value) {
+        return;
+    }
+    let Some(container) = container_of(a_element) else {
+        return;
+    };
+    let (old, new) = (variant_text(a_old_value), variant_text(a_new_value));
+    // UPSTREAM-QUIRK: the old value is tested for emptiness twice and the
+    // new one not at all; an empty new value with an old one fails there.
+    if old.is_empty() || new.is_empty() || old.chars().next() != new.chars().next() {
+        remove_member(&container, "DATA");
+        add_member(&container, "DATA");
+    }
+}
+
+/// `wbFLSTEDIDAfterSet` of every game: the FormIDs are dropped when the
+/// list changes between ordered and unordered.
+pub fn flst_edid_after_set(a_element: &ElementRef, a_old_value: &Variant, a_new_value: &Variant) {
+    if a_old_value.same_value(a_new_value) {
+        return;
+    }
+    let Some(container) = container_of(a_element) else {
+        return;
+    };
+    const ORDERED_LIST: &str = "OrderedList";
+    let ends_ordered = |value: String| {
+        let tail: String = if value.len() > ORDERED_LIST.len() {
+            value.chars().skip(value.chars().count() - ORDERED_LIST.len()).collect()
+        } else {
+            value
+        };
+        tail.eq_ignore_ascii_case(ORDERED_LIST)
+    };
+    if ends_ordered(variant_text(a_old_value)) != ends_ordered(variant_text(a_new_value)) {
+        remove_member(&container, "FormIDs");
+    }
+}
+
+/// `wbFLSTLNAMIsSorted` of every game: never sorted.
+// UPSTREAM-QUIRK: the editor ID is tested and the result stays false.
+pub fn flst_lnam_is_sorted(a_container: ElementArg) -> bool {
+    let _ = a_container
+        .and_then(|container| {
+            container
+                .as_container()?
+                .get_record_by_signature(Signature::new(b"EDID"))
+        })
+        .map(|edid| edid.get_value());
+    false
+}
+
+/// `wbConditionEventToInt` of every game: `Function:Member` through the
+/// event enums of the game.
+pub fn condition_event_to_int(
+    a_string: &str,
+    function_enum: Option<Arc<EnumDef>>,
+    member_enum: Option<Arc<EnumDef>>,
+) -> i64 {
+    let (function, member) = match a_string.split_once(':') {
+        Some((function, member)) => {
+            let function = function_enum
+                .and_then(|def| def.from_edit_value(function, None).ok())
+                .unwrap_or(0);
+            let member = member_enum
+                .and_then(|def| def.from_edit_value(member, None).ok())
+                .unwrap_or(0);
+            (function, member)
+        }
+        None => (0, 0),
+    };
+    (member << 16) + function
+}
+
+/// `wbMGEFAssocItemAfterSet` and `wbMGEFAV2WeightAfterSet`: the archetype
+/// is marked so that its next change leaves the item alone.
+pub fn mgef_assoc_item_after_set(a_element: &ElementRef, a_new_value: &Variant, archetype_name: &str) {
+    let Some(container) = wb_try_get_container_from_union(Some(a_element)) else {
+        return;
+    };
+    if variant_float(a_new_value) == 0.0 {
+        return;
+    }
+    if let Some(archetype) = container
+        .as_container()
+        .and_then(|c| c.get_element_by_name(archetype_name))
+        && variant_int(&archetype.get_native_value()) == 0
+    {
+        set_native(&archetype, 0xFFi64);
+    }
+}
+
+/// `wbMGEFArchtypeAfterSet` of Skyrim, Fallout 4 and Fallout 76: the actor
+/// values follow the archetype.
+pub fn mgef_archtype_after_set(
+    a_element: &ElementRef,
+    a_old_value: &Variant,
+    a_new_value: &Variant,
+    actor_values: &[(i64, i64)],
+) {
+    if a_old_value.same_value(a_new_value) {
+        return;
+    }
+    let Some(container) = as_container_ref(a_element) else {
+        return;
+    };
+    let (old, new) = (variant_int(a_old_value), variant_int(a_new_value));
+    if new < 0xFF && old < 0xFF {
+        set_path_native(&container, "..\\Assoc. Item", 0i64);
+        let actor_value = actor_values
+            .iter()
+            .find(|(archetype, _)| *archetype == new)
+            .map_or(-1, |(_, value)| *value);
+        set_path_native(&container, "..\\Actor Value", actor_value);
+        if is_skyrim() || is_fallout4() || is_fallout76() {
+            set_path_native(&container, "..\\Second Actor Value", -1i64);
+            set_path_native(&container, "..\\Second AV Weight", 0.0f64);
+        }
+    }
+}
+
+/// `wbCELLXCLWGetConflictPriority`: the water height of an interior cell
+/// is ignored.
+pub fn cell_xclw_get_conflict_priority(a_element: ElementArg, a_cp: &mut ConflictPriority) {
+    let Some(element) = a_element else { return };
+    let Some(container) = container_of(element) else { return };
+    if element_count(&container) < 1 {
+        return;
+    }
+    let Some(main_record) = container.as_main_record() else {
+        return;
+    };
+    if main_record.get_is_deleted() {
+        return;
+    }
+    let Some(data) = container
+        .as_container()
+        .and_then(|c| c.get_element_by_signature(Signature::new(b"DATA")))
+    else {
+        return;
+    };
+    if variant_int(&data.get_native_value()) & 1 == 1 {
+        *a_cp = ConflictPriority::cpIgnore;
+    }
+}
+
+/// `wbCELLDATAAfterSet`: the conflict state of the record resets, which the
+/// port does not keep.
+pub fn cell_data_after_set(_a_element: &ElementRef) {}
+
+/// `wbEFITAfterLoad` of Skyrim and the Fallout games: the actor value of
+/// an effect item follows its magic effect.
+pub fn efit_after_load(a_element: &ElementRef) {
+    with_internal_edit(|| {
+        let Some(container) = as_container_ref(a_element) else {
+            return;
+        };
+        if element_count(&container) < 1 {
+            return;
+        }
+        let Some(main_record) = container.get_containing_main_record() else {
+            return;
+        };
+        if main_record.get_is_deleted() {
+            return;
+        }
+        let efid = container.as_container().and_then(|c| c.get_element_by_path("..\\EFID"));
+        let Some(mgef) = wb_try_get_main_record(efid.as_ref(), "MGEF") else {
+            return;
+        };
+        let mgef: ElementRef = mgef;
+        let actor_value = path_native(&mgef, "DATA - Data\\Actor Value");
+        if matches!(actor_value, Variant::Empty) {
+            return;
+        }
+        if !actor_value.same_value(&path_native(&container, "Actor Value")) {
+            set_path_native(&container, "Actor Value", actor_value);
+        }
+    });
+}
+
+/// `wbREFRAfterLoad` of Skyrim, Fallout 4 and Fallout 76: a lock has at
+/// least level 1; Skyrim drops `XPTL`.
+pub fn refr_after_load_lock(a_element: &ElementRef, remove_xptl: bool) {
+    with_internal_edit(|| {
+        let Some(record) = wb_try_get_container_with_valid_main_record(Some(a_element)) else {
+            return;
+        };
+        let record: ElementRef = record;
+        if !path_exists(&record, "XLOC") {
+            return;
+        }
+        if path_int(&record, "XLOC - Lock Data\\Level") == 0 {
+            set_path_native(&record, "XLOC - Lock Data\\Level", 1i64);
+        }
+        if remove_xptl {
+            remove_member(&record, "XPTL");
+        }
+    });
+}
+
+/// `wbLLEAfterLoad`: the chance none of every entry is zero before form
+/// version 69.
+pub fn lle_after_load(a_element: &ElementRef) {
+    with_internal_edit(|| {
+        if let Some(decider) = wb_form_version_decider_version(69)
+            && decider(None, Some(a_element)) == 1
+        {
+            return;
+        }
+        let Some(record) = as_container_ref(a_element) else {
+            return;
+        };
+        if element_count(&record) < 1 {
+            return;
+        }
+        let Some(main_record) = a_element.as_main_record() else {
+            return;
+        };
+        if main_record.get_is_deleted() {
+            return;
+        }
+        let Some(entries) = record
+            .as_container()
+            .and_then(|c| c.get_element_by_name("Leveled List Entries"))
+            .and_then(|entries| as_container_ref(&entries))
+        else {
+            return;
+        };
+        for index in 0..element_count(&entries) {
+            let Some(entry) = element_at(&entries, index).and_then(|entry| as_container_ref(&entry)) else {
+                return;
+            };
+            set_path_native(&entry, "LVLO\\Chance None", 0i64);
+        }
+    });
+}
+
+/// `wbPackageDataInputValueTypeAfterSet`: the value member follows the type.
+pub fn package_data_input_value_type_after_set(a_element: &ElementRef, a_old_value: &Variant, a_new_value: &Variant) {
+    if a_old_value == a_new_value {
+        return;
+    }
+    let Some(container) = container_of(a_element) else {
+        return;
+    };
+    let new = variant_text(a_new_value);
+    let has_value = matches!(new.as_str(), "Bool" | "Int" | "Float" | "ObjectList");
+    match container.as_container().and_then(|c| c.get_element_by_path("CNAM")) {
+        Some(value) => {
+            if has_value {
+                report_edit(value.set_to_default());
+            } else {
+                value.remove();
+            }
+        }
+        None => {
+            if has_value {
+                add_member(&container, "CNAM");
+            }
+        }
+    }
+}
+
+/// `wbCELLCombinedRefsAfterSet`: the counter is twice the number of
+/// entries.
+pub fn cell_combined_refs_after_set(a_element: &ElementRef) {
+    let Some(container) = container_of(a_element) else {
+        return;
+    };
+    let Some(this) = as_container_ref(a_element) else {
+        return;
+    };
+    if let Some(counter) = container
+        .as_container()
+        .and_then(|c| c.get_element_by_name("References Count"))
+    {
+        let expected = i64::from(element_count(&this)) * 2;
+        if variant_int(&counter.get_native_value()) != expected {
+            // Upstream swallows a failure here.
+            let _ = counter.set_native_value(Variant::Int(expected));
+        }
+    }
+}
+
+/// `wbAECHTypeAfterSet`: the value of the audio effect chain resets.
+pub fn aech_type_after_set(a_element: &ElementRef, a_old_value: &Variant, a_new_value: &Variant) {
+    if a_old_value == a_new_value {
+        return;
+    }
+    if let Some(value) = container_of(a_element)
+        .and_then(|c| c.as_container()?.get_element_by_path("DNAM\\Value"))
+        .and_then(|value| as_container_ref(&value))
+    {
+        report_edit(value.set_to_default());
+    }
+}
+
+/// `wbReplaceBODTwithBOD2` of Skyrim and the Fallout games.
+// UPSTREAM-QUIRK: the routine exits at once ("causes problems with
+// Dawnguard.esm"), so nothing is replaced.
+pub fn replace_bodt_with_bod2(_a_element: &ElementRef) {}
+
+/// `wbCheckMorphKeyOrder` of Fallout 4 and Fallout 76: the morph keys and
+/// values of an override follow the order of its master.
+pub fn check_morph_key_order(a_element: &ElementRef) {
+    with_internal_edit(|| {
+        let Some(main_record) = wb_try_get_container_with_valid_main_record(Some(a_element)) else {
+            return;
+        };
+        let record: ElementRef = main_record.clone();
+        let Some(master) = main_record.get_master_or_self().into() else {
+            return;
+        };
+        let master: MainRecordRef = master;
+        if master.get_element_id() == main_record.get_element_id() {
+            return;
+        }
+        let master: ElementRef = master;
+        let by_signature = |container: &ElementRef, signature: &[u8; 4]| {
+            container
+                .as_container()?
+                .get_element_by_signature(Signature::new(signature))
+                .and_then(|element| as_container_ref(&element))
+        };
+        let (Some(keys), Some(master_keys), Some(values)) = (
+            by_signature(&record, b"MSDK"),
+            by_signature(&master, b"MSDK"),
+            by_signature(&record, b"MSDV"),
+        ) else {
+            return;
+        };
+        if element_count(&keys) < element_count(&master_keys) || element_count(&keys) != element_count(&values) {
+            return;
+        }
+        let mut master_order: Vec<(String, i32)> = (0..element_count(&master_keys))
+            .filter_map(|index| element_at(&master_keys, index).map(|key| (key.get_sort_key(true), index)))
+            .collect();
+        master_order.sort();
+        let mut needs_sort = false;
+        let mut next = element_count(&master_keys);
+        for index in 0..element_count(&keys) {
+            let (Some(key), Some(value)) = (element_at(&keys, index), element_at(&values, index)) else {
+                continue;
+            };
+            let sort_key = key.get_sort_key(true);
+            let order = match master_order.binary_search_by(|(candidate, _)| candidate.cmp(&sort_key)) {
+                Ok(found) => {
+                    let order = master_order[found].1;
+                    if order != index {
+                        needs_sort = true;
+                    }
+                    order
+                }
+                Err(_) => {
+                    next += 1;
+                    next - 1
+                }
+            };
+            key.set_sort_order(order);
+            value.set_sort_order(order);
+        }
+        if !needs_sort || next != element_count(&keys) {
+            return;
+        }
+        if let (Some(keys), Some(values)) = (keys.as_container(), values.as_container()) {
+            keys.sort_by_sort_order();
+            values.sort_by_sort_order();
+        }
+    });
+}
+
+/// `wbCELLAfterLoad` of Fallout 3 and New Vegas: an exterior cell gets a
+/// default water height and a water noise texture.
+pub fn cell_after_load_fallout3(a_element: &ElementRef) {
+    with_internal_edit(|| {
+        let Some(record) = wb_try_get_container_with_valid_main_record(Some(a_element)) else {
+            return;
+        };
+        let record: ElementRef = record;
+        let exterior = path_int(&record, "DATA") & 0x02 != 0;
+        if !path_exists(&record, "XCLW") && exterior {
+            add_member(&record, "XCLW");
+            set_path_edit(&record, "XCLW", "Default");
+        }
+        if !path_exists(&record, "XNAM") && exterior {
+            add_member(&record, "XNAM");
+        }
+    });
+}
+
+/// `wbConditionAfterLoad` of Fallout 3 and New Vegas: the "run on target"
+/// flag of a 20 byte condition moves into the `Run On` field.
+pub fn condition_after_load_fallout3(a_element: &ElementRef) {
+    with_internal_edit(|| {
+        let Some(container) = as_container_ref(a_element) else {
+            return;
+        };
+        if element_count(&container) < 1 {
+            return;
+        }
+        let type_flags = path_int(&container, "Type");
+        if type_flags & 2 != 0 {
+            if container.get_data_size() == 20 {
+                report_edit(container.set_data_size(28));
+            }
+            set_path_native(&container, "Type", type_flags & !2);
+            set_path_edit(&container, "Run On", "Target");
+        }
+    });
+}
+
+/// `wbHeadPartsAfterSet` of Fallout 3 and New Vegas.
+pub fn head_parts_after_set(a_element: &ElementRef) {
+    with_forced_internal_edit(|| {
+        if let Some(container) = as_container_ref(a_element)
+            && element_at(&container, 0).is_some_and(|first| variant_int(&first.get_native_value()) == 1)
+            && element_count(&container) > 2
+        {
+            container.as_container().and_then(|c| c.remove_element_at(1, false));
+        }
+    });
+}
+
+/// `wbMGEFAfterLoad` of Fallout 3 and New Vegas: the actor value follows
+/// the archetype.
+pub fn mgef_after_load_fallout3(a_element: &ElementRef, actor_values: &[(i64, i64)]) {
+    with_internal_edit(|| {
+        let Some(record) = wb_try_get_container_with_valid_main_record(Some(a_element)) else {
+            return;
+        };
+        let record: ElementRef = record;
+        let old = path_int(&record, "DATA - Data\\Actor Value");
+        let archetype = path_int(&record, "DATA - Data\\Archtype");
+        let new = actor_values
+            .iter()
+            .find(|(candidate, _)| *candidate == archetype)
+            .map_or(old, |(_, value)| *value);
+        if old != new {
+            set_path_native(&record, "DATA - Data\\Actor Value", new);
+        }
+    });
+}
+
+/// `wbPACKAfterLoad` of Fallout 3 and New Vegas: the members a package type
+/// needs are added.
+pub fn pack_after_load_fallout3(a_element: &ElementRef) {
+    with_internal_edit(|| {
+        let Some(record) = wb_try_get_container_with_valid_main_record(Some(a_element)) else {
+            return;
+        };
+        let record: ElementRef = record;
+        match path_int(&record, "PKDT - General\\Type") {
+            0 => {
+                add_member(&record, "PTDT");
+            }
+            1 => {
+                add_member(&record, "PKFD");
+            }
+            3 => {
+                add_member(&record, "PTDT");
+                add_member(&record, "PKED");
+            }
+            4 => {
+                if !path_exists(&record, "Locations")
+                    && let Some(locations) = add_member(&record, "Locations").and_then(|l| as_container_ref(&l))
+                {
+                    set_path_edit(&locations, "PLDT - Location 1\\Type", "Near editor location");
+                }
+            }
+            13 => {
+                if !path_exists(&record, "Locations")
+                    && let Some(locations) = add_member(&record, "Locations").and_then(|l| as_container_ref(&l))
+                {
+                    set_path_edit(&locations, "PLDT - Location 1\\Type", "Near linked reference");
+                }
+                add_member(&record, "PKPT");
+            }
+            _ => {}
+        }
+    });
+}
+
+/// `wbNPCAfterLoad` of Fallout 3 and New Vegas: `NAM5` is at most 255.
+pub fn npc_after_load_fallout3(a_element: &ElementRef) {
+    with_internal_edit(|| {
+        let Some(record) = wb_try_get_container_with_valid_main_record(Some(a_element)) else {
+            return;
+        };
+        let record: ElementRef = record;
+        if path_int(&record, "NAM5") > 255 {
+            set_path_native(&record, "NAM5", 255i64);
+        }
+    });
+}
+
+/// `wbREFRAfterLoad` of Fallout 3 and New Vegas: `RCLR` is dropped, and the
+/// ammo of a reference whose base is not a weapon.
+pub fn refr_after_load_fallout3(a_element: &ElementRef) {
+    with_internal_edit(|| {
+        let Some(main_record) = wb_try_get_container_with_valid_main_record(Some(a_element)) else {
+            return;
+        };
+        let record: ElementRef = main_record.clone();
+        remove_member(&record, "RCLR");
+        if path_exists(&record, "Ammo")
+            && let Some(base) = main_record.get_base_record()
+            && base.get_signature() != Signature::new(b"WEAP")
+        {
+            remove_member(&record, "Ammo");
+        }
+    });
+}
+
+/// `wbINFOAfterLoad` of Fallout 3 and New Vegas.
+pub fn info_after_load_fallout3(a_element: &ElementRef) {
+    with_internal_edit(|| {
+        let Some(record) = wb_try_get_container_with_valid_main_record(Some(a_element)) else {
+            return;
+        };
+        let record: ElementRef = record;
+        if path_int(&record, "DATA\\Flags 1") & 0x80 == 0 {
+            remove_member(&record, "DNAM");
+        }
+        remove_member(&record, "SNDD");
+        if path_int(&record, "DATA\\Type") == 3 {
+            set_path_native(&record, "DATA\\Type", 0i64);
+        }
+    });
+}
+
+/// `wbEmbeddedScriptAfterLoad` of Fallout 3 and New Vegas: a quest script
+/// type becomes an object script.
+pub fn embedded_script_after_load(a_element: &ElementRef) {
+    with_internal_edit(|| {
+        let Some(container) = as_container_ref(a_element) else {
+            return;
+        };
+        if element_count(&container) < 1 {
+            return;
+        }
+        if path_edit(&container, "SCHR\\Type") == "Quest" {
+            set_path_edit(&container, "SCHR\\Type", "Object");
+        }
+    });
+}
+
+/// `wbEFSHAfterLoad` of Fallout 3 and New Vegas: particle birth ratios at
+/// most 1 are scaled by 78.
+pub fn efsh_after_load_fallout3(a_element: &ElementRef) {
+    with_internal_edit(|| {
+        let Some(record) = wb_try_get_container_with_valid_main_record(Some(a_element)) else {
+            return;
+        };
+        let record: ElementRef = record;
+        if !path_exists(&record, "DATA") {
+            return;
+        }
+        for path in [
+            "DATA\\Particle Shader - Full Particle Birth Ratio",
+            "DATA\\Particle Shader - Persistant Particle Birth Ratio",
+        ] {
+            let ratio = variant_float(&path_native(&record, path));
+            if ratio != 0.0 && ratio <= 1.0 {
+                set_path_native(&record, path, ratio * 78.0);
+            }
+        }
+    });
+}
+
+/// `wbFACTAfterLoad` of Fallout 3 and New Vegas: `CNAM` is dropped.
+pub fn fact_after_load_fallout3(a_element: &ElementRef) {
+    with_internal_edit(|| {
+        let Some(record) = as_container_ref(a_element) else {
+            return;
+        };
+        if element_count(&record) < 1 || !path_exists(&record, "CNAM") {
+            return;
+        }
+        let Some(main_record) = a_element.as_main_record() else {
+            return;
+        };
+        if main_record.get_is_deleted() {
+            return;
+        }
+        remove_member(&record, "CNAM");
+    });
+}
+
+/// `wbWEAPAfterLoad` of Fallout 3 and New Vegas: zero animation
+/// multipliers become 1; New Vegas resets a reload animation of 255.
+pub fn weap_after_load_fallout3(a_element: &ElementRef, reset_reload_animation: bool) {
+    with_internal_edit(|| {
+        let Some(record) = wb_try_get_container_with_valid_main_record(Some(a_element)) else {
+            return;
+        };
+        let record: ElementRef = record;
+        if !path_exists(&record, "DNAM") {
+            return;
+        }
+        if reset_reload_animation && path_int(&record, "DNAM\\Reload Animation") == 255 {
+            set_path_native(&record, "DNAM\\Reload Animation", 0i64);
+        }
+        for path in ["DNAM\\Animation Multiplier", "DNAM\\Animation Attack Multiplier"] {
+            if variant_float(&path_native(&record, path)) == 0.0 {
+                set_path_native(&record, path, 1.0f64);
+            }
+        }
+    });
+}
+
+/// `wbPerkDATAFunctionAfterSet` of Fallout 3 and New Vegas, with the
+/// parameter type of each function.
+pub fn perk_data_function_after_set(
+    a_element: &ElementRef,
+    a_old_value: &Variant,
+    a_new_value: &Variant,
+    param_types: &[i64],
+) {
+    let new_function = variant_int(a_new_value);
+    let Ok(index) = usize::try_from(new_function) else {
+        return;
+    };
+    let Some(&new_param_type) = param_types.get(index) else {
+        return;
+    };
+    let Some(container) = as_container_ref(a_element) else {
+        return;
+    };
+    const PATH: &str = "..\\..\\..\\Entry Point Function Parameters\\EPFT";
+    let old_param_type = path_int(&container, PATH);
+    if old_param_type == new_param_type && !a_old_value.same_value(a_new_value) && matches!(new_function, 4 | 5) {
+        set_path_native(&container, PATH, 0i64);
+    }
+    set_path_native(&container, PATH, new_param_type);
+}
+
+/// `wbPerkEPFTAfterSet` of Fallout 3 and New Vegas: the parameter members
+/// follow the parameter type (0 none, 1 float, 2 two floats, 3 leveled
+/// item, 4 script).
+pub fn perk_epft_after_set(a_element: &ElementRef, a_old_value: &Variant, a_new_value: &Variant) {
+    if a_old_value.same_value(a_new_value) {
+        return;
+    }
+    let param_type = variant_int(a_new_value);
+    if !(0..=4).contains(&param_type) {
+        return;
+    }
+    let Some(container) = container_of(a_element) else {
+        return;
+    };
+    remove_member(&container, "EPFD");
+    remove_member(&container, "EPF2");
+    remove_member(&container, "EPF3");
+    remove_member(&container, "Embedded Script");
+    match param_type {
+        1..=3 => {
+            add_member(&container, "EPFD");
+        }
+        4 => {
+            add_member(&container, "EPF2");
+            add_member(&container, "EPF3");
+            add_member(&container, "SCHR");
+        }
+        _ => {}
+    }
+}
+
+/// `wbPERKEntryPointAfterSet` of Fallout 3 and New Vegas: the function,
+/// the condition tab count and the perk conditions follow the entry point.
+/// `entry_points` gives the condition index and function type of each entry
+/// point, `conditions` the count and captions of each condition type, and
+/// `functions` the function type of each function.
+pub fn perk_entry_point_after_set(
+    a_element: &ElementRef,
+    a_old_value: &Variant,
+    a_new_value: &Variant,
+    entry_points: &[(usize, i64)],
+    conditions: &[(i64, &str, &str)],
+    functions: &[i64],
+) {
+    if a_old_value == a_new_value {
+        return;
+    }
+    let (Ok(old_index), Ok(new_index)) = (
+        usize::try_from(variant_int(a_old_value)),
+        usize::try_from(variant_int(a_new_value)),
+    ) else {
+        return;
+    };
+    let (Some(old_entry), Some(new_entry)) = (entry_points.get(old_index), entry_points.get(new_index)) else {
+        return;
+    };
+    let (Some(old_condition), Some(new_condition)) = (conditions.get(old_entry.0), conditions.get(new_entry.0)) else {
+        return;
+    };
+    let Some(entry_point) = container_of(a_element) else {
+        return;
+    };
+    let function = usize::try_from(path_int(&entry_point, "Function")).ok();
+    let old_function_type = function.and_then(|index| functions.get(index)).copied();
+    if old_function_type != Some(new_entry.1)
+        && let Some(index) = functions.iter().position(|&function_type| function_type == new_entry.1)
+    {
+        set_path_native(&entry_point, "Function", index as i64);
+    }
+    set_path_native(&entry_point, "Perk Condition Tab Count", new_condition.0);
+    let Some(effect) = container_of(&entry_point).and_then(|data| container_of(&data)) else {
+        return;
+    };
+    let Some(perk_conditions) = effect
+        .as_container()
+        .and_then(|c| c.get_element_by_name("Perk Conditions"))
+        .and_then(|conditions| as_container_ref(&conditions))
+    else {
+        return;
+    };
+    for index in (0..element_count(&perk_conditions)).rev() {
+        let Some(condition) = element_at(&perk_conditions, index).and_then(|c| as_container_ref(&c)) else {
+            continue;
+        };
+        let tab = path_int(&condition, "PRKC");
+        if tab >= new_condition.0 {
+            condition.remove();
+        } else {
+            match tab {
+                2 if old_condition.1 != new_condition.1 => condition.remove(),
+                3 if old_condition.2 != new_condition.2 => condition.remove(),
+                _ => {}
+            }
+        }
+    }
 }

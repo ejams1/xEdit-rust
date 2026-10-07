@@ -17,7 +17,7 @@ use super::def::{
 use super::element::{Container, DataPtr, ElementArg, ElementRef};
 use super::enum_def::EnumDef;
 use super::globals::{copy_is_running, never_sorted};
-use super::misc::{length, read_integer_counter, read_integer_counter_size};
+use super::misc::{length, read_integer_counter, read_integer_counter_size, write_integer_counter};
 use super::struct_def::{data_from, trim};
 use super::types::{CallbackType, ConflictPriority, DefFlag, DefType, ElementType};
 
@@ -264,6 +264,25 @@ impl ArrayDef {
             result + 1
         } else {
             result
+        }
+    }
+
+    /// Port of `SetPrefixCount`: writes the count before the elements.
+    pub fn set_prefix_count(&self, data: &mut [u8], value: u32) {
+        match self.get_count() {
+            ARRAY_COUNT_NONE => {}
+            ARRAY_COUNT_COUNTER => {
+                let counter = write_integer_counter(i64::from(value));
+                let len = counter.len().min(data.len());
+                data[..len].copy_from_slice(&counter[..len]);
+            }
+            _ => {
+                let bytes = value.to_le_bytes();
+                let len = (self.get_prefix_length(Some(data)) as usize).min(data.len());
+                if matches!(len, 1 | 2 | 4) {
+                    data[..len].copy_from_slice(&bytes[..len]);
+                }
+            }
         }
     }
 

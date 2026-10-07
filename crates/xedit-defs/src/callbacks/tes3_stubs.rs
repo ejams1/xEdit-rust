@@ -10,49 +10,6 @@
 
 #![allow(clippy::all, unused_variables, unused_imports)]
 
+use std::sync::Arc;
+
 use xedit_core::interface::*;
-
-/// Upstream `anonymous routine in define_tes3`, line 2254 of `wbDefinitionsTES3.pas`.
-pub fn define_tes3_anonymous_2254(_a_sub_record: &ElementRef, _a_editor_id: &str) {
-    todo!("port anonymous routine in define_tes3 from wbDefinitionsTES3.pas line 2254")
-}
-
-/// Upstream `wbCELLAfterLoad`, line 100 of `wbDefinitionsTES3.pas`.
-pub fn wb_cell_after_load(_a_element: &ElementRef) {
-    todo!("port wbCELLAfterLoad from wbDefinitionsTES3.pas line 100")
-}
-
-/// Upstream `wbDeletedAfterLoad`, line 120 of `wbDefinitionsTES3.pas`.
-pub fn wb_deleted_after_load(_a_element: &ElementRef) {
-    todo!("port wbDeletedAfterLoad from wbDefinitionsTES3.pas line 120")
-}
-
-/// Upstream `wbEffectRangeAfterLoad`, line 170 of `wbDefinitionsTES3.pas`.
-pub fn wb_effect_range_after_load(_a_element: &ElementRef) {
-    todo!("port wbEffectRangeAfterLoad from wbDefinitionsTES3.pas line 170")
-}
-
-/// Upstream `wbEffectRangeAfterSet`, line 186 of `wbDefinitionsTES3.pas`.
-pub fn wb_effect_range_after_set(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
-    todo!("port wbEffectRangeAfterSet from wbDefinitionsTES3.pas line 186")
-}
-
-/// Upstream `wbForwardForReal`, line 261 of `wbDefinitionsTES3.pas`.
-pub fn wb_forward_for_real(_a_element: &ElementRef) {
-    todo!("port wbForwardForReal from wbDefinitionsTES3.pas line 261")
-}
-
-/// Upstream `wbGlobalAfterLoad`, line 299 of `wbDefinitionsTES3.pas`.
-pub fn wb_global_after_load(_a_element: &ElementRef) {
-    todo!("port wbGlobalAfterLoad from wbDefinitionsTES3.pas line 299")
-}
-
-/// Upstream `wbIngredientAfterLoad`, line 330 of `wbDefinitionsTES3.pas`.
-pub fn wb_ingredient_after_load(_a_element: &ElementRef) {
-    todo!("port wbIngredientAfterLoad from wbDefinitionsTES3.pas line 330")
-}
-
-/// Upstream `wbTES3AfterLoad`, line 395 of `wbDefinitionsTES3.pas`.
-pub fn wb_tes3_after_load(_a_element: &ElementRef) {
-    todo!("port wbTES3AfterLoad from wbDefinitionsTES3.pas line 395")
-}

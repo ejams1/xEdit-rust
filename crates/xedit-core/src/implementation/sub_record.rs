@@ -7,18 +7,21 @@
 //! `TwbSubRecord`, `TwbSubRecordArray` and `TwbSubRecordStruct`: the
 //! subrecords of a main record and the groups the definition makes of them.
 
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock, Weak};
 
 use crate::interface::def::{NamedDef, ValueDef};
-use crate::interface::element::{Container, DataContainer, DataPtr, Element, ElementRef, FileRef, MainRecordRef};
+use crate::interface::element::{
+    Container, DataContainer, DataPtr, Element, ElementRef, FileRef, MainRecord, MainRecordRef,
+};
 use crate::interface::form_id::FormID;
 use crate::interface::globals::{ignore_records, sort_sub_records};
-use crate::interface::misc::{Variant, progress};
+use crate::interface::misc::{EditError, Variant, progress};
 use crate::interface::sub_record::RecordMemberDef;
 use crate::interface::sub_record_group::RecordDef;
 use crate::interface::types::{CallbackType, ConflictPriority, DefFlag, DefType, ElementType, Signature, TriBool};
 
+use super::edit::{self, Storage};
 use super::structs::SubRecordHeaderStruct;
 use super::value::{Cursor, array_do_init, create_value_element, resolve, struct_do_init, union_do_init};
 use super::{ContainerBase, DataBlock, ElementBase, ElementImpl, MainRecordImpl};
@@ -41,6 +44,15 @@ pub struct SubRecordImpl {
     dc_data_end: usize,
     sr_def: RwLock<Option<Arc<dyn RecordMemberDef>>>,
     sr_skipped: AtomicBool,
+    /// Port of `dcDataStorage`: the data once the subrecord was changed.
+    storage: Storage,
+    /// Port of `srArraySizePrefix`.
+    sr_array_size_prefix: AtomicUsize,
+    /// Port of `srsIsArray` in `srStates`.
+    sr_is_array: AtomicBool,
+    /// Whether the subrecord was loaded with data (`dcDataBasePtr` set); a
+    /// subrecord made from its definition has none until it takes storage.
+    sr_has_data: AtomicBool,
 }
 
 impl SubRecordImpl {
@@ -86,10 +98,63 @@ impl SubRecordImpl {
             dc_data_end,
             sr_def: RwLock::new(None),
             sr_skipped: AtomicBool::new(false),
+            storage: Storage::default(),
+            sr_array_size_prefix: AtomicUsize::new(0),
+            sr_is_array: AtomicBool::new(false),
+            sr_has_data: AtomicBool::new(true),
         });
         container_base.add_element(sub_record.clone());
         *offset = dc_data_end;
         Some(sub_record)
+    }
+
+    /// Port of `TwbSubRecord.Create(aContainer, aSubRecordDef)`: a subrecord
+    /// made from its definition, with storage of its data size and the
+    /// default value.
+    pub(super) fn create_new(
+        container: &ElementRef,
+        container_base: &ContainerBase,
+        file: &Weak<super::FileImpl>,
+        def: Arc<dyn RecordMemberDef>,
+    ) -> Result<ElementRef, EditError> {
+        let Some(file_arc) = file.upgrade() else {
+            return Err("the file of the record is gone".to_owned());
+        };
+        let header = SubRecordHeaderStruct {
+            signature: def.get_default_signature(),
+            data_size: 0,
+        };
+        let sub_record = Arc::new_cyclic(|self_ref: &Weak<SubRecordImpl>| SubRecordImpl {
+            self_ref: self_ref.clone(),
+            base: ElementBase::new(Some(container)),
+            container: ContainerBase::default(),
+            file: Arc::downgrade(&file_arc),
+            block: DataBlock::Buffer(Arc::new(Vec::new())),
+            sr_struct: header,
+            sr_init: super::InitOnce::new(),
+            sr_value_def: RwLock::new(None),
+            dc_data_base: 0,
+            dc_data_end: 0,
+            sr_def: RwLock::new(Some(def)),
+            sr_skipped: AtomicBool::new(false),
+            storage: Storage::default(),
+            sr_array_size_prefix: AtomicUsize::new(0),
+            sr_is_array: AtomicBool::new(false),
+            sr_has_data: AtomicBool::new(false),
+        });
+        container_base.add_element(sub_record.clone());
+        sub_record.do_init();
+        let created_empty = sub_record.container.cnt_as_created_empty.load(Ordering::Relaxed);
+        let size = usize::try_from(sub_record.get_data_size()).unwrap_or(0);
+        if let Some(bytes) = edit::request_storage_change(&*sub_record, size) {
+            sub_record.storage.set(bytes);
+            sub_record.sr_has_data.store(true, Ordering::Relaxed);
+        }
+        edit::set_to_default(&*sub_record)?;
+        if created_empty {
+            sub_record.container.cnt_as_created_empty.store(true, Ordering::Relaxed);
+        }
+        Ok(sub_record)
     }
 
     pub fn get_signature(&self) -> Signature {
@@ -124,8 +189,37 @@ impl SubRecordImpl {
             .collect()
     }
 
+    /// Port of `GetDataBasePtr` up to `GetDataEndPtr`: the data, rebuilt
+    /// from the elements first when a child changed.
     pub fn data(&self) -> DataPtr<'_> {
+        if self.storage.is_invalid() {
+            edit::update_storage_from_elements(self);
+        }
+        self.data_raw()
+    }
+
+    /// The data as it is: the storage of a changed subrecord, else the bytes
+    /// as loaded; `None` for a subrecord without data.
+    fn data_raw(&self) -> DataPtr<'_> {
+        if let Some(bytes) = self.storage.current() {
+            return Some(bytes);
+        }
+        if !self.sr_has_data.load(Ordering::Relaxed) || self.storage.is_detached() {
+            return None;
+        }
         self.block.as_slice().get(self.dc_data_base..self.dc_data_end)
+    }
+
+    /// The block and range the elements are built over.
+    fn data_source(&self) -> Option<(DataBlock, usize, usize)> {
+        if let Some(block) = self.storage.current_block() {
+            let len = block.as_slice().len();
+            return Some((block, 0, len));
+        }
+        if !self.sr_has_data.load(Ordering::Relaxed) || self.storage.is_detached() {
+            return None;
+        }
+        Some((self.block.clone(), self.dc_data_base, self.dc_data_end))
     }
 
     /// The header as loaded (`srStruct`).
@@ -160,23 +254,31 @@ impl SubRecordImpl {
                 return;
             };
             let self_ref = self.element_ref();
-            let mut cursor = Cursor {
-                block: self.block.clone(),
-                pos: self.dc_data_base,
-                end: self.dc_data_end,
-            };
+            // A subrecord without data (made from its definition) builds its
+            // elements without data too, as upstream does with `nil`.
+            let (block, pos, end) = self
+                .data_source()
+                .unwrap_or_else(|| (DataBlock::Buffer(Arc::new(Vec::new())), 0, 0));
+            let mut cursor = Cursor { block, pos, end };
+            self.sr_array_size_prefix.store(0, Ordering::Relaxed);
+            self.sr_is_array.store(false, Ordering::Relaxed);
             let value_def = resolve(value.clone(), cursor.data(), Some(&self_ref));
             if value_def.get_name().is_empty() || value.def_base().def_flags.contains(DefFlag::dfUnionStaticResolve) {
                 *self.sr_value_def.write().unwrap() = Some(value_def.clone());
                 match value_def.get_def_type() {
                     DefType::dtArray => {
-                        array_do_init(&value_def, &self_ref, &self.file, &mut cursor);
+                        self.sr_is_array.store(true, Ordering::Relaxed);
+                        let (_, prefix) = array_do_init(&value_def, &self_ref, &self.file, &mut cursor);
+                        self.sr_array_size_prefix.store(prefix, Ordering::Relaxed);
                     }
                     DefType::dtStruct | DefType::dtStructChapter => {
                         struct_do_init(&value_def, &self_ref, &self.file, &mut cursor)
                     }
                     DefType::dtUnion => {
                         if let Some(resolved) = union_do_init(&value_def, &self_ref, &self.file, &mut cursor) {
+                            if resolved.get_def_type() == DefType::dtArray {
+                                self.sr_is_array.store(true, Ordering::Relaxed);
+                            }
                             *self.sr_value_def.write().unwrap() = Some(resolved);
                         }
                     }
@@ -185,7 +287,45 @@ impl SubRecordImpl {
             } else {
                 create_value_element(&self_ref, &self.file, &mut cursor, value_def, "");
             }
+            // `srDef.AfterLoad(Self)`.
+            def.after_load(&self_ref);
         });
+    }
+
+    /// Port of the `wbAssignAdd` branch of `TwbSubRecord.AssignInternal`
+    /// without a source: one element added to the array of the subrecord,
+    /// the element it was created with first.
+    fn array_assign_add(&self) -> Result<Option<ElementRef>, EditError> {
+        edit::check_edit_allowed(self)?;
+        self.do_init();
+        let Some(value_def) = self.value_def() else {
+            return Err(format!("{} can not be assigned.", self.get_name()));
+        };
+        if value_def.get_def_type() != DefType::dtArray {
+            return Ok(None);
+        }
+        let self_ref = self.element_ref();
+        let result = if self.container.cnt_as_created_empty.load(Ordering::Relaxed) {
+            self.set_modified(true);
+            self.container.cnt_as_created_empty.store(false, Ordering::Relaxed);
+            let first = self.container.element_at(0);
+            // `Result.Assign(wbAssignThis, nil, aOnlySK)`: `CanAssignInternal`
+            // refuses a nil source unless the edit is internal, where the
+            // FormID formater's `Assign` sets the element to zero.
+            if let Some(first) = &first
+                && crate::interface::globals::is_internal_edit()
+            {
+                first.set_native_value(Variant::UInt(0))?;
+            }
+            first
+        } else {
+            let sorted = sort_sub_records() && value_def.as_array_def().is_some_and(|a| a.get_sorted());
+            super::value::ValueImpl::array_assign_add(&self_ref, &self.container, &self.file, &value_def, sorted)?
+                .map(|element| element as ElementRef)
+        };
+        edit::check_count(self, Some(&value_def));
+        edit::check_terminator(self, Some(&value_def));
+        Ok(result)
     }
 
     /// Port of `TwbSubRecord.MergeMultiple`: the elements of another
@@ -228,9 +368,15 @@ impl SubRecordImpl {
         self.sr_def.read().unwrap().clone()
     }
 
-    /// Port of `SetDef`.
+    /// Port of `SetDef` with its `DoReset(True)`: the elements built before
+    /// the definition was known are dropped and built again on the next use.
     pub fn set_def(&self, def: Arc<dyn RecordMemberDef>) {
         *self.sr_def.write().unwrap() = Some(def);
+        self.container.release_elements();
+        *self.sr_value_def.write().unwrap() = None;
+        self.sr_is_array.store(false, Ordering::Relaxed);
+        self.sr_array_size_prefix.store(0, Ordering::Relaxed);
+        self.sr_init.reset();
     }
 
     pub fn skipped(&self) -> bool {
@@ -283,6 +429,40 @@ pub(super) fn create_sub_record_array(
 
 impl SubRecordArrayImpl {
     /// Port of `DoProcess`.
+    /// Port of the `wbAssignAdd` branch of `TwbSubRecordArray.AssignInternal`
+    /// without a source: one member added from the element definition.
+    fn member_assign_add(&self) -> Result<Option<ElementRef>, EditError> {
+        edit::check_edit_allowed(self)?;
+        let Some(array_def) = self.arc_def.as_sub_record_array_def() else {
+            return Ok(None);
+        };
+        let self_ref: ElementRef = self.self_ref.upgrade().expect("the array is alive");
+        let mut element_def = array_def.get_element().clone();
+        while element_def.get_def_type() == DefType::dtSubRecordUnion {
+            element_def = element_def
+                .as_record_def()
+                .map(|union| union.get_member(0))
+                .ok_or_else(|| format!("{} has an empty union member", self.get_name()))?;
+        }
+        let element: ElementRef = match element_def.get_def_type() {
+            DefType::dtSubRecord => SubRecordImpl::create_new(&self_ref, &self.container, &self.file, element_def)?,
+            DefType::dtSubRecordArray => {
+                create_sub_record_array_new(&self_ref, &self.container, element_def, &self.file)?
+            }
+            DefType::dtSubRecordStruct => {
+                create_sub_record_struct_new(&self_ref, &self.container, element_def, &self.file)?
+            }
+            other => return Err(format!("unexpected member type {other:?} in {}", self.get_name())),
+        };
+        // Port of `UpdateNameSuffixes`.
+        for (index, element) in self.container.elements().iter().enumerate() {
+            if let Some(element) = element.as_element_impl() {
+                element.element_base().set_name_suffix(&format!("#{index}"));
+            }
+        }
+        Ok(Some(element))
+    }
+
     pub(super) fn do_process(&self, self_ref: &ElementRef, container: &ContainerBase, mut pos: usize) {
         let Some(array_def) = self.arc_def.as_sub_record_array_def() else {
             return;
@@ -339,6 +519,111 @@ impl SubRecordArrayImpl {
                 element.element_base().set_name_suffix(&format!("#{index}"));
             }
         }
+    }
+}
+
+/// Port of `TwbSubRecordArray.Create` with `aPos = Low(Integer)`: an array
+/// made from its definition, with as many members as its definition needs
+/// and their default edit values.
+pub(super) fn create_sub_record_array_new(
+    owner: &ElementRef,
+    owner_base: &ContainerBase,
+    def: Arc<dyn RecordMemberDef>,
+    file: &Weak<super::FileImpl>,
+) -> Result<ElementRef, EditError> {
+    let array = Arc::new_cyclic(|self_ref: &Weak<SubRecordArrayImpl>| SubRecordArrayImpl {
+        self_ref: self_ref.clone(),
+        base: ElementBase::new(Some(owner)),
+        container: ContainerBase::default(),
+        file: file.clone(),
+        arc_def: def,
+    });
+    let array_ref: ElementRef = array.clone();
+    if let Some(array_def) = array.arc_def.as_sub_record_array_def() {
+        let defaults = array_def.get_default_edit_values();
+        let mut min_count = usize::from(!array.arc_def.def_base().def_flags.contains(DefFlag::dfArrayCanBeEmpty));
+        min_count = min_count
+            .max(usize::try_from(array_def.get_count()).unwrap_or(0))
+            .max(defaults.len());
+        while array.container.element_count() < min_count {
+            if array.member_assign_add()?.is_none() {
+                break;
+            }
+        }
+        for (element, default) in array.container.elements().iter().zip(&defaults) {
+            element.set_edit_value(default)?;
+        }
+        array.container.cnt_as_created_empty.store(true, Ordering::Relaxed);
+    }
+    owner_base.add_element(array_ref.clone());
+    array.set_modified(true);
+    array.invalidate_storage();
+    Ok(array_ref)
+}
+
+/// Port of `TwbSubRecordStruct.Create` with `aPos = Low(Integer)`: a
+/// structure made from its definition, with its required members.
+pub(super) fn create_sub_record_struct_new(
+    owner: &ElementRef,
+    owner_base: &ContainerBase,
+    def: Arc<dyn RecordMemberDef>,
+    file: &Weak<super::FileImpl>,
+) -> Result<ElementRef, EditError> {
+    let structure = Arc::new_cyclic(|self_ref: &Weak<SubRecordStructImpl>| SubRecordStructImpl {
+        self_ref: self_ref.clone(),
+        base: ElementBase::new(Some(owner)),
+        container: ContainerBase::default(),
+        file: file.clone(),
+        src_def: def,
+    });
+    let self_ref: ElementRef = structure.clone();
+    owner_base.add_element(self_ref.clone());
+    structure.add_required_elements()?;
+    Ok(self_ref)
+}
+
+impl SubRecordStructImpl {
+    /// Port of `AddRequiredElements`: the first member unless the structure
+    /// allows any order or says the first is not required, and every
+    /// required member.
+    fn add_required_elements(&self) -> Result<(), EditError> {
+        let Some(src_def) = self.src_def.as_record_def() else {
+            return Ok(());
+        };
+        let self_ref: ElementRef = self.self_ref.upgrade().expect("the structure is alive");
+        let first_required = !(src_def.allow_unordered()
+            || self
+                .src_def
+                .def_base()
+                .def_flags
+                .contains(DefFlag::dfStructFirstNotRequired));
+        let count = usize::try_from(src_def.get_member_count()).unwrap_or(0);
+        for index in 0..count {
+            let mut member = src_def.get_member(index);
+            if !((index == 0 && first_required) || member.def_base().def_required()) {
+                continue;
+            }
+            if member.get_def_type() == DefType::dtSubRecordUnion {
+                member = member
+                    .as_record_def()
+                    .map(|union| union.get_member(0))
+                    .ok_or_else(|| format!("{} has an empty union member", self.get_name()))?;
+            }
+            let element: ElementRef = match member.get_def_type() {
+                DefType::dtSubRecord => SubRecordImpl::create_new(&self_ref, &self.container, &self.file, member)?,
+                DefType::dtSubRecordArray => {
+                    create_sub_record_array_new(&self_ref, &self.container, member, &self.file)?
+                }
+                DefType::dtSubRecordStruct => {
+                    create_sub_record_struct_new(&self_ref, &self.container, member, &self.file)?
+                }
+                other => return Err(format!("unexpected member type {other:?} in {}", self.get_name())),
+            };
+            if let Some(element) = element.as_element_impl() {
+                element.set_sort_and_memory_order(index as i32);
+            }
+        }
+        Ok(())
     }
 }
 
@@ -630,6 +915,53 @@ pub(super) fn init_main_record(record: &Arc<MainRecordImpl>) {
     if found_error {
         progress(&format!("Errors were found in: {}", record.get_name()));
     }
+    if sort_sub_records() && (mr_def.allow_unordered() || record.base.has_state(super::ElementState::esModified)) {
+        edit::sort_sub_records_of(&**record);
+    }
+}
+
+/// Port of the tail of `TwbMainRecord.Init` under `wbAllowInternalEdit`:
+/// the required members the record lacks are added (`Adding missing
+/// record`), as an internal edit. Runs after the offsets of a worldspace
+/// are dropped, as upstream.
+pub(super) fn add_required_members(record: &Arc<MainRecordImpl>) {
+    let Some(mr_def) = &record.mr_def else { return };
+    let flags = record.mr_struct().flags;
+    if flags.is_deleted() || record.get_is_partial_form() {
+        return;
+    }
+    let count = usize::try_from(mr_def.get_member_count()).unwrap_or(0);
+    let present: Vec<bool> = {
+        let elements = record.container.elements();
+        (0..count)
+            .map(|index| elements.iter().any(|element| element.get_sort_order() == index as i32))
+            .collect()
+    };
+    let missing: Vec<usize> = (0..count)
+        .filter(|&index| mr_def.get_member(index).def_base().def_required() && !present[index])
+        .collect();
+    if missing.is_empty() {
+        return;
+    }
+    if !crate::interface::globals::begin_internal_edit(false) {
+        return;
+    }
+    for index in missing {
+        if crate::interface::globals::more_info_for_required() {
+            progress(&format!(
+                " [{}] Adding missing record: {}",
+                record.get_fixed_form_id().to_string(true),
+                mr_def.get_member(index).get_name()
+            ));
+        }
+        if let Err(error) = record.assign_member(index) {
+            progress(&format!(
+                "Error assigning to [{}] from [nil]: [Exception] {error}",
+                record.get_full_path()
+            ));
+        }
+    }
+    crate::interface::globals::end_internal_edit();
 }
 
 // ----- the element traits -----
@@ -659,8 +991,22 @@ impl Element for SubRecordImpl {
         }
     }
 
+    /// Port of `TwbSubRecord.GetDataSize` over `TwbDataContainer.GetDataSize`.
     fn get_data_size(&self) -> i32 {
-        (self.dc_data_end - self.dc_data_base) as i32
+        self.do_init();
+        if self.storage.is_invalid() {
+            return edit::data_size_from_elements(self) + self.sr_array_size_prefix.load(Ordering::Relaxed) as i32;
+        }
+        match self.data_raw() {
+            Some(data) => data.len() as i32,
+            None => match self.value_def() {
+                Some(value_def) => {
+                    let self_ref = self.element_ref();
+                    value_def.get_default_size(None, Some(&self_ref))
+                }
+                None => edit::data_size_from_elements(self),
+            },
+        }
     }
 
     fn get_element_type(&self) -> ElementType {
@@ -769,6 +1115,155 @@ impl Element for SubRecordImpl {
 }
 
 impl ElementImpl for SubRecordImpl {
+    fn as_this(&self) -> &dyn ElementImpl {
+        self
+    }
+
+    fn storage(&self) -> Option<&Storage> {
+        Some(&self.storage)
+    }
+
+    fn get_data_prefix_size(&self) -> usize {
+        self.sr_array_size_prefix.load(Ordering::Relaxed)
+    }
+
+    fn raw_data(&self) -> DataPtr<'_> {
+        self.data_raw()
+    }
+
+    fn current_data(&self) -> DataPtr<'_> {
+        self.data()
+    }
+
+    fn dont_save(&self) -> bool {
+        edit::def_dont_save(self)
+    }
+
+    fn init_running(&self) -> bool {
+        self.sr_init.is_running()
+    }
+
+    fn reset_and_init(&self) {
+        self.container.release_elements();
+        self.sr_init.reset();
+        self.do_init();
+    }
+
+    fn release_and_detach(&self) {
+        self.container.release_elements();
+        self.sr_init.reset();
+    }
+
+    fn commit_storage_impl(&self, bytes: Vec<u8>) {
+        self.storage.set(bytes);
+        self.sr_has_data.store(true, Ordering::Relaxed);
+    }
+
+    /// Port of `TwbSubRecord.SetEditValue`.
+    fn set_edit_value_impl(&self, value: &str) -> Result<(), EditError> {
+        edit::check_edit_allowed(self)?;
+        if self.def().is_none() {
+            return if value.is_empty() {
+                Ok(())
+            } else {
+                Err(format!("{} can not be edited", self.get_name()))
+            };
+        }
+        self.do_init();
+        edit::set_edit_value(self, value, false)
+    }
+
+    /// Port of `TwbSubRecord.SetNativeValue`.
+    fn set_native_value_impl(&self, value: Variant) -> Result<(), EditError> {
+        edit::check_edit_allowed(self)?;
+        if self.def().is_none() {
+            return Err(format!("{} can not be edited", self.get_name()));
+        }
+        self.do_init();
+        edit::set_native_value(self, value)
+    }
+
+    fn set_to_default_internal(&self) -> Result<(), EditError> {
+        edit::value_set_to_default_internal(self)
+    }
+
+    /// The tail of `TwbSubRecord.SetToDefaultInternal` for an array.
+    fn after_set_to_default(&self) -> Result<(), EditError> {
+        if self.sr_is_array.load(Ordering::Relaxed)
+            && let Some(value_def) = self.value_def()
+        {
+            let defaults = value_def
+                .as_array_def()
+                .map(|array| array.get_default_edit_values())
+                .unwrap_or_default();
+            for (element, default) in self.container.elements().iter().zip(&defaults) {
+                element.set_edit_value(default)?;
+            }
+            edit::update_count_via_path(self, Some(&value_def));
+        }
+        Ok(())
+    }
+
+    /// Port of `TwbSubRecord.DoAfterSet`.
+    fn do_after_set(&self, old: &Variant, new: &Variant) {
+        edit::do_after_set(self, old, new);
+        edit::update_count_via_path(self, self.value_def().as_ref());
+    }
+
+    /// Port of `TwbSubRecord.NotifyChangedInternal`.
+    fn notify_changed_internal(&self) {
+        if self.sr_is_array.load(Ordering::Relaxed) && self.base.has_state(super::ElementState::esModified) {
+            let value_def = self.value_def();
+            edit::check_count(self, value_def.as_ref());
+            edit::check_terminator(self, value_def.as_ref());
+        }
+        edit::notify_changed_internal(self);
+    }
+
+    fn assign_add(&self) -> Result<Option<ElementRef>, EditError> {
+        self.array_assign_add()
+    }
+
+    fn add_impl(&self, _name: &str, _silent: bool) -> Result<Option<ElementRef>, EditError> {
+        self.array_assign_add()
+    }
+
+    fn add_string_list_terminator(&self) {
+        let self_ref = self.element_ref();
+        super::value::create_string_list_terminator(&self_ref, &self.file);
+    }
+
+    /// Port of `TwbSubRecord.GetSortKeyInternal`: the key of the value, or
+    /// the keys of the elements.
+    fn get_sort_key_impl(&self, extended: bool) -> String {
+        self.do_init();
+        if let Some(value_def) = self.value_def() {
+            let self_ref = self.element_ref();
+            return value_def.to_sort_key(self.data(), Some(&self_ref), extended);
+        }
+        self.container
+            .elements()
+            .iter()
+            .map(|child| child.get_sort_key(extended))
+            .collect::<Vec<_>>()
+            .join("")
+    }
+
+    /// Port of `TwbSubRecord.GetIsEditable`.
+    fn get_is_editable_impl(&self) -> bool {
+        if crate::interface::globals::is_internal_edit() {
+            return true;
+        }
+        let Some(def) = self.def() else { return false };
+        if def.def_base().def_internal_edit_only() {
+            return false;
+        }
+        self.do_init();
+        let self_ref = self.element_ref();
+        self.value_def()
+            .is_some_and(|value_def| value_def.get_is_editable(self.data(), Some(&self_ref)))
+    }
+
     fn self_element_ref(&self) -> Option<ElementRef> {
         self.self_ref.upgrade().map(|element| element as ElementRef)
     }
@@ -798,6 +1293,26 @@ impl DataContainer for SubRecordImpl {
 
 macro_rules! container_by_elements {
     ($init:ident) => {
+        fn as_container_ref(&self) -> Option<ElementRef> {
+            self.self_element_ref()
+        }
+
+        fn add(&self, name: &str, silent: bool) -> Result<Option<ElementRef>, EditError> {
+            self.add_impl(name, silent)
+        }
+
+        fn remove_element_at(&self, index: i32, mark_modified: bool) -> Option<ElementRef> {
+            self.remove_child_at(index, mark_modified)
+        }
+
+        fn reverse_elements(&self) {
+            self.reverse_elements_impl()
+        }
+
+        fn sort_by_sort_order(&self) {
+            self.sort_by_sort_order_impl()
+        }
+
         fn get_element_by_name(&self, name: &str) -> Option<ElementRef> {
             super::element_by_name(self, name)
         }
@@ -901,6 +1416,26 @@ impl Element for SubRecordArrayImpl {
 }
 
 impl ElementImpl for SubRecordArrayImpl {
+    fn as_this(&self) -> &dyn ElementImpl {
+        self
+    }
+
+    fn assign_add(&self) -> Result<Option<ElementRef>, EditError> {
+        self.member_assign_add()
+    }
+
+    fn add_impl(&self, _name: &str, _silent: bool) -> Result<Option<ElementRef>, EditError> {
+        self.member_assign_add()
+    }
+
+    /// Port of `TwbSubRecordArray.DoAfterSet`.
+    fn do_after_set(&self, old: &Variant, new: &Variant) {
+        edit::do_after_set(self, old, new);
+        if let Some(array_def) = self.arc_def.as_sub_record_array_def() {
+            edit::update_count_via_paths(self, array_def.get_count_paths());
+        }
+    }
+
     fn self_element_ref(&self) -> Option<ElementRef> {
         self.self_ref.upgrade().map(|element| element as ElementRef)
     }
@@ -992,6 +1527,10 @@ impl Element for SubRecordStructImpl {
 }
 
 impl ElementImpl for SubRecordStructImpl {
+    fn as_this(&self) -> &dyn ElementImpl {
+        self
+    }
+
     fn self_element_ref(&self) -> Option<ElementRef> {
         self.self_ref.upgrade().map(|element| element as ElementRef)
     }

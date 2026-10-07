@@ -9,13 +9,17 @@
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::{Arc, Weak};
 
+use super::def::request_storage;
 use super::def::{
     Def, DefBase, DefCell, DefKind, DefRef, NamedDef, NamedDefArgs, NamedDefBase, ValueDef, ValueDefBase, set_parent,
     value_def_plumbing,
 };
 use super::element::{DataPtr, ElementArg, ElementRef};
 use super::globals::{check_expected_bytes, is_internal_edit};
-use super::misc::{Variant, int_to_hex64, read_integer_counter, read_integer_counter_size, read_integer24};
+use super::misc::{
+    EditError, Variant, int_to_hex64, read_integer_counter, read_integer_counter_size, read_integer24, str_to_int64,
+    variant_to_i64, write_integer_counter,
+};
 use super::types::{CallbackType, ConflictPriority, DefType, EditType, IntType};
 
 pub type IntOverlayCallback = Arc<dyn Fn(i64, ElementArg, CallbackType) -> i64 + Send + Sync>;
@@ -25,6 +29,7 @@ pub type IntOverlayCallback = Arc<dyn Fn(i64, ElementArg, CallbackType) -> i64 +
 /// The methods that change data (`FromEditValue`, `FromLinksTo`,
 /// `MastersUpdated`, `FindUsedMasters`, `CompareExchangeFormID`) come with the
 /// write path.
+#[allow(clippy::wrong_self_convention)]
 pub trait IntegerDefFormater: NamedDef {
     /// Port of `ToString`: the display value of `int`.
     fn to_string(&self, int: i64, element: ElementArg, for_summary: bool) -> String;
@@ -47,6 +52,12 @@ pub trait IntegerDefFormater: NamedDef {
 
     fn to_edit_value(&self, _int: i64, _element: ElementArg) -> String {
         String::new()
+    }
+
+    /// Port of `FromEditValue`: the integer for the edit text. The base
+    /// class does not support editing.
+    fn from_edit_value(&self, _value: &str, _element: ElementArg) -> Result<i64, EditError> {
+        Err(format!("{} does not support editing", self.get_name()))
     }
 
     fn get_is_editable(&self, _int: i64, _element: ElementArg) -> bool {
@@ -105,6 +116,7 @@ pub fn integer_def_formater_create(class_name: &str) -> (DefBase, NamedDefBase) 
 }
 
 /// Upstream `IwbIntegerDef`.
+#[allow(clippy::wrong_self_convention)]
 pub trait IntegerDefInterface: ValueDef {
     fn to_int(&self, data: DataPtr, element: ElementArg) -> i64;
 
@@ -116,6 +128,9 @@ pub trait IntegerDefInterface: ValueDef {
     fn get_int_type(&self) -> IntType;
 
     fn get_expected_length(&self, value: i64) -> i32;
+
+    /// Port of `FromInt`: writes the integer into the data of `element`.
+    fn from_int(&self, value: i64, data: DataPtr, element: ElementArg) -> Result<(), EditError>;
 
     /// Upstream `IwbIntegerDefInternal.ReplaceFormater`.
     fn replace_formater(&self, formater: Option<Arc<dyn IntegerDefFormater>>);
@@ -129,6 +144,23 @@ impl dyn IntegerDefInterface {
     pub fn add_overlay(self: Arc<Self>, callback: Option<IntOverlayCallback>) -> Arc<dyn IntegerDefInterface> {
         self.add_overlay_dyn(callback)
     }
+}
+
+/// The `case inType of` of `FromInt`: the integer in the layout of the type,
+/// as far as the buffer holds it.
+fn write_int(int_type: IntType, value: i64, bytes: &mut [u8]) {
+    let source: Vec<u8> = match int_type {
+        IntType::it0 => return,
+        IntType::itU8 | IntType::itS8 => vec![value as u8],
+        IntType::itU16 | IntType::itS16 => (value as u16).to_le_bytes().to_vec(),
+        // Port of `WriteInteger24`: most significant byte first.
+        IntType::itU24 => vec![(value >> 16) as u8, (value >> 8) as u8, value as u8],
+        IntType::itU32 | IntType::itS32 => (value as u32).to_le_bytes().to_vec(),
+        IntType::itU64 | IntType::itS64 => value.to_le_bytes().to_vec(),
+        IntType::itU6to30 => write_integer_counter(value),
+    };
+    let len = source.len().min(bytes.len());
+    bytes[..len].copy_from_slice(&source[..len]);
 }
 
 /// Upstream `TwbIntegerDef`.
@@ -554,6 +586,49 @@ impl ValueDef for IntegerDef {
         }
     }
 
+    fn from_edit_value(&self, data: DataPtr, element: ElementArg, value: &str) -> Result<(), EditError> {
+        let mut int = if value.is_empty() {
+            0
+        } else if let Some(formater) = self.in_formater.load().as_deref() {
+            formater.from_edit_value(value, element)?
+        } else {
+            str_to_int64(value)?
+        };
+        if let Some(overlay) = self.in_overlay_callback.load().as_deref() {
+            int = overlay(int, element, CallbackType::ctFromEditValue);
+        }
+        self.from_int(int, data, element)
+    }
+
+    fn from_native_value(&self, _data: DataPtr, element: ElementArg, value: Variant) -> Result<(), EditError> {
+        let mut int = variant_to_i64(&value)?;
+        if let Some(overlay) = self.in_overlay_callback.load().as_deref() {
+            int = overlay(int, element, CallbackType::ctFromNativeValue);
+        }
+        let size = usize::try_from(self.get_expected_length(int)).unwrap_or(0);
+        let (element, mut bytes) = request_storage(element, size)?;
+        // UPSTREAM-QUIRK: `it0` writes a byte all the same, into storage of
+        // size zero; nothing is written here.
+        write_int(self.in_type, int, &mut bytes);
+        element.commit_storage(bytes);
+        Ok(())
+    }
+
+    fn set_to_default(&self, data: DataPtr, element: ElementArg) -> Result<bool, EditError> {
+        if self.set_to_default_callback(data, element) {
+            return Ok(true);
+        }
+        if let Some(result) = self.set_to_default_edit_value(data, element) {
+            return result;
+        }
+        let default = self.in_default();
+        let changed = data.is_none() || self.to_int(data, element) != default;
+        if changed {
+            self.from_int(default, data, element)?;
+        }
+        Ok(changed)
+    }
+
     fn get_is_editable(&self, data: DataPtr, element: ElementArg) -> bool {
         let result = is_internal_edit()
             || match self.in_formater.load().as_deref() {
@@ -588,6 +663,19 @@ impl IntegerDefInterface for IntegerDef {
 
     fn replace_formater(&self, formater: Option<Arc<dyn IntegerDefFormater>>) {
         IntegerDef::replace_formater(self, formater);
+    }
+
+    fn from_int(&self, value: i64, _data: DataPtr, element: ElementArg) -> Result<(), EditError> {
+        let int = match self.in_overlay_callback.load().as_deref() {
+            Some(overlay) => overlay(value, element, CallbackType::ctFromInt),
+            None => value,
+        };
+        // The storage is sized for the value before the overlay, as upstream.
+        let size = usize::try_from(self.get_expected_length(value)).unwrap_or(0);
+        let (element, mut bytes) = request_storage(element, size)?;
+        write_int(self.in_type, int, &mut bytes);
+        element.commit_storage(bytes);
+        Ok(())
     }
 
     fn to_int(&self, data: DataPtr, element: ElementArg) -> i64 {

@@ -3516,11 +3516,13 @@ status = "pending"
 source = "IwbContainer_ReverseElements"
 
 [script."xejviScriptAdapterContainer:cUnit.SetElementEditValues:function"]
-status = "pending"
+status = "covered"
+command = "elements.set"
 source = "IwbContainer_SetElementEditValues"
 
 [script."xejviScriptAdapterContainer:cUnit.SetElementNativeValues:function"]
-status = "pending"
+status = "covered"
+command = "elements.set"
 source = "IwbContainer_SetElementNativeValues"
 
 [script."xejviScriptAdapterDF:TdfDef.Create:get"]
@@ -4124,7 +4126,8 @@ status = "pending"
 source = "IwbElement_ReportRequiredMasters"
 
 [script."xejviScriptAdapterElement:cUnit.SetEditValue:function"]
-status = "pending"
+status = "covered"
+command = "elements.set"
 source = "IwbElement_SetEditValue"
 
 [script."xejviScriptAdapterElement:cUnit.SetElementState:function"]
@@ -4132,11 +4135,13 @@ status = "pending"
 source = "IwbElement_SetElementState"
 
 [script."xejviScriptAdapterElement:cUnit.SetNativeValue:function"]
-status = "pending"
+status = "covered"
+command = "elements.set"
 source = "IwbElement_SetNativeValue"
 
 [script."xejviScriptAdapterElement:cUnit.SetToDefault:function"]
-status = "pending"
+status = "covered"
+command = "elements.set"
 source = "IwbElement_SetToDefault"
 
 [script."xejviScriptAdapterElement:cUnit.ShortName:function"]

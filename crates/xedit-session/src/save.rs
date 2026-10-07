@@ -23,7 +23,8 @@ use xedit_core::implementation::{FileImpl, ResetModified, SaveError};
 use xedit_core::interface::globals::{
     GameMode, app_name, set_allow_esp_masters, set_allow_esp_masters_on_save, set_allow_internal_edit,
     set_always_save_onam, set_always_save_onam_force, set_app_name, set_can_sort_info, set_complex_file_file_id,
-    set_tool_name, set_vwd_as_quest_children, set_vwd_in_temporary,
+    set_display_load_order_form_id, set_sort_sub_records, set_tool_name, set_vwd_as_quest_children,
+    set_vwd_in_temporary,
 };
 use xedit_core::interface::{Element, File, FileState};
 
@@ -36,6 +37,13 @@ use crate::{CommandError, Registry, Session};
 /// leaves them at their defaults, so they are applied after it.
 pub fn apply_edit_settings(mode: GameMode) {
     set_tool_name("Edit");
+    // `xeMainForm`: FormIDs are shown and edited as load order FormIDs, and
+    // the subrecords of a record keep the order of the definition.
+    set_display_load_order_form_id(true);
+    set_sort_sub_records(true);
+    // The default of `wbAllowInternalEdit`, which the games below override:
+    // the load adds the required subrecords a record lacks.
+    set_allow_internal_edit(true);
     let app = match mode {
         GameMode::gmTES3 => "TES3",
         GameMode::gmTES4 | GameMode::gmTES4R => "TES4",

@@ -1,6 +1,6 @@
 ---
 name: using-xedit-cli
-description: Use when inspecting or saving Bethesda plugins and save games with the native xedit CLI of this repository: loading plugins of any game from Oblivion to Starfield, listing files and records, reading a record or an element, dumping a plugin or a save like xDump, saving a loaded plugin back to disk. No element editing yet.
+description: Use when inspecting, editing or saving Bethesda plugins and save games with the native xedit CLI of this repository: loading plugins of any game from Oblivion to Starfield, listing files and records, reading a record or an element, setting the value of an element, dumping a plugin or a save like xDump, saving a loaded plugin back to disk, running several commands in one session.
 ---
 
 # Using the xedit CLI
@@ -35,20 +35,44 @@ Loading is per process: every invocation loads the plugins again. `Skyrim.esm` t
 | `elements get <FormID> <path> [--file F] [--depth N]` | One element of a record by path. |
 | `dump --game G <plugin>` | The whole plugin as `xDump.exe` prints it, to stdout; progress goes to stderr. |
 | `saves dump --game G --data <Data> <save>` | A save or co-save as `xDump.exe -saves` prints it. The plugins the save lists load from `<Data>`. |
+| `elements set <FormID> <path> [<value>] [--file F] [--native] [--default] [--dry-run]` | Sets the value of one element (`elements.set`): the edit value as xEdit shows it in its editor, a native number or boolean with `--native`, or the default of the definition with `--default`. A missing last element of the path is added when the record's definition has it. Needs `--edit` unless `--dry-run`. |
 | `save [--file F] [--output PATH] [--dry-run] [--no-backup]` | Writes a loaded plugin as xEdit saves it (`files.save`). Needs the global `--edit` flag unless `--dry-run`. |
+| `batch <file.json or ->` [--keep-going] | Runs a JSON array of `{"command": name, "params": {...}}` in one session and prints one envelope per command; stops at the first failure unless `--keep-going`. |
 
 FormIDs are load order FormIDs in hexadecimal, as xEdit shows them: `01003274` is object `003274` of the file in slot 1. `--file` names a loaded plugin; without it, `records list` and `records find` need exactly one plugin in `--load`, and `records get` and `elements get` see the record from the last loaded plugin (the winning override for that plugin).
 
 Element paths use `\` between names, as in xEdit scripts: `DATA\Health`, `ACBS\Flags\Female`, `Conditions\Condition #0\CTDA\Function`. Signatures (`DNAM`) and names (`DNAM - Flags`) both work for a step.
 
+## Editing an element
+
+`elements set` runs `SetEditValue`, `SetNativeValue` or `SetToDefault` on the element at the path, as a script's `SetEditValue` does, so the `AfterSet` callbacks of the definition run (a GMST's `DATA` is rebuilt when the first letter of its editor ID changes, a MGEF's actor values follow its archetype, and so on). The response holds the element before (`old`) and after (`new`), `changed`, and `added` when the element was created.
+
+- Edit values are the texts xEdit shows in its editor: `1.5` for a float, `Dawnguard "Dawnguard" [QUST:0200C97A]` or `0200C97A` for a FormID (load order FormIDs, as `--game` loads the plugins), a name or a number for an enum, `0000000000000001` for flags. A flag can also be set by its name as the last element of the path: `ACBS\Flags\Female` with `1` or `0`.
+- `--native` takes a JSON number or boolean and sets it as the native value; `--default` sets the element to the default of its definition.
+- A path whose last element is missing adds that member when the record's definition has it (`ElementEditValues`): `elements set 01003274 SNAM "text"` on a record without `SNAM`.
+- Loading runs the fix-ups xEdit runs on load (`wbAllowInternalEdit`): a record that lacks a required subrecord gets it, a worldspace loses its offset data, and the `AfterLoad` callbacks of the definitions apply their corrections. Those records are modified internally and are written from their elements on save.
+- The edit is in memory only. To keep it, save in the same process: use `batch` with an `elements.set` and a `files.save`, or `call` the commands from a daemon once `xedit serve` exists.
+- Error codes: `edit_failed` carries the message of the upstream exception (`"x" is not a valid character for a flag`, `Not a valid GUID: ...`, `FormID [...] can not be mapped to file FormID for file "..."`), `not_editable` a dry run on an element the editor would not let you change.
+
+```
+cat > edit.json <<'EOF'
+[
+  {"command": "elements.set", "params": {"form_id": "01003274", "path": "DNAM\\Flags", "value": "0000000000000001"}},
+  {"command": "files.save", "params": {"backup": true}}
+]
+EOF
+xedit --json --edit --game sse --load "<Data>\Update.esm" batch edit.json
+```
+
 ## Saving a plugin
 
-`save` is the first mutating command. It runs `PrepareSave` and `WriteToStream` as upstream does: every unmodified record is copied as loaded, a modified record is rebuilt from its elements (and compressed again when its flag says so), and the file's CRC32 is computed on the result. The response reports `bytes`, `crc32`, `loaded_crc32`, `changed` and `written`.
+`save` runs `PrepareSave` and `WriteToStream` as upstream does: every unmodified record is copied as loaded, a modified record is rebuilt from its elements (and compressed again when its flag says so), and the file's CRC32 is computed on the result. The response reports `bytes`, `crc32`, `loaded_crc32`, `changed` and `written`.
 
 - Mutating commands refuse to run without the global `--edit` flag (`edit_required`); with `--dry-run` they run without it and write nothing. In JSON, the same is `dry_run: true` in the request.
 - `--output` writes somewhere else than the loaded path. Never point it into a game's `Data` folder while testing; the harness writes into the parity cache.
 - Without `--output` the file is written over the loaded one, through a temporary file and a rename. An existing file first moves to `<AppName>Edit Backups\<name>.backup.<timestamp>` next to it (`--no-backup` skips that), and a save whose bytes did not change is dropped, as upstream removes it.
-- Error codes: `save_refused` carries an upstream `PrepareSave` message, which the oracle gives for the same file (a Starfield blueprint module, a record in the wrong group, an `.esp` master where the game forbids it); `unsupported` names an edit upstream makes on save that this version cannot (the `HEDR` record count or `INCC` cell count off, `ONAM` entries in the header or needed for overridden placed records, a flag that does not follow the extension, a FormID beyond the masters). Those come with the element editing step of phase 3.
+- The save edits the file header as upstream does: the ESM flag follows an `.esm` extension (ESM and Light an `.esl`), `HEDR` gets the record count, `INCC` the interior cell count, the `ONAM` list of a master is rebuilt from its overridden temporary placed records, and a FormID beyond the masters is clamped. The `unsupported` code is gone.
+- Error codes: `save_refused` carries an upstream `PrepareSave` message, which the oracle gives for the same file (a Starfield blueprint module, a record in the wrong group, an `.esp` master where the game forbids it).
 - Only the worldspace records are initialized by a save of an unmodified file (upstream drops their `OFST` subrecord and marks their children modified), so a big master saves in seconds; the children of its worldspaces are rebuilt record by record.
 
 ## Saves
@@ -77,6 +101,6 @@ xedit --json --edit --game sse --load "<Data>\Skyrim.esm" save --no-backup --out
 
 ## Limits of this version
 
-- No element editing, no masters or FormID changes; `save` writes a loaded file back and reports `unsupported` where upstream would edit its header on save.
+- No adding or removing of elements from the command line beyond the member `elements set` adds, no copying of records, no masters or FormID changes. Sorted arrays are not sorted again after a change, and flags are not shown as child elements.
 - Morrowind plugins are not verified. Oblivion saves do not read (an upstream limit, see above).
-- One session per process; `xedit serve` comes with the write path.
+- One session per process; `xedit serve` comes with step 7 of phase 3. Until then `batch` is the way to edit and save in one go.

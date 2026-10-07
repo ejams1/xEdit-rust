@@ -14,7 +14,7 @@ use super::element::ElementArg;
 use super::formaters::{editable_unless_internal_only, formater_impls, formater_plumbing};
 use super::globals::{report_mode, report_unknown_enums, show_flag_enum_value};
 use super::integer::{IntegerDefFormater, integer_def_formater_create};
-use super::misc::{get_unknown_int_string, int_to_hex64};
+use super::misc::{EditError, get_unknown_int_string, int_to_hex64, str_to_int64};
 use super::string::StringDefFormater;
 use super::types::{DefType, EditType};
 
@@ -329,6 +329,18 @@ impl StringDefFormater for EnumDef {
     fn str_to_edit_value(&self, string: &str, element: ElementArg) -> String {
         self.string_to_edit_value(string, element)
     }
+
+    /// Port of `TwbEnumDef.StringFromEditValue`: the name as the enum
+    /// spells it, or the text itself.
+    fn str_from_edit_value(&self, value: &str, _element: ElementArg) -> String {
+        if value.is_empty() {
+            return String::new();
+        }
+        match self.find_name(value) {
+            Some(index) => self.get_name_of(index),
+            None => value.to_owned(),
+        }
+    }
 }
 
 impl IntegerDefFormater for EnumDef {
@@ -419,6 +431,28 @@ impl IntegerDefFormater for EnumDef {
 
     fn get_edit_info(&self, _element: ElementArg) -> Vec<String> {
         self.en_edit_info.clone()
+    }
+
+    /// Port of `TwbEnumDef.FromEditValue`: the value of the name, or the
+    /// text as a number. With `wbShowFlagEnumValue` a trailing ` (number)`
+    /// is dropped first.
+    fn from_edit_value(&self, value: &str, _element: ElementArg) -> Result<i64, EditError> {
+        if value.is_empty() {
+            return Ok(0);
+        }
+        let mut text = value.to_owned();
+        if show_flag_enum_value()
+            && text.ends_with(')')
+            && let Some(open) = text.rfind('(')
+            && open >= 1
+            && str_to_int64(&text[open + 1..text.len() - 1]).is_ok()
+        {
+            text.truncate(open - 1);
+        }
+        if let Some(index) = self.find_name(&text) {
+            return Ok(index);
+        }
+        str_to_int64(&text)
     }
 
     fn to_edit_value(&self, int: i64, _element: ElementArg) -> String {

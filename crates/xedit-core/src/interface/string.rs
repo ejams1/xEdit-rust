@@ -14,6 +14,7 @@ use std::sync::{Arc, Weak};
 
 use xedit_io::Encoding;
 
+use super::def::request_storage;
 use super::def::{
     Def, DefBase, DefCell, DefKind, DefRef, NamedDef, NamedDefArgs, NamedDefBase, ValueDef, ValueDefBase, set_parent,
     value_def_plumbing,
@@ -21,11 +22,14 @@ use super::def::{
 use super::element::{DataPtr, ElementArg, ElementRef};
 use super::formaters::comma_text;
 use super::globals::{check_non_cpn_chars, encoding, encoding_trans, is_internal_edit, show_string_bytes};
-use super::misc::{Variant, localization_get_value, progress};
+use super::misc::{EditError, Variant, localization_get_value, progress, variant_to_string};
 use super::types::{CallbackType, DefFlag, DefType, EditType, TriBool};
 
 /// Upstream `wbTerminator`.
 pub const TERMINATOR: u8 = b'|';
+
+/// Upstream `sStringID`: the prefix of a string ID given as text.
+pub const STRING_ID_PREFIX: &str = "STRINGID:";
 
 /// Upstream `IwbStringDefFormater`: gives the text forms of a string value.
 /// `TwbEnumDef` implements it. The methods have the prefix `str_`, because
@@ -37,6 +41,12 @@ pub trait StringDefFormater: Def {
     fn str_get_edit_type(&self, element: ElementArg) -> EditType;
     fn str_get_edit_info(&self, element: ElementArg) -> Vec<String>;
     fn str_to_edit_value(&self, string: &str, element: ElementArg) -> String;
+
+    /// Upstream `FromEditValue` of the string formater: the text to store
+    /// for an edit value. The default keeps the text.
+    fn str_from_edit_value(&self, value: &str, _element: ElementArg) -> String {
+        value.to_owned()
+    }
 }
 
 impl DefKind for dyn StringDefFormater {
@@ -403,6 +413,56 @@ impl StringDef {
         self.transform_string(self.to_string_native(data, element, transform), transform)
     }
 
+    /// Port of `TwbStringDef.FromStringNative` and the override of
+    /// `TwbLStringDef`: the text in the encoding of the file, sized by the
+    /// definition and zero terminated unless the definition says not to. A
+    /// localized string takes a `STRINGID:` text as the string ID; writing a
+    /// new string into the string tables is not ported yet.
+    #[allow(clippy::wrong_self_convention)]
+    fn from_string_native(&self, _data: DataPtr, element: ElementArg, value: &str) -> Result<(), EditError> {
+        if self.class.is_localized() {
+            if let Some(id) = value.strip_prefix(STRING_ID_PREFIX) {
+                let (element, mut bytes) = request_storage(element, 4)?;
+                let id = u32::from_str_radix(id, 16).unwrap_or(0);
+                bytes.copy_from_slice(&id.to_le_bytes());
+                element.commit_storage(bytes);
+                return Ok(());
+            }
+            if element
+                .and_then(|element| element.get_file())
+                .is_some_and(|file| file.get_is_localized())
+            {
+                return Err(
+                    "Can not assign to a localized string: writing the string tables is not ported yet".to_owned(),
+                );
+            }
+        }
+        let bytes_of_text = self.bsd_get_encoding(element).get_bytes(value);
+        let zero_terminated = self.sd_size <= 0 && !self.def.def_flags.contains(DefFlag::dfNoZeroTerminator);
+        let new_size = if self.sd_size > 0 {
+            self.sd_size as usize + usize::from(self.def.def_flags.contains(DefFlag::dfHasZeroTerminator))
+        } else {
+            bytes_of_text.len() + usize::from(zero_terminated)
+        };
+        let terminator = usize::from(self.nd.nd_terminator);
+        let (element, mut bytes) = request_storage(element, new_size + terminator)?;
+        if self.sd_size > 0 {
+            bytes[..new_size].fill(0);
+            let len = bytes_of_text.len().min(self.sd_size as usize);
+            bytes[..len].copy_from_slice(&bytes_of_text[..len]);
+        } else {
+            bytes[..bytes_of_text.len()].copy_from_slice(&bytes_of_text);
+            if zero_terminated {
+                bytes[new_size - 1] = 0;
+            }
+        }
+        if self.nd.nd_terminator {
+            bytes[new_size] = TERMINATOR;
+        }
+        element.commit_storage(bytes);
+        Ok(())
+    }
+
     fn string_get_size(&self, data: DataPtr) -> i32 {
         let terminator = i32::from(self.nd.nd_terminator);
         if self.sd_size > 0 {
@@ -595,6 +655,39 @@ impl ValueDef for StringDef {
             to_str(&mut result, data, element, CallbackType::ctToNativeValue);
         }
         Variant::Str(result)
+    }
+
+    // UPSTREAM-QUIRK: `TwbStringDef.FromEditValue` runs the formater on the
+    // value and then stores the value as given, not the formater's result.
+    fn from_edit_value(&self, data: DataPtr, element: ElementArg, value: &str) -> Result<(), EditError> {
+        let text = self.transform_string(value.to_owned(), StringTransformType::ttFromEditValue);
+        self.from_string_native(data, element, &text)
+    }
+
+    fn from_native_value(&self, data: DataPtr, element: ElementArg, value: Variant) -> Result<(), EditError> {
+        let text = self.transform_string(variant_to_string(&value), StringTransformType::ttFromNativeValue);
+        self.from_string_native(data, element, &text)
+    }
+
+    fn set_to_default(&self, data: DataPtr, element: ElementArg) -> Result<bool, EditError> {
+        if self.set_to_default_callback(data, element) {
+            return Ok(true);
+        }
+        if let Some(result) = self.set_to_default_native_value(data, element) {
+            return result;
+        }
+        let default = self
+            .vd
+            .vd_default_edit_value
+            .load()
+            .as_deref()
+            .cloned()
+            .unwrap_or_default();
+        let changed = data.is_none() || self.to_edit_value(data, element) != default;
+        if changed {
+            self.from_edit_value(data, element, &default)?;
+        }
+        Ok(changed)
     }
 
     fn get_is_editable(&self, _data: DataPtr, _element: ElementArg) -> bool {

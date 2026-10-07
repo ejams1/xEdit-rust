@@ -125,6 +125,11 @@ fn save_definitions(mode: GameMode) -> Option<SaveDefinitions> {
 }
 
 fn setup(game: &str, save: Option<&str>) -> Result<GameMode, String> {
+    // `xDump.dpr`: `wbAllowInternalEdit := False`, so a dump shows a record
+    // as loaded, without the required subrecords the editor would add.
+    xedit_core::interface::globals::set_allow_internal_edit(false);
+    xedit_core::interface::globals::set_sort_sub_records(false);
+    xedit_core::interface::globals::set_display_load_order_form_id(false);
     let tag = game.to_ascii_lowercase();
     let Some(&(_, mode)) = GAMES.iter().find(|(name, _)| *name == tag) else {
         let tags: Vec<&str> = GAMES.iter().map(|(tag, _)| *tag).collect();

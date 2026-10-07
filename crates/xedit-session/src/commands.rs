@@ -2,8 +2,8 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-//! The read-only inspection commands: the session, its files, records and
-//! elements as JSON.
+//! The inspection commands (the session, its files, records and elements
+//! as JSON) and `elements.set`, the first command that changes plugin data.
 
 use std::sync::Arc;
 
@@ -24,6 +24,9 @@ impl Session {
     /// Loads the plugins of a game in the order given, with their masters.
     pub fn load(game: &str, plugins: &[String]) -> Result<Self, String> {
         let mode = setup_game(game)?;
+        // The editor's settings apply before the plugins load: the load
+        // itself edits records under `wbAllowInternalEdit`.
+        crate::save::apply_edit_settings(mode);
         clear_files();
         let mut files = Vec::new();
         for path in plugins {
@@ -35,8 +38,6 @@ impl Session {
             load_resources(file, path, &xedit_core::delphi::extract_file_path(path), mode);
             load_hardcoded()?;
         }
-        // The save path reads the per-game settings of the editor.
-        crate::save::apply_edit_settings(mode);
         Ok(Self {
             game: Some(mode),
             files,
@@ -396,6 +397,141 @@ fn elements_get(session: &mut Session, request: ElementsGetRequest) -> Result<El
     })
 }
 
+/// `elements.set`: the request.
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ElementsSetRequest {
+    /// Load order FormID of the record as hexadecimal digits.
+    pub form_id: String,
+    /// Path of the element inside the record, with `\\` between the names.
+    /// A missing last element is added when the record's definition has it
+    /// (`ElementEditValues`), and a flag of a flags value is set by its name.
+    pub path: String,
+    /// Plugin the record is seen from; the last loaded plugin when omitted.
+    pub file: Option<String>,
+    /// The value: a string is set as the edit value (the text xEdit shows
+    /// in its editor, such as `1.5`, `Dawnguard "Dawnguard" [QUST:0200C97A]`
+    /// or `0000000000000001` for flags), a number or a boolean as the native
+    /// value, and `null` sets the element to its default.
+    pub value: Value,
+    /// Report what would change, but change nothing.
+    #[serde(default)]
+    pub dry_run: bool,
+}
+
+/// `elements.set`: the response.
+#[derive(Serialize, JsonSchema)]
+pub struct ElementsSetResponse {
+    /// Full path of the element.
+    pub path: String,
+    /// The element before the change.
+    pub old: ElementNode,
+    /// The element after the change; the same as `old` for a dry run.
+    pub new: ElementNode,
+    /// Whether the value differs after the change.
+    pub changed: bool,
+    /// Whether the element was added to the record by this call.
+    pub added: bool,
+    /// The plugin that now holds a change to save.
+    pub file: String,
+}
+
+fn elements_set(session: &mut Session, request: ElementsSetRequest) -> Result<ElementsSetResponse, CommandError> {
+    let record = session.record(&request.form_id, request.file.as_deref())?;
+    let existing = record.get_element_by_path(&request.path);
+    let old = match &existing {
+        Some(element) => node_of(element, Some(0)),
+        None => {
+            // The element may be added; the request must name a member of
+            // the record for that.
+            if request.value.is_null() {
+                return Err(CommandError::new(
+                    "unknown_element",
+                    format!("{} has no element at {}", record.get_name(), request.path),
+                ));
+            }
+            ElementNode {
+                name: String::new(),
+                display_name: None,
+                value: String::new(),
+                summary: String::new(),
+                native: Value::Null,
+                children: Vec::new(),
+            }
+        }
+    };
+    let file = record.get_file().map(|file| file.get_name()).unwrap_or_default();
+    if request.dry_run {
+        let element = existing.ok_or_else(|| {
+            CommandError::new(
+                "unknown_element",
+                format!("{} has no element at {}", record.get_name(), request.path),
+            )
+        })?;
+        if !element.get_is_editable() && !request.value.is_null() {
+            return Err(CommandError::new(
+                "not_editable",
+                format!("{} can not be edited", element.get_full_path()),
+            ));
+        }
+        return Ok(ElementsSetResponse {
+            path: element.get_full_path(),
+            new: node_of(&element, Some(0)),
+            old,
+            changed: false,
+            added: false,
+            file,
+        });
+    }
+    let edit = |error: String| CommandError::new("edit_failed", error);
+    match (&existing, &request.value) {
+        (Some(element), Value::Null) => element.set_to_default().map_err(edit)?,
+        (Some(element), Value::String(text)) => element.set_edit_value(text).map_err(edit)?,
+        (Some(element), value) => element.set_native_value(native_of(value)?).map_err(edit)?,
+        (None, Value::String(text)) => record.set_element_edit_value(&request.path, text).map_err(edit)?,
+        (None, value) => record
+            .set_element_native_value(&request.path, native_of(value)?)
+            .map_err(edit)?,
+    }
+    let element = record.get_element_by_path(&request.path).ok_or_else(|| {
+        CommandError::new(
+            "unknown_element",
+            format!("{} has no element at {}", record.get_name(), request.path),
+        )
+    })?;
+    let new = node_of(&element, Some(0));
+    Ok(ElementsSetResponse {
+        path: element.get_full_path(),
+        changed: new.value != old.value || new.native != old.native,
+        added: existing.is_none(),
+        old,
+        new,
+        file,
+    })
+}
+
+/// A JSON value as the native value of an element.
+fn native_of(value: &Value) -> Result<Variant, CommandError> {
+    match value {
+        Value::Bool(value) => Ok(Variant::Bool(*value)),
+        Value::Number(number) => {
+            if let Some(value) = number.as_u64() {
+                Ok(Variant::UInt(value))
+            } else if let Some(value) = number.as_i64() {
+                Ok(Variant::Int(value))
+            } else {
+                Ok(Variant::Float(number.as_f64().unwrap_or(0.0)))
+            }
+        }
+        Value::String(text) => Ok(Variant::Str(text.clone())),
+        Value::Null => Ok(Variant::Empty),
+        _ => Err(CommandError::new(
+            "invalid_params",
+            "value must be a string, a number, a boolean or null",
+        )),
+    }
+}
+
 /// Adds the inspection commands to the registry.
 pub fn register(registry: &mut Registry) {
     registry.register(
@@ -423,5 +559,11 @@ pub fn register(registry: &mut Registry) {
         "Read an element of a record by path.",
         false,
         elements_get,
+    );
+    registry.register(
+        "elements.set",
+        "Set the value of an element of a record by path, adding a missing member.",
+        true,
+        elements_set,
     );
 }

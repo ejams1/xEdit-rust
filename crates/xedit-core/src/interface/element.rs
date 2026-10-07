@@ -16,7 +16,7 @@ use xedit_io::Encoding;
 
 use super::def::{NamedDef, ValueDef};
 use super::form_id::{FileID, FormID};
-use super::misc::Variant;
+use super::misc::{EditError, Variant};
 use super::types::{ConflictPriority, ElementType, FileState, FileStates, Signature, TriBool};
 
 /// A reference to an element, upstream `IwbElement`.
@@ -115,6 +115,80 @@ pub trait Element: Send + Sync {
     fn get_value_def(&self) -> Option<Arc<dyn ValueDef>>;
 
     fn get_native_value(&self) -> Variant;
+
+    /// Upstream `SetEditValue`. The error is the message of the exception
+    /// upstream raises.
+    fn set_edit_value(&self, _value: &str) -> Result<(), EditError> {
+        Err(format!("{} can not be edited.", self.get_name()))
+    }
+
+    /// Upstream `SetNativeValue`.
+    fn set_native_value(&self, _value: Variant) -> Result<(), EditError> {
+        Err(format!("{} can not be edited.", self.get_name()))
+    }
+
+    /// Upstream `SetToDefault`: the element takes the default value of its
+    /// definition.
+    fn set_to_default(&self) -> Result<(), EditError> {
+        Ok(())
+    }
+
+    /// Upstream `IsEditable`.
+    fn get_is_editable(&self) -> bool {
+        super::globals::is_internal_edit()
+    }
+
+    /// Upstream `Remove`: the element leaves its container.
+    fn remove(&self) {}
+
+    /// Upstream `SortOrder`.
+    fn get_sort_order(&self) -> i32 {
+        i32::MAX
+    }
+
+    /// Upstream `SortOrder := aValue`.
+    fn set_sort_order(&self, _order: i32) {}
+
+    /// Upstream `BeginUpdate`: change notifications wait for `end_update`.
+    fn begin_update(&self) {}
+
+    /// Upstream `EndUpdate`.
+    fn end_update(&self) {}
+
+    /// Upstream `DataSize := aValue` (`SetDataSize`): the data of the
+    /// element is resized, and its elements are built again over it.
+    fn set_data_size(&self, _size: i32) -> Result<(), EditError> {
+        Err(format!("{} can not be resized.", self.get_name()))
+    }
+
+    /// Upstream `SortKey[aExtended]`: the key the sorted containers order
+    /// their elements by.
+    fn get_sort_key(&self, _extended: bool) -> String {
+        String::new()
+    }
+
+    /// Upstream `MarkModifiedRecursive(AllElementTypes)`.
+    fn mark_modified_recursive(&self) {}
+
+    /// Upstream `Assign(Low(Integer), aSource, False)` (`wbAssignThis`) with
+    /// a source element: the element takes the value of the source, member
+    /// by member for a container. The default of `TwbDef.Assign` is the
+    /// edit value of the source.
+    fn assign_from(&self, source: &ElementRef) -> Result<(), EditError> {
+        self.set_edit_value(&source.get_edit_value())
+    }
+
+    /// Upstream `RequestStorageChange(aBasePtr, aEndPtr, aNewSize)`: makes
+    /// the element the owner of its data and marks it modified. Returns the
+    /// data as a buffer of `new_size` bytes (the old bytes, cut or extended
+    /// with zeros) for the caller to fill and hand back to `commit_storage`.
+    /// `None` for an element without data of its own.
+    fn request_storage_change(&self, _new_size: usize) -> Option<Vec<u8>> {
+        None
+    }
+
+    /// Stores the buffer of `request_storage_change` as the data of the element.
+    fn commit_storage(&self, _bytes: Vec<u8>) {}
 
     /// The element that contains this one.
     fn get_container(&self) -> Option<ElementRef>;
@@ -223,6 +297,11 @@ pub trait File: Container {
 
     /// Converts a FormID of this file to the FormID in the load order.
     fn file_form_id_to_load_order_form_id(&self, form_id: FormID, new: bool) -> Result<FormID, String>;
+
+    /// Upstream `LoadOrderFormIDtoFileFormID`: the FormID as this file
+    /// stores it. The error is the message of the upstream exception for a
+    /// FormID of a file that is not a master of this one.
+    fn load_order_form_id_to_file_form_id(&self, form_id: FormID, new: bool) -> Result<FormID, String>;
 }
 
 static FILES: RwLock<Vec<FileRef>> = RwLock::new(Vec::new());
@@ -335,6 +414,14 @@ pub trait MainRecord: Container {
     /// Upstream `BaseRecord`: the record the base record subrecord of a
     /// placed record links to.
     fn get_base_record(&self) -> Option<MainRecordRef>;
+
+    /// Upstream `IsMaster`: the record overrides no record of a master.
+    fn get_is_master(&self) -> bool {
+        true
+    }
+
+    /// Upstream `IsCompressed := aValue`.
+    fn set_is_compressed(&self, _value: bool) {}
 }
 
 /// Upstream `IwbContainer`, with the methods of `IwbContainerBase`.
@@ -382,6 +469,132 @@ pub trait Container: Element {
         let flag_def = formater.as_flags_def()?.find_flag(name)?;
         let index = flag_def.get_flag_index() as usize;
         Some(edit_value.as_bytes().get(index) == Some(&b'1'))
+    }
+
+    /// Upstream `ElementEditValues[aPath] := aValue` (`SetElementEditValue`):
+    /// the element at the path takes the value; a missing last element is
+    /// added (`SetMemberEditValue`), and a flag of a flags value is set by
+    /// its name.
+    fn set_element_edit_value(&self, path: &str, value: &str) -> Result<(), EditError> {
+        let (name, rest) = match path.split_once('\\') {
+            Some((name, rest)) => (name, Some(rest)),
+            None => (path, None),
+        };
+        let element = match name {
+            "." => self.as_container_ref(),
+            ".." => self.get_container(),
+            _ => self.get_element_by_name(name),
+        };
+        match (element, rest) {
+            (None, None) => self.set_member_edit_value(name, value),
+            (None, Some(_)) => Ok(()),
+            (Some(element), None) => element.set_edit_value(value),
+            (Some(element), Some(rest)) => match element.as_container() {
+                Some(container) => container.set_element_edit_value(rest, value),
+                None => Ok(()),
+            },
+        }
+    }
+
+    /// Upstream `ElementNativeValues[aPath] := aValue` (`SetElementNativeValue`).
+    fn set_element_native_value(&self, path: &str, value: Variant) -> Result<(), EditError> {
+        let (name, rest) = match path.split_once('\\') {
+            Some((name, rest)) => (name, Some(rest)),
+            None => (path, None),
+        };
+        let element = match name {
+            "." => self.as_container_ref(),
+            ".." => self.get_container(),
+            _ => self.get_element_by_name(name),
+        };
+        match (element, rest) {
+            (None, None) => self.set_member_native_value(name, value),
+            (None, Some(_)) => Ok(()),
+            (Some(element), None) => element.set_native_value(value),
+            (Some(element), Some(rest)) => match element.as_container() {
+                Some(container) => container.set_element_native_value(rest, value),
+                None => Ok(()),
+            },
+        }
+    }
+
+    /// This container as an element reference, for the `.` path.
+    fn as_container_ref(&self) -> Option<ElementRef> {
+        None
+    }
+
+    /// Port of `SetMemberEditValue`: a flag of a flags value by its name,
+    /// else the member added by its name.
+    fn set_member_edit_value(&self, name: &str, value: &str) -> Result<(), EditError> {
+        if let Some(flags) = self.flag_edit_value(name, value == "1") {
+            return self.set_edit_value(&flags);
+        }
+        if let Some(element) = self.add(name, true)? {
+            element.set_edit_value(value)?;
+        }
+        Ok(())
+    }
+
+    /// Port of `SetMemberNativeValue`.
+    fn set_member_native_value(&self, name: &str, value: Variant) -> Result<(), EditError> {
+        if let Some(flags) = self.flag_edit_value(name, matches!(value, Variant::Bool(true))) {
+            return self.set_edit_value(&flags);
+        }
+        if let Some(element) = self.add(name, true)? {
+            // UPSTREAM-QUIRK: the native value is assigned as an edit value.
+            element.set_edit_value(&super::misc::variant_to_string(&value))?;
+        }
+        Ok(())
+    }
+
+    /// The edit value of this flags value with the flag `name` set or
+    /// cleared, when the value is a flags value with that flag.
+    fn flag_edit_value(&self, name: &str, set: bool) -> Option<String> {
+        let value_def = self.get_value_def()?;
+        let integer_def = value_def.as_integer_def()?;
+        let formater = integer_def.get_formater(self.as_container_ref().as_ref())?;
+        let flag_def = formater.as_flags_def()?.find_flag(name)?;
+        let index = usize::try_from(flag_def.get_flag_index()).ok()?;
+        let mut flags: Vec<u8> = self.get_edit_value().into_bytes();
+        flags.resize(64.max(flags.len()), b'0');
+        if index >= flags.len() {
+            return None;
+        }
+        flags[index] = if set { b'1' } else { b'0' };
+        Some(String::from_utf8(flags).unwrap_or_default())
+    }
+
+    /// Upstream `Add(aName, aSilent)`: adds the member element with the name
+    /// or signature to the container, or returns the one that exists.
+    fn add(&self, _name: &str, _silent: bool) -> Result<Option<ElementRef>, EditError> {
+        Ok(None)
+    }
+
+    /// Upstream `RemoveElement(aName)`: removes the element the name resolves
+    /// to (`ResolveElementName`: a name, a path or a signature) and returns it.
+    fn remove_element_by_name(&self, name: &str) -> Option<ElementRef> {
+        let element = self.get_element_by_path(name)?;
+        element.remove();
+        Some(element)
+    }
+
+    /// Upstream `RemoveElement(aPos, aMarkModified)`: removes the element at
+    /// the position and returns it.
+    fn remove_element_at(&self, _index: i32, _mark_modified: bool) -> Option<ElementRef> {
+        None
+    }
+
+    /// Upstream `ReverseElements`.
+    fn reverse_elements(&self) {}
+
+    /// Upstream `SortBySortOrder`.
+    fn sort_by_sort_order(&self) {}
+
+    /// Upstream `ElementByMemoryOrder[aOrder]`.
+    fn get_element_by_memory_order(&self, order: i32) -> Option<ElementRef> {
+        (0..self.get_element_count())
+            .filter_map(|index| self.get_element(index))
+            .find(|element| element.get_memory_order() == order)
     }
 
     /// Upstream `ElementLinksTo[aPath]`.

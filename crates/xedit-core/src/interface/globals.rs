@@ -709,6 +709,10 @@ static _InternalEditCount: AtomicI32 = AtomicI32::new(0);
 #[allow(non_upper_case_globals)]
 static _BlockInternalEdit: AtomicBool = AtomicBool::new(false);
 
+/// Upstream `wbIgnoreStringValue`: a `ToStr` callback returns it from
+/// `ctFromEditValue` to leave the data as it is.
+pub const IGNORE_STRING_VALUE: &str = "<<<Ignore>>>";
+
 /// Port of `wbBeginInternalEdit`. Each `true` result needs one [`end_internal_edit`].
 pub fn begin_internal_edit(force: bool) -> bool {
     let result = edit_allowed() || ((allow_internal_edit() || force) && !_BlockInternalEdit.load(Ordering::Relaxed));

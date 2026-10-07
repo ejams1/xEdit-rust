@@ -15,10 +15,11 @@ use std::sync::{Arc, Weak};
 use super::def::{
     Def, DefBase, DefKind, DefRef, NamedDef, NamedDefArgs, NamedDefBase, ValueDef, ValueDefBase, value_def_plumbing,
 };
+use super::def::{ValueDefState, request_storage};
 use super::element::{DataPtr, ElementArg};
 use super::formaters::comma_text;
 use super::globals::is_internal_edit;
-use super::misc::{Variant, length};
+use super::misc::{EditError, Variant, length};
 use super::types::{CallbackType, DefFlag, DefType, EditType};
 
 pub type CountCallback = Arc<dyn Fn(DataPtr, ElementArg) -> u32 + Send + Sync>;
@@ -105,6 +106,28 @@ impl ByteArrayDef {
         }
         self.used(element, &result);
         result
+    }
+}
+
+impl ByteArrayDef {
+    /// The tail of `FromEditValue` and `FromNativeValue`: the bytes after the
+    /// length prefix, cut or extended to a fixed size.
+    // UPSTREAM-QUIRK: the length prefix itself is not written; it keeps the
+    // bytes it had, or zeros for new storage.
+    fn store_bytes(&self, element: ElementArg, mut bytes: Vec<u8>) -> Result<(), EditError> {
+        let prefix = match self.bad_size {
+            BYTE_ARRAY_LENGTH_U32 => 4,
+            BYTE_ARRAY_LENGTH_U16 => 2,
+            BYTE_ARRAY_LENGTH_U8 => 1,
+            _ => 0,
+        };
+        if self.bad_size > 0 {
+            bytes.resize(self.bad_size as usize, 0);
+        }
+        let (element, mut storage) = request_storage(element, bytes.len() + prefix)?;
+        storage[prefix..].copy_from_slice(&bytes);
+        element.commit_storage(storage);
+        Ok(())
     }
 }
 
@@ -227,6 +250,75 @@ impl ValueDef for ByteArrayDef {
 
     fn to_native_value(&self, data: DataPtr, _element: ElementArg) -> Variant {
         Variant::Bytes(self.content(data).to_vec())
+    }
+
+    /// Port of `TwbByteArrayDef.FromEditValue`: pairs of hexadecimal digits,
+    /// separated by blanks, commas or semicolons.
+    fn from_edit_value(&self, _data: DataPtr, element: ElementArg, value: &str) -> Result<(), EditError> {
+        let chars: Vec<char> = value.chars().collect();
+        let mut bytes = Vec::with_capacity(chars.len() / 2);
+        let mut i = 0;
+        while i < chars.len() {
+            match chars[i] {
+                ' ' | ',' | ';' => i += 1,
+                c if c.is_ascii_hexdigit() => {
+                    if i + 1 == chars.len() {
+                        return Err("Unexpected end of value. Single digit in hexadecimal pair".to_owned());
+                    }
+                    let next = chars[i + 1];
+                    if !next.is_ascii_hexdigit() {
+                        return Err(format!(
+                            "\"{next}\" at position {} is not a valid character for {}",
+                            i + 2,
+                            self.get_name()
+                        ));
+                    }
+                    bytes.push((c.to_digit(16).unwrap_or(0) * 16 + next.to_digit(16).unwrap_or(0)) as u8);
+                    i += 2;
+                }
+                other => {
+                    return Err(format!(
+                        "\"{other}\" at position {} is not a valid character for {}",
+                        i + 1,
+                        self.get_name()
+                    ));
+                }
+            }
+        }
+        self.store_bytes(element, bytes)
+    }
+
+    fn from_native_value(&self, _data: DataPtr, element: ElementArg, value: Variant) -> Result<(), EditError> {
+        match value {
+            Variant::Bytes(bytes) => self.store_bytes(element, bytes),
+            Variant::Empty => self.store_bytes(element, Vec::new()),
+            _ => Err("Could not convert variant into type (Array Byte)".to_owned()),
+        }
+    }
+
+    fn set_to_default(&self, data: DataPtr, element: ElementArg) -> Result<bool, EditError> {
+        if self.set_to_default_callback(data, element) {
+            return Ok(true);
+        }
+        if let Some(result) = self.set_to_default_native_value(data, element) {
+            return result;
+        }
+        let default = match self.vd.vd_default_edit_value.load().as_deref() {
+            Some(default) if self.vd.vd_states.contains(ValueDefState::vdsHasDefaultEditValue) => default.clone(),
+            _ => {
+                let size = self.get_size(data, element);
+                if size > 0 && size < i32::MAX {
+                    vec!["00"; size as usize].join(" ")
+                } else {
+                    String::new()
+                }
+            }
+        };
+        let changed = data.is_none() || self.to_string(data, element) != default;
+        if changed {
+            self.from_edit_value(data, element, &default)?;
+        }
+        Ok(changed)
     }
 
     fn get_is_editable(&self, _data: DataPtr, _element: ElementArg) -> bool {

@@ -7,6 +7,8 @@
 //! The callbacks of `wbDefinitionsFO4.pas` that are ported by hand. The
 //! ones that are not ported yet are stubs in `fo4_stubs.rs`.
 
+// The stubs of the callbacks not ported yet; empty once every callback is ported.
+#[allow(unused_imports)]
 pub use super::fo4_stubs::*;
 
 use std::sync::{Arc, Mutex};
@@ -1157,4 +1159,122 @@ pub fn wb_morph_value_to_str(a_int: i64, a_element: ElementArg, a_type: Callback
         true,
         "morph",
     )
+}
+
+// ----- the editing callbacks -----
+
+use super::common::{
+    aech_type_after_set, cell_combined_refs_after_set, cell_data_after_set, cell_xclw_get_conflict_priority,
+    check_morph_key_order, condition_event_to_int, efit_after_load, flst_edid_after_set, flst_lnam_is_sorted,
+    gmst_edid_after_set, lle_after_load, mgef_archtype_after_set, mgef_assoc_item_after_set,
+    package_data_input_value_type_after_set, refr_after_load_lock, replace_bodt_with_bod2, set_native,
+    with_forced_internal_edit, with_internal_edit,
+};
+
+/// Upstream `wbConditionEventToInt`.
+pub fn wb_condition_event_to_int(a_string: &str, _a_element: ElementArg) -> i64 {
+    condition_event_to_int(a_string, WB_EVENT_FUNCTION_ENUM.get(), WB_EVENT_MEMBER_ENUM.get())
+}
+
+/// Upstream `wbGMSTEDIDAfterSet`.
+pub fn wb_gmstedid_after_set(a_element: &ElementRef, a_old_value: &Variant, a_new_value: &Variant) {
+    gmst_edid_after_set(a_element, a_old_value, a_new_value);
+}
+
+/// Upstream `wbFLSTEDIDAfterSet`.
+pub fn wb_flstedid_after_set(a_element: &ElementRef, a_old_value: &Variant, a_new_value: &Variant) {
+    flst_edid_after_set(a_element, a_old_value, a_new_value);
+}
+
+/// Upstream `wbMGEFAssocItemAfterSet`.
+pub fn wb_mgef_assoc_item_after_set(a_element: &ElementRef, _a_old_value: &Variant, a_new_value: &Variant) {
+    mgef_assoc_item_after_set(a_element, a_new_value, "Archetype");
+}
+
+/// Upstream `wbMGEFAV2WeightAfterSet`.
+pub fn wb_mgefav2_weight_after_set(a_element: &ElementRef, _a_old_value: &Variant, a_new_value: &Variant) {
+    mgef_assoc_item_after_set(a_element, a_new_value, "Archetype");
+}
+
+/// Upstream `wbMGEFArchtypeAfterSet`.
+pub fn wb_mgef_archtype_after_set(a_element: &ElementRef, a_old_value: &Variant, a_new_value: &Variant) {
+    mgef_archtype_after_set(
+        a_element,
+        a_old_value,
+        a_new_value,
+        &[(6, 0), (7, 1), (8, 0), (11, 54), (21, 53), (24, 1), (38, 1), (42, 1)],
+    );
+}
+
+/// Upstream `wbFLSTLNAMIsSorted`.
+pub fn wb_flstlnam_is_sorted(a_container: ElementArg) -> bool {
+    flst_lnam_is_sorted(a_container)
+}
+
+/// Upstream `wbAECHTypeAfterSet`.
+pub fn wb_aech_type_after_set(a_element: &ElementRef, a_old_value: &Variant, a_new_value: &Variant) {
+    aech_type_after_set(a_element, a_old_value, a_new_value);
+}
+
+/// Upstream `wbARMOAfterLoad`.
+pub fn wb_armo_after_load(a_element: &ElementRef) {
+    replace_bodt_with_bod2(a_element);
+}
+
+/// Upstream `wbARMAAfterLoad`.
+pub fn wb_arma_after_load(a_element: &ElementRef) {
+    replace_bodt_with_bod2(a_element);
+}
+
+/// Upstream `wbNPCAfterLoad`.
+pub fn wb_npc_after_load(a_element: &ElementRef) {
+    check_morph_key_order(a_element);
+}
+
+/// Upstream `wbREFRAfterLoad`.
+pub fn wb_refr_after_load(a_element: &ElementRef) {
+    refr_after_load_lock(a_element, false);
+}
+
+/// Upstream `wbCELLXCLWGetConflictPriority`.
+pub fn wb_cellxclw_get_conflict_priority(a_element: ElementArg, a_conflict_priority: &mut ConflictPriority) {
+    cell_xclw_get_conflict_priority(a_element, a_conflict_priority);
+}
+
+/// Upstream `wbCELLDATAAfterSet`.
+pub fn wb_celldata_after_set(a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
+    cell_data_after_set(a_element);
+}
+
+/// Upstream `wbEFITAfterLoad`.
+pub fn wb_efit_after_load(a_element: &ElementRef) {
+    efit_after_load(a_element);
+}
+
+/// Upstream `wbLLEAfterLoad`.
+pub fn wb_lle_after_load(a_element: &ElementRef) {
+    lle_after_load(a_element);
+}
+
+/// Upstream `wbPackageDataInputValueTypeAfterSet`.
+pub fn wb_package_data_input_value_type_after_set(
+    a_element: &ElementRef,
+    a_old_value: &Variant,
+    a_new_value: &Variant,
+) {
+    package_data_input_value_type_after_set(a_element, a_old_value, a_new_value);
+}
+
+/// Upstream `wbCELLCombinedRefsAfterSet`.
+pub fn wb_cell_combined_refs_after_set(a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
+    with_forced_internal_edit(|| cell_combined_refs_after_set(a_element));
+}
+
+/// Upstream `wbSCENBehaviorEnumAfterLoad`: at most 3.
+pub fn wb_scen_behavior_enum_after_load(a_element: &ElementRef) {
+    with_internal_edit(|| {
+        if variant_int(&a_element.get_native_value()) > 3 {
+            set_native(a_element, 3i64);
+        }
+    });
 }

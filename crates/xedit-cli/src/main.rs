@@ -97,6 +97,14 @@ enum Action {
         #[arg(long, default_value = "{}")]
         params: String,
     },
+    /// Run several commands in one session: a JSON array of {"command": name, "params": {...}} from a file or stdin (-).
+    Batch {
+        /// Path of the JSON file, or - for stdin.
+        file: String,
+        /// Go on after a failed command instead of stopping at it.
+        #[arg(long)]
+        keep_going: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -189,12 +197,35 @@ enum ElementsAction {
         #[arg(long)]
         depth: Option<usize>,
     },
+    /// Set the value of an element by its path (elements.set). Needs --edit unless --dry-run.
+    Set {
+        /// Load order FormID of the record as hexadecimal digits.
+        form_id: String,
+        /// Path of the element inside the record, with \\ between the names. A missing last element is added.
+        path: String,
+        /// The edit value, as xEdit shows it in its editor. Omit with --default.
+        value: Option<String>,
+        /// Plugin the record is seen from; the last loaded plugin when omitted.
+        #[arg(long)]
+        file: Option<String>,
+        /// Set the value as a native value: a JSON number or boolean.
+        #[arg(long)]
+        native: bool,
+        /// Set the element to the default of its definition.
+        #[arg(long)]
+        default: bool,
+        /// Report the element and what would change, but change nothing.
+        #[arg(long)]
+        dry_run: bool,
+    },
 }
 
 /// The command name and parameters of a subcommand.
 fn command_of(action: Action) -> Result<(String, Value), CommandError> {
     Ok(match action {
-        Action::Dump { .. } | Action::Saves { .. } | Action::Schema => unreachable!("handled before"),
+        Action::Dump { .. } | Action::Saves { .. } | Action::Schema | Action::Batch { .. } => {
+            unreachable!("handled before")
+        }
         Action::Session {
             action: SessionAction::Info,
         } => ("session.info".to_owned(), json!({})),
@@ -226,18 +257,41 @@ fn command_of(action: Action) -> Result<(String, Value), CommandError> {
                 json!({ "form_id": form_id, "file": file, "depth": depth }),
             ),
         },
-        Action::Elements {
-            action:
-                ElementsAction::Get {
-                    form_id,
-                    path,
-                    file,
-                    depth,
-                },
-        } => (
-            "elements.get".to_owned(),
-            json!({ "form_id": form_id, "path": path, "file": file, "depth": depth }),
-        ),
+        Action::Elements { action } => match action {
+            ElementsAction::Get {
+                form_id,
+                path,
+                file,
+                depth,
+            } => (
+                "elements.get".to_owned(),
+                json!({ "form_id": form_id, "path": path, "file": file, "depth": depth }),
+            ),
+            ElementsAction::Set {
+                form_id,
+                path,
+                value,
+                file,
+                native,
+                default,
+                dry_run,
+            } => {
+                let value = match (default, value) {
+                    (true, _) | (false, None) => Value::Null,
+                    (false, Some(text)) if native => serde_json::from_str(&text).map_err(|e| {
+                        CommandError::new(
+                            "invalid_params",
+                            format!("--native needs a JSON number or boolean: {e}"),
+                        )
+                    })?,
+                    (false, Some(text)) => Value::String(text),
+                };
+                (
+                    "elements.set".to_owned(),
+                    json!({ "form_id": form_id, "path": path, "file": file, "value": value, "dry_run": dry_run }),
+                )
+            }
+        },
         Action::Save {
             file,
             output,
@@ -255,18 +309,80 @@ fn command_of(action: Action) -> Result<(String, Value), CommandError> {
     })
 }
 
+/// One command of a batch: `{"command": name, "params": {...}}`.
+struct BatchCommand {
+    command: String,
+    params: Value,
+}
+
+/// The commands of a batch, from its JSON text.
+fn parse_batch(text: &str) -> Result<Vec<BatchCommand>, CommandError> {
+    let invalid = |message: String| CommandError::new("invalid_params", message);
+    let value: Value = serde_json::from_str(text).map_err(|e| invalid(format!("the batch is not valid JSON: {e}")))?;
+    let Value::Array(items) = value else {
+        return Err(invalid("the batch must be a JSON array of commands".to_owned()));
+    };
+    items
+        .into_iter()
+        .enumerate()
+        .map(|(index, item)| {
+            let command = item["command"]
+                .as_str()
+                .ok_or_else(|| invalid(format!("command {index} has no \"command\" name")))?
+                .to_owned();
+            let params = match &item["params"] {
+                Value::Null => json!({}),
+                params @ Value::Object(_) => params.clone(),
+                _ => return Err(invalid(format!("command {index}: \"params\" must be an object"))),
+            };
+            Ok(BatchCommand { command, params })
+        })
+        .collect()
+}
+
 fn run(game: Option<String>, load: Vec<String>, edit: bool, action: Action) -> Result<Value, CommandError> {
     let registry = Registry::standard();
     if let Action::Schema = action {
         return Ok(registry.catalogue());
     }
-    let (name, params) = command_of(action)?;
+    let batch = match &action {
+        Action::Batch { file, keep_going } => {
+            let text = if file == "-" {
+                let mut text = String::new();
+                std::io::Read::read_to_string(&mut std::io::stdin(), &mut text)
+                    .map_err(|e| CommandError::new("io", e.to_string()))?;
+                text
+            } else {
+                std::fs::read_to_string(file).map_err(|e| CommandError::new("io", format!("{file}: {e}")))?
+            };
+            Some((parse_batch(&text)?, *keep_going))
+        }
+        _ => None,
+    };
     let mut session = match game {
         Some(game) => Session::load(&game, &load).map_err(|message| CommandError::new("load_failed", message))?,
         None if load.is_empty() => Session::default(),
         None => return Err(CommandError::new("invalid_params", "--load needs --game")),
     };
     session.allow_edit(edit);
+    if let Some((commands, keep_going)) = batch {
+        // Every command runs in the one session, so an edit is visible to
+        // the commands after it and a save at the end writes it.
+        let mut results = Vec::with_capacity(commands.len());
+        for command in commands {
+            match registry.call(&mut session, &command.command, command.params) {
+                Ok(result) => results.push(json!({ "ok": true, "command": command.command, "result": result })),
+                Err(error) => {
+                    results.push(json!({ "ok": false, "command": command.command, "error": error }));
+                    if !keep_going {
+                        break;
+                    }
+                }
+            }
+        }
+        return Ok(Value::Array(results));
+    }
+    let (name, params) = command_of(action)?;
     registry.call(&mut session, &name, params)
 }
 

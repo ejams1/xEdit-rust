@@ -7,6 +7,8 @@
 //! The callbacks of `wbDefinitionsSF1.pas` that are ported by hand. The
 //! ones that are not ported yet are stubs in `sf1_stubs.rs`.
 
+// The stubs of the callbacks not ported yet; empty once every callback is ported.
+#[allow(unused_imports)]
 pub use super::sf1_stubs::*;
 
 use std::collections::HashMap;
@@ -1601,3 +1603,151 @@ pub fn define_sf1_anonymous_5930(a_element: ElementArg) -> Option<ElementRef> {
     }
     None
 }
+
+// ----- the editing callbacks -----
+
+use super::common::{
+    as_container_ref, cell_data_after_set, condition_event_to_int, container_of, element_at, flst_edid_after_set,
+    flst_lnam_is_sorted, gmst_edid_after_set, package_data_input_value_type_after_set, set_native, set_path_native,
+};
+
+/// Upstream `wbConditionEventToInt`.
+pub fn wb_condition_event_to_int(a_string: &str, _a_element: ElementArg) -> i64 {
+    condition_event_to_int(a_string, WB_EVENT_FUNCTION_ENUM.get(), WB_EVENT_MEMBER_ENUM.get())
+}
+
+/// The body of the type `AfterSet` callbacks that replace a member by the
+/// template of the new type: the member at `sort_order` is removed; the
+/// assignment from a template (`GetAssignTemplates`) comes with the copy
+/// step of the write path.
+fn replace_member_by_template(container: &ElementRef, sort_order: i32) {
+    if let Some(member) = container
+        .as_container()
+        .and_then(|c| c.get_element_by_sort_order(sort_order))
+    {
+        member.remove();
+    }
+    xedit_core::interface::misc::progress(&format!(
+        "<Warning: the member {sort_order} of {} is not rebuilt from its template; that comes with the copy step>",
+        container.get_full_path()
+    ));
+}
+
+/// Upstream `wbTMLMTypeAfterSet`.
+pub fn wb_tmlm_type_after_set(a_element: &ElementRef, a_old_value: &Variant, a_new_value: &Variant) {
+    if !(a_old_value.is_ordinal() && a_new_value.is_ordinal()) || a_old_value.same_value(a_new_value) {
+        return;
+    }
+    let Some(parent) = container_of(a_element).and_then(|c| container_of(&c)) else {
+        return;
+    };
+    if let Some(data) = parent.as_container().and_then(|c| c.get_element_by_sort_order(5)) {
+        data.remove();
+    }
+    if matches!(variant_int(&a_element.get_native_value()), 0 | 1 | 5) {
+        replace_member_by_template(&parent, 5);
+    }
+}
+
+/// Upstream `wbGPOFTypeAfterSetCallback`.
+pub fn wb_gpof_type_after_set_callback(a_element: &ElementRef, a_old_value: &Variant, a_new_value: &Variant) {
+    if !(a_old_value.is_ordinal() && a_new_value.is_ordinal()) || a_old_value.same_value(a_new_value) {
+        return;
+    }
+    if let Some(container) = container_of(a_element) {
+        replace_member_by_template(&container, 1);
+    }
+}
+
+/// Upstream `wbGPOGTypeAfterSetCallback`.
+pub fn wb_gpog_type_after_set_callback(a_element: &ElementRef, a_old_value: &Variant, a_new_value: &Variant) {
+    wb_gpof_type_after_set_callback(a_element, a_old_value, a_new_value);
+}
+
+/// Upstream `wbSCENTimelineTypeAfterSet`.
+pub fn wb_scen_timeline_type_after_set(a_element: &ElementRef, a_old_value: &Variant, a_new_value: &Variant) {
+    if !(a_old_value.is_ordinal() && a_new_value.is_ordinal()) || a_old_value.same_value(a_new_value) {
+        return;
+    }
+    if let Some(container) = container_of(a_element) {
+        replace_member_by_template(&container, 2);
+    }
+}
+
+/// Upstream `wbGMSTEDIDAfterSet`.
+pub fn wb_gmstedid_after_set(a_element: &ElementRef, a_old_value: &Variant, a_new_value: &Variant) {
+    gmst_edid_after_set(a_element, a_old_value, a_new_value);
+}
+
+/// Upstream `wbFLSTEDIDAfterSet`.
+pub fn wb_flstedid_after_set(a_element: &ElementRef, a_old_value: &Variant, a_new_value: &Variant) {
+    flst_edid_after_set(a_element, a_old_value, a_new_value);
+}
+
+/// Upstream `wbMGEFArchtypeAfterSet`: the members that depend on the
+/// archetype are zeroed, by index because unions label them.
+pub fn wb_mgef_archtype_after_set(a_element: &ElementRef, a_old_value: &Variant, a_new_value: &Variant) {
+    if a_old_value.same_value(a_new_value) {
+        return;
+    }
+    let Some(container) = as_container_ref(a_element) else {
+        return;
+    };
+    let Some(parent) = container_of(&container) else { return };
+    if let Some(first) = element_at(&parent, 0) {
+        set_native(&first, 0i64);
+    }
+    if let Some(weight) = element_at(&parent, 17) {
+        set_native(&weight, 0i64);
+    }
+    set_path_native(&container, "..\\Second AV Weight", 0.0f64);
+    if !matches!(variant_int(a_new_value), 0 | 4 | 5 | 32 | 34 | 48 | 50)
+        && let Some(member) = element_at(&parent, 14)
+    {
+        set_native(&member, 0i64);
+    }
+}
+
+/// Upstream `wbFLSTLNAMIsSorted`.
+pub fn wb_flstlnam_is_sorted(a_container: ElementArg) -> bool {
+    flst_lnam_is_sorted(a_container)
+}
+
+/// Upstream `wbCELLDATAAfterSet`.
+pub fn wb_celldata_after_set(a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
+    cell_data_after_set(a_element);
+}
+
+/// Upstream `wbPackageDataInputValueTypeAfterSet`.
+pub fn wb_package_data_input_value_type_after_set(
+    a_element: &ElementRef,
+    a_old_value: &Variant,
+    a_new_value: &Variant,
+) {
+    package_data_input_value_type_after_set(a_element, a_old_value, a_new_value);
+}
+
+/// The perk activity callbacks of Starfield keep a virtual JSON view of
+/// the activity data (`wbPerkActivityLoadVirtualJSON`); the reflection JSON
+/// is not ported, so they do nothing beyond the upstream early exits.
+pub fn define_sf1_anonymous_5247(_a_element: &ElementRef) {}
+
+/// Upstream anonymous `AfterSet` of the perk activity (`ATAV`).
+pub fn define_sf1_anonymous_5256(_a_element: &ElementRef, a_old_value: &Variant, a_new_value: &Variant) {
+    if a_old_value.same_value(a_new_value) || xedit_core::interface::globals::is_internal_edit() {
+        return;
+    }
+    xedit_core::interface::misc::progress("<Warning: the perk activity JSON of Starfield is not ported>");
+}
+
+/// Upstream anonymous `AfterSet` of the virtual perk activity (`NULL`).
+pub fn define_sf1_anonymous_5271(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
+    if xedit_core::interface::globals::is_internal_edit() {
+        return;
+    }
+    xedit_core::interface::misc::progress("<Warning: the perk activity JSON of Starfield is not ported>");
+}
+
+/// Upstream anonymous `AfterSet` of the virtual perk stream ID: only a
+/// master update triggers it, which is not ported.
+pub fn define_sf1_anonymous_5287(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {}

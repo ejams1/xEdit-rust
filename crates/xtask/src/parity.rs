@@ -422,10 +422,12 @@ pub fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
     if options.roundtrip {
         let count = |status: &str| outcomes.iter().filter(|o| o.status == status).count();
         println!(
-            "{} equal, {} refused, {} ofst-dropped, {} unsupported, {} different, {} failed of {}. Report: {}",
+            "{} equal, {} refused, {} ofst-dropped, {} header-edited, {} structure-edited, {} unsupported, {} different, {} failed of {}. Report: {}",
             count("equal"),
             count("refused"),
             count("ofst-dropped"),
+            count("header-edited"),
+            count("structure-edited"),
             count("unsupported"),
             count("different"),
             count("port-failed") + count("port-memory-limit"),
@@ -444,10 +446,13 @@ pub fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
 /// The round trip of one plugin: the port loads it and saves it into the
 /// cache, and the saved bytes are compared with the input. `equal`,
 /// `ofst-dropped` (the input without the offsets of its worldspaces, which
-/// upstream drops too), `different` (with the first differing offset),
-/// `refused` (the port refused the save with an upstream message, as the
-/// oracle would), `unsupported` (a save upstream edits the header for, which
-/// the port cannot do yet), `port-failed` or `port-memory-limit`.
+/// upstream drops too), `header-edited` (the same bytes after the file
+/// header record, whose subrecords upstream edits on save: the `HEDR`
+/// record count, `INCC`, the `ONAM` list, the flags), `different` (with the
+/// first differing offset), `refused` (the port refused the save with an
+/// upstream message, as the oracle would), `unsupported` (a save upstream
+/// edits in a way the port cannot yet), `port-failed` or
+/// `port-memory-limit`.
 fn check_roundtrip(case: &Case, runner: &Runner) -> Result<Outcome> {
     let dir = runner.cache.join(format!("{}-roundtrip", case.game.mode));
     fs::create_dir_all(&dir)?;
@@ -533,7 +538,18 @@ fn check_roundtrip(case: &Case, runner: &Runner) -> Result<Outcome> {
             // a file with one saves smaller. A saved file that is the input
             // without those subrecords is what upstream writes, which the
             // oracle save of a later step confirms.
-            if let Some(dropped) = without_wrld_ofst(case, &saved)? {
+            let input = fs::read(&case.input)?;
+            let saved_bytes = fs::read(&saved)?;
+            let (expected, dropped) = match without_wrld_ofst(case, &input)? {
+                Some((expected, dropped)) => (expected, dropped),
+                None => (input, 0),
+            };
+            let ofst_note = if dropped > 0 {
+                format!(" and without the OFST data of its worldspaces ({dropped} bytes)")
+            } else {
+                String::new()
+            };
+            if expected == saved_bytes {
                 outcome.status = "ofst-dropped";
                 outcome.detail = Some(format!(
                     "  the saved file is the input without the OFST data of its worldspaces ({dropped} bytes)"
@@ -541,9 +557,40 @@ fn check_roundtrip(case: &Case, runner: &Runner) -> Result<Outcome> {
                 fs::remove_file(&saved)?;
                 return Ok(outcome);
             }
+            // The edits upstream makes to the file header on save leave the
+            // rest of the file as it is.
+            let header_size = main_record_header_size(case.game.mode);
+            if let (Some(expected_body), Some(saved_body)) = (
+                body_after_header(&expected, header_size),
+                body_after_header(&saved_bytes, header_size),
+            ) && expected_body == saved_body
+            {
+                outcome.status = "header-edited";
+                outcome.detail = Some(format!(
+                    "  the saved file is the input with the file header edited{ofst_note}: {}",
+                    describe_header_edit(&expected, &saved_bytes, header_size)
+                ));
+                fs::remove_file(&saved)?;
+                return Ok(outcome);
+            }
+            let (records_differ, record_report) = describe_record_differences(&expected, &saved_bytes, header_size);
+            if !records_differ {
+                // Every record is the input's: the file header and the
+                // groups changed (an empty top level group dropped,
+                // duplicated groups merged), as upstream changes them on
+                // load.
+                outcome.status = "structure-edited";
+                outcome.detail = Some(format!(
+                    "  every record is the input's{ofst_note}; the file header and the groups changed: {}; {}",
+                    describe_header_edit(&expected, &saved_bytes, header_size),
+                    describe_group_structure(&expected, &saved_bytes, header_size)
+                ));
+                fs::remove_file(&saved)?;
+                return Ok(outcome);
+            }
             outcome.status = "different";
             outcome.detail = Some(format!(
-                "  first difference at byte {offset} (0x{offset:X}); input {} bytes, saved {} bytes\n  saved:  {}\n  log:    {}",
+                "  first difference at byte {offset} (0x{offset:X}); input {} bytes, saved {} bytes\n  {record_report}\n  saved:  {}\n  log:    {}",
                 outcome.oracle_bytes,
                 outcome.port_bytes,
                 saved.display(),
@@ -554,23 +601,306 @@ fn check_roundtrip(case: &Case, runner: &Runner) -> Result<Outcome> {
     Ok(outcome)
 }
 
-/// Whether `saved` is the input of `case` with the `OFST` subrecord (and its
-/// `XXXX` size prefix) of every uncompressed `WRLD` record removed and the
-/// record and group sizes adjusted. Returns the number of bytes dropped.
-/// Only for the games with 24 byte record headers; Oblivion and Morrowind
-/// worldspaces keep their offsets.
-fn without_wrld_ofst(case: &Case, saved: &Path) -> Result<Option<u64>> {
-    if matches!(case.game.mode, "tes3" | "tes4") {
+/// The main records of a plugin by FormID: the signature and the bytes of
+/// each, found by walking the groups. A record that appears twice keeps
+/// its first occurrence.
+fn records_by_form_id(bytes: &[u8], header_size: usize) -> std::collections::HashMap<u32, (String, &[u8])> {
+    fn walk<'a>(
+        buf: &'a [u8],
+        start: usize,
+        end: usize,
+        header_size: usize,
+        out: &mut std::collections::HashMap<u32, (String, &'a [u8])>,
+    ) -> Option<()> {
+        let mut pos = start;
+        while pos + header_size <= end {
+            let signature = buf.get(pos..pos + 4)?;
+            let size = u32::from_le_bytes(buf.get(pos + 4..pos + 8)?.try_into().ok()?) as usize;
+            if signature == b"GRUP" {
+                walk(
+                    buf,
+                    pos + header_size.clamp(20, 24),
+                    (pos + size).min(end),
+                    header_size,
+                    out,
+                )?;
+                pos += size;
+            } else {
+                let form_id = u32::from_le_bytes(buf.get(pos + 12..pos + 16)?.try_into().ok()?);
+                let record = buf.get(pos..pos + header_size + size)?;
+                out.entry(form_id)
+                    .or_insert_with(|| (String::from_utf8_lossy(signature).into_owned(), record));
+                pos += header_size + size;
+            }
+        }
+        Some(())
+    }
+    let mut out = std::collections::HashMap::new();
+    // The group header is 24 bytes for every game but Oblivion (20) and
+    // Morrowind, whose groups do not exist.
+    let data_size = u32::from_le_bytes(bytes.get(4..8).map(|b| b.try_into().unwrap()).unwrap_or([0; 4])) as usize;
+    let _ = walk(bytes, header_size + data_size, bytes.len(), header_size, &mut out);
+    out
+}
+
+/// The number of groups of a plugin and of the empty ones among them.
+fn describe_group_structure(input: &[u8], saved: &[u8], header_size: usize) -> String {
+    fn count(bytes: &[u8], header_size: usize) -> (usize, usize) {
+        fn walk(buf: &[u8], start: usize, end: usize, group_header: usize, counts: &mut (usize, usize)) -> Option<()> {
+            let mut pos = start;
+            while pos + group_header <= end {
+                let signature = buf.get(pos..pos + 4)?;
+                let size = u32::from_le_bytes(buf.get(pos + 4..pos + 8)?.try_into().ok()?) as usize;
+                if signature == b"GRUP" {
+                    counts.0 += 1;
+                    if size == group_header {
+                        counts.1 += 1;
+                    }
+                    walk(buf, pos + group_header, (pos + size).min(end), group_header, counts)?;
+                    pos += size;
+                } else {
+                    pos += group_header + size;
+                }
+            }
+            Some(())
+        }
+        let mut counts = (0, 0);
+        let data_size = u32::from_le_bytes(bytes.get(4..8).map(|b| b.try_into().unwrap()).unwrap_or([0; 4])) as usize;
+        let _ = walk(
+            bytes,
+            header_size + data_size,
+            bytes.len(),
+            header_size.clamp(20, 24),
+            &mut counts,
+        );
+        counts
+    }
+    let (before, before_empty) = count(input, header_size);
+    let (after, after_empty) = count(saved, header_size);
+    format!("groups {before} ({before_empty} empty) -> {after} ({after_empty} empty)")
+}
+
+/// What differs between the records of the input and of the saved file:
+/// whether any does, and a report with how many changed, were added or
+/// dropped, by signature, and the first few of each.
+fn describe_record_differences(input: &[u8], saved: &[u8], header_size: usize) -> (bool, String) {
+    if header_size < 20 {
+        return (true, "record differences are not analysed for this game".to_owned());
+    }
+    let before = records_by_form_id(input, header_size);
+    let after = records_by_form_id(saved, header_size);
+    let mut changed: std::collections::BTreeMap<String, usize> = std::collections::BTreeMap::new();
+    let mut examples: Vec<String> = Vec::new();
+    let mut changed_total = 0usize;
+    let mut form_ids: Vec<&u32> = before.keys().collect();
+    form_ids.sort();
+    for form_id in form_ids {
+        let (signature, old) = &before[form_id];
+        if let Some((_, new)) = after.get(form_id)
+            && old != new
+        {
+            changed_total += 1;
+            *changed.entry(signature.clone()).or_default() += 1;
+            if examples.len() < 5 {
+                examples.push(format!(
+                    "{signature} [{form_id:08X}] {} -> {} bytes",
+                    old.len(),
+                    new.len()
+                ));
+            }
+        }
+    }
+    let mut dropped: Vec<String> = before
+        .iter()
+        .filter(|(form_id, _)| !after.contains_key(form_id))
+        .map(|(form_id, (signature, _))| format!("{signature} [{form_id:08X}]"))
+        .collect();
+    dropped.sort();
+    let mut added: Vec<String> = after
+        .iter()
+        .filter(|(form_id, _)| !before.contains_key(form_id))
+        .map(|(form_id, (signature, _))| format!("{signature} [{form_id:08X}]"))
+        .collect();
+    added.sort();
+    let by_signature: Vec<String> = changed
+        .iter()
+        .map(|(signature, count)| format!("{signature} {count}"))
+        .collect();
+    let differs = changed_total > 0 || !dropped.is_empty() || !added.is_empty();
+    let report = format!(
+        "records changed: {changed_total} ({}), dropped: {} ({}), added: {} ({}); first changed: {}",
+        by_signature.join(", "),
+        dropped.len(),
+        dropped.iter().take(3).cloned().collect::<Vec<_>>().join(", "),
+        added.len(),
+        added.iter().take(3).cloned().collect::<Vec<_>>().join(", "),
+        examples.join("; ")
+    );
+    (differs, report)
+}
+
+/// The size of the main record header of a game (`wbSizeOfMainRecordStruct`).
+fn main_record_header_size(mode: &str) -> usize {
+    match mode.to_ascii_lowercase().as_str() {
+        "tes3" => 16,
+        "tes4" => 20,
+        _ => 24,
+    }
+}
+
+/// The bytes after the file header record: from the first group on.
+fn body_after_header(bytes: &[u8], header_size: usize) -> Option<&[u8]> {
+    let data_size = u32::from_le_bytes(bytes.get(4..8)?.try_into().ok()?) as usize;
+    bytes.get(header_size + data_size..)
+}
+
+/// The subrecords of the file header record as `(signature, data)`.
+fn header_sub_records(bytes: &[u8], header_size: usize) -> Vec<(String, Vec<u8>)> {
+    let mut result = Vec::new();
+    let Some(data_size) = bytes
+        .get(4..8)
+        .map(|b| u32::from_le_bytes(b.try_into().unwrap()) as usize)
+    else {
+        return result;
+    };
+    let Some(data) = bytes.get(header_size..header_size + data_size) else {
+        return result;
+    };
+    let sub_header = if header_size == 16 { 8 } else { 6 };
+    let mut pos = 0;
+    while pos + sub_header <= data.len() {
+        let signature = String::from_utf8_lossy(&data[pos..pos + 4]).into_owned();
+        let size = if sub_header == 8 {
+            u32::from_le_bytes(data[pos + 4..pos + 8].try_into().unwrap()) as usize
+        } else {
+            u16::from_le_bytes([data[pos + 4], data[pos + 5]]) as usize
+        };
+        let end = (pos + sub_header + size).min(data.len());
+        result.push((signature, data[pos + sub_header..end].to_vec()));
+        pos = end;
+    }
+    result
+}
+
+/// What changed in the file header record: the flags, and the subrecords
+/// added, removed or changed, with the values that matter.
+fn describe_header_edit(input: &[u8], saved: &[u8], header_size: usize) -> String {
+    let mut notes = Vec::new();
+    let flags_at = if header_size == 16 { 12 } else { 8 };
+    let flags = |bytes: &[u8]| {
+        bytes
+            .get(flags_at..flags_at + 4)
+            .map(|b| u32::from_le_bytes(b.try_into().unwrap()))
+    };
+    if let (Some(before), Some(after)) = (flags(input), flags(saved))
+        && before != after
+    {
+        notes.push(format!("flags {before:08X} -> {after:08X}"));
+    }
+    let before = header_sub_records(input, header_size);
+    let after = header_sub_records(saved, header_size);
+    let describe = |signature: &str, data: &[u8]| -> String {
+        match signature {
+            "HEDR" => format!(
+                "{} records",
+                data.get(4..8)
+                    .map(|b| u32::from_le_bytes(b.try_into().unwrap()))
+                    .unwrap_or(0)
+            ),
+            "INCC" => format!(
+                "{} interior cells",
+                data.get(..4)
+                    .map(|b| u32::from_le_bytes(b.try_into().unwrap()))
+                    .unwrap_or(0)
+            ),
+            "ONAM" => format!("{} entries", data.len() / 4),
+            _ => format!("{} bytes", data.len()),
+        }
+    };
+    let count = |list: &[(String, Vec<u8>)], signature: &str| list.iter().filter(|(s, _)| s == signature).count();
+    let mut signatures: Vec<String> = before.iter().chain(&after).map(|(s, _)| s.clone()).collect();
+    signatures.sort();
+    signatures.dedup();
+    for signature in signatures {
+        let in_before = count(&before, &signature);
+        let in_after = count(&after, &signature);
+        let value_before = before
+            .iter()
+            .find(|(s, _)| *s == signature)
+            .map(|(_, d)| describe(&signature, d));
+        let value_after = after
+            .iter()
+            .find(|(s, _)| *s == signature)
+            .map(|(_, d)| describe(&signature, d));
+        match (in_before, in_after) {
+            (0, _) => notes.push(format!("{signature} added ({})", value_after.unwrap_or_default())),
+            (_, 0) => notes.push(format!("{signature} removed ({})", value_before.unwrap_or_default())),
+            _ => {
+                let same = before
+                    .iter()
+                    .filter(|(s, _)| *s == signature)
+                    .map(|(_, d)| d)
+                    .eq(after.iter().filter(|(s, _)| *s == signature).map(|(_, d)| d));
+                if !same {
+                    notes.push(format!(
+                        "{signature} {} -> {}",
+                        value_before.unwrap_or_default(),
+                        value_after.unwrap_or_default()
+                    ));
+                }
+            }
+        }
+    }
+    if notes.is_empty() {
+        "the header record changed".to_owned()
+    } else {
+        notes.join(", ")
+    }
+}
+
+/// The input of `case` with the offset data upstream drops from every
+/// uncompressed `WRLD` record on load removed, and the record and group
+/// sizes adjusted, with the number of bytes dropped; `None` when the input
+/// has none of it. That is the `OFST` subrecord (with its `XXXX` size
+/// prefix) of `TwbMainRecord.Init` under `wbRemoveOffsetData`, and what
+/// `wbWorldAfterLoad` removes: `CLSZ` for Fallout 4, Fallout 76 and
+/// Starfield, `VISI` for Fallout 76, and the `RNAM` large references of
+/// the game master for Skyrim, Fallout 4 and Fallout 76. Only for the games
+/// with 24 byte record headers; Oblivion and Morrowind worldspaces keep
+/// their offsets.
+fn without_wrld_ofst(case: &Case, input: &[u8]) -> Result<Option<(Vec<u8>, u64)>> {
+    let mode = case.game.mode.to_ascii_lowercase();
+    if matches!(mode.as_str(), "tes3" | "tes4") {
         return Ok(None);
     }
     const HEADER: usize = 24;
+    let mut dropped_signatures: Vec<&[u8; 4]> = vec![b"OFST"];
+    if matches!(mode.as_str(), "fo4" | "fo4vr" | "fo76" | "sf1") {
+        dropped_signatures.push(b"CLSZ");
+    }
+    if mode == "fo76" {
+        dropped_signatures.push(b"VISI");
+    }
+    let game_master = match mode.as_str() {
+        "tes5" | "tes5vr" | "sse" => Some("Skyrim.esm"),
+        "fo4" | "fo4vr" => Some("Fallout4.esm"),
+        "fo76" => Some("SeventySix.esm"),
+        _ => None,
+    };
+    if game_master.is_some_and(|master| case.name.eq_ignore_ascii_case(master)) {
+        dropped_signatures.push(b"RNAM");
+    }
+    let dropped_signatures: &[&[u8; 4]] = &dropped_signatures;
 
     fn u32_at(buf: &[u8], at: usize) -> Option<u32> {
         Some(u32::from_le_bytes(buf.get(at..at + 4)?.try_into().ok()?))
     }
 
-    /// The data of a WRLD record without its OFST subrecord, if it has one.
-    fn drop_ofst(data: &[u8]) -> Option<Vec<u8>> {
+    /// The data of a WRLD record without the subrecords whose signature is
+    /// in `signatures` (every occurrence), if it has any.
+    fn drop_ofst(data: &[u8], signatures: &[&[u8; 4]]) -> Option<Vec<u8>> {
+        let mut rest: Vec<u8> = Vec::with_capacity(data.len());
+        let mut found = false;
         let mut pos = 0;
         let mut pending: Option<(usize, usize)> = None;
         while pos + 6 <= data.len() {
@@ -585,17 +915,25 @@ fn without_wrld_ofst(case: &Case, saved: &Path) -> Result<Option<u64>> {
                 Some((start, real)) if size == 0 => (start, real),
                 _ => (pos, size),
             };
-            if signature == b"OFST" {
-                let mut rest = data[..start].to_vec();
-                rest.extend_from_slice(data.get(pos + 6 + real..)?);
-                return Some(rest);
+            let end = pos + 6 + real;
+            if signatures.iter().any(|candidate| signature == *candidate) {
+                found = true;
+            } else {
+                rest.extend_from_slice(data.get(start..end)?);
             }
-            pos += 6 + real;
+            pos = end;
         }
-        None
+        found.then_some(rest)
     }
 
-    fn walk(buf: &[u8], start: usize, end: usize, out: &mut Vec<u8>, dropped: &mut u64) -> Option<()> {
+    fn walk(
+        buf: &[u8],
+        start: usize,
+        end: usize,
+        out: &mut Vec<u8>,
+        dropped: &mut u64,
+        signatures: &[&[u8; 4]],
+    ) -> Option<()> {
         let mut pos = start;
         while pos < end {
             let signature = buf.get(pos..pos + 4)?;
@@ -604,7 +942,7 @@ fn without_wrld_ofst(case: &Case, saved: &Path) -> Result<Option<u64>> {
                 let mark = out.len();
                 out.extend_from_slice(buf.get(pos..pos + HEADER)?);
                 let before = *dropped;
-                walk(buf, pos + HEADER, pos + size, out, dropped)?;
+                walk(buf, pos + HEADER, pos + size, out, dropped, signatures)?;
                 let inner = (*dropped - before) as usize;
                 if inner > 0 {
                     out[mark + 4..mark + 8].copy_from_slice(&((size - inner) as u32).to_le_bytes());
@@ -615,7 +953,7 @@ fn without_wrld_ofst(case: &Case, saved: &Path) -> Result<Option<u64>> {
                 let data = buf.get(pos + HEADER..pos + HEADER + size)?;
                 if signature == b"WRLD"
                     && flags & 0x0004_0000 == 0
-                    && let Some(rest) = drop_ofst(data)
+                    && let Some(rest) = drop_ofst(data, signatures)
                 {
                     let mark = out.len();
                     out.extend_from_slice(&buf[pos..pos + HEADER]);
@@ -631,14 +969,12 @@ fn without_wrld_ofst(case: &Case, saved: &Path) -> Result<Option<u64>> {
         Some(())
     }
 
-    let input = fs::read(&case.input)?;
-    let saved = fs::read(saved)?;
     let mut out = Vec::with_capacity(input.len());
     let mut dropped = 0u64;
-    if walk(&input, 0, input.len(), &mut out, &mut dropped).is_none() || dropped == 0 {
+    if walk(input, 0, input.len(), &mut out, &mut dropped, dropped_signatures).is_none() || dropped == 0 {
         return Ok(None);
     }
-    Ok((out == saved).then_some(dropped))
+    Ok(Some((out, dropped)))
 }
 
 /// The offset of the first byte where the two files differ, or `None` when

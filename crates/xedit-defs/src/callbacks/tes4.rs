@@ -7,6 +7,8 @@
 //! The callbacks of `wbDefinitionsTES4.pas` that are ported by hand. The
 //! ones that are not ported yet are stubs in `tes4_stubs.rs`.
 
+// The stubs of the callbacks not ported yet; empty once every callback is ported.
+#[allow(unused_imports)]
 pub use super::tes4_stubs::*;
 
 use xedit_core::interface::misc::int_to_hex64;
@@ -15,7 +17,7 @@ use xedit_core::interface::*;
 
 use super::common::{
     variant_int, wb_try_get_container_from_union, wb_try_get_container_ref_from_union_or_value,
-    wb_try_get_containing_main_record, wb_try_get_main_record,
+    wb_try_get_container_with_valid_main_record, wb_try_get_containing_main_record, wb_try_get_main_record,
 };
 use crate::signatures::QUST;
 use crate::tes4::{WB_CONDITION_FUNCTIONS, wb_condition_desc_from_index};
@@ -452,4 +454,218 @@ pub fn wb_xloc_filler_decider(_a_base_ptr: DataPtr, a_element: ElementArg) -> i3
         return 0;
     };
     i32::from(container.get_sub_record_header_size() == Some(16))
+}
+
+// ----- the editing callbacks -----
+
+use super::common::{
+    add_member, as_container_ref, element_at, element_count, path_int, path_native, remove_member, set_path_native,
+    with_internal_edit,
+};
+
+/// Upstream `wbCELLAfterLoad`: an interior cell gets lighting and loses
+/// regions; an exterior cell loses its climate, gets the "has water" flag
+/// and keeps only the regions that are regions.
+pub fn wb_cell_after_load(a_element: &ElementRef) {
+    with_internal_edit(|| {
+        let Some(record) = wb_try_get_container_with_valid_main_record(Some(a_element)) else {
+            return;
+        };
+        let record: ElementRef = record;
+        let interior = path_int(&record, "DATA") & 1 != 0;
+        if interior {
+            add_member(&record, "XCLL");
+            remove_member(&record, "XCLR");
+        } else {
+            remove_member(&record, "XCCM");
+            if path_int(&record, "DATA") & 2 == 0 {
+                let data = path_int(&record, "DATA") | 2;
+                set_path_native(&record, "DATA", data);
+            }
+            if let Some(regions) = record
+                .as_container()
+                .and_then(|c| c.get_element_by_signature(Signature::new(b"XCLR")))
+                .and_then(|regions| as_container_ref(&regions))
+            {
+                for index in (0..element_count(&regions)).rev() {
+                    let is_region = element_at(&regions, index)
+                        .and_then(|region| region.get_links_to())
+                        .and_then(|target| target.into_main_record())
+                        .is_some_and(|target| target.get_signature() == Signature::new(b"REGN"));
+                    if !is_region {
+                        regions.as_container().and_then(|c| c.remove_element_at(index, false));
+                    }
+                }
+                if element_count(&regions) < 1 {
+                    regions.remove();
+                }
+            }
+        }
+    });
+}
+
+/// Upstream `wbEFITAfterLoad`: the actor value of an effect item follows a
+/// magic effect that uses one.
+pub fn wb_efit_after_load(a_element: &ElementRef) {
+    with_internal_edit(|| {
+        let Some(container) = as_container_ref(a_element) else {
+            return;
+        };
+        if element_count(&container) < 1 {
+            return;
+        }
+        let name = container
+            .as_container()
+            .and_then(|c| c.get_element_by_name("Magic effect name"));
+        let Some(mgef) = wb_try_get_main_record(name.as_ref(), "MGEF") else {
+            return;
+        };
+        let mgef: ElementRef = mgef;
+        if path_int(&mgef, "DATA - Data\\Flags") & 0x0100_0000 == 0 {
+            return;
+        }
+        let actor_value = path_native(&mgef, "DATA - Data\\Assoc. Item");
+        if matches!(actor_value, Variant::Empty) {
+            return;
+        }
+        if !actor_value.same_value(&path_native(&container, "Actor Value")) {
+            set_path_native(&container, "Actor Value", actor_value);
+        }
+    });
+}
+
+/// Upstream `wbLVLAfterLoad`: the legacy `DATA` is dropped and the "calculate
+/// from all levels" bit of the chance moves into the flags.
+pub fn wb_lvl_after_load(a_element: &ElementRef) {
+    with_internal_edit(|| {
+        let Some(record) = wb_try_get_container_with_valid_main_record(Some(a_element)) else {
+            return;
+        };
+        let record: ElementRef = record;
+        remove_member(&record, "DATA");
+        let chance = path_int(&record, "LVLD");
+        if chance & 0x80 != 0 {
+            set_path_native(&record, "LVLD", chance & !0x80);
+            let flags = path_int(&record, "LVLF") | 0x01;
+            set_path_native(&record, "LVLF", flags);
+        }
+    });
+}
+
+/// Upstream `wbMGEFAfterLoad`: flag fixes for five effects of Oblivion.esm.
+pub fn wb_mgef_after_load(a_element: &ElementRef) {
+    with_internal_edit(|| {
+        let Some(main_record) = wb_try_get_container_with_valid_main_record(Some(a_element)) else {
+            return;
+        };
+        let record: ElementRef = main_record.clone();
+        let Some(file) = main_record.get_file() else { return };
+        if !file.get_name().eq_ignore_ascii_case("Oblivion.esm") {
+            return;
+        }
+        let editor_id = main_record.get_editor_id();
+        if ["RSFI", "RSFR", "RSPA", "RSSH"]
+            .iter()
+            .any(|id| editor_id.eq_ignore_ascii_case(id))
+        {
+            let flags = path_int(&record, "DATA - Data\\Flags") | 0x8;
+            set_path_native(&record, "DATA - Data\\Flags", flags);
+        }
+        if editor_id.eq_ignore_ascii_case("REAN") {
+            let flags = path_int(&record, "DATA - Data\\Flags") & !0x20000;
+            set_path_native(&record, "DATA - Data\\Flags", flags);
+        }
+    });
+}
+
+/// Upstream `wbPGRDAfterLoad`: a path grid gets its `PGAG`, is compressed,
+/// and loses the unused connections of its points.
+pub fn wb_pgrd_after_load(a_element: &ElementRef) {
+    with_internal_edit(|| {
+        let Some(main_record) = wb_try_get_container_with_valid_main_record(Some(a_element)) else {
+            return;
+        };
+        let record: ElementRef = main_record.clone();
+        let by_signature = |signature: &[u8; 4]| {
+            record
+                .as_container()
+                .and_then(|c| c.get_element_by_signature(Signature::new(signature)))
+                .and_then(|element| as_container_ref(&element))
+        };
+        let Some(points) = by_signature(b"PGRP") else { return };
+        if !record.as_container().is_some_and(|c| c.get_element_exists("PGAG"))
+            && let Some(pgag) = add_member(&record, "PGAG")
+        {
+            let _ = pgag.set_data_size((element_count(&points) + 7) / 8);
+        }
+        main_record.set_is_compressed(true);
+        let Some(connections) = by_signature(b"PGRR") else {
+            return;
+        };
+        if element_count(&points) < element_count(&connections) {
+            return;
+        }
+        let mut first_removed = false;
+        for index in (0..element_count(&connections)).rev() {
+            let Some(connection) = element_at(&connections, index).and_then(|c| as_container_ref(&c)) else {
+                continue;
+            };
+            let mut removed = false;
+            let mut j = element_count(&connection);
+            while j > 0 {
+                j -= 1;
+                let Some(entry) = element_at(&connection, j) else { break };
+                if variant_int(&entry.get_native_value()) == 65535 {
+                    if !first_removed {
+                        first_removed = true;
+                        connections.mark_modified_recursive();
+                    }
+                    entry.remove();
+                    removed = true;
+                } else {
+                    break;
+                }
+            }
+            if removed && let Some(point) = element_at(&points, index).and_then(|p| as_container_ref(&p)) {
+                set_path_native(&point, "Connections", i64::from(element_count(&connection)));
+            }
+        }
+    });
+}
+
+/// Upstream `wbPGRIPointerAfterLoad`: duplicate inter-cell connections are
+/// dropped.
+pub fn wb_pgri_pointer_after_load(a_element: &ElementRef) {
+    with_internal_edit(|| {
+        let Some(connections) = as_container_ref(a_element) else {
+            return;
+        };
+        let mut keys: Vec<String> = Vec::new();
+        for index in (0..element_count(&connections)).rev() {
+            let Some(connection) = element_at(&connections, index) else {
+                continue;
+            };
+            let key = connection.get_sort_key(true);
+            if keys.contains(&key) {
+                connections
+                    .as_container()
+                    .and_then(|c| c.remove_element_at(index, true));
+            } else {
+                keys.push(key);
+            }
+        }
+    });
+}
+
+/// Upstream `wbREFRAfterLoad`: `XPCI` is dropped.
+pub fn wb_refr_after_load(a_element: &ElementRef) {
+    with_internal_edit(|| {
+        let Some(record) = as_container_ref(a_element) else {
+            return;
+        };
+        if element_count(&record) < 1 {
+            return;
+        }
+        remove_member(&record, "XPCI");
+    });
 }

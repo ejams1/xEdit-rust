@@ -7,6 +7,8 @@
 //! The callbacks of `wbDefinitionsTES5.pas` that are ported by hand. The
 //! ones that are not ported yet are stubs in `tes5_stubs.rs`.
 
+// The stubs of the callbacks not ported yet; empty once every callback is ported.
+#[allow(unused_imports)]
 pub use super::tes5_stubs::*;
 
 use std::sync::Mutex;
@@ -20,7 +22,7 @@ use xedit_core::interface::*;
 
 use super::common::{
     collision_layer_links_to, index_key_from_ordinal, variant_int, wb_try_get_container_from_union,
-    wb_try_get_container_ref_from_union_or_value, wb_try_get_main_record,
+    wb_try_get_container_ref_from_union_or_value, wb_try_get_container_with_valid_main_record, wb_try_get_main_record,
 };
 use crate::common::{wb_idx_addon_node, wb_idx_collision_layer};
 use crate::signatures::{ANAM, NAME, PRKE, QUST};
@@ -747,4 +749,223 @@ pub fn define_tes5_anonymous_7697(a_main_record: &MainRecordRef, a_index_keys: &
 /// collision layer of `XTRI`.
 pub fn define_tes5_anonymous_9854(a_element: ElementArg) -> Option<ElementRef> {
     collision_layer_links_to(a_element)
+}
+
+// ----- the editing callbacks -----
+
+use super::common::{
+    add_member, as_container_ref, cell_data_after_set, cell_xclw_get_conflict_priority, condition_event_to_int,
+    container_of, efit_after_load, element_count, flst_edid_after_set, flst_lnam_is_sorted, gmst_edid_after_set,
+    mgef_archtype_after_set, mgef_assoc_item_after_set, path_edit, path_exists, path_int, refr_after_load_lock,
+    replace_bodt_with_bod2, set_edit, set_native, set_path_edit, set_path_native, with_internal_edit,
+};
+
+/// Upstream `wbConditionEventToInt`.
+pub fn wb_condition_event_to_int(a_string: &str, _a_element: ElementArg) -> i64 {
+    condition_event_to_int(a_string, WB_EVENT_FUNCTION_ENUM.get(), WB_EVENT_MEMBER_ENUM.get())
+}
+
+/// Upstream `wbINFOPNAMAfterSet`: the group of the response sorts again
+/// under `wbSortINFO`.
+pub fn wb_infopnam_after_set(a_element: &ElementRef, a_old_value: &Variant, a_new_value: &Variant) {
+    if !xedit_core::interface::globals::sort_info() {
+        return;
+    }
+    if a_old_value.same_value(a_new_value) {
+        return;
+    }
+    let mut container = a_element.get_container();
+    while let Some(current) = container {
+        if current.get_element_type() == ElementType::etGroupRecord {
+            // `Group.Sort(True)`: the sort of a group by its records comes
+            // with the sorting step.
+            return;
+        }
+        container = current.get_container();
+    }
+}
+
+/// Upstream `wbGMSTEDIDAfterSet`.
+pub fn wb_gmstedid_after_set(a_element: &ElementRef, a_old_value: &Variant, a_new_value: &Variant) {
+    gmst_edid_after_set(a_element, a_old_value, a_new_value);
+}
+
+/// Upstream `wbFLSTEDIDAfterSet`.
+pub fn wb_flstedid_after_set(a_element: &ElementRef, a_old_value: &Variant, a_new_value: &Variant) {
+    flst_edid_after_set(a_element, a_old_value, a_new_value);
+}
+
+/// Upstream `wbMGEFAssocItemAfterSet`.
+pub fn wb_mgef_assoc_item_after_set(a_element: &ElementRef, _a_old_value: &Variant, a_new_value: &Variant) {
+    mgef_assoc_item_after_set(a_element, a_new_value, "Archtype");
+}
+
+/// Upstream `wbMGEFAV2WeightAfterSet`.
+pub fn wb_mgefav2_weight_after_set(a_element: &ElementRef, _a_old_value: &Variant, a_new_value: &Variant) {
+    mgef_assoc_item_after_set(a_element, a_new_value, "Archtype");
+}
+
+/// Upstream `wbMGEFArchtypeAfterSet`.
+pub fn wb_mgef_archtype_after_set(a_element: &ElementRef, a_old_value: &Variant, a_new_value: &Variant) {
+    mgef_archtype_after_set(
+        a_element,
+        a_old_value,
+        a_new_value,
+        &[(6, 0), (7, 1), (8, 0), (11, 54), (21, 53), (24, 1), (38, 1), (42, 1)],
+    );
+}
+
+/// Upstream `wbFLSTLNAMIsSorted`.
+pub fn wb_flstlnam_is_sorted(a_container: ElementArg) -> bool {
+    flst_lnam_is_sorted(a_container)
+}
+
+/// Upstream `wbARMOAfterLoad`.
+pub fn wb_armo_after_load(a_element: &ElementRef) {
+    replace_bodt_with_bod2(a_element);
+}
+
+/// Upstream `wbARMAAfterLoad`.
+pub fn wb_arma_after_load(a_element: &ElementRef) {
+    replace_bodt_with_bod2(a_element);
+}
+
+/// Upstream `wbRACEAfterLoad`.
+pub fn wb_race_after_load(a_element: &ElementRef) {
+    replace_bodt_with_bod2(a_element);
+}
+
+/// Upstream `wbREFRAfterLoad`.
+pub fn wb_refr_after_load(a_element: &ElementRef) {
+    refr_after_load_lock(a_element, true);
+}
+
+/// Upstream `wbWEAPAfterLoad`: the iron sights flags the Creation Kit sets
+/// at random are cleared.
+pub fn wb_weap_after_load(a_element: &ElementRef) {
+    with_internal_edit(|| {
+        let Some(record) = as_container_ref(a_element) else {
+            return;
+        };
+        if element_count(&record) < 1 {
+            return;
+        }
+        let Some(main_record) = a_element.as_main_record() else {
+            return;
+        };
+        if main_record.get_is_deleted() || !path_exists(&record, "DNAM") {
+            return;
+        }
+        let flags = path_int(&record, "DNAM - Data\\Flags") & (0xFFFF ^ 0x0040);
+        set_path_native(&record, "DNAM - Data\\Flags", flags);
+        let flags2 = path_int(&record, "DNAM - Data\\Flags2") & (0xFFFF_FFFF ^ 0x0100);
+        set_path_native(&record, "DNAM - Data\\Flags2", flags2);
+    });
+}
+
+/// Upstream `wbCELLXCLWGetConflictPriority`.
+pub fn wb_cellxclw_get_conflict_priority(a_element: ElementArg, a_conflict_priority: &mut ConflictPriority) {
+    cell_xclw_get_conflict_priority(a_element, a_conflict_priority);
+}
+
+/// Upstream `wbCELLDATAAfterSet`.
+pub fn wb_celldata_after_set(a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
+    cell_data_after_set(a_element);
+}
+
+/// Upstream `wbCELLAfterLoad`: legacy one byte flags become two, an
+/// exterior cell gets a default water height, and `Min` becomes `0.0`.
+pub fn wb_cell_after_load(a_element: &ElementRef) {
+    with_internal_edit(|| {
+        let Some(record) = wb_try_get_container_with_valid_main_record(Some(a_element)) else {
+            return;
+        };
+        let record: ElementRef = record;
+        if let Some(data) = record
+            .as_container()
+            .and_then(|c| c.get_element_by_signature(Signature::new(b"DATA")))
+            && data.get_element_type() == ElementType::etSubRecord
+        {
+            if data.get_sub_record_header_size() == Some(1) {
+                let flags = data
+                    .as_data_container()
+                    .and_then(|data| data.get_data())
+                    .and_then(|bytes| bytes.first().copied())
+                    .unwrap_or(0);
+                if data.set_to_default().is_ok() {
+                    set_native(&data, i64::from(flags));
+                }
+            }
+            if !path_exists(&record, "XCLW") && variant_int(&data.get_native_value()) & 0x02 != 0 {
+                add_member(&record, "XCLW");
+                set_path_edit(&record, "XCLW", "Default");
+            }
+        }
+        if path_edit(&record, "XCLW") == "Min" {
+            set_path_edit(&record, "XCLW", "0.0");
+        }
+    });
+}
+
+/// Upstream `wbEFITAfterLoad`.
+pub fn wb_efit_after_load(a_element: &ElementRef) {
+    efit_after_load(a_element);
+}
+
+/// Upstream `wbPackageDataInputValueTypeAfterSet`.
+pub fn wb_package_data_input_value_type_after_set(
+    a_element: &ElementRef,
+    a_old_value: &Variant,
+    a_new_value: &Variant,
+) {
+    super::common::package_data_input_value_type_after_set(a_element, a_old_value, a_new_value);
+}
+
+/// Upstream `wbLIGHDataFlagsAfterSet`: under `wbCS` the names of three
+/// members follow the "inverse square" flag. The names of definitions
+/// cannot change in the port, so the switch is reported.
+pub fn wb_ligh_data_flags_after_set(a_element: &ElementRef, a_old_value: &Variant, a_new_value: &Variant) {
+    if !xedit_core::interface::globals::cs() {
+        return;
+    }
+    if variant_int(a_old_value) & 0x4000 == variant_int(a_new_value) & 0x4000 {
+        return;
+    }
+    if container_of(a_element).is_none() || a_element.get_containing_main_record().is_none() {
+        return;
+    }
+    xedit_core::interface::misc::progress(
+        "<Warning: the names of the light falloff, FOV and FNAM members follow the inverse square flag upstream; the port keeps the definition names>",
+    );
+}
+
+/// Upstream anonymous `AfterSet` of the `SNAM` subtype name of a sound
+/// descriptor: the subtype in `DATA` follows it.
+pub fn define_tes5_anonymous_4890(a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
+    if a_element.as_container().is_none() {
+        return;
+    }
+    if let Some(subtype) = a_element
+        .as_container()
+        .and_then(|c| c.get_element_by_path("..\\DATA\\Subtype"))
+    {
+        set_edit(&subtype, &a_element.get_edit_value());
+    }
+}
+
+/// Upstream anonymous `DontShow` of the `FNAM` of a perk tree node: hidden
+/// for the root node, whose index and perk are zero.
+pub fn define_tes5_anonymous_6207(a_element: ElementArg) -> bool {
+    let Some(element) = a_element else { return true };
+    let Some(container) = element.get_container() else {
+        return true;
+    };
+    let Some(array) = container.get_container() else {
+        return true;
+    };
+    let is_first = array
+        .as_container()
+        .and_then(|array| array.get_element(0))
+        .is_some_and(|first| first.get_element_id() == container.get_element_id());
+    is_first && path_int(&container, "PNAM") == 0 && path_int(&container, "INAM") == 0
 }

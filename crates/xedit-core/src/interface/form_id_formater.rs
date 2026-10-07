@@ -19,9 +19,9 @@ use super::element::{
 use super::enum_def::EnumDef;
 use super::form_id::{FileID, FormID};
 use super::formaters::{editable_unless_internal_only, formater_impls, formater_plumbing};
-use super::globals::{disable_form_id_check, display_load_order_form_id};
+use super::globals::{disable_form_id_check, display_load_order_form_id, pretty_form_id};
 use super::integer::{IntegerDefFormater, integer_def_formater_create};
-use super::misc::int_to_hex64;
+use super::misc::{EditError, int_to_hex64, str_to_int64};
 use super::string::to_comma_text;
 use super::types::{DefFlag, DefType, EditType, ElementType, EnumSet, FileState, Signature};
 
@@ -650,6 +650,21 @@ impl IntegerDefFormater for FormIDDefFormater {
         EditType::etComboBox
     }
 
+    /// Port of `TwbFormIDDefFormater.FromEditValue` and the check of
+    /// `TwbFormIDChecked.FromEditValue`: the FormID in a text that may be a
+    /// record name with the FormID in brackets, `None`, `Self` or the
+    /// hexadecimal digits, converted to the FormID the file stores.
+    fn from_edit_value(&self, value: &str, element: ElementArg) -> Result<i64, EditError> {
+        let result = self.form_id_from_edit_value(value, element)?;
+        if self.class.is_checked() {
+            let error = self.checked_check(result, element);
+            if !error.is_empty() {
+                return Err(error);
+            }
+        }
+        Ok(result)
+    }
+
     fn to_edit_value(&self, int: i64, element: ElementArg) -> String {
         if display_load_order_form_id() {
             let result = IntegerDefFormater::to_string(self, int, element, false);
@@ -691,6 +706,119 @@ impl IntegerDefFormater for FormIDDefFormater {
 }
 
 impl FormIDDefFormater {
+    /// Port of `TwbFormIDDefFormater.FromEditValue`.
+    fn form_id_from_edit_value(&self, value: &str, element: ElementArg) -> Result<i64, EditError> {
+        let mut t: Vec<char> = if pretty_form_id() {
+            value.chars().filter(|&c| c != ' ').collect()
+        } else {
+            value.chars().collect()
+        };
+        // Delphi `Pos`: 1-based, 0 for not found.
+        let pos = |t: &[char], c: char| t.iter().position(|&x| x == c).map_or(0, |p| p + 1);
+        let mut s: Vec<char> = Vec::new();
+        let mut i = pos(&t, '[');
+        let mut j = pos(&t, '"');
+        let strip_prefix = |s: &mut Vec<char>| {
+            if (s.len() == 13 || s.len() == 14) && s[4] == ':' {
+                s.drain(..5);
+            }
+        };
+        if i > 0 {
+            while i > 0 {
+                if j > 0 && j < i {
+                    // A quoted name before the bracket is skipped.
+                    j += 1;
+                    if t.get(j - 1) != Some(&'"') {
+                        while j < t.len().saturating_sub(1) {
+                            if t[j - 1] == '"' {
+                                if t[j] == '"' {
+                                    j += 1;
+                                } else {
+                                    break;
+                                }
+                            }
+                            j += 1;
+                        }
+                    }
+                    t.drain(..j.min(t.len()));
+                    i = pos(&t, '[');
+                    j = pos(&t, '"');
+                    continue;
+                }
+                t.drain(..i);
+                i = pos(&t, ']');
+                if i > 0 {
+                    s = t[..i - 1].to_vec();
+                    t.drain(..i);
+                    strip_prefix(&mut s);
+                }
+                let digits: String = s.iter().collect();
+                i = match u64::from_str_radix(&digits, 16) {
+                    Ok(_) if s.len() == 8 || s.len() == 9 => 0,
+                    _ => pos(&t, '['),
+                };
+                j = pos(&t, '"');
+            }
+        } else {
+            let trimmed: String = t.iter().collect();
+            s = trimmed.trim().chars().collect();
+            strip_prefix(&mut s);
+        }
+        let digits: String = s.iter().collect();
+        let mut result: i64 = if s.len() == 8 || s.len() == 9 {
+            str_to_int64(&format!("${digits}"))?
+        } else if self.is_valid(ACVA) && value.trim().eq_ignore_ascii_case("None") {
+            return Ok(0xFF);
+        } else if value.trim().eq_ignore_ascii_case("Self")
+            && let Some(element) = element
+        {
+            let record = element
+                .get_containing_main_record()
+                .ok_or_else(|| "Can not resolve Self without a ContainingMainRecord".to_owned())?;
+            i64::from(record.get_load_order_form_id().to_cardinal())
+        } else {
+            str_to_int64(&format!("${value}"))?
+        };
+        let unmapped = self.def.def_flags.contains(DefFlag::dfUnmappedFormID);
+        if result != 0 && unmapped && FormID::from_cardinal(result as u32).file_id().full_slot() != 0 {
+            return Err("Unmapped FormIDs must belong to File ID [00]".to_owned());
+        }
+        if self.def.def_flags.contains(DefFlag::dfUseLoadOrder) || !display_load_order_form_id() {
+            return Ok(result);
+        }
+        if result == 0xFFFF_FFFF {
+            return Ok(result);
+        }
+        if let Some(element) = element
+            && let Some(file) = element.get_file()
+        {
+            if result != 0 && unmapped {
+                let states = file.get_file_states();
+                if !states.contains(FileState::fsIsGameMaster) && !states.contains(FileState::fsIsHardcoded) {
+                    let first_is_game_master = file.get_master_count(true) >= 1
+                        && file
+                            .get_master(0, true)
+                            .is_some_and(|master| master.get_file_states().contains(FileState::fsIsGameMaster));
+                    if !first_is_game_master {
+                        return Err("Unmapped FormIDs can only be different from 00000000 in modules which have the game master as their first master.".to_owned());
+                    }
+                }
+            }
+            if !file.get_allow_hardcoded_range_use() && result < 0x800 {
+                return Ok(result);
+            }
+            // The result is a load order FormID; the file stores its own.
+            result = i64::from(
+                file.load_order_form_id_to_file_form_id(
+                    FormID::from_cardinal(result as u32),
+                    element.get_masters_updated(),
+                )?
+                .to_cardinal(),
+            );
+        }
+        Ok(result)
+    }
+
     /// The part of `ToString` that upstream runs inside `try`: the text for a
     /// FormID that resolves to a record, or an error text. `None` when nothing
     /// was found, with `form_id` changed to the one to show.

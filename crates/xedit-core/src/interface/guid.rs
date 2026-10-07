@@ -8,13 +8,15 @@
 
 use std::sync::{Arc, Weak};
 
+use super::def::request_storage;
 use super::def::{
     Def, DefBase, DefKind, DefRef, NamedDef, NamedDefArgs, NamedDefBase, ValueDef, ValueDefBase, value_def_plumbing,
 };
 use super::element::{DataPtr, ElementArg, ElementRef};
 use super::formaters::comma_text;
+use super::globals::IGNORE_STRING_VALUE;
 use super::globals::is_internal_edit;
-use super::misc::Variant;
+use super::misc::{EditError, Variant, variant_to_string};
 use super::types::{CallbackType, DefType, EditType};
 
 /// Upstream `TwbGuidDef`: 16 bytes shown as `{XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}`.
@@ -65,6 +67,42 @@ impl GuidDef {
             &hex[16..20],
             &hex[20..]
         )
+    }
+
+    /// Port of `FromStringInternal`: the two halves of the text form as
+    /// 64-bit integers, or zeros for an empty text.
+    #[allow(clippy::wrong_self_convention)]
+    fn from_string_internal(&self, element: ElementArg, value: &str) -> Result<(), EditError> {
+        let (element, mut bytes) = request_storage(element, 16)?;
+        if value.is_empty() {
+            bytes.fill(0);
+            element.commit_storage(bytes);
+            return Ok(());
+        }
+        let chars: Vec<char> = value.chars().collect();
+        let invalid = || format!("Not a valid GUID: {value}");
+        if chars.len() != 38
+            || chars[0] != '{'
+            || chars[9] != '-'
+            || chars[14] != '-'
+            || chars[19] != '-'
+            || chars[24] != '-'
+            || chars[37] != '}'
+        {
+            return Err(invalid());
+        }
+        let hex: String = chars
+            .iter()
+            .enumerate()
+            .filter(|(index, _)| !matches!(index, 0 | 9 | 14 | 19 | 24 | 37))
+            .map(|(_, c)| *c)
+            .collect();
+        let first = u64::from_str_radix(&hex[..16], 16).map_err(|_| invalid())?;
+        let second = u64::from_str_radix(&hex[16..], 16).map_err(|_| invalid())?;
+        bytes[..8].copy_from_slice(&first.to_le_bytes());
+        bytes[8..].copy_from_slice(&second.to_le_bytes());
+        element.commit_storage(bytes);
+        Ok(())
     }
 
     fn with_callback(&self, mut result: String, data: DataPtr, element: ElementArg, callback: CallbackType) -> String {
@@ -139,6 +177,53 @@ impl ValueDef for GuidDef {
             element,
             CallbackType::ctToNativeValue,
         ))
+    }
+
+    fn from_edit_value(&self, data: DataPtr, element: ElementArg, value: &str) -> Result<(), EditError> {
+        let text = self.with_callback(value.to_owned(), data, element, CallbackType::ctFromEditValue);
+        if self.nd.nd_to_str.is_assigned() && text == IGNORE_STRING_VALUE {
+            return Ok(());
+        }
+        let text = if self.nd.nd_to_str.is_assigned() {
+            text
+        } else {
+            value.to_owned()
+        };
+        self.from_string_internal(element, &text)
+    }
+
+    fn from_native_value(&self, data: DataPtr, element: ElementArg, value: Variant) -> Result<(), EditError> {
+        let text = self.with_callback(
+            variant_to_string(&value),
+            data,
+            element,
+            CallbackType::ctFromNativeValue,
+        );
+        if self.nd.nd_to_str.is_assigned() && text == IGNORE_STRING_VALUE {
+            return Ok(());
+        }
+        self.from_string_internal(element, &text)
+    }
+
+    fn set_to_default(&self, data: DataPtr, element: ElementArg) -> Result<bool, EditError> {
+        if self.set_to_default_callback(data, element) {
+            return Ok(true);
+        }
+        if let Some(result) = self.set_to_default_native_value(data, element) {
+            return result;
+        }
+        let default = self
+            .vd
+            .vd_default_edit_value
+            .load()
+            .as_deref()
+            .cloned()
+            .unwrap_or_default();
+        let changed = data.is_none() || self.to_edit_value(data, element) != default;
+        if changed {
+            self.from_edit_value(data, element, &default)?;
+        }
+        Ok(changed)
     }
 
     fn get_is_editable(&self, _data: DataPtr, _element: ElementArg) -> bool {
