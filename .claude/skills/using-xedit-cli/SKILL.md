@@ -1,6 +1,6 @@
 ---
 name: using-xedit-cli
-description: Use when inspecting, editing or saving Bethesda plugins and save games with the native xedit CLI of this repository: loading plugins of any game from Oblivion to Starfield, listing files and records, reading a record or an element, setting the value of an element, dumping a plugin or a save like xDump, saving a loaded plugin back to disk, running several commands in one session.
+description: Use when inspecting, editing or saving Bethesda plugins and save games with the native xedit CLI of this repository: loading plugins of any game from Oblivion to Starfield, listing files and records, reading a record or an element, setting the value of an element, dumping a plugin or a save like xDump, saving a loaded plugin back to disk, running several commands in one session, keeping a session loaded behind a JSON-RPC daemon (`xedit serve`) or an MCP server (`xedit mcp`).
 ---
 
 # Using the xedit CLI
@@ -38,6 +38,8 @@ Loading is per process: every invocation loads the plugins again. `Skyrim.esm` t
 | `elements set <FormID> <path> [<value>] [--file F] [--native] [--default] [--dry-run]` | Sets the value of one element (`elements.set`): the edit value as xEdit shows it in its editor, a native number or boolean with `--native`, or the default of the definition with `--default`. A missing last element of the path is added when the record's definition has it. Needs `--edit` unless `--dry-run`. |
 | `save [--file F] [--output PATH] [--dry-run] [--no-backup]` | Writes a loaded plugin as xEdit saves it (`files.save`). Needs the global `--edit` flag unless `--dry-run`. |
 | `batch <file.json or ->` [--keep-going] | Runs a JSON array of `{"command": name, "params": {...}}` in one session and prints one envelope per command; stops at the first failure unless `--keep-going`. |
+| `serve [--pipe NAME]` | Keeps the session loaded and answers JSON-RPC requests, one per line, on stdio or a named pipe. See "Daemon and MCP server". |
+| `mcp` | Serves the commands as MCP tools on stdio. |
 
 FormIDs are load order FormIDs in hexadecimal, as xEdit shows them: `01003274` is object `003274` of the file in slot 1. `--file` names a loaded plugin; without it, `records list` and `records find` need exactly one plugin in `--load`, and `records get` and `elements get` see the record from the last loaded plugin (the winning override for that plugin).
 
@@ -51,7 +53,7 @@ Element paths use `\` between names, as in xEdit scripts: `DATA\Health`, `ACBS\F
 - `--native` takes a JSON number or boolean and sets it as the native value; `--default` sets the element to the default of its definition.
 - A path whose last element is missing adds that member when the record's definition has it (`ElementEditValues`): `elements set 01003274 SNAM "text"` on a record without `SNAM`.
 - Loading runs the fix-ups xEdit runs on load (`wbAllowInternalEdit`): a record that lacks a required subrecord gets it, a worldspace loses its offset data, and the `AfterLoad` callbacks of the definitions apply their corrections. Those records are modified internally and are written from their elements on save.
-- The edit is in memory only. To keep it, save in the same process: use `batch` with an `elements.set` and a `files.save`, or `call` the commands from a daemon once `xedit serve` exists.
+- The edit is in memory only. To keep it, save in the same process: use `batch` with an `elements.set` and a `files.save`, or send the commands to `xedit serve` or `xedit mcp`, which keep the session between calls.
 - Error codes: `edit_failed` carries the message of the upstream exception (`"x" is not a valid character for a flag`, `Not a valid GUID: ...`, `FormID [...] can not be mapped to file FormID for file "..."`), `not_editable` a dry run on an element the editor would not let you change.
 
 ```
@@ -74,6 +76,23 @@ xedit --json --edit --game sse --load "<Data>\Update.esm" batch edit.json
 - The save edits the file header as upstream does: the ESM flag follows an `.esm` extension (ESM and Light an `.esl`), `HEDR` gets the record count, `INCC` the interior cell count, the `ONAM` list of a master is rebuilt from its overridden temporary placed records, and a FormID beyond the masters is clamped. The `unsupported` code is gone.
 - Error codes: `save_refused` carries an upstream `PrepareSave` message, which the oracle gives for the same file (a Starfield blueprint module, a record in the wrong group, an `.esp` master where the game forbids it).
 - Only the worldspace records are initialized by a save of an unmodified file (upstream drops their `OFST` subrecord and marks their children modified), so a big master saves in seconds; the children of its worldspaces are rebuilt record by record.
+
+## Daemon and MCP server
+
+`serve` and `mcp` load the session once and run the same registry commands against it, so an edit stays in memory between calls and loading is paid once. Both take the global `--game`, `--load` and `--edit` options at startup; the edit gate is fixed then and no request can lift it. Both build their method or tool list from the registry when they run, so every command, including ones added later, is there without any change; `rpc.discover` (serve) and `tools/list` (mcp) show what this build has.
+
+```
+xedit --game fo4 --load "<Data>\DLCRobot.esm" --edit serve
+xedit --game fo4 --load "<Data>\DLCRobot.esm" --edit serve --pipe NAME
+xedit --game fo4 --load "<Data>\DLCRobot.esm" --edit mcp
+```
+
+- `serve` reads one JSON-RPC 2.0 request per line from stdin and writes one response line to stdout (`--pipe NAME` listens on the Windows named pipe `\\.\pipe\NAME` instead, one client at a time, and takes the next client when one disconnects; only the user that started it can open it). Progress messages go to stderr. The input ending closes a stdio daemon.
+- Each registry command is a method of its own name, with the request fields of `xedit schema` as `params` (an object): `{"jsonrpc":"2.0","id":1,"method":"records.find","params":{"editor_id":"Dawnguard"}}`. A JSON array of requests is a JSON-RPC batch.
+- The daemon's own methods: `rpc.discover` (the `xedit schema` catalogue plus `edit_allowed`), `rpc.batch` (`{"commands":[{"command","params"}],"keep_going":false}`, the result of `xedit batch`) and `rpc.shutdown` (ends the daemon).
+- Mutating commands behave as on the CLI: without `--edit` at startup they fail with `edit_required` unless `dry_run` is true, and nothing reaches disk until a `files.save` request (use `output` to write somewhere safe while testing).
+- A failed command is an error object: `message` is the message of the command, `data.code` its stable code (`edit_required`, `unknown_record`, ...), and `code` is `-32601` for `unknown_command`, `-32602` for `invalid_params`, `-32603` for `internal` and `-32000` for every other failure.
+- `mcp` speaks the Model Context Protocol on stdio. Register it with an MCP client as the command above. Each command is a tool named like the command with `.` replaced by `_` (`records_get`, `elements_set`, `files_save`), its `inputSchema` and `outputSchema` are the request and response schemas, and a result carries the JSON as text and as `structuredContent`. A failed command is a result with `isError: true` and the text `<code>: <message>`. Mutating tools say so in their description and are not read-only in their annotations. The plugins load at the first tool call, which can take a while on a big load order; `initialize` and `tools/list` answer at once.
 
 ## Saves
 
@@ -103,4 +122,4 @@ xedit --json --edit --game sse --load "<Data>\Skyrim.esm" save --no-backup --out
 
 - No adding or removing of elements from the command line beyond the member `elements set` adds, no copying of records, no masters or FormID changes. Sorted arrays are not sorted again after a change, and flags are not shown as child elements.
 - Morrowind plugins are not verified. Oblivion saves do not read (an upstream limit, see above).
-- One session per process; `xedit serve` comes with step 7 of phase 3. Until then `batch` is the way to edit and save in one go.
+- One session per process, fixed at startup: `serve` and `mcp` cannot load other plugins later, so restart them to change the load order.
