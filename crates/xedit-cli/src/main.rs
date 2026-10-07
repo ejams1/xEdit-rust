@@ -68,6 +68,11 @@ enum Action {
         #[command(subcommand)]
         action: ElementsAction,
     },
+    /// Masters of a plugin. Each command rewrites the FormIDs of the plugin to follow its masters; save to keep the change.
+    Masters {
+        #[command(subcommand)]
+        action: MastersAction,
+    },
     /// Save files.
     Saves {
         #[command(subcommand)]
@@ -235,6 +240,43 @@ enum ElementsAction {
     },
 }
 
+#[derive(Subcommand)]
+enum MastersAction {
+    /// Add loaded plugins as masters (masters.add, AddMastersIfMissing), then sort the masters by load order. Needs --edit unless --dry-run.
+    Add {
+        /// File names of loaded plugins to add, such as Dawnguard.esm.
+        #[arg(required = true)]
+        masters: Vec<String>,
+        /// Plugin to change; the only loaded plugin when omitted.
+        #[arg(long)]
+        file: Option<String>,
+        /// Keep the masters in the order they are added instead of sorting them by load order.
+        #[arg(long)]
+        no_sort: bool,
+        /// Report the master list the command would leave, but change nothing.
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Remove the masters no FormID of the plugin points to (masters.clean, CleanMasters). Needs --edit unless --dry-run.
+    Clean {
+        /// Plugin to change; the only loaded plugin when omitted.
+        #[arg(long)]
+        file: Option<String>,
+        /// Report the master list the command would leave, but change nothing.
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Sort the masters by load order (masters.sort, SortMasters). Needs --edit unless --dry-run.
+    Sort {
+        /// Plugin to change; the only loaded plugin when omitted.
+        #[arg(long)]
+        file: Option<String>,
+        /// Report the master list the command would leave, but change nothing.
+        #[arg(long)]
+        dry_run: bool,
+    },
+}
+
 /// The command name and parameters of a subcommand.
 fn command_of(action: Action) -> Result<(String, Value), CommandError> {
     Ok(match action {
@@ -310,6 +352,23 @@ fn command_of(action: Action) -> Result<(String, Value), CommandError> {
                     "elements.set".to_owned(),
                     json!({ "form_id": form_id, "path": path, "file": file, "value": value, "dry_run": dry_run }),
                 )
+            }
+        },
+        Action::Masters { action } => match action {
+            MastersAction::Add {
+                masters,
+                file,
+                no_sort,
+                dry_run,
+            } => (
+                "masters.add".to_owned(),
+                json!({ "masters": masters, "file": file, "sort": !no_sort, "dry_run": dry_run }),
+            ),
+            MastersAction::Clean { file, dry_run } => {
+                ("masters.clean".to_owned(), json!({ "file": file, "dry_run": dry_run }))
+            }
+            MastersAction::Sort { file, dry_run } => {
+                ("masters.sort".to_owned(), json!({ "file": file, "dry_run": dry_run }))
             }
         },
         Action::Save {

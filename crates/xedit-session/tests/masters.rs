@@ -5,14 +5,18 @@
 //! The master editing of `TwbFile` on synthetic Skyrim SE plugins:
 //! `AddMasters` and `AddMastersIfMissing` with and without the sort, the
 //! FormID remap of `MastersUpdated` (the record FormIDs, the FormIDs in the
-//! elements, the labels of child groups), `SortMasters` and `CleanMasters`.
+//! elements, the labels of child groups), `SortMasters`, `CleanMasters`, and
+//! the `masters.*` commands.
 
 use std::sync::Arc;
+
+use serde_json::json;
 
 use xedit_core::implementation::{FileBytes, FileImpl, ResetModified, wb_file_from_bytes};
 use xedit_core::interface::globals::{set_edit_allowed, test_lock};
 use xedit_core::interface::types::FileStates;
 use xedit_core::interface::{Container, Element, GameMode, MainRecord, Variant};
+use xedit_session::{Registry, Session};
 
 fn sub_record(signature: &[u8; 4], data: &[u8]) -> Vec<u8> {
     let mut bytes = signature.to_vec();
@@ -309,4 +313,51 @@ fn child_group_labels_follow_the_masters() {
         })
         .collect();
     assert!(groups.contains(&(0x0200_0810, 7)), "{groups:x?}");
+}
+#[test]
+fn masters_commands_add_sort_and_clean() {
+    let _guard = test_lock();
+    let file = load(plugin(&["MasterA.esm"], 0x0100_0803, &[0x0000_0801]), true);
+    let registry = Registry::standard();
+    let mut session = Session::with_files(GameMode::gmSSE, vec![file.clone()]);
+    // A mutating command needs the edit flag unless it is a dry run.
+    let error = registry
+        .call(&mut session, "masters.add", json!({ "masters": ["MasterB.esm"] }))
+        .unwrap_err();
+    assert_eq!(error.code, "edit_required");
+    let dry = registry
+        .call(
+            &mut session,
+            "masters.add",
+            json!({ "masters": ["MasterB.esm"], "dry_run": true }),
+        )
+        .unwrap();
+    assert_eq!(dry["masters"], json!(["MasterB.esm", "MasterA.esm"]));
+    assert_eq!(dry["changed"], true);
+    assert_eq!(master_names(&file), ["MasterA.esm"]);
+    session.allow_edit(true);
+    let added = registry
+        .call(
+            &mut session,
+            "masters.add",
+            json!({ "masters": ["MasterB.esm"], "sort": false }),
+        )
+        .unwrap();
+    assert_eq!(added["old_masters"], json!(["MasterA.esm"]));
+    assert_eq!(added["masters"], json!(["MasterA.esm", "MasterB.esm"]));
+    let sorted = registry.call(&mut session, "masters.sort", json!({})).unwrap();
+    assert_eq!(sorted["masters"], json!(["MasterB.esm", "MasterA.esm"]));
+    let dry = registry
+        .call(&mut session, "masters.clean", json!({ "dry_run": true }))
+        .unwrap();
+    assert_eq!(dry["masters"], json!(["MasterA.esm"]));
+    assert_eq!(master_names(&file), ["MasterB.esm", "MasterA.esm"]);
+    let cleaned = registry.call(&mut session, "masters.clean", json!({})).unwrap();
+    assert_eq!(cleaned["masters"], json!(["MasterA.esm"]));
+    assert_eq!(cleaned["changed"], true);
+    let error = registry
+        .call(&mut session, "masters.add", json!({ "masters": ["Nope.esm"] }))
+        .unwrap_err();
+    assert_eq!(error.code, "edit_failed");
+    session.allow_edit(false);
 }

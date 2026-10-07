@@ -1180,8 +1180,10 @@ status = "pending"
 source = "mniNavAddClick"
 
 [gui."xEdit/xeMainForm.dfm:mniNavAddMasters:OnClick"]
-status = "pending"
+status = "covered"
+command = "masters.add"
 source = "mniNavAddMastersClick"
+note = "The module selection dialog is presentation; the request names the masters."
 
 [gui."xEdit/xeMainForm.dfm:mniNavApplyScript:OnClick"]
 status = "pending"
@@ -1236,8 +1238,10 @@ status = "pending"
 source = "mniNavCheckForErrorsClick"
 
 [gui."xEdit/xeMainForm.dfm:mniNavCleanMasters:OnClick"]
-status = "pending"
+status = "covered"
+command = "masters.clean"
 source = "mniNavCleanMastersClick"
+note = "One file per call."
 
 [gui."xEdit/xeMainForm.dfm:mniNavCleanupInjected:OnClick"]
 status = "pending"
@@ -1428,8 +1432,10 @@ status = "pending"
 source = "mniNavSetVWDAutoIntoClick"
 
 [gui."xEdit/xeMainForm.dfm:mniNavSortMasters:OnClick"]
-status = "pending"
+status = "covered"
+command = "masters.sort"
 source = "mniNavSortMastersClick"
+note = "One file per call."
 
 [gui."xEdit/xeMainForm.dfm:mniNavTest:OnClick"]
 status = "pending"
@@ -4181,8 +4187,10 @@ status = "pending"
 source = "IwbFile_AddMasters"
 
 [script."xejviScriptAdapterFile:cUnit.AddMastersIfMissing:function"]
-status = "pending"
+status = "covered"
+command = "masters.add"
 source = "IwbFile_AddMastersIfMissing"
+note = "aSortMasters is the sort parameter; aSilent has no effect on the result."
 
 [script."xejviScriptAdapterFile:cUnit.CanBeESL:function"]
 status = "pending"
@@ -4201,7 +4209,8 @@ status = "pending"
 source = "IwbFile_CanBeLight"
 
 [script."xejviScriptAdapterFile:cUnit.CleanMasters:function"]
-status = "pending"
+status = "covered"
+command = "masters.clean"
 source = "IwbFile_CleanMasters"
 
 [script."xejviScriptAdapterFile:cUnit.FileFormIDtoLoadOrderFormID:function"]
@@ -4313,7 +4322,8 @@ status = "pending"
 source = "IwbFile_SetIsLight"
 
 [script."xejviScriptAdapterFile:cUnit.SortMasters:function"]
-status = "pending"
+status = "covered"
+command = "masters.sort"
 source = "IwbFile_SortMasters"
 
 [script."xejviScriptAdapterHost:cUnit.AddMessage:function"]

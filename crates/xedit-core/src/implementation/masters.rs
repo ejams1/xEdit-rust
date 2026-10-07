@@ -248,16 +248,10 @@ impl FileImpl {
         self.add_masters_if_missing(&[master], sort_masters, silent)
     }
 
-    /// Port of `AddMastersIfMissing`: the loaded files named that are not
-    /// masters yet (with their own masters under `wbEnforceAllMasters`)
-    /// become masters in load order, and the masters are sorted when
-    /// `sort_masters` is set.
-    pub fn add_masters_if_missing<S: AsRef<str>>(
-        self: &Arc<Self>,
-        masters: &[S],
-        sort_masters: bool,
-        silent: bool,
-    ) -> Result<(), EditError> {
+    /// The list `AddMastersIfMissing` passes to `AddMasters`: the loaded
+    /// files named that are not masters yet, with their own masters under
+    /// `wbEnforceAllMasters`, without the file itself, in load order.
+    pub fn masters_to_add<S: AsRef<str>>(&self, masters: &[S]) -> Result<Vec<Arc<FileImpl>>, EditError> {
         let mut list = SortedFiles::default();
         for name in masters {
             let name = name.as_ref();
@@ -279,12 +273,59 @@ impl FileImpl {
             list.delete(&master.get_name());
         }
         list.delete(&self.get_name());
-        if list.0.is_empty() {
-            return Ok(());
-        }
         // `CustomSort(CompareLoadOrder)` on the string list: by load order.
         list.0.sort_by_key(|(_, file)| file.load_order());
-        let names: Vec<String> = list.0.into_iter().map(|(name, _)| name).collect();
+        Ok(list.0.into_iter().map(|(_, file)| file).collect())
+    }
+
+    /// The masters as `SortMasters` orders them: by load order.
+    pub fn masters_in_load_order(&self) -> Vec<Arc<FileImpl>> {
+        let mut masters = self.masters();
+        masters.sort_by(compare_load_order);
+        masters
+    }
+
+    /// The masters `CleanMasters` keeps, by index: the used masters, the
+    /// game master and, under `wbEnforceAllMasters`, the masters of a used
+    /// master. `used` comes from `find_used_masters`.
+    pub fn masters_to_keep(&self, used: &UsedMasters) -> Vec<bool> {
+        let masters = self.masters();
+        let mut keep: Vec<String> = Vec::new();
+        if enforce_all_masters() {
+            for (i, master) in masters.iter().enumerate() {
+                if used[i] {
+                    keep.extend(master.all_masters().iter().map(|m| m.get_name().to_uppercase()));
+                }
+            }
+        }
+        masters
+            .iter()
+            .enumerate()
+            .map(|(i, master)| {
+                let name = master.get_name();
+                used[i] || name.eq_ignore_ascii_case(&game_master_esm()) || keep.contains(&name.to_uppercase())
+            })
+            .collect()
+    }
+
+    /// Port of `AddMastersIfMissing`: the loaded files named that are not
+    /// masters yet (with their own masters under `wbEnforceAllMasters`)
+    /// become masters in load order, and the masters are sorted when
+    /// `sort_masters` is set.
+    pub fn add_masters_if_missing<S: AsRef<str>>(
+        self: &Arc<Self>,
+        masters: &[S],
+        sort_masters: bool,
+        silent: bool,
+    ) -> Result<(), EditError> {
+        let names: Vec<String> = self
+            .masters_to_add(masters)?
+            .iter()
+            .map(|file| file.get_name())
+            .collect();
+        if names.is_empty() {
+            return Ok(());
+        }
         self.add_masters(&names, silent)?;
         if sort_masters {
             self.sort_masters()?;
@@ -474,14 +515,7 @@ impl FileImpl {
         for (i, entry) in old_entries.iter().enumerate() {
             entry.set_sort_order(i as i32);
         }
-        let mut keep: Vec<String> = Vec::new();
-        if enforce_all_masters() {
-            for (i, master) in old_masters.iter().enumerate() {
-                if used[i] {
-                    keep.extend(master.all_masters().iter().map(|m| m.get_name().to_uppercase()));
-                }
-            }
-        }
+        let keep = self.masters_to_keep(&used);
         let mut masters = old_masters.clone();
         let mut old = Vec::new();
         let mut new = Vec::new();
@@ -492,7 +526,7 @@ impl FileImpl {
             let master = &old_masters[i];
             let module_type = master.module_type();
             let name = master.get_name();
-            if used[i] || name.eq_ignore_ascii_case(&game_master_esm()) || keep.contains(&name.to_uppercase()) {
+            if keep[i] {
                 if i != j {
                     masters[j] = master.clone();
                     old_entries[i].set_sort_order(j as i32);
@@ -602,8 +636,7 @@ impl FileImpl {
             }
             FileID::invalid()
         };
-        let mut masters = old_masters.clone();
-        masters.sort_by(compare_load_order);
+        let masters = self.masters_in_load_order();
         let mut old = Vec::new();
         let mut new = Vec::new();
         let mut next = TypeCounters::default();
