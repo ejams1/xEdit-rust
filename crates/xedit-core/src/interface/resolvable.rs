@@ -634,7 +634,7 @@ mod tests {
         let children = ArrayDef::create(
             args("Children"),
             ArrayDefArgs {
-                element: recursive_value,
+                element: Some(recursive_value),
                 count: 0,
                 count_callback: None,
                 labels: Vec::new(),

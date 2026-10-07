@@ -47,7 +47,8 @@ pub const ARC_U8: i32 = ARRAY_COUNT_U8;
 
 /// The constructor arguments of `TwbArrayDef` after those of `TwbNamedDef`.
 pub struct ArrayDefArgs {
-    pub element: Arc<dyn ValueDef>,
+    /// `None` for an array created with a `nil` element upstream.
+    pub element: Option<Arc<dyn ValueDef>>,
     /// Number of elements when positive, 0 for as many as the data holds, or
     /// one of the negative `ARRAY_COUNT_` values.
     pub count: i32,
@@ -67,7 +68,7 @@ pub struct ArrayDef {
     vd: ValueDefBase,
     ar_count: AtomicI32,
     ar_count_callback: DefCell<CountCallback>,
-    ar_element: Arc<dyn ValueDef>,
+    ar_element: Option<Arc<dyn ValueDef>>,
     ar_labels: DefCell<Vec<String>>,
     ar_sorted: bool,
     ar_can_add_to: bool,
@@ -118,7 +119,7 @@ impl ArrayDef {
                 vd: ValueDefBase::default(),
                 ar_count: AtomicI32::new(count),
                 ar_count_callback: DefCell::new(array.count_callback),
-                ar_element: set_parent(array.element, &parent, false),
+                ar_element: array.element.map(|element| set_parent(element, &parent, false)),
                 ar_labels: DefCell::new(Some(array.labels)),
                 ar_sorted: sorted,
                 ar_can_add_to: array.can_add_to,
@@ -183,8 +184,14 @@ impl ArrayDef {
         self.ar_labels.load().as_deref().cloned().unwrap_or_default()
     }
 
+    /// The element definition. Upstream an array may be created with a `nil`
+    /// element (`wbArray('Global Data 1', wbGlobalData, [], ...)` in
+    /// `wbDefinitionsTES4Saves`, where `wbGlobalData` is never assigned);
+    /// using such an array is an access violation there and a panic here.
     pub fn get_element(&self) -> &Arc<dyn ValueDef> {
-        &self.ar_element
+        self.ar_element
+            .as_ref()
+            .unwrap_or_else(|| panic!("array {} has no element definition", self.get_name()))
     }
 
     pub fn get_count(&self) -> i32 {
@@ -211,7 +218,7 @@ impl ArrayDef {
     pub fn get_element_name_suffix(&self, index: i32) -> String {
         let mut result = self.get_element_label(index);
         if !result.is_empty() {
-            if self.ar_element.get_name().is_empty() {
+            if self.get_element().get_name().is_empty() {
                 return result;
             }
             result = format!(" ({result})");
@@ -427,7 +434,7 @@ impl Def for ArrayDef {
         } else {
             format!("{separated}Array of ")
         };
-        format!("{prefix}{}", self.ar_element.get_def_type_name())
+        format!("{prefix}{}", self.get_element().get_def_type_name())
     }
 
     fn as_array_def(&self) -> Option<&ArrayDef> {
@@ -439,7 +446,7 @@ impl Def for ArrayDef {
     }
 
     fn init_from_parent_do_children(&self) {
-        self.ar_element.init_from_parent();
+        self.get_element().init_from_parent();
     }
 }
 
@@ -600,10 +607,10 @@ impl ValueDef for ArrayDef {
         debug_assert!(should_include.is_none() || count == 0);
         let mut offset = prefix.max(0) as usize;
         if count > 0 || should_include.is_some() {
-            if self.ar_element.get_is_variable_size() || should_include.is_some() {
+            if self.get_element().get_is_variable_size() || should_include.is_some() {
                 let Some(container) = container else {
                     return if data.is_none() {
-                        self.ar_element.get_default_size(None, element)
+                        self.get_element().get_default_size(None, element)
                     } else {
                         i32::MAX
                     };
@@ -629,7 +636,7 @@ impl ValueDef for ArrayDef {
                         // A variable sized array with a static count of elements and no
                         // existing data to read: all elements have their default size.
                         result =
-                            (i64::from(self.ar_element.get_default_size(None, element)).wrapping_mul(count)) as i32;
+                            (i64::from(self.get_element().get_default_size(None, element)).wrapping_mul(count)) as i32;
                     } else {
                         if count == 0 && should_include.is_some() {
                             count = i64::from(i32::MAX);
@@ -645,7 +652,7 @@ impl ValueDef for ArrayDef {
                             {
                                 break;
                             }
-                            let size = self.ar_element.get_size(rest, child);
+                            let size = self.get_element().get_size(rest, child);
                             if size == i32::MAX {
                                 return i32::MAX;
                             }
@@ -664,7 +671,7 @@ impl ValueDef for ArrayDef {
             } else {
                 let any = container.and_then(|container| container.get_any_element());
                 let child = any.as_ref().or(element);
-                let size = i64::from(self.ar_element.get_size(data_from(data, offset), child));
+                let size = i64::from(self.get_element().get_size(data_from(data, offset), child));
                 if size >= i64::from(i32::MAX) {
                     return i32::MAX;
                 }
@@ -699,7 +706,7 @@ impl ValueDef for ArrayDef {
 
     fn get_is_variable_size_internal(&self) -> bool {
         !self.def.def_flags.contains(DefFlag::dfArrayStaticSize)
-            && (self.get_count() <= 0 || self.ar_element.get_is_variable_size())
+            && (self.get_count() <= 0 || self.get_element().get_is_variable_size())
     }
 
     fn get_can_be_zero_size(&self) -> bool {
@@ -739,7 +746,7 @@ mod tests {
         ArrayDef::create(
             args("Items", false),
             ArrayDefArgs {
-                element,
+                element: Some(element),
                 count,
                 count_callback: None,
                 labels: Vec::new(),
@@ -790,7 +797,7 @@ mod tests {
         let byte_counted = ArrayDef::create(
             args("Items", true),
             ArrayDefArgs {
-                element: u16_def(),
+                element: Some(u16_def()),
                 count: ARRAY_COUNT_U8,
                 count_callback: None,
                 labels: Vec::new(),
@@ -826,7 +833,7 @@ mod tests {
         let labelled = ArrayDef::create(
             args("Colors", false),
             ArrayDefArgs {
-                element: u16_def(),
+                element: Some(u16_def()),
                 count: 2,
                 count_callback: None,
                 labels: vec!["Red".to_owned(), "Green".to_owned()],
@@ -840,7 +847,7 @@ mod tests {
         let unnamed = ArrayDef::create(
             args("Colors", false),
             ArrayDefArgs {
-                element: IntegerDef::create(args("", false), IntType::itU8, None, 0),
+                element: Some(IntegerDef::create(args("", false), IntType::itU8, None, 0)),
                 count: 1,
                 count_callback: None,
                 labels: vec!["Red".to_owned()],

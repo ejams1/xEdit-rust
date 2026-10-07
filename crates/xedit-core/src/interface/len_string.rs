@@ -14,7 +14,7 @@ use super::def::{
     Def, DefBase, DefCell, DefKind, DefRef, NamedDef, NamedDefArgs, NamedDefBase, ValueDef, ValueDefBase, set_parent,
     value_def_plumbing,
 };
-use super::element::{DataPtr, ElementArg};
+use super::element::{DataPtr, ElementArg, bytes_after};
 use super::globals::{check_expected_bytes, is_internal_edit};
 use super::misc::{Variant, progress};
 use super::string::{StringDefFormater, base_string_get_edit_info, base_string_get_edit_type, bsd_get_encoding};
@@ -124,9 +124,23 @@ impl LenStringDef {
         }
         let size = self.get_prefix_value(bytes) as u32 as usize;
         // UPSTREAM-QUIRK: upstream limits the text to the size of the whole data,
-        // prefix included, and so can read past the end. The port stops there.
+        // prefix included, and so reads up to the prefix's bytes past the end
+        // of the data when the stored length is larger. Those bytes come from
+        // the block the data is part of; at the end of the block the text
+        // stops with the data.
         let len = bytes.len().min(size);
-        let text = &bytes[offset..(offset + len).min(bytes.len())];
+        let end = offset + len;
+        let overrun;
+        let text: &[u8] = if end <= bytes.len() {
+            &bytes[offset..end]
+        } else {
+            let mut text = bytes[offset..].to_vec();
+            if let Some(more) = element.and_then(|element| bytes_after(data, element, end - bytes.len())) {
+                text.extend_from_slice(more);
+            }
+            overrun = text;
+            &overrun
+        };
         let mut result = String::new();
         if len > 0 {
             let mut b = text;

@@ -453,3 +453,14 @@ pub fn bytes_before<'a>(data: DataPtr<'a>, element: &'a ElementRef, offset: usiz
     let begin = start.checked_sub(offset)?;
     block.get(begin..begin + len)
 }
+
+/// The `len` bytes after the end of `data`, read from the block of `element`
+/// that `data` is part of: upstream reads them when a stored length exceeds
+/// the data. `None` at the end of the block.
+pub fn bytes_after<'a>(data: DataPtr<'a>, element: &'a ElementRef, len: usize) -> Option<&'a [u8]> {
+    let data = data?;
+    let block = element.as_data_container()?.get_block()?;
+    let start = (data.as_ptr() as usize).checked_sub(block.as_ptr() as usize)?;
+    let end = start.checked_add(data.len())?;
+    block.get(end..end + len)
+}
