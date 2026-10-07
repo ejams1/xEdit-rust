@@ -64,6 +64,12 @@ macro_rules! element_common {
             self.$base().container()
         }
 
+        fn get_memory_order(&self) -> i32 {
+            self.$base()
+                .e_memory_order
+                .load(std::sync::atomic::Ordering::Relaxed)
+        }
+
         fn get_full_path(&self) -> String {
             match self.$base().container() {
                 Some(container) => format!("{} \\ {}", container.get_full_path(), self.get_name()),
@@ -574,7 +580,8 @@ impl FileImpl {
         *self.fl_version.get_or_init(|| round(version / factor) as f64 * factor)
     }
 
-    /// Port of `flRecords`: the main records of the file in file order.
+    /// Port of `flRecords`: the main records of the file, in FormID order once
+    /// the scan is done (`SortRecords`).
     pub fn records(&self) -> Vec<Arc<MainRecordImpl>> {
         self.fl_records.read().unwrap().clone()
     }
@@ -671,12 +678,13 @@ impl FileImpl {
         } else {
             form_id
         };
-        let index = sorted
-            .binary_search_by_key(&form_id.to_cardinal(), |record| {
-                record.get_fixed_form_id().to_cardinal()
-            })
-            .ok()?;
-        Some(sorted[index].clone())
+        // Port of the binary search of `FindFormID`: the first record with the
+        // FormID. Of records with the same FormID the stable sort keeps the
+        // file order, so the first one in the file wins.
+        let key = form_id.to_cardinal();
+        let index = sorted.partition_point(|record| record.get_fixed_form_id().to_cardinal() < key);
+        let record = sorted.get(index)?;
+        (record.get_fixed_form_id().to_cardinal() == key).then(|| record.clone())
     }
 
     /// Port of `GetMasterRecordByFormID`: the record of the master the
@@ -863,8 +871,12 @@ impl FileImpl {
         // `SortRecords` and `flActivateIndices` come before the group check:
         // the sort of a merged group finds the record of a child group in
         // this file.
+        // `SortRecords` sorts `flRecords` itself, so the indices take the
+        // records in FormID order: of records with the same key, the one with
+        // the lowest FormID is kept.
         let mut sorted = self.fl_records.read().unwrap().clone();
         sorted.sort_by_key(|record| record.get_fixed_form_id().to_cardinal());
+        *self.fl_records.write().unwrap() = sorted.clone();
         self.fl_sorted_records.set(sorted).ok();
         self.activate_indices();
         // Port of the top level group check of `TwbFile.Scan` for the games

@@ -282,6 +282,10 @@ pub struct Emitter<'a> {
     /// The callbacks of `wbDefinitionsCommon` that a game unit names, in the
     /// same form. Their stubs belong to the Common unit.
     pub common_callbacks: RefCell<BTreeMap<String, (String, String, u32)>>,
+    /// The functions of the hand-written file. A closure variable `name` of
+    /// the routine `routine` is that file's `<routine>_<name>` when it has
+    /// one, for closures that capture variables a stub cannot hold.
+    pub hand_written: RefCell<HashSet<String>>,
 }
 
 impl<'a> Emitter<'a> {
@@ -293,6 +297,7 @@ impl<'a> Emitter<'a> {
             references: RefCell::default(),
             callbacks: RefCell::default(),
             common_callbacks: RefCell::default(),
+            hand_written: RefCell::default(),
         }
     }
 
@@ -773,6 +778,21 @@ impl<'a> Emitter<'a> {
                 let [name] = var.names.as_slice() else {
                     bail!("inline variable with several names")
                 };
+                let hand = format!("{}_{}", cx.routine, snake(name));
+                if self.hand_written.borrow().contains(&hand) {
+                    out.push_str(&format!("{pad}let {} = {hand};\n", snake(name)));
+                    cx.closures.insert(
+                        name.to_ascii_lowercase(),
+                        RoutineSig {
+                            name: name.clone(),
+                            params: routine.params.clone(),
+                            return_type: routine.return_type.clone(),
+                            unit: String::new(),
+                            line: routine.line,
+                        },
+                    );
+                    return Ok(());
+                }
                 // A closure in a variable of a callback type is passed on as
                 // a callback, so it is written by hand like an anonymous
                 // routine that is passed directly.

@@ -495,6 +495,7 @@ fn emit_unit(upstream: &Path, unit_name: &str, out: &Path, stubs: &Path, ported:
         );
     }
 
+    *emitter.hand_written.borrow_mut() = ported.clone();
     let mut text = format!("{GENERATED_UNIT_HEADER}\n// Ported from xEdit: Core/{unit_name}.pas\n\n");
     text.push_str(&unit_imports(unit_name));
     for decl in unit.interface.iter().chain(&unit.implementation) {

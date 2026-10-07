@@ -2952,3 +2952,416 @@ pub fn wb_script_to_str(a_value: &mut String, _a_base_ptr: DataPtr, a_element: E
         count => format!("<{count} lines>"),
     };
 }
+
+/// Upstream `wbWwiseKeywordMappingSoundDecider`: the `WMTI` of the record.
+pub fn wb_wwise_keyword_mapping_sound_decider(_a_base_ptr: DataPtr, a_element: ElementArg) -> i32 {
+    let Some(element) = a_element else { return 0 };
+    element
+        .get_containing_main_record()
+        .map_or(0, |record| variant_int(&record.get_element_native_value("WMTI")) as i32)
+}
+
+/// Upstream `wbFlagNavmeshOnlyCutDontSHow`.
+pub fn wb_flag_navmesh_only_cut_dont_s_how(a_element: ElementArg) -> bool {
+    let flags = containing_record_flags(a_element);
+    flags & (0x400_0000 | 0x800_0000 | 0x2000_0000 | 0x4000_0000) != 0
+}
+
+/// Upstream `wbFlagNavmeshIgnoreErosionDontSHow`.
+pub fn wb_flag_navmesh_ignore_erosion_dont_s_how(a_element: ElementArg) -> bool {
+    let flags = containing_record_flags(a_element);
+    flags & (0x400_0000 | 0x800_0000 | 0x1000_0000 | 0x4000_0000) != 0
+}
+
+/// Upstream `wbConditionSummaryLinksTo`: the first parameter, the second
+/// parameter or the comparison value of the condition that links to a
+/// record.
+pub fn wb_condition_summary_links_to(a_element: ElementArg) -> Option<ElementRef> {
+    let container = wb_try_set_container(a_element, CallbackType::ctToSummary)?;
+    let ctda = if game_mode() > GameMode::gmFNV {
+        let ctda = container
+            .as_container()?
+            .get_record_by_signature(Signature::new(b"CTDA"))?;
+        ctda.as_container()?;
+        ctda
+    } else {
+        container
+    };
+    let ctda = ctda.as_container()?;
+    [5, 6, 2]
+        .into_iter()
+        .find_map(|index| ctda.get_element(index)?.get_links_to())
+}
+
+/// Upstream `wbCrowdPropertyToStr`: the actor value with its value, and the
+/// curve table in Fallout 76 and Starfield.
+pub fn wb_crowd_property_to_str(
+    a_value: &mut String,
+    _a_base_ptr: DataPtr,
+    a_element: ElementArg,
+    a_type: CallbackType,
+) {
+    let Some(container) = wb_try_set_container(a_element, a_type) else {
+        return;
+    };
+    let Some(container) = container.as_container() else {
+        return;
+    };
+    let actor = container.get_element_by_name("Actor");
+    let Some(main_record) = wb_try_get_main_record(actor.as_ref(), "") else {
+        return;
+    };
+    let value = container
+        .get_element_by_name("Value")
+        .map(|element| element.get_value())
+        .unwrap_or_default();
+    let Some(value) = str_to_float(&value) else { return };
+    *a_value = format!("{} = {}", main_record.get_editor_id(), format_general(value, 5));
+    if !matches!(game_mode(), GameMode::gmFO76 | GameMode::gmSF1) {
+        return;
+    }
+    let Some(curve_table) = container.get_element_by_name("Curve Table") else {
+        return;
+    };
+    let curve_table = curve_table
+        .as_container()
+        .and_then(|curve_table| curve_table.get_element_by_name("Curve Table"));
+    let Some(main_record) = wb_try_get_main_record(curve_table.as_ref(), "") else {
+        return;
+    };
+    a_value.push_str(&format!(" {{Curve Table: {}}}", main_record.get_short_name()));
+}
+
+/// Upstream `wbLGDIFiltersToStr`: the legendary mod of the star slot the
+/// filter selects.
+pub fn wb_lgdi_filters_to_str(a_int: i64, a_element: ElementArg, a_type: CallbackType) -> String {
+    const WARNING: &str = "<Warning: Could not resolve mod index>";
+    let mut result = match a_type {
+        CallbackType::ctToStr => format!("{a_int} {WARNING}"),
+        CallbackType::ctToSummary | CallbackType::ctToEditValue => a_int.to_string(),
+        CallbackType::ctToSortKey => return int_to_hex64(a_int, 8),
+        CallbackType::ctCheck => WARNING.to_owned(),
+        CallbackType::ctEditType => return "ComboBox".to_owned(),
+        CallbackType::ctEditInfo => String::new(),
+        _ => return String::new(),
+    };
+    let Some(element) = a_element else { return result };
+    let Some(filter) = element.get_container().filter(|filter| filter.as_container().is_some()) else {
+        return result;
+    };
+    let Some(main_record) = element.get_containing_main_record() else {
+        return result;
+    };
+    let has_signature = |element: Option<ElementRef>| element.and_then(|element| element.get_record_signature());
+    let Some(base) = has_signature(filter.get_container())
+        .or_else(|| has_signature(filter.get_container().and_then(|container| container.get_container())))
+    else {
+        return result;
+    };
+    let rank_slots_signature = match &base.to_string()[..] {
+        "CNAM" | "DNAM" | "LNAM" => Signature::new(b"BNAM"),
+        "INAM" | "HNAM" => Signature::new(b"GNAM"),
+        _ => return result,
+    };
+    let Some(rank_slots) = main_record.get_element_by_signature(rank_slots_signature) else {
+        return result;
+    };
+    let Some(rank_slots) = rank_slots.as_container() else {
+        return result;
+    };
+    let Some(star_slot_index) = filter
+        .as_container()
+        .and_then(|filter| filter.get_element(0))
+        .and_then(|element| element.get_native_value().as_ordinal())
+    else {
+        return result;
+    };
+    if star_slot_index < 0 || star_slot_index >= i64::from(rank_slots.get_element_count()) {
+        return result;
+    }
+    let Some(star_slot) = rank_slots.get_element(star_slot_index as i32) else {
+        return result;
+    };
+    let Some(star_slot) = star_slot.as_container() else {
+        return result;
+    };
+    let mod_name = |legendary_mod: &ElementRef| {
+        legendary_mod
+            .as_container()
+            .and_then(|legendary_mod| legendary_mod.get_element(1))
+            .map(|element| element.get_edit_value())
+            .unwrap_or_default()
+    };
+    if a_type == CallbackType::ctEditInfo {
+        let mut infos: Vec<String> = (0..star_slot.get_element_count())
+            .filter_map(|index| {
+                let legendary_mod = star_slot.get_element(index)?;
+                Some(format!("{index:02} {}", mod_name(&legendary_mod)))
+            })
+            .collect();
+        infos.sort_by_key(|info| info.to_lowercase());
+        return to_comma_text(&infos);
+    }
+    let Some(mod_index) = element.get_native_value().as_ordinal() else {
+        return result;
+    };
+    if mod_index < 0 || mod_index >= i64::from(star_slot.get_element_count()) {
+        return result;
+    }
+    let Some(legendary_mod) = star_slot.get_element(mod_index as i32) else {
+        return result;
+    };
+    let name = mod_name(&legendary_mod);
+    if name.is_empty() {
+        return result;
+    }
+    match a_type {
+        CallbackType::ctCheck => return String::new(),
+        CallbackType::ctToSummary => {
+            let omod = legendary_mod
+                .as_container()
+                .and_then(|legendary_mod| legendary_mod.get_element(1))
+                .and_then(|element| element.get_links_to())
+                .and_then(|record| record.into_main_record());
+            return match omod {
+                Some(omod) => {
+                    let editor_id = omod.get_editor_id();
+                    if editor_id.is_empty() {
+                        omod.get_short_name()
+                    } else {
+                        editor_id
+                    }
+                }
+                None => String::new(),
+            };
+        }
+        _ => result = format!("{mod_index:02}"),
+    }
+    format!("{result} {name}")
+}
+
+/// Upstream `wbLGDIRankSlotArrayShouldInclude`: the array of a rank slot
+/// continues while the data starts with its position.
+pub fn wb_lgdi_rank_slot_array_should_include(a_base_ptr: DataPtr, a_array: ElementArg) -> bool {
+    let (Some(array), Some(data)) = (a_array, a_base_ptr) else {
+        return false;
+    };
+    let Some(bytes) = data.get(..4) else { return false };
+    i32::from_le_bytes(bytes.try_into().unwrap()) == array.get_memory_order()
+}
+
+/// Upstream anonymous routine at line 7802 of `wbDefinitionsCommon.pas`:
+/// the set-to-default callback of a legendary slot. Editing is not ported.
+pub fn wb_lgdi_slot_def_anonymous_7802(_a_base_ptr: DataPtr, _a_element: ElementArg) -> bool {
+    false
+}
+
+/// Upstream `wbINFOAliasToStr`: the alias of the quest of the topic of the
+/// response.
+pub fn wb_info_alias_to_str(a_int: i64, a_element: ElementArg, a_type: CallbackType) -> String {
+    let Some(element) = a_element else {
+        return String::new();
+    };
+    if resolve_alias() {
+        let Some(main_record) = element.get_containing_main_record() else {
+            return String::new();
+        };
+        let Some(topic) = main_record
+            .get_element_by_name("Topic")
+            .and_then(|topic| topic.get_links_to())
+            .and_then(|topic| topic.into_main_record())
+        else {
+            return String::new();
+        };
+        let quest = topic.get_element_by_signature(Signature::new(b"QNAM"));
+        wb_alias_to_str(a_int, quest.as_ref(), a_type)
+    } else {
+        match a_type {
+            CallbackType::ctToSortKey => int_to_hex64(a_int, 8),
+            CallbackType::ctToStr | CallbackType::ctToSummary | CallbackType::ctToEditValue => a_int.to_string(),
+            _ => String::new(),
+        }
+    }
+}
+
+/// The chargen entries of the race of the `NPC_` for its gender, by the
+/// path below `Chargen`, with the race when it is one.
+fn npc_race_chargen(container: &dyn Container, path: &str) -> (Option<MainRecordRef>, String, Option<ElementRef>) {
+    let race = container
+        .get_element_links_to("...\\RNAM")
+        .and_then(|race| race.into_main_record());
+    let gender = if container.get_element_exists("...\\ACBS\\Flags\\Female") {
+        "Female"
+    } else {
+        "Male"
+    };
+    let entries = race.as_ref().and_then(|race| {
+        race.get_element_by_path(&format!("Chargen and Skintones\\{gender}\\Chargen\\{path}"))
+            .filter(|entries| entries.as_container().is_some())
+    });
+    (race, gender.to_owned(), entries)
+}
+
+/// The entry of the race chargen list whose `index_signature` is `index`.
+fn npc_chargen_entry(entries: &ElementRef, index_signature: &str, index: i64) -> Option<ElementRef> {
+    let entries = entries.as_container()?;
+    (0..entries.get_element_count()).find_map(|i| {
+        let entry = entries.get_element(i)?;
+        let value = entry
+            .as_container()?
+            .get_element_native_value(index_signature)
+            .as_ordinal()?;
+        (value == index).then_some(entry)
+    })
+}
+
+/// Upstream `wbNPCFaceDialToStr` and `wbNPCFaceMorphToStr`: the chargen
+/// entry of the race with the index, by its label.
+fn npc_chargen_to_str(
+    a_int: i64,
+    a_element: ElementArg,
+    a_type: CallbackType,
+    path: &str,
+    what: &str,
+    index_signature: &str,
+    label_signature: &str,
+) -> String {
+    let Some(container) = a_element.and_then(|element| element.as_container()) else {
+        return String::new();
+    };
+    let int = a_int.to_string();
+    let could_not = format!("<Warning: Could not resolve {}>", what.to_lowercase());
+    let mut result = match a_type {
+        CallbackType::ctToStr => format!("{int} {could_not}"),
+        CallbackType::ctToSummary | CallbackType::ctToEditValue => int.clone(),
+        CallbackType::ctToSortKey => return int_to_hex64(a_int, 8),
+        CallbackType::ctCheck => could_not,
+        CallbackType::ctEditType => return "ComboBox".to_owned(),
+        CallbackType::ctEditInfo => String::new(),
+        _ => String::new(),
+    };
+    let (race, gender, entries) = npc_race_chargen(container, path);
+    let Some(race) = race else { return result };
+    if race.get_signature().to_string() != "RACE" {
+        let warning = format!("<Warning: \"{}\" is not a Race record>", race.get_short_name());
+        match a_type {
+            CallbackType::ctToStr => result = format!("{int} {warning}"),
+            CallbackType::ctCheck => result = warning,
+            _ => {}
+        }
+        return result;
+    }
+    let Some(entries) = entries else {
+        let warning = format!(
+            "<Warning: \"{}\" does not contain {gender} Chargen {}>",
+            race.get_short_name(),
+            if what == "Face Dial" {
+                "Face Dials"
+            } else {
+                "Face Morph Phenotype"
+            }
+        );
+        match a_type {
+            CallbackType::ctToStr => result = format!("{int} {warning}"),
+            CallbackType::ctCheck => result = warning,
+            _ => {}
+        }
+        return result;
+    };
+    let entries = entries.as_container().unwrap();
+    let mut edit_infos = (a_type == CallbackType::ctEditInfo).then(Vec::new);
+    for i in 0..entries.get_element_count() {
+        let Some(entry) = entries.get_element(i) else { continue };
+        let Some(entry) = entry.as_container() else { continue };
+        let Some(index) = entry.get_element_native_value(index_signature).as_ordinal() else {
+            continue;
+        };
+        let index = index as i32;
+        if i64::from(index) != a_int && edit_infos.is_none() {
+            continue;
+        }
+        let mut text = format!("{index:03}");
+        let label = match a_type {
+            CallbackType::ctToSummary => entry
+                .get_element_by_path(label_signature)
+                .map(|label| label.get_summary())
+                .unwrap_or_default(),
+            _ => entry
+                .get_element_by_path(label_signature)
+                .map(|label| label.get_value())
+                .unwrap_or_default(),
+        };
+        if !label.is_empty() {
+            text = format!("{text} {label}");
+        }
+        if let Some(edit_infos) = edit_infos.as_mut() {
+            edit_infos.push(text);
+        } else {
+            match a_type {
+                CallbackType::ctToStr | CallbackType::ctToSummary | CallbackType::ctToEditValue => result = text,
+                CallbackType::ctCheck => result = String::new(),
+                _ => {}
+            }
+            return result;
+        }
+    }
+    let not_found = format!("<Warning: {what} [{int}] not found in \"{}\">", race.get_name());
+    match a_type {
+        CallbackType::ctToStr => result = format!("{int} {not_found}"),
+        CallbackType::ctToSummary => result = int,
+        CallbackType::ctCheck => result = not_found,
+        CallbackType::ctEditInfo => {
+            let mut edit_infos = edit_infos.unwrap_or_default();
+            edit_infos.sort_by_key(|info| info.to_lowercase());
+            result = to_comma_text(&edit_infos);
+        }
+        _ => {}
+    }
+    result
+}
+
+/// Upstream `wbNPCFaceDialToStr`.
+pub fn wb_npc_face_dial_to_str(a_int: i64, a_element: ElementArg, a_type: CallbackType) -> String {
+    npc_chargen_to_str(a_int, a_element, a_type, "Face Dials", "Face Dial", "FDSI", "FDSL")
+}
+
+/// Upstream `wbNPCFaceMorphToStr`.
+pub fn wb_npc_face_morph_to_str(a_int: i64, a_element: ElementArg, a_type: CallbackType) -> String {
+    npc_chargen_to_str(
+        a_int,
+        a_element,
+        a_type,
+        "Face Morph Phenotypes",
+        "Face Morph Phenotype",
+        "FMRI",
+        "FMRN",
+    )
+}
+
+/// Upstream `wbNPCFaceDialLinksTo` and `wbNPCFaceMorphLinksTo`.
+fn npc_chargen_links_to(a_element: ElementArg, path: &str, index_signature: &str) -> Option<ElementRef> {
+    let element = a_element?;
+    let container = element.as_container()?;
+    let index = element.get_native_value().as_ordinal()?;
+    let (_, _, entries) = npc_race_chargen(container, path);
+    npc_chargen_entry(&entries?, index_signature, index)
+}
+
+/// Upstream `wbNPCFaceDialLinksTo`.
+pub fn wb_npc_face_dial_links_to(a_element: ElementArg) -> Option<ElementRef> {
+    npc_chargen_links_to(a_element, "Face Dials", "FDSI")
+}
+
+/// Upstream `wbNPCFaceMorphLinksTo`.
+pub fn wb_npc_face_morph_links_to(a_element: ElementArg) -> Option<ElementRef> {
+    npc_chargen_links_to(a_element, "Face Morph Phenotypes", "FMRI")
+}
+
+/// Upstream `wbIntPrefixedStrToInt`: the leading integer of the text.
+pub fn wb_int_prefixed_str_to_int(a_string: &str, _a_element: ElementArg) -> i64 {
+    let text = a_string.trim();
+    let end = text
+        .find(|c: char| c != '-' && !c.is_ascii_digit())
+        .unwrap_or(text.len());
+    i64::from(str_to_int_def(&text[..end], 0))
+}
