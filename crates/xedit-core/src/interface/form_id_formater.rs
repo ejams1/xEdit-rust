@@ -17,7 +17,7 @@ use super::element::{
     ElementArg, ElementRef, FileRef, MainRecordRef, get_game_master_file, record_by_load_order_form_id,
 };
 use super::enum_def::EnumDef;
-use super::form_id::{FileID, FormID};
+use super::form_id::{FileID, FormID, MastersUpdate, UsedMasters, mark_used_master};
 use super::formaters::{editable_unless_internal_only, formater_impls, formater_plumbing};
 use super::globals::{disable_form_id_check, display_load_order_form_id, pretty_form_id};
 use super::integer::{IntegerDefFormater, integer_def_formater_create};
@@ -590,6 +590,48 @@ impl FormIDDefFormater {
 }
 
 impl IntegerDefFormater for FormIDDefFormater {
+    /// Port of `TwbFormIDDefFormater.MastersUpdated`: the FormID through
+    /// `FixupFormID`. Load order FormIDs and the none FormID of a formater
+    /// that accepts it keep their value.
+    fn masters_updated(&self, int: i64, element: ElementArg, update: &MastersUpdate) -> i64 {
+        if self.use_load_order() {
+            return int;
+        }
+        if int == 0xFFFF_FFFF && (self.is_valid(ACVA) || self.is_valid(Signature::new(b"FFFF"))) {
+            return int;
+        }
+        let allow_hardcoded_range_use = element
+            .and_then(|element| element.get_file())
+            .is_some_and(|file| file.get_allow_hardcoded_range_use());
+        if int == 0 {
+            return int;
+        }
+        i64::from(
+            update
+                .fixup(FormID::from_cardinal(int as u32), allow_hardcoded_range_use)
+                .to_cardinal(),
+        )
+    }
+
+    /// Port of `TwbFormIDDefFormater.FindUsedMasters`: the master of the
+    /// file index of the FormID.
+    // UPSTREAM-QUIRK: the file index is the top byte of the FormID even for
+    // a light or medium FileID, and the none FormID flags index 255 unless
+    // the formater accepts `ACVA` (`(aInt < $800) or (aInt = $FFFFFFFF) and
+    // IsValid('ACVA')`).
+    fn find_used_masters(&self, int: i64, _element: ElementArg, masters: &mut UsedMasters) {
+        if self.use_load_order() {
+            return;
+        }
+        if int < 0x800 || (int == 0xFFFF_FFFF && self.is_valid(ACVA)) {
+            return;
+        }
+        let value = int as u32;
+        if value != 0 {
+            mark_used_master(masters, (value >> 24) as usize);
+        }
+    }
+
     fn to_string(&self, int: i64, element: ElementArg, for_summary: bool) -> String {
         if self.class == FormIDClass::RefID {
             return self.ref_id_to_string(int, element, for_summary);

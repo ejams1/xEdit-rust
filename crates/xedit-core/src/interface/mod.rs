@@ -41,7 +41,10 @@ pub use element::*;
 pub use enum_def::*;
 pub use flags::*;
 pub use float::*;
-pub use form_id::{CRC32, FileID, FormID, ModuleType, ObjectIDOutOfBounds, SlotCounts};
+pub use form_id::{
+    CRC32, FileID, FormID, MastersUpdate, ModuleType, ObjectIDOutOfBounds, SlotCounts, USED_MASTERS_LEN, UsedMasters,
+    fixup_form_id, mark_used_master, new_used_masters,
+};
 pub use form_id_formater::*;
 pub use formaters::*;
 pub use globals::{GameMode, ToolMode, ToolSource};

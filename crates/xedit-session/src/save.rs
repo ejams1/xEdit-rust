@@ -23,8 +23,8 @@ use xedit_core::implementation::{FileImpl, ResetModified, SaveError};
 use xedit_core::interface::globals::{
     GameMode, app_name, set_allow_esp_masters, set_allow_esp_masters_on_save, set_allow_internal_edit,
     set_always_save_onam, set_always_save_onam_force, set_app_name, set_can_sort_info, set_complex_file_file_id,
-    set_display_load_order_form_id, set_sort_sub_records, set_tool_name, set_vwd_as_quest_children,
-    set_vwd_in_temporary,
+    set_display_load_order_form_id, set_enforce_all_masters, set_sort_sub_records, set_tool_name,
+    set_vwd_as_quest_children, set_vwd_in_temporary,
 };
 use xedit_core::interface::{Element, File, FileState};
 
@@ -32,7 +32,7 @@ use crate::{CommandError, Registry, Session};
 
 /// Port of the game specific settings of `xeInit.pas` that the save path
 /// reads (`wbAllowESPMastersOnSave`, `wbAlwaysSaveOnam`, the VWD group
-/// rules, `wbComplexFileFileID`) and the names upstream puts into its
+/// rules, `wbComplexFileFileID`, `wbEnforceAllMasters`) and the names upstream puts into its
 /// messages (`wbAppName`, `wbToolName`). The dump setup of `xDump.dpr`
 /// leaves them at their defaults, so they are applied after it.
 pub fn apply_edit_settings(mode: GameMode) {
@@ -101,6 +101,7 @@ pub fn apply_edit_settings(mode: GameMode) {
         }
         GameMode::gmSF1 => {
             set_complex_file_file_id(true);
+            set_enforce_all_masters(true);
             set_vwd_in_temporary(true);
             set_vwd_as_quest_children(true);
             set_always_save_onam(true);

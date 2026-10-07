@@ -39,6 +39,7 @@ use super::element::{DataPtr, ElementArg, ElementRef};
 use super::enum_def::EnumDef;
 use super::flags::{FlagDef, FlagsDef};
 use super::float::FloatDef;
+use super::form_id::{MastersUpdate, UsedMasters};
 use super::form_id_formater::FormIDDefFormater;
 use super::globals::{
     collapse_benign_array, hide_unused, is_internal_edit, make_unknown_elements_unique, report_mode, report_unknown,
@@ -1055,9 +1056,8 @@ pub fn request_storage(element: ElementArg<'_>, new_size: usize) -> Result<(Elem
 
 /// Upstream `IwbValueDef`, implemented by `TwbValueDef`.
 ///
-/// The methods that change data through the masters (`SetLinksTo`,
-/// `MastersUpdated`, `FindUsedMasters`, `CompareExchangeFormID`,
-/// `PrepareSave`) come with the later steps of the write path.
+/// `SetLinksTo`, `CompareExchangeFormID` and `PrepareSave` come with the
+/// later steps of the write path.
 // The `from_*` methods keep the upstream names (`FromEditValue`).
 #[allow(clippy::wrong_self_convention)]
 pub trait ValueDef: NamedDef {
@@ -1102,6 +1102,22 @@ pub trait ValueDef: NamedDef {
     }
 
     fn build_ref(&self, _data: DataPtr, _element: ElementArg) {}
+
+    /// Port of `MastersUpdated`: rewrites the FormIDs in the data of
+    /// `element` after the masters of its file changed, and reports whether
+    /// the data changed. The base changes nothing.
+    fn masters_updated(
+        &self,
+        _data: DataPtr,
+        _element: ElementArg,
+        _update: &MastersUpdate,
+    ) -> Result<bool, EditError> {
+        Ok(false)
+    }
+
+    /// Port of `FindUsedMasters`: flags the masters the FormIDs in the data
+    /// point to. The base flags nothing.
+    fn find_used_masters(&self, _data: DataPtr, _element: ElementArg, _masters: &mut UsedMasters) {}
 
     /// Port of `GetIsVariableSize`, which caches `GetIsVariableSizeInternal`.
     fn get_is_variable_size(&self) -> bool {
