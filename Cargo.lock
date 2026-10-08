@@ -838,6 +838,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0c790de23124f9ab44544d7ac05d60440adc586479ce501c1d6d7da3cd8c9cf5"
 
 [[package]]
+name = "sniff"
+version = "0.1.0"
+dependencies = [
+ "mimalloc",
+ "xedit-assets",
+]
+
+[[package]]
 name = "strsim"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1057,6 +1065,7 @@ checksum = "23b97319f7b8343df12cc98938e5c3eb436064524c8d2b4e30a1d3a36eecdf81"
 name = "xedit-assets"
 version = "0.1.0"
 dependencies = [
+ "regex",
  "thiserror",
  "xedit-core",
  "xedit-io",

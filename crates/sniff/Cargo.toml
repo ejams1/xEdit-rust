@@ -1,0 +1,15 @@
+[package]
+name = "sniff"
+version = "0.1.0"
+description = "Batch operations on NIF, KF and material files, with the automation arguments of Sniff"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "sniff"
+path = "src/main.rs"
+
+[dependencies]
+mimalloc = "0.1"
+xedit-assets = { path = "../xedit-assets" }

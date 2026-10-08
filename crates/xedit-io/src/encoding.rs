@@ -50,6 +50,35 @@ pub fn ansi_string(bytes: &[u8]) -> String {
         .unwrap_or_else(|_| String::from_utf8_lossy(bytes).into_owned())
 }
 
+/// The text of a file as `TStringList.LoadFromFile` reads it (`LoadFromJSONFile`,
+/// the settings of Sniff): by its byte order mark, else in the ANSI code page.
+pub fn string_list_text(bytes: &[u8]) -> String {
+    let utf16 = |rest: &[u8], big_endian: bool| {
+        let units: Vec<u16> = rest
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|pair| {
+                if big_endian {
+                    u16::from_be_bytes([pair[0], pair[1]])
+                } else {
+                    u16::from_le_bytes([pair[0], pair[1]])
+                }
+            })
+            .collect();
+        String::from_utf16_lossy(&units)
+    };
+    if let Some(rest) = bytes.strip_prefix(&[0xEF, 0xBB, 0xBF]) {
+        String::from_utf8_lossy(rest).into_owned()
+    } else if let Some(rest) = bytes.strip_prefix(&[0xFF, 0xFE]) {
+        utf16(rest, false)
+    } else if let Some(rest) = bytes.strip_prefix(&[0xFE, 0xFF]) {
+        utf16(rest, true)
+    } else {
+        ansi_string(bytes)
+    }
+}
+
 /// `CP_ACP` on Windows, which the system resolves to its ANSI code page.
 #[cfg(windows)]
 const ANSI_CODE_PAGE: u32 = 0;

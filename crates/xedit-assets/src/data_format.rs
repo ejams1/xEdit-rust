@@ -1371,19 +1371,27 @@ impl Tree {
 
     /// `EditValues[aPath]`.
     pub fn edit_values(&mut self, el: El, path: &str) -> R<String> {
+        Ok(self.edit_values_assigned(el, path)?.unwrap_or_default())
+    }
+
+    /// `EditValues[aPath]`, or `None` where upstream leaves the result
+    /// unassigned (no element at the path, no merge member of the name):
+    /// Delphi then passes the caller's string variable through unchanged,
+    /// which callers that read into a variable with a value rely on.
+    pub fn edit_values_assigned(&mut self, el: El, path: &str) -> R<Option<String>> {
         match self.virtual_target(el, path)? {
-            VirtualTarget::Redirect(item) => return self.edit_values(item, path),
+            VirtualTarget::Redirect(item) => return self.edit_values_assigned(item, path),
             VirtualTarget::Flag(_) | VirtualTarget::FlagPath => {
                 let set = self.native_values(el, path)?.to_bool()?;
-                return Ok(if set { "1" } else { "0" }.to_owned());
+                return Ok(Some(if set { "1" } else { "0" }.to_owned()));
             }
-            VirtualTarget::MergeIndex(index) => return self.merge_get_edit(el, index),
+            VirtualTarget::MergeIndex(index) => return self.merge_get_edit(el, index).map(Some),
             VirtualTarget::MergeName(found) => {
                 let def = self.raw_def(el);
                 let index = found.or_else(|| (0..def.defs.len()).find(|index| path == index.to_string()));
                 return match index {
-                    Some(index) => self.merge_get_edit(el, index),
-                    None => Ok(String::new()),
+                    Some(index) => self.merge_get_edit(el, index).map(Some),
+                    None => Ok(None),
                 };
             }
             VirtualTarget::None => {}
@@ -1393,9 +1401,9 @@ impl Tree {
             None => (self.element_by_path(el, path, true)?, None),
         };
         match (element, last) {
-            (Some(element), None) => self.edit_value(element),
-            (Some(element), Some(last)) => self.edit_values(element, last),
-            (None, _) => Ok(String::new()),
+            (Some(element), None) => self.edit_value(element).map(Some),
+            (Some(element), Some(last)) => self.edit_values_assigned(element, last),
+            (None, _) => Ok(None),
         }
     }
 

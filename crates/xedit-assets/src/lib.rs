@@ -4,7 +4,8 @@
 
 //! The asset formats of xEdit: the data format framework of
 //! `wbDataFormat` with the NIF, material, LOD and FUZ formats built on it,
-//! the NIF maths and the lightweight NIF scanner.
+//! the NIF maths, the lightweight NIF scanner, and the operations of
+//! Sniff on them.
 
 pub mod asset;
 pub mod data_format;
@@ -15,4 +16,5 @@ pub mod data_format_nif_types;
 pub mod json;
 pub mod nif_math;
 pub mod nif_scanner;
+pub mod sniff;
 pub mod variant;
