@@ -237,6 +237,42 @@ const CASES: &[Case] = &[
         settings: &[],
     },
     Case {
+        name: "merge-properties",
+        operation: "Merge properties",
+        settings: &[],
+    },
+    Case {
+        name: "merge-properties-named",
+        operation: "Merge properties",
+        settings: &[
+            ("bIgnoreName", "0"),
+            (
+                "sBlocks",
+                "NiMaterialProperty,NiAlphaProperty,NiTexturingProperty,BSShaderPPLightingProperty,BSLightingShaderProperty",
+            ),
+        ],
+    },
+    Case {
+        name: "lod-node",
+        operation: "Add NiLODNode",
+        settings: &[],
+    },
+    Case {
+        name: "lod-node-screen",
+        operation: "Add NiLODNode",
+        settings: &[("sLODData", "NiScreenLODData"), ("sProportions", "0.5#13#10#13#100.25")],
+    },
+    Case {
+        name: "bounding-box",
+        operation: "Add bounding box",
+        settings: &[("sCenterZ", "12.5"), ("sExtentX", "4"), ("sFlags", "4")],
+    },
+    Case {
+        name: "root-collision",
+        operation: "Add RootCollisionNode",
+        settings: &[],
+    },
+    Case {
         name: "copy-priorities",
         operation: "Copy anim priorities",
         settings: &[("sSourceDirectory", "{source}")],
