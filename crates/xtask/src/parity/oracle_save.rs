@@ -168,14 +168,20 @@ fn oracle_key(runner: &Runner, plugins: &[PathBuf], script: &str, exe: &str) -> 
         };
         mix(value);
     }
-    let text_hash = |text: &str| {
-        text.bytes().fold(0xcbf2_9ce4_8422_2325u64, |hash, byte| {
-            (hash ^ u64::from(byte)).wrapping_mul(0x0000_0100_0000_01b3)
-        })
-    };
     mix(text_hash(script));
     mix(text_hash(exe));
     Ok(hash)
+}
+
+/// FNV-1a of a text with its line endings normalised to LF: a checkout with
+/// `core.autocrlf` turns the embedded scripts into CRLF, and the key of a
+/// cached oracle run must not depend on that.
+fn text_hash(text: &str) -> u64 {
+    text.replace("\r\n", "\n")
+        .bytes()
+        .fold(0xcbf2_9ce4_8422_2325u64, |hash, byte| {
+            (hash ^ u64::from(byte)).wrapping_mul(0x0000_0100_0000_01b3)
+        })
 }
 
 /// A string as a Pascal literal.
@@ -185,8 +191,16 @@ fn pascal_string(text: &str) -> String {
 
 /// The plain-save script for one plugin.
 fn save_script(name: &str) -> String {
+    fill_save_script(SAVE_SCRIPT, name)
+}
+
+/// `template` with the plugin filled in, and LF line endings.
+fn fill_save_script(template: &str, name: &str) -> String {
     let literal = pascal_string(name);
-    SAVE_SCRIPT.replace("'{{FILE}}'", &literal).replace("{{FILE}}", name)
+    template
+        .replace("\r\n", "\n")
+        .replace("'{{FILE}}'", &literal)
+        .replace("{{FILE}}", name)
 }
 
 /// Where the oracle saves of a game are cached.
@@ -717,7 +731,10 @@ fn edit_script(sequence: &EditSequence) -> Result<String> {
             "      try\n        FileWriteToStream(FileNamed({literal}), fs, 0);\n      finally\n        fs.Free;\n      end;\n"
         ));
     }
-    Ok(TEMPLATE.replace("{{STEPS}}\n", &steps).replace("{{SAVES}}\n", &saves))
+    Ok(TEMPLATE
+        .replace("\r\n", "\n")
+        .replace("{{STEPS}}\n", &steps)
+        .replace("{{SAVES}}\n", &saves))
 }
 
 /// `parity oracle-edit`: every sequence of `crates/xtask/oracle/edits`, or
@@ -997,6 +1014,15 @@ mod tests {
         let masters = header_masters(&path, 24).unwrap();
         fs::remove_dir_all(&dir).unwrap();
         assert_eq!(masters, ["Fallout4.esm", "DLCRobot.esm"]);
+    }
+
+    #[test]
+    fn line_endings_do_not_change_the_key() {
+        let lf = "begin\n  Save('{{FILE}}');\nend.\n";
+        let crlf = lf.replace('\n', "\r\n");
+        assert_eq!(fill_save_script(lf, "A.esm"), fill_save_script(&crlf, "A.esm"));
+        assert_eq!(text_hash(lf), text_hash(&crlf));
+        assert_ne!(text_hash(lf), text_hash("begin\nend.\n"));
     }
 
     #[test]

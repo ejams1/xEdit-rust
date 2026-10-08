@@ -2,3 +2,6 @@
 *.esm binary
 *.esp binary
 *.esl binary
+
+# The oracle scripts are hashed into the oracle cache keys; keep them LF.
+crates/xtask/oracle/*.pas text eol=lf
