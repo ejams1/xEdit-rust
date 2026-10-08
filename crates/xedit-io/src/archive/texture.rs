@@ -35,6 +35,7 @@ pub(super) fn unsupported() -> ArchiveError {
 /// (`fMaxChunkCount`, `fSingleMipChunkX`, `fSingleMipChunkY`, `fTarget`),
 /// those of the packer and of the archive.
 #[derive(Debug, Clone, Copy)]
+#[allow(dead_code)] // read by the DDS code of step 2
 pub struct TextureConfig {
     pub max_chunk_count: i32,
     pub single_mip_chunk_x: i32,

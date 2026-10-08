@@ -13,6 +13,7 @@
 
 use std::sync::Arc;
 
+use xedit_core::container_handler;
 use xedit_core::delphi::{float_to_str_f_fixed, format_general, round, str_to_float};
 use xedit_core::interface::builders::wb_flags_unknown_is_unused;
 use xedit_core::interface::constructors::get_container_from_union;
@@ -1138,10 +1139,20 @@ pub fn wb_vtxt_position(a_int: i64, _a_element: ElementArg, a_type: CallbackType
     }
 }
 
-/// The text of a file or folder hash that the containers do not resolve.
-fn hash_callback(a_int: i64, a_type: CallbackType) -> String {
-    // UPSTREAM-QUIRK: upstream resolves the hash through the container
-    // handler once the loader is done; the hash tables are not ported.
+/// The text of a file or folder hash: the name the containers give it once
+/// the load order is loaded (`wbLoaderDone`), else the hash.
+fn hash_callback(a_int: i64, a_type: CallbackType, resolve: fn(i64) -> String) -> String {
+    if container_handler::loader_done()
+        && matches!(
+            a_type,
+            CallbackType::ctToStr | CallbackType::ctToSummary | CallbackType::ctToSortKey
+        )
+    {
+        let name = resolve(a_int);
+        if !name.is_empty() {
+            return name;
+        }
+    }
     match a_type {
         CallbackType::ctToSortKey => int_to_hex64(a_int, 16),
         CallbackType::ctToStr | CallbackType::ctToSummary => {
@@ -1158,12 +1169,12 @@ fn hash_callback(a_int: i64, a_type: CallbackType) -> String {
 
 /// Upstream `wbFileHashCallback`.
 pub fn wb_file_hash_callback(a_int: i64, _a_element: ElementArg, a_type: CallbackType) -> String {
-    hash_callback(a_int, a_type)
+    hash_callback(a_int, a_type, container_handler::resolve_file_hash)
 }
 
 /// Upstream `wbFolderHashCallback`.
 pub fn wb_folder_hash_callback(a_int: i64, _a_element: ElementArg, a_type: CallbackType) -> String {
-    hash_callback(a_int, a_type)
+    hash_callback(a_int, a_type, container_handler::resolve_folder_hash)
 }
 
 /// The alpha element of a color, or `None` when it is ignored or unused.

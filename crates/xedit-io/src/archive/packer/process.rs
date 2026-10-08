@@ -492,7 +492,7 @@ pub fn unpack_archive(
     } else {
         std::thread::scope(|scope| {
             for _ in 0..threads {
-                scope.spawn(&work);
+                scope.spawn(work);
             }
         });
     }

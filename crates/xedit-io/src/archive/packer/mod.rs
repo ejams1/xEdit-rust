@@ -118,7 +118,6 @@ impl Sources<'_> {
 /// `fSourceFiles[i]`.
 struct SourceFile {
     asset_name: String,
-    hash: LookupHash,
     source_file_name: String,
     /// The archive and the file of it that holds the data.
     source_entry: Option<(usize, usize)>,
@@ -174,7 +173,7 @@ fn ntfs_sort_key(name: &str) -> Vec<u16> {
 /// '*.*', soAllDirectories)` gives for them: `prefix` with the path from the
 /// folder, in the order of an NTFS directory listing, a folder's files
 /// listed where the folder is met.
-fn list_files(folder: &Path, prefix: &str, out: &mut Vec<String>) -> std::io::Result<()> {
+pub fn list_files(folder: &Path, prefix: &str, out: &mut Vec<String>) -> std::io::Result<()> {
     let mut entries: Vec<(String, bool)> = Vec::new();
     for entry in std::fs::read_dir(folder)? {
         let entry = entry?;
@@ -498,7 +497,6 @@ impl MultiSourcePacker {
             None => {
                 self.source_files.push(SourceFile {
                     asset_name: asset_name.to_owned(),
-                    hash,
                     source_file_name: String::new(),
                     source_entry: None,
                     compress: self.compress && !do_not_compress(asset_name),

@@ -2674,8 +2674,10 @@ status = "pending"
 source = "xDump.dpr"
 
 [switch.af]
-status = "pending"
+status = "covered"
 source = "BSArch.dpr"
+command = "archive.pack"
+note = "bsarch accepts -af as BSArch does; xedit archive pack takes it as an option of the same meaning."
 
 [switch.agl]
 status = "pending"
@@ -2834,8 +2836,10 @@ status = "pending"
 source = "xDump.dpr"
 
 [switch.dump]
-status = "pending"
+status = "covered"
 source = "BSArch.dpr"
+command = "archive.list"
+note = "bsarch accepts -dump as BSArch does; xedit archive list --files lists the files."
 
 [switch.enforceallmasters]
 status = "pending"
@@ -2850,12 +2854,16 @@ status = "pending"
 source = "xEdit/xeInit.pas"
 
 [switch.f]
-status = "pending"
+status = "covered"
 source = "BSArch.dpr"
+command = "archive.pack"
+note = "bsarch accepts -f as BSArch does; xedit archive pack takes it as an option of the same meaning."
 
 [switch.ff]
-status = "pending"
+status = "covered"
 source = "BSArch.dpr"
+command = "archive.pack"
+note = "bsarch accepts -ff as BSArch does; xedit archive pack takes it as an option of the same meaning."
 
 [switch.fillpnam]
 status = "pending"
@@ -2878,20 +2886,27 @@ status = "pending"
 source = "xEdit/xeInit.pas"
 
 [switch.fnv]
-status = "pending"
+status = "covered"
 source = "BSArch.dpr"
+command = "archive.pack"
+note = "bsarch accepts it with the upstream spelling (-fnv); xedit archive pack takes it as an option of the same meaning."
 
 [switch.fo3]
-status = "pending"
+status = "covered"
 source = "BSArch.dpr"
+command = "archive.pack"
+note = "bsarch accepts it with the upstream spelling (-fo3); xedit archive pack takes it as an option of the same meaning."
 
 [switch.fo4]
-status = "pending"
+status = "covered"
 source = "BSArch.dpr"
+command = "archive.pack"
+note = "bsarch accepts it with the upstream spelling (-fo4); xedit archive pack takes it as an option of the same meaning."
 
 [switch.fo4dds]
 status = "pending"
 source = "BSArch.dpr"
+note = "bsarch accepts -fo4dds; packing a texture archive needs the DDS code of phase 5 step 2."
 
 [switch.forcebsa]
 status = "pending"
@@ -2970,8 +2985,10 @@ status = "pending"
 source = "xDump.dpr"
 
 [switch.list]
-status = "pending"
+status = "covered"
 source = "BSArch.dpr"
+command = "archive.list"
+note = "bsarch accepts -list as BSArch does; xedit archive list --files lists the files."
 
 [switch.log]
 status = "pending"
@@ -3010,8 +3027,10 @@ status = "pending"
 source = "xEdit/xeInit.pas"
 
 [switch.mt]
-status = "pending"
+status = "covered"
 source = "BSArch.dpr"
+command = "archive.pack"
+note = "bsarch accepts -mt as BSArch does; xedit archive pack takes it as an option of the same meaning."
 
 [switch.nobsa]
 status = "pending"
@@ -3138,16 +3157,21 @@ status = "pending"
 source = "xEdit/xeInit.pas"
 
 [switch.sf1]
-status = "pending"
+status = "covered"
 source = "BSArch.dpr"
+command = "archive.pack"
+note = "bsarch accepts it with the upstream spelling (-sf1); xedit archive pack takes it as an option of the same meaning."
 
 [switch.sf1dds]
 status = "pending"
 source = "BSArch.dpr"
+note = "bsarch accepts -sf1dds; packing a texture archive needs the DDS code of phase 5 step 2."
 
 [switch.share]
-status = "pending"
+status = "covered"
 source = "BSArch.dpr"
+command = "archive.pack"
+note = "bsarch accepts -share as BSArch does; xedit archive pack takes it as an option of the same meaning."
 
 [switch.showfixup]
 status = "pending"
@@ -3178,8 +3202,10 @@ status = "pending"
 source = "xEdit/xeInit.pas"
 
 [switch.split]
-status = "pending"
+status = "covered"
 source = "BSArch.dpr"
+command = "archive.pack"
+note = "bsarch accepts -split as BSArch does; xedit archive pack takes it as an option of the same meaning."
 
 [switch.sr]
 status = "pending"
@@ -3194,8 +3220,10 @@ status = "pending"
 source = "xDump.dpr"
 
 [switch.sse]
-status = "pending"
+status = "covered"
 source = "BSArch.dpr"
+command = "archive.pack"
+note = "bsarch accepts it with the upstream spelling (-sse); xedit archive pack takes it as an option of the same meaning."
 
 [switch.stripemptymasters]
 status = "pending"
@@ -3218,16 +3246,22 @@ status = "pending"
 source = "xEdit/xeInit.pas"
 
 [switch.tes3]
-status = "pending"
+status = "covered"
 source = "BSArch.dpr"
+command = "archive.pack"
+note = "bsarch accepts it with the upstream spelling (-tes3); xedit archive pack takes it as an option of the same meaning."
 
 [switch.tes4]
-status = "pending"
+status = "covered"
 source = "BSArch.dpr"
+command = "archive.pack"
+note = "bsarch accepts it with the upstream spelling (-tes4); xedit archive pack takes it as an option of the same meaning."
 
 [switch.tes5]
-status = "pending"
+status = "covered"
 source = "BSArch.dpr"
+command = "archive.pack"
+note = "bsarch accepts it with the upstream spelling (-tes5); xedit archive pack takes it as an option of the same meaning."
 
 [switch.thisisfine]
 status = "pending"
@@ -3290,8 +3324,10 @@ status = "pending"
 source = "xDump.dpr"
 
 [switch.z]
-status = "pending"
+status = "covered"
 source = "BSArch.dpr"
+command = "archive.pack"
+note = "bsarch accepts -z as BSArch does; xedit archive pack takes it as an option of the same meaning."
 
 [game_mode.gmEnderal]
 status = "pending"

@@ -45,6 +45,8 @@ pub struct PackFile {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ChunkSlot {
     File,
+    /// A mipmap chunk of a texture, which the DDS code of step 2 stores.
+    #[allow(dead_code)]
     Tex(usize),
 }
 

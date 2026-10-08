@@ -8,6 +8,7 @@
 //! the MCP server and the GUI call commands and nothing else, so each of them
 //! covers the same set of operations.
 
+pub mod archive;
 pub mod batch;
 pub mod commands;
 pub mod dump;
@@ -123,6 +124,7 @@ impl Registry {
         save::register(&mut registry);
         masters::register(&mut registry);
         formids::register(&mut registry);
+        archive::register(&mut registry);
         registry
     }
 

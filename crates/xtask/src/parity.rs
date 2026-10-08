@@ -17,6 +17,10 @@
 //! The oracle of that check is the input itself, which holds where xEdit
 //! writes a file it loaded unchanged.
 //!
+//! `cargo xtask parity bsarch` packs, unpacks and lists the archives of the
+//! game folders with `BSArch.exe` and with the port's `bsarch` and compares
+//! the results (`bsarch`).
+//!
 //! `cargo xtask parity oracle-save` has the GUI build of xEdit save every
 //! corpus plugin (`oracle_save`, `gui`) and compares the port's save with
 //! it; the round trip counts a save that equals a cached oracle save as
@@ -46,6 +50,7 @@ use serde::Serialize;
 
 use crate::memory::{self, Budget, GIB, Limit};
 
+mod bsarch;
 mod gui;
 mod oracle_save;
 
@@ -278,6 +283,10 @@ struct Report<'a> {
 }
 
 pub fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
+    // `parity bsarch` has its own options and cases: the archive tool against BSArch.exe.
+    if let Some((&"bsarch", rest)) = args.split_first() {
+        return bsarch::run(root, tag, rest);
+    }
     let options = parse(args)?;
     // The round trip has no oracle binary: the input file is the oracle
     // (and the GUI oracle's saves, when they are cached).
@@ -1122,7 +1131,7 @@ fn first_byte_difference(a: &Path, b: &Path) -> Result<Option<u64>> {
 }
 
 fn parse(args: &[&str]) -> Result<Options> {
-    const USAGE: &str = "usage: cargo xtask parity dump|saves|roundtrip|oracle-save|oracle-edit [--game <game>]... [--file <name>]... \
+    const USAGE: &str = "usage: cargo xtask parity dump|saves|roundtrip|oracle-save|oracle-edit|bsarch [--game <game>]... [--file <name>]... \
                          [--oracle-only] [--jobs <n>] [--memory-budget <GiB>] [--max-memory <GiB>] \
                          [--oracle-timeout <minutes>]";
     let (mode, rest) = args.split_first().context(USAGE)?;
