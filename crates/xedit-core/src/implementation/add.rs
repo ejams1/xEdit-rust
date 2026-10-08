@@ -496,6 +496,7 @@ impl FileImpl {
             hardcoded = false;
         }
         if !hardcoded && self.is_new_record(form_id.file_id()) {
+            self.remove_index_keys(record);
             return Ok(());
         }
         let master = self.get_master_record_by_form_id(form_id, true, true);
@@ -507,7 +508,17 @@ impl FileImpl {
                 }
             }
         }
+        self.remove_index_keys(record);
         Ok(())
+    }
+
+    /// The `flRemoveKeysFromIndices(aRecord, aRecord.DeactivateIndexKeys)`
+    /// at the end of `RemoveMainRecord`.
+    fn remove_index_keys(&self, record: &Arc<MainRecordImpl>) {
+        if self.fl_indices_active.load(Ordering::Acquire) {
+            let keys = record.activate_index_keys();
+            self.remove_keys_from_indices(record, &keys);
+        }
     }
 
     /// Port of `RemoveInjectedMainRecord`.
@@ -832,7 +843,7 @@ impl MainRecordImpl {
 
     /// Port of `YouAreTheMaster`: this record, which was overridden by
     /// none, becomes the master of `overrides`.
-    fn you_are_the_master(self: &Arc<Self>, overrides: &[Arc<MainRecordImpl>]) {
+    pub(crate) fn you_are_the_master(self: &Arc<Self>, overrides: &[Arc<MainRecordImpl>]) {
         *self.mr_master.write().unwrap() = None;
         let mut own = self.mr_overrides.write().unwrap();
         own.clear();

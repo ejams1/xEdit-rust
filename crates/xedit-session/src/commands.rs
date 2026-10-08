@@ -45,7 +45,7 @@ impl Session {
         })
     }
 
-    fn mode(&self) -> Result<GameMode, CommandError> {
+    pub(crate) fn mode(&self) -> Result<GameMode, CommandError> {
         self.game
             .ok_or_else(|| CommandError::new("no_session", "no game loaded: pass --game and --load"))
     }

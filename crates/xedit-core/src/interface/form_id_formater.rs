@@ -764,6 +764,45 @@ impl IntegerDefFormater for FormIDDefFormater {
         }
     }
 
+    /// Port of `TwbFormIDDefFormater.CompareExchangeFormID`: `int` is a
+    /// FormID of the file of `element`, `old` and `new` are load order
+    /// FormIDs.
+    /// UPSTREAM-QUIRK: a FormID that uses the load order is replaced in
+    /// `int`, but the result stays false, so the data is not written.
+    fn compare_exchange_form_id(
+        &self,
+        int: &mut i64,
+        old: FormID,
+        new: FormID,
+        element: ElementArg,
+    ) -> Result<bool, EditError> {
+        if *int == 0xFFFF_FFFF && self.is_valid(ACVA) {
+            return Ok(false);
+        }
+        if old == new {
+            return Ok(false);
+        }
+        if self.use_load_order() {
+            if *int == i64::from(old.to_cardinal()) {
+                *int = i64::from(new.to_cardinal());
+            }
+            return Ok(false);
+        }
+        let Some(element) = element else { return Ok(false) };
+        let Some(file) = element.get_file() else {
+            return Ok(false);
+        };
+        let masters_updated = element.get_masters_updated();
+        if file.file_form_id_to_load_order_form_id(FormID::from_cardinal(*int as u32), masters_updated) == Ok(old) {
+            *int = i64::from(
+                file.load_order_form_id_to_file_form_id(new, masters_updated)?
+                    .to_cardinal(),
+            );
+            return Ok(true);
+        }
+        Ok(false)
+    }
+
     fn build_ref(&self, int: i64, element: ElementArg) {
         if self.class == FormIDClass::RefID {
             self.ref_id_build_ref(int, element);

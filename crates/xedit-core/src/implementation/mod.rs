@@ -16,8 +16,11 @@ pub mod add;
 pub mod assign;
 pub mod copy;
 pub mod edit;
+pub mod file_flags;
+pub mod form_ids;
 pub mod masters;
 pub mod new_form_id;
+pub mod refs;
 pub mod structs;
 pub mod write;
 
@@ -66,7 +69,9 @@ macro_rules! element_common {
             false
         }
 
-        fn add_referenced_from_id(&self, _form_id: FormID) {}
+        fn add_referenced_from_id(&self, form_id: FormID) {
+            $crate::implementation::refs::add_referenced_from_id(form_id)
+        }
 
         fn get_container(&self) -> Option<ElementRef> {
             self.$base().container()
@@ -601,6 +606,8 @@ pub struct FileImpl {
     /// The bytes of the file, shared with its records so that they do not
     /// need a strong reference to the file.
     fl_bytes: Arc<FileBytes>,
+    /// Port of `flRecords`: the main records, in file order while the
+    /// file is scanned and by FormID from `SortRecords` on.
     fl_records: RwLock<Vec<Arc<MainRecordImpl>>>,
     /// Port of `flFormIDsSorted`: `fl_records` is in FormID order
     /// (`SortRecords`), so the lookups may search it and a record added by
@@ -695,52 +702,30 @@ impl FileImpl {
 
     /// Port of `AddMainRecord`: keeps the record and registers it as the
     /// override of the record of a master with the same FormID. Once the
-    /// records are sorted, a record goes to its place, and a FormID the
-    /// file has already is refused.
-    fn add_main_record(self: &Arc<Self>, record: Arc<MainRecordImpl>) -> Result<(), String> {
+    /// records are sorted (after the scan) the record goes to its place in
+    /// the FormID index, a FormID the file has already is an error, and
+    /// the keys of the record go into the named indices.
+    pub(crate) fn add_main_record(self: &Arc<Self>, record: Arc<MainRecordImpl>) -> Result<(), String> {
         let form_id = record.get_fixed_form_id();
         // The file header, with the null FormID, is not one of the records.
         if form_id.is_null() {
             return Ok(());
         }
-        if self.fl_form_ids_sorted.load(Ordering::Acquire) {
-            let mut records = self.fl_records.write().unwrap();
-            let key = form_id.to_cardinal();
-            let index = records.partition_point(|other| other.get_fixed_form_id().to_cardinal() < key);
-            if records
-                .get(index)
-                .is_some_and(|other| other.get_fixed_form_id().to_cardinal() == key)
-            {
+        match self.find_form_id_index(form_id) {
+            None => self.fl_records.write().unwrap().push(record.clone()),
+            Some(Ok(_)) => {
                 return Err(format!(
                     "Duplicate FormID [{}] in file {}",
                     form_id.to_string(true),
                     self.get_name()
                 ));
             }
-            records.insert(index, record.clone());
-        } else {
-            self.fl_records.write().unwrap().push(record.clone());
+            Some(Err(index)) => self.fl_records.write().unwrap().insert(index, record.clone()),
         }
-        let file_id = form_id.file_id();
-        let states = self.get_file_states();
-        let hardcoded_elsewhere = form_id.is_hardcoded() && !states.contains(FileState::fsIsGameMaster);
-        if self.is_new_record(file_id) && !states.contains(FileState::fsIsCompareLoad) && !hardcoded_elsewhere {
-            // A new record.
-            return Ok(());
-        }
-        if let Some(master) = self.get_master_record_by_form_id(form_id, true, true) {
-            master.add_override(&record);
-        } else if hardcoded_elsewhere {
-            if let Some(game_master) = game_master_file() {
-                game_master.inject_main_record(record);
-            }
-        } else if let Some(master) = self.get_master_for_file_id(file_id) {
-            master.inject_main_record(record);
-        } else {
-            progress(&format!(
-                "Error: <master file not found> while trying to determine master record for {}",
-                record.get_name()
-            ));
+        self.register_main_record(&record, form_id);
+        if self.fl_indices_active.load(Ordering::Acquire) {
+            let keys = record.activate_index_keys();
+            self.add_keys_to_indices(&record, &keys);
         }
         Ok(())
     }
@@ -799,6 +784,14 @@ impl FileImpl {
     /// Port of `FindFormID` on the sorted records: a FormID past the
     /// masters belongs to the file itself.
     fn find_form_id(&self, form_id: FormID) -> Option<Arc<MainRecordImpl>> {
+        let index = self.find_form_id_index(form_id)?.ok()?;
+        self.fl_records.read().unwrap().get(index).cloned()
+    }
+
+    /// Port of `FindFormID` with the index: `Ok` with the position of the
+    /// first record with the FormID, `Err` with the position it would take.
+    /// `None` while the records are not sorted.
+    pub(crate) fn find_form_id_index(&self, form_id: FormID) -> Option<Result<usize, usize>> {
         if !self.fl_form_ids_sorted.load(Ordering::Acquire) {
             return None;
         }
@@ -813,8 +806,10 @@ impl FileImpl {
         // file order, so the first one in the file wins.
         let key = form_id.to_cardinal();
         let index = sorted.partition_point(|record| record.get_fixed_form_id().to_cardinal() < key);
-        let record = sorted.get(index)?;
-        (record.get_fixed_form_id().to_cardinal() == key).then(|| record.clone())
+        let found = sorted
+            .get(index)
+            .is_some_and(|record| record.get_fixed_form_id().to_cardinal() == key);
+        Some(if found { Ok(index) } else { Err(index) })
     }
 
     /// Port of `GetMasterRecordByFormID`: the record of the master the
@@ -1581,7 +1576,6 @@ pub fn wb_file_compare(
         fl_bytes: Arc::new(bytes),
         fl_records: RwLock::new(Vec::new()),
         fl_form_ids_sorted: AtomicBool::new(false),
-
         fl_masters: RwLock::new(Vec::new()),
         fl_load_finished: OnceLock::new(),
         fl_version: OnceLock::new(),
@@ -1689,11 +1683,6 @@ impl GroupRecordImpl {
     /// Port of `grStruct`: the group header as it is now.
     pub fn gr_struct(&self) -> GroupRecordStruct {
         *self.gr_struct.read().unwrap()
-    }
-
-    /// Port of `SetGroupLabel`.
-    pub(crate) fn set_group_label(&self, label: u32) {
-        self.gr_struct.write().unwrap().label = label;
     }
 
     pub fn group_type(&self) -> i32 {
@@ -2144,12 +2133,12 @@ impl MainRecordImpl {
     }
 
     /// Port of `Master` (`mrMaster`): the record this one overrides.
-    pub(crate) fn master(&self) -> Option<Arc<MainRecordImpl>> {
+    pub fn master(&self) -> Option<Arc<MainRecordImpl>> {
         self.mr_master.read().unwrap().as_ref().and_then(Weak::upgrade)
     }
 
     /// Port of `Overrides` (`mrOverrides`), in load order.
-    pub(crate) fn overrides(&self) -> Vec<Arc<MainRecordImpl>> {
+    pub fn overrides(&self) -> Vec<Arc<MainRecordImpl>> {
         self.mr_overrides
             .read()
             .unwrap()
@@ -2386,6 +2375,32 @@ impl MainRecordImpl {
             .and_then(|element| element.as_element_impl()?.value_impl())
     }
 
+    /// The common part of `TwbMainRecord.SetEditValue` and `SetNativeValue`.
+    fn set_form_id_value(&self, form_id: FormID) -> Result<(), EditError> {
+        if !is_internal_edit() {
+            if !edit_allowed() {
+                return Err(format!("{} can not be edited.", self.get_name()));
+            }
+            if self
+                .mr_def
+                .as_ref()
+                .is_some_and(|def| def.def_base().def_internal_edit_only())
+            {
+                return Ok(());
+            }
+        }
+        if !display_load_order_form_id() {
+            return Err("FormID can only be edited if wbDisplayLoadOrderFormID is active".to_owned());
+        }
+        self.self_arc().set_load_order_form_id(form_id)?;
+        if let Some(container) = self.base.container()
+            && let Some(container) = container.as_element_impl()
+        {
+            container.notify_changed();
+        }
+        Ok(())
+    }
+
     /// Port of `MakeHeaderWriteable`: the record is modified, and the
     /// header element reads the header again after `change` edits it.
     pub(crate) fn make_header_writeable(self: &Arc<Self>, change: impl FnOnce(&mut MainRecordStruct)) {
@@ -2432,6 +2447,27 @@ impl MainRecordImpl {
         }
     }
 
+    /// Port of `SetIsMedium`.
+    pub fn set_is_medium(self: &Arc<Self>, value: bool) {
+        if value != self.mr_struct().flags.is_medium() {
+            self.make_header_writeable(|header| header.flags.set_medium(value));
+        }
+    }
+
+    /// Port of `SetIsBlueprint`.
+    pub fn set_is_blueprint(self: &Arc<Self>, value: bool) {
+        if value != self.mr_struct().flags.is_blueprint() {
+            self.make_header_writeable(|header| header.flags.set_blueprint(value));
+        }
+    }
+
+    /// Port of `SetIsLocalized`.
+    pub fn set_is_localized(self: &Arc<Self>, value: bool) {
+        if value != self.mr_struct().flags.is_localized() {
+            self.make_header_writeable(|header| header.flags.set_localized(value));
+        }
+    }
+
     /// Port of `SetIsPersistent`, without the move between the cell child
     /// groups (`UpdateCellChildGroup`), which comes with the next step.
     pub fn set_is_persistent(self: &Arc<Self>, value: bool) {
@@ -2457,14 +2493,17 @@ impl MainRecordImpl {
         let slot = i32::from(form_id.file_id().full_slot());
         if slot > index {
             let clamped = form_id.change_file_id(FileID::create_full(index as i16));
+            // `mrGroup` is the group found by the old FormID.
+            let group = self.child_group();
             self.make_header_writeable(|header| header.form_id = clamped);
-            if let Some(group) = self.child_group() {
-                group.set_group_label(clamped.to_cardinal());
+            if let Some(group) = group {
+                // The child groups of a record can take a label.
+                let _ = group.set_group_label(clamped.to_cardinal());
             }
         } else if slot == index
             && let Some(group) = self.child_group()
         {
-            group.set_group_label(form_id.to_cardinal());
+            let _ = group.set_group_label(form_id.to_cardinal());
         }
     }
 
@@ -3710,10 +3749,21 @@ impl ElementImpl for MainRecordImpl {
         self.is_element_editable(Some(element)) && !element.get_def().is_some_and(|def| def.def_base().def_required())
     }
 
-    /// Port of `TwbMainRecord.SetEditValue`: the FormID of the record, which
-    /// comes with the FormID step.
-    fn set_edit_value_impl(&self, _value: &str) -> Result<(), EditError> {
-        Err("FormID can only be edited with the FormID step of the write path".to_owned())
+    /// Port of `TwbMainRecord.SetEditValue`: the load order FormID of the
+    /// record, in hexadecimal (`SetLoadOrderFormID`).
+    fn set_edit_value_impl(&self, value: &str) -> Result<(), EditError> {
+        let form_id = crate::interface::form_id::FormID::from_str(value)
+            .ok_or_else(|| format!("\"{value}\" is not a valid integer value"))?;
+        self.set_form_id_value(form_id)
+    }
+
+    /// Port of `TwbMainRecord.SetNativeValue`.
+    fn set_native_value_impl(&self, value: Variant) -> Result<(), EditError> {
+        let form_id = value
+            .as_ordinal()
+            .and_then(|value| u32::try_from(value).ok())
+            .ok_or_else(|| format!("{} can not be edited.", self.get_name()))?;
+        self.set_form_id_value(crate::interface::form_id::FormID::from_cardinal(form_id))
     }
 }
 

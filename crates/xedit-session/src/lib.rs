@@ -12,6 +12,7 @@ pub mod batch;
 pub mod commands;
 pub mod dump;
 pub mod edit;
+pub mod formids;
 pub mod masters;
 pub mod save;
 
@@ -121,6 +122,7 @@ impl Registry {
         edit::register(&mut registry);
         save::register(&mut registry);
         masters::register(&mut registry);
+        formids::register(&mut registry);
         registry
     }
 

@@ -120,27 +120,66 @@ impl MainRecordStructFlags {
     }
 
     /// Port of `SetLight`: nothing happens where the game has no light flag.
+    /// In Starfield the light flag clears the medium and update flags.
     pub fn set_light(&mut self, value: bool) {
         if is_light_supported() {
-            let bit = if is_starfield() { 0x0000_0100 } else { 0x0000_0200 };
-            self.set_bit(bit, value);
-        }
-    }
-
-    pub fn set_medium(&mut self, value: bool) {
-        if is_medium_supported() {
-            self.set_bit(0x0000_0400, value);
-        }
-    }
-
-    pub fn set_update(&mut self, value: bool) {
-        if is_update_supported() {
             if is_starfield() {
+                if value {
+                    self.set_bit(0x0000_0100, true);
+                    self.set_medium(false);
+                    self.set_update(false);
+                } else {
+                    self.set_bit(0x0000_0100, false);
+                }
+            } else {
                 self.set_bit(0x0000_0200, value);
-            } else if vresl() {
-                self.set_bit(0x0010_0000, value);
             }
         }
+    }
+
+    /// Port of `SetMedium`: the medium flag clears the light and update flags.
+    pub fn set_medium(&mut self, value: bool) {
+        if is_medium_supported() {
+            if value {
+                self.set_bit(0x0000_0400, true);
+                self.set_light(false);
+                self.set_update(false);
+            } else {
+                self.set_bit(0x0000_0400, false);
+            }
+        }
+    }
+
+    /// Port of `SetUpdate`: the update flag clears the light and medium flags.
+    pub fn set_update(&mut self, value: bool) {
+        if is_update_supported() {
+            let bit = if is_starfield() {
+                0x0000_0200
+            } else if vresl() {
+                0x0010_0000
+            } else {
+                0
+            };
+            if value {
+                self.set_bit(bit, true);
+                self.set_light(false);
+                self.set_medium(false);
+            } else {
+                self.set_bit(bit, false);
+            }
+        }
+    }
+
+    /// Port of `SetBlueprint`.
+    pub fn set_blueprint(&mut self, value: bool) {
+        if is_blueprint_supported() {
+            self.set_bit(0x0000_0800, value);
+        }
+    }
+
+    /// Port of `SetLocalized`.
+    pub fn set_localized(&mut self, value: bool) {
+        self.set_bit(0x0000_0080, value);
     }
 }
 

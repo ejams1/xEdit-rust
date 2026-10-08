@@ -15,7 +15,7 @@ use super::def::{
     def_dont_assign, set_parent, value_def_plumbing,
 };
 use super::element::{DataPtr, ElementArg, ElementRef};
-use super::form_id::{MastersUpdate, UsedMasters};
+use super::form_id::{FormID, MastersUpdate, UsedMasters};
 use super::globals::{check_expected_bytes, is_internal_edit};
 use super::misc::{
     EditError, Variant, int_to_hex64, read_integer_counter, read_integer_counter_size, read_integer24, str_to_int64,
@@ -50,6 +50,19 @@ pub trait IntegerDefFormater: NamedDef {
 
     /// Port of `FindUsedMasters`. The base flags nothing.
     fn find_used_masters(&self, _int: i64, _element: ElementArg, _masters: &mut UsedMasters) {}
+
+    /// Port of `CompareExchangeFormID`: replaces the load order FormID
+    /// `old` by `new` in `int`, and tells whether the data must be written.
+    /// The base class changes nothing.
+    fn compare_exchange_form_id(
+        &self,
+        _int: &mut i64,
+        _old: FormID,
+        _new: FormID,
+        _element: ElementArg,
+    ) -> Result<bool, EditError> {
+        Ok(false)
+    }
 
     fn get_edit_type(&self, _element: ElementArg) -> EditType {
         EditType::etDefault
@@ -614,6 +627,27 @@ impl ValueDef for IntegerDef {
         let formater = formater.as_deref()?;
         let value = self.value(data, element, CallbackType::ctLinksTo)?;
         formater.get_links_to(value, element)
+    }
+
+    /// Port of `TwbIntegerDef.CompareExchangeFormID`: the formater decides,
+    /// and the integer is written back when it changed.
+    fn compare_exchange_form_id(
+        &self,
+        data: DataPtr,
+        element: ElementArg,
+        old: FormID,
+        new: FormID,
+    ) -> Result<bool, EditError> {
+        let formater = self.in_formater.load();
+        let Some(formater) = formater.as_deref() else {
+            return Ok(false);
+        };
+        let mut int = IntegerDefInterface::to_int(self, data, element);
+        let result = formater.compare_exchange_form_id(&mut int, old, new, element)?;
+        if result {
+            IntegerDefInterface::from_int(self, int, data, element)?;
+        }
+        Ok(result)
     }
 
     fn build_ref(&self, data: DataPtr, element: ElementArg) {

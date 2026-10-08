@@ -73,6 +73,11 @@ enum Action {
         #[command(subcommand)]
         action: MastersAction,
     },
+    /// FormIDs of records.
+    Formids {
+        #[command(subcommand)]
+        action: FormidsAction,
+    },
     /// Save files.
     Saves {
         #[command(subcommand)]
@@ -152,6 +157,80 @@ enum SessionAction {
 enum FilesAction {
     /// List the loaded files with their masters and record counts.
     List,
+    /// Read or set the module flags of a plugin header (files.flags). Needs --edit unless --dry-run; --dry-run alone reads them.
+    Flags {
+        /// Plugin name; the only loaded plugin when omitted.
+        #[arg(long)]
+        file: Option<String>,
+        /// The ESM flag.
+        #[arg(long)]
+        esm: Option<bool>,
+        /// The light (ESL) flag, where the game has it.
+        #[arg(long)]
+        light: Option<bool>,
+        /// The medium flag (Starfield); clears light and update.
+        #[arg(long)]
+        medium: Option<bool>,
+        /// The update (overlay) flag (Starfield); clears light and medium.
+        #[arg(long, alias = "overlay")]
+        update: Option<bool>,
+        /// The blueprint flag (Starfield).
+        #[arg(long)]
+        blueprint: Option<bool>,
+        /// The localized flag.
+        #[arg(long)]
+        localized: Option<bool>,
+        /// Report the flags the change would give, but change nothing.
+        #[arg(long)]
+        dry_run: bool,
+    },
+}
+
+#[derive(Subcommand)]
+enum FormidsAction {
+    /// Change the FormID of a record and update the records that refer to it (formids.change). Needs --edit unless --dry-run.
+    Change {
+        /// Load order FormID of the record as hexadecimal digits.
+        form_id: String,
+        /// The new load order FormID; the next free FormID of the file (or of --target-file) when omitted.
+        new_form_id: Option<String>,
+        /// Plugin whose version of the record changes; the last loaded plugin when omitted.
+        #[arg(long)]
+        file: Option<String>,
+        /// Take the next free FormID of this file: the record's file or one of its masters.
+        #[arg(long)]
+        target_file: Option<String>,
+        /// Change the later overrides of the record too.
+        #[arg(long)]
+        overrides: bool,
+        /// Report the change and the referencing records, but change nothing.
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Renumber the new records of a plugin (formids.renumber). Needs --edit unless --dry-run.
+    Renumber {
+        /// Plugin name; the only loaded plugin when omitted.
+        #[arg(long)]
+        file: Option<String>,
+        /// The first object ID in hexadecimal (six digits, three for a light target); the next object ID when omitted.
+        #[arg(long)]
+        start: Option<String>,
+        /// Compact the FormIDs into the ESL range from 000800.
+        #[arg(long)]
+        compact: bool,
+        /// Give the records FormIDs of this master instead.
+        #[arg(long)]
+        inject_into: Option<String>,
+        /// With --inject-into: keep the object IDs the master has free.
+        #[arg(long)]
+        preserve_object_ids: bool,
+        /// With --preserve-object-ids: stop when an object ID can not be kept.
+        #[arg(long)]
+        all_or_nothing: bool,
+        /// Report the plan, but change nothing.
+        #[arg(long)]
+        dry_run: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -366,6 +445,56 @@ fn command_of(action: Action) -> Result<(String, Value), CommandError> {
         Action::Files {
             action: FilesAction::List,
         } => ("files.list".to_owned(), json!({})),
+        Action::Files {
+            action:
+                FilesAction::Flags {
+                    file,
+                    esm,
+                    light,
+                    medium,
+                    update,
+                    blueprint,
+                    localized,
+                    dry_run,
+                },
+        } => (
+            "files.flags".to_owned(),
+            json!({
+                "file": file, "esm": esm, "light": light, "medium": medium, "update": update,
+                "blueprint": blueprint, "localized": localized, "dry_run": dry_run
+            }),
+        ),
+        Action::Formids { action } => match action {
+            FormidsAction::Change {
+                form_id,
+                new_form_id,
+                file,
+                target_file,
+                overrides,
+                dry_run,
+            } => (
+                "formids.change".to_owned(),
+                json!({
+                    "form_id": form_id, "new_form_id": new_form_id, "file": file,
+                    "target_file": target_file, "overrides": overrides, "dry_run": dry_run
+                }),
+            ),
+            FormidsAction::Renumber {
+                file,
+                start,
+                compact,
+                inject_into,
+                preserve_object_ids,
+                all_or_nothing,
+                dry_run,
+            } => (
+                "formids.renumber".to_owned(),
+                json!({
+                    "file": file, "start": start, "compact": compact, "inject_into": inject_into,
+                    "preserve_object_ids": preserve_object_ids, "all_or_nothing": all_or_nothing, "dry_run": dry_run
+                }),
+            ),
+        },
         Action::Records { action } => match action {
             RecordsAction::List {
                 file,

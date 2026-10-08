@@ -1,6 +1,6 @@
 ---
 name: using-xedit-cli
-description: Use when inspecting, editing or saving Bethesda plugins and save games with the native xedit CLI of this repository: loading plugins of any game from Oblivion to Starfield, listing files and records, reading a record or an element, setting the value of an element, adding, sorting and cleaning the masters of a plugin, dumping a plugin or a save like xDump, saving a loaded plugin back to disk, running several commands in one session, keeping a session loaded behind a JSON-RPC daemon (`xedit serve`) or an MCP server (`xedit mcp`).
+description: Use when inspecting, editing or saving Bethesda plugins and save games with the native xedit CLI of this repository: loading plugins of any game from Oblivion to Starfield, listing files and records, reading a record or an element, setting the value of an element, changing or renumbering FormIDs, setting the ESM/ESL/medium/update flags of a plugin, adding, sorting and cleaning the masters of a plugin, dumping a plugin or a save like xDump, saving a loaded plugin back to disk, running several commands in one session, keeping a session loaded behind a JSON-RPC daemon (`xedit serve`) or an MCP server (`xedit mcp`).
 ---
 
 # Using the xedit CLI
@@ -36,6 +36,9 @@ Loading is per process: every invocation loads the plugins again. `Skyrim.esm` t
 | `dump --game G <plugin>` | The whole plugin as `xDump.exe` prints it, to stdout; progress goes to stderr. |
 | `saves dump --game G --data <Data> <save>` | A save or co-save as `xDump.exe -saves` prints it. The plugins the save lists load from `<Data>`. |
 | `elements set <FormID> <path> [<value>] [--file F] [--native] [--default] [--dry-run]` | Sets the value of one element (`elements.set`): the edit value as xEdit shows it in its editor, a native number or boolean with `--native`, or the default of the definition with `--default`. A missing last element of the path is added when the record's definition has it. Needs `--edit` unless `--dry-run`. |
+| `formids change <FormID> [<new FormID>] [--file F] [--target-file T] [--overrides] [--dry-run]` | Gives a record a new load order FormID and updates the records that refer to it (`formids.change`). Needs `--edit` unless `--dry-run`. |
+| `formids renumber [--file F] [--start HEX] [--compact] [--inject-into M] [--preserve-object-ids] [--all-or-nothing] [--dry-run]` | Renumbers the new records of a plugin (`formids.renumber`), updating the referencing records. Needs `--edit` unless `--dry-run`. |
+| `files flags [--file F] [--esm B] [--light B] [--medium B] [--update B] [--blueprint B] [--localized B] [--dry-run]` | Sets the module flags of a plugin header (`files.flags`); `--dry-run` alone reads them with the ESL, medium and update compatibility. Needs `--edit` unless `--dry-run`. |
 | `save [--file F] [--output PATH] [--dry-run] [--no-backup]` | Writes a loaded plugin as xEdit saves it (`files.save`). Needs the global `--edit` flag unless `--dry-run`. |
 | `masters add <name>... [--file F] [--no-sort] [--dry-run]` | Adds loaded plugins as masters (`masters.add`, `AddMastersIfMissing`) and sorts the masters by load order unless `--no-sort`. Needs `--edit` unless `--dry-run`. |
 | `masters sort [--file F] [--dry-run]` | Sorts the masters by load order (`masters.sort`, `SortMasters`). Needs `--edit` unless `--dry-run`. |
@@ -67,6 +70,29 @@ cat > edit.json <<'EOF'
 ]
 EOF
 xedit --json --edit --game sse --load "<Data>\Update.esm" batch edit.json
+```
+
+## FormIDs and module flags
+
+`formids change` runs upstream's "Change FormID": `SetLoadOrderFormID` on the record (the record leaves its master and overrides, takes the FormID, and is registered again; its child group follows, and an interior cell moves to the block and sub-block of its new object ID), then `CompareExchangeFormID` on every record that refers to it.
+
+- The new FormID is a load order FormID. Omitted, it is the next free FormID of the record's file (`NewFormID`, which moves `HEDR\Next Object ID`), or of `--target-file` (the record's file or one of its masters, upstream's "renumber to destination file"). `00000000` and `00000014` are refused, a FormID the file has already fails with `FormID [...] is already present in file ...`, and a FormID of a file that loads before the record's file but is not its master makes that file a master (upstream's `AddRequiredMaster`, without its question; the response lists it in `masters_added`).
+- `--overrides` changes the later overrides too (upstream asks "has later overrides, update them too?"): all of them for a master record, the following ones for an override.
+- The response lists the referencing records (`referenced_by`) and how many were updated. Without `--target-file` only the records in editable files are updated (the records the dialog lets you pick); with it, and for `formids renumber`, every referencing record is updated when one of them is editable, as upstream's silent update does. The game master is not editable (upstream needs `-IKnowWhatImDoing -IKnowIllBreakMyGameWithThis`), so its records can not be changed.
+- The referencing records are found by scanning the files that can see the FormID (its file and the files that have it as a master) until the reference index of phase 4 exists.
+
+`formids renumber` is "Renumber FormIDs from...": the new records of the plugin take the FormIDs from `--start` (six hex digits, three for a light plugin; the next object ID when omitted), keeping the ones already in the new range; `--compact` packs them into `000800`..`000FFF` for an ESL; `--inject-into <master>` gives them free FormIDs of that master (`--preserve-object-ids` keeps the object IDs where the master has them free, `--all-or-nothing` stops when one can not be kept). Their overrides in later plugins follow, the referencing records are updated, and `HEDR\Next Object ID` of the target moves past the highest FormID used.
+
+`files flags` sets the ESM, light (ESL), medium, update (`--overlay`), blueprint and localized flags of the header as `TwbFile.SetIs...` does: a flag the game does not have is ignored (`supported` lists the game's flags), a medium or update flag clears the other two in Starfield, and a file that is not editable fails (`File "..." is not editable`). The flags apply in the order esm, localized, blueprint, update, medium, light. `light_compatible` tells whether every new record has an object ID up to `000FFF` (the save refuses a Light plugin otherwise), `medium_compatible` the same for `00FFFF`, `update_compatible` whether the plugin has no new records. Changing a flag does not move the plugin to another load order slot in the running session.
+
+```
+xedit --json --edit --game sse --load "<Data>\MyMod.esp" batch - <<'JSON'
+[
+  {"command": "formids.renumber", "params": {"compact": true}},
+  {"command": "files.flags", "params": {"light": true}},
+  {"command": "files.save", "params": {"output": "<somewhere else>\MyMod.esp"}}
+]
+JSON
 ```
 
 ## Saving a plugin
@@ -143,6 +169,6 @@ xedit --json --edit --game sse --load "<Data>\Skyrim.esm" save --no-backup --out
 
 ## Limits of this version
 
-- No adding or removing of elements from the command line beyond the member `elements set` adds, no copying of records, no FormID changes. Sorted arrays are not sorted again after a change, and flags are not shown as child elements.
+- No adding or removing of elements from the command line beyond the member `elements set` adds, no copying of records. Sorted arrays are not sorted again after a change (also not after a FormID update of their entries), and flags are not shown as child elements.
 - Morrowind plugins are not verified. Oblivion saves do not read (an upstream limit, see above).
 - One session per process, fixed at startup: `serve` and `mcp` cannot load other plugins later, so restart them to change the load order.

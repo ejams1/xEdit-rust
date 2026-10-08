@@ -1146,6 +1146,19 @@ pub trait ValueDef: NamedDef {
     /// point to. The base flags nothing.
     fn find_used_masters(&self, _data: DataPtr, _element: ElementArg, _masters: &mut UsedMasters) {}
 
+    /// Port of `TwbValueDef.CompareExchangeFormID`: replaces the load order
+    /// FormID `old` by `new` in the data of `element`. Only an integer with
+    /// a FormID formater does; the others change nothing.
+    fn compare_exchange_form_id(
+        &self,
+        _data: DataPtr,
+        _element: ElementArg,
+        _old: crate::interface::form_id::FormID,
+        _new: crate::interface::form_id::FormID,
+    ) -> Result<bool, EditError> {
+        Ok(false)
+    }
+
     /// Port of `GetIsVariableSize`, which caches `GetIsVariableSizeInternal`.
     fn get_is_variable_size(&self) -> bool {
         let states = &self.value_def_base().vd_states;
