@@ -179,6 +179,7 @@ fn matrix_member(i: usize, j: usize) -> String {
 }
 
 /// Upstream `RotMatrix33_GetText`.
+#[allow(clippy::needless_range_loop)]
 pub fn rot_matrix33_get_text(t: &mut Tree, e: El, a_text: &mut String) -> R<()> {
     let mut m: Matrix33 = [[0.0; 3]; 3];
     for i in 0..3 {
@@ -197,6 +198,7 @@ pub fn rot_matrix33_get_text(t: &mut Tree, e: El, a_text: &mut String) -> R<()> 
 }
 
 /// Upstream `RotMatrix33_SetText`.
+#[allow(clippy::needless_range_loop)]
 pub fn rot_matrix33_set_text(t: &mut Tree, e: El, a_text: &mut String) -> R<()> {
     let parts = split_string(a_text, " ");
     let m = if rotation_euler() {

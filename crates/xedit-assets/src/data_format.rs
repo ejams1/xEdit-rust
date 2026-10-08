@@ -147,10 +147,8 @@ fn df_str_to_half_float(value: &str) -> R<f64> {
 pub fn df_calc_hash(name: &str) -> u32 {
     let mut result: u32 = 0;
     for ch in name.chars() {
-        let byte = u32::try_from(ch)
-            .ok()
-            .filter(|&code| code < 0x100)
-            .unwrap_or(u32::from(b'?'));
+        let code = u32::from(ch);
+        let byte = if code < 0x100 { code } else { u32::from(b'?') };
         result = result.rotate_left(5) ^ (byte & 0xDF);
     }
     result
@@ -1158,10 +1156,11 @@ impl Tree {
             None => self.element_by_name(el, path, enabled_only)?,
         };
         // Try to traverse into the linked element.
-        if result.is_none() && self.def(el)?.events.on_links_to.is_some() {
-            if let Some(element) = self.links_to(el)? {
-                result = self.element_by_path(element, path, enabled_only)?;
-            }
+        if result.is_none()
+            && self.def(el)?.events.on_links_to.is_some()
+            && let Some(element) = self.links_to(el)?
+        {
+            result = self.element_by_path(element, path, enabled_only)?;
         }
         Ok(result)
     }
@@ -1616,9 +1615,7 @@ impl Tree {
                     DataType::Float32 => {
                         let bits: u32 = if value.is_empty() || number.is_nan() {
                             SINGLE_NAN_BITS
-                        } else if number.is_infinite() {
-                            0x7F7F_FFFF
-                        } else if same_value(number, MAX_SINGLE) || number > MAX_SINGLE {
+                        } else if number.is_infinite() || same_value(number, MAX_SINGLE) || number > MAX_SINGLE {
                             0x7F7F_FFFF
                         } else if same_value(number, -MAX_SINGLE) || number < -MAX_SINGLE {
                             0xFF7F_FFFF
@@ -2767,11 +2764,11 @@ impl Tree {
     /// indented with tabs.
     pub fn to_text(&mut self, el: El, indent: usize) -> R<String> {
         let mut out = String::new();
-        self.to_text_into(el, indent, &mut out)?;
+        self.write_text(el, indent, &mut out)?;
         Ok(out)
     }
 
-    fn to_text_into(&mut self, el: El, indent: usize, out: &mut String) -> R<()> {
+    fn write_text(&mut self, el: El, indent: usize, out: &mut String) -> R<()> {
         if !self.enabled(el)? {
             return Ok(());
         }
@@ -2786,7 +2783,7 @@ impl Tree {
         out.push_str("\r\n");
         for index in 0..self.count(el) {
             let item = self.item(el, index)?;
-            self.to_text_into(item, indent + 1, out)?;
+            self.write_text(item, indent + 1, out)?;
         }
         Ok(())
     }

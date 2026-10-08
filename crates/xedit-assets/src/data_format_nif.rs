@@ -13,6 +13,7 @@
 
 mod callbacks;
 pub mod defs;
+mod geometry;
 mod stubs;
 
 use std::sync::OnceLock;
@@ -30,6 +31,7 @@ use crate::variant::Variant;
 
 pub use callbacks::*;
 pub use defs::*;
+pub use geometry::*;
 #[allow(unused_imports)]
 pub use stubs::*;
 
@@ -830,14 +832,13 @@ pub fn update_nif_version(tree: &mut Tree) -> R<()> {
     let v = i64::from(version);
     let nif_version = if v == V4002 {
         NifVersion::Tes3
-    } else if v == V20005 && matches!(user_version, 0 | 11) && matches!(user_version2, 0 | 11) {
-        // Some third party Oblivion meshes have user version 0.
-        NifVersion::Tes4
-    } else if v == V20004 && matches!(user_version, 10 | 11) && user_version2 == 11 {
-        NifVersion::Tes4
-    } else if v == V1010106 && user_version == 10 && user_version2 == 5 {
-        NifVersion::Tes4
-    } else if v == V10200 && user_version == 10 && matches!(user_version2, 6..=9 | 11) {
+    } else if
+    // Some third party Oblivion meshes have user version 0.
+    (v == V20005 && matches!(user_version, 0 | 11) && matches!(user_version2, 0 | 11))
+        || (v == V20004 && matches!(user_version, 10 | 11) && user_version2 == 11)
+        || (v == V1010106 && user_version == 10 && user_version2 == 5)
+        || (v == V10200 && user_version == 10 && matches!(user_version2, 6..=9 | 11))
+    {
         NifVersion::Tes4
     } else if v == V20207 && user_version == 11 {
         NifVersion::Fo3

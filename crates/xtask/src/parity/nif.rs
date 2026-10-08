@@ -11,7 +11,7 @@
 //!
 //! - the dump: the operation `Convert to and from JSON` writes every NIF
 //!   (`*.nif`, `*.kf`) as `ToJSON`, with six decimals and rotations as an
-//!   angle and an axis, the settings the port uses.
+//!   angle and an axis, in the ANSI code page of the system.
 //! - the save: the operation `Universal tweaker` sets `Num Blocks` of the
 //!   `NiHeader`, which saving recomputes (`UpdateHeader`), so each NIF is
 //!   written exactly as a load and save writes it. A material has no such
@@ -42,6 +42,7 @@ use xedit_assets::data_format_material::MaterialFile;
 use xedit_assets::data_format_nif::NifFile;
 use xedit_assets::data_format_nif_types::ROTATION_EULER;
 use xedit_io::archive::Archive;
+use xedit_io::encoding::Encoding;
 
 use super::{GAMES, Game, cache_dir, required_var};
 
@@ -309,10 +310,15 @@ fn skipped(log: &str, map: &mut HashMap<String, Output>) {
 fn oracle(sniff: &Path, archive: &Path, cache: &Path, scratch: &Path, options: &Options) -> Result<OracleOutputs> {
     let key = archive_key(archive)?;
     let cached = cache.join(format!("{key}.tsv"));
-    if cached.exists() {
-        return read_cache(&cached);
-    }
     let work = scratch.join("sniff-work").join(&key);
+    if cached.exists() {
+        let mut outputs = read_cache(&cached)?;
+        if rerun_crashes(sniff, &work, archive, &mut outputs)? {
+            write_cache(&cached, &outputs)?;
+        }
+        let _ = fs::remove_dir_all(&work);
+        return Ok(outputs);
+    }
     let mut outputs = OracleOutputs::default();
     let start = Instant::now();
     for operation in ["json", "save"] {
@@ -328,6 +334,7 @@ fn oracle(sniff: &Path, archive: &Path, cache: &Path, scratch: &Path, options: &
         skipped(&log, map);
         let _ = fs::remove_dir_all(&out);
     }
+    rerun_crashes(sniff, &work, archive, &mut outputs)?;
     let _ = fs::remove_dir_all(&work);
     println!(
         "oracle        {} ({} dumps, {} saves, {:.0} s)",
@@ -340,8 +347,51 @@ fn oracle(sniff: &Path, archive: &Path, cache: &Path, scratch: &Path, options: &
     Ok(outputs)
 }
 
+/// Whether an exception of Sniff is a crash of its threads rather than an
+/// error of the file: an access violation or an invalid pointer.
+fn is_crash(message: &str) -> bool {
+    message.starts_with("Access violation") || message.contains("Invalid pointer operation")
+}
+
+/// Runs the files whose output is a crash again, one at a time on one
+/// thread: Sniff's threads share state, and a file that crashed among
+/// others is read fine on its own. Returns whether an output changed.
+fn rerun_crashes(sniff: &Path, work: &Path, archive: &Path, outputs: &mut OracleOutputs) -> Result<bool> {
+    let mut changed = false;
+    for operation in ["json", "save"] {
+        let map = if operation == "json" {
+            &mut outputs.json
+        } else {
+            &mut outputs.save
+        };
+        let crashed: Vec<String> = map
+            .iter()
+            .filter(|(_, output)| matches!(output, Output::Error(message) if is_crash(message)))
+            .map(|(name, _)| name.clone())
+            .collect();
+        for name in crashed {
+            let out = work.join(format!("rerun-{operation}"));
+            let _ = fs::remove_dir_all(&out);
+            let log = run_sniff(sniff, work, archive, operation, &out, Some(&name), 1)?;
+            let mut rerun = HashMap::new();
+            hash_outputs(&out, if operation == "json" { ".json" } else { "" }, &mut rerun)?;
+            skipped(&log, &mut rerun);
+            if let Some(output) = rerun.remove(&name) {
+                println!("oracle rerun  {name}: {output:?}");
+                map.insert(name, output);
+                changed = true;
+            }
+            let _ = fs::remove_dir_all(&out);
+        }
+    }
+    Ok(changed)
+}
+
 /// The port's dump and save of one file. A material has no dump.
-fn port(kind: Kind, data: &[u8]) -> (Option<Result<Vec<u8>, String>>, Result<Vec<u8>, String>) {
+/// The bytes of a port output, or the message of its exception.
+type PortOutput = Result<Vec<u8>, String>;
+
+fn port(kind: Kind, data: &[u8]) -> (Option<PortOutput>, PortOutput) {
     match kind {
         Kind::Nif => {
             let json = (|| {
@@ -349,7 +399,9 @@ fn port(kind: Kind, data: &[u8]) -> (Option<Result<Vec<u8>, String>>, Result<Vec
                 nif.load_from_data(data)?;
                 nif.to_json(false)
             })()
-            .map(String::into_bytes)
+            // Sniff writes the text in the ANSI code page, with `?` for a
+            // character outside of it.
+            .map(|text| Encoding::Mbcs(0).get_bytes(&text))
             .map_err(|error| error.0);
             let save = (|| {
                 let mut nif = NifFile::new()?;

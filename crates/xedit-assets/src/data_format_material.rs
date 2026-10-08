@@ -507,7 +507,7 @@ mod tests {
             file.tree.edit_values(file.root, "Textures\\Diffuse").unwrap(),
             "Test/a_d.dds"
         );
-        assert_eq!(file.tree.edit_values(file.root, "AlphaBlendMode").unwrap(), "Unknown");
+        assert_eq!(file.tree.edit_values(file.root, "AlphaBlendMode").unwrap(), "None");
         assert_eq!(file.tree.edit_values(file.root, "HairTintColor").unwrap(), "#808080");
         assert_eq!(file.save_to_data().unwrap(), data);
     }
