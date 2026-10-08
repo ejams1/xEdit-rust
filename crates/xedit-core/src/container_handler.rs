@@ -413,3 +413,136 @@ pub fn resolve_file_hash(hash: i64) -> String {
 pub fn resolve_folder_hash(hash: i64) -> String {
     cache().folder_hashes.get(&hash).cloned().unwrap_or_default()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::interface::globals::{set_game_mode, set_game_name, test_lock};
+    use xedit_io::archive::{ArchiveType, PackFile};
+
+    /// A data folder in the temporary directory with a few files, and a BSA.
+    fn setup(tag: &str) -> (PathBuf, PathBuf) {
+        let root = std::env::temp_dir().join(format!("xedit-containers-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let data = root.join("Data");
+        for (name, text) in [
+            ("Meshes/Loose/a.nif", "loose a"),
+            ("meshes/b.nif", "loose b"),
+            ("Textures/t.dds", "loose texture"),
+        ] {
+            let path = data.join(name);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, text).unwrap();
+        }
+        let archive = root.join("Test.bsa");
+        let mut bsa = Archive::new();
+        let files: Vec<PackFile> = ["meshes\\b.nif", "meshes\\packed\\c.nif"]
+            .iter()
+            .enumerate()
+            .map(|(index, name)| PackFile {
+                name: (*name).to_owned(),
+                file_object: index,
+                compress: false,
+            })
+            .collect();
+        bsa.create_archive(&archive.display().to_string(), ArchiveType::Fo3, &files)
+            .unwrap();
+        bsa.pack("meshes\\b.nif", b"packed b").unwrap();
+        bsa.pack("meshes\\packed\\c.nif", b"packed c").unwrap();
+        bsa.save().unwrap();
+        (data, archive)
+    }
+
+    #[test]
+    fn lists_counts_and_copies_resources() {
+        let _lock = test_lock();
+        let (data, archive) = setup("listing");
+        clear_containers();
+        add_folder(&data);
+        add_archive(&archive).unwrap();
+        assert_eq!(
+            container_list(),
+            [data.display().to_string(), archive.display().to_string()]
+        );
+
+        // The loose files are listed lower case and relative to the folder, in
+        // the order of a directory listing, the archive's as it names them.
+        let data_name = data.display().to_string();
+        assert_eq!(
+            container_resource_list(&data_name, ""),
+            ["meshes\\b.nif", "meshes\\loose\\a.nif", "textures\\t.dds"]
+        );
+        assert_eq!(
+            container_resource_list(&data_name, "meshes\\loose"),
+            ["meshes\\loose\\a.nif"]
+        );
+        assert_eq!(
+            container_resource_list(&archive.display().to_string(), "meshes\\packed"),
+            ["meshes\\packed\\c.nif"]
+        );
+        let mut all = ResourceDict::new();
+        container_resource_dict("", "", &mut all);
+        assert_eq!(all.len(), 4, "{all:?}");
+
+        assert!(resource_exists("meshes\\packed\\c.nif"));
+        assert!(!resource_exists("meshes\\missing.nif"));
+        let (count, containers) = resource_count("Meshes\\B.nif");
+        assert_eq!(count, 2);
+        assert_eq!(containers.len(), 2);
+
+        // The last container that has the file wins; a name picks a container.
+        assert_eq!(open_resource_data("", "meshes\\b.nif"), b"packed b");
+        assert_eq!(open_resource_data(&data_name, "meshes\\b.nif"), b"loose b");
+
+        let out = data.with_file_name("copies");
+        resource_copy("", "meshes\\packed\\c.nif", &out.display().to_string()).unwrap();
+        assert_eq!(std::fs::read(out.join("meshes/packed/c.nif")).unwrap(), b"packed c");
+        resource_copy(
+            &data_name,
+            "textures\\t.dds",
+            &out.join("one.dds").display().to_string(),
+        )
+        .unwrap();
+        assert_eq!(std::fs::read(out.join("one.dds")).unwrap(), b"loose texture");
+        assert_eq!(
+            resource_copy("", "nothing.nif", &out.display().to_string())
+                .unwrap_err()
+                .0,
+            "Resource doesn't exist"
+        );
+        assert_eq!(
+            resource_copy("", "meshes\\b.nif", "").unwrap_err().0,
+            "Destination path is not specified"
+        );
+        clear_containers();
+        std::fs::remove_dir_all(data.parent().unwrap()).unwrap();
+    }
+
+    #[test]
+    fn resolves_the_names_of_file_and_folder_hashes() {
+        let _lock = test_lock();
+        let (data, archive) = setup("hashes");
+        clear_containers();
+        add_folder(&data);
+        add_archive(&archive).unwrap();
+
+        // From Skyrim on the hashes are those of the BA2 and a file name has no extension.
+        set_game_name("Fallout4");
+        set_game_mode(GameMode::gmFO4);
+        invalidate_cache();
+        let folder = i64::from(xedit_io::hash::fo4("meshes\\packed"));
+        assert_eq!(resolve_folder_hash(folder), "meshes\\packed");
+        assert_eq!(resolve_file_hash(i64::from(xedit_io::hash::fo4("c"))), "c");
+        assert_eq!(resolve_file_hash(i64::from(xedit_io::hash::fo4("nothing"))), "");
+
+        // Before Skyrim the BSA hash takes the extension, and a texture is also known as `.ddx`.
+        set_game_mode(GameMode::gmFNV);
+        invalidate_cache();
+        assert_eq!(resolve_file_hash(xedit_io::hash::tes4("c.nif", true) as i64), "c.nif");
+        assert_eq!(resolve_file_hash(xedit_io::hash::tes4("t.ddx", true) as i64), "t.ddx");
+        assert_eq!(resolve_file_hash(xedit_io::hash::tes4("t.dds", true) as i64), "t.dds");
+        assert!(!loader_done());
+        clear_containers();
+        std::fs::remove_dir_all(data.parent().unwrap()).unwrap();
+    }
+}

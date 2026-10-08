@@ -446,7 +446,12 @@ fn pack_variants(format: &str, switch: &'static str, cross: bool) -> Vec<PackVar
 fn check_archive(case: &Case, runner: &Runner) -> Result<Vec<Outcome>> {
     let format = archive_format(&case.path)?;
     let dds = format.ends_with("DX10");
-    let work = runner.scratch.join(format!("{}-{}", case.game, sanitize(&case.name)));
+    // A short folder name: the oracle fails on paths over 260 characters, and
+    // the archives of Fallout 76 have long ones.
+    let hash = case.name.bytes().fold(0xcbf2_9ce4_8422_2325u64, |hash, byte| {
+        (hash ^ u64::from(byte)).wrapping_mul(0x0000_0100_0000_01b3)
+    });
+    let work = runner.scratch.join(format!("{}-{:06x}", case.game, hash & 0xff_ffff));
     let _ = fs::remove_dir_all(&work);
     fs::create_dir_all(&work)?;
     let archive = case.path.display().to_string();
@@ -488,7 +493,7 @@ fn check_archive(case: &Case, runner: &Runner) -> Result<Vec<Outcome>> {
             Some("  texture archives: phase 5 step 2".to_owned()),
             0,
         );
-        finish(&work, &outcomes, runner.keep)?;
+        finish(&work, &mut outcomes, runner.keep)?;
         return Ok(outcomes);
     }
 
@@ -559,14 +564,31 @@ fn check_archive(case: &Case, runner: &Runner) -> Result<Vec<Outcome>> {
         }
     }
     let _ = fs::remove_dir_all(&oracle_tree);
-    finish(&work, &outcomes, runner.keep)?;
+    finish(&work, &mut outcomes, runner.keep)?;
     Ok(outcomes)
 }
 
-/// Removes the folder of a case that is equal throughout.
-fn finish(work: &Path, outcomes: &[Outcome], keep: bool) -> Result<()> {
+/// Removes the folder of a case that is equal throughout; names the folder
+/// in the detail of a check that is not.
+fn finish(work: &Path, outcomes: &mut [Outcome], keep: bool) -> Result<()> {
     if !keep && outcomes.iter().all(|o| matches!(o.status, "equal" | "deferred")) {
         let _ = fs::remove_dir_all(work);
+        return Ok(());
+    }
+    for outcome in outcomes
+        .iter_mut()
+        .filter(|o| !matches!(o.status, "equal" | "deferred"))
+    {
+        let detail = outcome.detail.take().unwrap_or_default();
+        if !detail.contains("kept in") {
+            outcome.detail = Some(format!(
+                "{detail}
+  kept in {}",
+                work.display()
+            ));
+        } else {
+            outcome.detail = Some(detail);
+        }
     }
     Ok(())
 }
