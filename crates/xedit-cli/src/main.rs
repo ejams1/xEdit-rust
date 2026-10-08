@@ -107,6 +107,53 @@ enum Action {
         #[arg(long)]
         no_backup: bool,
     },
+    /// List the conflict status of the records of the loaded plugins and of each file (conflicts.list, ConflictLevelForMainRecord). Lists the records that are not the only record of their FormID unless --include-single.
+    Conflicts {
+        /// List only the records of this loaded file; repeat for several. Every record is still compared with all loaded files.
+        #[arg(long)]
+        file: Vec<String>,
+        /// List only the records with this signature, such as NPC_; repeat for several.
+        #[arg(long)]
+        signature: Vec<String>,
+        /// List only the records whose conflict is at least this ConflictAll: caOnlyOne, caNoConflict, caConflictBenign, caOverride, caConflict or caConflictCritical.
+        #[arg(long)]
+        min_conflict_all: Option<String>,
+        /// List only the records whose own status is this ConflictThis, such as ctConflictLoses; repeat for several.
+        #[arg(long)]
+        conflict_this: Vec<String>,
+        /// Also list the records that are the only record of their FormID.
+        #[arg(long)]
+        include_single: bool,
+        /// Compare only the master and the leaf overrides ("Only show Master and Leafs").
+        #[arg(long)]
+        master_and_leafs: bool,
+        /// Classify a FormID with one override as an override without comparing, as -quickshowconflicts does.
+        #[arg(long)]
+        quick_show_conflicts: bool,
+        /// Listed records to skip.
+        #[arg(long, default_value_t = 0)]
+        offset: usize,
+        /// Records to list at most.
+        #[arg(long)]
+        limit: Option<usize>,
+    },
+    /// Compare the records of a FormID side by side, row by row with their conflict status, as the view tab does (records.compare).
+    Compare {
+        /// Load order FormID of the record as hexadecimal digits.
+        form_id: String,
+        /// Plugin the record is seen from; the last loaded plugin when omitted.
+        #[arg(long)]
+        file: Option<String>,
+        /// Compare only the master and the leaf overrides ("Only show Master and Leafs").
+        #[arg(long)]
+        master_and_leafs: bool,
+        /// Hide the rows without a conflict ("Hide no conflict and empty rows").
+        #[arg(long)]
+        hide_no_conflict: bool,
+        /// Also list the rows the view hides (ignored members, members no record has).
+        #[arg(long)]
+        include_hidden: bool,
+    },
     /// Write the element tree of a plugin as xDump prints it.
     Dump {
         /// Game of the plugin, as for --game.
@@ -920,6 +967,38 @@ fn command_of(action: Action) -> Result<(String, Value), CommandError> {
         } => (
             "files.save".to_owned(),
             json!({ "file": file, "output": output, "dry_run": dry_run, "backup": !no_backup }),
+        ),
+        Action::Conflicts {
+            file,
+            signature,
+            min_conflict_all,
+            conflict_this,
+            include_single,
+            master_and_leafs,
+            quick_show_conflicts,
+            offset,
+            limit,
+        } => (
+            "conflicts.list".to_owned(),
+            json!({
+                "files": file, "signatures": signature, "min_conflict_all": min_conflict_all,
+                "conflict_this": conflict_this, "include_single": include_single,
+                "master_and_leafs": master_and_leafs, "quick_show_conflicts": quick_show_conflicts,
+                "offset": offset, "limit": limit
+            }),
+        ),
+        Action::Compare {
+            form_id,
+            file,
+            master_and_leafs,
+            hide_no_conflict,
+            include_hidden,
+        } => (
+            "records.compare".to_owned(),
+            json!({
+                "form_id": form_id, "file": file, "master_and_leafs": master_and_leafs,
+                "hide_no_conflict": hide_no_conflict, "include_hidden": include_hidden
+            }),
         ),
         Action::Assets { action } => match action {
             AssetsAction::Dump {

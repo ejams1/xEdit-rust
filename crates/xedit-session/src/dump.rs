@@ -70,14 +70,24 @@ pub fn game_tag(mode: GameMode) -> &'static str {
 /// Port of the game setup of `xDump.dpr` for the plugins of a game: the
 /// names of the game, its executable and its master, and the definitions.
 pub fn setup_game(game: &str) -> Result<GameMode, String> {
-    setup(game, None)
+    setup(game, None, false)
+}
+
+/// The game setup of the editor (`xeInit.pas`) for a session: as
+/// [`setup_game`], with the settings the GUI reads before it builds the
+/// definitions and that xDump changes: simple records (`wbSimpleRecords`,
+/// the GUI's default), the unused fields hidden (`wbHideUnused`) and the
+/// contained-in elements of the records in a worldspace, cell or topic
+/// group (`wbCreateContainedIn`, off for Morrowind only).
+pub fn setup_game_for_edit(game: &str) -> Result<GameMode, String> {
+    setup(game, None, true)
 }
 
 /// Port of the game setup of `xDump.dpr -saves` for a save or co-save of a
 /// game: the save definitions, switched to the co-save ones for the
 /// extension of the script extender.
 pub fn setup_saves(game: &str, path: &str) -> Result<GameMode, String> {
-    setup(game, Some(path))
+    setup(game, Some(path), false)
 }
 
 /// The save definitions of a game.
@@ -127,7 +137,7 @@ fn save_definitions(mode: GameMode) -> Option<SaveDefinitions> {
     }
 }
 
-fn setup(game: &str, save: Option<&str>) -> Result<GameMode, String> {
+fn setup(game: &str, save: Option<&str>, edit: bool) -> Result<GameMode, String> {
     // `xDump.dpr`: `wbAllowInternalEdit := False`, so a dump shows a record
     // as loaded, without the required subrecords the editor would add.
     xedit_core::interface::globals::set_allow_internal_edit(false);
@@ -169,14 +179,19 @@ fn setup(game: &str, save: Option<&str>) -> Result<GameMode, String> {
         GameMode::gmSF1 => xedit_defs::sf1::define_sf1,
         _ => return Err(format!("the definitions of {tag} are not ported yet")),
     };
-    set_simple_records(false);
-    set_hide_unused(false);
+    set_simple_records(edit);
+    set_hide_unused(edit);
     set_game_mode(mode);
-    // xDump turns the contained-in elements off for Fallout 4 and later.
-    set_create_contained_in(!matches!(
-        mode,
-        GameMode::gmFO4 | GameMode::gmFO4VR | GameMode::gmFO76 | GameMode::gmSF1
-    ));
+    // xDump turns the contained-in elements off for Fallout 4 and later, the
+    // editor for Morrowind.
+    set_create_contained_in(if edit {
+        mode != GameMode::gmTES3
+    } else {
+        !matches!(
+            mode,
+            GameMode::gmFO4 | GameMode::gmFO4VR | GameMode::gmFO76 | GameMode::gmSF1
+        )
+    });
     set_game_name(game_name);
     set_game_exe_name(&format!("{}.exe", exe_name.unwrap_or(game_name)));
     set_game_master_esm(&master_esm.map_or_else(|| format!("{game_name}.esm"), str::to_owned));

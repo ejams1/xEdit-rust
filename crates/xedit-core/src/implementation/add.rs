@@ -109,6 +109,7 @@ impl GroupRecordImpl {
             dc_base: 0,
             dc_end: 0,
             gr_sorted: std::sync::atomic::AtomicBool::new(false),
+            gr_sorting: std::sync::atomic::AtomicBool::new(false),
         });
         if group_type == 0 {
             let order = wb_get_group_order(Signature::new(&label.to_le_bytes()));

@@ -189,11 +189,19 @@ impl MainRecordImpl {
     pub fn resolve_reference(&self, form_id: FormID) -> Option<Arc<MainRecordImpl>> {
         let file = self.file_impl()?;
         let masters = file.masters();
-        let slot = usize::try_from(form_id.file_id().full_slot()).ok()?.min(masters.len());
-        let target = if slot == masters.len() {
-            file
+        let target = if crate::interface::globals::complex_file_file_id() {
+            // The slot among the masters of the module type of the FileID.
+            match usize::try_from(file.get_master_index_for_file_id(form_id.file_id())) {
+                Ok(index) if index < masters.len() => masters[index].clone(),
+                _ => file,
+            }
         } else {
-            masters[slot].clone()
+            let slot = usize::try_from(form_id.file_id().full_slot()).ok()?.min(masters.len());
+            if slot == masters.len() {
+                file
+            } else {
+                masters[slot].clone()
+            }
         };
         let form_id = form_id.change_file_id(target.get_file_file_id());
         target.record_by_form_id(form_id, true, true)

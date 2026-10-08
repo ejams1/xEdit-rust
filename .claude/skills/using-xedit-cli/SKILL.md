@@ -67,6 +67,8 @@ Inspection (never mutates):
 | `records find [--file F] [--signature SIG] [--editor-id TEXT] [--name TEXT] [--limit N]` | `records.find` | Records whose editor ID or display name contains the text, compared without case. |
 | `records get <FormID> [--file F] [--depth N]` | `records.get` | One record with its elements as a tree. |
 | `elements get <FormID> <path> [--file F] [--depth N]` | `elements.get` | One element of a record by path. |
+| `conflicts [--file F]... [--signature SIG]... [--min-conflict-all CA] [--conflict-this CT]... [--include-single] [--master-and-leafs] [--quick-show-conflicts] [--offset N] [--limit N]` | `conflicts.list` | The conflict status of the records of the loaded plugins, and per file the counts and the highest status. See "Conflicts". |
+| `compare <FormID> [--file F] [--master-and-leafs] [--hide-no-conflict] [--include-hidden]` | `records.compare` | The records of a FormID side by side, row by row, with the conflict status of each row and cell, as the view tab shows them. |
 | `call system.version` | `system.version` | The version of the build. |
 | `dump --game G <plugin>` | (none) | The whole plugin as `xDump.exe` prints it, to stdout; progress goes to stderr. |
 | `saves dump --game G --data <Data> <save>` | (none) | A save or co-save as `xDump.exe -saves` prints it. The plugins the save lists load from `<Data>`. |
@@ -102,6 +104,22 @@ Element paths use `\` between names, as in xEdit scripts: `DATA\Health`, `ACBS\F
 
 A record or element node has `name`, `display_name` (only when it differs, for example a placed object with its base record), `value` (the text xEdit shows), `summary` (the `[S]:` text of containers without a value), `native` (number, boolean, string or bytes as hexadecimal) and `children`. `--depth 1` keeps the first level of children, which is enough to list the subrecords of a record.
 
+## Conflicts
+
+`conflicts` and `compare` classify the records of a FormID as the GUI colours them (`ConflictLevelForMainRecord`; the view tab's `InitConflictStatus`). Load every plugin of the load order that matters: a record is compared with the records of its FormID in all loaded files, and the masters of the loaded plugins load with them.
+
+- `conflict_all` is the conflict of all the records of the FormID, from low to high: `caOnlyOne` (a single record), `caNoConflict` (several, all equal), `caConflictBenign`, `caOverride` (overridden without a conflict: one override, or every override agrees with the last), `caConflict`, `caConflictCritical` (a FormID-type value or an injected record). `conflict_this` is the part one record plays: `ctMaster`, `ctIdenticalToMaster` (an identical override: ITM), `ctOverride`, `ctIdenticalToMasterWinsConflict`, `ctConflictWins`, `ctConflictLoses`, `ctConflictBenign`, `ctOnlyOne`, and `ctHiddenByModGroup`, `ctIgnored`, `ctNotDefined`.
+- `conflicts` lists every record that is not the only record of its FormID; `--include-single` lists those too. `--file` limits the list, not the comparison. `--min-conflict-all caConflict --conflict-this ctConflictLoses` finds the records of a plugin that lose a conflict; `--conflict-this ctIdenticalToMaster` finds identical overrides. The `files` part of the result has, for every loaded file, `records`, `single`, the counts by status and the highest status of its records, which is what the navigation tree shows for a file. `messages` holds the warnings xEdit writes to its message log while it compares (`Comparing a mix of sorted, unsorted, and/or alignable entries ...`).
+- Game settings (`GMST`) and default objects (`DFOB`) are compared by editor ID, the first of each file, not by FormID, as xEdit does; a `NAVI` record is compared only with the records of its own file, so its overrides show `caOnlyOne`/`ctHiddenByModGroup`.
+- `compare` gives one column per record (`columns`, with the file and the record's `conflict_this`) and the rows of the view as a tree (`rows`, each with `name`, `conflict_all`, one cell per column with `value` and `conflict_this`, and `children`). A cell without an element is `null`. Rows the view hides (ignored members such as the record header's data size, members no record has) are left out unless `--include-hidden`; `--hide-no-conflict` leaves out the rows without a conflict, as the view's "Hide no conflict and empty rows". Sorted arrays are matched by their sort keys (" (sorted)" in the row name) and unsorted arrays aligned entry by entry (" (aligned)").
+- The comparison follows the GUI's settings: the session builds the definitions with simple records (`wbSimpleRecords`, so the landscape data and similar subrecords are byte arrays), the unused fields hidden, the contained-in element of a placed record (its cell or worldspace) and the flags of a flags value as elements of their own. Localized strings compare as they resolve: a plugin whose strings files are not found shows `<Error: No strings file for lstring ID ...>`, which differs from a resolved text.
+- `--master-and-leafs` compares only the master and the overrides no other override has as a master ("Only show Master and Leafs"); `--quick-show-conflicts` classifies a FormID with one override as an override without comparing them, as `-quickshowconflicts` does.
+- The records of different FormIDs are compared on all CPUs (`--threads`); the result is the same for every thread count. A full Fallout 4 load order of vanilla files takes seconds.
+
+```
+xedit --game fo4 --load "<Data>\Fallout4.esm" --load "<Data>\DLCRobot.esm" conflicts --file DLCRobot.esm --min-conflict-all caConflict
+xedit --game fo4 --load "<Data>\DLCRobot.esm" compare 000BB1F9 --hide-no-conflict
+```
 ## Archives
 
 `archive list|extract|pack` read, unpack and write BSA (Morrowind through Skyrim Special Edition) and BA2 (Fallout 4, Fallout 76, Starfield) archives. They are the three modes of `BSArch.exe`, need no `--game` or `--load`, and the archives `pack` writes are byte for byte the ones `BSArch.exe -mt:no` writes for the same sources and options, whatever the thread count. The `bsarch` binary (`cargo build --release -p bsarch`) takes the upstream arguments and prints the upstream text; use it where a script already calls `BSArch.exe`.
@@ -291,16 +309,17 @@ xedit --json --edit --game sse --load "<Data>\Skyrim.esm" save --no-backup --out
 
 ## Known gaps
 
-Behaviour a user can meet, as of the end of phase 3. Each is an upstream behaviour not ported yet; say so rather than work around it silently.
+Behaviour a user can meet, as of phase 4 step 2. Each is an upstream behaviour not ported yet; say so rather than work around it silently.
 
 - **LString.** The string tables of a localized plugin are not written. Setting a localized string from text fails (`Can not assign to a localized string: writing the string tables is not ported yet`; only a `STRINGID:` text works), and `records copy` into a localized plugin copies the record with its localized strings empty (the `FULL` of a copied `NPC_` reads `""`). Check the strings of a copy before saving it.
 - **Copy over an existing override.** xEdit's "...with overwriting" (`aAllowOverwrite`) is not ported: `records copy` returns the existing override unchanged. A partial form (`MakePartialForm`), template elements and aligned arrays can not be copied either.
 - **Sorted arrays.** A record that is rebuilt on save sorts its sorted subrecord arrays as upstream does, but an array that is sorted by the value of a subrecord (the `KWDA` keyword arrays, `srsSorted` and `arrSorted`) is not, an array is not sorted again after a FormID update of its entries, and after a master update (`masters add|sort|clean`) the port sorts unchanged sorted arrays that the oracle leaves in file order (30 `MSWP` and 1 `RACE` of `DLCworkshop01.esm`); a saved plugin can therefore differ from xEdit's in the order of those entries.
 - **References.** The records that refer to a FormID are found by scanning the loaded files on demand (`formids.change`, `formids.renumber`) until the reference index of phase 4; the editor ID index of a file does not learn the records an edit adds.
-- **Flags** are not shown as child elements.
+- **Flags** are not child elements of their value in `records get`; `compare` shows them as rows, as the view does.
+- **Conflicts.** Mod groups do not change the comparison yet (phase 4 step 6), so no record is `ctHiddenByModGroup` but a `NAVI` override; records the GUI user hid and the compare-to load (`Compare to...`) do not exist; the raw data compare (`wbCompareRawData`) is not ported; compare of selected records of different FormIDs (`Compare Selected`) and the script function `ConflictAllForElements` have no command yet.
 - **Morrowind.** Plugins load and dump, but the save stops at `must have a FormID`: the identity FormID of a TES3 record is not ported. The 4.1.5q oracle saves no Morrowind plugin either (its GUI runs Morrowind in view mode), so there is nothing to compare with.
 - **Sessions.** One session per process; `serve` and `mcp` can not load other plugins later, and a named pipe serves one client at a time.
-- **Starfield.** The complex FileIDs are ported in the master functions but the FormID lookups ignore them, so FormID changes and renumbering across masters are unchecked there. The oracle refuses to save the official Starfield modules whose header the save would edit, and so does the port.
+- **Starfield.** The complex FileIDs (light and medium masters with slots of their own) are followed by the master functions and the FormID lookups, but FormID changes and renumbering across masters are unchecked there. The oracle refuses to save the official Starfield modules whose header the save would edit, and so does the port.
 - **Oblivion saves** do not read (an upstream limit, see "Saves").
 - **Mesh optimizing.** `SpellOptimize`, `SpellStripify` and `SpellTriangulate` of a NIF are ported (`wbMeshOptimize`) but have no command of their own; `sniff run "Optimize mesh"` runs them on a folder.
 - **Sniff.** `Update MOPP code` is not ported (`sniff list` gives its `not_ported` reason; it needs `NifMopp.dll`), and `ProcCollapseLinksArrays` has no operation in the 4.1.5q form; see "Sniff".

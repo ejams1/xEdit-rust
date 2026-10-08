@@ -21,7 +21,7 @@ use crate::interface::element::{
     Container, CopyArgs, DataContainer, DataPtr, Element, ElementRef, FileRef, MainRecordRef,
 };
 use crate::interface::form_id::FormID;
-use crate::interface::globals::{edit_allowed, hide_never_show, is_internal_edit, sort_sub_records};
+use crate::interface::globals::{compare_raw_data, edit_allowed, hide_never_show, is_internal_edit, sort_sub_records};
 use crate::interface::misc::{EditError, Variant};
 use crate::interface::struct_def::ChapterKind;
 use crate::interface::types::{
@@ -644,6 +644,64 @@ impl ValueImpl {
 
     pub fn value_def(&self) -> &Arc<dyn ValueDef> {
         &self.vb.vb_value_def
+    }
+
+    /// Port of `TwbArray.GetSorted` and `TwbValue.GetSorted`
+    /// (`IwbSortableContainer`): `arrSorted` of an array (the definition
+    /// sorts it, under `wbSortSubRecords`); a value is sorted when it holds
+    /// flags (`vIsFlags`) or its definition is a sorted `wbEmpty`. `None`
+    /// for the structures and unions, which are not sortable containers.
+    pub fn get_sorted(&self) -> Option<bool> {
+        match self.kind {
+            ValueKind::Array => Some(
+                !compare_raw_data()
+                    && sort_sub_records()
+                    && self
+                        .vb
+                        .vb_value_def
+                        .as_array_def()
+                        .is_some_and(|array| array.get_sorted()),
+            ),
+            ValueKind::Value => {
+                if compare_raw_data() {
+                    return Some(false);
+                }
+                let self_ref = self.element_ref();
+                let is_flags = super::flag::is_flags(&self_ref);
+                Some(
+                    is_flags
+                        || resolve(self.vb.vb_value_def.clone(), self.data(), Some(&self_ref))
+                            .as_empty_def()
+                            .is_some_and(|empty| empty.get_sorted()),
+                )
+            }
+            ValueKind::Struct | ValueKind::Union | ValueKind::Terminator => None,
+        }
+    }
+
+    /// Port of `TwbArray.GetAlignable` and `TwbValue.GetAlignable`: an
+    /// unsorted array of a variable count whose definition does not forbid
+    /// it (`dfNotAlignable`).
+    pub fn get_alignable(&self) -> bool {
+        match self.kind {
+            ValueKind::Array => {
+                if compare_raw_data() || self.get_sorted() == Some(true) {
+                    return false;
+                }
+                let def = &self.vb.vb_value_def;
+                if def.def_base().def_flags.contains(DefFlag::dfNotAlignable) {
+                    return false;
+                }
+                def.as_array_def().is_some_and(|array| array.get_count() <= 0)
+            }
+            _ => false,
+        }
+    }
+
+    /// Port of `esOptionalAndMissing`: an optional member of a structure
+    /// that the data ended before.
+    pub fn is_optional_and_missing(&self) -> bool {
+        self.vb.optional_and_missing.load(Ordering::Relaxed)
     }
 
     /// Port of `TwbStruct.DecompressIfNeeded` and `GetIsCompressed`: the

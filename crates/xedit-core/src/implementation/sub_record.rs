@@ -15,7 +15,9 @@ use crate::interface::element::{
     Container, CopyArgs, DataContainer, DataPtr, Element, ElementRef, FileRef, MainRecord, MainRecordRef,
 };
 use crate::interface::form_id::FormID;
-use crate::interface::globals::{always_fast_assign, edit_allowed, ignore_records, is_internal_edit, sort_sub_records};
+use crate::interface::globals::{
+    always_fast_assign, compare_raw_data, edit_allowed, ignore_records, is_internal_edit, sort_sub_records,
+};
 use crate::interface::misc::{EditError, Variant, progress};
 use crate::interface::sub_record::RecordMemberDef;
 use crate::interface::sub_record_group::RecordDef;
@@ -653,6 +655,72 @@ impl SubRecordImpl {
 
     pub fn def(&self) -> Option<Arc<dyn RecordMemberDef>> {
         self.sr_def.read().unwrap().clone()
+    }
+
+    /// Port of `srValueDef` for the readers outside the subrecord: the
+    /// resolved value definition when the value has no name and its
+    /// elements live in the subrecord itself.
+    pub fn resolved_value_def(&self) -> Option<Arc<dyn ValueDef>> {
+        self.value_def()
+    }
+
+    /// Port of `TwbSubRecord.GetSorted` (`IwbSortableContainer`):
+    /// `srsSorted` (the value is an array the definition sorts, under
+    /// `wbSortSubRecords`, or flags under `wbFlagsAsArray`), or a value
+    /// definition that is a sorted `wbEmpty`.
+    pub fn get_sorted(&self) -> bool {
+        if compare_raw_data() {
+            return false;
+        }
+        let Some(value_def) = self.value_def() else {
+            return false;
+        };
+        let self_ref = self.element_ref();
+        let srs_sorted = match value_def.get_def_type() {
+            DefType::dtArray => sort_sub_records() && value_def.as_array_def().is_some_and(|array| array.get_sorted()),
+            DefType::dtStruct | DefType::dtStructChapter => false,
+            _ => super::flag::is_flags(&self_ref),
+        };
+        srs_sorted
+            || resolve(value_def, self.data(), Some(&self_ref))
+                .as_empty_def()
+                .is_some_and(|empty| empty.get_sorted())
+    }
+
+    /// Whether `DoInit(True)` sorts the entries of the subrecord: a sorted
+    /// array value (`srsSortInvalid` is set for `srsSorted` without
+    /// `srsIsFlags`).
+    pub fn sorts_its_entries(&self) -> bool {
+        self.sr_is_array.load(Ordering::Relaxed) && self.get_sorted()
+    }
+
+    /// Port of `TwbSubRecord.GetAlignable`: an unsorted array value of a
+    /// variable count whose definitions do not forbid it (`dfNotAlignable`).
+    /// UPSTREAM-QUIRK: upstream casts `srValueDef` to an array definition
+    /// whenever `srsIsArray` is set, which raises for an array reached
+    /// through a union the definitions could not resolve on load; the port
+    /// keeps the resolved definition there and answers.
+    pub fn get_alignable(&self) -> bool {
+        if compare_raw_data() || self.get_sorted() {
+            return false;
+        }
+        if self
+            .def()
+            .is_some_and(|def| def.def_base().def_flags.contains(DefFlag::dfNotAlignable))
+        {
+            return false;
+        }
+        let value_def = self.value_def();
+        if value_def
+            .as_ref()
+            .is_some_and(|def| def.def_base().def_flags.contains(DefFlag::dfNotAlignable))
+        {
+            return false;
+        }
+        self.sr_is_array.load(Ordering::Relaxed)
+            && value_def
+                .and_then(|def| def.as_array_def().map(|array| array.get_count() <= 0))
+                .unwrap_or(false)
     }
 
     /// Port of `SetDef` with its `DoReset(True)`: the elements built before
@@ -2320,6 +2388,19 @@ impl ElementImpl for SubRecordArrayImpl {
 }
 
 impl SubRecordArrayImpl {
+    /// Port of `TwbSubRecordArray.GetSorted` (`IwbSortableContainer`):
+    /// `arcSorted`.
+    pub fn get_sorted(&self) -> bool {
+        !compare_raw_data() && self.arc_sorted.load(Ordering::Relaxed)
+    }
+
+    /// Port of `TwbSubRecordArray.GetAlignable`.
+    pub fn get_alignable(&self) -> bool {
+        !compare_raw_data()
+            && !self.get_sorted()
+            && !self.arc_def.def_base().def_flags.contains(DefFlag::dfNotAlignable)
+    }
+
     /// Port of `TwbSubRecordArray.DoInit(True)`: the members are sorted by
     /// their sort keys when a change made the order invalid.
     fn sorted_init(&self) {

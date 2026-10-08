@@ -1709,8 +1709,10 @@ status = "pending"
 source = "mniViewHeaderUnhideAllClick"
 
 [gui."xEdit/xeMainForm.dfm:mniViewHideNoConflict:OnClick"]
-status = "pending"
+status = "covered"
+command = "records.compare"
 source = "mniViewHideNoConflictClick"
+note = "The hide_no_conflict parameter of records.compare; the view itself is presentation."
 
 [gui."xEdit/xeMainForm.dfm:mniViewModGroupsReload:OnClick"]
 status = "pending"
@@ -4551,16 +4553,20 @@ status = "pending"
 source = "_ConflictAllForElements"
 
 [script."xejviScriptAdapterHost:cUnit.ConflictAllForMainRecord:function"]
-status = "pending"
+status = "covered"
+command = "conflicts.list"
 source = "_ConflictAllForMainRecord"
+note = "The conflict_all of each record of the loaded files."
 
 [script."xejviScriptAdapterHost:cUnit.ConflictAllForNode:function"]
 status = "pending"
 source = "_ConflictAllForNode"
 
 [script."xejviScriptAdapterHost:cUnit.ConflictThisForMainRecord:function"]
-status = "pending"
+status = "covered"
+command = "conflicts.list"
 source = "_ConflictThisForMainRecord"
+note = "The conflict_this of each record of the loaded files."
 
 [script."xejviScriptAdapterHost:cUnit.ConflictThisForNode:function"]
 status = "pending"

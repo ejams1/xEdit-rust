@@ -56,6 +56,7 @@ use serde::Serialize;
 
 use crate::memory::{self, Budget, GIB, Limit};
 
+mod conflicts;
 mod bsarch;
 mod gui;
 mod hidden;
@@ -217,6 +218,11 @@ struct Options {
     oracle_save: bool,
     /// `parity oracle-edit`: the scripted edit sequences.
     oracle_edit: bool,
+    /// `parity conflicts`: the conflict status of every record.
+    conflicts: bool,
+    /// `parity conflicts --record <FormID>`: the oracle's probe of these
+    /// records instead of the check.
+    records: Vec<String>,
     games: Vec<&'static Game>,
     /// Lower-case file names. Empty selects the whole corpus.
     files: Vec<String>,
@@ -310,14 +316,15 @@ pub fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
     // The round trip has no oracle binary: the input file is the oracle
     // (and the GUI oracle's saves, when they are cached).
     let oracle_dir = std::env::var_os("XEDIT_ORACLE_DIR").map(PathBuf::from);
-    let oracle = if options.roundtrip || options.oracle_save || options.oracle_edit {
+    let gui_oracle = options.oracle_save || options.oracle_edit || options.conflicts;
+    let oracle = if options.roundtrip || gui_oracle {
         PathBuf::new()
     } else {
         let oracle = PathBuf::from(required_var("XEDIT_ORACLE_DIR")?).join("xDump.exe");
         ensure!(oracle.exists(), "{} does not exist", oracle.display());
         oracle
     };
-    if options.oracle_save || options.oracle_edit {
+    if gui_oracle {
         ensure!(oracle_dir.is_some(), "environment variable XEDIT_ORACLE_DIR is not set");
     }
     let oracle_dir = oracle_dir.unwrap_or_default();
@@ -328,6 +335,9 @@ pub fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
     };
     if options.oracle_edit {
         return oracle_save::run_edits(root, tag, &options, cache, scratch, oracle_dir);
+    }
+    if options.conflicts {
+        return conflicts::run_conflicts(root, tag, &options, cache, scratch, oracle_dir);
     }
 
     let mut cases = Vec::new();
@@ -1155,7 +1165,7 @@ fn parse(args: &[&str]) -> Result<Options> {
                          [--oracle-timeout <minutes>]";
     let (mode, rest) = args.split_first().context(USAGE)?;
     let (saves, roundtrip, oracle_save, oracle_edit) = match *mode {
-        "dump" => (false, false, false, false),
+        "dump" | "conflicts" => (false, false, false, false),
         "saves" => (true, false, false, false),
         "roundtrip" => (false, true, false, false),
         "oracle-save" => (false, false, true, false),
@@ -1167,6 +1177,8 @@ fn parse(args: &[&str]) -> Result<Options> {
         roundtrip,
         oracle_save,
         oracle_edit,
+        conflicts: *mode == "conflicts",
+        records: Vec::new(),
         games: Vec::new(),
         files: Vec::new(),
         oracle_only: false,
@@ -1194,6 +1206,7 @@ fn parse(args: &[&str]) -> Result<Options> {
                 options.games.push(game);
             }
             "--file" => options.files.push(rest.next().context(USAGE)?.to_lowercase()),
+            "--record" => options.records.push(rest.next().context(USAGE)?.to_uppercase()),
             "--oracle-only" => options.oracle_only = true,
             "--jobs" => options.jobs = rest.next().context(USAGE)?.parse::<usize>()?.max(1),
             "--memory-budget" => options.memory_budget = Some(gib(rest.next())?),

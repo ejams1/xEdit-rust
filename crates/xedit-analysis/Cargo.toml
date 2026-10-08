@@ -1,0 +1,11 @@
+[package]
+name = "xedit-analysis"
+version = "0.1.0"
+description = "Conflict detection and the other analyses of xEdit over a loaded session"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+rayon = "1.12.0"
+xedit-core = { path = "../xedit-core" }

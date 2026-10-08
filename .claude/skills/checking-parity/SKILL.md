@@ -10,7 +10,7 @@ The official xEdit release build of the tag in `upstream-map.toml` is the oracle
 ## Running the harness
 
 ```
-cargo xtask parity dump|saves|roundtrip|oracle-save|oracle-edit [--game <game>]... [--file <name>]... [--oracle-only]
+cargo xtask parity dump|saves|roundtrip|oracle-save|oracle-edit|conflicts [--game <game>]... [--file <name>]... [--record <FormID>]... [--oracle-only]
                     [--jobs <n>] [--memory-budget <GiB>] [--max-memory <GiB>] [--oracle-timeout <minutes>]
 ```
 
@@ -95,6 +95,17 @@ How a GUI run works (`crates/xtask/src/parity/gui.rs`), and what to check when o
 
 The other checks of the table below are added to `crates/xtask/src/parity.rs` in the phase that ports the feature.
 
+### Conflict status
+
+`parity conflicts` has the GUI build load the vanilla plugins of each game together (all of them, `--file` names some instead, with their masters) and run `crates/xtask/oracle/conflicts.pas`, which writes `ConflictAllForMainRecord` and `ConflictThisForMainRecord` of every main record of every loaded file, files in load order and records in `RecordByIndex` order (the order matters for the GMST and DFOB records, which upstream groups by editor ID and caches on the first record asked). A record that is the only one of its FormID (`caOnlyOne` with `ctOnlyOne`) is counted per file, the others are listed. The output is cached as `<cache>/<tag>/<MODE>-oracle-conflicts/<set>.<key>.txt.zst` (the key hashes the plugins and the script; `vanilla` is the whole corpus of the game, `selected` a `--file` set). The port loads the same plugins in the load order the GUI reports (the hardcoded executable file loads with them), from `<scratch>/<tag>/<MODE>-conflicts/Data`, a folder of hard links to the plugins only, as the GUI's private data folder has no archives and no strings files: a localized string resolves to `<Error: No strings file for lstring ID ...>` on both sides. It runs `conflicts.list` and compares every listed record and the counts of each file. Statuses: `equal`, `different` (the first 20 records and the file counts that differ), `oracle-failed`, `oracle-unsupported` (Morrowind: the GUI runs it in view mode only, without scripts), `port-failed`, `oracle-only`. The report is `target/parity/conflicts.json`. The GUI runs take minutes (all of Fallout 4 with its 181 files about 6 minutes, Starfield and Fallout 76 longer).
+
+`--record <FormID>` (with `--game` and usually `--file` to keep the load small) runs `crates/xtask/oracle/conflicts-probe.pas` instead and prints, for each record, its status and that of its first override, then the elements of the two walked side by side by index: the path, the `ConflictAllForElements` of the pair (`-1` when one side has no element), and the extended sort keys of both. Compare it with `xedit compare <FormID> --include-hidden` to find the row where the port parts from the oracle; nothing is cached.
+
+What the gate taught (all fixed): the session builds its definitions with the GUI's settings (`wbSimpleRecords`, `wbHideUnused`, `wbCreateContainedIn`), not xDump's; the view compares the flags of a flags value one by one (`wbFlagsAsArray`); a topic of the games that sort their responses (`wbSortINFO`) has the `INOM` and `INOA` lists once it is built; Starfield's light and medium masters count their own slots (`wbComplexFileFileID`); and an element knows its memory order from the moment its container adds it (`AddElement`), which the rank slot arrays of a Starfield `LGDI` read while they are sized.
+
+#### Phase 4 step 2 results (2026-10-08)
+
+`cargo xtask parity conflicts`, 2026-10-08, the vanilla plugins of each game loaded together: 10 of 10 games equal, 23,383,514 records compared (422,552 that are not the only record of their FormID listed record by record, the rest counted per file): Fallout 4 181 files 2,248,005 records, Skyrim SE 11 files 1,188,933, Oblivion 12 files 1,190,878, Fallout 3 7 files 932,219, New Vegas 11 files 629,839, Skyrim LE 6 files 1,161,503, Skyrim VR 7 files 1,177,152, Fallout 4 VR 3 files 1,548,595, Fallout 76 3 files 5,816,095, Starfield 15 files 7,490,295; Morrowind `oracle-unsupported` (the GUI runs it in view mode, without scripts). The oracle takes about 6 minutes for Fallout 4, the port's `conflicts.list` seconds (Skyrim SE 3.8 s on 16 threads, 12.6 s on one; Fallout 76 23 s and 48 s; the output is byte for byte the same).
 ### NIF and materials
 
 ```
@@ -160,7 +171,7 @@ The `xEdit-llm` automation build is a secondary oracle for conflict, reference a
 | --- | --- | --- |
 | Element dump | `xDump` text output | `xedit dump` |
 | Round-trip save | input file bytes | load then save, compare bytes |
-| Conflict status | xEdit conflict export | `xedit conflicts` |
+| Conflict status | `ConflictAllForMainRecord`/`ConflictThisForMainRecord` of every record by a `-script:` of the GUI (`oracle/conflicts.pas`) | `xedit conflicts` (`conflicts.list`) |
 | Cleaning | plugin saved by `-quickautoclean` | `xedit clean` |
 | Saved bytes | plugin written by a `-script:` of the GUI (`oracle/save.pas`, `oracle/edit.pas`) | `xedit save`, `xedit batch` |
 | Scripts | plugin and log after `-script:` | `xedit script run` |
