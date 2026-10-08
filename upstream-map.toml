@@ -210,7 +210,7 @@ status = "pending"
 [units."Core/wbNifMath.pas"]
 status = "pending"
 rust = "crates/xedit-assets/src/nif_math.rs"
-note = "Missing: StripifyTriangles, which needs meshopt_stripify of wbMeshOptimize (phase 5 step 6). Sin and Cos are the Delphi Win64 RTL's, ported from the machine code; ArcTan2 is still the C runtime's."
+note = "Missing: StripifyTriangles, which needs meshopt_stripify of wbMeshOptimize (phase 5 step 6). Sin, Cos, ArcTan, ArcTan2 (with ArcCos and ArcSin), RoundTo and SameValue are the Delphi Win64 RTL's, ported from the machine code of Sniff.exe."
 
 [units."Core/wbNifScanner.pas"]
 status = "ported"
@@ -232,171 +232,266 @@ status = "pending"
 
 [units."Core/wbTaskProgress.pas"]
 status = "pending"
+rust = "crates/xedit-assets/src/sniff/main_form.rs"
+note = "CalcThreads and the worker threads of Sniff (process_all, with the results committed in file order). The progress window is the GUI's."
 
 [units."Sniff.dpr"]
-status = "pending"
+status = "ported"
+rust = "crates/sniff/src/main.rs"
+note = "The sniff binary: the automation mode of the main form (-OP: and the other switches) without a window, printing the messages; -list lists the operations."
 
 [units."Sniff/Proc/ProcAddBoundingBox.pas"]
-status = "pending"
+status = "ported"
+rust = "crates/xedit-assets/src/sniff/proc_add_bounding_box.rs"
+note = "The frame is the processor's fields with the .dfm defaults (on_show); checked by cargo xtask parity sniff."
 
 [units."Sniff/Proc/ProcAddFacialAnim.pas"]
 status = "pending"
+note = "Not ported yet: phase 5 step 5, on the pattern of the porting-pascal-unit skill (Sniff processors)."
 
 [units."Sniff/Proc/ProcAddHeadtrackingAnim.pas"]
 status = "pending"
+note = "Not ported yet: phase 5 step 5, on the pattern of the porting-pascal-unit skill (Sniff processors)."
 
 [units."Sniff/Proc/ProcAddLODNode.pas"]
-status = "pending"
+status = "ported"
+rust = "crates/xedit-assets/src/sniff/proc_add_lod_node.rs"
+note = "The frame is the processor's fields with the .dfm defaults (on_show); checked by cargo xtask parity sniff."
 
 [units."Sniff/Proc/ProcAddRootCollisionNode.pas"]
-status = "pending"
+status = "ported"
+rust = "crates/xedit-assets/src/sniff/proc_add_root_collision_node.rs"
+note = "The frame is the processor's fields with the .dfm defaults (on_show); checked by cargo xtask parity sniff."
 
 [units."Sniff/Proc/ProcAdjustTransform.pas"]
-status = "pending"
+status = "ported"
+rust = "crates/xedit-assets/src/sniff/proc_adjust_transform.rs"
+note = "The frame is the processor's fields with the .dfm defaults (on_show); checked by cargo xtask parity sniff."
 
 [units."Sniff/Proc/ProcAnalyzeMesh.pas"]
 status = "pending"
+note = "Needs wbMeshOptimize (phase 5 step 6)."
 
 [units."Sniff/Proc/ProcAnimQuadraticToLinear.pas"]
-status = "pending"
+status = "ported"
+rust = "crates/xedit-assets/src/sniff/proc_anim_quadratic_to_linear.rs"
+note = "The frame is the processor's fields with the .dfm defaults (on_show); checked by cargo xtask parity sniff."
 
 [units."Sniff/Proc/ProcAnimSkeletonDeath.pas"]
 status = "pending"
+note = "Not ported yet: phase 5 step 5, on the pattern of the porting-pascal-unit skill (Sniff processors)."
 
 [units."Sniff/Proc/ProcApplyTransform.pas"]
-status = "pending"
+status = "ported"
+rust = "crates/xedit-assets/src/sniff/proc_apply_transform.rs"
+note = "The frame is the processor's fields with the .dfm defaults (on_show); checked by cargo xtask parity sniff."
 
 [units."Sniff/Proc/ProcAttachParent.pas"]
-status = "pending"
+status = "ported"
+rust = "crates/xedit-assets/src/sniff/proc_attach_parent.rs"
+note = "The frame is the processor's fields with the .dfm defaults (on_show); checked by cargo xtask parity sniff."
 
 [units."Sniff/Proc/ProcCheckForErrors.pas"]
 status = "pending"
+rust = "crates/xedit-assets/src/sniff/proc_check_for_errors.rs"
+note = "Every mesh check. Missing: the texture checks CheckDDS and CheckSSEDdsFormat, which need wbDDS (phase 5 step 2); a DDS file fails with a message while they are on."
 
 [units."Sniff/Proc/ProcCollapseLinksArrays.pas"]
-status = "pending"
+status = "not-ported"
+note = "Not in the list of the main form (frmMain.pas does not use the unit), so Sniff.exe has no such operation; nfoCollapseLinkArrays of wbDataFormatNif does the same on save."
 
 [units."Sniff/Proc/ProcConvertRootNode.pas"]
-status = "pending"
+status = "ported"
+rust = "crates/xedit-assets/src/sniff/proc_convert_root_node.rs"
+note = "The frame is the processor's fields with the .dfm defaults (on_show); checked by cargo xtask parity sniff."
 
 [units."Sniff/Proc/ProcCopyControlledBlocks.pas"]
 status = "pending"
+note = "Not ported yet: phase 5 step 5, on the pattern of the porting-pascal-unit skill (Sniff processors)."
 
 [units."Sniff/Proc/ProcCopyGeometryBlocks.pas"]
 status = "pending"
+note = "Not ported yet: phase 5 step 5, on the pattern of the porting-pascal-unit skill (Sniff processors)."
 
 [units."Sniff/Proc/ProcCopyPriorities.pas"]
-status = "pending"
+status = "ported"
+rust = "crates/xedit-assets/src/sniff/proc_copy_priorities.rs"
+note = "The frame is the processor's fields with the .dfm defaults (on_show); checked by cargo xtask parity sniff."
 
 [units."Sniff/Proc/ProcFindDrawCalls.pas"]
-status = "pending"
+status = "ported"
+rust = "crates/xedit-assets/src/sniff/proc_find_draw_calls.rs"
+note = "The frame is the processor's fields with the .dfm defaults (on_show); checked by cargo xtask parity sniff."
 
 [units."Sniff/Proc/ProcFindTextures.pas"]
 status = "pending"
+note = "Needs wbDDS (phase 5 step 2)."
 
 [units."Sniff/Proc/ProcFindUVs.pas"]
-status = "pending"
+status = "ported"
+rust = "crates/xedit-assets/src/sniff/proc_find_uvs.rs"
+note = "The frame is the processor's fields with the .dfm defaults (on_show); checked by cargo xtask parity sniff."
 
 [units."Sniff/Proc/ProcFixExportedKFAnim.pas"]
-status = "pending"
+status = "ported"
+rust = "crates/xedit-assets/src/sniff/proc_fix_exported_kf_anim.rs"
+note = "The frame is the processor's fields with the .dfm defaults (on_show); checked by cargo xtask parity sniff."
 
 [units."Sniff/Proc/ProcGroupShapes.pas"]
 status = "pending"
+note = "Not ported yet: phase 5 step 5, on the pattern of the porting-pascal-unit skill (Sniff processors)."
 
 [units."Sniff/Proc/ProcHavokInfo.pas"]
-status = "pending"
+status = "ported"
+rust = "crates/xedit-assets/src/sniff/proc_havok_info.rs"
+note = "The frame is the processor's fields with the .dfm defaults (on_show); checked by cargo xtask parity sniff."
 
 [units."Sniff/Proc/ProcHavokSearchMaterial.pas"]
-status = "pending"
+status = "ported"
+rust = "crates/xedit-assets/src/sniff/proc_havok_search_material.rs"
+note = "The frame is the processor's fields with the .dfm defaults (on_show); checked by cargo xtask parity sniff."
 
 [units."Sniff/Proc/ProcHavokSettingsUpdate.pas"]
-status = "pending"
+status = "ported"
+rust = "crates/xedit-assets/src/sniff/proc_havok_settings_update.rs"
+note = "The frame is the processor's fields with the .dfm defaults (on_show); checked by cargo xtask parity sniff."
 
 [units."Sniff/Proc/ProcInertiaUpdate.pas"]
-status = "pending"
+status = "ported"
+rust = "crates/xedit-assets/src/sniff/proc_inertia_update.rs"
+note = "The frame is the processor's fields with the .dfm defaults (on_show); checked by cargo xtask parity sniff."
 
 [units."Sniff/Proc/ProcJamAnim.pas"]
 status = "pending"
+note = "Not ported yet: phase 5 step 5, on the pattern of the porting-pascal-unit skill (Sniff processors)."
 
 [units."Sniff/Proc/ProcJsonConverter.pas"]
-status = "pending"
+status = "ported"
+rust = "crates/xedit-assets/src/sniff/proc_json_converter.rs"
+note = "The frame is the processor's fields with the .dfm defaults (on_show); checked by cargo xtask parity sniff."
 
 [units."Sniff/Proc/ProcMergeProperties.pas"]
-status = "pending"
+status = "ported"
+rust = "crates/xedit-assets/src/sniff/proc_merge_properties.rs"
+note = "The frame is the processor's fields with the .dfm defaults (on_show); checked by cargo xtask parity sniff."
 
 [units."Sniff/Proc/ProcMergeShapes.pas"]
 status = "pending"
+note = "Not ported yet: phase 5 step 5, on the pattern of the porting-pascal-unit skill (Sniff processors)."
 
 [units."Sniff/Proc/ProcMoppUpdate.pas"]
-status = "pending"
+status = "not-ported"
+note = "Calls NifMopp.dll, Havok's MOPP builder, which is not part of the source and is not redistributable."
 
 [units."Sniff/Proc/ProcOptimize.pas"]
 status = "pending"
+note = "Needs wbMeshOptimize (phase 5 step 6)."
 
 [units."Sniff/Proc/ProcOptimizeKF.pas"]
-status = "pending"
+status = "ported"
+rust = "crates/xedit-assets/src/sniff/proc_optimize_kf.rs"
+note = "The frame is the processor's fields with the .dfm defaults (on_show); checked by cargo xtask parity sniff."
 
 [units."Sniff/Proc/ProcRagdollConstraintUpdate.pas"]
-status = "pending"
+status = "ported"
+rust = "crates/xedit-assets/src/sniff/proc_ragdoll_constraint_update.rs"
+note = "The frame is the processor's fields with the .dfm defaults (on_show); checked by cargo xtask parity sniff."
 
 [units."Sniff/Proc/ProcRemoveControlledBlocks.pas"]
-status = "pending"
+status = "ported"
+rust = "crates/xedit-assets/src/sniff/proc_remove_controlled_blocks.rs"
+note = "The frame is the processor's fields with the .dfm defaults (on_show); checked by cargo xtask parity sniff."
 
 [units."Sniff/Proc/ProcRemoveNodes.pas"]
-status = "pending"
+status = "ported"
+rust = "crates/xedit-assets/src/sniff/proc_remove_nodes.rs"
+note = "The frame is the processor's fields with the .dfm defaults (on_show); checked by cargo xtask parity sniff."
 
 [units."Sniff/Proc/ProcRemoveUnusedNodes.pas"]
-status = "pending"
+status = "ported"
+rust = "crates/xedit-assets/src/sniff/proc_remove_unused_nodes.rs"
+note = "The frame is the processor's fields with the .dfm defaults (on_show); checked by cargo xtask parity sniff."
 
 [units."Sniff/Proc/ProcReplaceAssets.pas"]
-status = "pending"
+status = "ported"
+rust = "crates/xedit-assets/src/sniff/proc_replace_assets.rs"
+note = "The frame is the processor's fields with the .dfm defaults (on_show); checked by cargo xtask parity sniff."
 
 [units."Sniff/Proc/ProcSetMissingNames.pas"]
-status = "pending"
+status = "ported"
+rust = "crates/xedit-assets/src/sniff/proc_set_missing_names.rs"
+note = "The frame is the processor's fields with the .dfm defaults (on_show); checked by cargo xtask parity sniff."
 
 [units."Sniff/Proc/ProcShaderFlagsUpdate.pas"]
-status = "pending"
+status = "ported"
+rust = "crates/xedit-assets/src/sniff/proc_shader_flags_update.rs"
+note = "The frame is the processor's fields with the .dfm defaults (on_show); checked by cargo xtask parity sniff."
 
 [units."Sniff/Proc/ProcSoftParticles.pas"]
-status = "pending"
+status = "ported"
+rust = "crates/xedit-assets/src/sniff/proc_soft_particles.rs"
+note = "The frame is the processor's fields with the .dfm defaults (on_show); checked by cargo xtask parity sniff."
 
 [units."Sniff/Proc/ProcTangents.pas"]
-status = "pending"
+status = "ported"
+rust = "crates/xedit-assets/src/sniff/proc_tangents.rs"
+note = "The frame is the processor's fields with the .dfm defaults (on_show); checked by cargo xtask parity sniff."
 
 [units."Sniff/Proc/ProcTransformInfo.pas"]
-status = "pending"
+status = "ported"
+rust = "crates/xedit-assets/src/sniff/proc_transform_info.rs"
+note = "The frame is the processor's fields with the .dfm defaults (on_show); checked by cargo xtask parity sniff."
 
 [units."Sniff/Proc/ProcUniversalFixer.pas"]
-status = "pending"
+status = "ported"
+rust = "crates/xedit-assets/src/sniff/proc_universal_fixer.rs"
+note = "The frame is the processor's fields with the .dfm defaults (on_show); checked by cargo xtask parity sniff."
 
 [units."Sniff/Proc/ProcUniversalTweaker.pas"]
-status = "pending"
+status = "ported"
+rust = "crates/xedit-assets/src/sniff/proc_universal_tweaker.rs"
+note = "The frame is the processor's fields with the .dfm defaults (on_show); checked by cargo xtask parity sniff."
 
 [units."Sniff/Proc/ProcUnskinMesh.pas"]
-status = "pending"
+status = "ported"
+rust = "crates/xedit-assets/src/sniff/proc_unskin_mesh.rs"
+note = "The frame is the processor's fields with the .dfm defaults (on_show); checked by cargo xtask parity sniff."
 
 [units."Sniff/Proc/ProcUnweldedVertices.pas"]
-status = "pending"
+status = "ported"
+rust = "crates/xedit-assets/src/sniff/proc_unwelded_vertices.rs"
+note = "The frame is the processor's fields with the .dfm defaults (on_show); checked by cargo xtask parity sniff."
 
 [units."Sniff/Proc/ProcUpdateBounds.pas"]
-status = "pending"
+status = "ported"
+rust = "crates/xedit-assets/src/sniff/proc_update_bounds.rs"
+note = "The frame is the processor's fields with the .dfm defaults (on_show); checked by cargo xtask parity sniff."
 
 [units."Sniff/Proc/ProcVertexPaint.pas"]
 status = "pending"
+note = "Not ported yet: phase 5 step 5, on the pattern of the porting-pascal-unit skill (Sniff processors)."
 
 [units."Sniff/Proc/ProcWallsReflectionFlag.pas"]
-status = "pending"
+status = "ported"
+rust = "crates/xedit-assets/src/sniff/proc_walls_reflection_flag.rs"
+note = "The frame is the processor's fields with the .dfm defaults (on_show); checked by cargo xtask parity sniff."
 
 [units."Sniff/Proc/ProcWeiExplosion.pas"]
 status = "pending"
+note = "Not ported yet: phase 5 step 5, on the pattern of the porting-pascal-unit skill (Sniff processors)."
 
 [units."Sniff/SniffProcessor.pas"]
-status = "pending"
+status = "ported"
+rust = "crates/xedit-assets/src/sniff/processor.rs"
+note = "TProcBase as the Proc trait with ProcBase, TProcManager, TProcFileObject, the storage of the settings (TMemIniFile), TextToString and StringToText. SelectFolder and SelectArchive are dialogs of the GUI."
 
 [units."Sniff/frMessages.pas"]
 status = "pending"
 
 [units."Sniff/frmMain.pas"]
 status = "pending"
+rust = "crates/xedit-assets/src/sniff/main_form.rs"
+note = "The automation mode: the list of operations (procs.rs), the command line (wbFindCmdLineParam), the settings and btnProcessClick, run by the sniff binary and sniff.run. The window, the drag and drop and the message tab are the GUI phase's."
 
 [units."Sniff/frmVertexPaintHelper.pas"]
 status = "pending"

@@ -286,8 +286,7 @@ fn set_delimited_text(value: &str, delimiter: char, strict: bool) -> Vec<String>
         }
     }
     while p < end {
-        let field: String;
-        if chars[p] == '"' {
+        let field: String = if chars[p] == '"' {
             // AnsiExtractQuotedStr
             let mut text = String::new();
             p += 1;
@@ -304,14 +303,14 @@ fn set_delimited_text(value: &str, delimiter: char, strict: bool) -> Vec<String>
                 text.push(chars[p]);
                 p += 1;
             }
-            field = text;
+            text
         } else {
             let start = p;
             while p < end && (strict || chars[p] > ' ') && chars[p] != delimiter {
                 p += 1;
             }
-            field = chars[start..p].iter().collect();
-        }
+            chars[start..p].iter().collect()
+        };
         result.push(field);
         if !strict {
             while p < end && blank(chars[p]) {
@@ -574,7 +573,7 @@ impl ProcBase {
         if !ext.is_empty() {
             ext.remove(0);
         }
-        self.extensions.iter().any(|known| *known == ext)
+        self.extensions.contains(&ext)
     }
 
     /// `GetStorageSection`: the title without spaces.

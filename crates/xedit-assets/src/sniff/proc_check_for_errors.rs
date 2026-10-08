@@ -2355,6 +2355,7 @@ fn check_geometry(_: &ProcFileObject, nif: &mut NifFile, log: &mut Vec<String>) 
 
 // ===========================================================================
 /// `CheckVertexColors`.
+#[allow(clippy::needless_late_init)]
 fn check_vertex_colors(_: &ProcFileObject, nif: &mut NifFile, log: &mut Vec<String>) -> R<()> {
     const WHITE: [u8; 16] = [0, 0, 0x80, 0x3F, 0, 0, 0x80, 0x3F, 0, 0, 0x80, 0x3F, 0, 0, 0x80, 0x3F];
     let tree = &mut nif.tree;
@@ -2604,6 +2605,7 @@ fn check_optional(_: &ProcFileObject, nif: &mut NifFile, log: &mut Vec<String>) 
 
 // ===========================================================================
 /// `CheckUVs`.
+#[allow(clippy::needless_late_init)]
 fn check_uvs(_: &ProcFileObject, nif: &mut NifFile, log: &mut Vec<String>) -> R<()> {
     let tree = &mut nif.tree;
     for i in 0..blocks_count(tree)? {
