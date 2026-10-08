@@ -269,6 +269,10 @@ fn watch(child: &mut HiddenChild, work: &Path, timeout: Duration, hang_timeout: 
                     }
                 }
                 "TApplication" => {}
+                // The input indicator Windows makes for a process on its
+                // desktop (seen on the long Starfield and Fallout 76 runs),
+                // not a dialog of the GUI.
+                "UAC_InputIndicatorOverlayWnd" | "UAC Input Indicator" => {}
                 "TfrmModuleSelect" => {
                     // The GUI runs hidden, but the modal module selection
                     // shows itself: it is found hidden while it is built,
