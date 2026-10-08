@@ -10,8 +10,8 @@ The official xEdit release build of the tag in `upstream-map.toml` is the oracle
 ## Running the harness
 
 ```
-cargo xtask parity dump|saves|roundtrip [--game <game>]... [--file <name>]... [--oracle-only] [--jobs <n>]
-                                        [--memory-budget <GiB>] [--max-memory <GiB>] [--oracle-timeout <minutes>]
+cargo xtask parity dump|saves|roundtrip|oracle-save|oracle-edit [--game <game>]... [--file <name>]... [--oracle-only]
+                    [--jobs <n>] [--memory-budget <GiB>] [--max-memory <GiB>] [--oracle-timeout <minutes>]
 ```
 
 The harness runs the oracle `xDump.exe` and the port's `xedit dump` on every vanilla plugin of the selected games and compares the outputs byte for byte. The games are `fo4`, `sse`, `tes3`, `tes4`, `fo3`, `fnv`, `tes5`, `tes5vr`, `fo4vr`, `fo76` and `sf1`. Without `--game` it checks every game whose data directory is set and prints a `skipped` line for the others. `--file` restricts the run to named plugins, vanilla or not. It prints the first differing line of each file, writes `target/parity/dump.json` and exits with an error when any file differs.
@@ -23,7 +23,9 @@ Environment variables:
 | `XEDIT_ORACLE_DIR` | Unpacked release archive of the baseline tag. |
 | `XEDIT_<GAME>_DATA` | `Data` directory of each game: `XEDIT_FO4_DATA`, `XEDIT_SSE_DATA`, `XEDIT_TES3_DATA` (Morrowind's `Data Files`), `XEDIT_TES4_DATA`, `XEDIT_FO3_DATA`, `XEDIT_FNV_DATA`, `XEDIT_TES5_DATA`, `XEDIT_TES5VR_DATA`, `XEDIT_FO4VR_DATA`, `XEDIT_FO76_DATA`, `XEDIT_SF1_DATA`. |
 | `XEDIT_<GAME>_SAVES` | Save folder of each game for `parity saves`: `XEDIT_FO4_SAVES`, `XEDIT_SSE_SAVES`, `XEDIT_TES5_SAVES`, `XEDIT_FNV_SAVES`, `XEDIT_FO3_SAVES`, `XEDIT_TES4_SAVES`. |
-| `XEDIT_PARITY_CACHE` | Cache directory. Optional; defaults to the user cache directory. |
+| `XEDIT_PARITY_CACHE` | Cache directory. Optional; defaults to the user cache directory. Shared: it holds the expensive oracle outputs. |
+| `XEDIT_PARITY_SCRATCH` | Where the port's saves (`roundtrip`, `oracle-save`, `oracle-edit`), the files kept for a difference and the oracle's run folders go. Optional; defaults to the cache. Set it per branch when several branches run the round trip at once. |
+| `XEDIT_ORACLE_KEEP_WORK` | Set to keep the run folder of a GUI oracle run (the generated script, the private data folder) to read it or start the GUI on it by hand. |
 
 Oracle output is cached zstd-compressed as `<cache>/<tag>/<game>/<file>.<hash>.oracle.txt.zst`, so the oracle runs once per input file; plain `.oracle.txt` files from older runs are still read. A run that the oracle ended with `Unexpected Error` is kept as `<file>.<hash>.oracle.crashed.txt.zst`, with the exception's log line in `<file>.<hash>.oracle.error`, and compared as a prefix: the port has to match it up to the crash, and the rest of its output must still finish without an error, which the report shows as `equal-prefix`. A port that stops with the same error message after the same output (`error: <message>` as its last log line) is reported as `equal-error`; the Oblivion saves end that way, because upstream's Oblivion save definitions expect the Fallout 3 header magic. An oracle run that ended with `EInOutError` (I/O error 1450 under memory pressure) is not kept and is reported as `oracle-failed`; run the file again. An oracle assertion failure while loading (`EAssertionFailed` in `wbImplementation.pas`) was seen once on a Fallout New Vegas save and did not repeat: delete the `.oracle.crashed.txt.zst` and run the file again before reading anything into it. The oracle is slow on large masters: it writes about 80 MB of dump per minute and needs more than ten minutes for `Fallout4.esm`. `--oracle-only` fills the cache without running the port. The port output is compared while the port writes it; it is kept only for a file that differs, as `.port.txt.zst` up to the first difference (`zstd -dc` reads it), next to the port's log `.port.log`.
 
@@ -37,7 +39,7 @@ The processes that run at once stay within `--memory-budget` (default: three qua
 
 ### Round trip
 
-`parity roundtrip` runs `xedit --edit --game <game> --load <plugin> save --no-backup --output <cache>/<tag>/<game>-roundtrip/<file>.<hash>.saved` on every corpus plugin and compares the saved bytes with the input, byte for byte. No oracle binary runs: the input file is the oracle, which holds exactly where xEdit writes a loaded file back unchanged. The report is `target/parity/roundtrip.json` and the statuses are:
+`parity roundtrip` runs `xedit --edit --game <game> --load <plugin> save --no-backup --output <scratch>/<tag>/<game>-roundtrip/<file>.<hash>.saved` on every corpus plugin and compares the saved bytes with the input, byte for byte. No oracle binary runs: the input file is the oracle, which holds exactly where xEdit writes a loaded file back unchanged, and the GUI oracle's own save decides wherever `parity oracle-save` has cached it (below): a save that equals the oracle's save is `equal` whatever it changed in the input (the detail says how the oracle's save differs from the input), one that does not is `different`, and a refusal with the oracle's message stays `refused` with the oracle's confirmation in the detail. Only a file without a cached oracle save falls back to the classes below that judge the input alone. The report is `target/parity/roundtrip.json` and the statuses are:
 
 - `equal`: identical bytes; the saved file is deleted.
 - `ofst-dropped`: the saved file is the input without the `OFST` subrecord (and its `XXXX` size prefix) of every worldspace (and `CLSZ` for Fallout 4, Fallout 76 and Starfield, `VISI` for Fallout 76, the `RNAM` of the game master), with the record and group sizes adjusted. xEdit drops those offsets when it loads a worldspace and writes the record without them, so this is the expected result for a file that overrides a worldspace; the harness rebuilds the expected bytes from the input and compares. Not counted as passing until the oracle's own save confirms it (step 6 of phase 3).
@@ -58,11 +60,44 @@ The saves run under the same memory cap and budget as the dumps and reuse the `.
 
 249 plugins in 8 minutes: 125 `equal`, 46 `ofst-dropped`, 24 `header-edited`, 15 `structure-edited`, 5 `refused`, 0 `unsupported`, 34 `different`, 0 failed. The 3 Morrowind `refused` are a port gap (`must have a FormID`: the identity FormID of a Morrowind record, owed). Every `different` file was diffed at subrecord level with `cmp.py` (a scratch script: walks the groups of both files, pairs the records by FormID, decompresses, and prints the subrecords that differ) and is one of the three upstream changes listed under `different` above: 25 files whose worldspaces gained the members `wbWorldAfterLoad` adds (`CNAM` with its default `351` in a Skyrim worldspace, `INAM` too in Fallout 3), 9 files with a clamped FormID (`Oblivion.esm` 10 `REFR`, `Skyrim.esm` the `GMST` `0123C00E`, the `INFO`/`QUST` of the Fallout 3 DLC, `GunRunnersArsenal.esm` 1 `REFR`), and the Skyrim masters (359 `CELL` records of `Tamriel` rebuilt with their `XCLW` fix, sorted subrecords and a two byte `DATA`; 4 `REFR` overrides of `Dawnguard.esm` set persistent by the `ONAM` rebuild). None is a port bug by that analysis; the oracle's own save (step 6) decides.
 
+#### Step 6 results (2026-10-07)
+
+With the oracle's saves cached: 239 `equal`, 10 `refused` (7 confirmed by the oracle's refusal: the two blueprint masters and the official Starfield modules whose header `PrepareSave` would have to edit; the 3 Morrowind masters unconfirmed, as the oracle saves no Morrowind plugin), 0 `ofst-dropped`, 0 `header-edited`, 0 `structure-edited`, 0 `different`. Every file of the classes above equals the oracle's save.
+
+### Oracle save
+
+`parity oracle-save` has the GUI build of the oracle (`xTESEdit.exe`, `xFOEdit.exe`, `xSFEdit.exe` in `XEDIT_ORACLE_DIR`) load every corpus plugin with its masters and write it with `FileWriteToStream` (`crates/xtask/oracle/save.pas`), which runs the `PrepareSave` and `WriteToStream` of the GUI's save, and compares the port's save (as the round trip makes it) with it byte for byte. Statuses:
+
+- `equal`: identical bytes; the detail says whether the oracle's save equals the input.
+- `equal-error`: both refused the save with the same message (the oracle's exception, the port's `save_refused`). Counted as passing.
+- `different`: the first differing offset, the record report (dropped: only in the oracle's save, added: only in the port's) and the two files, kept in the scratch folder as `<file>.<hash>.oracle.saved` and `.port.saved`. Also a refusal on one side only, or with another message.
+- `oracle-unsupported`: Morrowind. The 4.1.5q GUI runs Morrowind in its view mode only (`ToolModes := [tmView]` in `xeInit.pas`) and saves nothing, so there is no oracle save.
+- `oracle-failed`: the GUI run failed (a dialog, a timeout, a hang); the detail has the reason. Nothing is cached; run the file again.
+- `port-failed`, `port-memory-limit`, `oracle-only`: as for the round trip.
+
+The oracle's result is cached as `<cache>/<tag>/<MODE>-oracle-save/<file>.<key>.saved.zst` (zstd) or `<file>.<key>.error` (the exception's message), with the script's log as `.oracle.log`; the key hashes the plugin, its masters (found through the `MAST` subrecords, recursively) and the script, so a change to `save.pas` runs the oracle again on everything. The GUI is fast: `Starfield.esm` loads and saves in about 2 minutes, the whole corpus in about an hour with `--jobs 3`, most of it the port's saves of the big masters.
+
+How a GUI run works (`crates/xtask/src/parity/gui.rs`), and what to check when one fails:
+
+- The GUI's script mode (`-script:<file>`) loads the plugins, runs the script and stays open; `-autoload` and `-autoexit` work in the edit mode only. The harness presses OK on the module selection (`TfrmModuleSelect`, with the plugins of the private plugin list checked), waits for `done.txt` (the script writes `status.txt` and then the marker), and ends the process through its job object, which also kills it when the harness dies.
+- Every run gets a private folder under `<scratch>/<tag>/oracle-work`: a copy of the executable (the GUI writes its log, ini and exception log next to it), copies of the plugins as the data folder (`-D:`), a plugin list (`-P:`, with `*` where the game uses it), an empty game ini (`-I:`, with `-M:` and `-G:`, so no archive and no setting of the user's `My Games` folder applies, and a game that was never started does not stop the GUI with `Fatal: Could not find ini`), and `-T:`, `-C:`, `-B:`, `-S:`. Nothing is written to a game install, the user's `Plugins.txt` or the settings next to the oracle binaries. The folder is removed after the run.
+- Any other dialog that stays up for 10 seconds ends the run with its texts (a Windows task dialog shows only its buttons), as does a `Fatal:` line or `Aborted: Applying script` (a script that did not compile) in the message log of the main form, the timeout (`--oracle-timeout`, default 120 minutes) or 10 minutes without CPU time. The windows of the GUI appear on the desktop while it runs.
+- JvInterpreter resolves names without case and before locals: a parameter called `path` or `name`, or a variable `e` next to `on E: Exception`, breaks a script (`Undeclared Identifier 'Message'`), so the scripts use `aPath`, `aName`, `el`.
+- The script mode builds the reference information unless `-nobuildrefs` is passed; the plain save passes it. Building the references initialises every record of the loaded files, which applies their load fix-ups (required members, `AfterLoad`), so a save then differs from a plain one wherever a record has a fix-up.
+
+### Oracle edit sequences
+
+`parity oracle-edit` runs the scripted edit sequences of `crates/xtask/oracle/edits/*.json` (`--file <stem>` selects some, `--game` the games) on both sides and compares every saved plugin, reported as `<sequence>/<plugin>` in `target/parity/oracle-edit.json`. A sequence names the game, the plugins to load (masters first, in the order the GUI loads them: the official order, or the file dates for Oblivion to New Vegas), the commands as `xedit batch` takes them, the plugins to save, and `build_refs` (whether the oracle builds the reference information, which a FormID change needs; see above for what that costs). The port runs the batch with a `files.save` per plugin; the oracle runs a Pascal script that `oracle_save.rs` generates from the same commands around `crates/xtask/oracle/edit.pas`: a record is the one the named file sees (`RecordByFormID` with the file's FormID), `elements.set` is `SetElementEditValues` (or the native and default setters) with the element required afterwards, `records.copy` adds the required masters and copies as the GUI's copy commands do (`wbCopyElementToFile` with the record's contents, or the child group with `deep`), `formids.change` collects `ReferencedBy` before `SetLoadOrderFormID` and updates the editable referencing records, and `formids.renumber` (with `start`, in the file itself) follows `mniNavRenumberFormIDsFromClick`. A command or parameter the translation does not know fails the sequence instead of running on one side only. The oracle's saves are cached in `<cache>/<tag>/<MODE>-oracle-edit`, keyed by the sequence, the generated script and the plugins.
+
+#### Step 6 results (2026-10-07)
+
+`oracle-save` over the 249 plugins: 239 `equal`, 7 `equal-error`, 3 `oracle-unsupported`, 0 `different` (the first run, before the port fixes listed in `docs/PLAN.md`, had 12 `different`). `oracle-edit`: `fnv-caravanpack`, `fnv-gmst` and `fo4-dlcworkshop01` equal; `fo4-dlcworkshop01-masters` different (31 records whose unchanged sorted arrays the oracle leaves unsorted after a master update and the port sorts; owed).
+
 The other checks of the table below are added to `crates/xtask/src/parity.rs` in the phase that ports the feature.
 
 ## Running the oracle
 
-`XEDIT_ORACLE_DIR` points at the unpacked release archive of the baseline tag. The game is selected with a switch such as `-FO4` or `-SSE`. Masters are read from the directory of the input file, and `-D:<Data path>` is needed for every plugin but the game master: without it the oracle loads the hardcoded records, cannot find the game master again and stops with `EOSError: System Error. Code: 2`.
+`XEDIT_ORACLE_DIR` points at the unpacked release archive of the baseline tag. The dump checks run `xDump.exe` as below; the save checks run the GUI builds as described under "Oracle save". The game is selected with a switch such as `-FO4` or `-SSE`. Masters are read from the directory of the input file, and `-D:<Data path>` is needed for every plugin but the game master: without it the oracle loads the hardcoded records, cannot find the game master again and stops with `EOSError: System Error. Code: 2`.
 
 ```
 "$XEDIT_ORACLE_DIR/xDump.exe" -FO4 -q "-D:$XEDIT_FO4_DATA" "$XEDIT_FO4_DATA\<plugin>" > dump.txt 2> dump.log
@@ -90,6 +125,7 @@ The `xEdit-llm` automation build is a secondary oracle for conflict, reference a
 | Round-trip save | input file bytes | load then save, compare bytes |
 | Conflict status | xEdit conflict export | `xedit conflicts` |
 | Cleaning | plugin saved by `-quickautoclean` | `xedit clean` |
+| Saved bytes | plugin written by a `-script:` of the GUI (`oracle/save.pas`, `oracle/edit.pas`) | `xedit save`, `xedit batch` |
 | Scripts | plugin and log after `-script:` | `xedit script run` |
 | Archives | BSArch pack output | `bsarch` pack output |
 
