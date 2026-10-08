@@ -1013,7 +1013,16 @@ pub fn run(tag: &str, args: &[&str]) -> Result<()> {
         let proc = (entry
             .create
             .with_context(|| format!("{} is not ported", case.operation))?)();
-        let extensions = proc.base().extensions.clone();
+        // The extensions of the operation, or those of the case's
+        // `ProcessedFiles` (`*.nif, *.kf`), which override them.
+        let extensions: Vec<String> = match case.settings.iter().find(|(name, _)| *name == "ProcessedFiles") {
+            Some((_, value)) => value
+                .split(',')
+                .map(|part| part.trim().trim_start_matches("*.").to_lowercase())
+                .filter(|ext| !ext.is_empty())
+                .collect(),
+            None => proc.base().extensions.clone(),
+        };
         let games: Vec<&'static Game> = proc
             .base()
             .supported_games
@@ -1077,7 +1086,13 @@ pub fn run(tag: &str, args: &[&str]) -> Result<()> {
                             .join(game.name)
                             .join(&archive_name)
                             .join(count.to_string());
-                        sample_folder(&archive, &dir, count, &extensions)?;
+                        if let Err(error) = sample_folder(&archive, &dir, count, &extensions) {
+                            say(
+                                format!("skipped       {}: {error:#}", archive_path.display()),
+                                &mut report,
+                            );
+                            continue;
+                        }
                         dir
                     }
                     None => archive_path.clone(),
