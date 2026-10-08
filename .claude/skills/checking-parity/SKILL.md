@@ -75,7 +75,7 @@ With the oracle's saves cached: 239 `equal`, 10 `refused` (7 confirmed by the or
 - `oracle-failed`: the GUI run failed (a dialog, a timeout, a hang); the detail has the reason. Nothing is cached; run the file again.
 - `port-failed`, `port-memory-limit`, `oracle-only`: as for the round trip.
 
-The oracle's result is cached as `<cache>/<tag>/<MODE>-oracle-save/<file>.<key>.saved.zst` (zstd) or `<file>.<key>.error` (the exception's message), with the script's log as `.oracle.log`; the key hashes the plugin, its masters (found through the `MAST` subrecords, recursively) and the script, so a change to `save.pas` runs the oracle again on everything. The GUI is fast: `Starfield.esm` loads and saves in about 2 minutes, the whole corpus in about an hour with `--jobs 3`, most of it the port's saves of the big masters.
+The oracle's result is cached as `<cache>/<tag>/<MODE>-oracle-save/<file>.<key>.saved.zst` (zstd) or `<file>.<key>.error` (the exception's message), with the script's log as `.oracle.log`; the key hashes the plugin, its masters (found through the `MAST` subrecords, recursively) and the script, so a change to `save.pas` runs the oracle again on everything. The script text is hashed with its line endings normalised to LF (and `.gitattributes` keeps `crates/xtask/oracle/*.pas` LF), so a CRLF checkout under `core.autocrlf` finds the same cached saves. The GUI is fast: `Starfield.esm` loads and saves in about 2 minutes, the whole corpus in about an hour with `--jobs 3`, most of it the port's saves of the big masters.
 
 How a GUI run works (`crates/xtask/src/parity/gui.rs`), and what to check when one fails:
 

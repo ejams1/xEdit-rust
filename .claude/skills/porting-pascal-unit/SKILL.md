@@ -17,7 +17,7 @@ The upstream source is a checkout of https://github.com/TES5Edit/TES5Edit at the
 6. Keep upstream names, converted to Rust case and without the `wb`/`xe` prefix: `wbIsPlugin` becomes `is_plugin`. The definition builder API is the exception and keeps the prefix (`wbStruct` becomes `wb_struct`), so that definition files stay line-for-line comparable. Keep the order of declarations the same as upstream so that an upstream diff maps onto the Rust file.
 7. Port behaviour exactly, including quirks. When upstream behaviour looks wrong, port it as it is and add a comment that starts with `UPSTREAM-QUIRK:`. Parity comes before correctness.
 8. Do not port Delphi plumbing: reference counting, interface GUIDs, memory manager calls, VCL message pumping.
-9. When the unit adds an operation a user can run, register a command in `xedit-session` and follow the `adding-a-command` skill once it exists. Set the matching entries in `coverage/ledger.toml` to `covered` with the command name.
+9. When the unit adds an operation a user can run, register a command in `xedit-session` and follow the `adding-a-command` skill. Set the matching entries in `coverage/ledger.toml` to `covered` with the command name.
 10. Add tests. Use unit tests for pure logic and a parity test (see the `checking-parity` skill) for anything that reads or writes game files.
 11. Set the unit in `upstream-map.toml` to `ported` with its `rust` path. For a partial port keep `pending` and say in `note` what is missing.
 12. Run `cargo fmt`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace` and `cargo xtask check`.

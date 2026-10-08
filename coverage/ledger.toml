@@ -1415,6 +1415,7 @@ source = "mniNavRaceLVLIsClick"
 status = "covered"
 command = "records.delete"
 source = "mniNavRemoveClick"
+note = "A record; an element of a record is elements.remove."
 
 [gui."xEdit/xeMainForm.dfm:mniNavRemoveIdenticalToMaster:OnClick"]
 status = "pending"
@@ -4201,8 +4202,10 @@ status = "pending"
 source = "_wbCopyElementToRecord"
 
 [script."xejviScriptAdapterFile:cUnit.AddMasterIfMissing:function"]
-status = "pending"
+status = "covered"
+command = "masters.add"
 source = "IwbFile_AddMasterIfMissing"
+note = "A list of one name; the command runs AddMastersIfMissing."
 
 [script."xejviScriptAdapterFile:cUnit.AddMasters:function"]
 status = "pending"
