@@ -549,8 +549,10 @@ impl ContainerBase {
         self.cnt_elements.read().unwrap().get(index).cloned()
     }
 
-    /// Port of `ReleaseElements`: the container gives up its elements.
+    /// Port of `ReleaseElements`: the container gives up its elements, and
+    /// with them the element it was created with (`csAsCreatedEmpty`).
     pub(crate) fn release_elements(&self) -> Vec<ElementRef> {
+        self.cnt_as_created_empty.store(false, Ordering::Relaxed);
         std::mem::take(&mut *self.cnt_elements.write().unwrap())
     }
 

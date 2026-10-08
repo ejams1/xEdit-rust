@@ -1,6 +1,6 @@
 ---
 name: using-xedit-cli
-description: Use when inspecting, editing or saving Bethesda plugins and save games with the native xedit CLI of this repository: loading plugins of any game from Oblivion to Starfield, listing files and records, reading a record or an element, setting the value of an element, changing or renumbering FormIDs, setting the ESM/ESL/medium/update flags of a plugin, adding, sorting and cleaning the masters of a plugin, dumping a plugin or a save like xDump, saving a loaded plugin back to disk, running several commands in one session, keeping a session loaded behind a JSON-RPC daemon (`xedit serve`) or an MCP server (`xedit mcp`).
+description: Use when inspecting, editing or saving Bethesda plugins and save games with the native xedit CLI of this repository: loading plugins of any game from Oblivion to Starfield, listing files and records, reading a record or an element, setting the value of an element, adding and removing elements and child records, copying a record into a plugin as an override or a new record, deleting a record, changing or renumbering FormIDs, setting the ESM/ESL/medium/update flags of a plugin, adding, sorting and cleaning the masters of a plugin, dumping a plugin or a save like xDump, saving a loaded plugin back to disk, running several commands in one session, keeping a session loaded behind a JSON-RPC daemon (`xedit serve`) or an MCP server (`xedit mcp`).
 ---
 
 # Using the xedit CLI
@@ -39,6 +39,10 @@ Loading is per process: every invocation loads the plugins again. `Skyrim.esm` t
 | `formids change <FormID> [<new FormID>] [--file F] [--target-file T] [--overrides] [--dry-run]` | Gives a record a new load order FormID and updates the records that refer to it (`formids.change`). Needs `--edit` unless `--dry-run`. |
 | `formids renumber [--file F] [--start HEX] [--compact] [--inject-into M] [--preserve-object-ids] [--all-or-nothing] [--dry-run]` | Renumbers the new records of a plugin (`formids.renumber`), updating the referencing records. Needs `--edit` unless `--dry-run`. |
 | `files flags [--file F] [--esm B] [--light B] [--medium B] [--update B] [--blueprint B] [--localized B] [--dry-run]` | Sets the module flags of a plugin header (`files.flags`); `--dry-run` alone reads them with the ESL, medium and update compatibility. Needs `--edit` unless `--dry-run`. |
+| `elements add <FormID> <name> [--path P] [--file F] [--dry-run]` | Adds to the record or to the container at `--path` as xEdit's "Add" does (`elements.add`): a member by name or signature, an entry of an array, or a child record of a cell, topic, worldspace or quest. Needs `--edit` unless `--dry-run`. |
+| `elements remove <FormID> <path> [--file F] [--dry-run]` | Removes an element that xEdit lets you remove (`elements.remove`). Needs `--edit` unless `--dry-run`. |
+| `records copy <FormID> --to F [--from F] [--as-new] [--deep] [--prefix T] [--suffix T] [--prefix-remove T] [--suffix-remove T] [--dry-run]` | Copies a record into a plugin as an override or a new record (`records.copy`, `CopyInto`), adding the masters it needs. Needs `--edit` unless `--dry-run`. |
+| `records delete <FormID> [--file F] [--dry-run]` | Removes the plugin's version of a record with its child group (`records.delete`, xEdit's "Remove"). Needs `--edit` unless `--dry-run`. |
 | `save [--file F] [--output PATH] [--dry-run] [--no-backup]` | Writes a loaded plugin as xEdit saves it (`files.save`). Needs the global `--edit` flag unless `--dry-run`. |
 | `masters add <name>... [--file F] [--no-sort] [--dry-run]` | Adds loaded plugins as masters (`masters.add`, `AddMastersIfMissing`) and sorts the masters by load order unless `--no-sort`. Needs `--edit` unless `--dry-run`. |
 | `masters sort [--file F] [--dry-run]` | Sorts the masters by load order (`masters.sort`, `SortMasters`). Needs `--edit` unless `--dry-run`. |
@@ -70,6 +74,28 @@ cat > edit.json <<'EOF'
 ]
 EOF
 xedit --json --edit --game sse --load "<Data>\Update.esm" batch edit.json
+```
+
+## Adding, removing and copying
+
+These commands change the structure of a plugin as the navigation menu of xEdit does ("Add", "Remove", "Copy as override into...", "Copy as new record into...", "Deep copy as override into..."). Like `elements set` they change memory only: save in the same session (`batch`, `xedit serve`, `xedit mcp`), and read the result back with `records get` before saving.
+
+- `elements add` runs xEdit's `Add(name, silent)` on the record (or on the container at `--path`). On a record, `name` is a member name or signature (`FULL`, `Model`); an existing member is returned, not doubled. On a `CELL` the signature of a placed record (`REFR`, `ACHR`, `NAVM`, `LAND`, `PGRD`) adds a new record with a new FormID of the cell's plugin to the right child group, made when missing; `INFO` does the same for a `DIAL`, `ROAD` and `CELL[x,y]` or `CELL[P]` (persistent) for a `WRLD`, and `DLBR`, `DIAL` or `SCEN` for a Fallout 4 or later `QUST`. A `LAND`, `PGRD`, `ROAD` or worldspace cell that a master has already is copied as an override instead, as upstream does. On an array, any `name` adds an entry (a number adds at that position of a subrecord array). The response has `element`, and `record` when a record was added.
+- `elements remove` removes the element only when xEdit offers "Remove" for it (`IsRemovable`): not a required member, not the last entry of an array that must keep one, not the record header; else `not_removable`. Counters along the count paths of a removed array go to zero.
+- `records copy` copies the version of the record that `--from` sees (the last loaded plugin by default) into `--to`. Without `--as-new` the copy is an override with the same load order FormID; when `--to` has the record already, the existing override is returned unchanged (`existed: true`) and nothing is copied over. With `--as-new` the record takes the next free FormID of the target (`NewFormID`, from `HEDR\Next Object ID`, which moves on) and `--prefix`, `--suffix`, `--prefix-remove`, `--suffix-remove` change its editor ID; a cell or the road of a worldspace can not be copied as new (`Can't copy record ... as new record.`). `--deep` copies the child group too (the references of a cell, the responses of a topic, the cells of a worldspace). The parents of the record come along as overrides without their contents (the worldspace and cell of a reference, the topic of a response). The response lists `required_masters` and the `missing_masters` the copy adds to the target (sorted by load order); a required master that loads after the target fails with `The required master "X" can not be added to "Y" as it has a higher load order`. The masters are reported for the record itself, not for the records of a deep copy, as upstream does.
+- A record copied into a game master or the hardcoded file fails with `not_editable` (xEdit does not edit the game master). A GMST whose editor ID changes its first letter gets its `DATA` reset by the definition's `AfterSet`, as in xEdit.
+- `records delete` removes the record of `--file` (not the version another plugin sees) with its child group. The response has `child_records`. The file header can not be removed.
+- Not ported yet: copying over an existing override (xEdit's "...with overwriting"), copying a partial form, and moving a reference between the persistent and temporary groups of its cell when its flags change.
+
+```
+cat > copy.json <<'EOF'
+[
+  {"command": "records.copy", "params": {"form_id": "0001A332", "to": "MyPatch.esp"}},
+  {"command": "elements.set", "params": {"form_id": "0001A332", "file": "MyPatch.esp", "path": "FULL", "value": "New name"}},
+  {"command": "files.save", "params": {"file": "MyPatch.esp"}}
+]
+EOF
+xedit --edit --game sse --load "<Data>\Skyrim.esm" --load "<Data>\MyPatch.esp" batch copy.json
 ```
 
 ## FormIDs and module flags
@@ -169,6 +195,6 @@ xedit --json --edit --game sse --load "<Data>\Skyrim.esm" save --no-backup --out
 
 ## Limits of this version
 
-- No adding or removing of elements from the command line beyond the member `elements set` adds, no copying of records. Sorted arrays are not sorted again after a change (also not after a FormID update of their entries), and flags are not shown as child elements.
+- Sorted arrays are not sorted again after a change or a copy (also not after a FormID update of their entries), and flags are not shown as child elements.
 - Morrowind plugins are not verified. Oblivion saves do not read (an upstream limit, see above).
 - One session per process, fixed at startup: `serve` and `mcp` cannot load other plugins later, so restart them to change the load order.

@@ -679,7 +679,12 @@ impl ValueImpl {
 
     /// The union step of `TwbContainer.AssignInternal`: the element the
     /// union was decided with goes, and the union is decided again without
-    /// data (`UnionDoInit` with `nil`), from the elements around it.
+    /// data (`UnionDoInit` with `nil`), from the elements assigned before
+    /// it.
+    /// UPSTREAM-QUIRK: upstream builds the new element over no data, and its
+    /// members take storage as they are assigned; here the element takes
+    /// storage of its default size with its default value at once
+    /// (`create_new`), so that its members exist to take the values.
     pub(super) fn union_reinit_without_data(&self) {
         if self.kind != ValueKind::Union {
             return;
@@ -688,14 +693,29 @@ impl ValueImpl {
         if self.vb.container.element_count() == 1 {
             self.vb.container.remove_element(0);
         }
-        if self.vb.container.element_count() == 0 {
-            let self_ref = self.element_ref();
-            let mut cursor = Cursor {
-                block: DataBlock::Buffer(Arc::new(Vec::new())),
-                pos: 0,
-                end: 0,
-            };
-            union_do_init(&self.vb.vb_value_def, &self_ref, &self.vb.file, &mut cursor);
+        if self.vb.container.element_count() != 0 {
+            return;
+        }
+        let self_ref = self.element_ref();
+        let Some(resolvable) = self.vb.vb_value_def.as_resolvable_def() else {
+            return;
+        };
+        let Some(mut resolved) = resolvable.resolve_def(None, Some(&self_ref)).cloned() else {
+            return;
+        };
+        if resolved.get_def_type() == DefType::dtResolvable
+            || resolved.def_base().def_flags.contains(DefFlag::dfUnionStaticResolve)
+        {
+            resolved = resolve(resolved, None, Some(&self_ref));
+        }
+        if matches!(
+            resolved.get_def_type(),
+            DefType::dtArray | DefType::dtStruct | DefType::dtStructChapter | DefType::dtUnion
+        ) {
+            match ValueImpl::create_new(&self_ref, &self.vb.file, resolved, "") {
+                Ok(element) => element.set_sort_and_memory_order(0),
+                Err(error) => crate::interface::misc::progress(&error),
+            }
         }
     }
 
