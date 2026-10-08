@@ -72,3 +72,19 @@ Callbacks that cache per-record data (tint layers, face morphs) keep their cache
 2. Add `define_<game>()` to `crates/xedit-defs/src/lib.rs` and the game to `setup_game` in `crates/xedit-session/src/dump.rs` (game name, executable name, master name, encodings of the string tables).
 3. Run the transpiler for the unit, then dump each vanilla plugin of the game and port the callbacks it hits.
 4. Produce the oracle dumps with `xDump.exe` (`checking-parity`) and compare every vanilla plugin byte for byte.
+
+## The data format units
+
+`wbDataFormatNifTypes` and `wbDataFormatNif` (NIF blocks, phase 5 step 3) declare their definitions with the builder functions of `wbDataFormat` (`dfStruct`, `dfArray`, `dfUnion`, ...), not with `wbRecord`. Their transpiler is `cargo xtask port-defs emit-df` (`crates/xtask/src/portdefs/df.rs`), which uses the same Pascal reader:
+
+```
+U=<upstream checkout>; A=crates/xedit-assets/src
+cargo run -q -p xtask -- port-defs emit-df $U wbDataFormatNifTypes $A/data_format_nif_types/defs.rs $A/data_format_nif_types/stubs.rs "$A/data_format_nif_types/callbacks.rs;$A/data_format_nif_types.rs"
+cargo run -q -p xtask -- port-defs emit-df $U wbDataFormatNif $A/data_format_nif/defs.rs $A/data_format_nif/stubs.rs "$A/data_format_nif/callbacks.rs;$A/data_format_nif.rs"
+cargo fmt
+```
+
+- Every overload of a builder becomes a function of its own: the one with the most parameters keeps the base name (`wb_vector3`), the others get their parameter names (`wb_vector3_name_events`, `wb_vector3_name`). The overloads of the `df*` functions are completed to their full form at the call (`dfFloat('X')` is `df_float("X", DataType::Float32, "", &[])`), with upstream's quirk that `dfBool(name, type, events)` drops the events.
+- `wbDefine*` procedures take the registry (`infos: &mut NiObjectInfos`); the version variables `v4002` to `v20207` are the constants `V4002` to `V20207` of `data_format_nif.rs`.
+- Callbacks (any routine whose first parameter is a `TdfElement`) are translated when they stay in a small typed subset: `nif(e).Version` and the user versions, `with nif(e) do`, `NativeValues`/`EditValues`/`Elements[...]` lookups and assignments, comparisons of variants with integers, `in [...]`, `and`/`or`/`not`, local variables, `if`, `for`, `Inc`/`Dec` and `Exit`. The rest are ported by hand in `callbacks.rs` (a `pub fn` there, or in the parent module named after the hand files, is never generated) and are stubbed until then: the stub returns the error `not ported: <name> line <n>`, so a load that reaches it fails with the name. The generator prints the routines it could not translate.
+- The generated files are formatted by `cargo fmt`; regenerate them after a transpiler change and check `git diff`.
