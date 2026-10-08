@@ -1635,6 +1635,9 @@ fn check_texture_set_slots(_: &ProcFileObject, nif: &mut NifFile, log: &mut Vec<
 /// `CheckNiAlphaProperty`.
 fn check_ni_alpha_property(_: &ProcFileObject, nif: &mut NifFile, log: &mut Vec<String>) -> R<()> {
     let tree = &mut nif.tree;
+    // The Variant temporary of `NativeValues['Shader Flags 2\Assume_Shadowmask']`:
+    // `None` is Unassigned.
+    let mut shadowmask_temp: Option<bool> = None;
     for i in 0..blocks_count(tree)? {
         let shape = block(tree, i)?;
         if !(block_is_ni_object(tree, shape, "BSTriShape", true) || block_is_ni_object(tree, shape, "NiGeometry", true))
@@ -1650,11 +1653,27 @@ fn check_ni_alpha_property(_: &ProcFileObject, nif: &mut NifFile, log: &mut Vec<
         let flags = tree.native_values(prop, "Flags")?.to_i64()? as u32;
         let alpha_blend = flags & 1 == 1;
         let shader = block_property_by_type(tree, shape, "BSShaderProperty", true)?;
-        if let Some(shader) = shader
-            && version(tree) < NifVersion::Fo4
-            && alpha_blend
-            && !flag(tree, shader, "Shader Flags 2\\Assume_Shadowmask")?
-        {
+        let Some(shader) = shader else { continue };
+        if version(tree) >= NifVersion::Fo4 {
+            continue;
+        }
+        // UPSTREAM-QUIRK: `not shader.NativeValues['Shader Flags 2\Assume_Shadowmask']`
+        // negates the hidden Variant temporary of the call in place
+        // (`VarNot`, from the machine code of `Sniff.exe`). Where the flag
+        // does not exist (the shader flags of Oblivion, Fallout 3 and New
+        // Vegas have no `Assume_Shadowmask`, or the shader type disables
+        // `Shader Flags 2`) the call leaves the temporary as it was, so it
+        // starts Unassigned in each file (`not` gives -1, true) and then
+        // flips at every shape with an alpha property and a shader: every
+        // other such shape is reported.
+        if let crate::variant::Variant::Bool(value) = tree.native_values(shader, "Shader Flags 2\\Assume_Shadowmask")? {
+            shadowmask_temp = Some(value);
+        }
+        shadowmask_temp = Some(match shadowmask_temp {
+            None => true,
+            Some(value) => !value,
+        });
+        if alpha_blend && shadowmask_temp == Some(true) {
             log.push(format!(
                 "\t{}: Blend alpha forces the object to be in single-pass mode, and can cause lighting issues if multiple lights are illuminating the object",
                 name(tree, prop)?
