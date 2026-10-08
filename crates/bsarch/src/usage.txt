@@ -1,0 +1,77 @@
+
+BSArch v1.0 x64 by zilav, ElminsterAU, Sheson
+Packer and unpacker for Bethesda Game Studios archive files
+
+The Source Code Form is subject to the terms of the Mozilla Public License, v2.0.
+If a copy of the MPL was not distributed with this file, You can obtain one at
+https://mozilla.org/MPL/2.0/
+The Source Code Form is available at https://github.com/TES5Edit/TES5Edit
+
+PACK ARCHIVE
+  BSArch.exe pack <source1+source2+...> <archive> [parameters]
+  <sources>    Path to the source folder, file or archive with file(s) to pack
+               Multiple sources can be provided using + without spaces
+               Files from later source win on matched file names
+  <archive>    Archive file name to create
+  -tes3        Morrowind archive format
+  -tes4        Oblivion archive format
+  -fo3         Fallout 3 archive format
+  -fnv         Fallout: New Vegas archive format
+  -tes5        Skyrim LE archive format (fo3/fnv/tes5 are the same)
+  -sse         Skyrim SE/AE archive format
+  -fo4         Fallout 4 General archive format
+  -fo4dds      Fallout 4 DDS archive format (streamed DDS textures mipmaps)
+               Always compress using -z parameter, game crashes otherwise
+  -sf1         Starfield General archive format
+  -sf1dds      Starfield DDS archive format (streamed DDS textures mipmaps)
+  -split:N     Split archives by N GB, 0 disables splitting
+               Don't use values larger than available free memory
+               When not set BSA archives are split by 2 GB, BA2 aren't split
+               Games before Fallout 4 have hardcoded 2 GB limit!
+  -z:type      Compress files in archive using provided compression type:
+               zlib, lz4 or lz4f
+               When type is omitted use default compression for the game
+               Strings and audio files (except .fuz) are not compressed
+  -f:filters   Pack files only matching provided mask(s) separated by comma
+  -share:yes|no Identical files will share the same data in archive to preserve space
+               "no" to disable sharing, default: yes
+  -mt:yes|no   Use available CPU cores for faster multithreaded processing
+               "no" to disable multithreading, default: yes
+  -af:value    Override archive flags with a hex value
+               Oblivion, Fallout 3/NV and Skyrim archives only
+  -ff:value    Override file flags with a hex value
+               Oblivion, Fallout 3/NV and Skyrim archives only
+
+UNPACK ARCHIVE
+  BSArch.exe unpack <archive> [folder] [parameters]
+  <archive>    Archive file name to unpack
+  [folder]     Path to the existing destination folder to unpack into
+               When not set unpack into the folder where archive is located
+  -mt:yes|no   Use available CPU cores for faster multithreaded processing
+               "no" to disable multithreading, default: yes
+
+ARCHIVE INFO
+  BSArch.exe <archive> [parameters]
+  <archive>    Archive file name
+  -list        Show files list
+  -dump        Extended dump
+
+EXAMPLES
+  If <folder> or <archive> include spaces then embed them in quotes
+
+  * Create Skyrim SE/AE compressed archive with meshes only, split by 2 GB
+      BSArch pack "d:\Skyrim AE\data" "d:\Skyrim AE\data\new.bsa" -sse -z -f:*.nif,*.hkx
+  * Create Fallout NV uncompressed archive from multiple folders using custom flags, split by 2 GB
+      BSArch pack "c:\FNV files\meshes"+d:\new\textures "d:\somewhere\mod.bsa" -fnv -af:0x83 -ff:0x113
+  * Merge archives and overwrite with files from folder, compress with lz4, split by 4 GB
+      BSArch pack "d:\mod\main.ba2"+"d:\mod\update.ba2"+"d:\mod\data" "d:\mod\new.ba2" -sf1 -z:lz4 -split:4
+  * Decompress archive (repack without compression)
+      BSArch pack "e:\Oblivion\Data\Textures - Compressed.bsa" "e:\Oblivion\Data\Textures.bsa" -tes4
+  * Unpack archive into the same folder where archive is located
+      BSArch unpack d:\mymod\new.bsa
+  * Unpack archive into the specified folder
+      BSArch unpack d:\mymod\new.bsa "d:\unpacked archive\data"
+  * Show archive info including hex flags values to be used with -af and -ff
+      BSArch d:\somepath\somefile.bsa
+  * Dump extended files information from archive
+      BSArch "d:\game\mod - main.bsa" -dump
