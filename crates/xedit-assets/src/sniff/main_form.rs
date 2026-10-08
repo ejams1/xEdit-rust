@@ -93,7 +93,10 @@ pub struct RunOptions {
 
 /// A receiver of the outputs of a run (`RunOptions::sink`).
 #[derive(Clone)]
-pub struct OutputSink(pub std::sync::Arc<dyn Fn(&str, &[u8]) + Send + Sync>);
+pub struct OutputSink(pub std::sync::Arc<OutputFn>);
+
+/// The function of an [`OutputSink`]: the path and the bytes of an output.
+pub type OutputFn = dyn Fn(&str, &[u8]) + Send + Sync;
 
 impl std::fmt::Debug for OutputSink {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

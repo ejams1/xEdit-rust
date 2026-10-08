@@ -242,20 +242,25 @@ status = "pending"
 source = "lblInfoMetricsClick"
 
 [gui."Sniff/Proc/ProcCheckForErrors.dfm:lvChecks:OnSelectItem"]
-status = "pending"
+status = "presentation"
 source = "lvChecksSelectItem"
+note = "Enables, fills or browses controls of the frame; sniff.run takes the settings."
 
 [gui."Sniff/Proc/ProcCheckForErrors.dfm:mniCheckAll:OnClick"]
-status = "pending"
+status = "presentation"
 source = "mniCheckAllClick"
+note = "Enables, fills or browses controls of the frame; sniff.run takes the settings."
 
 [gui."Sniff/Proc/ProcCheckForErrors.dfm:mniUncheckAll:OnClick"]
-status = "pending"
+status = "presentation"
 source = "mniCheckAllClick"
+note = "Enables, fills or browses controls of the frame; sniff.run takes the settings."
 
 [gui."Sniff/Proc/ProcConvertRootNode.dfm:cmbNodeFrom:OnSelect"]
-status = "pending"
+status = "covered"
 source = "cmbNodeFromSelect"
+command = "sniff.run"
+note = "The types a block type converts to (sNodeFrom, sNodeTo)."
 
 [gui."Sniff/Proc/ProcCopyControlledBlocks.dfm:btnBrowse:OnClick"]
 status = "pending"
@@ -266,8 +271,9 @@ status = "pending"
 source = "btnBrowseClick"
 
 [gui."Sniff/Proc/ProcCopyPriorities.dfm:btnBrowse:OnClick"]
-status = "pending"
+status = "presentation"
 source = "btnBrowseClick"
+note = "Enables, fills or browses controls of the frame; sniff.run takes the settings."
 
 [gui."Sniff/Proc/ProcFindTextures.dfm:edFormatFilter:OnChange"]
 status = "pending"
@@ -286,36 +292,49 @@ status = "pending"
 source = "mniCheckAllClick"
 
 [gui."Sniff/Proc/ProcHavokSearchMaterial.dfm:edReplace:OnChange"]
-status = "pending"
+status = "covered"
 source = "rbTES5Click"
+command = "sniff.run"
+note = "The materials of the game (iGame) and the filters (sFilterSearch, sFilterReplace) that bound the chosen materials."
 
 [gui."Sniff/Proc/ProcHavokSearchMaterial.dfm:edSearch:OnChange"]
-status = "pending"
+status = "covered"
 source = "rbTES5Click"
+command = "sniff.run"
+note = "The materials of the game (iGame) and the filters (sFilterSearch, sFilterReplace) that bound the chosen materials."
 
 [gui."Sniff/Proc/ProcHavokSearchMaterial.dfm:rbFO3:OnClick"]
-status = "pending"
+status = "covered"
 source = "rbTES5Click"
+command = "sniff.run"
+note = "The materials of the game (iGame) and the filters (sFilterSearch, sFilterReplace) that bound the chosen materials."
 
 [gui."Sniff/Proc/ProcHavokSearchMaterial.dfm:rbTES4:OnClick"]
-status = "pending"
+status = "covered"
 source = "rbTES5Click"
+command = "sniff.run"
+note = "The materials of the game (iGame) and the filters (sFilterSearch, sFilterReplace) that bound the chosen materials."
 
 [gui."Sniff/Proc/ProcHavokSearchMaterial.dfm:rbTES5:OnClick"]
-status = "pending"
+status = "covered"
 source = "rbTES5Click"
+command = "sniff.run"
+note = "The materials of the game (iGame) and the filters (sFilterSearch, sFilterReplace) that bound the chosen materials."
 
 [gui."Sniff/Proc/ProcHavokSettingsUpdate.dfm:edSettings:OnGetPickList"]
-status = "pending"
+status = "presentation"
 source = "edSettingsGetPickList"
+note = "Enables, fills or browses controls of the frame; sniff.run takes the settings."
 
 [gui."Sniff/Proc/ProcJsonConverter.dfm:rbFromJson:OnClick"]
-status = "pending"
+status = "presentation"
 source = "rbToJsonClick"
+note = "Enables, fills or browses controls of the frame; sniff.run takes the settings."
 
 [gui."Sniff/Proc/ProcJsonConverter.dfm:rbToJson:OnClick"]
-status = "pending"
+status = "presentation"
 source = "rbToJsonClick"
+note = "Enables, fills or browses controls of the frame; sniff.run takes the settings."
 
 [gui."Sniff/Proc/ProcOptimize.dfm:chkStripify:OnClick"]
 status = "pending"
@@ -330,32 +349,40 @@ status = "pending"
 source = "lblInfoClick"
 
 [gui."Sniff/Proc/ProcShaderFlagsUpdate.dfm:cmbGame:OnSelect"]
-status = "pending"
+status = "covered"
 source = "cmbGameSelect"
+command = "sniff.run"
+note = "The flag lists of the game (iGame) that bound iFlags and iFlags2."
 
 [gui."Sniff/Proc/ProcUniversalFixer.dfm:btnBrowse:OnClick"]
-status = "pending"
+status = "presentation"
 source = "btnBrowseClick"
+note = "Enables, fills or browses controls of the frame; sniff.run takes the settings."
 
 [gui."Sniff/Proc/ProcUniversalTweaker.dfm:btnPreset:OnClick"]
-status = "pending"
+status = "presentation"
 source = "btnPresetClick"
+note = "The presets fill the controls of the frame; sniff.run takes the settings themselves."
 
 [gui."Sniff/Proc/ProcUniversalTweaker.dfm:chkOldValueCheck:OnClick"]
-status = "pending"
+status = "presentation"
 source = "chkOldValueCheckClick"
+note = "Enables, fills or browses controls of the frame; sniff.run takes the settings."
 
 [gui."Sniff/Proc/ProcUniversalTweaker.dfm:edPath:OnChange"]
-status = "pending"
+status = "presentation"
 source = "edPathChange"
+note = "Enables, fills or browses controls of the frame; sniff.run takes the settings."
 
 [gui."Sniff/Proc/ProcUniversalTweaker.dfm:miPresetAdd:OnClick"]
-status = "pending"
+status = "presentation"
 source = "miPresetAddClick"
+note = "The presets fill the controls of the frame; sniff.run takes the settings themselves."
 
 [gui."Sniff/Proc/ProcUniversalTweaker.dfm:miPresetRemove:OnClick"]
-status = "pending"
+status = "presentation"
 source = "miPresetRemoveClick"
+note = "The presets fill the controls of the frame; sniff.run takes the settings themselves."
 
 [gui."Sniff/Proc/ProcVertexPaint.dfm:btnColor2Select:OnClick"]
 status = "pending"
@@ -386,64 +413,86 @@ status = "pending"
 source = "rbSetColorsClick"
 
 [gui."Sniff/frmMain.dfm:FormMain:OnClose"]
-status = "pending"
+status = "presentation"
 source = "FormClose"
+note = "Window, browse dialogs and tabs of the GUI."
 
 [gui."Sniff/frmMain.dfm:FormMain:OnCreate"]
-status = "pending"
+status = "covered"
 source = "FormCreate"
+command = "sniff.run"
+note = "The automation mode: the list of operations (sniff.list), the settings and the command line."
 
 [gui."Sniff/frmMain.dfm:FormMain:OnShow"]
-status = "pending"
+status = "presentation"
 source = "FormShow"
+note = "Window, browse dialogs and tabs of the GUI."
 
 [gui."Sniff/frmMain.dfm:btnExit:OnClick"]
-status = "pending"
+status = "presentation"
 source = "btnExitClick"
+note = "Window, browse dialogs and tabs of the GUI."
 
 [gui."Sniff/frmMain.dfm:btnInputBrowse:OnClick"]
-status = "pending"
+status = "presentation"
 source = "btnInputBrowseClick"
+note = "Window, browse dialogs and tabs of the GUI."
 
 [gui."Sniff/frmMain.dfm:btnOutputBrowse:OnClick"]
-status = "pending"
+status = "presentation"
 source = "btnOutputBrowseClick"
+note = "Window, browse dialogs and tabs of the GUI."
 
 [gui."Sniff/frmMain.dfm:btnProcess:OnClick"]
-status = "pending"
+status = "covered"
 source = "btnProcessClick"
+command = "sniff.run"
+note = "The run of the automation mode; the confirmation dialog and the drag and drop are presentation."
 
 [gui."Sniff/frmMain.dfm:cmbProcGame:OnClick"]
-status = "pending"
+status = "covered"
 source = "edProcFilterChange"
+command = "sniff.list"
+note = "The filter of the list by game and name; sniff.list returns the games of each operation."
 
 [gui."Sniff/frmMain.dfm:edProcFilter:OnChange"]
-status = "pending"
+status = "covered"
 source = "edProcFilterChange"
+command = "sniff.list"
+note = "The filter of the list by game and name; sniff.list returns the games of each operation."
 
 [gui."Sniff/frmMain.dfm:lblProcessedFiles:OnClick"]
-status = "pending"
+status = "covered"
 source = "lblProcessedFilesTitleClick"
+command = "sniff.run"
+note = "The file masks are the ProcessedFiles setting of the operation."
 
 [gui."Sniff/frmMain.dfm:lblProcessedFilesTitle:OnClick"]
-status = "pending"
+status = "covered"
 source = "lblProcessedFilesTitleClick"
+command = "sniff.run"
+note = "The file masks are the ProcessedFiles setting of the operation."
 
 [gui."Sniff/frmMain.dfm:lvProcs:OnSelectItem"]
-status = "pending"
+status = "covered"
 source = "lvProcsSelectItem"
+command = "sniff.run"
+note = "Choosing the operation and reading its settings section (ProcessedFiles, OnShow)."
 
 [gui."Sniff/frmMain.dfm:mniInputArchive:OnClick"]
-status = "pending"
+status = "presentation"
 source = "mniInputArchiveClick"
+note = "Window, browse dialogs and tabs of the GUI."
 
 [gui."Sniff/frmMain.dfm:mniInputFolder:OnClick"]
-status = "pending"
+status = "presentation"
 source = "mniInputFolderClick"
+note = "Window, browse dialogs and tabs of the GUI."
 
 [gui."Sniff/frmMain.dfm:tcMain:OnChange"]
-status = "pending"
+status = "presentation"
 source = "tcMainChange"
+note = "Window, browse dialogs and tabs of the GUI."
 
 [gui."Sniff/frmVertexPaintHelper.dfm:FormVertexPaintHelper:OnKeyDown"]
 status = "pending"
@@ -2688,8 +2737,10 @@ status = "pending"
 source = "Tools/TreeLodBillboardCreator/treelod.dpr"
 
 [switch.all]
-status = "pending"
+status = "covered"
 source = "Sniff/frmMain.pas"
+command = "sniff.run"
+note = "The sniff binary takes -all: as Sniff.exe does; sniff.run takes it as a parameter."
 
 [switch.allbsa]
 status = "pending"
@@ -2945,8 +2996,10 @@ status = "pending"
 source = "xEdit/xeInit.pas"
 
 [switch.i]
-status = "pending"
+status = "covered"
 source = "Sniff/frmMain.pas"
+command = "sniff.run"
+note = "The sniff binary takes -I: as Sniff.exe does; sniff.run takes it as a parameter."
 
 [switch.ignoreesl]
 status = "pending"
@@ -2991,8 +3044,10 @@ command = "archive.list"
 note = "bsarch accepts -list as BSArch does; xedit archive list --files lists the files."
 
 [switch.log]
-status = "pending"
+status = "covered"
 source = "Sniff/frmMain.pas"
+command = "sniff.run"
+note = "The sniff binary takes -LOG: as Sniff.exe does; sniff.run takes it as a parameter."
 
 [switch.m]
 status = "pending"
@@ -3065,16 +3120,22 @@ status = "pending"
 source = "xEdit/xeInit.pas"
 
 [switch.o]
-status = "pending"
+status = "covered"
 source = "Sniff/frmMain.pas"
+command = "sniff.run"
+note = "The sniff binary takes -O: as Sniff.exe does; sniff.run takes it as a parameter."
 
 [switch.op]
-status = "pending"
+status = "covered"
 source = "Sniff/frmMain.pas"
+command = "sniff.run"
+note = "The sniff binary takes -OP: as Sniff.exe does; sniff.run takes it as a parameter."
 
 [switch.p]
-status = "pending"
+status = "covered"
 source = "Sniff/frmMain.pas"
+command = "sniff.run"
+note = "The sniff binary takes -P: as Sniff.exe does; sniff.run takes it as a parameter."
 
 [switch.pseudoesl]
 status = "pending"
@@ -3145,8 +3206,10 @@ status = "pending"
 source = "xEdit/xeInit.pas"
 
 [switch.s]
-status = "pending"
+status = "covered"
 source = "Sniff/frmMain.pas"
+command = "sniff.run"
+note = "The sniff binary takes -S: as Sniff.exe does; sniff.run takes it as a parameter."
 
 [switch.script]
 status = "pending"
@@ -3182,8 +3245,10 @@ status = "pending"
 source = "xEdit/xeInit.pas"
 
 [switch.skip]
-status = "pending"
+status = "covered"
 source = "Sniff/frmMain.pas"
+command = "sniff.run"
+note = "The sniff binary takes -skip: as Sniff.exe does; sniff.run takes it as a parameter."
 
 [switch.skipbsa]
 status = "pending"
@@ -3234,8 +3299,10 @@ status = "pending"
 source = "xEdit/xeInit.pas"
 
 [switch.subdir]
-status = "pending"
+status = "covered"
 source = "Sniff/frmMain.pas"
+command = "sniff.run"
+note = "The sniff binary takes -subdir: as Sniff.exe does; sniff.run takes it as a parameter."
 
 [switch.summary]
 status = "pending"
@@ -3268,8 +3335,10 @@ status = "pending"
 source = "xEdit/xeInit.pas"
 
 [switch.threads]
-status = "pending"
+status = "covered"
 source = "Sniff/frmMain.pas"
+command = "sniff.run"
+note = "The sniff binary takes -threads: as Sniff.exe does; sniff.run takes it as a parameter."
 
 [switch.top]
 status = "pending"

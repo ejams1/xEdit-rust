@@ -9,6 +9,9 @@
 //! the operations in the order of the main form, with the ones not ported
 //! yet.
 
+// The processors are made as upstream constructs them, by `new`.
+#![allow(clippy::new_without_default)]
+
 pub mod main_form;
 pub mod perl_regex;
 pub mod processor;

@@ -129,7 +129,7 @@ impl Proc for ProcUnweldedVertices {
                 verts = vec![[0.0; 3]; tree.count(entries) as usize];
                 // The bytes of the array as singles.
                 let data = tree.save_to_data(entries)?;
-                for (index, chunk) in data.chunks_exact(4).enumerate() {
+                for (index, chunk) in data.as_chunks::<4>().0.iter().enumerate() {
                     if let Some(vertex) = verts.get_mut(index / 3) {
                         vertex[index % 3] = f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]);
                     }

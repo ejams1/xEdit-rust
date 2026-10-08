@@ -235,7 +235,7 @@ mod tests {
         assert_eq!(re.replace_all("  name ", ""), (true, "name".to_owned()));
         let re = PerlRegEx::new("b").unwrap();
         assert_eq!(re.replace_all("abc", "[$&\\$$`$']$"), (true, "a[b$ac]$c".to_owned()));
-        assert_eq!(re.replace_all("xyz", "q").0, false);
+        assert!(!re.replace_all("xyz", "q").0);
         let re = PerlRegEx::new("(?P<x>b)(c)").unwrap();
         assert_eq!(re.replace_all("abcd", "${x}\\2\\u1"), (true, "abcBd".to_owned()));
     }
