@@ -1,0 +1,14 @@
+[package]
+name = "xedit-assets"
+version = "0.1.0"
+description = "NIF, material and the other asset formats of xEdit"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+thiserror = "2.0.21"
+xedit-core = { path = "../xedit-core" }
+
+[dev-dependencies]
+xedit-io = { path = "../xedit-io" }

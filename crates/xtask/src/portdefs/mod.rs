@@ -14,6 +14,7 @@
 // The Rust output will use the parts that nothing reads yet.
 #![allow(dead_code)]
 
+pub mod df;
 pub mod emit;
 pub mod model;
 pub mod resolve;
@@ -47,6 +48,13 @@ pub fn run(args: &[&str]) -> Result<()> {
         ["resolve", upstream, unit] => resolve_definitions(Path::new(upstream), unit),
         ["emit", upstream, out] => emit_builders(Path::new(upstream), Path::new(out)),
         ["emit-signatures", upstream, out] => emit_signatures(Path::new(upstream), Path::new(out)),
+        ["emit-df", upstream, unit, out, stubs, hand] => df::emit_df(
+            Path::new(upstream),
+            unit,
+            Path::new(out),
+            Path::new(stubs),
+            Path::new(hand),
+        ),
         ["emit-unit", upstream, unit, out, stubs] => {
             emit_unit(Path::new(upstream), unit, Path::new(out), Path::new(stubs), None)
         }
