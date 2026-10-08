@@ -1117,6 +1117,7 @@ dependencies = [
  "schemars",
  "serde",
  "serde_json",
+ "xedit-assets",
  "xedit-core",
  "xedit-defs",
  "xedit-io",

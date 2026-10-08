@@ -115,6 +115,11 @@ enum Action {
         /// Path of the plugin.
         file: String,
     },
+    /// NIF and KF meshes, BGSM and BGEM materials, LOD, FUZ and DDS files, loose or in an archive.
+    Assets {
+        #[command(subcommand)]
+        action: AssetsAction,
+    },
     /// Run a command by name.
     Call {
         /// Command name as listed by `xedit schema`, for example system.version.
@@ -139,6 +144,98 @@ enum Action {
     },
     /// Serve the commands as Model Context Protocol tools on stdio. The plugins load when the first tool is called.
     Mcp,
+}
+
+#[derive(Subcommand)]
+enum AssetsAction {
+    /// Print a file as text (ToText) or JSON (ToJSON, as Sniff writes it).
+    Dump {
+        /// The file, or the archive that holds it.
+        file: String,
+        /// The path of the file inside the archive FILE.
+        #[arg(long)]
+        archive_path: Option<String>,
+        /// The format of the file: nif, bgsm, bgem, lod, dlodsettings, lst, btt, fuz or dds; by the extension when omitted.
+        #[arg(long)]
+        kind: Option<String>,
+        /// text or json.
+        #[arg(long)]
+        format: Option<String>,
+        /// Decimals of the float values, 6 to 16.
+        #[arg(long)]
+        decimals: Option<usize>,
+        /// Rotations as Euler angles in degrees instead of an angle and an axis.
+        #[arg(long)]
+        euler: bool,
+    },
+    /// List the blocks of a NIF file.
+    Blocks {
+        /// The file, or the archive that holds it.
+        file: String,
+        /// The path of the file inside the archive FILE.
+        #[arg(long)]
+        archive_path: Option<String>,
+        /// The format of the file; by the extension when omitted.
+        #[arg(long)]
+        kind: Option<String>,
+    },
+    /// List the NIF block types.
+    Types,
+    /// Load a file and write it back as xEdit saves it.
+    Save {
+        /// The file, or the archive that holds it.
+        file: String,
+        /// Path to write to.
+        #[arg(long)]
+        output: String,
+        /// The path of the file inside the archive FILE.
+        #[arg(long)]
+        archive_path: Option<String>,
+        /// The format of the file; by the extension when omitted.
+        #[arg(long)]
+        kind: Option<String>,
+        /// Build the file and report it, but write nothing.
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Set a value of a file and write it.
+    Set {
+        /// The file, or the archive that holds it.
+        file: String,
+        /// Path of the element, with \ between the names, below BLOCK for a NIF.
+        path: String,
+        /// The new value as the dump prints it.
+        value: String,
+        /// Path to write to.
+        #[arg(long)]
+        output: String,
+        /// For a NIF: header, footer, a block index or a block path.
+        #[arg(long)]
+        block: Option<String>,
+        /// The path of the file inside the archive FILE.
+        #[arg(long)]
+        archive_path: Option<String>,
+        /// The format of the file; by the extension when omitted.
+        #[arg(long)]
+        kind: Option<String>,
+        /// Report the value before and after, but write nothing.
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Build a file from its JSON form and write it.
+    FromJson {
+        /// The JSON file.
+        file: String,
+        /// Path to write to.
+        #[arg(long)]
+        output: String,
+        /// The format to build; by the extension before .json when omitted.
+        #[arg(long)]
+        kind: Option<String>,
+        /// Build the file and report it, but write nothing.
+        #[arg(long)]
+        dry_run: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -740,6 +837,67 @@ fn command_of(action: Action) -> Result<(String, Value), CommandError> {
             "files.save".to_owned(),
             json!({ "file": file, "output": output, "dry_run": dry_run, "backup": !no_backup }),
         ),
+        Action::Assets { action } => match action {
+            AssetsAction::Dump {
+                file,
+                archive_path,
+                kind,
+                format,
+                decimals,
+                euler,
+            } => (
+                "assets.dump".to_owned(),
+                json!({ "file": file, "archive_path": archive_path, "kind": kind, "format": format, "decimals": decimals, "euler": euler }),
+            ),
+            AssetsAction::Blocks {
+                file,
+                archive_path,
+                kind,
+            } => (
+                "assets.blocks".to_owned(),
+                json!({ "file": file, "archive_path": archive_path, "kind": kind }),
+            ),
+            AssetsAction::Types => ("assets.types".to_owned(), json!({})),
+            AssetsAction::Save {
+                file,
+                output,
+                archive_path,
+                kind,
+                dry_run,
+            } => (
+                "assets.save".to_owned(),
+                json!({ "file": file, "output": output, "archive_path": archive_path, "kind": kind, "dry_run": dry_run }),
+            ),
+            AssetsAction::Set {
+                file,
+                path,
+                value,
+                output,
+                block,
+                archive_path,
+                kind,
+                dry_run,
+            } => (
+                "assets.set".to_owned(),
+                json!({
+                    "file": file,
+                    "edits": [{ "block": block, "path": path, "value": value }],
+                    "output": output,
+                    "archive_path": archive_path,
+                    "kind": kind,
+                    "dry_run": dry_run,
+                }),
+            ),
+            AssetsAction::FromJson {
+                file,
+                output,
+                kind,
+                dry_run,
+            } => (
+                "assets.from-json".to_owned(),
+                json!({ "file": file, "output": output, "kind": kind, "dry_run": dry_run }),
+            ),
+        },
         Action::Call { name, params } => {
             let params = serde_json::from_str(&params)
                 .map_err(|e| CommandError::new("invalid_params", format!("--params is not valid JSON: {e}")))?;

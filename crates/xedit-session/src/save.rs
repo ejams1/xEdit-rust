@@ -252,7 +252,7 @@ fn backup(target: &Path) -> Result<String, CommandError> {
 
 /// Writes `bytes` to a temporary file next to `target` and renames it over
 /// `target`, so that a failure leaves the old file in place.
-fn write_atomically(target: &Path, bytes: &[u8]) -> Result<(), CommandError> {
+pub(crate) fn write_atomically(target: &Path, bytes: &[u8]) -> Result<(), CommandError> {
     let io = |path: &Path, error: std::io::Error| CommandError::new("io", format!("{}: {error}", path.display()));
     if let Some(parent) = target.parent()
         && !parent.as_os_str().is_empty()

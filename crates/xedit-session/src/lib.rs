@@ -9,6 +9,7 @@
 //! covers the same set of operations.
 
 pub mod archive;
+pub mod assets;
 pub mod batch;
 pub mod commands;
 pub mod dump;
@@ -125,6 +126,7 @@ impl Registry {
         masters::register(&mut registry);
         formids::register(&mut registry);
         archive::register(&mut registry);
+        assets::register(&mut registry);
         registry
     }
 

@@ -495,10 +495,7 @@ pub fn tris2_indices(tris: &[Triangle]) -> Vec<u32> {
 
 /// `Indices2Tris`.
 pub fn indices2_tris(indices: &[u32]) -> Vec<Triangle> {
-    indices
-        .chunks_exact(3)
-        .map(|chunk| [chunk[0], chunk[1], chunk[2]])
-        .collect()
+    indices.as_chunks::<3>().0.to_vec()
 }
 
 /// `Indices2Strip`.
@@ -802,7 +799,7 @@ mod tests {
 
     #[test]
     fn strips_drop_degenerate_triangles() {
-        assert_eq!(triangulate_strip(&[0, 1, 2, 2, 3, 4]), vec![[0, 1, 2], [2, 3, 4]]);
+        assert_eq!(triangulate_strip(&[0, 1, 2, 2, 3, 4]), vec![[0, 1, 2], [2, 4, 3]]);
         assert_eq!(triangulate_strip(&[0, 1, 2, 3]), vec![[0, 1, 2], [1, 3, 2]]);
     }
 }
