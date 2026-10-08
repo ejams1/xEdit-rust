@@ -5730,20 +5730,28 @@ status = "pending"
 source = "Misc_LocalizationGetStringsFromFile"
 
 [script."xejviScriptAdapterResource:cUnit.NifBlockList:function"]
-status = "pending"
+status = "covered"
+command = "assets.scan"
 source = "NifUtils_NifBlockList"
+note = "what = blocks"
 
 [script."xejviScriptAdapterResource:cUnit.NifTextureList:function"]
-status = "pending"
+status = "covered"
+command = "assets.scan"
 source = "NifUtils_NifTextureList"
+note = "what = textures"
 
 [script."xejviScriptAdapterResource:cUnit.NifTextureListResource:function"]
-status = "pending"
+status = "covered"
+command = "assets.scan"
 source = "NifUtils_NifTextureListResource"
+note = "what = textures; the container is the archive of file and archive_path"
 
 [script."xejviScriptAdapterResource:cUnit.NifTextureListUVRange:function"]
-status = "pending"
+status = "covered"
+command = "assets.scan"
 source = "NifUtils_NifTextureListUVRange"
+note = "what = textures with uv_range"
 
 [script."xejviScriptAdapterResource:cUnit.ResourceContainerList:function"]
 status = "pending"

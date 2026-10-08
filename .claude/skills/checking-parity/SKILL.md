@@ -95,6 +95,23 @@ How a GUI run works (`crates/xtask/src/parity/gui.rs`), and what to check when o
 
 The other checks of the table below are added to `crates/xtask/src/parity.rs` in the phase that ports the feature.
 
+### NIF and materials
+
+```
+cargo xtask parity nif [--game <game>]... [--archive <name part>]... [--file <path part>] [--threads <n>] [--keep]
+cargo xtask parity nif --text [--sample <n>] ...
+cargo xtask parity nif --from-json [--sample <n>] ...
+```
+
+Run it from a release build (`cargo build --release -p xtask`, then `target/release/xtask parity nif ...`): the port side runs in the harness process. It reads every archive of the selected games' data folders with the port's archive reader (texture and sound archives hold none of the files and are skipped) and checks every `.nif`, `.kf`, `.bgsm` and `.bgem` in them against `Sniff.exe` of the release in its automation mode (`-OP:<operation> -I:<archive> -O:<folder> -S:<settings ini> -LOG:<file> -skip:yes -threads:<n>`; the settings ini holds the operation's options under its storage section, the title without spaces). Two Sniff runs per archive are the oracle:
+
+- the dump: `Convert to and from JSON` writes each NIF and KF as `ToJSON` with six decimals and rotations as angle and axis (`[ConverttoandfromJSON] bToJson=1 sDigits=6 iRotation=0`). Sniff writes the text with a `TStringStream`, which encodes it in the system's ANSI code page, so the port's JSON is compared after the same conversion (characters outside it become `?`).
+- the save: `Universal tweaker` with `sBlocks=NiHeader sPath=Num Blocks sValue=99999` changes a value that `SaveToData` recomputes (`UpdateHeader`), so the written NIF is a plain load and save. A material has no `Num Blocks`; the tweaker still counts it as changed and writes it, because `TdfElement.GetEditValues` leaves its string result unassigned for a missing element and Delphi passes the caller's variable as that result: the old value is read into an empty string and the new one into the variable that holds the new text.
+
+The oracle's outputs are reduced to an FNV-1a hash per file (and the exception message of a file Sniff skipped) and cached as `<cache>/<tag>/nif-oracle/<game>/<archive>-<size>-<hash>.tsv`, keyed by the archive's name, size and a hash of its first and last megabyte. Sniff's threads share state: rarely a file fails with an access violation among the others and reads fine alone, so a cached crash is run again on its own (`-P:<path> -threads:1`) before it counts. A file whose output differs is written to `<scratch>/<tag>/nif-diff/<game>/<archive>/` (`<name>.port.json`, `<name>.port`); `--file <path part>` with a fresh Sniff run of the archive (delete its `.tsv`, or run Sniff by hand with `-P:`) gives the oracle's side. The outcomes per file are `equal` (dump and save), `equal-error` (both refuse the file with the same message: Fallout 76 and Starfield meshes, `Unknown NIF version`), `dump-different`, `save-different`, `port-failed`, `oracle-failed` and `oracle-missing`; the report is `<scratch>/<tag>/nif-report.txt`.
+
+`--text` covers what Sniff does not: the GUI build runs `crates/xtask/oracle/dataformat.pas` through its script adapter of the data format units (in FO4 mode on an empty plugin the harness writes), which writes `ToText` and `SaveToFile` of every material, LOD settings and tree LOD file of the corpus and of the first `--sample` (default 20) NIF and FUZ files of each archive, and `dfCalcHash` of every element name of the definitions; the port's text is compared as `TStringList.SaveToFile` writes it (CRLF lines, ANSI). `--from-json` builds NIFs back from the port's JSON dumps of the first `--sample` NIFs of each archive, with Sniff's `Convert to and from JSON` in the other direction and with the port's `FromJSON`, and compares the bytes.
+
 ## Running the oracle
 
 `XEDIT_ORACLE_DIR` points at the unpacked release archive of the baseline tag. The dump checks run `xDump.exe` as below; the save checks run the GUI builds as described under "Oracle save". The game is selected with a switch such as `-FO4` or `-SSE`. Masters are read from the directory of the input file, and `-D:<Data path>` is needed for every plugin but the game master: without it the oracle loads the hardcoded records, cannot find the game master again and stops with `EOSError: System Error. Code: 2`.
@@ -128,6 +145,7 @@ The `xEdit-llm` automation build is a secondary oracle for conflict, reference a
 | Saved bytes | plugin written by a `-script:` of the GUI (`oracle/save.pas`, `oracle/edit.pas`) | `xedit save`, `xedit batch` |
 | Scripts | plugin and log after `-script:` | `xedit script run` |
 | Archives | BSArch pack output | `bsarch` pack output |
+| NIF and material dumps and saves | `Sniff.exe` JSON converter and universal tweaker; the GUI's script adapter for text dumps | `cargo xtask parity nif` (in process) |
 
 ## Investigating a difference
 
@@ -137,6 +155,8 @@ The `xEdit-llm` automation build is a secondary oracle for conflict, reference a
 4. Never change expected output to match the port.
 
 ## Quirks found and reproduced
+
+- **Name hashes.** The data format units find an element by comparing `dfCalcHash` of the names only (`HashName` of the ANSI string): each character in lower case is xored into the sum, which is then rotated left by five bits. `parity nif --text` compares it on the 1596 element names of the definitions.
 
 - **Float rounding.** `xDump.exe` 4.1.5q binds `IntPower(10, ADigit)` in `RoundToEx` to the `Single` overload, so a value is divided by and multiplied with the single-precision `10^-digits` in double precision, and 64-bit `FloatToDecimal` scales the result by a power of ten in double precision into an 18 digit mantissa before rounding to the decimals. `delphi.rs` reproduces both (`int_power_single`, `round_to_ex`, `float_to_decimal`). `make_float_probe.py <out.esp>` writes a plugin of 1800 GMST floats to probe the oracle (`xDump.exe -SSE -q -D:<dir> <out.esp>`), and `angle_probe.py <plugin> <oracle dump>` pairs the oracle's REFR rotation lines with the raw radians; both agree with the port. Upstream's `TwoPi` is `2 * Single(3.1415927)` (`TWO_PI` in `constructors.rs`). The rounding helpers were found by disassembling `xDump.exe` with `capstone`: `RoundToEx` loads `10.0` as a single before calling `IntPower`, and `Round` is a plain `cvtsd2si`.
 - **Length-prefixed strings read past their data.** `TwbLenStringDef.ToStringInternal` limits the text to the length of the whole data, prefix included, so a stored length larger than the data reads up to the prefix's bytes past the end of the element, out of the bytes that follow it in the file. A Fallout New Vegas save's dialogue `Response Text` showed it. `len_string.rs` reads those bytes from the block of the data container (`bytes_after` in `element.rs`).
