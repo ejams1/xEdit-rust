@@ -99,7 +99,7 @@ fn write(text: &str) {
 /// `WriteLn`.
 fn write_line(text: &str) {
     let mut out = output().lock().expect("output lock");
-    let _ = out.write_all(text.as_bytes());
+    let _ = out.write_all(line_ends(text).as_bytes());
     let _ = out.write_all(NEWLINE.as_bytes());
 }
 
@@ -195,7 +195,7 @@ fn round_half_even(value: f64) -> i64 {
 /// every hundredth step (at least every tenth) and after the last one.
 fn show_progress(processed: usize, count: usize) {
     let step = (count / 100).max(10);
-    if processed % step == 0 || processed + 1 == count {
+    if processed.is_multiple_of(step) || processed + 1 == count {
         write(&format!(
             "\r{}%",
             round_half_even((processed + 1) as f64 / count as f64 * 100.0)
@@ -347,7 +347,9 @@ fn do_pack(args: &[String]) -> Result<u8, Failure> {
 
     packer.set_share_data(!find_param(args, "share").is_some_and(|value| value.eq_ignore_ascii_case("no")));
     let multi_threaded = !find_param(args, "mt").is_some_and(|value| value.eq_ignore_ascii_case("no"));
-    packer.set_threads(if multi_threaded { 0 } else { 1 });
+    // EXTENSION: `-threads:N` sets the number of threads; the archives do not depend on it.
+    let threads = find_param(args, "threads").and_then(|value| value.trim().parse::<usize>().ok());
+    packer.set_threads(if multi_threaded { threads.unwrap_or(0) } else { 1 });
 
     if let Some(value) = find_param(args, "af").filter(|value| !value.is_empty()) {
         packer.set_archive_flags(hex_to_int(&value)?);
@@ -479,36 +481,40 @@ fn do_unpack(args: &[String]) -> Result<u8, Failure> {
     }
 }
 
-/// The text `BSArch.exe` prints before anything else.
+const CRLF: &str = "\r\n";
+const LF: &str = "\n";
+
+/// The marker after which the banner of `BSArch.exe` ends and its usage begins.
+const BANNER_END: &str = "TES5Edit/TES5Edit\n\n";
+
+/// The text `BSArch.exe` prints before anything else. Its first line break
+/// is a bare LF, as in the output of the original, the others are `WriteLn`s.
 fn banner() -> String {
-    let text = String::from_utf8_lossy(USAGE);
-    let end = text
-        .find("TES5Edit/TES5Edit\r\n\r\n")
-        .map_or(0, |at| at + "TES5Edit/TES5Edit\r\n\r\n".len());
-    portable_lines(&text[..end])
+    let text = usage_text();
+    let end = text.find(BANNER_END).map_or(0, |at| at + BANNER_END.len());
+    let rest = line_ends(&text[1..end]);
+    format!("\n{rest}")
+}
+
+/// The usage file with LF line ends, whatever the checkout made of them.
+fn usage_text() -> String {
+    String::from_utf8_lossy(USAGE).replace(CRLF, LF)
 }
 
 fn usage() -> String {
-    let text = String::from_utf8_lossy(USAGE);
-    let start = text
-        .find("TES5Edit/TES5Edit\r\n\r\n")
-        .map_or(0, |at| at + "TES5Edit/TES5Edit\r\n\r\n".len());
-    portable_lines(&text[start..])
+    let text = usage_text();
+    let start = text.find(BANNER_END).map_or(0, |at| at + BANNER_END.len());
+    line_ends(&text[start..])
 }
 
-/// The text with the line ends of the platform.
-fn portable_lines(text: &str) -> String {
-    if cfg!(windows) {
-        text.to_owned()
-    } else {
-        text.replace("\r\n", "\n")
-    }
+/// The text with the line ends of the platform (CR LF on Windows).
+fn line_ends(text: &str) -> String {
+    text.replace("\r\n", "\n").replace('\n', NEWLINE)
 }
 
 /// `Main`. Returns the exit code.
 fn run(args: &[String]) -> Result<u8, Failure> {
     write(&banner());
-
     // At least one parameter and it is not a switch.
     if args.len() > 1 && !is_switch(&args[1]) {
         return if args[1].eq_ignore_ascii_case("pack") {

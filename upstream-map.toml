@@ -7,7 +7,9 @@ tag = "xedit-4.1.5q"
 commit = "fd1e36020b2b5b6217e553dc0038983146a2e2dd"
 
 [units."BSArch.dpr"]
-status = "pending"
+status = "ported"
+rust = "crates/bsarch/src/main.rs"
+note = "The console tool: info with -list and -dump, pack and unpack, with the arguments and the text of BSArch.exe (the usage is the oracle's, byte for byte). The pack options -tes3 to -sf1dds, -z, -split, -f, -share, -mt, -af and -ff are accepted; the texture formats (-fo4dds, -sf1dds) stop with the error of phase 5 step 2. Extension: -threads:N."
 
 [units."BSArch/baDefines.inc"]
 status = "pending"
@@ -32,14 +34,14 @@ status = "not-ported"
 note = "Delphi memory manager override; Rust uses its own allocator."
 
 [units."Core/wbBSA.pas"]
-status = "pending"
+status = "ported"
 rust = "crates/xedit-core/src/container_handler.rs"
-note = "The container handler read side (AddFolder, AddBSA, ContainerExists, OpenResource) is ported. The resource listings and the texture helpers are pending."
+note = "The container handler: AddFolder, AddBSA, ContainerExists, ContainerList, OpenResource, OpenResourceData, the resource listings (ContainerResourceList, ContainerResourceDict, ResourceExists, ResourceCount, ResourceCopy) and the file and folder hash tables (BuildCache, ResolveFileHash, ResolveFolderHash, wired into wbFileHashCallback and wbFolderHashCallback behind wbLoaderDone). DEVIATION: BuildCache reads <game>.HashSeed.txt but does not write the .txt2 file beside the program. The unit has no texture helpers in this tag."
 
 [units."Core/wbBSArchive.pas"]
 status = "pending"
-rust = "crates/xedit-io/src/archive.rs"
-note = "Reading the file table and the files of a BSA (versions 103 to 105) and of a general BA2 (Fallout 4 and Starfield versions 1 to 3, zlib and LZ4) is ported. Morrowind archives, texture archives and writing are pending."
+rust = "crates/xedit-io/src/archive"
+note = "TwbAsset, TwbBSArchive (reading and writing every BSA, Morrowind and general BA2 version; listing, Info and Warnings; the DX10 file table), TwbSplitPacker and TwbMultiSourcePacker (the steps of Process in upstream's single-thread order with the reading and compressing on all CPUs) are ported; the output equals BSArch.exe -mt:no for every thread count (cargo xtask parity bsarch). Pending, for phase 5 step 2: the DDS code of TwbBSArchive.Pack and Unpack and of LoadFile for the texture archives, in archive/texture.rs."
 
 [units."Core/wbBetterStringList.pas"]
 status = "pending"
@@ -50,7 +52,7 @@ status = "pending"
 [units."Core/wbCompression.pas"]
 status = "pending"
 rust = "crates/xedit-io/src/compression.rs"
-note = "Decompression and the zlib compression of record data (libdeflate level 12 up to 8 MiB) are ported. LZ4 compression for archives is pending."
+note = "Decompression and compression of every type: zlib (libdeflate level 12 up to 8 MiB, zlib's compress2 level 9 beyond), LZ4 (LZ4_compress_HC level 12) and LZ4F (LZ4F_compressFrame, independent 4 MB blocks), from the C libraries upstream links (lz4 1.10 gives the bytes of the oracle). The stream-to-stream overloads (ZCompressStream, LZ4FCompressStream, TLZ4.Stream_Decode) have no caller in the port and are pending."
 
 [units."Core/wbDDS.pas"]
 status = "pending"
@@ -163,9 +165,9 @@ rust = "crates/xedit-defs/src/hardcoded.rs"
 note = "The embedded plugins of the hardcoded records of each game are ported; the Morrowind one is extracted from wbHardcoded.dfm."
 
 [units."Core/wbHash.pas"]
-status = "pending"
+status = "ported"
 rust = "crates/xedit-io/src/hash.rs"
-note = "TwbHash.CRC32 is ported for the save path. The BSA hashes and xxHash come with the archives."
+note = "CRC32, the lookup hash (xxHash64) and XXH32/XXH64, the name hashes of the archives (TES3, TES4, TES5, FO4, BSCRC32). The SHA1 and MD5 of the CRYPTOAPI define, which is off, are not ported."
 
 [units."Core/wbHelpers.pas"]
 status = "pending"

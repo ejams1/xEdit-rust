@@ -1,6 +1,6 @@
 ---
 name: using-xedit-cli
-description: Use when inspecting, editing or saving Bethesda plugins and save games with the native xedit CLI of this repository (version 2, with the write path). Covers the mutation rules (edit flag, dry run, explicit save, readback), loading plugins of any game from Morrowind to Starfield, listing and reading records and elements, setting, adding, removing and copying them, deleting records, changing and renumbering FormIDs, module flags, the masters of a plugin, dumping plugins and saves like xDump, running several commands in one session with batch, and keeping a session loaded behind a JSON-RPC daemon (serve) or an MCP server (mcp).
+description: Use when inspecting, editing or saving Bethesda plugins and save games with the native xedit CLI of this repository (version 2, with the write path). Covers the mutation rules (edit flag, dry run, explicit save, readback), loading plugins of any game from Morrowind to Starfield, listing and reading records and elements, setting, adding, removing and copying them, deleting records, changing and renumbering FormIDs, module flags, the masters of a plugin, dumping plugins and saves like xDump, listing, unpacking and packing BSA and BA2 archives (`archive list|extract|pack` and the `bsarch` binary), running several commands in one session with batch, and keeping a session loaded behind a JSON-RPC daemon (serve) or an MCP server (mcp).
 ---
 
 # Using the xedit CLI
@@ -101,6 +101,22 @@ Sessions:
 Element paths use `\` between names, as in xEdit scripts: `DATA\Health`, `ACBS\Flags\Female`, `Conditions\Condition #0\CTDA\Function`. Signatures (`DNAM`) and names (`DNAM - Flags`) both work for a step, and `[n]` picks an entry by position.
 
 A record or element node has `name`, `display_name` (only when it differs, for example a placed object with its base record), `value` (the text xEdit shows), `summary` (the `[S]:` text of containers without a value), `native` (number, boolean, string or bytes as hexadecimal) and `children`. `--depth 1` keeps the first level of children, which is enough to list the subrecords of a record.
+
+## Archives
+
+`archive list|extract|pack` read, unpack and write BSA (Morrowind through Skyrim Special Edition) and BA2 (Fallout 4, Fallout 76, Starfield) archives. They are the three modes of `BSArch.exe`, need no `--game` or `--load`, and the archives `pack` writes are byte for byte the ones `BSArch.exe -mt:no` writes for the same sources and options, whatever the thread count. The `bsarch` binary (`cargo build --release -p bsarch`) takes the upstream arguments and prints the upstream text; use it where a script already calls `BSArch.exe`.
+
+| CLI | Registry name | What it does |
+|---|---|---|
+| `archive list <archive> [--files] [--folder F] [--offset N] [--limit N]` | `archive.list` | Format, version, flags, compression, warnings and with `--files` a page of the file table. Reads only. |
+| `archive extract <archive> [<folder>] [--threads N]` | `archive.extract` | Unpacks every file below the folder (which must exist; the archive's folder when omitted). Needs `--edit` unless `--dry-run`. |
+| `archive pack <archive> <source>... --format F [-z[=zlib\|lz4\|lz4f]] [--split GB] [--filter MASK]... [--no-share] [--threads N] [--archive-flags HEX] [--file-flags HEX]` | `archive.pack` | Packs folders, files and archives (later sources win on equal names). Needs `--edit` unless `--dry-run`. |
+
+- `--format` is `tes3`, `tes4`, `fo3`, `fnv`, `tes5` (the last three are one format), `sse`, `fo4`, `sf1`; `fo4dds` and `sf1dds` (the texture archives) are accepted and stop with `Texture (DX10) archives are not supported yet` until phase 5 step 2, as does extracting a texture from a texture archive. Listing a texture archive works.
+- `-z` compresses with the default of the format (zlib for Oblivion, Fallout 3, New Vegas, Skyrim LE and Fallout 4, LZ4F for Skyrim SE, zlib or LZ4 for Starfield); sounds, music and strings stay stored, as BSArch leaves them. A BSA over 2 GB is split by default (`--split 0` keeps one archive, a number is GB, at most 8) and a split archive numbers its files from the second one: `mod.bsa`, `mod2.bsa`.
+- A dry run of `archive pack` adds the sources and reports `source_files` and `source_counts` without creating anything; run it first to see which files a folder yields (files under `data\` or a known asset folder keep the path from there; the extensions in `cSkippedExtensions` such as `.esp`, `.bsa`, `.dll` are never packed).
+- Error code `archive_failed` carries the message BSArch prints (`Error processing "meshes\a.nif": ...`, `Cannot open file "...". The system cannot find the file specified`). A pack that fails leaves no archive behind. A name that would leave the destination folder (`..`, a drive) is refused by `extract`, where BSArch would write it.
+- The same bytes come out for every `--threads`; upstream's multithreaded packing writes the data in the order the threads finish, the port writes it in the order of a single thread.
 
 ## Editing an element
 
@@ -211,7 +227,7 @@ xedit --game fo4 --load "<Data>\DLCRobot.esm" --edit mcp
 
 ## Output
 
-Without `--json` a command prints its result as pretty JSON and an error as `error: <code>: <message>` on stderr with exit code 1. With `--json` it prints one envelope, `{"ok":true,"result":...}` or `{"ok":false,"error":{"code":"...","message":"..."}}`, always on stdout; `batch` puts one envelope per command in the `result` array (`{"ok", "command", "result" or "error"}`). Error codes are stable: `no_session` (no `--game`), `unknown_file`, `ambiguous_file`, `unknown_record`, `unknown_element`, `invalid_params`, `load_failed`, `unknown_command`, `edit_required`, `edit_failed`, `not_editable`, `not_removable`, `save_refused`, `unsupported`, `io`, `internal`.
+Without `--json` a command prints its result as pretty JSON and an error as `error: <code>: <message>` on stderr with exit code 1. With `--json` it prints one envelope, `{"ok":true,"result":...}` or `{"ok":false,"error":{"code":"...","message":"..."}}`, always on stdout; `batch` puts one envelope per command in the `result` array (`{"ok", "command", "result" or "error"}`). Error codes are stable: `no_session` (no `--game`), `unknown_file`, `ambiguous_file`, `unknown_record`, `unknown_element`, `invalid_params`, `load_failed`, `unknown_command`, `edit_required`, `edit_failed`, `not_editable`, `not_removable`, `save_refused`, `archive_failed`, `unsupported`, `io`, `internal`.
 
 The progress log of a load and a save (`[Skyrim.esm] Loading file`, the string table encodings) goes to stderr, as xEdit's messages do. With several threads the messages of the workers arrive in no fixed order.
 
@@ -241,3 +257,4 @@ Behaviour a user can meet, as of the end of phase 3. Each is an upstream behavio
 - **Sessions.** One session per process; `serve` and `mcp` can not load other plugins later, and a named pipe serves one client at a time.
 - **Starfield.** The complex FileIDs are ported in the master functions but the FormID lookups ignore them, so FormID changes and renumbering across masters are unchecked there. The oracle refuses to save the official Starfield modules whose header the save would edit, and so does the port.
 - **Oblivion saves** do not read (an upstream limit, see "Saves").
+- **Texture archives.** `archive pack` and `archive extract` stop on `Fallout 4 DDS` and `Starfield DDS` archives (`wbDDS` is phase 5 step 2); listing works. The loose texture and `BSArch.exe -fo4dds` paths are the same gap.

@@ -1189,7 +1189,7 @@ impl Archive {
                     ));
                 } else {
                     result.push_str(&format!(
-                        "\r\n  Width: {:04}  Height: {:04}  CubeMap: {}  Format: {}",
+                        "\r\n  Width: {:4}  Height: {:4}  CubeMap: {}  Format: {}",
                         file.dds.width,
                         file.dds.height,
                         if file.is_cube_map() { "Yes" } else { "No" },

@@ -82,6 +82,11 @@ enum Action {
         #[command(subcommand)]
         action: FormidsAction,
     },
+    /// BSA and BA2 archives: list, extract and pack, the modes of BSArch. They need no --game or --load.
+    Archive {
+        #[command(subcommand)]
+        action: ArchiveAction,
+    },
     /// Save files.
     Saves {
         #[command(subcommand)]
@@ -185,6 +190,75 @@ enum FilesAction {
         #[arg(long)]
         localized: Option<bool>,
         /// Report the flags the change would give, but change nothing.
+        #[arg(long)]
+        dry_run: bool,
+    },
+}
+
+#[derive(Subcommand)]
+enum ArchiveAction {
+    /// Read the header and the file table of an archive (archive.list): format, version, flags, warnings and with --files the files.
+    List {
+        /// Path of the archive.
+        archive: String,
+        /// List the files.
+        #[arg(long)]
+        files: bool,
+        /// Only the files below this folder of the archive.
+        #[arg(long)]
+        folder: Option<String>,
+        /// Files to skip.
+        #[arg(long, default_value_t = 0)]
+        offset: usize,
+        /// Files to return at most.
+        #[arg(long, default_value_t = 1000)]
+        limit: usize,
+    },
+    /// Unpack an archive into a folder (archive.extract). Needs --edit unless --dry-run.
+    Extract {
+        /// Path of the archive.
+        archive: String,
+        /// Folder that exists to unpack into; the folder of the archive when omitted.
+        output: Option<String>,
+        /// Threads that decompress and write; 0 uses every CPU. The files are the same for every count.
+        #[arg(long, default_value_t = 0)]
+        threads: usize,
+        /// Report what would be written, but write nothing.
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Pack folders, files and archives into an archive (archive.pack), byte for byte as BSArch does. Needs --edit unless --dry-run.
+    Pack {
+        /// Path of the archive to write.
+        archive: String,
+        /// Folders, files and archives to pack; later ones win on files with the same name.
+        #[arg(required = true)]
+        sources: Vec<String>,
+        /// Archive format: tes3, tes4, fo3, fnv, tes5, sse, fo4, fo4dds, sf1 or sf1dds.
+        #[arg(long)]
+        format: String,
+        /// Compress the files: zlib, lz4, lz4f, or without a value the default of the format.
+        #[arg(short = 'z', long, num_args = 0..=1, default_missing_value = "default")]
+        compress: Option<String>,
+        /// Split into archives of this many GB (at most 8), 0 for none. Default: BSA formats 2 GB, BA2 formats none.
+        #[arg(long, allow_hyphen_values = true)]
+        split: Option<i64>,
+        /// Pack only the files whose name matches one of these masks (* and ?); repeat for several.
+        #[arg(long = "filter")]
+        filters: Vec<String>,
+        /// Do not let identical files share their data.
+        #[arg(long)]
+        no_share: bool,
+        /// Threads that read and compress; 0 uses every CPU. The archives are the same for every count.
+        #[arg(long, default_value_t = 0)]
+        threads: usize,
+        /// Override the archive flags of a BSA with this hexadecimal value.
+        #[arg(long)]
+        archive_flags: Option<String>,
+        /// Override the file flags of a BSA with this hexadecimal value.
+        #[arg(long)]
+        file_flags: Option<String>,
+        /// Add the sources and report the files that would be packed, but write nothing.
         #[arg(long)]
         dry_run: bool,
     },
@@ -468,6 +542,47 @@ fn command_of(action: Action) -> Result<(String, Value), CommandError> {
                 "blueprint": blueprint, "localized": localized, "dry_run": dry_run
             }),
         ),
+        Action::Archive { action } => match action {
+            ArchiveAction::List {
+                archive,
+                files,
+                folder,
+                offset,
+                limit,
+            } => (
+                "archive.list".to_owned(),
+                json!({ "archive": archive, "files": files, "folder": folder, "offset": offset, "limit": limit }),
+            ),
+            ArchiveAction::Extract {
+                archive,
+                output,
+                threads,
+                dry_run,
+            } => (
+                "archive.extract".to_owned(),
+                json!({ "archive": archive, "output": output, "threads": threads, "dry_run": dry_run }),
+            ),
+            ArchiveAction::Pack {
+                archive,
+                sources,
+                format,
+                compress,
+                split,
+                filters,
+                no_share,
+                threads,
+                archive_flags,
+                file_flags,
+                dry_run,
+            } => (
+                "archive.pack".to_owned(),
+                json!({
+                    "archive": archive, "sources": sources, "format": format, "compress": compress,
+                    "split": split, "filters": filters, "share": !no_share, "threads": threads,
+                    "archive_flags": archive_flags, "file_flags": file_flags, "dry_run": dry_run
+                }),
+            ),
+        },
         Action::Formids { action } => match action {
             FormidsAction::Change {
                 form_id,
