@@ -554,6 +554,18 @@ impl Def {
     }
 }
 
+/// `UTF8ToString`: invalid bytes become U+FFFD as Windows decodes them
+/// (`MultiByteToWideChar`), which differs from Rust's replacement for a
+/// lead byte followed by a byte that cannot continue it.
+pub fn utf8_to_string(bytes: &[u8]) -> String {
+    match std::str::from_utf8(bytes) {
+        Ok(text) => text.to_owned(),
+        Err(_) => Encoding::Mbcs(65001)
+            .get_string(bytes)
+            .unwrap_or_else(|_| String::from_utf8_lossy(bytes).into_owned()),
+    }
+}
+
 /// An element that upstream uses without checking it for `nil`.
 pub fn req(el: Option<El>) -> R<El> {
     el.ok_or_else(|| DfError::new("Access violation: the element does not exist"))
@@ -1576,7 +1588,7 @@ impl Tree {
                 let data = self.def_bytes(el, start, end).to_vec();
                 let mut text = Vec::new();
                 self.read_chars(el, def, Some(&data), &mut text)?;
-                *value = Variant::Str(String::from_utf8_lossy(&text).into_owned());
+                *value = Variant::Str(utf8_to_string(&text));
                 self.event_get_value(def, el, value)
             }
             DefKind::Merge { .. } => {
