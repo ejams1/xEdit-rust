@@ -73,7 +73,7 @@ impl Proc for ProcRemoveNodes {
         // The sorted list of block types; the text of the combo box is ''
         // until an item is chosen.
         let mut types = wb_ni_object_list();
-        types.sort_by_key(|name| name.to_lowercase());
+        types.sort_by(|a, b| xedit_io::encoding::ansi_compare_text(a, b));
         let wanted = storage.get_string("sType", "");
         let index = types.iter().position(|name| ansi_same_text(name, &wanted)).unwrap_or(0);
         self.type_text = types.get(index).cloned().unwrap_or_default();

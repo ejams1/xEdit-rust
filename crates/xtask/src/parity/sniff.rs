@@ -237,6 +237,35 @@ const CASES: &[Case] = &[
         settings: &[],
     },
     Case {
+        name: "copy-priorities",
+        operation: "Copy anim priorities",
+        settings: &[("sSourceDirectory", "{source}")],
+    },
+    Case {
+        name: "remove-controlled",
+        operation: "Remove controlled blocks",
+        settings: &[],
+    },
+    Case {
+        name: "remove-controlled-others",
+        operation: "Remove controlled blocks",
+        settings: &[
+            ("sNames", "Bip01 Spine, Tail"),
+            ("bExactMatch", "0"),
+            ("bNotMatching", "1"),
+        ],
+    },
+    Case {
+        name: "quadratic-to-linear",
+        operation: "Quadratic to linear anim",
+        settings: &[("sNames", "Bip01"), ("bExactMatch", "0")],
+    },
+    Case {
+        name: "optimize-kf",
+        operation: "Optimize Animations",
+        settings: &[],
+    },
+    Case {
         name: "havok-settings",
         operation: "Update Havok settings",
         settings: &[
@@ -319,6 +348,52 @@ const CASES: &[Case] = &[
         ],
     },
     Case {
+        name: "transform-info",
+        operation: "Transform information",
+        settings: &[],
+    },
+    Case {
+        name: "transform-info-no-scale",
+        operation: "Transform information",
+        settings: &[("bRotation", "0"), ("bSkipEmpty", "0")],
+    },
+    Case {
+        name: "havok-info",
+        operation: "Havok information",
+        settings: &[(
+            "sFields",
+            "\"Inertia Tensor\",Friction,\"Motion System\",\"Penetration Depth\"",
+        )],
+    },
+    Case {
+        name: "havok-info-same-line",
+        operation: "Havok information",
+        settings: &[
+            ("bSameLine", "1"),
+            ("sFields", "Restitution,\"Max Linear Velocity\",\"Inertia Tensor\""),
+        ],
+    },
+    Case {
+        name: "unwelded",
+        operation: "Find unwelded vertices",
+        settings: &[],
+    },
+    Case {
+        name: "unwelded-report",
+        operation: "Find unwelded vertices",
+        settings: &[("sDistance", "0.01"), ("bSkipSame", "1"), ("bReportVertices", "1")],
+    },
+    Case {
+        name: "draw-calls",
+        operation: "Find excessive draw calls",
+        settings: &[("sCallsNum", "3")],
+    },
+    Case {
+        name: "find-uvs",
+        operation: "Find UVs",
+        settings: &[("sUMax", "1"), ("sVMax", "1.5")],
+    },
+    Case {
         name: "soft-particles",
         operation: "Vanilla Plus Particles - NVSE",
         settings: &[],
@@ -375,11 +450,13 @@ fn parse(args: &[&str]) -> Result<Options> {
 }
 
 /// The settings ini of a case, with `{log}` as `log`.
-fn settings_text(case: &Case, log: &Path) -> String {
+fn settings_text(case: &Case, log: &Path, source: &Path) -> String {
     let section = case.operation.replace(' ', "");
     let mut text = format!("[Main]\r\nPopupWarning=0\r\n[{section}]\r\n");
     for (name, value) in case.settings {
-        let value = value.replace("{log}", &windows_path(log));
+        let value = value
+            .replace("{log}", &windows_path(log))
+            .replace("{source}", &windows_path(source));
         text.push_str(&format!("{name}={value}\r\n"));
     }
     text
@@ -481,6 +558,7 @@ fn run_sniff(
     sniff: &Path,
     work: &Path,
     case: &Case,
+    source: &Path,
     input: &Path,
     path_filter: Option<&str>,
     threads: usize,
@@ -497,7 +575,7 @@ fn run_sniff(
     let extra = work.join("oracle-extra.log");
     let _ = fs::remove_file(&extra);
     let ini = work.join("oracle.ini");
-    fs::write(&ini, settings_text(case, &extra))?;
+    fs::write(&ini, settings_text(case, &extra, source))?;
     let log = work.join("oracle.log");
     let _ = fs::remove_file(&log);
     let mut command = Command::new(&exe);
@@ -551,6 +629,7 @@ fn rerun_crashes(
     sniff: &Path,
     work: &Path,
     case: &Case,
+    source: &Path,
     input: &Path,
     extensions: &[String],
     results: &mut Results,
@@ -562,7 +641,7 @@ fn rerun_crashes(
         .map(|(name, _)| name.clone())
         .collect();
     for name in crashed {
-        let rerun = run_sniff(sniff, work, case, input, Some(&name), 1, extensions)?;
+        let rerun = run_sniff(sniff, work, case, source, input, Some(&name), 1, extensions)?;
         let error = rerun.errors.get(&name).cloned();
         println!("oracle rerun  {name}: {}", error.as_deref().unwrap_or("no error"));
         results.errors.remove(&name);
@@ -582,12 +661,19 @@ fn rerun_crashes(
 }
 
 /// Runs the port on `input` with the settings of the case.
-fn run_port(work: &Path, case: &Case, input: &Path, threads: usize, extensions: &[String]) -> Result<Results> {
+fn run_port(
+    work: &Path,
+    case: &Case,
+    source: &Path,
+    input: &Path,
+    threads: usize,
+    extensions: &[String],
+) -> Result<Results> {
     let out = work.join("port-out");
     fs::create_dir_all(&out)?;
     let extra = work.join("port-extra.log");
     let _ = fs::remove_file(&extra);
-    let settings = MemIniFile::from_text(&settings_text(case, &extra));
+    let settings = MemIniFile::from_text(&settings_text(case, &extra, source));
     let outputs: Arc<Mutex<BTreeMap<String, u64>>> = Arc::default();
     let sink_outputs = outputs.clone();
     let options = RunOptions {
@@ -705,6 +791,41 @@ fn sample_folder(archive: &Archive, dir: &Path, count: usize, extensions: &[Stri
     Ok(())
 }
 
+/// The source folder of the operations that copy from the files of the same
+/// path in another folder (`Copy anim priorities`): the files of the
+/// archive with the priorities of their controlled blocks set to 33 by the
+/// port's universal tweaker. Made once.
+fn prepare_source(archive: &Archive, dir: &Path, extensions: &[String], threads: usize) -> Result<()> {
+    let done = dir.join(".complete");
+    if done.exists() {
+        return Ok(());
+    }
+    let raw = dir.with_extension("raw");
+    sample_folder(archive, &raw, usize::MAX, extensions)?;
+    let _ = fs::remove_dir_all(dir);
+    fs::create_dir_all(dir)?;
+    let settings = MemIniFile::from_text(
+        "[Universaltweaker]\r\nProcessedFiles=*.kf\r\nsBlocks=NiControllerSequence\r\nsPath=Controlled Blocks\\[*]\\Priority\r\nsValue=33\r\n",
+    );
+    let options = RunOptions {
+        operation: "Universal tweaker".to_owned(),
+        input: windows_path(&raw),
+        output: windows_path(dir),
+        path_contains: Some(String::new()),
+        subdir: Some(true),
+        skip_on_errors: Some(true),
+        copy_all: Some(false),
+        threads: Some(threads as i32),
+        dry_run: false,
+        sink: None,
+    };
+    if let Err(error) = port_run(Some(settings), &options) {
+        bail!("preparing {}: {error}", dir.display());
+    }
+    fs::write(done, "")?;
+    Ok(())
+}
+
 pub fn run(tag: &str, args: &[&str]) -> Result<()> {
     let options = parse(args)?;
     if options.list {
@@ -749,7 +870,7 @@ pub fn run(tag: &str, args: &[&str]) -> Result<()> {
             .filter_map(|game| GAMES.iter().find(|known| known.name == harness_game(*game)))
             .filter(|game| options.games.is_empty() || options.games.iter().any(|name| name == game.name))
             .collect();
-        let settings_key = fnv(settings_text(case, Path::new("{log}")).as_bytes());
+        let settings_key = fnv(settings_text(case, Path::new("{log}"), Path::new("{source}")).as_bytes());
 
         for game in games {
             let Some(data) = std::env::var_os(game.data_var).map(PathBuf::from) else {
@@ -810,6 +931,11 @@ pub fn run(tag: &str, args: &[&str]) -> Result<()> {
                     }
                     None => archive_path.clone(),
                 };
+                // The source folder of the operations that copy from one.
+                let source = scratch.join("sniff-source").join(game.name).join(&archive_name);
+                if case.settings.iter().any(|(_, value)| value.contains("{source}")) {
+                    prepare_source(&archive, &source, &extensions, options.threads)?;
+                }
                 drop(archive);
                 let work = scratch.join("sniff-work").join(case.name).join(&archive_name);
 
@@ -819,8 +945,9 @@ pub fn run(tag: &str, args: &[&str]) -> Result<()> {
                 let oracle = if cached.exists() {
                     serde_json::from_slice::<Results>(&fs::read(&cached)?)?
                 } else {
-                    let mut results = run_sniff(&sniff, &work, case, &input, None, options.threads, &extensions)?;
-                    rerun_crashes(&sniff, &work, case, &input, &extensions, &mut results)?;
+                    let mut results =
+                        run_sniff(&sniff, &work, case, &source, &input, None, options.threads, &extensions)?;
+                    rerun_crashes(&sniff, &work, case, &source, &input, &extensions, &mut results)?;
                     fs::create_dir_all(cached.parent().unwrap())?;
                     fs::write(&cached, serde_json::to_vec(&results)?)?;
                     say(
@@ -838,7 +965,7 @@ pub fn run(tag: &str, args: &[&str]) -> Result<()> {
                 };
 
                 let start = Instant::now();
-                let port = match run_port(&work, case, &input, options.threads, &extensions) {
+                let port = match run_port(&work, case, &source, &input, options.threads, &extensions) {
                     Ok(port) => port,
                     Err(error) => {
                         say(

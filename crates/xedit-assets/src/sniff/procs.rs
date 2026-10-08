@@ -8,13 +8,7 @@
 //! group. An operation whose unit is not ported yet is listed with why.
 
 use crate::sniff::processor::Proc;
-use crate::sniff::{
-    proc_adjust_transform, proc_apply_transform, proc_attach_parent, proc_check_for_errors, proc_convert_root_node,
-    proc_fix_exported_kf_anim, proc_havok_search_material, proc_havok_settings_update, proc_inertia_update,
-    proc_json_converter, proc_ragdoll_constraint_update, proc_remove_nodes, proc_remove_unused_nodes,
-    proc_replace_assets, proc_set_missing_names, proc_shader_flags_update, proc_soft_particles, proc_tangents,
-    proc_universal_fixer, proc_universal_tweaker, proc_unskin_mesh, proc_update_bounds, proc_walls_reflection_flag,
-};
+use crate::sniff::*;
 
 /// An operation of the main form.
 pub struct ProcEntry {
@@ -96,22 +90,46 @@ pub const PROCS: &[ProcEntry] = &[
     ported!("NIF", "Set missing names", proc_set_missing_names::ProcSetMissingNames),
     ported!("Report", "Check for errors", proc_check_for_errors::ProcCheckForErrors),
     pending!("Report", "Analyze mesh", MESH_OPTIMIZE),
-    pending!("Report", "Transform information", STEP_5),
-    pending!("Report", "Havok information", STEP_5),
-    pending!("Report", "Find unwelded vertices", STEP_5),
-    pending!("Report", "Find excessive draw calls", STEP_5),
-    pending!("Report", "Find UVs", STEP_5),
+    ported!(
+        "Report",
+        "Transform information",
+        proc_transform_info::ProcTransformInfo
+    ),
+    ported!("Report", "Havok information", proc_havok_info::ProcHavokInfo),
+    ported!(
+        "Report",
+        "Find unwelded vertices",
+        proc_unwelded_vertices::ProcUnweldedVertices
+    ),
+    ported!(
+        "Report",
+        "Find excessive draw calls",
+        proc_find_draw_calls::ProcFindDrawCalls
+    ),
+    ported!("Report", "Find UVs", proc_find_uvs::ProcFindUVs),
     pending!("Report", "Find textures", "needs wbDDS (phase 5 step 2)"),
     pending!("Animation", "Copy anim controlled blocks", STEP_5),
-    pending!("Animation", "Copy anim priorities", STEP_5),
-    pending!("Animation", "Remove controlled blocks", STEP_5),
-    pending!("Animation", "Quadratic to linear anim", STEP_5),
+    ported!(
+        "Animation",
+        "Copy anim priorities",
+        proc_copy_priorities::ProcCopyPriorities
+    ),
+    ported!(
+        "Animation",
+        "Remove controlled blocks",
+        proc_remove_controlled_blocks::ProcRemoveControlledBlocks
+    ),
+    ported!(
+        "Animation",
+        "Quadratic to linear anim",
+        proc_anim_quadratic_to_linear::ProcAnimQuadraticToLinear
+    ),
     ported!(
         "Animation",
         "Fix 3DS exported KF",
         proc_fix_exported_kf_anim::ProcFixExportedKFAnim
     ),
-    pending!("Animation", "Optimize Animations", STEP_5),
+    ported!("Animation", "Optimize Animations", proc_optimize_kf::ProcOptimizeKF),
     pending!("Animation", "Add headtracking anim", STEP_5),
     pending!("Animation", "Add facial anim", STEP_5),
     pending!("Animation", "Add NiTransformData", STEP_5),

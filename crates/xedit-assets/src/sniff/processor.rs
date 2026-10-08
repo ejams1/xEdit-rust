@@ -399,14 +399,7 @@ pub fn change_file_ext(file_name: &str, extension: &str) -> String {
     format!("{}{extension}", &file_name[..file_name.len() - ext.len()])
 }
 
-/// `SameValue` of two doubles with the default epsilon: the resolution of
-/// `System.Math` (`DoubleResolution`, 1E-15 times the fuzz factor 1000)
-/// relative to the smaller value.
-pub fn same_value(a: f64, b: f64) -> bool {
-    const RESOLUTION: f64 = 1e-12;
-    let epsilon = (a.abs().min(b.abs()) * RESOLUTION).max(RESOLUTION);
-    if a > b { a - b <= epsilon } else { b - a <= epsilon }
-}
+pub use crate::nif_math::same_value;
 
 /// `SameValue` of two singles with the default epsilon
 /// (`SingleResolution`, 1E-7 times 1000): the epsilon is worked out in

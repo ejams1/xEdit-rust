@@ -68,8 +68,7 @@ fn materials() -> Vec<String> {
     ] {
         list.extend(def.values_map().iter().map(|(_, name)| name.clone()));
     }
-    // `TStringList.Sort` compares with `AnsiCompareText`.
-    list.sort_by_key(|name| name.to_uppercase());
+    list.sort_by(|a, b| xedit_io::encoding::ansi_compare_text(a, b));
     list.insert(0, String::new());
     list
 }

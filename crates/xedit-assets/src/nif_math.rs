@@ -13,12 +13,40 @@
 
 use std::ops::{Add, Div, Mul, Sub};
 
-use xedit_core::delphi::{MAX_SINGLE, same_value};
+use xedit_core::delphi::MAX_SINGLE;
 
 use crate::data_format::{DfError, R};
 
 /// `TMatrix33`.
 pub type Matrix33 = [[f64; 3]; 3];
+
+/// `SameValue` of two doubles with the default epsilon, as the RTL of the
+/// release builds has it (`System.Math`, read from the machine code of
+/// `Sniff.exe` at 0x471D00): `DoubleResolution` is 1E-15 times the fuzz
+/// factor 1000, relative to the smaller value. (`xedit_core::delphi::
+/// same_value` uses 1E-15.)
+pub fn same_value(a: f64, b: f64) -> bool {
+    const RESOLUTION: f64 = 1e-12;
+    let smaller = if b.abs() > a.abs() { a.abs() } else { b.abs() };
+    let scaled = smaller * RESOLUTION;
+    let epsilon = if scaled > RESOLUTION { scaled } else { RESOLUTION };
+    if a > b { a - b <= epsilon } else { b - a <= epsilon }
+}
+
+/// Delphi `RoundTo(Double, ADigit)` (`System.Math` at 0x471480): times the
+/// power of ten, rounded half to even below 2^52, times the inverse power.
+pub fn round_to(value: f64, digit: i32) -> f64 {
+    let (up, down) = if digit <= 0 {
+        (10f64.powi(-digit), 1.0 / 10f64.powi(-digit))
+    } else {
+        (1.0 / 10f64.powi(digit), 10f64.powi(digit))
+    };
+    let mut x = value * up;
+    if x.abs() < 4_503_599_627_370_496.0 {
+        x = x.round_ties_even();
+    }
+    x * down
+}
 
 /// `TQuaternion`: `q = [w, x, y, z]`.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
