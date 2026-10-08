@@ -22,6 +22,8 @@ use xedit_core::delphi::{
     half_to_float, same_value, str_to_float,
 };
 
+use xedit_io::encoding::Encoding;
+
 use crate::json::Json;
 use crate::variant::{Variant, str_to_int, str_to_int64};
 
@@ -142,17 +144,26 @@ fn df_str_to_half_float(value: &str) -> R<f64> {
 }
 
 /// `dfCalcHash`: Delphi's `HashName` of the name as an ANSI string, a
-/// case-insensitive hash. Upstream finds elements by name by comparing
-/// these hashes only.
+/// case-insensitive hash: each character in lower case is added with an
+/// exclusive or and the sum rotated left by five bits. Upstream finds
+/// elements by name by comparing these hashes only. (The form was found
+/// from the oracle's `dfCalcHash`, `cargo xtask parity nif --text`.)
 pub fn df_calc_hash(name: &str) -> u32 {
-    let mut result: u32 = 0;
-    for ch in name.chars() {
-        let code = u32::from(ch);
-        let byte = if code < 0x100 { code } else { u32::from(b'?') };
-        result = result.rotate_left(5) ^ (byte & 0xDF);
+    let hash = |bytes: &[u8]| {
+        bytes.iter().fold(0u32, |result, byte| {
+            (result ^ u32::from(byte.to_ascii_lowercase())).rotate_left(5)
+        })
+    };
+    if name.is_ascii() {
+        hash(name.as_bytes())
+    } else {
+        hash(&Encoding::Mbcs(ANSI_CODE_PAGE).get_bytes(name))
     }
-    result
 }
+
+/// The ANSI code page of the strings that upstream converts with
+/// `AnsiString(s)`: the system's (`CP_ACP`).
+pub const ANSI_CODE_PAGE: u32 = 0;
 
 /// `IntToStr` of an `Integer` that the Pascal code shifts: `1 shl n` with
 /// a 32 bit `1`, whose shift count wraps at 32 and whose bit 31 is the sign.
