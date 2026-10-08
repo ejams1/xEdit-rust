@@ -13,6 +13,8 @@ serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
 toml = "1.1.6"
 walkdir = "2.5.0"
+xedit-assets = { path = "../xedit-assets" }
+xedit-io = { path = "../xedit-io" }
 zstd = "0.14.0"
 
 [target."cfg(windows)".dependencies]

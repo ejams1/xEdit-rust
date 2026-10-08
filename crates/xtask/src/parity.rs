@@ -27,6 +27,9 @@
 //! equal. `cargo xtask parity oracle-edit` runs the scripted edit sequences
 //! of `crates/xtask/oracle/edits` on both and compares the saved files.
 //!
+//! `cargo xtask parity nif` loads, dumps and saves the NIF and material
+//! files of the corpus archives with the port and with `Sniff.exe` (`nif`).
+//!
 //! Environment:
 //!
 //! - `XEDIT_ORACLE_DIR`: unpacked release archive of the baseline tag.
@@ -52,6 +55,7 @@ use crate::memory::{self, Budget, GIB, Limit};
 
 mod bsarch;
 mod gui;
+mod nif;
 mod oracle_save;
 
 /// A game whose masters are in the corpus.
@@ -286,6 +290,9 @@ pub fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
     // `parity bsarch` has its own options and cases: the archive tool against BSArch.exe.
     if let Some((&"bsarch", rest)) = args.split_first() {
         return bsarch::run(root, tag, rest);
+    }
+    if let Some((&"nif", rest)) = args.split_first() {
+        return nif::run(root, tag, rest);
     }
     let options = parse(args)?;
     // The round trip has no oracle binary: the input file is the oracle
