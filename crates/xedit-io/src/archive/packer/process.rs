@@ -41,8 +41,8 @@ pub(super) fn numbered_archive_name(file_name: &str, count: usize) -> String {
 enum Unsplit {
     /// The data of a general file, compressed when the file is.
     Chunk(Prepared),
-    /// A DDS file, split into chunks by the archive.
-    Raw(Vec<u8>),
+    /// A DDS file, cut into chunks and compressed.
+    Dds(texture::DdsPrepared),
 }
 
 impl MultiSourcePacker {
@@ -79,6 +79,7 @@ impl MultiSourcePacker {
         let share = *share_data;
         let compression = archive.compression_type();
         let dds = kind.is_dds();
+        let texture_config = texture::TextureConfig::of(archive);
         // The entry of each file in the archive and whether it is compressed.
         let entries: Vec<(usize, bool)> = files
             .iter()
@@ -89,32 +90,38 @@ impl MultiSourcePacker {
             .collect::<Option<_>>()
             .ok_or("File to pack not found in archive")?;
         let names: Vec<String> = files.iter().map(|file| file.file_name.clone()).collect();
-        let seen: Mutex<HashMap<(u32, LookupHash), usize>> = Mutex::new(HashMap::new());
+        // The first file and chunk that has data of a size and hash.
+        let seen: Mutex<HashMap<(u32, LookupHash), (usize, usize)>> = Mutex::new(HashMap::new());
+        // Data that an earlier file has is found in the archive when its turn
+        // comes, so it need not be compressed.
+        let is_shared = |file: usize, chunk: usize, size: u32, hash: LookupHash| {
+            let mut seen = seen.lock().expect("seen lock");
+            match seen.get_mut(&(size, hash)) {
+                Some(first) if *first < (file, chunk) => true,
+                Some(first) => {
+                    *first = (file, chunk);
+                    false
+                }
+                None => {
+                    seen.insert((size, hash), (file, chunk));
+                    false
+                }
+            }
+        };
 
         let prepare = |i: usize| -> Result<Unsplit, String> {
             let wrap = |message: String| format!("Error processing \"{}\": {message}", names[i]);
             let data = sources.data(files[i].source).map_err(wrap)?;
             if dds {
-                return Ok(Unsplit::Raw(data));
+                return texture::prepare_dds(&texture_config, data, entries[i].1, share, &|chunk, size, hash| {
+                    is_shared(i, chunk, size, hash)
+                })
+                .map(Unsplit::Dds)
+                .map_err(|error| wrap(error.0));
             }
             let hash = share.then(|| lookup_hash(&data));
             let size = data.len();
-            // Data that an earlier file has is found in the archive when its
-            // turn comes, so it need not be compressed.
-            let shared = hash.is_some_and(|hash| {
-                let mut seen = seen.lock().expect("seen lock");
-                match seen.get_mut(&(size as u32, hash)) {
-                    Some(first) if *first < i => true,
-                    Some(first) => {
-                        *first = i;
-                        false
-                    }
-                    None => {
-                        seen.insert((size as u32, hash), i);
-                        false
-                    }
-                }
-            });
+            let shared = hash.is_some_and(|hash| is_shared(i, 0, size as u32, hash));
             let stored = if shared {
                 None
             } else if entries[i].1 {
@@ -133,7 +140,7 @@ impl MultiSourcePacker {
         };
         let size_of = |item: &Unsplit| match item {
             Unsplit::Chunk(prepared) => prepared.data.as_ref().map_or(0, Vec::len),
-            Unsplit::Raw(data) => data.len(),
+            Unsplit::Dds(prepared) => prepared.size(),
         };
         with_prefetch(
             names.len(),
@@ -149,9 +156,9 @@ impl MultiSourcePacker {
                         Unsplit::Chunk(prepared) => archive
                             .pack_chunk(entries[index].0, ChunkSlot::File, prepared)
                             .map_err(|error| wrap(error.0))?,
-                        Unsplit::Raw(data) => archive
-                            .pack_entry(entries[index].0, &data)
-                            .map_err(|error| wrap(error.0))?,
+                        Unsplit::Dds(prepared) => {
+                            texture::store_dds(archive, entries[index].0, prepared).map_err(|error| wrap(error.0))?
+                        }
                     }
                     progress(tick + 1);
                 }
@@ -201,6 +208,7 @@ impl MultiSourcePacker {
             single_mip_chunk_x: *single_mip_chunk_x,
             single_mip_chunk_y: *single_mip_chunk_y,
             target: *target,
+            compression,
         };
 
         // The part of `LoadFile` that needs nothing of the packer's state.

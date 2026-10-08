@@ -1086,8 +1086,6 @@ mod tests {
             text.contains("MipMaps 00-00  Size:      100  PackedSize:      100  Offset: "),
             "{text}"
         );
-        // Extracting a texture is the DDS code of step 2.
-        assert!(read.unpack("textures\\a\\one.dds").is_err());
         drop(read);
         std::fs::remove_dir_all(&dir).unwrap();
     }

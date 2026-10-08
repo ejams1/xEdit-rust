@@ -135,6 +135,133 @@ fn every_format_packs_lists_and_extracts() {
     }
 }
 
+/// A DDS file of the format with a chain of mipmaps of generated data.
+fn dds_file(format: xedit_io::dds::Dxgi, size: i32, mips: i32, seed: u32) -> Vec<u8> {
+    use xedit_io::dds;
+    let mut file = vec![0u8; dds::HEADER_SIZE + dds::HEADER_DX10_SIZE];
+    dds::set_up_header(&mut file, format, size, size, mips, false, false);
+    file.truncate(dds::header_size(&file));
+    let bits = usize::from(dds::bits_per_pixel(format));
+    let mut state = seed;
+    let mut level = size as usize;
+    for _ in 0..mips {
+        let bytes = (level * level * bits / 8).max(16);
+        // Half runs, half noise, so that zlib and lz4 both find something.
+        for index in 0..bytes {
+            state = state.wrapping_mul(1664525).wrapping_add(1013904223);
+            file.push(if index % 3 == 0 {
+                (state >> 24) as u8
+            } else {
+                (index / 64) as u8
+            });
+        }
+        level = (level / 2).max(1);
+    }
+    file
+}
+
+#[test]
+fn texture_archives_pack_list_and_extract() {
+    use xedit_io::dds::Dxgi;
+    let source = Folder::new("source-textures");
+    let files = [
+        ("textures/t/big.dds", dds_file(Dxgi::BC1_UNORM, 1024, 11, 1)),
+        ("textures/t/seven.dds", dds_file(Dxgi::BC7_UNORM, 256, 9, 2)),
+        ("textures/t/small.dds", dds_file(Dxgi::BC3_UNORM, 64, 7, 3)),
+        ("textures/t/alike.dds", dds_file(Dxgi::BC3_UNORM, 64, 7, 3)),
+        ("textures/t/plain.dds", dds_file(Dxgi::R8G8B8A8_UNORM, 128, 1, 4)),
+    ];
+    for (name, data) in &files {
+        source.write(name, data);
+    }
+    let work = Folder::new("work-textures");
+    for (format, compress) in [
+        ("fo4dds", None),
+        ("fo4dds", Some("zlib")),
+        ("sf1dds", Some("lz4")),
+        ("sf1dds", Some("zlib")),
+    ] {
+        let archive = work.path(&format!("{format}-{}.ba2", compress.unwrap_or("plain")));
+        let packed = call(
+            true,
+            "archive.pack",
+            json!({ "archive": archive, "sources": [source.path("")], "format": format, "compress": compress }),
+        )
+        .unwrap();
+        assert_eq!(packed["archives"][0]["files"], 5, "{format}");
+        // The identical texture shares all of its chunks, and counts once.
+        assert_eq!(packed["archives"][0]["shared_files"], 1, "{format}");
+
+        let listed = call(false, "archive.list", json!({ "archive": archive, "files": true })).unwrap();
+        let entries = listed["entries"].as_array().unwrap();
+        let big = entries
+            .iter()
+            .find(|entry| entry["name"].as_str().unwrap().ends_with("big.dds"))
+            .unwrap();
+        assert_eq!(
+            (big["width"].as_u64(), big["height"].as_u64()),
+            (Some(1024), Some(1024))
+        );
+        assert_eq!(big["format"], "BC1_UNORM");
+
+        let output = Folder::new(&format!("out-textures-{format}-{}", compress.unwrap_or("plain")));
+        call(
+            true,
+            "archive.extract",
+            json!({ "archive": archive, "output": output.path("") }),
+        )
+        .unwrap();
+        let extracted = files_below(&output.0);
+        assert_eq!(extracted.len(), files.len());
+        for (name, data) in &files {
+            let found = extracted.iter().find(|(extracted, _)| extracted == name).unwrap();
+            assert!(&found.1 == data, "{format} {name}");
+        }
+    }
+}
+
+#[test]
+fn texture_archives_do_not_depend_on_the_threads() {
+    use xedit_io::dds::Dxgi;
+    let source = Folder::new("source-textures-threads");
+    for index in 0..9u32 {
+        source.write(
+            &format!("textures/t/t{index}.dds"),
+            &dds_file(
+                if index % 2 == 0 {
+                    Dxgi::BC1_UNORM
+                } else {
+                    Dxgi::BC7_UNORM
+                },
+                512,
+                10,
+                index % 4,
+            ),
+        );
+    }
+    let work = Folder::new("work-textures-threads");
+    for split in [json!(0), json!(-1)] {
+        let mut archives = Vec::new();
+        for threads in [1, 2, 7] {
+            let archive = work.path(&format!("t-{threads}-{split}.ba2"));
+            call(
+                true,
+                "archive.pack",
+                json!({
+                    "archive": archive, "sources": [source.path("")], "format": "fo4dds",
+                    "compress": "zlib", "threads": threads, "split": split,
+                }),
+            )
+            .unwrap();
+            archives.push(fs::read(&archive).unwrap());
+        }
+        assert!(
+            archives[0] == archives[1] && archives[0] == archives[2],
+            "split {split}"
+        );
+    }
+}
+
 #[test]
 fn the_archive_does_not_depend_on_the_threads() {
     let source = source("the_archive_");
@@ -267,7 +394,7 @@ fn bad_requests_have_stable_errors() {
         pack(json!({ "sources": [work.path("missing")] })).message,
         "No valid source file(s) found."
     );
-    // A texture archive needs the DDS code of phase 5 step 2.
+    // A texture archive takes DDS files only.
     let error = call(
         true,
         "archive.pack",
@@ -275,6 +402,7 @@ fn bad_requests_have_stable_errors() {
     )
     .unwrap_err();
     assert_eq!(error.code, "archive_failed");
+    assert!(error.message.contains("Not a valid DDS file"), "{}", error.message);
     assert!(!Path::new(&work.path("t.ba2")).exists(), "a failed pack leaves nothing");
 
     let error = call(false, "archive.list", json!({ "archive": work.path("missing.bsa") })).unwrap_err();
