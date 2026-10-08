@@ -158,9 +158,17 @@ impl Proc for ProcAdjustTransform {
         self.rot_p = get_verify_float(&self.rot_text[1])?;
         self.rot_r = get_verify_float(&self.rot_text[2])?;
         self.scale = get_verify_float(&self.scale_text)?;
-        if [&self.pos_x, &self.pos_y, &self.pos_z, &self.rot_y, &self.rot_p, &self.rot_r, &self.scale]
-            .iter()
-            .all(|value| value.is_empty())
+        if [
+            &self.pos_x,
+            &self.pos_y,
+            &self.pos_z,
+            &self.rot_y,
+            &self.rot_p,
+            &self.rot_r,
+            &self.scale,
+        ]
+        .iter()
+        .all(|value| value.is_empty())
         {
             return Err(DfError::new("No adjustment values set"));
         }
@@ -181,9 +189,11 @@ impl Proc for ProcAdjustTransform {
                 break;
             }
             let name = tree.edit_values(b, "Name")?;
-            if self.names.iter().any(|s| {
-                (self.exact_match && same_text(&name, s)) || (!self.exact_match && contains_text(&name, s))
-            }) {
+            if self
+                .names
+                .iter()
+                .any(|s| (self.exact_match && same_text(&name, s)) || (!self.exact_match && contains_text(&name, s)))
+            {
                 let t = tree.elements(b, "Transform")?;
                 changed = self.transform(tree, t)? || changed;
             }

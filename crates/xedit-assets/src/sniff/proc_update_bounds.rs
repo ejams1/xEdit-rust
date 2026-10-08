@@ -8,7 +8,7 @@
 //! `BSTriShape`, `NiTriShapeData` and `NiTriStripsData`.
 
 use crate::data_format::R;
-use crate::data_format_nif::{NifFile, block, blocks_count, block_update_bounds};
+use crate::data_format_nif::{NifFile, block, block_update_bounds, blocks_count};
 use crate::proc_base;
 use crate::sniff::processor::{GameType, Proc, ProcBase, ProcContext, ProcFileObject};
 

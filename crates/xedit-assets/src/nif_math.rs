@@ -311,14 +311,197 @@ impl Mul for Transform {
     }
 }
 
-/// Delphi `ArcCos`: `ArcTan2(Sqrt((1 + X) * (1 - X)), X)`.
+/// Delphi `ArcCos`: `ArcTan2(Sqrt((X + 1) * (1 - X)), X)`.
 pub fn arc_cos(x: f64) -> f64 {
-    ((1.0 + x) * (1.0 - x)).sqrt().atan2(x)
+    arc_tan2(((x + 1.0) * (1.0 - x)).sqrt(), x)
 }
 
-/// Delphi `ArcSin`: `ArcTan2(X, Sqrt((1 + X) * (1 - X)))`.
+/// Delphi `ArcSin`: `ArcTan2(X, Sqrt((X + 1) * (1 - X)))`.
 pub fn arc_sin(x: f64) -> f64 {
-    x.atan2(((1.0 + x) * (1.0 - x)).sqrt())
+    arc_tan2(x, ((x + 1.0) * (1.0 - x)).sqrt())
+}
+
+// Delphi's `ArcTan` and `ArcTan2` on Win64, read from the machine code of
+// `Sniff.exe` (`System.ArcTan` at 0x40C4B0 with `emu_PAtan` at 0x40C410
+// and `internalArcTan` at 0x40C390; `System.Math.ArcTan2` at 0x4717F0, whose
+// `TDoubleHelper.SpecialType` and `Exponent` are at 0x450A00 and 0x450980;
+// the names are in the JCL debug data of the program). `ArcTan2` divides
+// and calls `ArcTan`, so it differs from the C runtime's `atan2` by an ulp
+// at times, which shows in the tangents of `UpdateTangents` (weighted by
+// `ArcCos`) and the Euler angles of `M33ToEuler`. Every operation is one
+// double operation, in the order of the machine code.
+
+/// `TFloatSpecial` of a double (`TDoubleHelper.SpecialType`): zero,
+/// negative zero, denormal, negative denormal, positive, negative,
+/// infinity, negative infinity, NaN.
+fn special_type(x: f64) -> usize {
+    let bits = x.to_bits();
+    let w = (bits >> 48) as u16;
+    if (0x0010..=0x7FEF).contains(&w) {
+        4
+    } else if (0x8010..=0xFFEF).contains(&w) {
+        5
+    } else if bits == 0 {
+        0
+    } else if bits == 0x8000_0000_0000_0000 {
+        1
+    } else if w <= 0x000F {
+        2
+    } else if (0x8000..=0x800F).contains(&w) {
+        3
+    } else if bits == 0x7FF0_0000_0000_0000 {
+        6
+    } else if bits == 0xFFF0_0000_0000_0000 {
+        7
+    } else {
+        8
+    }
+}
+
+/// `TDoubleHelper.Exponent`: unbiased; -1022 for a denormal, 0 for zero,
+/// infinity and NaN.
+fn exponent(x: f64) -> i32 {
+    let bits = x.to_bits();
+    let e = ((bits >> 52) & 0x7FF) as i32;
+    let mantissa = bits & 0xF_FFFF_FFFF_FFFF;
+    if e > 0 && e < 0x7FF {
+        e - 0x3FF
+    } else if e == 0 && mantissa != 0 {
+        -1022
+    } else {
+        0
+    }
+}
+
+const ATAN_P: [f64; 8] = [
+    bits(0x3FB2_F5A7_353A_1B01),
+    bits(0xBFB7_429E_98FF_380E),
+    bits(0x3FBC_71C0_3715_3954),
+    bits(0xBFC2_4924_8E85_912A),
+    bits(0xBC53_C41A_EC2E_7942),
+    bits(0x3FC9_9999_9997_B5A2),
+    bits(0x3C63_5CC7_570C_5D0A),
+    bits(0xBFD5_5555_5555_552D),
+];
+/// The bounds of the intervals of `emu_PAtan`.
+const ATAN_BOUNDS: [f64; 3] = [
+    bits(0x3FBC_E000_0000_0000),
+    bits(0x3FD6_6B8C_9DCF_7AD5),
+    bits(0x3FE4_2226_0E9F_88F1),
+];
+/// The centers of the intervals and their arc tangents in two parts.
+const ATAN_CENTERS: [f64; 3] = [
+    bits(0x3FCD_3F41_37A3_FB2E),
+    bits(0x3FDE_DBB0_8B77_A6AF),
+    bits(0x3FE9_8E70_1B60_46BB),
+];
+const ATAN_HI: [f64; 3] = [
+    bits(0x3FCC_C0E3_B656_0C9F),
+    bits(0x3FDC_C0E3_B656_0C9F),
+    bits(0x3FE5_90AA_C8C0_8978),
+];
+const ATAN_LO: [f64; 3] = [
+    bits(0x3C6D_4191_1026_EB34),
+    bits(0xBC41_58A0_5270_3F90),
+    bits(0xBC84_1E18_65A7_6537),
+];
+const PI: f64 = bits(0x4009_21FB_5444_2D18);
+const HALF_PI_DOUBLE: f64 = bits(0x3FF9_21FB_5444_2D18);
+const QUARTER_PI_DOUBLE: f64 = bits(0x3FE9_21FB_5444_2D18);
+const THREE_QUARTERS_PI_DOUBLE: f64 = bits(0x4002_D97C_7F33_21D2);
+
+/// `internalArcTan`: the polynomial for a small argument.
+fn internal_arc_tan(x: f64) -> f64 {
+    let z = x * x;
+    let w = z * z;
+    let mut a = ATAN_P[0] * w;
+    let mut b = ATAN_P[1] * w;
+    a += ATAN_P[2];
+    b += ATAN_P[3];
+    a *= w;
+    a += ATAN_P[4];
+    a += ATAN_P[5];
+    b *= w;
+    b += ATAN_P[6];
+    a *= z;
+    b += a;
+    let mut r = b + ATAN_P[7];
+    r *= z;
+    r *= x;
+    r + x
+}
+
+/// `emu_PAtan`: the arc tangent of `0 <= x <= 1`.
+fn emu_p_atan(x: f64) -> f64 {
+    let mut i = 0;
+    while i < 3 && x > ATAN_BOUNDS[i] {
+        i += 1;
+    }
+    if i == 0 {
+        return internal_arc_tan(x);
+    }
+    let k = i - 1;
+    let y = (x - ATAN_CENTERS[k]) / (x * ATAN_CENTERS[k] + 1.0);
+    (internal_arc_tan(y) + ATAN_LO[k]) + ATAN_HI[k]
+}
+
+/// Delphi `ArcTan` on Win64.
+pub fn arc_tan(x: f64) -> f64 {
+    match special_type(x) {
+        0 | 1 | 8 => return x,
+        6 => return HALF_PI_DOUBLE,
+        7 => return -HALF_PI_DOUBLE,
+        _ => {}
+    }
+    if x == 0.0 {
+        return x;
+    }
+    let a = x.abs();
+    let r = if a > 1.0 {
+        HALF_PI_DOUBLE - emu_p_atan(1.0 / a)
+    } else {
+        emu_p_atan(a)
+    };
+    if 0.0 > x { -r } else { r }
+}
+
+/// The start value of `ArcTan2` by the special types of `Y` (rows) and `X`.
+const ATAN2_TABLE: [[f64; 9]; 9] = {
+    const N: f64 = f64::NAN;
+    const H: f64 = HALF_PI_DOUBLE;
+    const Q: f64 = QUARTER_PI_DOUBLE;
+    const T: f64 = THREE_QUARTERS_PI_DOUBLE;
+    [
+        [0.0, PI, 0.0, PI, 0.0, PI, 0.0, PI, N],
+        [-0.0, -PI, -0.0, -PI, -0.0, -PI, -0.0, -PI, N],
+        [H, H, 0.0, PI, 0.0, PI, 0.0, PI, N],
+        [-H, -H, 0.0, -PI, 0.0, -PI, -0.0, -PI, N],
+        [H, H, 0.0, PI, 0.0, PI, 0.0, PI, N],
+        [-H, -H, 0.0, -PI, 0.0, -PI, -0.0, -PI, N],
+        [H, H, H, H, H, H, Q, T, N],
+        [-H, -H, -H, -H, -H, -H, -Q, -T, N],
+        [N, N, N, N, N, N, N, N, N],
+    ]
+};
+
+/// Delphi `ArcTan2` on Win64.
+pub fn arc_tan2(y: f64, x: f64) -> f64 {
+    let (sy, sx) = (special_type(y), special_type(x));
+    let mut r = ATAN2_TABLE[sy][sx];
+    if (2..=5).contains(&sy) && (2..=5).contains(&sx) {
+        if exponent(y) - exponent(x) > 55 {
+            if y.is_sign_negative() == x.is_sign_negative() {
+                r += HALF_PI_DOUBLE;
+            } else {
+                r -= HALF_PI_DOUBLE;
+            }
+        } else if r == 0.0 {
+            r = arc_tan(y / x);
+        } else {
+            r += arc_tan(y / x);
+        }
+    }
+    r
 }
 
 // Delphi's `Sin` and `Cos` on Win64 (the RTL the 4.1.5q builds link): an
@@ -496,12 +679,16 @@ pub fn identity_m33() -> Matrix33 {
 pub fn m33_to_euler(m: &Matrix33) -> (f64, f64, f64) {
     if m[0][2] < 1.0 {
         if m[0][2] > -1.0 {
-            ((-m[1][2]).atan2(m[2][2]), arc_sin(m[0][2]), (-m[0][1]).atan2(m[0][0]))
+            (
+                arc_tan2(-m[1][2], m[2][2]),
+                arc_sin(m[0][2]),
+                arc_tan2(-m[0][1], m[0][0]),
+            )
         } else {
-            (-(-m[1][0]).atan2(m[1][1]), -std::f64::consts::PI / 2.0, 0.0)
+            (-arc_tan2(-m[1][0], m[1][1]), -std::f64::consts::PI / 2.0, 0.0)
         }
     } else {
-        (m[1][0].atan2(m[1][1]), std::f64::consts::PI / 2.0, 0.0)
+        (arc_tan2(m[1][0], m[1][1]), std::f64::consts::PI / 2.0, 0.0)
     }
 }
 
@@ -933,6 +1120,31 @@ pub fn calculate_tangents_bitangents2(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn arc_tangent_of_delphi() {
+        // Within two ulps of the C runtime's everywhere, the special values
+        // as `ArcTan2` gives them.
+        let mut x: f64 = -7.3;
+        while x < 7.3 {
+            let mut y: f64 = -5.1;
+            while y < 5.1 {
+                let (port, crt) = (arc_tan2(y, x), y.atan2(x));
+                assert!(
+                    (port - crt).abs() <= 4.0 * f64::EPSILON * crt.abs().max(1e-300),
+                    "{y} {x}: {port} {crt}"
+                );
+                y += 0.37;
+            }
+            x += 0.29;
+        }
+        assert_eq!(arc_tan2(0.0, -0.0), PI);
+        assert_eq!(arc_tan2(1.0, 0.0), HALF_PI_DOUBLE);
+        assert_eq!(arc_tan2(1e300, 1e-300), HALF_PI_DOUBLE);
+        assert_eq!(arc_cos(1.0), 0.0);
+        assert!((arc_cos(-1.0) - PI).abs() < 1e-15);
+        assert_eq!(arc_tan(f64::INFINITY), HALF_PI_DOUBLE);
+    }
 
     #[test]
     fn sine_and_cosine_of_delphi() {

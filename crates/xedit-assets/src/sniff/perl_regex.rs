@@ -227,7 +227,10 @@ mod tests {
     #[test]
     fn replacements() {
         let re = PerlRegEx::new("(.+)\\.dds").unwrap();
-        assert_eq!(re.replace_all("Tex\\A.DDS", "$1_n.dds"), (true, "Tex\\A_n.dds".to_owned()));
+        assert_eq!(
+            re.replace_all("Tex\\A.DDS", "$1_n.dds"),
+            (true, "Tex\\A_n.dds".to_owned())
+        );
         let re = PerlRegEx::new("^\\s*|\\s*$").unwrap();
         assert_eq!(re.replace_all("  name ", ""), (true, "name".to_owned()));
         let re = PerlRegEx::new("b").unwrap();

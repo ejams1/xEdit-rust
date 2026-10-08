@@ -86,6 +86,19 @@ pub struct RunOptions {
     pub threads: Option<i32>,
     /// Process every file but write nothing.
     pub dry_run: bool,
+    /// Receives each output (the path under the output folder and the
+    /// bytes) instead of the file being written.
+    pub sink: Option<OutputSink>,
+}
+
+/// A receiver of the outputs of a run (`RunOptions::sink`).
+#[derive(Clone)]
+pub struct OutputSink(pub std::sync::Arc<dyn Fn(&str, &[u8]) + Send + Sync>);
+
+impl std::fmt::Debug for OutputSink {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("OutputSink")
+    }
 }
 
 impl RunOptions {
@@ -105,6 +118,7 @@ impl RunOptions {
                 .and_then(|value| crate::variant::str_to_int(&value))
                 .filter(|&count| count >= 0),
             dry_run: false,
+            sink: None,
         }
     }
 }
@@ -283,7 +297,10 @@ pub fn run(settings: Option<MemIniFile>, options: &RunOptions) -> Result<RunRepo
         .iter()
         .position(|proc| same_text(&options.operation, proc.base().title))
         .ok_or_else(|| {
-            match procs::PROCS.iter().find(|entry| same_text(&options.operation, entry.title)) {
+            match procs::PROCS
+                .iter()
+                .find(|entry| same_text(&options.operation, entry.title))
+            {
                 Some(entry) => RunError::NotPorted(entry.title.to_owned(), entry.pending.to_owned()),
                 None => RunError::UnknownOperation(options.operation.clone()),
             }
@@ -323,7 +340,16 @@ pub fn run(settings: Option<MemIniFile>, options: &RunOptions) -> Result<RunRepo
         let storage = Storage::new(section, settings.as_ref());
         proc.on_show(&storage);
     }
-    let result = run_proc(proc.as_mut(), settings, options, subdir, skip_on_errors, copy_all, &path_contains, &threads_text);
+    let result = run_proc(
+        proc.as_mut(),
+        settings,
+        options,
+        subdir,
+        skip_on_errors,
+        copy_all,
+        &path_contains,
+        &threads_text,
+    );
     proc.on_hide();
     result
 }
@@ -343,10 +369,11 @@ fn run_proc(
     let input = options.input.trim();
     let input_is_archive = is_archive(&options.input) && std::path::Path::new(&options.input).is_file();
     if input.is_empty() || (!std::path::Path::new(&options.input).is_dir() && !input_is_archive) {
-        return Err(RunError::Message("Input directory/archive not found or invalid".to_owned()));
+        return Err(RunError::Message(
+            "Input directory/archive not found or invalid".to_owned(),
+        ));
     }
-    if !proc.base().no_output && (options.output.trim().is_empty() || !std::path::Path::new(&options.output).is_dir())
-    {
+    if !proc.base().no_output && (options.output.trim().is_empty() || !std::path::Path::new(&options.output).is_dir()) {
         return Err(RunError::Message("Output directory not found".to_owned()));
     }
     let input_directory = if is_archive(&options.input) {
@@ -361,6 +388,7 @@ fn run_proc(
     manager.copy_all = copy_all;
     manager.skip_on_errors = skip_on_errors;
     manager.dry_run = options.dry_run;
+    manager.sink = options.sink.clone();
 
     proc.on_start().map_err(|error| RunError::Message(error.0))?;
 
@@ -374,8 +402,8 @@ fn run_proc(
     };
     let mut names: Vec<(String, Option<usize>)> = Vec::new();
     if is_archive(&input.input_directory) {
-        let archive = Archive::open(std::path::Path::new(&input.input_directory))
-            .map_err(|error| RunError::Message(error.0))?;
+        let archive =
+            Archive::open(std::path::Path::new(&input.input_directory)).map_err(|error| RunError::Message(error.0))?;
         for (index, entry) in archive.files().iter().enumerate() {
             if !proc.base().is_accepted_file(&entry.name) {
                 continue;
@@ -569,10 +597,17 @@ mod tests {
 
     #[test]
     fn command_line_switches() {
-        let args: Vec<String> = ["-S:a.ini", "-OP:Update bounds", "/i:C:\\in", "-subdir:no", "-skip:YES", "-threads:4"]
-            .iter()
-            .map(|arg| (*arg).to_owned())
-            .collect();
+        let args: Vec<String> = [
+            "-S:a.ini",
+            "-OP:Update bounds",
+            "/i:C:\\in",
+            "-subdir:no",
+            "-skip:YES",
+            "-threads:4",
+        ]
+        .iter()
+        .map(|arg| (*arg).to_owned())
+        .collect();
         let options = RunOptions::from_command_line(&args);
         assert_eq!(options.operation, "Update bounds");
         assert_eq!(options.input, "C:\\in");
