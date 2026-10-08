@@ -737,7 +737,9 @@ fn rerun_crashes(
         }
         // The output may be named otherwise (`Convert to and from JSON`
         // writes `<name>.json`); the run alone wrote only this file's.
-        results.outputs.extend(rerun.outputs.iter().map(|(output, hash)| (output.clone(), *hash)));
+        results
+            .outputs
+            .extend(rerun.outputs.iter().map(|(output, hash)| (output.clone(), *hash)));
         results.log.extend(rerun.log);
         results.log.sort();
         results.extra.extend(rerun.extra);

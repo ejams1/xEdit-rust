@@ -19,36 +19,145 @@ struct FloatRec {
 /// `CMaxExtPrecision` without ten byte extendeds.
 const MAX_EXT_PRECISION: i32 = 17;
 
-/// `Pow10Tab0` and `Pow10Tab1` of the `Double` build of `System.pas`.
-const POW10_TAB0: [f64; 32] = [
-    1e0, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9, 1e10, 1e11, 1e12, 1e13, 1e14, 1e15, 1e16, 1e17, 1e18, 1e19, 1e20,
-    1e21, 1e22, 1e23, 1e24, 1e25, 1e26, 1e27, 1e28, 1e29, 1e30, 1e31,
+/// The tables of `Power10` in the 64-bit RTL (`System.Power10` at
+/// 0x40CDF0 in `Sniff.exe`): each power of ten as a pair of doubles, a
+/// high part of 26 significant bits and the rest, so that a product with
+/// them keeps about 80 bits until its last rounding.
+/// `10^i`, `i` in 0..32.
+const POW10_TAB0: [(u64, u64); 32] = [
+    (0x3ff0000000000000, 0x0000000000000000),
+    (0x4024000000000000, 0x0000000000000000),
+    (0x4059000000000000, 0x0000000000000000),
+    (0x408f400000000000, 0x0000000000000000),
+    (0x40c3880000000000, 0x0000000000000000),
+    (0x40f86a0000000000, 0x0000000000000000),
+    (0x412e848000000000, 0x0000000000000000),
+    (0x416312d000000000, 0x0000000000000000),
+    (0x4197d78400000000, 0x0000000000000000),
+    (0x41cdcd6500000000, 0x0000000000000000),
+    (0x4202a05f20000000, 0x0000000000000000),
+    (0x42374876e8000000, 0x0000000000000000),
+    (0x426d1a94a0000000, 0x40b0000000000000),
+    (0x42a2309ce4000000, 0x40e4000000000000),
+    (0x42d6bcc41c000000, 0x4124800000000000),
+    (0x430c6bf524000000, 0x4151a00000000000),
+    (0x4341c37934000000, 0x419f040000000000),
+    (0x4376345784000000, 0x41bd8a0000000000),
+    (0x43abc16d64000000, 0x41fa764000000000),
+    (0x43e158e460000000, 0x421227a000000000),
+    (0x4415af1d78000000, 0x4246b18800000000),
+    (0x444b1ae4d4000000, 0x4297177a80000000),
+    (0x4480f0cf04000000, 0x42d26eac90000000),
+    (0x44b52d02c4000000, 0x430f0a57b4000000),
+    (0x44ea784378000000, 0x432d99db42000000),
+    (0x45208b2a2c000000, 0x433401484a000000),
+    (0x4554adf4b4000000, 0x43a99019a5c80000),
+    (0x4589d971e4000000, 0x43bfd0803ce80000),
+    (0x45c027e72c000000, 0x4418f89409844000),
+    (0x45f431e0f8000000, 0x444736b90be55000),
+    (0x46293e5938000000, 0x446a08ce9dbd4800),
+    (0x465f8def88000000, 0x44416048a5934000),
 ];
-const POW10_TAB1: [f64; 8] = [1e0, 1e32, 1e64, 1e96, 1e128, 1e160, 1e192, 1e224];
+/// `10^(32 i)`, `i` in 0..8.
+const POW10_TAB1: [(u64, u64); 8] = [
+    (0x3ff0000000000000, 0x0000000000000000),
+    (0x4693b8b5b4000000, 0x44d056e16b3be040),
+    (0x4d384f03e8000000, 0x4b73ff9f4daa797f),
+    (0x53ddf67560000000, 0x5226c59b14a2c5d0),
+    (0x5a827748f8000000, 0x58c301d319bf8cde),
+    (0x6126c2d424000000, 0x5f66ffcc2f54aef7),
+    (0x67cc0e1ef0000000, 0x660a724eaad50b78),
+    (0x6e714a52dc000000, 0x6ccfe33cc92f82bd),
+];
+/// `10^-i`, `i` in 0..32.
+const POW10_NEG_TAB0: [(u64, u64); 32] = [
+    (0x3ff0000000000000, 0x0000000000000000),
+    (0x3fb9999998000000, 0x3df999999999999a),
+    (0x3f847ae144000000, 0x3ddd70a3d70a3d71),
+    (0x3f50624dd0000000, 0x3da78d4fdf3b645a),
+    (0x3f1a36e2e8000000, 0x3d68e219652bd3c3),
+    (0x3ee4f8b588000000, 0x3d1c6d1e108c3f3e),
+    (0x3eb0c6f7a0000000, 0x3ce6bdb1a6d698fe),
+    (0x3e7ad7f298000000, 0x3cc5e57a42bc3d33),
+    (0x3e45798ee0000000, 0x3c918461cefcfdc2),
+    (0x3e112e0be8000000, 0x3c236b4a59731681),
+    (0x3ddb7cdfd8000000, 0x3c1d7bdbab7d6ae7),
+    (0x3da5fd7fe0000000, 0x3be7964955fdef1f),
+    (0x3d71979980000000, 0x3bb2dea11197f27f),
+    (0x3d3c25c268000000, 0x3b525da07099432d),
+    (0x3d06849b84000000, 0x3b55095cd80f5385),
+    (0x3cd203af9c000000, 0x3b273ab0acd90f9d),
+    (0x3c9cd2b294000000, 0x3aeec44de15b4c2f),
+    (0x3c670ef544000000, 0x3ab236a4b44909bf),
+    (0x3c32725dd0000000, 0x3a7d243aba0e75fe),
+    (0x3bfd83c94c000000, 0x3a4db69561a52b32),
+    (0x3bc79ca10c000000, 0x39f248446baa23d3),
+    (0x3b92e3b408000000, 0x39e074da7beed3f7),
+    (0x3b5e392010000000, 0x39575ee5962a6499),
+    (0x3b282db340000000, 0x3922b25144eeb6e1),
+    (0x3af357c298000000, 0x393a88ea76a58925),
+    (0x3abef2d0f4000000, 0x38fda7dd8aa27508),
+    (0x3a88c240c4000000, 0x38b5d962776a54d9),
+    (0x3a53ce9a34000000, 0x38a791e07e48775f),
+    (0x3a1fb0f6bc000000, 0x38628300ca0d8bcb),
+    (0x39e95a5efc000000, 0x3835359a3b3e096f),
+    (0x39b4484bfc000000, 0x38075e14fc31a126),
+    (0x398039d664000000, 0x37c89687f9e901d6),
+];
+/// `10^(-32 i)`, `i` in 0..8.
+const POW10_NEG_TAB1: [(u64, u64); 8] = [
+    (0x3ff0000000000000, 0x0000000000000000),
+    (0x3949f623d4000000, 0x378a8a732974cfbc),
+    (0x32a50ffd44000000, 0x30de94e7a694fc8e),
+    (0x2c0116805c000000, 0x2a57fd75539b11dc),
+    (0x255bba08cc000000, 0x23ac64bce4a0ac7d),
+    (0x1eb67e9c10000000, 0x1d03db73a09359ed),
+    (0x18123ff06c000000, 0x16675423cc067b63),
+    (0x116d9ca79c000000, 0x0fa894629d7b49f1),
+];
+/// `10^256` as a pair.
+const POW10_256: (u64, u64) = (0x75154fdd7c000000, 0x736b9df9de8dddbc);
+/// `10^-256` as a pair scaled by 2^850, and the scale `2^-850`.
+const POW10_NEG_256: (u64, u64) = (0x3fe8062864000000, 0x3e158de864e7ea44);
+const POW10_NEG_256_SCALE: u64 = 0x0ad0000000000000;
 
-/// Port of `Power10` without ten byte extendeds: `value * 10^power` as the
-/// product of up to four table entries, each multiplication rounded to
-/// double. The result differs from a correctly rounded one in the last
-/// bits, which `FloatToDecimal` turns into digits.
+/// The product of `value` and a table pair (at 0x40CD70): `value` split
+/// into a high part of 26 bits and the rest, the partial products added
+/// from the smallest.
+fn mul_pair(value: f64, (hi, lo): (u64, u64)) -> f64 {
+    let (hi, lo) = (f64::from_bits(hi), f64::from_bits(lo));
+    let vh = f64::from_bits(value.to_bits() & 0xffff_ffff_f800_0000);
+    let vl = value - vh;
+    if lo == 0.0 {
+        vh * hi + vl * hi
+    } else {
+        ((vl * lo + vh * lo) + vl * hi) + vh * hi
+    }
+}
+
+/// Port of `Power10` of the 64-bit RTL, from the machine code of
+/// `Sniff.exe`: `value * 10^power` as the product of up to four table
+/// pairs (`mul_pair`), negative powers by the reciprocal tables. The
+/// result is near the correctly rounded one but not always it, and
+/// `FloatToDecimal` turns its last bits into digits (`1.05E-5` from
+/// `0.000014 * 0.75` gives `0.000011` with six decimals, found by `parity
+/// sniff` on the vertices of Skyrim meshes).
 fn power10(value: f64, power: i32) -> f64 {
     let mut result = value;
     if power > 0 {
         if power >= 632 {
             return f64::INFINITY;
         }
-        result *= POW10_TAB0[(power & 0x1F) as usize];
+        if power & 0x1F != 0 {
+            result = mul_pair(result, POW10_TAB0[(power & 0x1F) as usize]);
+        }
         let p = power >> 5;
         if p != 0 {
-            let i = p & 7;
-            if i != 0 {
-                result *= POW10_TAB1[i as usize];
+            if p & 7 != 0 {
+                result = mul_pair(result, POW10_TAB1[(p & 7) as usize]);
             }
-            let i = p >> 3;
-            if i >= 1 {
-                result *= 1e256;
-            }
-            if i == 2 {
-                result *= 1e256;
+            for _ in 0..(p >> 3) {
+                result = mul_pair(result, POW10_256);
             }
         }
     } else if power < 0 {
@@ -56,19 +165,16 @@ fn power10(value: f64, power: i32) -> f64 {
         if p >= 632 {
             return 0.0;
         }
-        result /= POW10_TAB0[(p & 0x1F) as usize];
+        if p & 0x1F != 0 {
+            result = mul_pair(result, POW10_NEG_TAB0[(p & 0x1F) as usize]);
+        }
         let p = p >> 5;
         if p != 0 {
-            let i = p & 7;
-            if i != 0 {
-                result /= POW10_TAB1[i as usize];
+            if p & 7 != 0 {
+                result = mul_pair(result, POW10_NEG_TAB1[(p & 7) as usize]);
             }
-            let i = p >> 3;
-            if i >= 1 {
-                result *= 1e-256;
-            }
-            if i == 2 {
-                result *= 1e-256;
+            for _ in 0..(p >> 3) {
+                result = mul_pair(result, POW10_NEG_256) * f64::from_bits(POW10_NEG_256_SCALE);
             }
         }
     }
@@ -554,6 +660,22 @@ pub fn str_to_float(text: &str) -> Option<f64> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn power10_rounds_as_the_rtl() {
+        // The products of six decimal texts and 0.75 that `Sniff.exe`'s
+        // `Apply transformation` writes (a probe of 239 vertices); the
+        // first two round up only with the RTL's paired tables.
+        for (value, text) in [
+            (1.4e-5, "0.000011"),
+            (1.8e-5, "0.000014"),
+            (2.6e-5, "0.000020"),
+            (5.4e-5, "0.000040"),
+            (1.1e-4, "0.000083"),
+        ] {
+            assert_eq!(float_to_str_f_fixed(value * 0.75, 6), text, "{value}");
+        }
+    }
 
     #[test]
     fn fixed_format() {
