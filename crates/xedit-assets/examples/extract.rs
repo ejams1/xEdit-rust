@@ -12,8 +12,9 @@ fn main() {
     let archive = xedit_io::archive::Archive::open(Path::new(&args[0])).expect("archive");
     let names: Vec<String> = archive
         .files()
+        .iter()
+        .map(|entry| entry.name.to_lowercase())
         .filter(|name| name.contains(&args[1]))
-        .map(str::to_owned)
         .collect();
     for name in names {
         let data = archive.read(&name).unwrap().unwrap();

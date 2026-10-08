@@ -139,7 +139,11 @@ fn hash_names() -> Vec<String> {
 
 /// The files of one archive that the check takes.
 fn sample(archive: &Archive, sample: usize) -> Vec<String> {
-    let mut names: Vec<String> = archive.files().map(str::to_owned).collect();
+    let mut names: Vec<String> = archive
+        .files()
+        .iter()
+        .map(|entry| entry.name.to_lowercase().replace('/', "\\"))
+        .collect();
     names.sort();
     let mut taken: BTreeMap<&'static str, usize> = BTreeMap::new();
     names
