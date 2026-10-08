@@ -42,9 +42,21 @@ pub enum OldValueMode {
 impl OldValueMode {
     fn from_int(value: i32) -> Option<OldValueMode> {
         use OldValueMode::*;
-        [Equal, NotEqual, Greater, Lesser, Contains, DoesntContain, StartsWith, EndsWith, And, AndNot, RegExp]
-            .get(usize::try_from(value).ok()?)
-            .copied()
+        [
+            Equal,
+            NotEqual,
+            Greater,
+            Lesser,
+            Contains,
+            DoesntContain,
+            StartsWith,
+            EndsWith,
+            And,
+            AndNot,
+            RegExp,
+        ]
+        .get(usize::try_from(value).ok()?)
+        .copied()
     }
 
     /// `MathOld`.
@@ -73,9 +85,11 @@ pub enum NewValueMode {
 impl NewValueMode {
     fn from_int(value: i32) -> Option<NewValueMode> {
         use NewValueMode::*;
-        [Set, Add, Mul, Replace, Prepend, Append, And, AndNot, Or, Remove, Round, MulRound]
-            .get(usize::try_from(value).ok()?)
-            .copied()
+        [
+            Set, Add, Mul, Replace, Prepend, Append, And, AndNot, Or, Remove, Round, MulRound,
+        ]
+        .get(usize::try_from(value).ok()?)
+        .copied()
     }
 
     /// `MathNew`.
@@ -292,7 +306,10 @@ fn modify_element(tree: &mut Tree, block: El, m: &Modify, log: &mut Option<Vec<S
                 format!("{}{}", m.value, new_value_string.chars().skip(skip).collect::<String>())
             }
             OldValueMode::EndsWith => {
-                let keep = new_value_string.chars().count().saturating_sub(m.old_value.chars().count());
+                let keep = new_value_string
+                    .chars()
+                    .count()
+                    .saturating_sub(m.old_value.chars().count());
                 format!("{}{}", new_value_string.chars().take(keep).collect::<String>(), m.value)
             }
             OldValueMode::RegExp => regexp_subject,
@@ -419,12 +436,20 @@ impl Proc for ProcUniversalTweaker {
         // The combo boxes hold the modes as objects; an unknown one is the
         // first item.
         let mode = storage.get_integer("iValueMode", 0);
-        self.value_mode_index = if NewValueMode::from_int(mode).is_some() { mode } else { 0 };
+        self.value_mode_index = if NewValueMode::from_int(mode).is_some() {
+            mode
+        } else {
+            0
+        };
         self.value_text = storage.get_string("sValue", "0.8");
         self.old_path_text = storage.get_string("sOldPath", "");
         self.old_value_check_checked = storage.get_bool("bOldValueCheck", false);
         let mode = storage.get_integer("iOldValueMode", 0);
-        self.old_value_mode_index = if OldValueMode::from_int(mode).is_some() { mode } else { 0 };
+        self.old_value_mode_index = if OldValueMode::from_int(mode).is_some() {
+            mode
+        } else {
+            0
+        };
         self.old_value_text = storage.get_string("sOldValue", "");
         // The presets (`sPresets`) only fill the controls in the GUI.
     }
@@ -459,7 +484,12 @@ impl Proc for ProcUniversalTweaker {
 
         if matches!(
             self.value_mode,
-            NewValueMode::Add | NewValueMode::Mul | NewValueMode::And | NewValueMode::AndNot | NewValueMode::Or | NewValueMode::Round
+            NewValueMode::Add
+                | NewValueMode::Mul
+                | NewValueMode::And
+                | NewValueMode::AndNot
+                | NewValueMode::Or
+                | NewValueMode::Round
         ) && df_str_to_float(&self.value).is_err()
         {
             return Err(DfError::new("Value must be a number"));
@@ -579,7 +609,10 @@ mod tests {
 
     #[test]
     fn string_replace_ignores_case() {
-        assert_eq!(replace_text("Textures\\Old\\a.dds", "textures\\old\\", "textures\\new\\"), "textures\\new\\a.dds");
+        assert_eq!(
+            replace_text("Textures\\Old\\a.dds", "textures\\old\\", "textures\\new\\"),
+            "textures\\new\\a.dds"
+        );
         assert_eq!(replace_text("aAa", "a", "b"), "bbb");
         assert!(starts_with_text("ABC", "ab") && ends_with_text("ABC", "bc"));
     }

@@ -243,11 +243,48 @@ pub fn string_list_file_bytes(lines: &[String]) -> Vec<u8> {
 /// quote is read up to its closing quote (`AnsiExtractQuotedStr`), and a
 /// delimiter at the end adds an empty field.
 pub fn delimited_text(value: &str, delimiter: char) -> Vec<String> {
+    set_delimited_text(value, delimiter, true)
+}
+
+/// `TStrings.CommaText := Value`: as `delimited_text` with a comma, but
+/// without `StrictDelimiter`, so the characters up to the space split too
+/// and are skipped around the fields.
+pub fn comma_text(value: &str) -> Vec<String> {
+    set_delimited_text(value, ',', false)
+}
+
+/// `TStrings.CommaText` (the getter): an empty field and a field with a
+/// character up to the space, a comma or a quote are quoted.
+pub fn comma_text_of(fields: &[String]) -> String {
+    let mut text = String::new();
+    for (index, field) in fields.iter().enumerate() {
+        if index > 0 {
+            text.push(',');
+        }
+        if field.is_empty() || field.chars().any(|c| c <= ' ' || c == ',' || c == '"') {
+            text.push('"');
+            text.push_str(&field.replace('"', "\"\""));
+            text.push('"');
+        } else {
+            text.push_str(field);
+        }
+    }
+    text
+}
+
+/// `TStrings.SetDelimitedText`.
+fn set_delimited_text(value: &str, delimiter: char, strict: bool) -> Vec<String> {
     let chars: Vec<char> = value.chars().collect();
     let mut result = Vec::new();
+    let blank = |c: char| ('\u{1}'..=' ').contains(&c);
     let mut p = 0;
     // `PChar` stops at the first #0.
     let end = chars.iter().position(|&c| c == '\0').unwrap_or(chars.len());
+    if !strict {
+        while p < end && blank(chars[p]) {
+            p += 1;
+        }
+    }
     while p < end {
         let field: String;
         if chars[p] == '"' {
@@ -270,17 +307,27 @@ pub fn delimited_text(value: &str, delimiter: char) -> Vec<String> {
             field = text;
         } else {
             let start = p;
-            while p < end && chars[p] != delimiter {
+            while p < end && (strict || chars[p] > ' ') && chars[p] != delimiter {
                 p += 1;
             }
             field = chars[start..p].iter().collect();
         }
         result.push(field);
+        if !strict {
+            while p < end && blank(chars[p]) {
+                p += 1;
+            }
+        }
         if p < end && chars[p] == delimiter {
             if p + 1 >= end {
                 result.push(String::new());
             }
             p += 1;
+            if !strict {
+                while p < end && blank(chars[p]) {
+                    p += 1;
+                }
+            }
         }
     }
     result
@@ -350,6 +397,31 @@ pub fn extract_file_path(file_name: &str) -> &str {
 pub fn change_file_ext(file_name: &str, extension: &str) -> String {
     let ext = extract_file_ext(file_name);
     format!("{}{extension}", &file_name[..file_name.len() - ext.len()])
+}
+
+/// `SameValue` of two doubles with the default epsilon: the resolution of
+/// `System.Math` (`DoubleResolution`, 1E-15 times the fuzz factor 1000)
+/// relative to the smaller value.
+pub fn same_value(a: f64, b: f64) -> bool {
+    const RESOLUTION: f64 = 1e-12;
+    let epsilon = (a.abs().min(b.abs()) * RESOLUTION).max(RESOLUTION);
+    if a > b { a - b <= epsilon } else { b - a <= epsilon }
+}
+
+/// `SameValue` of two singles with the default epsilon
+/// (`SingleResolution`, 1E-7 times 1000): the epsilon is worked out in
+/// double precision and the difference in single, as the machine code of
+/// the RTL does.
+pub fn same_value_single(a: f32, b: f32) -> bool {
+    const RESOLUTION: f64 = 1e-4;
+    let smaller = if f64::from(b).abs() > f64::from(a).abs() {
+        f64::from(a).abs()
+    } else {
+        f64::from(b).abs()
+    };
+    let scaled = smaller * RESOLUTION;
+    let epsilon = (if scaled > RESOLUTION { scaled } else { RESOLUTION }) as f32;
+    if a > b { epsilon >= a - b } else { epsilon >= b - a }
 }
 
 /// An exception of a processor where upstream reads through a nil
@@ -470,12 +542,20 @@ impl ProcBase {
 
     /// `GetSupportedGameNames`.
     pub fn supported_game_names(&self) -> String {
-        self.supported_games.iter().map(|game| game.name()).collect::<Vec<_>>().join(", ")
+        self.supported_games
+            .iter()
+            .map(|game| game.name())
+            .collect::<Vec<_>>()
+            .join(", ")
     }
 
     /// `GetExtensionNames`.
     pub fn extension_names(&self) -> String {
-        self.extensions.iter().map(|ext| format!("*.{ext}")).collect::<Vec<_>>().join(", ")
+        self.extensions
+            .iter()
+            .map(|ext| format!("*.{ext}"))
+            .collect::<Vec<_>>()
+            .join(", ")
     }
 
     /// `SetExtensionNames`: the extensions of a comma separated list of
@@ -680,6 +760,8 @@ pub struct ProcManager {
     pub dry_run: bool,
     /// The lines of [`ProcContext::proc_log`], in file order.
     pub proc_log: Vec<String>,
+    /// Receives the outputs instead of the files being written.
+    pub sink: Option<crate::sniff::main_form::OutputSink>,
 }
 
 impl ProcManager {
@@ -696,6 +778,7 @@ impl ProcManager {
             processed_count: 0,
             dry_run: false,
             proc_log: Vec::new(),
+            sink: None,
         }
     }
 
@@ -769,7 +852,9 @@ impl ProcManager {
 
         // Saving the output file.
         let out_file = format!("{}{}", self.output_directory, file.file_name);
-        if !self.dry_run {
+        if let Some(sink) = &self.sink {
+            (sink.0)(&file.file_name, &data);
+        } else if !self.dry_run {
             let dir = extract_file_path(&out_file).to_owned();
             if dir != self.output_directory {
                 self.create_directory(&dir)?;
@@ -823,6 +908,9 @@ mod tests {
         assert_eq!(split("\"a\"\"b\"x,c"), vec!["a\"b", "x", "c"]);
         assert_eq!(delimited_text("1 2  3", ' '), vec!["1", "2", "", "3"]);
         assert_eq!(delimited_text_of(&["1".into(), "a b".into()], ' '), "1 \"a b\"");
+        let fields = comma_text(" \"0 Other=\", \"1 Head=2\",3 x=4");
+        assert_eq!(fields, vec!["0 Other=", "1 Head=2", "3", "x=4"]);
+        assert_eq!(comma_text_of(&fields[..2]), "\"0 Other=\",\"1 Head=2\"");
     }
 
     #[test]

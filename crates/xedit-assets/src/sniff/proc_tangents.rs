@@ -26,7 +26,14 @@ impl ProcTangents {
         ProcTangents {
             base: ProcBase::new(
                 "Update tangents and binormals",
-                &[GameType::Tes4, GameType::Fo3, GameType::Fnv, GameType::Tes5, GameType::Sse, GameType::Fo4],
+                &[
+                    GameType::Tes4,
+                    GameType::Fo3,
+                    GameType::Fnv,
+                    GameType::Tes5,
+                    GameType::Sse,
+                    GameType::Fo4,
+                ],
                 &["nif"],
             ),
             add_if_missing: false,

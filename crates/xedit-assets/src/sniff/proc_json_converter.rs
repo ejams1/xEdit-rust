@@ -111,7 +111,8 @@ impl Proc for ProcJsonConverter {
                 return Ok(Vec::new());
             }
             let path = format!("{}{}", file.input.input_directory, file.file_name);
-            let bytes = std::fs::read(&path).map_err(|error| DfError::new(format!("Cannot open file \"{path}\". {error}")))?;
+            let bytes =
+                std::fs::read(&path).map_err(|error| DfError::new(format!("Cannot open file \"{path}\". {error}")))?;
             nif.from_json(&string_list_text(&bytes))?;
             let result = nif.save_to_data()?;
             file.file_name = change_file_ext(&file.file_name, "");

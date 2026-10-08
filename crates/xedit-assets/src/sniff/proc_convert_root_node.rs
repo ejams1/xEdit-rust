@@ -37,7 +37,9 @@ fn node_to_items(node_from: &str) -> &'static [&'static str] {
 
 /// `TStrings.IndexOf`: ignores case.
 fn index_of(items: &[&str], text: &str) -> Option<usize> {
-    items.iter().position(|item| crate::sniff::processor::ansi_same_text(item, text))
+    items
+        .iter()
+        .position(|item| crate::sniff::processor::ansi_same_text(item, text))
 }
 
 pub struct ProcConvertRootNode {
@@ -55,7 +57,14 @@ impl ProcConvertRootNode {
         ProcConvertRootNode {
             base: ProcBase::new(
                 "Convert block type",
-                &[GameType::Tes4, GameType::Fo3, GameType::Fnv, GameType::Tes5, GameType::Sse, GameType::Fo4],
+                &[
+                    GameType::Tes4,
+                    GameType::Fo3,
+                    GameType::Fnv,
+                    GameType::Tes5,
+                    GameType::Sse,
+                    GameType::Fo4,
+                ],
                 &["nif"],
             ),
             node_from: String::new(),
@@ -111,7 +120,9 @@ impl Proc for ProcConvertRootNode {
                 }
                 "BSDismemberSkinInstance" => {
                     let mut parts = 1;
-                    let link = tree.elements(converted, "Skin Partition")?.ok_or_else(access_violation)?;
+                    let link = tree
+                        .elements(converted, "Skin Partition")?
+                        .ok_or_else(access_violation)?;
                     if let Some(skin_partition) = tree.links_to(link)? {
                         parts = tree.native_values(skin_partition, "Num Partitions")?.to_i32()?;
                     }

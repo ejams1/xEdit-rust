@@ -18,15 +18,15 @@ use std::cmp::Ordering;
 use crate::data_format::{DfError, El, R, Tree};
 use crate::data_format_nif::{
     NifFile, NifOptions, NifVersion, block, block_add_extra_data, block_by_name, block_by_type,
-    block_extra_datas_by_type, block_get_controller, block_get_skin, block_get_string_palette_string, block_is_editor_marker,
-    block_is_hidden, block_is_ni_object, block_property_by_type, block_referenced_by, block_remove_branch, block_strings,
-    block_type, blocks_by_type, blocks_count, detect_bsx_flags, get_assets, get_link_arrays, get_unique_name, header,
-    nifblk, root_node,
+    block_extra_datas_by_type, block_get_controller, block_get_skin, block_get_string_palette_string,
+    block_is_editor_marker, block_is_hidden, block_is_ni_object, block_property_by_type, block_referenced_by,
+    block_remove_branch, block_strings, block_type, blocks_by_type, blocks_count, detect_bsx_flags, get_assets,
+    get_link_arrays, get_unique_name, header, nifblk, root_node,
 };
 use crate::proc_base;
 use crate::sniff::processor::{
-    GameType, Proc, ProcBase, ProcContext, ProcFileObject, Storage, StopContext, access_violation, ansi_same_text,
-    extract_file_path, string_list_file_bytes, string_list_text_of,
+    GameType, Proc, ProcBase, ProcContext, ProcFileObject, StopContext, Storage, access_violation, ansi_same_text,
+    extract_file_path, same_value, same_value_single, string_list_file_bytes, string_list_text_of,
 };
 use crate::variant::Variant;
 
@@ -75,21 +75,6 @@ fn set_flag(tree: &mut Tree, element: El, path: &str, value: bool) -> R<()> {
 
 fn name(tree: &mut Tree, element: El) -> R<String> {
     tree.name(element)
-}
-
-/// `SameValue` of two doubles: the resolution of `System.Math`
-/// (`DoubleResolution`, 1E-15 times the fuzz factor 1000).
-fn same_value(a: f64, b: f64) -> bool {
-    const RESOLUTION: f64 = 1e-12;
-    let epsilon = (a.abs().min(b.abs()) * RESOLUTION).max(RESOLUTION);
-    if a > b { a - b <= epsilon } else { b - a <= epsilon }
-}
-
-/// `SameValue` of two singles (`SingleResolution`, 1E-7 times 1000).
-fn same_value_single(a: f32, b: f32) -> bool {
-    const RESOLUTION: f32 = 1e-4;
-    let epsilon = (a.abs().min(b.abs()) * RESOLUTION).max(RESOLUTION);
-    if a > b { a - b <= epsilon } else { b - a <= epsilon }
 }
 
 /// Variant `<>` of two values.
@@ -246,7 +231,9 @@ fn fix_absolute_paths(tree: &mut Tree, log: &mut Log) -> R<bool> {
 
         if asset_name != new_name {
             let path = tree.path(element)?;
-            log.push(format!("\t{path}: Path changed from \"{asset_name}\" to \"{new_name}\""));
+            log.push(format!(
+                "\t{path}: Path changed from \"{asset_name}\" to \"{new_name}\""
+            ));
             tree.set_edit_value(element, &new_name)?;
             result = true;
         }
@@ -748,7 +735,9 @@ fn fix_collision(tree: &mut Tree, log: &mut Log) -> R<bool> {
             result = true;
         }
 
-        let body = tree.element_by_name(collision, "Body", true)?.ok_or_else(access_violation)?;
+        let body = tree
+            .element_by_name(collision, "Body", true)?
+            .ok_or_else(access_violation)?;
         // UPSTREAM-QUIRK: a collision object without a body ends the whole
         // fix, the rigid body settings below included.
         let Some(rigid) = tree.links_to(body)? else {
@@ -806,9 +795,8 @@ fn fix_collision(tree: &mut Tree, log: &mut Log) -> R<bool> {
                         "MO_SYS_BOX_INERTIA",
                         "MO_SYS_SPHERE_INERTIA",
                     )? || result;
-                    result =
-                        update_element(tree, log, rigid, "Motion Quality", "MO_QUAL_DEBRIS", "MO_QUAL_MOVING")?
-                            || result;
+                    result = update_element(tree, log, rigid, "Motion Quality", "MO_QUAL_DEBRIS", "MO_QUAL_MOVING")?
+                        || result;
                 }
                 result = update_element(tree, log, rigid, "Deactivator Type", "DEACTIVATOR_SPATIAL", "")? || result;
                 result = update_element(tree, log, rigid, "Enable Deactivation", "yes", "")? || result;
@@ -913,7 +901,9 @@ fn fix_particles(tree: &mut Tree, log: &mut Log) -> R<bool> {
             // Enables the particle data; the save sets the right size.
             tree.set_native_values(shape, "Particle Data Size", Variant::Int(1))?;
 
-            let Some(vertices) = tree.elements(shape, "Vertex Data")? else { continue };
+            let Some(vertices) = tree.elements(shape, "Vertex Data")? else {
+                continue;
+            };
             let count = tree.count(vertices);
             if count == 0 {
                 continue;
@@ -950,11 +940,16 @@ fn fix_particles(tree: &mut Tree, log: &mut Log) -> R<bool> {
 /// `FixConsistencyFlags`.
 fn fix_consistency_flags(tree: &mut Tree, log: &mut Log) -> R<bool> {
     let mut result = false;
-    if !matches!(tree.nif.nif_version, NifVersion::Tes4 | NifVersion::Fo3 | NifVersion::Tes5) {
+    if !matches!(
+        tree.nif.nif_version,
+        NifVersion::Tes4 | NifVersion::Fo3 | NifVersion::Tes5
+    ) {
         return Ok(false);
     }
     for shape in blocks_by_type(tree, "NiGeometry", true)? {
-        let Some(data) = link(tree, shape, "Data")? else { continue };
+        let Some(data) = link(tree, shape, "Data")? else {
+            continue;
+        };
         if tree.elements(data, "Consistency Flags")?.is_none() {
             continue;
         }
@@ -1043,7 +1038,10 @@ fn fix_redundant_blocks(tree: &mut Tree, log: &mut Log) -> R<bool> {
     // A useless NiSpecularProperty.
     if tree.nif.nif_version >= NifVersion::Tes4 {
         for spec in blocks_by_type(tree, "NiSpecularProperty", false)? {
-            log.push(format!("\t{}: Removed because redundant and does nothing", name(tree, spec)?));
+            log.push(format!(
+                "\t{}: Removed because redundant and does nothing",
+                name(tree, spec)?
+            ));
             block_remove_branch(tree, spec, true)?;
             result = true;
         }
@@ -1440,7 +1438,9 @@ fn fix_shader_property(tree: &mut Tree, root: El, log: &mut Log) -> R<bool> {
                     tree,
                     log,
                     shader,
-                    shader_type == "Environment Map" || shader_type == "MultiLayer Parallax" || shader_type == "Eye Envmap",
+                    shader_type == "Environment Map"
+                        || shader_type == "MultiLayer Parallax"
+                        || shader_type == "Eye Envmap",
                     "Shader Flags 2\\EnvMap_Light_Fade",
                     "Added EnvMap_Light_Fade flag because Shader Type is Environment/MultiLayer Parallax",
                     "Removed EnvMap_Light_Fade flag because Shader Type is not Environment/MultiLayer Parallax",

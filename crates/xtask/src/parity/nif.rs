@@ -82,7 +82,7 @@ enum Output {
 }
 
 /// FNV-1a.
-fn fnv(bytes: &[u8]) -> u64 {
+pub(super) fn fnv(bytes: &[u8]) -> u64 {
     let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
     for &byte in bytes {
         hash = (hash ^ u64::from(byte)).wrapping_mul(0x0000_0100_0000_01b3);
@@ -147,7 +147,7 @@ fn parse(args: &[&str]) -> Result<Options> {
 
 /// The cache key of an archive: its name, size and a hash of its first and
 /// last megabyte.
-fn archive_key(path: &Path) -> Result<String> {
+pub(super) fn archive_key(path: &Path) -> Result<String> {
     let mut file = File::open(path)?;
     let size = file.metadata()?.len();
     let chunk = 1 << 20;
@@ -227,7 +227,7 @@ fn settings(operation: &str) -> &'static str {
     }
 }
 
-fn windows_path(path: &Path) -> String {
+pub(super) fn windows_path(path: &Path) -> String {
     path.display().to_string().replace('/', "\\")
 }
 

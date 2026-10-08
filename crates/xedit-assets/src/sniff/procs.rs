@@ -9,9 +9,11 @@
 
 use crate::sniff::processor::Proc;
 use crate::sniff::{
-    proc_adjust_transform, proc_apply_transform, proc_attach_parent, proc_convert_root_node, proc_fix_exported_kf_anim,
-    proc_json_converter, proc_remove_nodes, proc_remove_unused_nodes, proc_replace_assets, proc_set_missing_names,
-    proc_tangents, proc_universal_fixer, proc_universal_tweaker, proc_unskin_mesh, proc_update_bounds,
+    proc_adjust_transform, proc_apply_transform, proc_attach_parent, proc_check_for_errors, proc_convert_root_node,
+    proc_fix_exported_kf_anim, proc_havok_search_material, proc_havok_settings_update, proc_inertia_update,
+    proc_json_converter, proc_ragdoll_constraint_update, proc_remove_nodes, proc_remove_unused_nodes,
+    proc_replace_assets, proc_set_missing_names, proc_shader_flags_update, proc_soft_particles, proc_tangents,
+    proc_universal_fixer, proc_universal_tweaker, proc_unskin_mesh, proc_update_bounds, proc_walls_reflection_flag,
 };
 
 /// An operation of the main form.
@@ -56,12 +58,24 @@ pub const PROCS: &[ProcEntry] = &[
     ported!("NIF", "Update tangents and binormals", proc_tangents::ProcTangents),
     ported!("NIF", "Update bounds", proc_update_bounds::ProcUpdateBounds),
     pending!("NIF", "Optimize mesh", MESH_OPTIMIZE),
-    ported!("NIF", "Search and replace assets", proc_replace_assets::ProcReplaceAssets),
-    ported!("NIF", "Convert to and from JSON", proc_json_converter::ProcJsonConverter),
+    ported!(
+        "NIF",
+        "Search and replace assets",
+        proc_replace_assets::ProcReplaceAssets
+    ),
+    ported!(
+        "NIF",
+        "Convert to and from JSON",
+        proc_json_converter::ProcJsonConverter
+    ),
     ported!("NIF", "Universal tweaker", proc_universal_tweaker::ProcUniversalTweaker),
     ported!("NIF", "Universal fixer", proc_universal_fixer::ProcUniversalFixer),
     ported!("NIF", "Apply transformation", proc_apply_transform::ProcApplyTransform),
-    ported!("NIF", "Adjust transformation", proc_adjust_transform::ProcAdjustTransform),
+    ported!(
+        "NIF",
+        "Adjust transformation",
+        proc_adjust_transform::ProcAdjustTransform
+    ),
     ported!("NIF", "Attach parent NiNode", proc_attach_parent::ProcAttachParent),
     pending!("NIF", "Copy geometry blocks", STEP_5),
     pending!("NIF", "Vertex color painting", STEP_5),
@@ -69,14 +83,18 @@ pub const PROCS: &[ProcEntry] = &[
     pending!("NIF", "Merge shapes", STEP_5),
     pending!("NIF", "Merge properties", STEP_5),
     ported!("NIF", "Remove nodes", proc_remove_nodes::ProcRemoveNodes),
-    ported!("NIF", "Remove unused nodes", proc_remove_unused_nodes::ProcRemoveUnusedNodes),
+    ported!(
+        "NIF",
+        "Remove unused nodes",
+        proc_remove_unused_nodes::ProcRemoveUnusedNodes
+    ),
     ported!("NIF", "Convert block type", proc_convert_root_node::ProcConvertRootNode),
     ported!("NIF", "Unskin mesh", proc_unskin_mesh::ProcUnskinMesh),
     pending!("NIF", "Add NiLODNode", STEP_5),
     pending!("NIF", "Add RootCollisionNode", STEP_5),
     pending!("NIF", "Add bounding box", STEP_5),
     ported!("NIF", "Set missing names", proc_set_missing_names::ProcSetMissingNames),
-    pending!("Report", "Check for errors", STEP_5),
+    ported!("Report", "Check for errors", proc_check_for_errors::ProcCheckForErrors),
     pending!("Report", "Analyze mesh", MESH_OPTIMIZE),
     pending!("Report", "Transform information", STEP_5),
     pending!("Report", "Havok information", STEP_5),
@@ -88,7 +106,11 @@ pub const PROCS: &[ProcEntry] = &[
     pending!("Animation", "Copy anim priorities", STEP_5),
     pending!("Animation", "Remove controlled blocks", STEP_5),
     pending!("Animation", "Quadratic to linear anim", STEP_5),
-    ported!("Animation", "Fix 3DS exported KF", proc_fix_exported_kf_anim::ProcFixExportedKFAnim),
+    ported!(
+        "Animation",
+        "Fix 3DS exported KF",
+        proc_fix_exported_kf_anim::ProcFixExportedKFAnim
+    ),
     pending!("Animation", "Optimize Animations", STEP_5),
     pending!("Animation", "Add headtracking anim", STEP_5),
     pending!("Animation", "Add facial anim", STEP_5),
@@ -100,13 +122,41 @@ pub const PROCS: &[ProcEntry] = &[
         "Update MOPP code",
         "calls NifMopp.dll (Havok's MOPP builder), which the port does not have"
     ),
-    pending!("Collision", "Update Havok settings", STEP_5),
-    pending!("Collision", "Update Havok inertia", STEP_5),
-    pending!("Collision", "Update ragdoll constraint", STEP_5),
-    pending!("Collision", "Search for Havok material", STEP_5),
-    pending!("Shader", "Update shader flags", STEP_5),
-    pending!("Shader", "Real Time Reflections - NVSE", STEP_5),
-    pending!("Shader", "Vanilla Plus Particles - NVSE", STEP_5),
+    ported!(
+        "Collision",
+        "Update Havok settings",
+        proc_havok_settings_update::ProcHavokSettingsUpdate
+    ),
+    ported!(
+        "Collision",
+        "Update Havok inertia",
+        proc_inertia_update::ProcInertiaUpdate
+    ),
+    ported!(
+        "Collision",
+        "Update ragdoll constraint",
+        proc_ragdoll_constraint_update::ProcRagdollConstraintUpdate
+    ),
+    ported!(
+        "Collision",
+        "Search for Havok material",
+        proc_havok_search_material::ProcHavokSearchMaterial
+    ),
+    ported!(
+        "Shader",
+        "Update shader flags",
+        proc_shader_flags_update::ProcShaderFlagsUpdate
+    ),
+    ported!(
+        "Shader",
+        "Real Time Reflections - NVSE",
+        proc_walls_reflection_flag::ProcWallsReflectionFlag
+    ),
+    ported!(
+        "Shader",
+        "Vanilla Plus Particles - NVSE",
+        proc_soft_particles::ProcSoftParticles
+    ),
 ];
 
 /// The ported operations, in order, with their groups.

@@ -29,6 +29,9 @@
 //!
 //! `cargo xtask parity nif` loads, dumps and saves the NIF and material
 //! files of the corpus archives with the port and with `Sniff.exe` (`nif`).
+//! `cargo xtask parity sniff` runs the operations of Sniff on them with the
+//! port's `sniff` and with `Sniff.exe` and compares what they write and
+//! report (`sniff`).
 //!
 //! Environment:
 //!
@@ -57,6 +60,7 @@ mod bsarch;
 mod gui;
 mod nif;
 mod oracle_save;
+mod sniff;
 
 /// A game whose masters are in the corpus.
 struct Game {
@@ -293,6 +297,9 @@ pub fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
     }
     if let Some((&"nif", rest)) = args.split_first() {
         return nif::run(root, tag, rest);
+    }
+    if let Some((&"sniff", rest)) = args.split_first() {
+        return sniff::run(tag, rest);
     }
     let options = parse(args)?;
     // The round trip has no oracle binary: the input file is the oracle
