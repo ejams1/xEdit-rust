@@ -1010,6 +1010,88 @@ mod tests {
         );
     }
 
+    /// The file table of a texture archive that step 2 fills in: the chunks
+    /// stored through `pack_chunk` come back from `save` and a new read.
+    #[test]
+    fn a_texture_archive_table_is_written_and_read_back() {
+        use super::super::{DdsInfoValues, TexChunk};
+        let dir = temp_dir("dx10");
+        let path = dir.join("tex.ba2").display().to_string();
+        let list = files(&[("textures\\a\\one.dds", true), ("textures\\a\\two.dds", false)]);
+        let mut archive = Archive::new();
+        archive.set_share_data(true);
+        // One texture in three chunks, the other in one.
+        archive.set_dds_info_proc(Some(|_, name| {
+            if name.ends_with("one.dds") {
+                DdsInfoValues {
+                    width: 1024,
+                    height: 1024,
+                    mip_maps: 11,
+                }
+            } else {
+                DdsInfoValues {
+                    width: 64,
+                    height: 64,
+                    mip_maps: 7,
+                }
+            }
+        }));
+        archive.create_archive(&path, ArchiveType::Fo4Dds, &list).unwrap();
+        assert_eq!(archive.dds_mip_chunk_num(1024, 1024, 11), 3);
+        // The table space: the header, then 24 + 24 per chunk for each file.
+        assert_eq!(archive.data_offset, 24 + (24 + 24 * 3) + (24 + 24));
+
+        for (index, chunks) in [(0usize, 3u16), (1, 1)] {
+            let entry = &mut archive.files[index];
+            entry.dds.width = if index == 0 { 1024 } else { 64 };
+            entry.dds.height = entry.dds.width;
+            entry.dds.num_mips = if index == 0 { 11 } else { 7 };
+            entry.dds.dxgi_format = 71; // BC1_UNORM
+            entry.dds.tex_chunks = (0..chunks)
+                .map(|i| TexChunk {
+                    start_mip: i,
+                    end_mip: if i + 1 == chunks { 10 } else { i },
+                    ..TexChunk::default()
+                })
+                .collect();
+            for i in 0..usize::from(chunks) {
+                let data = vec![index as u8 + 1; 100 * (i + 1)];
+                let prepared = Prepared {
+                    uncompressed_size: data.len(),
+                    hash: Some(lookup_hash(&data)),
+                    data: Some(data),
+                };
+                archive.pack_chunk(index, ChunkSlot::Tex(i), prepared).unwrap();
+            }
+        }
+        archive.save().unwrap();
+
+        let read = Archive::open(std::path::Path::new(&path)).unwrap();
+        assert_eq!(read.archive_type(), ArchiveType::Fo4Dds);
+        assert_eq!(read.count(), 2);
+        let one = read.file_by_name("textures\\a\\one.dds").unwrap();
+        assert_eq!((one.dds.width, one.dds.height, one.dds.num_mips), (1024, 1024, 11));
+        assert_eq!(one.dds.tex_chunks.len(), 3);
+        assert_eq!(one.dds.tex_chunks[2].end_mip, 10);
+        assert_eq!(one.dds.tex_chunks[1].chunk.size, 200);
+        assert!(one.dds.tex_chunks.iter().all(|chunk| chunk.chunk.offset > 0));
+        assert_eq!(one.dxgi_format_name(), "BC1_UNORM");
+        // The text of a dump, as `bsarch -dump` prints it.
+        let text = read.file_info(one);
+        assert!(
+            text.contains("Width: 1024  Height: 1024  CubeMap: No  Format: BC1_UNORM"),
+            "{text}"
+        );
+        assert!(
+            text.contains("MipMaps 00-00  Size:      100  PackedSize:      100  Offset: "),
+            "{text}"
+        );
+        // Extracting a texture is the DDS code of step 2.
+        assert!(read.unpack("textures\\a\\one.dds").is_err());
+        drop(read);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
     #[test]
     fn flags_follow_the_files() {
         let list = files(&[("meshes\\a.nif", true), ("sound\\fx\\b.wav", false)]);
