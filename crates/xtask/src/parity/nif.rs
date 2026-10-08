@@ -46,10 +46,11 @@ use xedit_io::encoding::Encoding;
 
 use super::{GAMES, Game, cache_dir, required_var};
 
+mod from_json;
 mod text;
 
 const USAGE: &str = "usage: cargo xtask parity nif [--game <game>]... [--archive <name part>]... [--file <path part>] \
-                     [--threads <n>] [--keep] [--text [--sample <n>]]";
+                     [--threads <n>] [--keep] [--text | --from-json] [--sample <n>]";
 
 /// The file kinds of the check.
 fn kind(path: &str) -> Option<Kind> {
@@ -98,7 +99,11 @@ struct Options {
     /// Compare the text dumps and saves with the GUI build's script
     /// adapter instead of Sniff (`--text`).
     text: bool,
-    /// The NIF and FUZ files per archive that `--text` checks.
+    /// Compare NIF files built back from their JSON dumps with Sniff's
+    /// (`--from-json`).
+    from_json: bool,
+    /// The NIF and FUZ files per archive that `--text` and `--from-json`
+    /// check.
     sample: usize,
 }
 
@@ -110,6 +115,7 @@ fn parse(args: &[&str]) -> Result<Options> {
         threads: std::thread::available_parallelism().map_or(4, |count| count.get()),
         keep: false,
         text: false,
+        from_json: false,
         sample: 20,
     };
     let mut rest = args.iter();
@@ -128,6 +134,7 @@ fn parse(args: &[&str]) -> Result<Options> {
             "--threads" => options.threads = rest.next().context(USAGE)?.parse::<usize>()?.max(1),
             "--keep" => options.keep = true,
             "--text" => options.text = true,
+            "--from-json" => options.from_json = true,
             "--sample" => options.sample = rest.next().context(USAGE)?.parse()?,
             _ => bail!(USAGE),
         }
@@ -211,6 +218,9 @@ fn settings(operation: &str) -> &'static str {
         "json" => {
             "[Main]\r\nPopupWarning=0\r\n[ConverttoandfromJSON]\r\nbToJson=1\r\nsDigits=6\r\niRotation=0\r\nProcessedFiles=*.nif, *.kf\r\n"
         }
+        "from-json" => {
+            "[Main]\r\nPopupWarning=0\r\n[ConverttoandfromJSON]\r\nbToJson=0\r\nsExtension=nif\r\nsDigits=6\r\niRotation=0\r\nProcessedFiles=*.json\r\n"
+        }
         _ => {
             "[Main]\r\nPopupWarning=0\r\n[Universaltweaker]\r\nProcessedFiles=*.nif, *.kf, *.bgsm, *.bgem\r\nbReportOnly=0\r\nsBlocks=NiHeader\r\nbDescendants=0\r\nsPath=Num Blocks\r\niValueMode=0\r\nsValue=99999\r\nbOldValueCheck=0\r\nsOldPath=\r\niOldValueMode=0\r\nsOldValue=\r\n"
         }
@@ -242,7 +252,7 @@ fn run_sniff(
     fs::write(&ini, settings(operation))?;
     let log = work.join(format!("{operation}.log"));
     let _ = fs::remove_file(&log);
-    let title = if operation == "json" {
+    let title = if operation == "json" || operation == "from-json" {
         "Convert to and from JSON"
     } else {
         "Universal tweaker"
@@ -256,6 +266,7 @@ fn run_sniff(
         .arg(format!("-O:{}", windows_path(out)))
         .arg(format!("-LOG:{}", windows_path(&log)))
         .arg("-skip:yes")
+        .arg(if archive.is_dir() { "-subdir:yes" } else { "-subdir:no" })
         .arg(format!("-threads:{threads}"));
     if let Some(filter) = path_filter {
         command.arg(format!("-P:{filter}"));
@@ -490,6 +501,9 @@ pub fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
     let options = parse(args)?;
     if options.text {
         return text::run(root, tag, &options);
+    }
+    if options.from_json {
+        return from_json::run(tag, &options);
     }
     let sniff = PathBuf::from(required_var("XEDIT_ORACLE_DIR")?).join("Sniff.exe");
     ensure!(sniff.exists(), "{} does not exist", sniff.display());
