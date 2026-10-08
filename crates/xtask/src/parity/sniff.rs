@@ -23,8 +23,10 @@
 //!   itself (`{log}` in the settings is the path of that file).
 //!
 //! Sniff's threads share state and rarely fail a file with an access
-//! violation that does not repeat when the file runs alone; such a file is
-//! run again on its own (`-P:<file> -threads:1`) before it counts. The
+//! violation that does not repeat when the file runs alone, or write it
+//! differently; such a file, and every file whose output or error differs
+//! from the port's (up to `MAX_ALONE` per archive), is run again on its own
+//! (`-P:<file> -threads:1`) before it counts. The
 //! oracle's results are cached in `<cache>/<tag>/sniff-oracle/<case>/`,
 //! keyed by the archive and the settings. With `--sample <n>` the first `n`
 //! files of each archive are unpacked into a folder, which is the input of
@@ -49,7 +51,7 @@ use xedit_io::encoding::ansi_string;
 use super::nif::{archive_key, fnv, windows_path};
 use super::{GAMES, Game, cache_dir, required_var};
 
-const USAGE: &str = "usage: cargo xtask parity sniff [--case <name part>]... [--game <game>]... \
+const USAGE: &str = "usage: cargo xtask parity sniff [--case <name or name part>]... [--game <game>]... \
                      [--archive <name part>]... [--sample <n>] [--threads <n>] [--keep <n>] [--list]";
 
 /// A run of an operation with its settings.
@@ -512,7 +514,15 @@ struct Results {
     /// The counts of the summary line: updated and processed.
     updated: usize,
     processed: usize,
+    /// The files whose output or error differed from the port's and that
+    /// Sniff ran again alone (`rerun_differences`).
+    #[serde(default)]
+    alone: Vec<String>,
 }
+
+/// Files that differ from the port's are run again alone, up to this many
+/// per archive: more is a difference of the port, not a race of Sniff.
+const MAX_ALONE: usize = 40;
 
 /// Whether an error of Sniff is a crash of its threads rather than of the
 /// file: an access violation or an invalid pointer.
@@ -692,8 +702,74 @@ fn rerun_crashes(
         results.extra.extend(rerun.extra);
         results.extra.sort();
         results.updated += rerun.updated;
+        results.alone.push(name);
     }
+    results.alone.sort();
     Ok(())
+}
+
+/// Runs Sniff again alone on each file whose output or error differs from
+/// the port's and that has not been run alone yet: Sniff's threads share
+/// state, and rarely one writes a file differently from a run of the file
+/// alone (`DLC05ElevatorNavCut.nif` in `Remove nodes`). The output and the
+/// error of the run alone count. Returns whether the results changed.
+#[allow(clippy::too_many_arguments)]
+fn rerun_differences(
+    sniff: &Path,
+    work: &Path,
+    case: &Case,
+    source: &Path,
+    input: &Path,
+    extensions: &[String],
+    oracle: &mut Results,
+    port: &Results,
+) -> Result<bool> {
+    let mut names: Vec<String> = oracle
+        .outputs
+        .keys()
+        .chain(oracle.errors.keys())
+        .chain(port.outputs.keys())
+        .chain(port.errors.keys())
+        .filter(|name| {
+            let errors = match (port.errors.get(*name), oracle.errors.get(*name)) {
+                (Some(a), Some(b)) => same_error(a, b),
+                (None, None) => true,
+                _ => false,
+            };
+            !(errors && port.outputs.get(*name) == oracle.outputs.get(*name))
+        })
+        .filter(|name| !oracle.alone.contains(name))
+        .cloned()
+        .collect();
+    names.sort();
+    names.dedup();
+    if names.is_empty() || names.len() > MAX_ALONE {
+        return Ok(false);
+    }
+    for name in names {
+        let rerun = run_sniff(sniff, work, case, source, input, Some(&name), 1, extensions)?;
+        let output = rerun.outputs.get(&name).copied();
+        let error = rerun.errors.get(&name).cloned();
+        println!(
+            "oracle alone  {name}: {}",
+            match (&output, &error) {
+                (_, Some(error)) => error.clone(),
+                (Some(hash), None) => format!("output {hash}"),
+                (None, None) => "unchanged".to_owned(),
+            }
+        );
+        oracle.outputs.remove(&name);
+        oracle.errors.remove(&name);
+        if let Some(hash) = output {
+            oracle.outputs.insert(name.clone(), hash);
+        }
+        if let Some(error) = error {
+            oracle.errors.insert(name.clone(), error);
+        }
+        oracle.alone.push(name);
+    }
+    oracle.alone.sort();
+    Ok(true)
 }
 
 /// Runs the port on `input` with the settings of the case.
@@ -888,7 +964,13 @@ pub fn run(tag: &str, args: &[&str]) -> Result<()> {
     };
 
     for case in CASES {
-        if !options.cases.is_empty() && !options.cases.iter().any(|part| case.name.contains(part.as_str())) {
+        // A case's full name selects that case only, another text every
+        // case whose name holds it.
+        let selects = |part: &String| {
+            case.name == part.as_str()
+                || (!CASES.iter().any(|other| other.name == part.as_str()) && case.name.contains(part.as_str()))
+        };
+        if !options.cases.is_empty() && !options.cases.iter().any(selects) {
             continue;
         }
         let entry = PROCS
@@ -978,7 +1060,7 @@ pub fn run(tag: &str, args: &[&str]) -> Result<()> {
                 // The oracle, from the cache or run now.
                 let cached = cache.join(case.name).join(game.name).join(format!("{key}.json"));
                 let start = Instant::now();
-                let oracle = if cached.exists() {
+                let mut oracle = if cached.exists() {
                     serde_json::from_slice::<Results>(&fs::read(&cached)?)?
                 } else {
                     let mut results =
@@ -1012,6 +1094,9 @@ pub fn run(tag: &str, args: &[&str]) -> Result<()> {
                         continue;
                     }
                 };
+                if rerun_differences(&sniff, &work, case, &source, &input, &extensions, &mut oracle, &port)? {
+                    fs::write(&cached, serde_json::to_vec(&oracle)?)?;
+                }
 
                 // File by file.
                 let mut names: Vec<&String> = oracle
