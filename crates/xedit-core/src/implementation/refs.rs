@@ -433,10 +433,14 @@ impl MainRecordImpl {
     /// resolves to through the master of the record's file its FileID
     /// names, or through the file itself for a FileID past the masters.
     /// With `wbComplexFileFileID` the masters of the FileID's module type
-    /// are counted.
+    /// are counted. The masters of a compare load end with the file it
+    /// compares to, as upstream's.
     pub fn resolve_reference(&self, form_id: FormID) -> Option<Arc<MainRecordImpl>> {
         let file = self.file_impl()?;
-        let masters = file.masters();
+        let mut masters = file.masters();
+        // Upstream's compare load (the hardcoded file) has the file it
+        // compares to as its last master; the port keeps it apart.
+        masters.extend(file.compare_to_file());
         let target = if complex_file_file_id() {
             let file_id = form_id.file_id();
             if !file_id.is_valid() || (file_id.is_full_slot() && file_id.full_slot() > FileID::max_full_slot()) {
@@ -575,6 +579,30 @@ impl MainRecordImpl {
 }
 
 impl FileImpl {
+    /// The main records of the element tree that are not in `flRecords`:
+    /// the file header and the records with the null FormID, which
+    /// `AddMainRecord` does not keep. A record skipped on load as a
+    /// duplicate is not in upstream's tree.
+    pub(crate) fn unlisted_records(&self) -> Vec<Arc<MainRecordImpl>> {
+        fn walk(elements: Vec<ElementRef>, out: &mut Vec<Arc<MainRecordImpl>>) {
+            for element in elements {
+                let Some(element) = element.as_element_impl() else {
+                    continue;
+                };
+                if let Some(record) = element.main_record_impl() {
+                    if record.get_fixed_form_id().is_null() && !record.mr_duplicate.load(Ordering::Relaxed) {
+                        out.push(record);
+                    }
+                } else if let Some(group) = element.group_record_impl() {
+                    walk(group.container.elements(), out);
+                }
+            }
+        }
+        let mut out = Vec::new();
+        walk(self.container.elements(), &mut out);
+        out
+    }
+
     /// Adds a state to `flStates`.
     pub(crate) fn include_file_state(&self, state: FileState) {
         self.fl_states.write().unwrap().include(state);
@@ -600,7 +628,7 @@ impl FileImpl {
     /// record builds its references again if it changed.
     fn rebuild_changed_refs(self: &Arc<Self>) {
         let outer = FILE_REFS_BUILDING.with(|building| building.replace(true));
-        for record in self.records() {
+        for record in self.unlisted_records().into_iter().chain(self.records()) {
             record.build_ref();
         }
         FILE_REFS_BUILDING.with(|building| building.set(outer));
@@ -749,6 +777,18 @@ pub fn build_or_load_refs(files: &[Arc<FileImpl>], only_load: bool) -> Result<Ve
         }
     }
 
+    // The `inherited BuildRef` of `TwbFile` walks the element tree, which
+    // holds main records besides `flRecords`: the file header and a record
+    // with the null FormID (the transient types of a Fallout 4 header, a
+    // navmesh without a FormID). Their references are built in either case
+    // and are not cached.
+    let headers: Vec<Arc<MainRecordImpl>> = loaded
+        .iter()
+        .map(|(index, _)| *index)
+        .chain(to_build.iter().map(|(index, _)| *index))
+        .flat_map(|index| files[index].unlisted_records())
+        .collect();
+
     // The references from the caches: resolved on the workers, added on
     // this thread.
     for (index, records) in loaded {
@@ -774,8 +814,12 @@ pub fn build_or_load_refs(files: &[Arc<FileImpl>], only_load: bool) -> Result<Ve
         }
     }
 
-    // The records of the files to build, in file order.
-    let records: Vec<Arc<MainRecordImpl>> = to_build.iter().flat_map(|(index, _)| files[*index].records()).collect();
+    // The records of the files to build, in file order, and the headers.
+    let records: Vec<Arc<MainRecordImpl>> = to_build
+        .iter()
+        .flat_map(|(index, _)| files[*index].records())
+        .chain(headers.iter().cloned())
+        .collect();
     let collected = collect_all(&records);
     let mut collected = collected.into_iter();
     for (index, cache_file) in &to_build {
@@ -784,24 +828,10 @@ pub fn build_or_load_refs(files: &[Arc<FileImpl>], only_load: bool) -> Result<Ve
         let mut elapsed = Duration::ZERO;
         let mut cache = Vec::with_capacity(file_records.len());
         for record in &file_records {
-            let Collected {
-                references,
-                targets,
-                elapsed: record_elapsed,
-                cache: record_cache,
-            } = collected.next().expect("one result per record");
+            let (references, record_cache, record_elapsed) =
+                record.apply_collected(collected.next().expect("one result per record"));
             elapsed += record_elapsed;
-            let old = std::mem::take(&mut record.mr_refs.lock().unwrap().references);
-            record.apply_references(&old, &references, |form_id| {
-                // The targets resolved on the worker, by the position in
-                // `references`; a FormID only in `old` resolves now.
-                match references.binary_search_by_key(&form_id.to_cardinal(), |id| id.to_cardinal()) {
-                    Ok(position) => targets[position].clone(),
-                    Err(_) => record.resolve_reference(form_id),
-                }
-            });
-            cache.push((references.clone(), record_cache));
-            record.set_references_from_cache(references);
+            cache.push((references, record_cache));
         }
         if let Some(cache_file) = cache_file
             && (file_records.len() > crate::interface::globals::cache_records_threshold() as usize
@@ -812,7 +842,36 @@ pub fn build_or_load_refs(files: &[Arc<FileImpl>], only_load: bool) -> Result<Ve
             results[*index] = BuildOrLoadRefResult::blrBuiltAndSaved;
         }
     }
+    for header in &headers {
+        header.apply_collected(collected.next().expect("one result per header"));
+    }
     Ok(results)
+}
+
+impl MainRecordImpl {
+    /// The references a worker collected, added to the lists: the record
+    /// joins the lists of the records it refers to and keeps the FormIDs.
+    /// Returns the FormIDs, the values of the cache and the time the build
+    /// took.
+    fn apply_collected(self: &Arc<Self>, collected: Collected) -> (Vec<FormID>, refcache::RecordCacheData, Duration) {
+        let Collected {
+            references,
+            targets,
+            elapsed,
+            cache,
+        } = collected;
+        let old = std::mem::take(&mut self.mr_refs.lock().unwrap().references);
+        self.apply_references(&old, &references, |form_id| {
+            // The targets resolved on the worker, by the position in
+            // `references`; a FormID only in `old` resolves now.
+            match references.binary_search_by_key(&form_id.to_cardinal(), |id| id.to_cardinal()) {
+                Ok(position) => targets[position].clone(),
+                Err(_) => self.resolve_reference(form_id),
+            }
+        });
+        self.set_references_from_cache(references.clone());
+        (references, cache, elapsed)
+    }
 }
 
 /// Port of `TwbContainer.CompareExchangeFormID`: the elements that can hold

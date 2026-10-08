@@ -445,3 +445,116 @@ fn fallout3_condition_resized_on_load_keeps_its_reference() {
     assert_eq!(referenced_by(&record(&file, 0x801)), ["00000800@Test.esm"]);
     std::fs::remove_dir_all(dir).ok();
 }
+
+/// A master added to the plugin moves the FileIDs of its FormIDs: the
+/// references the plugin's records keep follow (`MastersUpdated`), and the
+/// referenced-by lists stay the same.
+#[test]
+fn masters_update_keeps_the_references() {
+    let _guard = test_lock();
+    no_cache();
+    let dir = std::env::temp_dir().join(format!("xedit-refs-masters-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("Master.esm"), master_bytes()).unwrap();
+    std::fs::write(dir.join("Plugin.esp"), plugin_bytes()).unwrap();
+    std::fs::write(dir.join("Extra.esm"), header(1, 0, 0x800, &[])).unwrap();
+    xedit_core::implementation::clear_files_map();
+    xedit_core::implementation::reset_load_order_slots();
+    xedit_core::interface::clear_files();
+    xedit_session::dump::setup_game("sse").unwrap();
+    xedit_session::save::apply_edit_settings(GameMode::gmSSE);
+    let extra = wb_file(dir.join("Extra.esm").to_str().unwrap(), i32::MAX, FileStates::empty()).unwrap();
+    let plugin = wb_file(dir.join("Plugin.esp").to_str().unwrap(), i32::MAX, FileStates::empty()).unwrap();
+    let master = plugin.masters()[0].clone();
+    let mut session = session(vec![extra, plugin.clone()]);
+    session.ensure_refs().unwrap();
+    let before: Vec<Vec<String>> = [record(&master, 0x0100_0800), record(&plugin, 0x0200_0900)]
+        .iter()
+        .map(referenced_by)
+        .collect();
+    let registry = Registry::standard();
+    let added = registry
+        .call(
+            &mut session,
+            "masters.add",
+            json!({ "file": "Plugin.esp", "masters": ["Extra.esm"] }),
+        )
+        .unwrap();
+    assert_eq!(added["masters"], json!(["Extra.esm", "Master.esm"]));
+    let after: Vec<Vec<String>> = [record(&master, 0x0100_0800), record(&plugin, 0x0200_0900)]
+        .iter()
+        .map(referenced_by)
+        .collect();
+    assert_eq!(after, before);
+    // Extra.esm loads first: Master.esm has the load order FileID 01 and the
+    // plugin 02. As the plugin stores them now, Master.esm is master 1 and
+    // the plugin's own FormIDs take FileID 02 (they were 00 and 01).
+    let references: Vec<String> = record(&plugin, 0x0200_0901)
+        .references()
+        .iter()
+        .map(|form_id| form_id.to_string(false))
+        .collect();
+    assert_eq!(references, ["01000800", "02000900"]);
+    std::fs::remove_dir_all(dir).ok();
+}
+
+/// An Oblivion magic effect code (`TwbChar4`) refers to the effect with the
+/// code as its editor ID, also from the hardcoded file, which finds it in
+/// the game master it compares to.
+#[test]
+fn oblivion_effect_codes_refer_to_the_effect() {
+    let _guard = test_lock();
+    no_cache();
+    let dir = std::env::temp_dir().join(format!("xedit-refs-tes4-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    // Oblivion's record header has no version fields: 20 bytes.
+    let record = |signature: &[u8; 4], form_id: u32, data: &[u8]| {
+        let mut bytes = signature.to_vec();
+        bytes.extend_from_slice(&(data.len() as u32).to_le_bytes());
+        bytes.extend_from_slice(&0u32.to_le_bytes());
+        bytes.extend_from_slice(&form_id.to_le_bytes());
+        bytes.extend_from_slice(&0u32.to_le_bytes());
+        bytes.extend_from_slice(data);
+        bytes
+    };
+    let tes4_group = |label: &[u8; 4], records: &[u8]| {
+        let mut bytes = b"GRUP".to_vec();
+        bytes.extend_from_slice(&((20 + records.len()) as u32).to_le_bytes());
+        bytes.extend_from_slice(label);
+        bytes.extend_from_slice(&0u32.to_le_bytes());
+        bytes.extend_from_slice(&0u32.to_le_bytes());
+        bytes.extend_from_slice(records);
+        bytes
+    };
+    let mut hedr = 0.8f32.to_le_bytes().to_vec();
+    hedr.extend_from_slice(&1u32.to_le_bytes());
+    hedr.extend_from_slice(&0x2000u32.to_le_bytes());
+    let mut plugin = record(b"TES4", 0, &sub_record(b"HEDR", &hedr));
+    plugin.extend(tes4_group(
+        b"MGEF",
+        &record(b"MGEF", 0x1887, &sub_record(b"EDID", b"PARA\0")),
+    ));
+    std::fs::write(dir.join("Oblivion.esm"), plugin).unwrap();
+    xedit_core::implementation::clear_files_map();
+    xedit_core::implementation::reset_load_order_slots();
+    xedit_core::interface::clear_files();
+    let mut session = Session::load("tes4", &[dir.join("Oblivion.esm").to_string_lossy().into_owned()]).unwrap();
+    session.ensure_refs().unwrap();
+    let files = xedit_core::implementation::masters::loaded_files();
+    let master = files
+        .iter()
+        .find(|file| file.file_name().ends_with("Oblivion.esm"))
+        .unwrap();
+    let referenced = referenced_by(&record_of(master, 0x1887));
+    // The hardcoded spell `DefaultMarksmanParalyzeSpell` [SPEL:00000137]
+    // has the effect PARA.
+    assert!(
+        referenced.contains(&"00000137@Oblivion.exe".to_owned()),
+        "{referenced:?}"
+    );
+    std::fs::remove_dir_all(dir).ok();
+}
+
+fn record_of(file: &Arc<FileImpl>, form_id: u32) -> Arc<MainRecordImpl> {
+    record(file, form_id)
+}

@@ -279,25 +279,35 @@ fn cache_record_fields(data: &[u8], mut at: usize, names: bool) -> Option<(Vec<C
 
 /// The first record and field where two cache streams differ.
 fn describe_cache_difference(oracle: &[u8], port: &[u8]) -> String {
-    // A stream with the names of the game master, or without.
-    for names in [false, true] {
-        let (mut a, mut b) = (4, 4);
-        let mut index = 0;
-        while let (Some((fields_a, end_a)), Some((fields_b, end_b))) = (
-            cache_record_fields(oracle, a, names),
-            cache_record_fields(port, b, names),
-        ) {
-            for ((name, start_a, stop_a), (_, start_b, stop_b)) in fields_a.iter().zip(&fields_b) {
-                if oracle[*start_a..*stop_a] != port[*start_b..*stop_b] {
-                    let form_id = u32::from_le_bytes(oracle[fields_a[0].1..fields_a[0].1 + 4].try_into().unwrap());
-                    return format!("; record {index} [{form_id:08X}], field {name}");
-                }
+    // A stream with the names of the game master, or without: the one whose
+    // records end where the stream does.
+    let ends_exactly = |names: bool| {
+        let mut at = 4;
+        while at < oracle.len() {
+            match cache_record_fields(oracle, at, names) {
+                Some((_, end)) => at = end,
+                None => return false,
             }
-            if end_a >= oracle.len() || end_b >= port.len() {
-                break;
-            }
-            (a, b, index) = (end_a, end_b, index + 1);
         }
+        at == oracle.len()
+    };
+    let names = !ends_exactly(false);
+    let (mut a, mut b) = (4, 4);
+    let mut index = 0;
+    while let (Some((fields_a, end_a)), Some((fields_b, end_b))) = (
+        cache_record_fields(oracle, a, names),
+        cache_record_fields(port, b, names),
+    ) {
+        for ((name, start_a, stop_a), (_, start_b, stop_b)) in fields_a.iter().zip(&fields_b) {
+            if oracle[*start_a..*stop_a] != port[*start_b..*stop_b] {
+                let form_id = u32::from_le_bytes(oracle[fields_a[0].1..fields_a[0].1 + 4].try_into().unwrap());
+                return format!("; record {index} [{form_id:08X}], field {name}");
+            }
+        }
+        if end_a >= oracle.len() || end_b >= port.len() {
+            break;
+        }
+        (a, b, index) = (end_a, end_b, index + 1);
     }
     String::new()
 }
@@ -330,7 +340,14 @@ fn link_plugins(plugins: &[PathBuf], folder: &Path) -> Result<Vec<PathBuf>> {
 fn run_port(runner: &Runner, game: &Game, plugins: &[PathBuf], cache: &Path, out: &Path, log: &Path) -> Result<()> {
     let port = runner.port.as_ref().context("no port binary")?;
     let mut command = Command::new(port);
-    command.arg("--game").arg(game.name).arg("--cache-path").arg(cache);
+    // The GUI edits (`wbEditAllowed`), which lets the load fix-ups run in
+    // the games without `wbAllowInternalEdit` (Oblivion), as `--edit` does.
+    command
+        .arg("--edit")
+        .arg("--game")
+        .arg(game.name)
+        .arg("--cache-path")
+        .arg(cache);
     for plugin in plugins {
         command.arg("--load").arg(plugin);
     }

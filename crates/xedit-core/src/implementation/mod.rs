@@ -300,9 +300,11 @@ pub(crate) fn element_by_path(container: &dyn Container, path: &str) -> Option<E
     } else if let Some(index) = first.strip_prefix('[').and_then(|index| index.strip_suffix(']')) {
         container.get_element(index.parse().unwrap_or(0))
     } else {
+        // `GetElementBySignature`: an element with the signature, which for
+        // a subrecord array or struct is the signature of its first member.
         container.get_element_by_name(first).or_else(|| {
             let bytes: [u8; 4] = first.as_bytes().try_into().ok()?;
-            container.get_record_by_signature(Signature::new(&bytes))
+            container.get_element_by_signature(Signature::new(&bytes))
         })
     };
     match rest {
@@ -801,6 +803,18 @@ impl FileImpl {
 
     fn master_count(&self) -> i32 {
         self.fl_masters.read().unwrap().len() as i32
+    }
+
+    /// The file a compare load compares to (`flCompareToFile`), which
+    /// upstream adds as the last master (`AddMaster(flCompareTo)`).
+    pub(crate) fn compare_to_file(&self) -> Option<Arc<FileImpl>> {
+        let name = path_file_name(self.fl_compare_to.as_deref()?);
+        FILES_MAP
+            .read()
+            .unwrap()
+            .iter()
+            .find(|file| file.get_name().eq_ignore_ascii_case(name))
+            .cloned()
     }
 
     /// Port of `GetFileFileID`: the FileID of the file as its own records
@@ -3493,6 +3507,16 @@ impl File for FileImpl {
     fn get_record_by_editor_id(&self, editor_id: &str) -> Option<MainRecordRef> {
         if let Some(record) = self.find_key_in_index(idx_editor_id(), editor_id) {
             return Some(record as MainRecordRef);
+        }
+        // Upstream's compare load has the file it compares to as its last
+        // master (`AddMaster(flCompareTo)`), which the port does not add to
+        // the masters: the hardcoded file finds the editor IDs of the game
+        // master (the magic effect codes of Oblivion).
+        if let Some(record) = self
+            .compare_to_file()
+            .and_then(|file| file.get_record_by_editor_id(editor_id))
+        {
+            return Some(record);
         }
         self.masters()
             .iter()

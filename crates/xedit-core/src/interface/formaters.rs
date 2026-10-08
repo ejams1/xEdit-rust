@@ -472,6 +472,22 @@ impl IntegerDefFormater for Char4 {
         file.get_record_by_editor_id(&Self::characters(int))
             .map(|record| record as ElementRef)
     }
+
+    /// Port of `TwbChar4.BuildRef`: the record with the editor ID.
+    /// UPSTREAM-QUIRK: its load order FormID is collected, where the other
+    /// definitions collect a FormID as the file stores it ("should always be
+    /// 00, these are only defined in Oblivion.esm").
+    fn build_ref(&self, int: i64, element: ElementArg) {
+        if self.def.def_flags.contains(DefFlag::dfExcludeFromBuildRef) {
+            return;
+        }
+        let Some(element) = element else { return };
+        if let Some(file) = element.get_file()
+            && let Some(record) = file.get_record_by_editor_id(&Self::characters(int))
+        {
+            element.add_referenced_from_id(record.get_load_order_form_id());
+        }
+    }
 }
 
 /// The sort key of `TwbDivDef` and `TwbDivFDef`: the sign of the stored value

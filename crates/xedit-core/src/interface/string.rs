@@ -584,6 +584,23 @@ impl NamedDef for StringDef {
 impl ValueDef for StringDef {
     value_def_plumbing!(ValueDef);
 
+    /// Port of `TwbStringMgefCodeDef.BuildRef`: the magic effect whose
+    /// editor ID is the code, found from the file of the element.
+    /// UPSTREAM-QUIRK: the load order FormID of the effect is collected,
+    /// where every other definition collects a FormID as the file stores
+    /// it; the two agree for a file whose masters load first in order.
+    fn build_ref(&self, data: DataPtr, element: ElementArg) {
+        if self.class != StringClass::MgefCode || self.def.def_flags.contains(DefFlag::dfExcludeFromBuildRef) {
+            return;
+        }
+        let Some(element) = element else { return };
+        let Some(file) = element.get_file() else { return };
+        let code = self.to_string_transform(data, Some(element), StringTransformType::ttToSortKey);
+        if let Some(record) = file.get_record_by_editor_id(&code) {
+            element.add_referenced_from_id(record.get_load_order_form_id());
+        }
+    }
+
     /// Port of `TwbStringMgefCodeDef.MastersUpdated`: the file index in the
     /// low byte of a dynamic magic effect code follows the masters.
     /// Upstream writes the code in place; here it goes through the storage.
