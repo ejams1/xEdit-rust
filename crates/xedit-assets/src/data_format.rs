@@ -3125,5 +3125,108 @@ mod tests {
     fn hash_is_case_insensitive() {
         assert_eq!(df_calc_hash("Num Blocks"), df_calc_hash("num blocks"));
         assert_ne!(df_calc_hash("Num Blocks"), df_calc_hash("NumBlocks"));
+        // Values of the oracle's dfCalcHash.
+        assert_eq!(df_calc_hash("A"), 0xC20);
+        assert_eq!(df_calc_hash("@"), 0x800);
+        assert_eq!(df_calc_hash(".."), 0xBDC0);
+    }
+
+    fn version_is_one(tree: &mut Tree, el: El) -> R<i32> {
+        Ok(i32::from(tree.native_values(el, "..\\Version")? == 1))
+    }
+
+    #[test]
+    fn union_member_follows_decider() {
+        let def = leak(df_struct(
+            "S",
+            vec![
+                df_integer("Version", DataType::U8, "", &[]),
+                df_union(
+                    Some(version_is_one),
+                    vec![
+                        df_integer("Value", DataType::U16, "", &[]),
+                        df_float("Value", DataType::Float32, "", &[]),
+                    ],
+                    &[],
+                ),
+            ],
+            &[],
+        ));
+        let mut data = vec![1];
+        data.extend_from_slice(&2.5f32.to_le_bytes());
+        let (mut tree, root) = load(def, &data);
+        assert_eq!(tree.edit_values(root, "Value").unwrap(), "2.500000");
+        assert_eq!(tree.save_to_data(root).unwrap(), data);
+        let (mut tree, root) = load(def, &[0, 7, 0]);
+        assert_eq!(tree.edit_values(root, "Value").unwrap(), "7");
+        // The union has no elements of its own, and its name is its member's.
+        let union = tree.item(root, 1).unwrap();
+        assert_eq!(tree.count(union), 0);
+        assert_eq!(tree.name(union).unwrap(), "Value");
+    }
+
+    #[test]
+    fn strings_of_every_size() {
+        let def = leak(df_struct(
+            "S",
+            vec![
+                df_chars("Fixed", 4, "", 0, true, &[]),
+                df_chars("Line", 0, "", 0x0A, true, &[]),
+                df_chars("Prefixed", -1, "", 0, true, &[]),
+                df_chars("Rest", 0, "", 0, false, &[]),
+            ],
+            &[],
+        ));
+        let data = b"ab\0\0line\n\x03xy\0tail".to_vec();
+        let (mut tree, root) = load(def, &data);
+        assert_eq!(tree.edit_values(root, "Fixed").unwrap(), "ab\0");
+        assert_eq!(tree.edit_values(root, "Line").unwrap(), "line");
+        assert_eq!(tree.edit_values(root, "Prefixed").unwrap(), "xy");
+        assert_eq!(tree.edit_values(root, "Rest").unwrap(), "tail");
+        tree.set_edit_values(root, "Prefixed", "abc").unwrap();
+        assert_eq!(tree.save_to_data(root).unwrap(), b"ab\0\0line\n\x04abc\0tail".to_vec());
+        let mut tree = Tree::new();
+        let root = tree.create_root(def, class_of(def)).unwrap();
+        let error = tree.unserialize(root, Some(b"ab\0\0no terminator"), 0).unwrap_err();
+        assert_eq!(
+            error.0,
+            "Error in \"Line\": Terminator character not found for terminated string"
+        );
+    }
+
+    #[test]
+    fn flags_take_a_number_as_text() {
+        let def = leak(df_struct(
+            "S",
+            vec![df_flags("Flags", DataType::U16, &[(0, "A")], "", &[])],
+            &[],
+        ));
+        let (mut tree, root) = load(def, &[0, 0]);
+        // UPSTREAM-QUIRK: a text without a flag name is set as a number.
+        tree.set_edit_values(root, "Flags", "5").unwrap();
+        assert_eq!(tree.save_to_data(root).unwrap(), vec![5, 0]);
+        assert_eq!(tree.edit_values(root, "Flags").unwrap(), "A | Bit 2");
+    }
+
+    #[test]
+    fn json_round_trip() {
+        let def = leak(df_struct(
+            "S",
+            vec![
+                df_integer("Count", DataType::U8, "", &[]),
+                df_array("Values", df_integer("Value", DataType::S16, "", &[]), 0, "Count", &[]),
+            ],
+            &[],
+        ));
+        let (mut tree, root) = load(def, &[2, 1, 0, 0xFF, 0xFF]);
+        let json = tree.to_json(root, false).unwrap();
+        assert_eq!(
+            json,
+            "{\n\t\"S\": {\n\t\t\"Count\": \"2\",\n\t\t\"Values\": [\n\t\t\t\"1\",\n\t\t\t\"-1\"\n\t\t]\n\t}\n}\n"
+        );
+        let mut other = Tree::new();
+        let other_root = other.create_root(def, class_of(def)).unwrap();
+        other.from_json(other_root, &json).unwrap();
+        assert_eq!(other.save_to_data(other_root).unwrap(), vec![2, 1, 0, 0xFF, 0xFF]);
     }
 }
