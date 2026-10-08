@@ -631,6 +631,10 @@ pub struct FileImpl {
     /// built once the file is scanned (`flIndicesActive`).
     fl_records_indices: RwLock<Vec<HashMap<String, Arc<MainRecordImpl>>>>,
     fl_indices_active: std::sync::atomic::AtomicBool,
+    /// Port of `flSetContainsFixedFormID`: the fixed FormIDs of the records
+    /// added while the file is scanned, which finds a duplicate anywhere in
+    /// the file.
+    fl_scanned_form_ids: std::sync::Mutex<std::collections::HashSet<u32>>,
     /// Port of `flCRC32`: the CRC32 of the file as loaded, computed on first
     /// use, replaced by the CRC32 of the bytes of the last save.
     pub(crate) fl_crc32: std::sync::atomic::AtomicU32,
@@ -714,7 +718,18 @@ impl FileImpl {
             return Ok(());
         }
         match self.find_form_id_index(form_id) {
-            None => self.fl_records.write().unwrap().push(record.clone()),
+            None => {
+                if game_mode() > GameMode::gmTES3
+                    && !self.fl_scanned_form_ids.lock().unwrap().insert(form_id.to_cardinal())
+                {
+                    return Err(format!(
+                        "Duplicate FormID [{}] in file {}",
+                        form_id.to_string(true),
+                        self.get_name()
+                    ));
+                }
+                self.fl_records.write().unwrap().push(record.clone())
+            }
             Some(Ok(_)) => {
                 return Err(format!(
                     "Duplicate FormID [{}] in file {}",
@@ -1555,6 +1570,15 @@ pub fn wb_file_compare(
     } else if base_name.eq_ignore_ascii_case(&game_master_esm()) {
         fl_states.include(FileState::fsIsGameMaster);
         fl_states.include(FileState::fsIsOfficial);
+    } else if crate::interface::globals::official_dlc()
+        .iter()
+        .any(|name| name.eq_ignore_ascii_case(base_name))
+        || (crate::interface::globals::is_skyrim() && base_name.eq_ignore_ascii_case("Update.esm"))
+    {
+        // The module of an official DLC (`miOfficialIndex`, which Skyrim's
+        // Update.esm has too) is official; Starfield does not let it be
+        // edited (`GetIsEditable`).
+        fl_states.include(FileState::fsIsOfficial);
     }
     fl_states.include(FileState::fsMemoryMapped);
     // UPSTREAM-QUIRK: upstream adds the player reference to the hardcoded
@@ -1585,6 +1609,7 @@ pub fn wb_file_compare(
         fl_injected_records: RwLock::new(Vec::new()),
         fl_records_indices: RwLock::new(Vec::new()),
         fl_indices_active: std::sync::atomic::AtomicBool::new(false),
+        fl_scanned_form_ids: std::sync::Mutex::new(std::collections::HashSet::new()),
         fl_crc32: std::sync::atomic::AtomicU32::new(0),
     });
     progress(&format!("[{}] Loading file", file.get_name()));
@@ -1696,13 +1721,18 @@ impl GroupRecordImpl {
     }
 
     /// Port of `ChildrenOf`: the record the group holds the children of,
-    /// for the group types whose label is a FormID.
+    /// for the group types whose label is a FormID and the exterior blocks.
     pub fn children_of(&self) -> Option<Arc<MainRecordImpl>> {
-        if !matches!(self.gr_struct().group_type, 1 | 6..=10) {
-            return None;
+        match self.gr_struct().group_type {
+            1 | 6..=10 => {
+                let file = self.file.upgrade()?;
+                file.record_by_form_id(FormID::from_cardinal(self.get_group_label()), true, true)
+            }
+            // An exterior cell block or sub-block: the worldspace of the
+            // world children group above it.
+            4 | 5 => self.parent_group()?.children_of(),
+            _ => None,
         }
-        let file = self.file.upgrade()?;
-        file.record_by_form_id(FormID::from_cardinal(self.gr_struct().label), true, true)
     }
 
     fn parent_group(&self) -> Option<Arc<GroupRecordImpl>> {
@@ -1872,6 +1902,9 @@ pub struct MainRecordImpl {
     /// Port of `mrsOFSTRemoved` in `mrStates`: the init dropped the offsets
     /// of a worldspace, and `PrepareSave` marks its children modified.
     mr_ofst_removed: AtomicBool,
+    /// A record that repeats the FormID of the record before it, which
+    /// upstream skips on load.
+    mr_duplicate: AtomicBool,
 }
 
 impl MainRecordImpl {
@@ -1891,15 +1924,17 @@ impl MainRecordImpl {
         if mr_def.is_none() {
             progress(&format!("Error: unknown record type {}", mr_struct.signature));
         }
-        if let Some(prev) = prev_main_record
-            && prev.mr_struct().form_id == mr_struct.form_id
-        {
+        let duplicate = prev_main_record.is_some_and(|prev| prev.mr_struct().form_id == mr_struct.form_id);
+        let skipped = |form_id: FormID| {
             // Port of `EwbSkipLoad` for a duplicate FormID: the record is skipped.
             progress(&format!(
                 "Skipped Load: Duplicate FormID [{}] in file {}",
-                mr_struct.form_id.to_string(true),
+                form_id.to_string(true),
                 file.fl_file_name
             ));
+        };
+        if duplicate {
+            skipped(mr_struct.form_id);
         }
         let record = Arc::new_cyclic(|self_ref: &Weak<MainRecordImpl>| MainRecordImpl {
             self_ref: self_ref.clone(),
@@ -1924,13 +1959,17 @@ impl MainRecordImpl {
             mr_display_name: RwLock::new(None),
             mr_precombined: OnceLock::new(),
             mr_ofst_removed: AtomicBool::new(false),
+            mr_duplicate: AtomicBool::new(duplicate),
         });
         if let Some(parent) = container.as_container_base() {
             parent.add_element(record.clone());
         }
-        // The records of a file being scanned are not sorted yet, so the add
-        // does not refuse a duplicate.
-        let _ = file.add_main_record(record.clone());
+        // A record whose FormID the scan saw before (`AddMainRecord`'s
+        // `flSetContainsFixedFormID`) is skipped as well.
+        if !duplicate && file.add_main_record(record.clone()).is_err() {
+            record.mr_duplicate.store(true, Ordering::Relaxed);
+            skipped(record.get_fixed_form_id());
+        }
         *offset = dc_data_end;
         Ok(record)
     }
@@ -2204,8 +2243,29 @@ impl MainRecordImpl {
         result
     }
 
-    /// Port of `GetShortNameInternal` without `wbDisplayShorterNames`.
+    /// Port of `GetShortNameInternal`; the GUI's `wbDisplayShorterNames`
+    /// gives `EditorID "Full Name" [SIG:FormID]`.
     fn short_name_internal(&self) -> String {
+        if crate::interface::globals::display_shorter_names() {
+            let mut result = self.get_editor_id();
+            let full_name = self.get_full_name();
+            if !full_name.is_empty() {
+                if !result.is_empty() {
+                    result.push(' ');
+                }
+                result.push_str(&format!("\"{}\"", full_name.replace('"', "\"\"")));
+            }
+            if !result.is_empty() {
+                result.push(' ');
+            }
+            let form_id = if display_load_order_form_id() {
+                self.get_load_order_form_id()
+            } else {
+                self.mr_struct().form_id
+            };
+            result.push_str(&format!("[{}:{}]", self.mr_struct().signature, form_id.to_string(true)));
+            return result;
+        }
         let mut result = self.mr_struct().signature.to_string();
         if let Some(def) = &self.mr_def {
             result = format!("{result} - {}", def.get_name());
@@ -2470,18 +2530,26 @@ impl MainRecordImpl {
         }
     }
 
-    /// Port of `SetIsPersistent`, without the move between the cell child
-    /// groups (`UpdateCellChildGroup`), which comes with the next step.
+    /// Port of `SetIsPersistent`: a placed record moves to the children
+    /// group of its cell the flag calls for (`UpdateCellChildGroup`).
     pub fn set_is_persistent(self: &Arc<Self>, value: bool) {
         if value != self.mr_struct().flags.is_persistent() {
+            let need_update = self.check_child_of_cell();
             self.make_header_writeable(|header| header.flags.set_persistent(value));
+            if need_update {
+                self.update_cell_child_group();
+            }
         }
     }
 
-    /// Port of `SetIsVisibleWhenDistant`, without `UpdateCellChildGroup`.
+    /// Port of `SetIsVisibleWhenDistant`, with `UpdateCellChildGroup`.
     pub fn set_is_visible_when_distant(self: &Arc<Self>, value: bool) {
         if value != self.mr_struct().flags.is_visible_when_distant() {
+            let need_update = self.check_child_of_cell();
             self.make_header_writeable(|header| header.flags.set_visible_when_distant(value));
+            if need_update {
+                self.update_cell_child_group();
+            }
         }
     }
 
@@ -2593,19 +2661,37 @@ impl MainRecordImpl {
     }
 
     /// Port of `GetChildGroup` (`mrGroup`): the group of the children of
-    /// this record, which follows it in its container.
+    /// this record. The group that follows the record with its FormID as
+    /// label (`InformPrevMainRecord`, types 1, 6 and 7), else the group of
+    /// the record's child type with that label in the containing group
+    /// (`FindChildGroup`; a quest's group of type 10 under
+    /// `wbVWDAsQuestChildren`). Labels compare as `GetGroupLabel` gives
+    /// them, with a FileID beyond the masters read as the file's own.
     pub fn child_group(&self) -> Option<Arc<GroupRecordImpl>> {
         let container = self.base.container()?;
         let base = container.as_element_impl()?.container_base()?;
+        let form_id = self.mr_struct().form_id.to_cardinal();
         let elements = base.elements();
         let index = elements
             .iter()
             .position(|element| std::ptr::addr_eq(Arc::as_ptr(element), self as *const Self))?;
-        let group = elements.get(index + 1)?.as_element_impl()?.group_record_impl()?;
-        if !matches!(group.group_type(), 1 | 6 | 7) || group.group_label() != self.mr_struct().form_id.to_cardinal() {
-            return None;
+        if let Some(group) = elements
+            .get(index + 1)
+            .and_then(|e| e.as_element_impl()?.group_record_impl())
+            && matches!(group.group_type(), 1 | 6 | 7)
+            && group.get_group_label() == form_id
+        {
+            return Some(group);
         }
-        Some(group)
+        let wanted = match &self.mr_struct().signature.0 {
+            b"WRLD" => 1,
+            b"CELL" => 6,
+            b"DIAL" => 7,
+            b"QUST" if vwd_as_quest_children() => 10,
+            _ => return None,
+        };
+        let containing = container.as_element_impl()?.group_record_impl()?;
+        containing.find_child_group(wanted, form_id)
     }
 
     /// The record data as stored in the file, after the header.
@@ -3642,8 +3728,12 @@ impl ElementImpl for MainRecordImpl {
     }
 
     /// Port of `TwbMainRecord.GetCountedRecordCount`: the record itself.
+    /// UPSTREAM-QUIRK: upstream skips a record that repeats the FormID of
+    /// the record before it (`EwbSkipLoad`), so it is not counted, while its
+    /// bytes stay in the data of its unmodified group and are written; the
+    /// port keeps the record and leaves it out of the count.
     fn get_counted_record_count(&self) -> u32 {
-        1
+        u32::from(!self.mr_duplicate.load(Ordering::Relaxed))
     }
 
     fn init_running(&self) -> bool {

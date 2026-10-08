@@ -181,7 +181,7 @@ impl GroupRecordImpl {
     pub(crate) fn find_child_group(&self, group_type: i32, label: u32) -> Option<Arc<GroupRecordImpl>> {
         self.container.elements().iter().find_map(|element| {
             let group = element.as_element_impl()?.group_record_impl()?;
-            (group.group_type() == group_type && group.group_label() == label).then_some(group)
+            (group.group_type() == group_type && group.get_group_label() == label).then_some(group)
         })
     }
 
@@ -637,6 +637,7 @@ impl MainRecordImpl {
             mr_display_name: RwLock::new(None),
             mr_precombined: std::sync::OnceLock::new(),
             mr_ofst_removed: std::sync::atomic::AtomicBool::new(false),
+            mr_duplicate: std::sync::atomic::AtomicBool::new(false),
         });
         let Some(mr_def) = record.mr_def.clone() else {
             return Err(format!("Error: unknown record type {signature}"));

@@ -243,6 +243,10 @@ impl SubRecordImpl {
     }
 
     /// Port of `TwbSubRecord.Init`: the value elements of the subrecord.
+    /// Not ported: the sort of the entries of a sorted array value
+    /// (`srsSorted`, `DoInit(True)`). The oracle keeps such an array in its
+    /// loaded order when `MastersUpdated` changes an entry, which sorting
+    /// the elements on init does not give.
     pub fn do_init(&self) {
         self.sr_init.run(|| {
             if self.skipped() {
@@ -678,6 +682,12 @@ pub struct SubRecordArrayImpl {
     pub(super) container: ContainerBase,
     file: Weak<super::FileImpl>,
     arc_def: Arc<dyn RecordMemberDef>,
+    /// Port of `arcSorted`: the definition sorts the members (under
+    /// `wbSortSubRecords`).
+    arc_sorted: AtomicBool,
+    /// Port of `arcSortInvalid`: the members are to be sorted on the next
+    /// `DoInit(True)`.
+    arc_sort_invalid: AtomicBool,
 }
 
 /// Port of `TwbSubRecordStruct`: the subrecords of one structure member.
@@ -704,6 +714,8 @@ pub(super) fn create_sub_record_array(
         container: ContainerBase::default(),
         file: file.clone(),
         arc_def: def,
+        arc_sorted: AtomicBool::new(false),
+        arc_sort_invalid: AtomicBool::new(false),
     });
     let array_ref: ElementRef = array.clone();
     array.do_process(&array_ref, owner_base, pos);
@@ -820,7 +832,12 @@ impl SubRecordArrayImpl {
             self.update_name_suffixes();
             result = element;
         }
-        // The sort of a sorted array by sort keys is not ported yet.
+        // The members are sorted after every assignment.
+        let sorted = sort_sub_records() && array_def.get_sorted(self.base.container().as_ref());
+        if sorted {
+            edit::sort_by_sort_keys(&self.container);
+        }
+        self.arc_sorted.store(sorted, Ordering::Relaxed);
         Ok(result)
     }
 
@@ -944,8 +961,11 @@ impl SubRecordArrayImpl {
                 ),
             }
         }
-        // UPSTREAM-QUIRK: the sorted flag is only set under wbSortSubRecords.
-        let _ = sort_sub_records();
+        // The members are sorted on the first `DoInit(True)`, under
+        // `wbSortSubRecords` only.
+        let sorted = sort_sub_records() && array_def.get_sorted(self.base.container().as_ref());
+        self.arc_sorted.store(sorted, Ordering::Relaxed);
+        self.arc_sort_invalid.store(sorted, Ordering::Relaxed);
         // Port of `UpdateNameSuffixes`: the elements are numbered.
         for (index, element) in self.container.elements().iter().enumerate() {
             if let Some(element) = element.as_element_impl() {
@@ -986,6 +1006,8 @@ pub(super) fn create_sub_record_array_new(
         container: ContainerBase::default(),
         file: file.clone(),
         arc_def: def,
+        arc_sorted: AtomicBool::new(false),
+        arc_sort_invalid: AtomicBool::new(false),
     });
     let array_ref: ElementRef = array.clone();
     if let Some(array_def) = array.arc_def.as_sub_record_array_def() {
@@ -2003,20 +2025,19 @@ impl ElementImpl for SubRecordImpl {
         super::value::create_string_list_terminator(&self_ref, &self.file);
     }
 
-    /// Port of `TwbSubRecord.GetSortKeyInternal`: the key of the value, or
-    /// the keys of the elements.
+    /// Port of `TwbSubRecord.GetSortKeyInternal`: the signature without a
+    /// definition, else the key of the value, or the keys of the elements
+    /// (`TwbContainer`'s).
     fn get_sort_key_impl(&self, extended: bool) -> String {
+        if self.def().is_none() {
+            return self.get_signature().to_string();
+        }
         self.do_init();
         if let Some(value_def) = self.value_def() {
             let self_ref = self.element_ref();
             return value_def.to_sort_key(self.data(), Some(&self_ref), extended);
         }
-        self.container
-            .elements()
-            .iter()
-            .map(|child| child.get_sort_key(extended))
-            .collect::<Vec<_>>()
-            .join("")
+        edit::container_sort_key(&self.container, extended)
     }
 
     /// Port of `TwbSubRecord.GetIsEditable`.
@@ -2270,17 +2291,46 @@ impl ElementImpl for SubRecordArrayImpl {
         Some(self)
     }
 
+    /// `TwbContainer.GetSortKeyInternal`.
+    fn get_sort_key_impl(&self, extended: bool) -> String {
+        self.sorted_init();
+        edit::container_sort_key(&self.container, extended)
+    }
+
+    /// Port of `TwbSubRecordArray.ElementChanged`: a change of a member
+    /// makes the order invalid.
+    fn element_changed(&self, _child: &ElementRef) {
+        self.notify_changed();
+        if self.arc_sorted.load(Ordering::Relaxed) {
+            self.arc_sort_invalid.store(true, Ordering::Relaxed);
+        }
+    }
+
+    /// Port of `TwbSubRecordArray.SetModified`.
+    fn set_modified(&self, value: bool) {
+        super::write::element_set_modified(self, value);
+        if value && self.arc_sorted.load(Ordering::Relaxed) {
+            self.arc_sort_invalid.store(true, Ordering::Relaxed);
+        }
+    }
+
     fn element_base(&self) -> &ElementBase {
         &self.base
     }
 }
 
 impl SubRecordArrayImpl {
-    fn no_init(&self) {}
+    /// Port of `TwbSubRecordArray.DoInit(True)`: the members are sorted by
+    /// their sort keys when a change made the order invalid.
+    fn sorted_init(&self) {
+        if self.arc_sorted.load(Ordering::Relaxed) && self.arc_sort_invalid.swap(false, Ordering::Relaxed) {
+            edit::sort_by_sort_keys(&self.container);
+        }
+    }
 }
 
 impl Container for SubRecordArrayImpl {
-    container_by_elements!(no_init);
+    container_by_elements!(sorted_init);
 }
 
 impl Element for SubRecordStructImpl {
@@ -2351,6 +2401,29 @@ impl Element for SubRecordStructImpl {
 impl ElementImpl for SubRecordStructImpl {
     fn as_this(&self) -> &dyn ElementImpl {
         self
+    }
+
+    /// Port of `TwbSubRecordStruct.GetSortKeyInternal`: the keys of the
+    /// members of the sort key of the definition, separated by `|`.
+    fn get_sort_key_impl(&self, extended: bool) -> String {
+        let Some(def) = self.src_def.as_sub_record_struct_def().filter(|def| def.has_sort_key()) else {
+            return String::new();
+        };
+        let mut result = String::new();
+        if def.get_sort_key_count(false) > 0 {
+            let count = def.get_sort_key_count(extended).max(0) as usize;
+            let additional = self.get_additional_element_count();
+            for index in 0..count {
+                let member = def.get_sort_key(index, extended);
+                if let Some(element) = self.get_element_by_sort_order(member + additional) {
+                    result.push_str(&element.get_sort_key(extended));
+                }
+                if index + 1 < count {
+                    result.push('|');
+                }
+            }
+        }
+        result
     }
 
     fn add_impl(&self, name: &str, _silent: bool) -> Result<Option<ElementRef>, EditError> {
