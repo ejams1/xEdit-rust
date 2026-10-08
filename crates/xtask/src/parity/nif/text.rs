@@ -202,7 +202,8 @@ pub fn run(_root: &Path, tag: &str, options: &Options) -> Result<()> {
                 let Some(kind) = AssetKind::from_path(&name) else {
                     continue;
                 };
-                let data = archive.read(&name)?.unwrap_or_default();
+                // The textures of a texture archive wait for phase 5 step 2.
+                let Ok(Some(data)) = archive.read(&name) else { continue };
                 cases.push(Case {
                     game: game.name,
                     archive: path.file_name().unwrap_or_default().to_string_lossy().into_owned(),
