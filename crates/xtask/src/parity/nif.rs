@@ -529,9 +529,10 @@ pub fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
             };
             let mut names: Vec<String> = archive
                 .files()
+                .iter()
+                .map(|entry| entry.name.to_lowercase().replace('/', "\\"))
                 .filter(|name| kind(name).is_some())
                 .filter(|name| options.file.as_ref().is_none_or(|part| name.contains(part.as_str())))
-                .map(str::to_owned)
                 .collect();
             if names.is_empty() {
                 continue;

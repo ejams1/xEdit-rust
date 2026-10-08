@@ -90,7 +90,10 @@ pub fn add_archive(path: &Path) -> Result<(), ArchiveError> {
         return Ok(());
     }
     let archive = Archive::open(path)?;
-    CONTAINERS.write().unwrap().push(Arc::new(Container::Archive(Box::new(archive))));
+    CONTAINERS
+        .write()
+        .unwrap()
+        .push(Arc::new(Container::Archive(Box::new(archive))));
     invalidate_cache();
     Ok(())
 }

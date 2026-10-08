@@ -27,8 +27,9 @@ fn main() {
         .cloned();
     let mut names: Vec<String> = archive
         .files()
+        .iter()
+        .map(|entry| entry.name.to_lowercase())
         .filter(|name| (name.ends_with(".nif") || name.ends_with(".kf")) && name.contains(&filter))
-        .map(str::to_owned)
         .collect();
     names.sort();
     let (mut equal, mut different, mut failed) = (0, 0, 0);
