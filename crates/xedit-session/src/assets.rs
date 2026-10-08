@@ -26,6 +26,7 @@ use xedit_assets::data_format_nif::{
     block, block_by_path, block_type, blocks_count, footer, header, wb_ni_object_list,
 };
 use xedit_assets::data_format_nif_types::ROTATION_EULER;
+use xedit_assets::nif_scanner;
 use xedit_io::archive::Archive;
 
 use crate::save::write_atomically;
@@ -449,7 +450,66 @@ fn assets_types(_: &mut Session, _: crate::NoParams) -> Result<AssetsTypesRespon
     })
 }
 
+/// `assets.scan`: the request.
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct AssetsScanRequest {
+    /// Path of the NIF on disk, or of the archive that holds it.
+    pub file: String,
+    /// The path of the NIF inside the archive `file`.
+    pub archive_path: Option<String>,
+    /// `blocks` (`NifBlockList`: `Name=Type` of every block) or `textures`
+    /// (`NifTextureList`: the textures of the texture sets and effect
+    /// shaders).
+    pub what: String,
+    /// With `textures`: only the textures of the shapes whose texture
+    /// coordinates stay within -range..range (`NifTextureListUVRange`).
+    pub uv_range: Option<f32>,
+}
+
+/// One line of a scan.
+#[derive(Serialize, JsonSchema)]
+pub struct ScanEntry {
+    /// `Name=Type` of a block, or a texture file name.
+    pub text: String,
+    /// The block index, or the slot of the texture in its texture set.
+    pub index: i32,
+}
+
+#[derive(Serialize, JsonSchema)]
+pub struct AssetsScanResponse {
+    pub entries: Vec<ScanEntry>,
+}
+
+fn assets_scan(_: &mut Session, request: AssetsScanRequest) -> Result<AssetsScanResponse, CommandError> {
+    let source = AssetSource {
+        file: request.file.clone(),
+        archive_path: request.archive_path.clone(),
+        kind: Some("nif".to_owned()),
+    };
+    let (data, _) = read_source(&source)?;
+    let entries = match (request.what.as_str(), request.uv_range) {
+        ("blocks", _) => nif_scanner::nif_block_list(&data),
+        ("textures", None) => nif_scanner::nif_textures(&data).map(Option::unwrap_or_default),
+        ("textures", Some(range)) => nif_scanner::nif_textures_uv_range(&data, range).map(Option::unwrap_or_default),
+        _ => return Err(CommandError::new("invalid_params", "what is blocks or textures")),
+    }
+    .map_err(load_failed)?;
+    Ok(AssetsScanResponse {
+        entries: entries
+            .into_iter()
+            .map(|(text, index)| ScanEntry { text, index })
+            .collect(),
+    })
+}
+
 pub fn register(registry: &mut Registry) {
+    registry.register(
+        "assets.scan",
+        "List the blocks or the textures of a NIF with the light scanner (NifBlockList, NifTextureList).",
+        false,
+        assets_scan,
+    );
     registry.register(
         "assets.dump",
         "Print a NIF, material or other data format file as text or JSON (ToText, ToJSON).",

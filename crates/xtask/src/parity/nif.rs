@@ -46,7 +46,10 @@ use xedit_io::encoding::Encoding;
 
 use super::{GAMES, Game, cache_dir, required_var};
 
-const USAGE: &str = "usage: cargo xtask parity nif [--game <game>]... [--archive <name part>]... [--file <path part>] [--threads <n>] [--keep]";
+mod text;
+
+const USAGE: &str = "usage: cargo xtask parity nif [--game <game>]... [--archive <name part>]... [--file <path part>] \
+                     [--threads <n>] [--keep] [--text [--sample <n>]]";
 
 /// The file kinds of the check.
 fn kind(path: &str) -> Option<Kind> {
@@ -92,6 +95,11 @@ struct Options {
     file: Option<String>,
     threads: usize,
     keep: bool,
+    /// Compare the text dumps and saves with the GUI build's script
+    /// adapter instead of Sniff (`--text`).
+    text: bool,
+    /// The NIF and FUZ files per archive that `--text` checks.
+    sample: usize,
 }
 
 fn parse(args: &[&str]) -> Result<Options> {
@@ -101,6 +109,8 @@ fn parse(args: &[&str]) -> Result<Options> {
         file: None,
         threads: std::thread::available_parallelism().map_or(4, |count| count.get()),
         keep: false,
+        text: false,
+        sample: 20,
     };
     let mut rest = args.iter();
     while let Some(&arg) = rest.next() {
@@ -117,6 +127,8 @@ fn parse(args: &[&str]) -> Result<Options> {
             "--file" => options.file = Some(rest.next().context(USAGE)?.to_lowercase().replace('/', "\\")),
             "--threads" => options.threads = rest.next().context(USAGE)?.parse::<usize>()?.max(1),
             "--keep" => options.keep = true,
+            "--text" => options.text = true,
+            "--sample" => options.sample = rest.next().context(USAGE)?.parse()?,
             _ => bail!(USAGE),
         }
     }
@@ -474,8 +486,11 @@ fn compare(port: &Output, oracle: Option<&Output>) -> Option<Outcome> {
     }
 }
 
-pub fn run(_root: &Path, tag: &str, args: &[&str]) -> Result<()> {
+pub fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
     let options = parse(args)?;
+    if options.text {
+        return text::run(root, tag, &options);
+    }
     let sniff = PathBuf::from(required_var("XEDIT_ORACLE_DIR")?).join("Sniff.exe");
     ensure!(sniff.exists(), "{} does not exist", sniff.display());
     let cache = cache_dir()?.join(tag).join("nif-oracle");

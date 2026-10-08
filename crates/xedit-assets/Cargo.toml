@@ -9,6 +9,7 @@ repository.workspace = true
 [dependencies]
 thiserror = "2.0.21"
 xedit-core = { path = "../xedit-core" }
+xedit-io = { path = "../xedit-io" }
 
 [dev-dependencies]
 xedit-io = { path = "../xedit-io" }
