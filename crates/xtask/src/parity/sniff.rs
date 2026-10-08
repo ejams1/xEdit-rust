@@ -56,7 +56,7 @@ use super::nif::{archive_key, fnv, windows_path};
 use super::{GAMES, Game, cache_dir, required_var};
 
 const USAGE: &str = "usage: cargo xtask parity sniff [--case <name or name part>]... [--game <game>]... \
-                     [--archive <name part>]... [--sample <n>] [--threads <n>] [--show <n>] [--keep] [--list]";
+                     [--archive <name part>]... [--sample <n>] [--threads <n>] [--show <n>] [--keep] [--refresh-oracle] [--list]";
 
 /// A run of an operation with its settings.
 struct Case {
@@ -467,6 +467,8 @@ struct Options {
     /// Keep the work folders (Sniff's outputs, the logs) of the archives
     /// that compared equal, and every output of the others.
     keep: bool,
+    /// Run Sniff again and replace the cached results.
+    refresh_oracle: bool,
     list: bool,
 }
 
@@ -479,6 +481,7 @@ fn parse(args: &[&str]) -> Result<Options> {
         threads: std::thread::available_parallelism().map_or(4, |count| count.get()),
         show: 3,
         keep: false,
+        refresh_oracle: false,
         list: false,
     };
     let mut rest = args.iter();
@@ -491,6 +494,7 @@ fn parse(args: &[&str]) -> Result<Options> {
             "--threads" => options.threads = rest.next().context(USAGE)?.parse::<usize>()?.max(1),
             "--show" => options.show = rest.next().context(USAGE)?.parse()?,
             "--keep" => options.keep = true,
+            "--refresh-oracle" => options.refresh_oracle = true,
             "--list" => options.list = true,
             _ => bail!(USAGE),
         }
@@ -527,11 +531,12 @@ struct Results {
     processed: usize,
     /// The files whose output or error differed from the port's and that
     /// Sniff ran again alone (`rerun_differences`).
-    /// (Named `run_alone`: the `alone` of earlier caches named outputs,
-    /// not input files, and missed the renamed outputs of the JSON
-    /// converter, so those caches run their differences alone again.)
+    /// (Named `alone_runs`: the `alone` and `run_alone` of earlier caches
+    /// missed the renamed outputs of the JSON converter and the log lines
+    /// of a file that failed among the others, so those caches run their
+    /// differences alone again.)
     #[serde(default)]
-    run_alone: Vec<String>,
+    alone_runs: Vec<String>,
 }
 
 /// Files that differ from the port's are run again alone, up to this many
@@ -738,9 +743,9 @@ fn rerun_crashes(
         results.extra.extend(rerun.extra);
         results.extra.sort();
         results.updated += rerun.updated;
-        results.run_alone.push(name);
+        results.alone_runs.push(name);
     }
-    results.run_alone.sort();
+    results.alone_runs.sort();
     Ok(())
 }
 
@@ -774,7 +779,7 @@ fn rerun_differences(
             };
             !(errors && port.outputs.get(*name) == oracle.outputs.get(*name))
         })
-        .filter(|name| !oracle.run_alone.contains(&input_name(name, extensions)))
+        .filter(|name| !oracle.alone_runs.contains(&input_name(name, extensions)))
         .cloned()
         .collect();
     names.sort();
@@ -796,16 +801,25 @@ fn rerun_differences(
             }
         );
         oracle.outputs.remove(&name);
-        oracle.errors.remove(&name);
+        let failed = oracle.errors.remove(&source_name).is_some() | oracle.errors.remove(&name).is_some();
         if let Some(hash) = output {
             oracle.outputs.insert(name.clone(), hash);
         }
-        if let Some(error) = error {
-            oracle.errors.insert(name.clone(), error);
+        if let Some(error) = &error {
+            oracle.errors.insert(source_name.clone(), error.clone());
         }
-        oracle.run_alone.push(source_name);
+        // A file that failed among the others wrote no log lines there:
+        // the run alone gives them (`Updated:`, the processor's report).
+        if failed && error.is_none() {
+            oracle.log.extend(rerun.log);
+            oracle.log.sort();
+            oracle.extra.extend(rerun.extra);
+            oracle.extra.sort();
+            oracle.updated += rerun.updated;
+        }
+        oracle.alone_runs.push(source_name);
     }
-    oracle.run_alone.sort();
+    oracle.alone_runs.sort();
     Ok(true)
 }
 
@@ -1132,7 +1146,7 @@ pub fn run(tag: &str, args: &[&str]) -> Result<()> {
                 // The oracle, from the cache or run now.
                 let cached = cache.join(case.name).join(game.name).join(format!("{key}.json"));
                 let start = Instant::now();
-                let mut oracle = if cached.exists() {
+                let mut oracle = if cached.exists() && !options.refresh_oracle {
                     serde_json::from_slice::<Results>(&fs::read(&cached)?)?
                 } else {
                     let mut results =
