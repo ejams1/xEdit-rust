@@ -75,7 +75,7 @@ pub const PROCS: &[ProcEntry] = &[
     pending!("NIF", "Vertex color painting", STEP_5),
     pending!("NIF", "Group shapes", STEP_5),
     pending!("NIF", "Merge shapes", STEP_5),
-    pending!("NIF", "Merge properties", STEP_5),
+    ported!("NIF", "Merge properties", proc_merge_properties::ProcMergeProperties),
     ported!("NIF", "Remove nodes", proc_remove_nodes::ProcRemoveNodes),
     ported!(
         "NIF",
@@ -84,9 +84,13 @@ pub const PROCS: &[ProcEntry] = &[
     ),
     ported!("NIF", "Convert block type", proc_convert_root_node::ProcConvertRootNode),
     ported!("NIF", "Unskin mesh", proc_unskin_mesh::ProcUnskinMesh),
-    pending!("NIF", "Add NiLODNode", STEP_5),
-    pending!("NIF", "Add RootCollisionNode", STEP_5),
-    pending!("NIF", "Add bounding box", STEP_5),
+    ported!("NIF", "Add NiLODNode", proc_add_lod_node::ProcAddLODNode),
+    ported!(
+        "NIF",
+        "Add RootCollisionNode",
+        proc_add_root_collision_node::ProcAddRootCollisionNode
+    ),
+    ported!("NIF", "Add bounding box", proc_add_bounding_box::ProcAddBoundingBox),
     ported!("NIF", "Set missing names", proc_set_missing_names::ProcSetMissingNames),
     ported!("Report", "Check for errors", proc_check_for_errors::ProcCheckForErrors),
     pending!("Report", "Analyze mesh", MESH_OPTIMIZE),

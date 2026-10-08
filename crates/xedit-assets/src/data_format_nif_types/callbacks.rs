@@ -61,10 +61,21 @@ pub fn byte_float_get_text(_t: &mut Tree, _e: El, a_text: &mut String) -> R<()> 
     Ok(())
 }
 
-/// Upstream `ByteFloatSetText`.
+/// Upstream `ByteFloatSetText`. UPSTREAM-QUIRK: the floating point
+/// exceptions are masked, so `Round` of NaN or of a value outside the
+/// `Int64` range gives the x64 integer indefinite, -2^63, which the byte
+/// then refuses (`'-9223372036854775808' is not a valid integer value`;
+/// a bitangent of `NAN` that `ApplyTransform` rotates, found by
+/// `cargo xtask parity sniff`).
 pub fn byte_float_set_text(_t: &mut Tree, _e: El, a_text: &mut String) -> R<()> {
     let value = df_str_to_float(a_text)?;
-    *a_text = round((value + 1.0) * 127.5).to_string();
+    let scaled = (value + 1.0) * 127.5;
+    let rounded = if scaled.is_nan() || scaled.abs() >= 9_223_372_036_854_775_808.0 {
+        i64::MIN
+    } else {
+        round(scaled)
+    };
+    *a_text = rounded.to_string();
     Ok(())
 }
 
