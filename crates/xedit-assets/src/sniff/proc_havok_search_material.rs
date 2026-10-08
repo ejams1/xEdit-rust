@@ -86,16 +86,31 @@ fn filtered(materials: &[String], prefix: &str, filter: &str) -> Vec<String> {
 
 /// `GetTarget`: the node a collision belongs to, through the first block
 /// that refers to the block.
+///
+/// UPSTREAM-QUIRK: upstream recurses, and a chain of first referrers that
+/// comes back to a block it passed (a skinned mesh: the root node is first
+/// referred to by the `Skeleton Root` of a skin instance, whose shape is a
+/// child of the root) recurses until the stack overflows, which fails the
+/// file with `Stack overflow` (`ndcuirass_gnd.nif` of Oblivion's
+/// `Knights.bsa`). The port walks the chain and fails the same way when a
+/// block comes again.
 fn get_target(tree: &mut Tree, b: El) -> R<Option<El>> {
-    if block_is_ni_object(tree, b, "bhkCollisionObject", true) {
-        let link = tree.elements(b, "Target")?.ok_or_else(access_violation)?;
-        return tree.links_to(link);
+    let mut current = b;
+    let mut seen = vec![b];
+    loop {
+        if block_is_ni_object(tree, current, "bhkCollisionObject", true) {
+            let link = tree.elements(current, "Target")?.ok_or_else(access_violation)?;
+            return tree.links_to(link);
+        }
+        let Some(&reference) = block_referenced_by(tree, current)?.first() else {
+            return Ok(None);
+        };
+        current = nifblk(tree, reference).ok_or_else(access_violation)?;
+        if seen.contains(&current) {
+            return Err(DfError::new("Stack overflow"));
+        }
+        seen.push(current);
     }
-    if let Some(&reference) = block_referenced_by(tree, b)?.first() {
-        let referrer = nifblk(tree, reference).ok_or_else(access_violation)?;
-        return get_target(tree, referrer);
-    }
-    Ok(None)
 }
 
 /// `UpdateField`.
@@ -158,6 +173,11 @@ impl Proc for ProcHavokSearchMaterial {
         let tree = &mut nif.tree;
         // `RootNode` reads past an empty array for a file without blocks.
         let root = *root_nodes(tree)?.first().ok_or_else(access_violation)?;
+        // The hidden temporaries of the three `EditValues['Material']` calls
+        // on a shape.
+        let mut temp_check = String::new();
+        let mut temp_search = String::new();
+        let mut temp_log = String::new();
         for i in 0..blocks_count(tree)? {
             let b = block(tree, i)?;
             if matches!(
@@ -189,15 +209,31 @@ impl Proc for ProcHavokSearchMaterial {
                 if self.skip_root && get_target(tree, b)? == Some(root) {
                     continue;
                 }
-                let material = tree.edit_values(b, "Material")?;
-                if material.is_empty() {
+                // UPSTREAM-QUIRK: a shape without `Material` (a
+                // `bhkPackedNiTriStripsShape`, a `bhkMoppBvTreeShape`) leaves
+                // the string result of `EditValues` unassigned, so each call
+                // keeps what its hidden temporary got from the last shape
+                // that has one: upstream lists those shapes with the
+                // previous material.
+                if let Some(material) = tree.edit_values_assigned(b, "Material")? {
+                    temp_check = material;
+                }
+                if temp_check.is_empty() {
                     continue;
                 }
-                if !self.material_search.is_empty() && material != self.material_search {
-                    continue;
+                if !self.material_search.is_empty() {
+                    if let Some(material) = tree.edit_values_assigned(b, "Material")? {
+                        temp_search = material;
+                    }
+                    if temp_search != self.material_search {
+                        continue;
+                    }
                 }
                 if self.material_replace.is_empty() {
-                    log.push(format!("\t{}: {material}", tree.name(b)?));
+                    if let Some(material) = tree.edit_values_assigned(b, "Material")? {
+                        temp_log = material;
+                    }
+                    log.push(format!("\t{}: {temp_log}", tree.name(b)?));
                 } else {
                     let el = tree.elements(b, "Material")?;
                     update_field(tree, el, &self.material_replace, &mut changed)?;
