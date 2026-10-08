@@ -106,8 +106,9 @@ impl ElementBase {
     }
 }
 
-/// Port of `TwbElement.SetModified`. The sort keys, the generation counters
-/// and the update count of upstream are not ported: nothing reads them yet.
+/// Port of `TwbElement.SetModified`. The sort keys and the generation
+/// counters of upstream are not ported, except that a main record marks its
+/// references out of date.
 pub(crate) fn element_set_modified(element: &dyn ElementImpl, value: bool) {
     if !value {
         return;
@@ -122,6 +123,12 @@ pub(crate) fn element_set_modified(element: &dyn ElementImpl, value: bool) {
         base.include_state(ElementState::esUnsaved);
     }
     base.include_state(ElementState::esModified);
+    // `Inc(eGeneration)`: the references of a record are out of date.
+    if element.get_element_type() == ElementType::etMainRecord
+        && let Some(record) = element.main_record_impl()
+    {
+        record.mark_refs_stale();
+    }
     if base.e_update_count.load(Ordering::Relaxed) > 0 {
         base.include_state(ElementState::esModifiedUpdated);
     } else {

@@ -607,7 +607,13 @@ impl ValueImpl {
 
     /// Port of `DoInit`: builds the children once.
     pub fn do_init(&self) {
-        self.vb.init.run(|| {
+        self.vb.init.run(|| self.init());
+    }
+
+    /// The body of the init, which `SetDataSize` runs again while the init
+    /// runs (from an `AfterLoad` callback).
+    fn init(&self) {
+        {
             let Some((block, start, end)) = self.vb.data_source() else {
                 return;
             };
@@ -639,7 +645,7 @@ impl ValueImpl {
             if matches!(self.kind, ValueKind::Struct | ValueKind::Array | ValueKind::Union) {
                 self.vb.vb_value_def.after_load(&self_ref);
             }
-        });
+        }
     }
 
     pub fn value_def(&self) -> &Arc<dyn ValueDef> {
@@ -1218,8 +1224,14 @@ impl ElementImpl for ValueImpl {
         self.vb.init.is_running()
     }
 
+    /// Port of `Reset; Init` of `SetDataSize` and `RecreateFlags`: inside
+    /// the init of the element itself, the init runs again at once.
     fn reset_and_init(&self) {
         self.vb.container.release_elements();
+        if self.vb.init.is_running_here() {
+            self.init();
+            return;
+        }
         self.vb.init.reset();
         self.do_init();
     }

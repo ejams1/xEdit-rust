@@ -51,6 +51,11 @@ pub fn get_loaded_file_by_name(name: &str) -> Option<Arc<FileImpl>> {
         .cloned()
 }
 
+/// The loaded files (`FilesMap`), in the order they were loaded.
+pub fn loaded_files() -> Vec<Arc<FileImpl>> {
+    FILES_MAP.read().unwrap().clone()
+}
+
 /// Port of `ExtractFileExt`: the extension with its dot, or nothing.
 fn extract_file_ext(name: &str) -> &str {
     match name.rfind(['.', '\\', '/', ':']) {
@@ -806,8 +811,9 @@ pub fn element_masters_updated(element: &ElementRef, update: &MastersUpdate) -> 
     })
 }
 
-/// Port of `TwbMainRecord.MastersUpdated`: the FormID of the record and
-/// every FormID in its elements, inside an internal edit. A record that
+/// Port of `TwbMainRecord.MastersUpdated`: the FormID of the record, the
+/// FormIDs of its references (`mrReferences`) and every FormID in its
+/// elements, inside an internal edit. A record that
 /// was not modified before and is now is modified internally. A record
 /// that did not change releases its elements again.
 fn main_record_masters_updated(record: &Arc<MainRecordImpl>, update: &MastersUpdate) -> Result<bool, EditError> {
@@ -820,6 +826,7 @@ fn main_record_masters_updated(record: &Arc<MainRecordImpl>, update: &MastersUpd
                 .file
                 .upgrade()
                 .is_some_and(|file| file.get_allow_hardcoded_range_use());
+            let refs_out_of_date = record.refs_out_of_date();
             let mut header_updated = false;
             let old = record.mr_struct().form_id;
             if !old.is_null() {
@@ -830,7 +837,18 @@ fn main_record_masters_updated(record: &Arc<MainRecordImpl>, update: &MastersUpd
                     header_updated = true;
                 }
             }
-            let result = container_masters_updated(&**record, update)?;
+            // With the references built, the elements are only visited when
+            // one of the FormIDs the record refers to changes (or the
+            // references are out of date).
+            let found_one = match record.update_references(|form_id| update.fixup(form_id, allow_hardcoded_range_use)) {
+                Some(found) => found || refs_out_of_date,
+                None => true,
+            };
+            let result = if found_one {
+                container_masters_updated(&**record, update)?
+            } else {
+                false
+            };
             Ok(result || header_updated)
         })
     });

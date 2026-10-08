@@ -158,12 +158,15 @@ impl MainRecordImpl {
             .map(|record| record.master_or_self_impl());
 
         file.remove_main_record(self)?;
+        // The referenced-by list goes to the override that becomes the
+        // master, or is dropped (`mrReferencedBy := nil`).
+        let referenced_by = self.take_referenced_by();
         if let Some(old_master) = self.master() {
             old_master.remove_override(self);
         } else {
             let overrides = self.overrides();
             if let Some(first) = overrides.first() {
-                first.you_are_the_master(&overrides);
+                first.you_are_the_master(&overrides, referenced_by);
             }
         }
         *self.mr_master.write().unwrap() = None;

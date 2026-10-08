@@ -22,6 +22,7 @@ pub mod form_ids;
 mod info_sort;
 pub mod masters;
 pub mod new_form_id;
+pub mod refcache;
 pub mod refs;
 mod scan;
 pub mod sortable;
@@ -2012,6 +2013,15 @@ pub struct MainRecordImpl {
     /// A record that repeats the FormID of the record before it, which
     /// upstream skips on load.
     mr_duplicate: AtomicBool,
+    /// Port of `mrReferences` with `csRefsBuild`, `cntRefsBuildAt` and
+    /// `mrsBuildingRef`: the FormIDs the record refers to.
+    pub(crate) mr_refs: std::sync::Mutex<refs::RecordRefs>,
+    /// Port of `mrReferencedBy` with `mrsReferencedByUnsorted`: the records
+    /// that refer to this one (kept by the master only).
+    pub(crate) mr_referenced_by: std::sync::Mutex<refs::ReferencedBy>,
+    /// Port of `mrsGridCellChecked`, `mrsHasGridCell` and `mrGridCell` as
+    /// the init leaves them, which the reference cache keeps.
+    pub(crate) mr_grid_cell: std::sync::Mutex<refcache::GridCellState>,
 }
 
 impl MainRecordImpl {
@@ -2067,6 +2077,9 @@ impl MainRecordImpl {
             mr_precombined: OnceLock::new(),
             mr_ofst_removed: AtomicBool::new(false),
             mr_duplicate: AtomicBool::new(duplicate),
+            mr_refs: Default::default(),
+            mr_referenced_by: Default::default(),
+            mr_grid_cell: Default::default(),
         });
         scan::attach(container, record.clone());
         // A record whose FormID the scan saw before (`AddMainRecord`'s
@@ -3937,6 +3950,19 @@ impl ElementImpl for MainRecordImpl {
             }
         }
         self.notify_changed();
+        // `if not (mrsNoUpdateRefs in mrStates) then UpdateRefs`.
+        self.self_arc().update_refs();
+    }
+
+    /// Port of `TwbMainRecord.SetParentModified`: the group is marked
+    /// modified, and the references are built again.
+    fn set_parent_modified(&self) {
+        if let Some(container) = self.base.container()
+            && let Some(container) = container.as_element_impl()
+        {
+            container.set_modified(true);
+        }
+        self.self_arc().update_refs();
     }
 
     /// Port of `TwbMainRecord.DoAfterSet` without the cell child group

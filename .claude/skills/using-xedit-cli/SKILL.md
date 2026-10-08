@@ -69,6 +69,9 @@ Inspection (never mutates):
 | `elements get <FormID> <path> [--file F] [--depth N]` | `elements.get` | One element of a record by path. |
 | `conflicts [--file F]... [--signature SIG]... [--min-conflict-all CA] [--conflict-this CT]... [--include-single] [--master-and-leafs] [--quick-show-conflicts] [--offset N] [--limit N]` | `conflicts.list` | The conflict status of the records of the loaded plugins, and per file the counts and the highest status. See "Conflicts". |
 | `compare <FormID> [--file F] [--master-and-leafs] [--hide-no-conflict] [--include-hidden]` | `records.compare` | The records of a FormID side by side, row by row, with the conflict status of each row and cell, as the view tab shows them. |
+| `refs get <FormID> [--file F] [--offset N] [--limit N]` | `refs.get` | The records that refer to a record (xEdit's "Referenced By" tab) and the FormIDs it refers to. Builds the reference index first. |
+| `refs build [--file F] [--only-load]` | `refs.build` | Builds the reference index of the loaded files, or loads it from the reference cache, and saves the cache (`BuildOrLoadRef`). |
+| `refs dump` | (none) | The referenced-by lists of every record as text, for the parity check. |
 | `call system.version` | `system.version` | The version of the build. |
 | `dump --game G <plugin>` | (none) | The whole plugin as `xDump.exe` prints it, to stdout; progress goes to stderr. |
 | `saves dump --game G --data <Data> <save>` | (none) | A save or co-save as `xDump.exe -saves` prints it. The plugins the save lists load from `<Data>`. |
@@ -220,7 +223,7 @@ xedit --edit --game sse --load "<Data>\Skyrim.esm" --load "<Data>\MyPatch.esp" b
 - The new FormID is a load order FormID. Omitted, it is the next free FormID of the record's file (`NewFormID`, which moves `HEDR\Next Object ID`), or of `--target-file` (the record's file or one of its masters, upstream's "renumber to destination file"). `00000000` and `00000014` are refused, a FormID the file has already fails with `FormID [...] is already present in file ...`, and a FormID of a file that loads before the record's file but is not its master makes that file a master (upstream's `AddRequiredMaster`, without its question; the response lists it in `masters_added`).
 - `--overrides` changes the later overrides too (upstream asks "has later overrides, update them too?"): all of them for a master record, the following ones for an override.
 - The response lists the referencing records (`referenced_by`) and how many were updated. Without `--target-file` only the records in editable files are updated (the records the dialog lets you pick); with it, and for `formids renumber`, every referencing record is updated when one of them is editable, as upstream's silent update does. The game master is not editable (upstream needs `-IKnowWhatImDoing -IKnowIllBreakMyGameWithThis`), so its records can not be changed.
-- The referencing records are found by scanning the files that can see the FormID (its file and the files that have it as a master) until the reference index of phase 4 exists; on a big load order a change or a renumbering can take a while.
+- The referencing records come from the reference index (see "References"), which the first command that needs it builds for every loaded file; on a big load order without a reference cache that first build takes a while.
 
 `formids renumber` is "Renumber FormIDs from...": the new records of the plugin take the FormIDs from `--start` (six hex digits, three for a light plugin; the next object ID when omitted), keeping the ones already in the new range; `--compact` packs them into `000800`..`000FFF` for an ESL; `--inject-into <master>` gives them free FormIDs of that master (`--preserve-object-ids` keeps the object IDs where the master has them free, `--all-or-nothing` stops when one can not be kept). Their overrides in later plugins follow, the referencing records are updated, and `HEDR\Next Object ID` of the target moves past the highest FormID used.
 
@@ -234,6 +237,20 @@ xedit --json --edit --game sse --load "<Data>\MyMod.esp" batch - <<'JSON'
   {"command": "files.save", "params": {"output": "<somewhere else>\MyMod.esp"}}
 ]
 JSON
+```
+
+## References
+
+The reference index is xEdit's "Referenced By" information: for every record the FormIDs its elements refer to (`References`), and for every master record the records that refer to it or to one of its overrides (`ReferencedBy`). The GUI builds it for every loaded file once they are loaded; the CLI builds it when a command first needs it (`refs get`, `formids change`, `formids renumber`) or when `refs build` runs, once per session, on all CPUs (`--threads`; the lists are the same for every count).
+
+- `refs get <FormID>` reports `referenced_by` (the list of the master of the record, sorted by load order FormID and then by the load order of the referencing file, as xEdit's tab shows it; a record that refers through two FormIDs that resolve to the same record is listed twice, as in xEdit), `referenced_by_count`, `master`, and `references`: the FormIDs the record's own elements hold, as its file stores them, each with the record it resolves to. `--offset` and `--limit` page the list (a keyword can have tens of thousands of entries).
+- Edits keep the index right as xEdit does: a changed record collects its references again, a new or copied record joins the lists of the records it refers to, a deleted record leaves them, and a record whose FormID changes hands its list to the override that becomes the master.
+- **The reference cache.** Like xEdit, the build saves the references of every file with more than 500 records (or that took more than 2 seconds) to a cache file, and the next process loads them instead of building (`refs build` reports `loaded`, `built` or `built_and_saved` per file). The cache folder is xEdit's: `<AppName>Edit Cache` in the data folder of the plugins (`SSEEdit Cache`, `FO4Edit Cache`), so by default the CLI writes into the game's `Data` folder. Pass the global `--cache-path <folder>` to put it elsewhere, `--dont-cache-save` to write none, `--dont-cache-load` to read none and `--dont-cache` for neither. A cache file is named after the CRC32 of the program, the plugin and its CRC32, the code pages and the language, so a changed plugin or another build of `xedit` never reads a stale file; xEdit's own files carry xEdit's CRC32 and are not read by the CLI, but the format is the same (renamed, each reads the other's). Delete the folder to start over.
+- Morrowind has no reference information (xEdit builds none): `referenced_by` is always empty there.
+
+```
+xedit --game sse --load "<Data>\Update.esm" --cache-path "<scratch>\cache" refs get 0001A332 --limit 20
+xedit --json --game fo4 --load "<Data>\DLCRobot.esm" --dont-cache refs build
 ```
 
 ## Masters
@@ -314,7 +331,7 @@ Behaviour a user can meet, as of phase 4 step 2. Each is an upstream behaviour n
 - **LString.** The string tables of a localized plugin are not written. Setting a localized string from text fails (`Can not assign to a localized string: writing the string tables is not ported yet`; only a `STRINGID:` text works), and `records copy` into a localized plugin copies the record with its localized strings empty (the `FULL` of a copied `NPC_` reads `""`). Check the strings of a copy before saving it.
 - **Copy over an existing override.** xEdit's "...with overwriting" (`aAllowOverwrite`) is not ported: `records copy` returns the existing override unchanged. A partial form (`MakePartialForm`), template elements and aligned arrays can not be copied either.
 - **Sorted arrays.** A record that is rebuilt on save sorts its sorted subrecord arrays as upstream does, but an array that is sorted by the value of a subrecord (the `KWDA` keyword arrays, `srsSorted` and `arrSorted`) is not, an array is not sorted again after a FormID update of its entries, and after a master update (`masters add|sort|clean`) the port sorts unchanged sorted arrays that the oracle leaves in file order (30 `MSWP` and 1 `RACE` of `DLCworkshop01.esm`); a saved plugin can therefore differ from xEdit's in the order of those entries.
-- **References.** The records that refer to a FormID are found by scanning the loaded files on demand (`formids.change`, `formids.renumber`) until the reference index of phase 4; the editor ID index of a file does not learn the records an edit adds.
+- **References.** The index has no "reachable" information (xEdit's "Build Reachable Info"), and a record whose references come from the cache takes only its editor ID and full name from it (its base record, grid cell and GUI names are read from the record when needed). The editor ID index of a file does not learn the records an edit adds.
 - **Flags** are not child elements of their value in `records get`; `compare` shows them as rows, as the view does.
 - **Conflicts.** Mod groups do not change the comparison yet (phase 4 step 6), so no record is `ctHiddenByModGroup` but a `NAVI` override; records the GUI user hid and the compare-to load (`Compare to...`) do not exist; the raw data compare (`wbCompareRawData`) is not ported; compare of selected records of different FormIDs (`Compare Selected`) and the script function `ConflictAllForElements` have no command yet.
 - **Morrowind.** Plugins load and dump, but the save stops at `must have a FormID`: the identity FormID of a TES3 record is not ported. The 4.1.5q oracle saves no Morrowind plugin either (its GUI runs Morrowind in view mode), so there is nothing to compare with.

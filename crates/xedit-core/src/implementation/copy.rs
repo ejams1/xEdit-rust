@@ -801,6 +801,11 @@ impl GroupRecordImpl {
                 source.you_got_a_master(&result);
             }
         }
+        // `if Assigned(Result) and (csRefsBuild in Result._File.ContainerStates)
+        // then Result.BuildRef`.
+        if file.refs_built() {
+            result.build_ref();
+        }
         Ok(Some(result as ElementRef))
     }
 }

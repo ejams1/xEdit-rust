@@ -14,8 +14,9 @@
 //!
 //! The dialogs of upstream are parameters: the new FormID, whether later
 //! overrides follow, the start FormID, the injection target and its two
-//! questions. The referencing records come from `ReferenceScan`, the
-//! stand-in for upstream's reference index; `formids.change` updates the
+//! questions. The referencing records come from the reference index
+//! (`ReferencedBy` of the master, built on first use as the GUI builds it on
+//! load); `formids.change` updates the
 //! referencing records in editable files, as a user who keeps every record
 //! the dialog offers, and `formids.renumber` updates them as upstream's
 //! silent update does.
@@ -25,7 +26,6 @@ use std::sync::Arc;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use xedit_core::implementation::file_flags::ModuleFlag;
-use xedit_core::implementation::refs::ReferenceScan;
 use xedit_core::implementation::{FileImpl, MainRecordImpl};
 use xedit_core::interface::{Element, File, FormID, MainRecord, MainRecordRef};
 
@@ -61,7 +61,7 @@ fn edit_failed(message: String) -> CommandError {
     CommandError::new("edit_failed", message)
 }
 
-fn record_impl(record: &MainRecordRef) -> Result<Arc<MainRecordImpl>, CommandError> {
+pub(crate) fn record_impl(record: &MainRecordRef) -> Result<Arc<MainRecordImpl>, CommandError> {
     record
         .as_element_impl()
         .and_then(|element| element.main_record_impl())
@@ -99,7 +99,7 @@ pub struct RecordRef {
     pub file: String,
 }
 
-fn record_ref(record: &MainRecordImpl) -> RecordRef {
+pub(crate) fn record_ref(record: &MainRecordImpl) -> RecordRef {
     RecordRef {
         form_id: record.get_load_order_form_id().to_string(false),
         signature: record.get_signature().to_string(),
@@ -285,9 +285,9 @@ fn formids_change(session: &mut Session, request: FormIdsChangeRequest) -> Resul
         }
     }
 
+    session.ensure_refs()?;
     let master = record.master_or_self_impl();
-    let scan = ReferenceScan::new(std::slice::from_ref(&master));
-    let referenced_by = scan.referenced_by(&master);
+    let referenced_by = master.referenced_by();
     // The overrides that follow: all of them for the master, the later ones
     // for an override that is not the last.
     let overrides = master.overrides();
@@ -622,10 +622,11 @@ fn formids_renumber(
     signatures.dedup();
     response.signatures = signatures;
 
-    let scan = ReferenceScan::new(&plan.records);
+    session.ensure_refs()?;
     for (record, new) in plan.records.iter().zip(&plan.targets) {
         let old = record.get_load_order_form_id();
-        let referenced_by = scan.referenced_by(record);
+        // Read before the change, as upstream: the change moves the list.
+        let referenced_by = record.master_or_self_impl().referenced_by();
         let mut change = FormIdChange {
             old_form_id: old.to_string(false),
             new_form_id: new.to_string(false),
