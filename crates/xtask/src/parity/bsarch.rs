@@ -316,14 +316,48 @@ struct Run {
 }
 
 /// How long a run of a tool may take before it is taken for hung.
-const RUN_TIMEOUT: Duration = Duration::from_secs(30 * 60);
+const RUN_TIMEOUT: Duration = Duration::from_secs(60 * 60);
+
+/// How long a process may use no CPU time before it is taken for hung.
+const IDLE_TIMEOUT: Duration = Duration::from_secs(120);
+
+/// The CPU time (user and kernel) a process has used.
+#[cfg(windows)]
+fn cpu_time(child: &std::process::Child) -> Option<u64> {
+    use std::os::windows::io::AsRawHandle;
+    use windows_sys::Win32::Foundation::FILETIME;
+    use windows_sys::Win32::System::Threading::GetProcessTimes;
+    let zero = FILETIME {
+        dwLowDateTime: 0,
+        dwHighDateTime: 0,
+    };
+    let (mut created, mut exited, mut kernel, mut user) = (zero, zero, zero, zero);
+    // SAFETY: the handle is the open handle of the child, the out pointers
+    // are valid FILETIMEs.
+    let ok = unsafe {
+        GetProcessTimes(
+            child.as_raw_handle() as _,
+            &mut created,
+            &mut exited,
+            &mut kernel,
+            &mut user,
+        )
+    };
+    let ticks = |time: FILETIME| (u64::from(time.dwHighDateTime) << 32) | u64::from(time.dwLowDateTime);
+    (ok != 0).then(|| ticks(kernel) + ticks(user))
+}
+
+#[cfg(not(windows))]
+fn cpu_time(_child: &std::process::Child) -> Option<u64> {
+    None
+}
 
 /// Runs the tool and collects what it writes. `BSArch.exe` was seen to hang
-/// at its start (no CPU time for a quarter of an hour, two runs of a
-/// batch of thousands), so a run that exceeds the timeout is stopped and
-/// run once more.
+/// at its start (no CPU time for a quarter of an hour, a few runs of a batch
+/// of thousands), so a run that uses no CPU for `IDLE_TIMEOUT` or takes over
+/// `RUN_TIMEOUT` is stopped and run once more.
 fn run_tool(exe: &Path, args: &[String]) -> Result<Run> {
-    for attempt in 0..2 {
+    for attempt in 0..3 {
         let mut child = Command::new(exe)
             .args(args)
             .stdin(Stdio::null())
@@ -338,11 +372,21 @@ fn run_tool(exe: &Path, args: &[String]) -> Result<Run> {
             bytes
         });
         let started = Instant::now();
+        let mut last_cpu = (cpu_time(&child), Instant::now());
+        let mut last_sample = Instant::now();
         let status = loop {
             if let Some(status) = child.try_wait()? {
                 break Some(status);
             }
-            if started.elapsed() > RUN_TIMEOUT {
+            if last_sample.elapsed() > Duration::from_secs(1) {
+                last_sample = Instant::now();
+                let cpu = cpu_time(&child);
+                if cpu != last_cpu.0 {
+                    last_cpu = (cpu, Instant::now());
+                }
+            }
+            let idle = last_cpu.0.is_some() && last_cpu.1.elapsed() > IDLE_TIMEOUT;
+            if idle || started.elapsed() > RUN_TIMEOUT {
                 let _ = child.kill();
                 let _ = child.wait();
                 break None;
@@ -357,11 +401,11 @@ fn run_tool(exe: &Path, args: &[String]) -> Result<Run> {
                     code: status.code(),
                 });
             }
-            None if attempt == 0 => println!("hung         {} {}: run again", exe.display(), args.join(" ")),
+            None if attempt < 2 => println!("hung         {} {}: run again", exe.display(), args.join(" ")),
             None => bail!("{} did not finish: {}", exe.display(), args.join(" ")),
         }
     }
-    unreachable!("two attempts")
+    unreachable!("three attempts")
 }
 
 /// The format of an archive from its header.
@@ -880,6 +924,19 @@ fn synthetic(runner: &Runner) -> Result<Vec<Outcome>> {
     write(over.join("meshes/mod.esp"), b"skipped")?;
     write(over.join("meshes/dir/inner.nif"), &random(500))?;
 
+    // A folder of textures only, which the BSA formats give the embedded names
+    // flag, and which the Skyrim SE format must then compress without a split.
+    let textures = root.join("textures-only");
+    for index in 0..12u8 {
+        write(
+            textures.join(format!(
+                "textures/t/tex{index:02}{}.dds",
+                if index % 5 == 0 { "_e" } else { "" }
+            )),
+            &random(20_000 + usize::from(index) * 777),
+        )?;
+    }
+    let textures = textures.display().to_string();
     let mixed = mixed.display().to_string();
     let over = over.display().to_string();
     let both = format!("{mixed}+{over}");
@@ -923,6 +980,39 @@ fn synthetic(runner: &Runner) -> Result<Vec<Outcome>> {
             extension,
         ));
     }
+    for (format, switch) in [("tes4", "-tes4"), ("fo3", "-fo3"), ("sse", "-sse")] {
+        jobs.push((format!("{format} textures"), textures.clone(), vec![switch], "bsa"));
+        jobs.push((
+            format!("{format} textures z"),
+            textures.clone(),
+            vec![switch, "-z"],
+            "bsa",
+        ));
+        jobs.push((
+            format!("{format} textures no split"),
+            textures.clone(),
+            vec![switch, "-split:0"],
+            "bsa",
+        ));
+        jobs.push((
+            format!("{format} no split"),
+            mixed.clone(),
+            vec![switch, "-z", "-split:0"],
+            "bsa",
+        ));
+    }
+    jobs.push((
+        "tes3 no split".to_owned(),
+        mixed.clone(),
+        vec!["-tes3", "-split:0"],
+        "bsa",
+    ));
+    jobs.push((
+        "fo4 split 1".to_owned(),
+        mixed.clone(),
+        vec!["-fo4", "-z", "-split:1"],
+        "ba2",
+    ));
     jobs.push(("sf1 lz4".to_owned(), mixed.clone(), vec!["-sf1", "-z:lz4"], "ba2"));
     jobs.push((
         "sf1 lz4 split".to_owned(),
