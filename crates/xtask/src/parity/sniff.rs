@@ -1095,12 +1095,21 @@ pub fn run(tag: &str, args: &[&str]) -> Result<()> {
                 let mut key = format!("{}-{settings_key:016x}", archive_key(&archive_path)?);
                 let input = match options.sample {
                     Some(count) => {
-                        key.push_str(&format!("-sample{count}"));
+                        // The sample holds the first files of the case's
+                        // extensions; a sample of NIFs only keeps the name
+                        // (and cache key) it had before other extensions
+                        // got their own samples.
+                        let tag = if extensions == ["nif"] {
+                            String::new()
+                        } else {
+                            format!("-{}", extensions.join("+"))
+                        };
+                        key.push_str(&format!("-sample{count}{tag}"));
                         let dir = scratch
                             .join("sniff-sample")
                             .join(game.name)
                             .join(&archive_name)
-                            .join(count.to_string());
+                            .join(format!("{count}{tag}"));
                         if let Err(error) = sample_folder(&archive, &dir, count, &extensions) {
                             say(
                                 format!("skipped       {}: {error:#}", archive_path.display()),
