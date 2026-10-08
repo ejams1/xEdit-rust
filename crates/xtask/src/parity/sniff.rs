@@ -527,8 +527,11 @@ struct Results {
     processed: usize,
     /// The files whose output or error differed from the port's and that
     /// Sniff ran again alone (`rerun_differences`).
+    /// (Named `run_alone`: the `alone` of earlier caches named outputs,
+    /// not input files, and missed the renamed outputs of the JSON
+    /// converter, so those caches run their differences alone again.)
     #[serde(default)]
-    alone: Vec<String>,
+    run_alone: Vec<String>,
 }
 
 /// Files that differ from the port's are run again alone, up to this many
@@ -727,17 +730,17 @@ fn rerun_crashes(
         if let Some(error) = error {
             results.errors.insert(name.clone(), error);
         }
-        if let Some(hash) = rerun.outputs.get(&name) {
-            results.outputs.insert(name.clone(), *hash);
-        }
+        // The output may be named otherwise (`Convert to and from JSON`
+        // writes `<name>.json`); the run alone wrote only this file's.
+        results.outputs.extend(rerun.outputs.iter().map(|(output, hash)| (output.clone(), *hash)));
         results.log.extend(rerun.log);
         results.log.sort();
         results.extra.extend(rerun.extra);
         results.extra.sort();
         results.updated += rerun.updated;
-        results.alone.push(name);
+        results.run_alone.push(name);
     }
-    results.alone.sort();
+    results.run_alone.sort();
     Ok(())
 }
 
@@ -771,7 +774,7 @@ fn rerun_differences(
             };
             !(errors && port.outputs.get(*name) == oracle.outputs.get(*name))
         })
-        .filter(|name| !oracle.alone.contains(name))
+        .filter(|name| !oracle.run_alone.contains(&input_name(name, extensions)))
         .cloned()
         .collect();
     names.sort();
@@ -780,9 +783,10 @@ fn rerun_differences(
         return Ok(false);
     }
     for name in names {
-        let rerun = run_sniff(sniff, work, case, source, input, Some(&name), 1, extensions)?;
+        let source_name = input_name(&name, extensions);
+        let rerun = run_sniff(sniff, work, case, source, input, Some(&source_name), 1, extensions)?;
         let output = rerun.outputs.get(&name).copied();
-        let error = rerun.errors.get(&name).cloned();
+        let error = rerun.errors.get(&source_name).cloned();
         println!(
             "oracle alone  {name}: {}",
             match (&output, &error) {
@@ -799,10 +803,21 @@ fn rerun_differences(
         if let Some(error) = error {
             oracle.errors.insert(name.clone(), error);
         }
-        oracle.alone.push(name);
+        oracle.run_alone.push(source_name);
     }
-    oracle.alone.sort();
+    oracle.run_alone.sort();
     Ok(true)
+}
+
+/// The input file of an output: `<name>.json` of `Convert to and from
+/// JSON` comes from `<name>` when that is a file the operation takes.
+fn input_name(name: &str, extensions: &[String]) -> String {
+    if let Some(stem) = name.strip_suffix(".json")
+        && extensions.iter().any(|ext| stem.ends_with(&format!(".{ext}")))
+    {
+        return stem.to_owned();
+    }
+    name.to_owned()
 }
 
 /// Runs the port on `input` with the settings of the case.
