@@ -102,6 +102,10 @@ impl Proc for ProcHavokInfo {
         let tree = &mut nif.tree;
         let (mut statics, mut dynamics) = (0, 0);
         let mut mass: f32 = 0.0;
+        // The hidden temporaries of `EditValues['Mass']` and
+        // `EditValues['Havok Filter\Layer']`.
+        let (mut temp_mass, mut temp_layer) = (String::new(), String::new());
+        let mut temp_native_mass = crate::variant::Variant::Empty;
         for col in blocks_by_type(tree, "bhkCollisionObject", true)? {
             let body = tree.elements(col, "Body")?.ok_or_else(access_violation)?;
             let Some(rigid) = tree.links_to(body)? else { continue };
@@ -127,11 +131,17 @@ impl Proc for ProcHavokInfo {
             };
 
             if self.per_object {
-                let mut line = format!(
-                    "\t{name}      {}    {}    {shape_type}",
-                    tree.edit_values(rigid, "Mass")?,
-                    tree.edit_values(rigid, "Havok Filter\\Layer")?
-                );
+                // UPSTREAM-QUIRK: a body without `Mass` (a
+                // `bhkSimpleShapePhantom`) leaves the string result of
+                // `EditValues` unassigned, so the hidden temporary of the
+                // call keeps the mass of the body before it in the file.
+                if let Some(value) = tree.edit_values_assigned(rigid, "Mass")? {
+                    temp_mass = value;
+                }
+                if let Some(value) = tree.edit_values_assigned(rigid, "Havok Filter\\Layer")? {
+                    temp_layer = value;
+                }
+                let mut line = format!("\t{name}      {temp_mass}    {temp_layer}    {shape_type}");
                 for field in &self.fields {
                     let Some(el) = tree.elements(rigid, field)? else {
                         continue;
@@ -160,7 +170,15 @@ impl Proc for ProcHavokInfo {
             } else {
                 statics += 1;
             }
-            mass = (f64::from(mass) + tree.native_values(rigid, "Mass")?.to_f64()?) as f32;
+            // The Variant temporary of `NativeValues['Mass']` keeps its
+            // value the same way: a phantom adds the mass before it again.
+            let value = tree.native_values(rigid, "Mass")?;
+            if !value.is_empty() {
+                temp_native_mass = value;
+            }
+            if !temp_native_mass.is_empty() {
+                mass = (f64::from(mass) + temp_native_mass.to_f64()?) as f32;
+            }
         }
 
         // `TStringList.Sort`.
