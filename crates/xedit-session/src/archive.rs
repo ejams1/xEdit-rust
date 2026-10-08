@@ -289,8 +289,8 @@ pub struct ArchivePackRequest {
     /// The archive format: `tes3` (Morrowind), `tes4` (Oblivion), `fo3`,
     /// `fnv` and `tes5` (the same Skyrim LE format), `sse` (Skyrim SE/AE),
     /// `fo4` (Fallout 4 general), `fo4dds`, `sf1` (Starfield general) or
-    /// `sf1dds`. The `dds` formats are texture archives, which phase 5
-    /// step 2 adds.
+    /// `sf1dds`. The `dds` formats are texture archives: every file must be a
+    /// DDS file, which is stored as chunks of mipmaps.
     pub format: String,
     /// Compress the files: `zlib`, `lz4` or `lz4f` (the formats take some of
     /// them); `default` for the default of the format. Sounds, music and

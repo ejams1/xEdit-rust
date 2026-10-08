@@ -6,9 +6,11 @@
 
 pub mod archive;
 pub mod compression;
+pub mod dds;
 pub mod encoding;
 pub mod hash;
 pub mod mapped_file;
+pub mod simd;
 
 pub use archive::{Archive, ArchiveError, ArchiveType, MultiSourcePacker};
 pub use compression::{CompressionError, CompressionType};

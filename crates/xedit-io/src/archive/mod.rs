@@ -10,8 +10,8 @@
 //! parallel packer behind `BSArch` (`packer`).
 //!
 //! The DX10 texture archives (`Fallout 4 DDS`, `Starfield DDS`) read and
-//! list here; what needs the DDS code (packing a texture, extracting one)
-//! is the extension point in `texture` that phase 5 step 2 fills in.
+//! list here; the DDS code (packing a texture, extracting one) is `texture`
+//! with the header of `dds`.
 
 mod asset;
 pub mod packer;
@@ -643,21 +643,8 @@ impl Archive {
     }
 
     /// Port of `GetDDSMipChunkNum`: how many chunks a DX10 texture is stored in.
-    pub(crate) fn dds_mip_chunk_num(&self, mut width: i32, mut height: i32, mut mip_maps: i32) -> i32 {
-        let mut result = 1;
-        if mip_maps == 0 {
-            mip_maps += 1;
-        }
-        while result < mip_maps
-            && result < self.max_chunk_count
-            && width >= self.single_mip_chunk_x
-            && height >= self.single_mip_chunk_y
-        {
-            result += 1;
-            width /= 2;
-            height /= 2;
-        }
-        result
+    pub(crate) fn dds_mip_chunk_num(&self, width: i32, height: i32, mip_maps: i32) -> i32 {
+        texture::TextureConfig::of(self).mip_chunk_num(width, height, mip_maps)
     }
 
     // Reading.

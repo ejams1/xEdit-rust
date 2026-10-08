@@ -17,8 +17,8 @@
 //!   with `-mt:no`, and the text of the run (the summary of the created
 //!   archives, the warnings) is compared too.
 //!
-//! The texture archives (`DX10`) are listed but their `unpack` and `pack`
-//! belong to phase 5 step 2 and are reported as `deferred`.
+//! The texture archives (`DX10`) go through the same checks: `unpack` writes
+//! the DDS files, and `pack` packs them into `-fo4dds` or `-sf1dds`.
 //!
 //! `--synthetic` adds packs of generated folders that the game archives do
 //! not cover: several source folders and an archive merged, name filters,
@@ -74,6 +74,8 @@ struct Options {
     jobs: usize,
     cross: bool,
     synthetic: bool,
+    /// Only the texture archives (`DX10`).
+    textures: bool,
     /// Keep the output of the runs that are equal.
     keep: bool,
 }
@@ -96,7 +98,7 @@ struct Case {
 }
 
 const USAGE: &str = "usage: cargo xtask parity bsarch [--game <game>]... [--archive <name>]... [--max-size <MB>] \
-                     [--jobs <n>] [--cross] [--synthetic] [--keep]";
+                     [--jobs <n>] [--cross] [--synthetic] [--textures] [--keep]";
 
 fn parse(args: &[&str]) -> Result<Options> {
     let mut options = Options {
@@ -107,6 +109,7 @@ fn parse(args: &[&str]) -> Result<Options> {
         jobs: 4,
         cross: false,
         synthetic: false,
+        textures: false,
         keep: false,
     };
     let mut rest = args.iter();
@@ -126,6 +129,7 @@ fn parse(args: &[&str]) -> Result<Options> {
             "--jobs" => options.jobs = rest.next().context(USAGE)?.parse::<usize>()?.max(1),
             "--cross" => options.cross = true,
             "--synthetic" => options.synthetic = true,
+            "--textures" => options.textures = true,
             "--keep" => options.keep = true,
             _ => bail!(USAGE),
         }
@@ -187,6 +191,9 @@ pub fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
             } else {
                 options.archives.contains(&lower)
             };
+            if selected && options.textures && !archive_format(&path)?.ends_with("DX10") {
+                continue;
+            }
             if selected {
                 cases.push(Case {
                     game: game.name,
@@ -463,6 +470,17 @@ fn pack_variants(format: &str, switch: &'static str, cross: bool) -> Vec<PackVar
         variant("sf1 z", &["-sf1", "-z"], "ba2"),
         variant("sf1 z:lz4", &["-sf1", "-z:lz4"], "ba2"),
     ];
+    // The texture archives: uncompressed (which the oracle warns about) and
+    // compressed.
+    let fo4dds = vec![
+        variant("fo4dds", &["-fo4dds"], "ba2"),
+        variant("fo4dds z", &["-fo4dds", "-z"], "ba2"),
+    ];
+    let sf1dds = vec![
+        variant("sf1dds", &["-sf1dds"], "ba2"),
+        variant("sf1dds z", &["-sf1dds", "-z"], "ba2"),
+        variant("sf1dds z:lz4", &["-sf1dds", "-z:lz4"], "ba2"),
+    ];
     if cross {
         let mut all = tes3;
         all.extend(tes4);
@@ -470,7 +488,16 @@ fn pack_variants(format: &str, switch: &'static str, cross: bool) -> Vec<PackVar
         all.extend(sse);
         all.extend(fo4);
         all.extend(sf1);
+        all.extend(fo4dds);
+        all.extend(sf1dds);
         return all;
+    }
+    if format.ends_with("DX10") {
+        return if format.starts_with("BTDX 2 ") || format.starts_with("BTDX 3 ") {
+            sf1dds
+        } else {
+            fo4dds
+        };
     }
     if format.starts_with("TES3") {
         tes3
@@ -489,7 +516,6 @@ fn pack_variants(format: &str, switch: &'static str, cross: bool) -> Vec<PackVar
 
 fn check_archive(case: &Case, runner: &Runner) -> Result<Vec<Outcome>> {
     let format = archive_format(&case.path)?;
-    let dds = format.ends_with("DX10");
     // A short folder name: the oracle fails on paths over 260 characters, and
     // the archives of Fallout 76 have long ones.
     let hash = case.name.bytes().fold(0xcbf2_9ce4_8422_2325u64, |hash, byte| {
@@ -522,23 +548,6 @@ fn check_archive(case: &Case, runner: &Runner) -> Result<Vec<Outcome>> {
         fs::write(work.join("list.oracle.txt"), &oracle.stdout)?;
         fs::write(work.join("list.port.txt"), &port.stdout)?;
         outcome("list", "different", Some(detail), oracle.stdout.len() as u64);
-    }
-
-    if dds {
-        outcome(
-            "unpack",
-            "deferred",
-            Some("  texture archives: phase 5 step 2".to_owned()),
-            0,
-        );
-        outcome(
-            "pack",
-            "deferred",
-            Some("  texture archives: phase 5 step 2".to_owned()),
-            0,
-        );
-        finish(&work, &mut outcomes, runner.keep)?;
-        return Ok(outcomes);
     }
 
     // unpack
