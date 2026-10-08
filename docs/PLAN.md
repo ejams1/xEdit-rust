@@ -148,6 +148,14 @@ The review checks:
 - **Skills:** Asset skills: archive handling, NIF batch operations.
 - **Performance:** Parallel pack and unpack. SIMD for half-float conversion, hashing and texture block processing.
 - **Gate:** Packed archives are byte-identical to BSArch output. Sniff and LODGen outputs equal the oracle.
+- **Steps** (one pull request, `phase-5-assets`; each step lands with its own check; steps 1 and 3 can start at once, the others wait for the steps named):
+  1. **Archives** (Sonnet 5.5): the rest of `wbBSArchive` (Morrowind archives, writing every BSA and general BA2 version), LZ4 compression, the BSA hashes and xxHash of `wbHash`, the resource listings of `wbBSA`, parallel pack and unpack; `bsarch` with the upstream arguments, `xedit archive list|extract|pack`.
+  2. **Textures** (Sonnet 5.5, after 1): `wbDDS`, texture BA2 (DX10) read and write, the texture helpers of `wbBSA`, SIMD for half-float conversion and texture block processing with a scalar fallback.
+  3. **NIF and materials** (Opus 5.5): `wbDataFormat`, `wbDataFormatNif`, `wbDataFormatNifTypes`, `wbDataFormatMaterial`, `wbDataFormatMisc`, `wbNifMath`, `wbNifScanner`, Wwise; load then save byte-identical for the meshes and materials of the corpus archives.
+  4. **Sniff** (Opus 5.5 for the processor pattern and the first processors, after 3): `SniffProcessor` and the processors of `Sniff/Proc`; `sniff <operation>`.
+  5. **Sniff processors** (Sonnet 5.5, after 4): the remaining processors on the pattern of step 4.
+  6. **LODGen** (Opus 5.5, after 2 and 3): `wbLOD`, `wbMeshOptimize`, the `tmLODgen` tool mode; `xedit lodgen`.
+  7. **Skills and docs** (Sonnet 5.5, after all): archive handling and NIF batch operation skills, README, ledger, map, the gate evidence.
 
 ### Phase 6: Scripting
 
