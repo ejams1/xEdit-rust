@@ -2357,7 +2357,12 @@ fn check_geometry(_: &ProcFileObject, nif: &mut NifFile, log: &mut Vec<String>) 
 /// `CheckVertexColors`.
 #[allow(clippy::needless_late_init)]
 fn check_vertex_colors(_: &ProcFileObject, nif: &mut NifFile, log: &mut Vec<String>) -> R<()> {
-    const WHITE: [u8; 16] = [0, 0, 0x80, 0x3F, 0, 0, 0x80, 0x3F, 0, 0, 0x80, 0x3F, 0, 0, 0x80, 0x3F];
+    // UPSTREAM-QUIRK: `fColor4White: TFloat4 = (fSingle1, ...)` gives each
+    // Single the value of the integer `$3F800000` (1065353216.0), not the
+    // bits of 1.0, so a float colour is never "white" and the check never
+    // reports a shape with float vertex colours as all white.
+    let white_single = (0x3F80_0000u32 as f32).to_le_bytes();
+    let white: Vec<u8> = white_single.iter().copied().cycle().take(16).collect();
     let tree = &mut nif.tree;
     for i in 0..blocks_count(tree)? {
         let shape = block(tree, i)?;
@@ -2386,7 +2391,7 @@ fn check_vertex_colors(_: &ProcFileObject, nif: &mut NifFile, log: &mut Vec<Stri
             }
             for (j, color) in items(tree, colors)?.into_iter().enumerate() {
                 let bytes: Vec<u8> = tree.value_bytes(color).to_vec();
-                if bytes.len() >= 16 && bytes[..16] == WHITE {
+                if bytes.len() >= 16 && bytes[..16] == white[..] {
                     continue;
                 }
                 let c: Vec<f32> = (0..4)
