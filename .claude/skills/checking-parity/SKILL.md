@@ -134,6 +134,10 @@ The `xEdit-llm` automation build is a secondary oracle for conflict, reference a
 - **Corpus:** vanilla master files from the local game installs, found through `XEDIT_FO4_DATA` and `XEDIT_SSE_DATA` (each is the game's `Data` directory). Never commit game files. Small synthetic plugins live in `tests/fixtures` and are committed.
 - **Oracle output:** produced by the release binaries (xDump, xEdit tool modes, BSArch, Sniff) and cached outside the repository, keyed by release tag, game and input file hash.
 
+### Archives
+
+`cargo xtask parity bsarch [--game <game>]... [--archive <name>]... [--max-size <MB>] [--jobs <n>] [--cross] [--synthetic] [--keep]` runs `BSArch.exe` (in `XEDIT_ORACLE_DIR`) and the port's `bsarch` (built in release) on the archives of the game folders and compares: `list` (the `-dump` text, byte for byte), `unpack` (the files written; an archive the oracle cannot unpack must stop the port with the same message), and `pack` (the folder the oracle unpacked, packed by both into the format of the source with each compression it has, or into every format with `--cross`; every archive written is compared byte for byte, with the oracle at `-mt:no`, the port at all threads and at `-mt:no`, and the text of the run too). Archives up to `--max-size` MB (40) are taken unless some are named with `--archive`. `--synthetic` adds generated folders for what the game archives lack (two sources merged, filters, flags, `-split`, empty files, names that sort several ways, shared data). The texture archives (`DX10`) list but their `unpack` and `pack` are `deferred` to phase 5 step 2. The work goes to `XEDIT_PARITY_SCRATCH/<tag>/bsarch` and is removed for an equal case (`--keep` keeps it); a different case keeps its folders and prints the first difference. The report is `target/parity/bsarch.json`. `BSArch.exe` was seen to hang at its start (no CPU time for a quarter of an hour); a run over 30 minutes is stopped and run once more. The oracle packs on one thread and compresses at level 12, so a few hundred MB take minutes: the default selection of the 11 games takes about half an hour with `--jobs 4`.
+
 ## Checks
 
 | Check | Oracle | Port |
@@ -144,7 +148,7 @@ The `xEdit-llm` automation build is a secondary oracle for conflict, reference a
 | Cleaning | plugin saved by `-quickautoclean` | `xedit clean` |
 | Saved bytes | plugin written by a `-script:` of the GUI (`oracle/save.pas`, `oracle/edit.pas`) | `xedit save`, `xedit batch` |
 | Scripts | plugin and log after `-script:` | `xedit script run` |
-| Archives | BSArch pack output | `bsarch` pack output |
+| Archives | `BSArch.exe pack -mt:no`, `unpack` and `-dump` output | `bsarch`, `xedit archive pack` (`parity bsarch`) |
 | NIF and material dumps and saves | `Sniff.exe` JSON converter and universal tweaker; the GUI's script adapter for text dumps | `cargo xtask parity nif` (in process) |
 
 ## Investigating a difference

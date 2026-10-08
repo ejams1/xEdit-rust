@@ -30,6 +30,7 @@ pub use asset::{
 };
 pub use packer::{MultiSourcePacker, PackerError};
 pub use texture::dxgi_format_name;
+pub use write::{PackFile, detect_flags};
 
 use crate::compression::{CompressionError, CompressionType};
 use crate::encoding::{ansi_string, lower_case};
@@ -921,7 +922,8 @@ impl Archive {
     /// Port of `FilesByFolder`: the files whose name starts with the folder,
     /// compared without case, all of them for an empty folder.
     pub fn files_by_folder(&self, folder: &str) -> Vec<&FileEntry> {
-        let folder = folder.trim_end_matches(['\\', '/']);
+        // `ExcludeTrailingPathDelimiter` takes off one separator.
+        let folder = folder.strip_suffix(['\\', '/']).unwrap_or(folder);
         let folder = lower_case(folder);
         self.files
             .iter()
@@ -1000,8 +1002,11 @@ impl Archive {
                 if matches!(self.kind, ArchiveType::Fo3 | ArchiveType::Sse)
                     && self.header.flags & ARCHIVE_EMBEDNAME != 0
                 {
-                    let name = stream.string_len(false)?;
-                    size -= name.chars().count() as i64 + 1;
+                    // Upstream counts the characters of the name, which are its
+                    // bytes in a single byte code page.
+                    let length = usize::from(stream.u8()?);
+                    stream.take(length)?;
+                    size -= length as i64 + 1;
                 }
 
                 if self.is_compressed(file) {
@@ -1349,6 +1354,44 @@ mod tests {
         let archive = Archive::open(Path::new(&path)).unwrap();
         let strings = archive.read("strings\\fallout4_en.strings").unwrap().unwrap();
         assert!(strings.len() > 100_000, "{} bytes", strings.len());
+    }
+
+    /// The hash fields of the file tables, which the names must give again.
+    #[test]
+    fn name_hashes_equal_the_tables_of_the_game_archives() {
+        use crate::hash;
+        for (env, name) in [
+            ("XEDIT_TES3_DATA", "Tribunal.bsa"),
+            ("XEDIT_TES4_DATA", "DLCHorseArmor.bsa"),
+            ("XEDIT_FNV_DATA", "MercenaryPack - Main.bsa"),
+            ("XEDIT_SSE_DATA", "ccQDRSSE001-SurvivalMode.bsa"),
+            ("XEDIT_FO4_DATA", "Fallout4 - Materials.ba2"),
+            ("XEDIT_SF1_DATA", "SFBGS004 - Main.ba2"),
+        ] {
+            let Some(path) = data_file(env, name) else {
+                continue;
+            };
+            let archive = Archive::open(Path::new(&path)).unwrap();
+            for file in archive.files() {
+                let (_, directory, file_name) = split_dir_name(&file.name);
+                match archive.archive_type() {
+                    ArchiveType::Tes3 => assert_eq!(hash::tes3(&file.name), file.name_hash64, "{}", file.name),
+                    ArchiveType::Tes4 => {
+                        assert_eq!(hash::tes4(&directory, false), file.dir_hash64, "{}", file.name);
+                        assert_eq!(hash::tes4(&file_name, true), file.name_hash64, "{}", file.name);
+                    }
+                    ArchiveType::Fo3 | ArchiveType::Sse => {
+                        assert_eq!(hash::tes5(&directory, false), file.dir_hash64, "{}", file.name);
+                        assert_eq!(hash::tes5(&file_name, true), file.name_hash64, "{}", file.name);
+                    }
+                    _ => {
+                        let (_, stem, _) = split_name_ext(&file_name, true);
+                        assert_eq!(hash::fo4(&directory), file.dir_hash32, "{}", file.name);
+                        assert_eq!(hash::fo4(&stem), file.name_hash32, "{}", file.name);
+                    }
+                }
+            }
+        }
     }
 
     #[test]

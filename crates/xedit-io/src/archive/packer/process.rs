@@ -410,6 +410,11 @@ impl MultiSourcePacker {
     }
 }
 
+/// The name of a file of an archive with the separators of the platform.
+fn native_path(name: &str) -> String {
+    name.replace('\\', std::path::MAIN_SEPARATOR_STR)
+}
+
 /// Port of the unpacking of `BSArch.dpr` (`DoUnpack`): creates the folders
 /// and writes every file of the archive below `folder`, on `threads` threads
 /// (0 for one per CPU). `progress` is called with the number of files done
@@ -440,7 +445,7 @@ pub fn unpack_archive(
         }
         let (position, directory, _) = split_dir_name(&file.name);
         if position != 0 {
-            let directory = format!("{folder}{directory}");
+            let directory = format!("{folder}{}", native_path(&directory));
             std::fs::create_dir_all(&directory).map_err(|_| {
                 format!(
                     "Can't create destination folder: {directory}{}",
@@ -466,7 +471,7 @@ pub fn unpack_archive(
             }
             let file = &archive.files()[index];
             let result = archive.unpack(&file.name).map_err(|error| error.0).and_then(|data| {
-                let path = format!("{folder}{}", file.name);
+                let path = format!("{folder}{}", native_path(&file.name));
                 std::fs::write(&path, data).map_err(|error| {
                     format!(
                         "Cannot create file \"{path}\". {}",
