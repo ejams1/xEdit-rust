@@ -139,6 +139,17 @@ The review checks:
 - **Skills:** Agent workflow skills on the native CLI: conflict audit, plugin cleaning, patch building. These replace the `xEdit-llm` daemon route.
 - **Performance:** Build the reference index and run conflict detection across files in parallel.
 - **Gate:** Conflict status, reference index, cleaning result and error check output equal the oracle on the corpus.
+- **Steps** (one pull request, `phase-4-analysis`; each step lands with its own check; steps 1, 2, 3 and 7 can start at once, the others wait for the steps named):
+  1. **Reference index:** `mrReferencedBy`, `BuildRef` of every element, `BuildOrLoadRef` and its cache file, the referenced-by lists in place of the phase 3 `ReferenceScan`, built across files in parallel; `xedit refs`.
+  2. **Conflict detection:** `ConflictLevelForMainRecord`, `ConflictLevelForContainer`, `ConflictLevelForNodeDatas` and the rest of the conflict code of `xeMainForm`, moved into the core; the injected and sibling cases; run across records in parallel; `xedit conflicts`, `xedit compare`.
+  3. **Error checks:** `CheckForErrors` and `CheckForErrorsLinear` with every `Check` callback of the definitions; `xedit check`.
+  4. **Filters** (after 1 and 2): the filter options of `xeFilterOptionsForm` and `ApplyFilter`, filter for cleaning, filter for conflicts, the referenced-by and view filters; `xedit filter`.
+  5. **Cleaning** (after 2): ITM removal, UDR (undelete and disable references), quick auto clean, cleanup of injected records, `mniNavCleaningObsolete`; `xedit clean`.
+  6. **Mod groups** (after 2): `wbModGroups`, mod group files and CRCs, their effect on conflict status; `xedit modgroups`.
+  7. **Localization:** adding and writing strings, the string tables of a localized file on save, localize and delocalize a plugin, the translate mode; `xedit localization`.
+  8. **Merged patch** (after 2 and 6): `mniNavCreateMergedPatchClick` and the merge of leveled lists and containers; `xedit patch merged`.
+  9. **Tool modes** (after 3, 5 and 7): `wbCommandLine`, `xeInit`, all 17 tool modes with their switches (`-quickautoclean`, `-IKnowWhatImDoing` and the rest), `ESMify`, `ESPify`, ONAM update, master update and restore, sort and clean masters, SEQ generation, export; `tmLODgen` is wired in phase 5.
+  10. **Skills and docs** (after all): conflict audit, plugin cleaning and patch building skills on the native CLI (replacing the `xEdit-llm` route), README, ledger, map, the gate evidence.
 
 ### Phase 5: Archives, assets and LOD
 
