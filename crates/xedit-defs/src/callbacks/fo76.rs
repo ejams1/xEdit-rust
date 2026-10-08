@@ -598,27 +598,31 @@ fn cached_entries(
     build: &impl Fn(&MainRecordRef, bool) -> Vec<(u32, String)>,
 ) -> Option<Vec<(u32, String)>> {
     let race_id = race.get_editor_id();
-    let mut cache = cache.lock().unwrap();
     let find = |cache: &Vec<FaceGenFeature>| {
         cache
             .iter()
-            .position(|feature| feature.female == female && feature.race_id == race_id)
+            .find(|feature| feature.female == female && feature.race_id == race_id)
+            .map(|feature| feature.entries.clone())
     };
-    let position = match find(&cache) {
-        Some(position) => position,
-        None => {
-            // Cache not found, fill with data from RACE.
-            for female2 in [false, true] {
-                cache.push(FaceGenFeature {
-                    race_id: race_id.clone(),
-                    female: female2,
-                    entries: build(race, female2),
-                });
-            }
-            find(&cache)?
-        }
-    };
-    Some(cache[position].entries.clone())
+    if let Some(entries) = find(&cache.lock().unwrap()) {
+        return Some(entries);
+    }
+    // Cache not found, fill with data from RACE. The race is read without
+    // the lock, which a thread that builds the race may wait for; of two
+    // threads that build the entries, the first one to store them wins.
+    let built: Vec<FaceGenFeature> = [false, true]
+        .into_iter()
+        .map(|female2| FaceGenFeature {
+            race_id: race_id.clone(),
+            female: female2,
+            entries: build(race, female2),
+        })
+        .collect();
+    let mut cache = cache.lock().unwrap();
+    if find(&cache).is_none() {
+        cache.extend(built);
+    }
+    find(&cache)
 }
 
 /// The elements of the container at `path` of the record, as containers.

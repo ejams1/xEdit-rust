@@ -21,6 +21,7 @@ pub mod form_ids;
 pub mod masters;
 pub mod new_form_id;
 pub mod refs;
+mod scan;
 pub mod structs;
 pub mod write;
 
@@ -235,56 +236,7 @@ impl FileBytes {
     }
 }
 
-/// Port of the `csInit`, `csInitializing` and `csInitDone` states of
-/// `TwbContainer.DoInit`: the initialization runs once, and a call from
-/// inside the initialization (a decider that reads the container being
-/// built) returns at once instead of blocking.
-///
-/// The guard is not a lock: a second thread that calls `run` while the
-/// first one initializes sees the elements built so far.
-pub struct InitOnce(std::sync::atomic::AtomicU8);
-
-impl InitOnce {
-    const NOT_STARTED: u8 = 0;
-    const RUNNING: u8 = 1;
-    const DONE: u8 = 2;
-
-    pub const fn new() -> Self {
-        InitOnce(std::sync::atomic::AtomicU8::new(Self::NOT_STARTED))
-    }
-
-    pub fn run(&self, init: impl FnOnce()) {
-        if self
-            .0
-            .compare_exchange(Self::NOT_STARTED, Self::RUNNING, Ordering::AcqRel, Ordering::Acquire)
-            .is_err()
-        {
-            return;
-        }
-        init();
-        self.0.store(Self::DONE, Ordering::Release);
-    }
-
-    /// Whether an init runs (`csInit`).
-    pub fn is_running(&self) -> bool {
-        self.0.load(Ordering::Acquire) == Self::RUNNING
-    }
-
-    /// Port of the `csInitDone` removal in `DoReset`: the next `run` builds
-    /// again. Nothing happens while an init runs or before one ran; returns
-    /// whether a finished init was reset.
-    pub fn reset(&self) -> bool {
-        self.0
-            .compare_exchange(Self::DONE, Self::NOT_STARTED, Ordering::AcqRel, Ordering::Acquire)
-            .is_ok()
-    }
-}
-
-impl Default for InitOnce {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+pub use crate::threads::InitOnce;
 
 /// The bytes an element reads its data from: the file, or the decompressed
 /// data of a record.
@@ -450,9 +402,6 @@ pub struct ElementBase {
     e_memory_order: AtomicI32,
     /// Port of `eNameSuffix`: `#3` for the elements of an array.
     e_name_suffix: RwLock<String>,
-    /// Port of `esResolving` in `eStates`: set while a definition resolves
-    /// through this element, so that a nested resolve stops.
-    e_resolving: std::sync::atomic::AtomicBool,
     /// Port of the save states of `eStates`: `esModified`,
     /// `esInternalModified` and `esUnsaved`, as bits of [`ElementState`].
     pub(crate) e_states: std::sync::atomic::AtomicU32,
@@ -472,7 +421,6 @@ impl ElementBase {
             e_sort_order: AtomicI32::new(i32::MAX),
             e_memory_order: AtomicI32::new(i32::MIN),
             e_name_suffix: RwLock::new(String::new()),
-            e_resolving: std::sync::atomic::AtomicBool::new(false),
             e_states: std::sync::atomic::AtomicU32::new(0),
             e_update_count: AtomicI32::new(0),
             e_report_masters_gen: std::sync::atomic::AtomicU32::new(0),
@@ -678,9 +626,8 @@ impl FileImpl {
     /// The header record (`TES4`).
     pub fn header(&self) -> Option<Arc<MainRecordImpl>> {
         self.container
-            .elements()
-            .first()
-            .and_then(|element| element.clone().into_main_record_impl())
+            .element_at(0)
+            .and_then(|element| element.into_main_record_impl())
     }
 
     /// Port of `GetVersion`: `HEDR\Version` of the header, rounded to two
@@ -745,6 +692,19 @@ impl FileImpl {
             self.add_keys_to_indices(&record, &keys);
         }
         Ok(())
+    }
+
+    /// `AddMainRecord` for a record the scan read: a FormID the file has
+    /// already marks the record as a duplicate, which upstream skips.
+    fn register_scanned(self: &Arc<Self>, record: &Arc<MainRecordImpl>) {
+        if self.add_main_record(record.clone()).is_err() {
+            record.mr_duplicate.store(true, Ordering::Relaxed);
+            progress(&format!(
+                "Skipped Load: Duplicate FormID [{}] in file {}",
+                record.get_fixed_form_id().to_string(true),
+                self.fl_file_name
+            ));
+        }
     }
 
     /// Port of `IsNewRecord`: whether the FileID is the file's own.
@@ -924,7 +884,8 @@ impl FileImpl {
     /// the fixed FormID), which the lookups by FormID search.
     pub fn sort_records(&self) {
         let mut sorted = self.fl_records.read().unwrap().clone();
-        sorted.sort_by_key(|record| record.get_fixed_form_id().to_cardinal());
+        // The keys once per record: a comparison would read two records.
+        sorted.sort_by_cached_key(|record| record.get_fixed_form_id().to_cardinal());
         *self.fl_records.write().unwrap() = sorted;
         self.fl_form_ids_sorted.store(true, Ordering::Release);
     }
@@ -1140,9 +1101,8 @@ impl FileImpl {
             }
         }
         self.assign_slot(&header)?;
-        while offset < bytes.len() {
-            create_record(self, &container, bytes, &mut offset, None)?;
-        }
+        // The top level groups, on the worker threads when there are several.
+        scan::scan_top_level(self, &container, bytes, &mut offset)?;
         // `SortRecords` and `flActivateIndices` come before the group check:
         // the sort of a merged group finds the record of a child group in
         // this file.
@@ -1440,9 +1400,13 @@ fn player_reference_group() -> Vec<u8> {
 }
 
 /// Port of `PrecombinedCache`: the precombined references of the cell that
-/// was looked at last, by cell FormID and file name.
-type PrecombinedCache = Option<(FormID, String, Vec<(u32, u32)>)>;
-static PRECOMBINED_CACHE: std::sync::Mutex<PrecombinedCache> = std::sync::Mutex::new(None);
+/// was looked at last, by cell FormID and file name. One per thread: the
+/// cache only saves reading the cell again, and a thread does not wait for
+/// another one's cell while it holds the cache.
+type PrecombinedCache = Option<(FormID, String, Arc<Vec<(u32, u32)>>)>;
+thread_local! {
+    static PRECOMBINED_CACHE: std::cell::RefCell<PrecombinedCache> = const { std::cell::RefCell::new(None) };
+}
 
 /// The main records in the order their subrecords were built, with the
 /// count of the build. Delphi resets a record when its last
@@ -1454,27 +1418,72 @@ static PRECOMBINED_CACHE: std::sync::Mutex<PrecombinedCache> = std::sync::Mutex:
 static INITIALIZED_RECORDS: std::sync::Mutex<std::collections::VecDeque<(Weak<MainRecordImpl>, u32)>> =
     std::sync::Mutex::new(std::collections::VecDeque::new());
 
+/// About the length of `INITIALIZED_RECORDS`, read without its lock: the
+/// workers of the dump check it after every line.
+static INITIALIZED_COUNT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+/// The main records that a dump writes on a worker thread, by address:
+/// [`trim_initialized_records`] keeps them built, as it keeps the record of
+/// the serial dump, so that a record is not built again for every line.
+static PINNED_RECORDS: std::sync::Mutex<Vec<usize>> = std::sync::Mutex::new(Vec::new());
+
+/// Keeps a record built while the guard lives (see [`PINNED_RECORDS`]).
+pub struct RecordPin(usize);
+
+impl Drop for RecordPin {
+    fn drop(&mut self) {
+        let mut pinned = PINNED_RECORDS.lock().unwrap();
+        if let Some(index) = pinned.iter().position(|address| *address == self.0) {
+            pinned.swap_remove(index);
+        }
+    }
+}
+
+/// Pins `record` (see [`PINNED_RECORDS`]).
+pub fn pin_record(record: &Arc<MainRecordImpl>) -> RecordPin {
+    let address = Arc::as_ptr(record) as usize;
+    PINNED_RECORDS.lock().unwrap().push(address);
+    RecordPin(address)
+}
+
+fn is_pinned(record: &Arc<MainRecordImpl>) -> bool {
+    let address = Arc::as_ptr(record) as usize;
+    PINNED_RECORDS.lock().unwrap().contains(&address)
+}
+
 /// Resets the main records whose subrecords were built longest ago until at
-/// most `keep` builds remain, except `except`, which stays built. Call it
-/// only where no element of another main record is held, such as between
-/// two elements of a dump: a reset record gives up its elements and builds
-/// them again on the next use.
+/// most `keep` builds remain, except `except` and the pinned records, which
+/// stay built. A reset record gives up its elements and builds them again on
+/// the next use; an element of it that is held keeps working, detached.
 pub fn trim_initialized_records(keep: usize, except: Option<&Arc<MainRecordImpl>>) {
+    if INITIALIZED_COUNT.load(Ordering::Relaxed) <= keep {
+        return;
+    }
     let expired: Vec<(Weak<MainRecordImpl>, u32)> = {
-        let mut records = INITIALIZED_RECORDS.lock().unwrap();
+        // While another thread trims, this one does not wait for it: the
+        // records are trimmed all the same, and when does not change what
+        // is written.
+        let mut records = match INITIALIZED_RECORDS.try_lock() {
+            Ok(records) => records,
+            Err(std::sync::TryLockError::WouldBlock) => return,
+            Err(std::sync::TryLockError::Poisoned(poisoned)) => poisoned.into_inner(),
+        };
         if records.len() <= keep {
             return;
         }
         let excess = records.len() - keep;
-        records.drain(..excess).collect()
+        let expired = records.drain(..excess).collect();
+        INITIALIZED_COUNT.store(records.len(), Ordering::Relaxed);
+        expired
     };
     for (record, build) in expired {
         let Some(record) = record.upgrade() else { continue };
-        if except.is_some_and(|except| Arc::ptr_eq(except, &record)) {
+        if except.is_some_and(|except| Arc::ptr_eq(except, &record)) || is_pinned(&record) {
             INITIALIZED_RECORDS
                 .lock()
                 .unwrap()
                 .push_back((Arc::downgrade(&record), build));
+            INITIALIZED_COUNT.fetch_add(1, Ordering::Relaxed);
         } else if record.mr_builds.load(Ordering::Relaxed) == build {
             // A record built again since this entry has a newer entry.
             record.reset();
@@ -1692,17 +1701,11 @@ impl GroupRecordImpl {
             group.base.e_sort_order.store(order, Ordering::Relaxed);
             group.base.e_memory_order.store(order, Ordering::Relaxed);
         }
-        if let Some(parent) = container.as_container_base() {
-            parent.add_element(group.clone());
-        }
-        // Port of `TwbGroupRecord.ScanData`.
+        scan::attach(container, group.clone());
+        // Port of `TwbGroupRecord.ScanData`, the large child groups on the
+        // worker threads.
         let self_element: ElementRef = group.clone();
-        let mut current = dc_base + header_size;
-        let mut prev_main_record: Option<Arc<MainRecordImpl>> = None;
-        while current < dc_end {
-            let record = create_record(file, &self_element, bytes, &mut current, prev_main_record.as_ref())?;
-            prev_main_record = record.and_then(|record| record.into_main_record_impl());
-        }
+        scan::scan_records(file, &self_element, bytes, dc_base + header_size, dc_end)?;
         *offset = dc_end;
         Ok(group)
     }
@@ -1922,12 +1925,12 @@ impl MainRecordImpl {
         let dc_data_end = (dc_data_base + mr_struct.data_size as usize).min(bytes.len());
         let mr_def = find_record_def(mr_struct.signature);
         if mr_def.is_none() {
-            progress(&format!("Error: unknown record type {}", mr_struct.signature));
+            scan::progress(&format!("Error: unknown record type {}", mr_struct.signature));
         }
         let duplicate = prev_main_record.is_some_and(|prev| prev.mr_struct().form_id == mr_struct.form_id);
         let skipped = |form_id: FormID| {
             // Port of `EwbSkipLoad` for a duplicate FormID: the record is skipped.
-            progress(&format!(
+            scan::progress(&format!(
                 "Skipped Load: Duplicate FormID [{}] in file {}",
                 form_id.to_string(true),
                 file.fl_file_name
@@ -1961,14 +1964,11 @@ impl MainRecordImpl {
             mr_ofst_removed: AtomicBool::new(false),
             mr_duplicate: AtomicBool::new(duplicate),
         });
-        if let Some(parent) = container.as_container_base() {
-            parent.add_element(record.clone());
-        }
+        scan::attach(container, record.clone());
         // A record whose FormID the scan saw before (`AddMainRecord`'s
         // `flSetContainsFixedFormID`) is skipped as well.
-        if !duplicate && file.add_main_record(record.clone()).is_err() {
-            record.mr_duplicate.store(true, Ordering::Relaxed);
-            skipped(record.get_fixed_form_id());
+        if !duplicate && !scan::defer_registration(&record) {
+            file.register_scanned(&record);
         }
         *offset = dc_data_end;
         Ok(record)
@@ -2028,12 +2028,20 @@ impl MainRecordImpl {
     /// names. While the record's own init runs, upstream returns `<EditorID
     /// not yet available: init still running>`; the port returns the names
     /// read so far, as it did before the quick init was ported.
+    ///
+    /// The subrecords are released before the build counts as done
+    /// (`InitOnce::run_then`), so no other thread sees them: a thread that
+    /// needs the record meanwhile waits and builds it itself. A record built
+    /// already, by any thread, stays built.
     fn quick_init(self: &Arc<Self>) {
-        if self.mr_names_known.load(Ordering::Acquire) || self.mr_init.is_running() {
+        if self.mr_names_known.load(Ordering::Acquire) || self.mr_init.is_running_here() {
             return;
         }
-        self.do_init();
-        self.reset();
+        self.mr_init.run_then(
+            || !self.mr_names_known.load(Ordering::Acquire),
+            || self.build(),
+            || self.release_elements_and_data(),
+        );
     }
 
     /// Port of `FixedFormID`. The hardcoded range of the game master is
@@ -2134,11 +2142,15 @@ impl MainRecordImpl {
             // between the records of the same cell and file.
             let file_name = self.file.upgrade().map(|file| file.get_name()).unwrap_or_default();
             let own = self.mr_struct().form_id.to_cardinal();
-            let mut cache = PRECOMBINED_CACHE.lock().unwrap();
-            if cache
-                .as_ref()
-                .is_none_or(|(form_id, name, _)| *form_id != cell_form_id || *name != file_name)
-            {
+            let cached = PRECOMBINED_CACHE.with_borrow(|cache| {
+                cache
+                    .as_ref()
+                    .filter(|(form_id, name, _)| *form_id == cell_form_id && *name == file_name)
+                    .map(|(_, _, entries)| entries.clone())
+            });
+            let entries = if let Some(entries) = cached {
+                entries
+            } else {
                 let mut entries = Vec::new();
                 let ordinal = |element: Option<ElementRef>| {
                     element.map_or(0, |element| element.get_native_value().as_ordinal().unwrap_or(0)) as u32
@@ -2163,9 +2175,10 @@ impl MainRecordImpl {
                         entries.push((ordinal(pair.get_element(0)), ordinal(pair.get_element(1))));
                     }
                 }
-                *cache = Some((cell_form_id, file_name, entries));
-            }
-            let (_, _, entries) = cache.as_ref()?;
+                let entries = Arc::new(entries);
+                PRECOMBINED_CACHE.set(Some((cell_form_id, file_name, entries.clone())));
+                entries
+            };
             entries
                 .iter()
                 .find(|(reference, _)| *reference == own)
@@ -2286,14 +2299,42 @@ impl MainRecordImpl {
         result
     }
 
-    /// Port of `DoInit`: builds the subrecords once.
-    pub fn do_init(self: &Arc<Self>) {
-        self.mr_init.run(|| {
+    /// `read` on the elements once they are built. It runs under the lock
+    /// that `reset` takes to release them, so it never sees the elements of
+    /// a record that another thread reset in the meantime: the record is
+    /// built again instead (`crate::threads`). Inside its own build, or when
+    /// two builds needed each other (`init_cycles`), it sees the elements
+    /// built so far, as upstream does.
+    fn read_built<T>(&self, read: impl Fn(&[ElementRef]) -> T) -> T {
+        let this = self.self_arc();
+        loop {
+            let cycles = crate::threads::init_cycles();
+            this.do_init();
+            let elements = self.container.cnt_elements.read().unwrap();
+            if self.mr_init.is_done()
+                || self.mr_init.is_running_here()
+                || (self.mr_init.is_running() && crate::threads::init_cycles() != cycles)
+            {
+                return read(&elements);
+            }
+        }
+    }
+
+    /// Port of `DoInit`: builds the subrecords once. Returns whether this
+    /// call built them.
+    pub fn do_init(self: &Arc<Self>) -> bool {
+        self.mr_init.run(|| self.build())
+    }
+
+    /// The init of `do_init`.
+    fn build(self: &Arc<Self>) {
+        {
             let build = self.mr_builds.fetch_add(1, Ordering::Relaxed) + 1;
             INITIALIZED_RECORDS
                 .lock()
                 .unwrap()
                 .push_back((Arc::downgrade(self), build));
+            INITIALIZED_COUNT.fetch_add(1, Ordering::Relaxed);
             self.create_contained_in();
             self.create_record_header();
             sub_record::init_main_record(self);
@@ -2326,7 +2367,7 @@ impl MainRecordImpl {
                 def.after_load(&self_ref);
             }
             sub_record::add_required_members(self);
-        });
+        }
     }
 
     /// Port of `TwbMainRecord.Reset` through `DoReset(False)`: the
@@ -2336,18 +2377,42 @@ impl MainRecordImpl {
     /// one record at a time. The decompressed data is released as upstream
     /// `mrDataStorage`; elements that outlive the reset keep their own
     /// reference to it.
+    ///
+    /// The elements are released and the init undone under the lock that
+    /// `read_built` reads under, so another thread that reads the record
+    /// meanwhile builds it again (`crate::threads`).
     pub fn reset(&self) {
-        // A record whose init runs keeps its elements and data.
-        if self.mr_init.is_running() {
-            return;
-        }
-        // Port of the `esModified` check of `TwbContainer.DoReset`: a modified
-        // record keeps its elements, which hold the change.
+        let released = {
+            let mut elements = self.container.cnt_elements.write().unwrap();
+            // A record whose init runs keeps its elements and data.
+            if self.mr_init.is_running() {
+                return;
+            }
+            // Port of the `esModified` check of `TwbContainer.DoReset`: a
+            // modified record keeps its elements, which hold the change.
+            if self.base.has_state(ElementState::esModified) {
+                return;
+            }
+            self.mr_init.reset();
+            std::mem::take(&mut *elements)
+        };
+        crate::threads::retire(released);
+        self.release_data();
+    }
+
+    /// The release of the quick init: the elements are given up before the
+    /// build counts as done. False for a modified record, which keeps them.
+    fn release_elements_and_data(&self) -> bool {
         if self.base.has_state(ElementState::esModified) {
-            return;
+            return false;
         }
         self.container.release_elements();
-        self.mr_init.reset();
+        self.release_data();
+        true
+    }
+
+    /// Port of the release of `mrDataStorage`.
+    fn release_data(&self) {
         let mut storage = self.mr_data_storage.lock().unwrap();
         if matches!(*storage, DataStorage::Loaded(_)) {
             *storage = DataStorage::Unloaded;
@@ -2783,14 +2848,15 @@ pub trait ElementImpl: Element {
     fn self_element_ref(&self) -> Option<ElementRef>;
 
     /// Port of `BeginResolve`: whether this element may resolve a definition
-    /// now; false while it is resolving one already.
+    /// now; false while this thread is resolving one through it already
+    /// (`esResolving`, per thread as in `crate::threads`).
     fn begin_resolve(&self) -> bool {
-        !self.element_base().e_resolving.swap(true, Ordering::AcqRel)
+        crate::threads::begin_resolve(std::ptr::from_ref(self.element_base()) as usize)
     }
 
     /// Port of `EndResolve`.
     fn end_resolve(&self) {
-        self.element_base().e_resolving.store(false, Ordering::Release);
+        crate::threads::end_resolve(std::ptr::from_ref(self.element_base()) as usize);
     }
 
     fn container_base(&self) -> Option<&ContainerBase> {
@@ -3881,19 +3947,26 @@ impl Container for MainRecordImpl {
     }
 
     fn get_element_count(&self) -> i32 {
-        self.self_arc().do_init();
-        self.container.element_count() as i32
+        self.read_built(|elements| elements.len() as i32)
     }
 
     fn get_element(&self, index: i32) -> Option<ElementRef> {
-        self.self_arc().do_init();
-        self.container.element_at(usize::try_from(index).ok()?)
+        let index = usize::try_from(index).ok()?;
+        self.read_built(|elements| elements.get(index).cloned())
     }
 
     fn get_element_by_sort_order(&self, sort_order: i32) -> Option<ElementRef> {
-        self.self_arc().do_init();
-        self.container
-            .element_by_sort_order(sort_order - self.get_additional_element_count())
+        let sort_order = sort_order - self.get_additional_element_count();
+        self.read_built(|elements| {
+            elements
+                .iter()
+                .find(|element| {
+                    element.as_element_impl().is_some_and(|element| {
+                        element.element_base().e_sort_order.load(Ordering::Relaxed) == sort_order
+                    })
+                })
+                .cloned()
+        })
     }
 
     fn get_any_element(&self) -> Option<ElementRef> {

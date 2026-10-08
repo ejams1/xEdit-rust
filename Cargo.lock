@@ -1007,6 +1007,7 @@ dependencies = [
  "mimalloc",
  "serde_json",
  "windows-sys",
+ "xedit-core",
  "xedit-session",
 ]
 
@@ -1015,6 +1016,7 @@ name = "xedit-core"
 version = "0.1.0"
 dependencies = [
  "arc-swap",
+ "rayon",
  "thiserror",
  "xedit-io",
 ]
@@ -1045,6 +1047,7 @@ name = "xedit-session"
 version = "0.1.0"
 dependencies = [
  "criterion",
+ "rayon",
  "schemars",
  "serde",
  "serde_json",
