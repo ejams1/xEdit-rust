@@ -36,6 +36,7 @@ use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, bail, ensure};
 use serde::Serialize;
+use xedit_io::dds::{self, Dxgi};
 
 use super::{GAMES, Game};
 
@@ -76,6 +77,8 @@ struct Options {
     synthetic: bool,
     /// Only the texture archives (`DX10`).
     textures: bool,
+    /// Only the synthetic packs whose label contains this text.
+    only: Option<String>,
     /// Keep the output of the runs that are equal.
     keep: bool,
 }
@@ -98,7 +101,7 @@ struct Case {
 }
 
 const USAGE: &str = "usage: cargo xtask parity bsarch [--game <game>]... [--archive <name>]... [--max-size <MB>] \
-                     [--jobs <n>] [--cross] [--synthetic] [--textures] [--keep]";
+                     [--jobs <n>] [--cross] [--synthetic] [--only <text>] [--textures] [--keep]";
 
 fn parse(args: &[&str]) -> Result<Options> {
     let mut options = Options {
@@ -110,6 +113,7 @@ fn parse(args: &[&str]) -> Result<Options> {
         cross: false,
         synthetic: false,
         textures: false,
+        only: None,
         keep: false,
     };
     let mut rest = args.iter();
@@ -130,6 +134,7 @@ fn parse(args: &[&str]) -> Result<Options> {
             "--cross" => options.cross = true,
             "--synthetic" => options.synthetic = true,
             "--textures" => options.textures = true,
+            "--only" => options.only = Some(rest.next().context(USAGE)?.to_string()),
             "--keep" => options.keep = true,
             _ => bail!(USAGE),
         }
@@ -241,7 +246,7 @@ pub fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
         }
     });
     if options.synthetic {
-        for outcome in synthetic(&runner)? {
+        for outcome in synthetic(&runner, options.only.as_deref())? {
             print_outcome(&outcome);
             outcomes.lock().unwrap().push(outcome);
         }
@@ -873,7 +878,7 @@ fn pack_and_compare(
 
 /// Packs of folders made up for the checks, which the game archives do not
 /// cover.
-fn synthetic(runner: &Runner) -> Result<Vec<Outcome>> {
+fn synthetic(runner: &Runner, only: Option<&str>) -> Result<Vec<Outcome>> {
     let root = runner.scratch.join("synthetic");
     let _ = fs::remove_dir_all(&root);
     fs::create_dir_all(&root)?;
@@ -945,6 +950,231 @@ fn synthetic(runner: &Runner) -> Result<Vec<Outcome>> {
             &random(20_000 + usize::from(index) * 777),
         )?;
     }
+
+    // Folders of texture files for the DX10 archives. `dds` holds what both
+    // sides pack; `dds-cut` a texture whose data ends early, which only the
+    // split packer reads as upstream (the other route reads past the buffer);
+    // `dds-bad` files each side refuses.
+    let dds_texture = |format: Dxgi, width: i32, height: i32, mips: i32, cube: bool, data: Vec<u8>| -> Vec<u8> {
+        let mut file = vec![0u8; dds::MAX_HEADER_SIZE];
+        dds::set_up_header(&mut file, format, width, height, mips, cube, false);
+        file.truncate(dds::header_size(&file));
+        file.extend(data);
+        file
+    };
+    // The image data of a chain of mipmaps: half noise, half runs, so that
+    // the compressors have both to work on.
+    let mut seed = 0x1234_5678_9ABC_DEF1u64;
+    let mut chain = |format: Dxgi, width: i32, height: i32, mips: i32, faces: usize| -> Vec<u8> {
+        let bits = usize::from(dds::bits_per_pixel(format));
+        let (mut w, mut h) = (width as usize, height as usize);
+        let mut data = Vec::new();
+        for _ in 0..mips.max(1) {
+            let bytes = ((w * h * bits / 8).max(8)) * faces;
+            for _ in 0..bytes / 2 {
+                seed ^= seed << 13;
+                seed ^= seed >> 7;
+                seed ^= seed << 17;
+                data.push((seed >> 24) as u8);
+            }
+            data.extend((0..bytes - bytes / 2).map(|i| (i / 48) as u8));
+            w = (w / 2).max(1);
+            h = (h / 2).max(1);
+        }
+        data
+    };
+    let dds_dir = root.join("dds");
+    let bc1 = chain(Dxgi::BC1_UNORM, 1024, 1024, 11, 1);
+    let bc3 = chain(Dxgi::BC3_UNORM, 128, 128, 8, 1);
+    let put = |name: &str, file: Vec<u8>| write(dds_dir.join("textures/t").join(name), &file);
+    put(
+        "bc1_1024.dds",
+        dds_texture(Dxgi::BC1_UNORM, 1024, 1024, 11, false, bc1.clone()),
+    )?;
+    put(
+        "bc7_512.dds",
+        dds_texture(
+            Dxgi::BC7_UNORM,
+            512,
+            512,
+            10,
+            false,
+            chain(Dxgi::BC7_UNORM, 512, 512, 10, 1),
+        ),
+    )?;
+    put(
+        "bc3_128.dds",
+        dds_texture(Dxgi::BC3_UNORM, 128, 128, 8, false, bc3.clone()),
+    )?;
+    put(
+        "bc3_128_same.dds",
+        dds_texture(Dxgi::BC3_UNORM, 128, 128, 8, false, bc3),
+    )?;
+    put(
+        "bc5_odd.dds",
+        dds_texture(
+            Dxgi::BC5_UNORM,
+            100,
+            60,
+            7,
+            false,
+            chain(Dxgi::BC5_UNORM, 100, 60, 7, 1),
+        ),
+    )?;
+    put(
+        "bc6h.dds",
+        dds_texture(
+            Dxgi::BC6H_UF16,
+            256,
+            256,
+            9,
+            false,
+            chain(Dxgi::BC6H_UF16, 256, 256, 9, 1),
+        ),
+    )?;
+    put(
+        "rgba.dds",
+        dds_texture(
+            Dxgi::R8G8B8A8_UNORM,
+            64,
+            64,
+            1,
+            false,
+            chain(Dxgi::R8G8B8A8_UNORM, 64, 64, 1, 1),
+        ),
+    )?;
+    put(
+        "bgra_srgb.dds",
+        dds_texture(
+            Dxgi::B8G8R8A8_UNORM_SRGB,
+            64,
+            32,
+            6,
+            false,
+            chain(Dxgi::B8G8R8A8_UNORM_SRGB, 64, 32, 6, 1),
+        ),
+    )?;
+    put(
+        "half.dds",
+        dds_texture(
+            Dxgi::R16G16B16A16_FLOAT,
+            32,
+            32,
+            3,
+            false,
+            chain(Dxgi::R16G16B16A16_FLOAT, 32, 32, 3, 1),
+        ),
+    )?;
+    put(
+        "r8.dds",
+        dds_texture(
+            Dxgi::R8_UNORM,
+            256,
+            256,
+            9,
+            false,
+            chain(Dxgi::R8_UNORM, 256, 256, 9, 1),
+        ),
+    )?;
+    put(
+        "tiny.dds",
+        dds_texture(Dxgi::BC1_UNORM, 4, 4, 1, false, chain(Dxgi::BC1_UNORM, 4, 4, 1, 1)),
+    )?;
+    put(
+        "cube_e.dds",
+        dds_texture(
+            Dxgi::BC1_UNORM,
+            256,
+            256,
+            9,
+            true,
+            chain(Dxgi::BC1_UNORM, 256, 256, 9, 6),
+        ),
+    )?;
+    // The mipmap count 0 of the header.
+    let mut no_count = dds_texture(
+        Dxgi::BC1_UNORM,
+        512,
+        512,
+        1,
+        false,
+        chain(Dxgi::BC1_UNORM, 512, 512, 1, 1),
+    );
+    no_count[28..32].copy_from_slice(&0u32.to_le_bytes());
+    put("no_mip_count.dds", no_count)?;
+    // 24 bit RGB, which both sides store as 32 bit.
+    let mut rgb = vec![0u8; dds::HEADER_SIZE];
+    let mut header = dds::DdsHeader::read(&rgb);
+    header.magic = dds::MAGIC_DDS;
+    header.size = 124;
+    header.flags = dds::DDSD_CAPS | dds::DDSD_PIXELFORMAT | dds::DDSD_WIDTH | dds::DDSD_HEIGHT;
+    header.width = 64;
+    header.height = 48;
+    header.mip_map_count = 1;
+    header.caps = dds::DDSCAPS_TEXTURE;
+    header.pixel_format.size = 32;
+    header.pixel_format.flags = dds::DDPF_RGB;
+    header.pixel_format.rgb_bit_count = 24;
+    header.pixel_format.r_bit_mask = 0xFF0000;
+    header.pixel_format.g_bit_mask = 0xFF00;
+    header.pixel_format.b_bit_mask = 0xFF;
+    header.write(&mut rgb);
+    rgb.extend(random(64 * 48 * 3));
+    put("rgb24.dds", rgb)?;
+    // A texture with a name that is not lower case, and one in another folder.
+    write(
+        dds_dir.join("textures/Other/Name.DDS"),
+        &dds_texture(
+            Dxgi::BC1_UNORM,
+            256,
+            256,
+            5,
+            false,
+            chain(Dxgi::BC1_UNORM, 256, 256, 5, 1),
+        ),
+    )?;
+
+    // Data that ends early.
+    let cut_dir = root.join("dds-cut");
+    let mut cut = dds_texture(Dxgi::BC1_UNORM, 1024, 1024, 11, false, bc1);
+    cut.truncate(128 + 700_000);
+    write(cut_dir.join("textures/t/cut.dds"), &cut)?;
+    write(
+        cut_dir.join("textures/t/ok.dds"),
+        &dds_texture(Dxgi::BC3_UNORM, 64, 64, 1, false, random(4096)),
+    )?;
+
+    // Files the DX10 archives refuse, each in a folder of its own.
+    let mut bad: Vec<(&str, PathBuf)> = Vec::new();
+    let mut refuse = |label: &'static str, name: &str, file: Vec<u8>| -> Result<()> {
+        let dir = root.join(format!("dds-bad-{label}"));
+        write(dir.join("textures/t").join(name), &file)?;
+        bad.push((label, dir));
+        Ok(())
+    };
+    refuse("noise", "noise.dds", random(5000))?;
+    refuse("short", "short.dds", {
+        let mut file = dds_texture(Dxgi::BC1_UNORM, 8, 8, 1, false, Vec::new());
+        file.truncate(100);
+        file
+    })?;
+    refuse(
+        "alpha8",
+        "alpha8.dds",
+        dds_texture(Dxgi::A8_UNORM, 32, 32, 1, false, random(1024)),
+    )?;
+    refuse(
+        "unknown",
+        "unknown.dds",
+        dds_texture(Dxgi::UNKNOWN, 32, 32, 1, false, random(1024)),
+    )?;
+    refuse("xbox", "xbox.dds", {
+        let mut file = vec![0u8; dds::MAX_HEADER_SIZE];
+        dds::set_up_header(&mut file, Dxgi::BC1_UNORM, 32, 32, 1, false, true);
+        file.extend(random(512));
+        file
+    })?;
+
     let textures = textures.display().to_string();
     let mixed = mixed.display().to_string();
     let over = over.display().to_string();
@@ -1047,9 +1277,77 @@ fn synthetic(runner: &Runner) -> Result<Vec<Outcome>> {
         vec!["-tes4", "-af:0x703", "-ff:0x3"],
         "bsa",
     ));
+
+    // The texture archives.
+    let dds_all = dds_dir.display().to_string();
+    let dds_cut = cut_dir.display().to_string();
+    for (format, switch) in [("fo4dds", "-fo4dds"), ("sf1dds", "-sf1dds")] {
+        jobs.push((format!("{format} folder"), dds_all.clone(), vec![switch], "ba2"));
+        jobs.push((format!("{format} z"), dds_all.clone(), vec![switch, "-z"], "ba2"));
+        jobs.push((
+            format!("{format} z no share"),
+            dds_all.clone(),
+            vec![switch, "-z", "-share:no"],
+            "ba2",
+        ));
+        jobs.push((
+            format!("{format} z split"),
+            dds_all.clone(),
+            vec![switch, "-z", "-split:-1"],
+            "ba2",
+        ));
+        jobs.push((
+            format!("{format} z no split"),
+            dds_all.clone(),
+            vec![switch, "-z", "-split:0"],
+            "ba2",
+        ));
+        jobs.push((
+            format!("{format} z filter"),
+            dds_all.clone(),
+            vec![switch, "-z", "-f:*bc?_*.dds"],
+            "ba2",
+        ));
+        jobs.push((format!("{format} z cut"), dds_cut.clone(), vec![switch, "-z"], "ba2"));
+        jobs.push((
+            format!("{format} cut"),
+            dds_cut.clone(),
+            vec![switch, "-split:-1"],
+            "ba2",
+        ));
+    }
+    jobs.push((
+        "fo4dds split 1".to_owned(),
+        dds_all.clone(),
+        vec!["-fo4dds", "-z", "-split:1"],
+        "ba2",
+    ));
+    jobs.push((
+        "sf1dds lz4".to_owned(),
+        dds_all.clone(),
+        vec!["-sf1dds", "-z:lz4"],
+        "ba2",
+    ));
+    jobs.push((
+        "sf1dds lz4 split".to_owned(),
+        dds_all.clone(),
+        vec!["-sf1dds", "-z:lz4", "-split:-1"],
+        "ba2",
+    ));
+    for (label, dir) in &bad {
+        jobs.push((
+            format!("fo4dds refuses {label}"),
+            dir.display().to_string(),
+            vec!["-fo4dds", "-z"],
+            "ba2",
+        ));
+    }
     // A source that is an archive of the oracle's: merged with the folder.
     let mut outcomes = Vec::new();
     for (label, input, switches, extension) in jobs {
+        if only.is_some_and(|only| !label.contains(only)) {
+            continue;
+        }
         let variant = PackVariant {
             label: label.clone(),
             switches,
