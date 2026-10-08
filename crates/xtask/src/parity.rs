@@ -59,6 +59,7 @@ use crate::memory::{self, Budget, GIB, Limit};
 mod conflicts;
 mod bsarch;
 mod gui;
+mod hidden;
 mod oracle_refs;
 mod hidden;
 mod lodgen;
