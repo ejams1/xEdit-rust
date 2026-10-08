@@ -129,7 +129,7 @@ JSON
 - `--output` writes somewhere else than the loaded path. Never point it into a game's `Data` folder while testing; the harness writes into the parity cache.
 - Without `--output` the file is written over the loaded one, through a temporary file and a rename. An existing file first moves to `<AppName>Edit Backups\<name>.backup.<timestamp>` next to it (`--no-backup` skips that), and a save whose bytes did not change is dropped, as upstream removes it.
 - The save edits the file header as upstream does: the ESM flag follows an `.esm` extension (ESM and Light an `.esl`), `HEDR` gets the record count, `INCC` the interior cell count, the `ONAM` list of a master is rebuilt from its overridden temporary placed records, and a FormID beyond the masters is clamped. The `unsupported` code is gone.
-- Error codes: `save_refused` carries an upstream `PrepareSave` message, which the oracle gives for the same file (a Starfield blueprint module, a record in the wrong group, an `.esp` master where the game forbids it).
+- Error codes: `save_refused` carries an upstream `PrepareSave` message, which the oracle gives for the same file (a Starfield blueprint module, a record in the wrong group, an `.esp` master where the game forbids it, an official Starfield module whose header the save would have to edit: `[TES4:00000000] can not be edited`). The messages of a save name records as the xEdit GUI does (`EditorID "Name" [SIG:FormID]`), so they read like the GUI's; the other commands keep xDump's names.
 - Only the worldspace records are initialized by a save of an unmodified file (upstream drops their `OFST` subrecord and marks their children modified), so a big master saves in seconds; the children of its worldspaces are rebuilt record by record.
 
 ## Masters
