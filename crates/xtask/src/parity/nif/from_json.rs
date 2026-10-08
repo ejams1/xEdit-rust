@@ -5,8 +5,10 @@
 //! `cargo xtask parity nif --from-json`: NIF files built back from their
 //! JSON dumps (`FromJSON`). The port dumps the first `--sample` NIF files of
 //! each archive; Sniff's `Convert to and from JSON` builds a NIF from each
-//! dump, and so does the port; the two must be the same bytes.
+//! dump, and so does the port; the two must be the same bytes, or both must
+//! refuse the dump with the same message (Sniff logs it as `Skipped:`).
 
+use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 
@@ -73,7 +75,11 @@ pub fn run(tag: &str, options: &Options) -> Result<()> {
                 let relative = format!("{}\\{archive_name}\\{name}", game.name);
                 let file = input.join(format!("{relative}.json").replace('\\', "/"));
                 fs::create_dir_all(file.parent().unwrap())?;
-                fs::write(&file, Encoding::Mbcs(0).get_bytes(&json))?;
+                // Sniff reads the file in the ANSI code page; the port builds
+                // from the same text, with `?` for what the code page lacks.
+                let bytes = Encoding::Mbcs(0).get_bytes(&json);
+                fs::write(&file, &bytes)?;
+                let json = Encoding::Mbcs(0).get_string(&bytes).unwrap_or(json);
                 let built = (|| {
                     let mut nif = NifFile::new()?;
                     nif.from_json(&json)?;
@@ -87,36 +93,34 @@ pub fn run(tag: &str, options: &Options) -> Result<()> {
     }
 
     println!("oracle        {} JSON dumps through Sniff", cases.len());
-    run_sniff_from_json(&sniff, &work, &input, &output, options.threads)?;
-    let (mut equal, mut different) = (0, 0);
+    let log = run_sniff(&sniff, &work, &input, "from-json", &output, None, options.threads)?;
+    // `Skipped: <relative>.json: <message>`, Sniff's refusals.
+    let refused: HashMap<String, String> = log
+        .lines()
+        .filter_map(|line| line.strip_prefix("Skipped: "))
+        .filter_map(|line| line.split_once(".json: "))
+        .map(|(relative, message)| (relative.to_lowercase(), message.to_owned()))
+        .collect();
+    let (mut equal, mut equal_error, mut different) = (0, 0, 0);
     for (relative, built) in &cases {
         let oracle = fs::read(output.join(relative.replace('\\', "/")))
             .ok()
             .map(|bytes| fnv(&bytes));
-        match (built, oracle) {
-            (Ok(port), Some(oracle)) if *port == oracle => equal += 1,
+        let refusal = refused.get(&relative.to_lowercase());
+        match (built, oracle, refusal) {
+            (Ok(port), Some(oracle), _) if *port == oracle => equal += 1,
+            (Err(port), None, Some(oracle)) if port == oracle => equal_error += 1,
             _ => {
                 different += 1;
                 if different <= 20 {
-                    println!("    different {relative}: port {built:?}, oracle {oracle:?}");
+                    println!("    different {relative}: port {built:?}, oracle {oracle:?} {refusal:?}");
                 }
             }
         }
     }
     println!(
-        "total: {} built from JSON: {equal} equal, {different} different",
+        "total: {} built from JSON: {equal} equal, {equal_error} equal-error, {different} different",
         cases.len()
     );
-    Ok(())
-}
-
-fn run_sniff_from_json(
-    sniff: &std::path::Path,
-    work: &std::path::Path,
-    input: &std::path::Path,
-    output: &std::path::Path,
-    threads: usize,
-) -> Result<()> {
-    run_sniff(sniff, work, input, "from-json", output, None, threads)?;
     Ok(())
 }

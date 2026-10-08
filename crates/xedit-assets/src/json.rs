@@ -5,9 +5,73 @@
 //! The JSON documents of the data format units, as the `JsonDataObjects`
 //! library that upstream uses builds and prints them: objects keep their
 //! keys in insertion order, setting a key that exists replaces its value in
-//! place, and the readable form indents with tabs.
+//! place, and the readable form indents with tabs. The accessors read values
+//! the way the library's `S[]`, `I[]`, `F[]`, `B[]`, `O[]` and `A[]`
+//! properties do, with the same conversions and the same errors.
+
+use xedit_core::delphi::{float_to_str, str_to_float};
 
 use crate::data_format::DfError;
+use crate::variant::str_to_int64;
+
+/// The type a number gets when the library parses it.
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum Number {
+    Int(i64),
+    Long(i64),
+    ULong(u64),
+    Float(f64),
+}
+
+/// The library's number parser: an integer of up to 9 digits is an
+/// `Integer`, of up to 19 a `Long` (a `ULong` when it does not fit), of 20 a
+/// `ULong`; a fraction, an exponent or an integer too large is a `Float`.
+fn parse_number(text: &str) -> Number {
+    let (negative, digits) = match text.strip_prefix('-') {
+        Some(rest) => (true, rest),
+        None => (false, text),
+    };
+    let float = || Number::Float(text.parse::<f64>().unwrap_or(0.0));
+    if digits.is_empty() || !digits.bytes().all(|byte| byte.is_ascii_digit()) {
+        return float();
+    }
+    let count = digits.len();
+    if count <= 9 {
+        let value: i64 = digits.parse().unwrap_or(0);
+        return Number::Int(if negative { -value } else { value });
+    }
+    let Ok(value) = digits.parse::<u64>() else {
+        return float();
+    };
+    if negative {
+        if value > i64::MAX as u64 {
+            return Number::Float(-(value as f64));
+        }
+        let value = -(value as i64);
+        return if i32::try_from(value).is_ok() {
+            Number::Int(value)
+        } else {
+            Number::Long(value)
+        };
+    }
+    if count == 20 || value > i64::MAX as u64 {
+        Number::ULong(value)
+    } else {
+        Number::Long(value as i64)
+    }
+}
+
+fn cast_error(from: &str, into: &str) -> DfError {
+    DfError::new(format!("Cannot cast {from} into {into}"))
+}
+
+fn index_error(index: usize) -> DfError {
+    DfError::new(format!("List index out of bounds ({index})"))
+}
+
+fn not_a_float(text: &str) -> DfError {
+    DfError::new(format!("'{text}' is not a valid floating point value"))
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Json {
@@ -55,11 +119,167 @@ impl Json {
         }
     }
 
+    /// The first value with the key, as `FindItem` finds it.
     pub fn get(&self, name: &str) -> Option<&Json> {
         match self {
             Json::Obj(entries) => entries.iter().find(|(key, _)| key == name).map(|(_, value)| value),
             _ => None,
         }
+    }
+
+    fn get_mut(&mut self, name: &str) -> Option<&mut Json> {
+        match self {
+            Json::Obj(entries) => entries.iter_mut().find(|(key, _)| key == name).map(|(_, value)| value),
+            _ => None,
+        }
+    }
+
+    /// The keys, in order, repeated keys included (`Names[i]`).
+    pub fn names(&self) -> Vec<String> {
+        match self {
+            Json::Obj(entries) => entries.iter().map(|(key, _)| key.clone()).collect(),
+            _ => Vec::new(),
+        }
+    }
+
+    /// The name of the value's type in the library's cast errors; `null`
+    /// is a nil object there.
+    fn type_name(&self) -> &'static str {
+        match self {
+            Json::Null | Json::Obj(_) => "Object",
+            Json::Bool(_) => "Bool",
+            Json::Str(_) => "String",
+            Json::Arr(_) => "Array",
+            Json::Num(text) => match parse_number(text) {
+                Number::Int(_) => "Integer",
+                Number::Long(_) => "Long",
+                Number::ULong(_) => "ULong",
+                Number::Float(_) => "Float",
+            },
+        }
+    }
+
+    /// `TJsonDataValue.Value`: the value as a string.
+    pub fn value_str(&self) -> Result<String, DfError> {
+        match self {
+            Json::Str(text) => Ok(text.clone()),
+            Json::Num(text) => Ok(match parse_number(text) {
+                Number::Int(value) | Number::Long(value) => value.to_string(),
+                Number::ULong(value) => value.to_string(),
+                Number::Float(value) => float_to_str(value),
+            }),
+            Json::Bool(true) => Ok("true".to_owned()),
+            Json::Bool(false) => Ok("false".to_owned()),
+            _ => Err(cast_error(self.type_name(), "String")),
+        }
+    }
+
+    /// `TJsonDataValue.IntValue`.
+    pub fn value_int(&self) -> Result<i32, DfError> {
+        match self {
+            Json::Str(text) => match str_to_int64(text).and_then(|value| i32::try_from(value).ok()) {
+                Some(value) => Ok(value),
+                None => Ok(str_to_float(text).ok_or_else(|| not_a_float(text))?.trunc() as i64 as i32),
+            },
+            Json::Num(text) => Ok(match parse_number(text) {
+                Number::Int(value) | Number::Long(value) => value as i32,
+                Number::ULong(value) => value as i32,
+                Number::Float(value) => value.trunc() as i64 as i32,
+            }),
+            Json::Bool(value) => Ok(i32::from(*value)),
+            _ => Err(cast_error(self.type_name(), "Integer")),
+        }
+    }
+
+    /// `TJsonDataValue.FloatValue`.
+    pub fn value_float(&self) -> Result<f64, DfError> {
+        match self {
+            Json::Str(text) => str_to_float(text).ok_or_else(|| not_a_float(text)),
+            Json::Num(text) => Ok(match parse_number(text) {
+                Number::Int(value) | Number::Long(value) => value as f64,
+                Number::ULong(value) => value as f64,
+                Number::Float(value) => value,
+            }),
+            Json::Bool(value) => Ok(f64::from(u8::from(*value))),
+            _ => Err(cast_error(self.type_name(), "Float")),
+        }
+    }
+
+    /// `TJsonDataValue.BoolValue`.
+    pub fn value_bool(&self) -> Result<bool, DfError> {
+        match self {
+            Json::Str(text) => Ok(text == "true"),
+            Json::Num(text) => Ok(match parse_number(text) {
+                Number::Int(value) | Number::Long(value) => value != 0,
+                Number::ULong(value) => value != 0,
+                Number::Float(value) => value != 0.0,
+            }),
+            Json::Bool(value) => Ok(*value),
+            _ => Err(cast_error(self.type_name(), "Bool")),
+        }
+    }
+
+    /// `O.S[Name]`: empty when the key is missing.
+    pub fn s(&self, name: &str) -> Result<String, DfError> {
+        self.get(name).map_or(Ok(String::new()), Json::value_str)
+    }
+
+    /// `O.I[Name]`: 0 when the key is missing.
+    pub fn i(&self, name: &str) -> Result<i32, DfError> {
+        self.get(name).map_or(Ok(0), Json::value_int)
+    }
+
+    /// `O.F[Name]`: 0 when the key is missing.
+    pub fn f(&self, name: &str) -> Result<f64, DfError> {
+        self.get(name).map_or(Ok(0.0), Json::value_float)
+    }
+
+    /// `O.B[Name]`: false when the key is missing.
+    pub fn b(&self, name: &str) -> Result<bool, DfError> {
+        self.get(name).map_or(Ok(false), Json::value_bool)
+    }
+
+    /// `A.S[Index]`.
+    pub fn s_at(&self, index: usize) -> Result<String, DfError> {
+        self.index(index).ok_or_else(|| index_error(index))?.value_str()
+    }
+
+    /// `O.O[Name]` or `O.A[Name]`: adds an empty object or array when the
+    /// key is missing.
+    fn container_mut(&mut self, name: &str, array: bool) -> Result<Option<&mut Json>, DfError> {
+        if self.get(name).is_none() {
+            self.set(name, if array { Json::array() } else { Json::object() });
+        }
+        match self.get_mut(name) {
+            Some(value) => container_value(value, array),
+            None => Ok(None),
+        }
+    }
+
+    /// `O.O[Name]`.
+    pub fn o_mut(&mut self, name: &str) -> Result<Option<&mut Json>, DfError> {
+        self.container_mut(name, false)
+    }
+
+    /// `O.A[Name]`.
+    pub fn a_mut(&mut self, name: &str) -> Result<Option<&mut Json>, DfError> {
+        self.container_mut(name, true)
+    }
+
+    /// `A.O[Index]`.
+    pub fn o_at_mut(&mut self, index: usize) -> Result<Option<&mut Json>, DfError> {
+        let Json::Arr(items) = self else {
+            return Err(index_error(index));
+        };
+        container_value(items.get_mut(index).ok_or_else(|| index_error(index))?, false)
+    }
+
+    /// `A.A[Index]`.
+    pub fn a_at_mut(&mut self, index: usize) -> Result<Option<&mut Json>, DfError> {
+        let Json::Arr(items) = self else {
+            return Err(index_error(index));
+        };
+        container_value(items.get_mut(index).ok_or_else(|| index_error(index))?, true)
     }
 
     pub fn contains(&self, name: &str) -> bool {
@@ -85,44 +305,6 @@ impl Json {
         self.len() == 0
     }
 
-    /// The value as `S[...]` reads it: a string, a number or a boolean as
-    /// text, empty for anything else.
-    pub fn as_str(&self) -> String {
-        match self {
-            Json::Str(text) | Json::Num(text) => text.clone(),
-            Json::Bool(true) => "true".to_owned(),
-            Json::Bool(false) => "false".to_owned(),
-            _ => String::new(),
-        }
-    }
-
-    pub fn as_bool(&self) -> bool {
-        match self {
-            Json::Bool(value) => *value,
-            Json::Num(text) => text.parse::<f64>().is_ok_and(|value| value != 0.0),
-            Json::Str(text) => text.eq_ignore_ascii_case("true"),
-            _ => false,
-        }
-    }
-
-    pub fn as_f64(&self) -> f64 {
-        match self {
-            Json::Num(text) | Json::Str(text) => text.parse().unwrap_or(0.0),
-            Json::Bool(value) => f64::from(u8::from(*value)),
-            _ => 0.0,
-        }
-    }
-
-    pub fn as_i64(&self) -> i64 {
-        match self {
-            Json::Num(text) | Json::Str(text) => text
-                .parse::<i64>()
-                .unwrap_or_else(|_| text.parse::<f64>().map_or(0, |value| value as i64)),
-            Json::Bool(value) => i64::from(*value),
-            _ => 0,
-        }
-    }
-
     /// `ToJSON(aCompact)`.
     pub fn to_text(&self, compact: bool) -> String {
         let mut out = String::new();
@@ -145,6 +327,17 @@ impl Json {
             return Err(parser.error("unexpected data after the value"));
         }
         Ok(value)
+    }
+}
+
+/// `ObjectValue` and `ArrayValue`: `null` is a nil object, which reads as
+/// no object and fails as an array.
+fn container_value(value: &mut Json, array: bool) -> Result<Option<&mut Json>, DfError> {
+    match (value, array) {
+        (Json::Null, false) => Ok(None),
+        (value @ Json::Obj(_), false) | (value @ Json::Arr(_), true) => Ok(Some(value)),
+        (value, true) => Err(cast_error(value.type_name(), "Array")),
+        (value, false) => Err(cast_error(value.type_name(), "Object")),
     }
 }
 
@@ -273,11 +466,9 @@ impl Parser<'_> {
                         return Err(self.error("expected ':'"));
                     }
                     self.skip_space();
+                    // The library keeps a repeated key; lookups find the first.
                     let value = self.value()?;
-                    match entries.iter_mut().find(|(name, _)| *name == key) {
-                        Some(entry) => entry.1 = value,
-                        None => entries.push((key, value)),
-                    }
+                    entries.push((key, value));
                     self.skip_space();
                     if self.eat(b',') {
                         continue;
@@ -427,7 +618,40 @@ mod tests {
     fn parses_back() {
         let text = "{\"a\": [\"1\", {\"b\": true}], \"c\": -1.5e3}";
         let value = Json::parse(text).unwrap();
-        assert_eq!(value.get("c").unwrap().as_f64(), -1500.0);
-        assert!(value.get("a").unwrap().index(1).unwrap().get("b").unwrap().as_bool());
+        assert_eq!(value.get("c").unwrap().value_float().unwrap(), -1500.0);
+        assert!(
+            value
+                .get("a")
+                .unwrap()
+                .index(1)
+                .unwrap()
+                .get("b")
+                .unwrap()
+                .value_bool()
+                .unwrap()
+        );
+    }
+
+    #[test]
+    fn reads_like_the_library() {
+        let mut value = Json::parse(
+            r#"{"a": ["x"], "n": null, "i": 12, "l": 1234567890123, "f": 1.50, "t": true, "d": "1", "d": "2"}"#,
+        )
+        .unwrap();
+        assert_eq!(value.s("a").unwrap_err().0, "Cannot cast Array into String");
+        assert_eq!(value.s("n").unwrap_err().0, "Cannot cast Object into String");
+        assert_eq!(value.s("i").unwrap(), "12");
+        assert_eq!(value.s("f").unwrap(), "1.5");
+        assert_eq!(value.s("t").unwrap(), "true");
+        assert_eq!(value.s("missing").unwrap(), "");
+        assert_eq!(value.s("d").unwrap(), "1");
+        assert_eq!(value.i("f").unwrap(), 1);
+        assert!(value.o_mut("n").unwrap().is_none());
+        assert_eq!(value.a_mut("n").unwrap_err().0, "Cannot cast Object into Array");
+        assert_eq!(value.o_mut("l").unwrap_err().0, "Cannot cast Long into Object");
+        assert_eq!(value.o_mut("i").unwrap_err().0, "Cannot cast Integer into Object");
+        assert!(value.o_mut("new").unwrap().is_some());
+        assert_eq!(value.s("new").unwrap_err().0, "Cannot cast Object into String");
+        assert_eq!(value.names().len(), 9);
     }
 }

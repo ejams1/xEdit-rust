@@ -321,6 +321,152 @@ pub fn arc_sin(x: f64) -> f64 {
     x.atan2(((1.0 + x) * (1.0 - x)).sqrt())
 }
 
+// Delphi's `Sin` and `Cos` on Win64 (the RTL the 4.1.5q builds link): an
+// argument reduction to [-π/4, π/4] and two kernels, read from the machine
+// code of `Sniff.exe` (`System.Sin` and `System.Cos` call them). The results
+// differ from the C runtime's and from the correctly rounded ones by an ulp
+// at times (`Sin(Pi / 4)`, and the sine of half of 110.221202 degrees), which
+// flips the sign or the last bit of a matrix element near zero after
+// `AxisAngleToM33`. Every operation is one double operation, in the order of
+// the machine code.
+
+const fn bits(value: u64) -> f64 {
+    f64::from_bits(value)
+}
+
+const QUARTER_PI: f64 = bits(0x3FE9_21FB_5444_2D18);
+const THREE_QUARTERS_PI: f64 = bits(0x4002_D97C_7F33_21D2);
+const FIVE_QUARTERS_PI: f64 = bits(0x400F_6A7A_2955_385E);
+/// π/2 in three parts for the reduction of `|x| <= 5π/4`.
+const HALF_PI: [f64; 3] = [
+    bits(0x3FF9_21FB_5444_2D18),
+    bits(0x3C91_A626_3314_5C04),
+    bits(0x3967_0734_4A40_9382),
+];
+/// -π/2 in three parts for the reduction of `|x| < 2^22`.
+const MINUS_HALF_PI: [f64; 3] = [
+    bits(0xBFF9_21FB_5440_0000),
+    bits(0xBDD0_B461_1A60_0000),
+    bits(0xBBA3_198A_2E03_7073),
+];
+const TWO_OVER_PI: f64 = bits(0x3FE4_5F30_6DC9_C883);
+const REDUCTION_LIMIT: f64 = bits(0x4150_0000_0000_0000);
+const COS: [f64; 6] = [
+    bits(0xBDA8_FA6A_8A7D_84DF),
+    bits(0x3E21_EE9D_C12C_88AC),
+    bits(0xBE92_7E4F_7F1E_E922),
+    bits(0x3EFA_01A0_19C8_F945),
+    bits(0xBF56_C16C_16C1_5018),
+    bits(0x3FA5_5555_5555_554B),
+];
+const SIN: [f64; 8] = [
+    bits(0x3DE5_E0A2_8E7F_A626),
+    bits(0xBE5A_E600_81AA_5E86),
+    bits(0x3EC7_1DE3_7936_614A),
+    bits(0xBF2A_01A0_19E8_0E58),
+    bits(0xBC29_D73D_6337_65DD),
+    bits(0x3F81_1111_1111_0BA5),
+    bits(0x3C6A_74A9_34AD_37D5),
+    bits(0xBFC5_5555_5555_5555),
+];
+
+/// The cosine kernel: the cosine of `x + y`, `|x| <= π/4`.
+fn kernel_cos(x: f64, y: f64) -> f64 {
+    let z = x * x;
+    let w = z * z;
+    let a = ((COS[0] * w + COS[2]) * w + COS[4]) * z;
+    let b = (COS[1] * w + COS[3]) * w + COS[5];
+    let p = (b + a) * w;
+    let hz = z * 0.5;
+    let w1 = 1.0 - hz;
+    let t = hz + (w1 - 1.0);
+    w1 + ((p - x * y) - t)
+}
+
+/// The sine kernel: the sine of `x + y`, `|x| <= π/4`.
+fn kernel_sin(x: f64, y: f64) -> f64 {
+    let z = x * x;
+    let w = z * z;
+    let v = z * x;
+    let a = ((SIN[0] * w + SIN[2]) * w + SIN[4]) + SIN[5];
+    let b = (SIN[1] * w + SIN[3]) * w + SIN[6];
+    let r = ((a * z + b) + SIN[7]) * v + (1.0 - z * 0.5) * y;
+    x + r
+}
+
+/// The reduction: `x` less `n` times π/2 as `y0 + y1`, with `n & 3`.
+/// `None` for `|x| >= 2^22`, which takes a path that is not ported (no
+/// rotation gets there).
+fn reduce(x: f64) -> Option<(i64, f64, f64)> {
+    let ax = x.abs();
+    if QUARTER_PI >= ax {
+        return Some((0, x, 0.0));
+    }
+    if FIVE_QUARTERS_PI >= ax {
+        let mut n: i64 = if THREE_QUARTERS_PI >= ax { 1 } else { 2 };
+        if 0.0 > x {
+            n = -n;
+        }
+        let f = n as f64;
+        let (t0, t1, t2) = (f * HALF_PI[0], f * HALF_PI[1], f * HALF_PI[2]);
+        let r = x - t0;
+        let y0 = r - t1;
+        let y1 = ((-t1) - (y0 - r)) - t2;
+        return Some((n & 3, y0, y1));
+    }
+    if REDUCTION_LIMIT > ax {
+        let mut n = (((ax - QUARTER_PI) * TWO_OVER_PI) as i64) + 1;
+        if 0.0 > x {
+            n = -n;
+        }
+        let f = n as f64;
+        let (t0, t1, t2) = (f * MINUS_HALF_PI[0], f * MINUS_HALF_PI[1], f * MINUS_HALF_PI[2]);
+        let r = x + t0;
+        // Two double-double additions: t1 + r, then t2 + that.
+        let s = t1 + r;
+        let bb = s - t1;
+        let error = (t1 - (s - bb)) + (r - bb);
+        let hi = s + error;
+        let lo = error - (hi - s);
+        let s2 = t2 + hi;
+        let bb2 = s2 - t2;
+        let error2 = ((t2 - (s2 - bb2)) + (hi - bb2)) + lo;
+        let hi2 = s2 + error2;
+        let lo2 = error2 - (hi2 - s2);
+        return Some((n & 3, hi2, lo2));
+    }
+    None
+}
+
+/// Delphi's `Sin` (`cosine` false) and `Cos`.
+fn sin_cos(x: f64, cosine: bool) -> f64 {
+    if x.is_nan() {
+        return x;
+    }
+    if QUARTER_PI > x.abs() {
+        return if cosine { kernel_cos(x, 0.0) } else { kernel_sin(x, 0.0) };
+    }
+    let Some((n, y0, y1)) = reduce(x) else {
+        return if cosine { x.cos() } else { x.sin() };
+    };
+    match (n + i64::from(cosine)) & 3 {
+        0 => kernel_sin(y0, y1),
+        1 => kernel_cos(y0, y1),
+        2 => -kernel_sin(y0, y1),
+        _ => -kernel_cos(y0, y1),
+    }
+}
+
+/// Delphi `Sin` on Win64.
+pub fn sin(x: f64) -> f64 {
+    sin_cos(x, false)
+}
+
+/// Delphi `Cos` on Win64.
+pub fn cos(x: f64) -> f64 {
+    sin_cos(x, true)
+}
+
 /// Delphi `RadToDeg`.
 pub fn rad_to_deg(radians: f64) -> f64 {
     radians * (180.0 / std::f64::consts::PI)
@@ -364,9 +510,9 @@ pub fn euler_to_m33(x: f64, y: f64, z: f64) -> Matrix33 {
     if same_value(x, 0.0) && same_value(y, 0.0) && same_value(z, 0.0) {
         return identity_m33();
     }
-    let (sin_x, cos_x) = (x.sin(), x.cos());
-    let (sin_y, cos_y) = (y.sin(), y.cos());
-    let (sin_z, cos_z) = (z.sin(), z.cos());
+    let (sin_x, cos_x) = (sin(x), cos(x));
+    let (sin_y, cos_y) = (sin(y), cos(y));
+    let (sin_z, cos_z) = (sin(z), cos(z));
     [
         [cos_y * cos_z, -cos_y * sin_z, sin_y],
         [
@@ -450,8 +596,8 @@ pub fn quaternion_to_axis_angle(quat: &Quaternion) -> (f64, f64, f64, f64) {
 /// `AxisAngleToQuaternion`.
 pub fn axis_angle_to_quaternion(a: f64, mut x: f64, mut y: f64, mut z: f64) -> Quaternion {
     normalize3(&mut x, &mut y, &mut z);
-    let s = (a / 2.0).sin();
-    Quaternion::new((a / 2.0).cos(), s * x, s * y, s * z)
+    let s = sin(a / 2.0);
+    Quaternion::new(cos(a / 2.0), s * x, s * y, s * z)
 }
 
 /// `EulerToQuaternion`.
@@ -787,6 +933,28 @@ pub fn calculate_tangents_bitangents2(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn sine_and_cosine_of_delphi() {
+        // `Sin` and `Cos` of half the angle as the xEdit GUI's script
+        // adapter returns them (the bits of 20097 such pairs checked): the C
+        // runtime is an ulp above at 90 degrees, the correctly rounded value
+        // an ulp below at 110.221202 and 646.876437.
+        for (degrees, sine, cosine) in [
+            (90.0, 0x3FE6_A09E_667F_3BCC, 0x3FE6_A09E_667F_3BCD),
+            (110.221202, 0x3FEA_3F8D_1F13_945A, 0x3FE2_4DC6_9B5F_31D5),
+            (95.890933, 0x3FE7_C29F_55E5_AC41, 0x3FE5_6F4F_4E1E_D5E0),
+            (180.0, 0x3FF0_0000_0000_0000, 0x3C91_A626_3314_5C07),
+            (-437.008794, 0x3FE3_EC21_C3A8_A8DC, 0xBFE9_0ABC_11AF_349C),
+            (-484.950803, 0x3FEC_60C4_A1B6_D122, 0xBFDD_9387_224F_9572),
+            (48.201302, 0x3FDA_2241_95D5_09EE, 0x3FED_35E6_4A65_CB5D),
+            (646.876437, 0xBFE3_0FE2_DD4A_3D6A, 0x3FE9_B3EF_F270_F6A1),
+        ] {
+            let half = deg_to_rad(degrees) / 2.0;
+            assert_eq!(sin(half).to_bits(), sine, "sin of {degrees} / 2");
+            assert_eq!(cos(half).to_bits(), cosine, "cos of {degrees} / 2");
+        }
+    }
 
     #[test]
     fn identity_rotation_round_trips() {

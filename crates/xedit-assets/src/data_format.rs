@@ -2704,21 +2704,23 @@ impl Tree {
         }
     }
 
-    /// `UnSerializeFromJSON` from `json`, an object or an array.
-    pub fn unserialize_from_json(&mut self, el: El, json: &Json) -> R<()> {
+    /// `UnSerializeFromJSON` from `json`, an object or an array. The value
+    /// is read the way `JsonDataObjects` reads it: a struct or an array that
+    /// is missing is added to `json` empty, and a value of the wrong type is
+    /// an error ("Cannot cast Array into String").
+    pub fn unserialize_from_json(&mut self, el: El, json: &mut Json) -> R<()> {
         match self.class(el) {
             Class::Value(_) | Class::Union => {
                 if !self.enabled(el)? {
                     return Ok(());
                 }
-                let value = if json.is_object() {
-                    let name = self.name(el)?;
-                    json.get(&name).map(Json::as_str).unwrap_or_default()
-                } else {
-                    let index = self.index(el)?;
-                    json.index(index.max(0) as usize).map(Json::as_str).unwrap_or_default()
-                };
-                self.set_edit_value(el, &value)?;
+                if json.is_object() {
+                    let value = json.s(&self.name(el)?)?;
+                    self.set_edit_value(el, &value)?;
+                } else if json.is_array() {
+                    let value = json.s_at(self.index(el)?.max(0) as usize)?;
+                    self.set_edit_value(el, &value)?;
+                }
                 self.element_unserialize(el, true, 0)
             }
             Class::Struct(_) => {
@@ -2726,15 +2728,17 @@ impl Tree {
                     return Ok(());
                 }
                 let object = if json.is_object() {
-                    let name = self.name(el)?;
-                    json.get(&name).cloned().unwrap_or_else(Json::object)
+                    json.o_mut(&self.name(el)?)?
+                } else if json.is_array() {
+                    json.o_at_mut(self.index(el)?.max(0) as usize)?
                 } else {
-                    let index = self.index(el)?;
-                    json.index(index.max(0) as usize).cloned().unwrap_or_else(Json::object)
+                    None
                 };
-                let items = self.n(el).items.clone();
-                for item in items {
-                    self.unserialize_from_json(item, &object)?;
+                if let Some(object) = object {
+                    let items = self.n(el).items.clone();
+                    for item in items {
+                        self.unserialize_from_json(item, object)?;
+                    }
                 }
                 self.element_unserialize(el, true, 0)
             }
@@ -2743,11 +2747,14 @@ impl Tree {
                     return Ok(());
                 }
                 let array = if json.is_object() {
-                    let name = self.name(el)?;
-                    json.get(&name).cloned().unwrap_or_else(Json::array)
+                    json.a_mut(&self.name(el)?)?
+                } else if json.is_array() {
+                    json.a_at_mut(self.index(el)?.max(0) as usize)?
                 } else {
-                    let index = self.index(el)?;
-                    json.index(index.max(0) as usize).cloned().unwrap_or_else(Json::array)
+                    None
+                };
+                let Some(array) = array else {
+                    return Ok(());
                 };
                 let fixed = self.raw_def(el).size > 0;
                 if !fixed {
@@ -2756,10 +2763,10 @@ impl Tree {
                 for index in 0..array.len() {
                     if fixed {
                         let item = self.item(el, index as i32)?;
-                        self.unserialize_from_json(item, &array)?;
+                        self.unserialize_from_json(item, array)?;
                     } else {
                         let item = self.add(el)?;
-                        self.unserialize_from_json(item, &array)?;
+                        self.unserialize_from_json(item, array)?;
                     }
                 }
                 self.element_unserialize(el, true, 0)
@@ -2778,9 +2785,9 @@ impl Tree {
 
     /// `FromJSON`.
     pub fn from_json(&mut self, el: El, text: &str) -> R<()> {
-        let json = Json::parse(text)?;
+        let mut json = Json::parse(text)?;
         self.set_to_default(el)?;
-        self.unserialize_from_json(el, &json)
+        self.unserialize_from_json(el, &mut json)
     }
 
     /// `ToText`: the name and value of every enabled element, one per line,

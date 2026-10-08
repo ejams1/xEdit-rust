@@ -28,6 +28,7 @@ use xedit_assets::data_format_nif::{
 use xedit_assets::data_format_nif_types::ROTATION_EULER;
 use xedit_assets::nif_scanner;
 use xedit_io::archive::Archive;
+use xedit_io::encoding::Encoding;
 
 use crate::save::write_atomically;
 use crate::{CommandError, Registry, Session};
@@ -419,6 +420,37 @@ pub struct AssetsFromJsonRequest {
     pub dry_run: bool,
 }
 
+/// The text of a file as `TStringList.LoadFromFile` reads it (upstream's
+/// `LoadFromJSONFile`): by its byte order mark, else in the ANSI code page.
+fn string_list_text(bytes: &[u8]) -> String {
+    let utf16 = |rest: &[u8], big_endian: bool| {
+        let units: Vec<u16> = rest
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|pair| {
+                if big_endian {
+                    u16::from_be_bytes([pair[0], pair[1]])
+                } else {
+                    u16::from_le_bytes([pair[0], pair[1]])
+                }
+            })
+            .collect();
+        String::from_utf16_lossy(&units)
+    };
+    if let Some(rest) = bytes.strip_prefix(&[0xEF, 0xBB, 0xBF]) {
+        String::from_utf8_lossy(rest).into_owned()
+    } else if let Some(rest) = bytes.strip_prefix(&[0xFF, 0xFE]) {
+        utf16(rest, false)
+    } else if let Some(rest) = bytes.strip_prefix(&[0xFE, 0xFF]) {
+        utf16(rest, true)
+    } else {
+        Encoding::Mbcs(0)
+            .get_string(bytes)
+            .unwrap_or_else(|_| String::from_utf8_lossy(bytes).into_owned())
+    }
+}
+
 fn assets_from_json(_: &mut Session, request: AssetsFromJsonRequest) -> Result<AssetsSaveResponse, CommandError> {
     let kind = match &request.kind {
         Some(kind) => AssetKind::from_name(kind)
@@ -431,7 +463,7 @@ fn assets_from_json(_: &mut Session, request: AssetsFromJsonRequest) -> Result<A
     };
     let text =
         std::fs::read(&request.file).map_err(|error| CommandError::new("io", format!("{}: {error}", request.file)))?;
-    let text = String::from_utf8_lossy(&text);
+    let text = string_list_text(&text);
     let mut file = AssetFile::from_json(kind, &text).map_err(load_failed)?;
     finish_save(&mut file, &[], &request.output, request.dry_run)
 }
