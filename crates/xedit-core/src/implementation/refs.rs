@@ -4,40 +4,106 @@
 
 // Ported from xEdit: Core/wbImplementation.pas
 
-//! Port of the reference paths of the elements: `BuildRef` with
+//! Port of the reference index: `BuildRef` of every element with
 //! `AddReferencedFromID` and `CanContainFormIDs`, which collect the FormIDs
-//! a main record refers to (`TwbMainRecord.DoBuildRef` without the
-//! referenced-by lists), and `CompareExchangeFormID`, which replaces one
-//! load order FormID by another in every element of a record.
+//! a main record refers to; `TwbMainRecord.BuildRef`, `DoBuildRef` and
+//! `UpdateRefs`, which keep them in `mrReferences` and add the record to the
+//! referenced-by list (`mrReferencedBy`, `AddReferencedBy`,
+//! `RemoveReferencedBy`, `SortReferencedBy`) of every record it refers to;
+//! `TwbFile.BuildRef` and `BuildOrLoadRef` with the reference cache file
+//! (`refcache`); and `CompareExchangeFormID`, which replaces one load order
+//! FormID by another in every element of a record.
 //!
-//! The port has no reference index yet: upstream keeps `mrReferencedBy` for
-//! every record from the `BuildRef` of all loaded files, and the FormID
-//! change of `xeMainForm` (`ShowChangeReferencedBy`) calls
-//! `CompareExchangeFormID` on the records in that list. Until phase 4 builds
-//! the index, [`ReferenceScan`] finds the same records on demand: a record
-//! refers to a target when a FormID its `BuildRef` collects resolves, as
-//! `DoBuildRef` resolves it, to the target or one of its overrides. The scan
-//! looks only at the files that can see the FormID of a target (the file of
-//! the FormID and the files that have it as a master) and skips a record
-//! whose data does not hold the FormID's four bytes before it builds its
-//! elements. Phase 4 replaces the scan by the index behind the same call.
+//! Upstream builds the references of the loaded files on load
+//! (`TfrmMain`'s loader, one file per thread with `USE_PARALLEL_BUILD_REFS`,
+//! `AddReferencedBy` under a lock and the lists sorted when first read). The
+//! port builds them when a command first needs them ([`build_or_load_refs`]):
+//! the FormIDs of every record of the files to build are collected on the
+//! worker threads, record by record, and then added to the lists in file
+//! order on the calling thread. A referenced-by list is sorted by the load
+//! order FormID and the load order of the file of each record when it is
+//! read, as upstream, so the result does not depend on the thread count. An
+//! edit keeps the index right: a changed record builds its references again
+//! (`UpdateRefs` from `ElementChanged` and `SetParentModified`), a new or
+//! copied record builds them once its file has them, a removed record takes
+//! its references back (`DoBuildRef(True)`), and a record whose FormID
+//! changes hands its list to the override that becomes the master.
 
-use std::cell::RefCell;
-use std::collections::{BTreeSet, HashMap, HashSet};
-use std::sync::Arc;
+use std::cell::{Cell, RefCell};
+use std::collections::BTreeSet;
+use std::sync::atomic::Ordering;
+use std::sync::{Arc, Weak};
+use std::time::{Duration, Instant};
+
+use rayon::prelude::*;
 
 use crate::interface::def::Def;
-use crate::interface::element::{Element, ElementRef, MainRecord};
-use crate::interface::form_id::FormID;
+use crate::interface::element::{ElementRef, File, MainRecord};
+use crate::interface::form_id::{FileID, FormID};
+use crate::interface::globals::{complex_file_file_id, dont_cache, dont_cache_load, dont_cache_save};
 use crate::interface::misc::{EditError, Variant};
-use crate::interface::types::{DefFlag, ElementType};
+use crate::interface::types::{DefFlag, ElementType, FileState};
+use crate::threads;
 
-use super::{ElementImpl, FileImpl, MainRecordImpl, edit, value};
+use super::{
+    ElementImpl, ElementState, FileImpl, MainRecordImpl, edit, pin_record, refcache, trim_initialized_records, value,
+};
 
 thread_local! {
     /// Port of `mrTmpRefFormIDs`: the FormIDs collected by the `BuildRef`
     /// of the main record that builds on this thread (`mrsBuildingRef`).
     static BUILDING_REFS: RefCell<Option<BTreeSet<u32>>> = const { RefCell::new(None) };
+    /// Port of the `threadvar` `_FileRefsBuilding`: a file builds the
+    /// references of its records, which are reset once built.
+    static FILE_REFS_BUILDING: Cell<bool> = const { Cell::new(false) };
+}
+
+/// The reference state of a main record.
+#[derive(Default)]
+pub struct RecordRefs {
+    /// Port of `csRefsBuild`: the references were built or loaded.
+    built: bool,
+    /// Port of `cntRefsBuildAt >= eGeneration`: the record did not change
+    /// since. Cleared when the record is marked modified.
+    current: bool,
+    /// Port of `mrsBuildingRef`.
+    building: bool,
+    /// Port of `mrReferences`: the FormIDs the record refers to as its file
+    /// stores them, sorted.
+    references: Vec<FormID>,
+}
+
+/// The records that refer to a main record.
+#[derive(Default)]
+pub struct ReferencedBy {
+    /// Port of `mrReferencedBy`. The records stay alive through their
+    /// files; a record dropped from the tree drops out of the list.
+    list: Vec<Weak<MainRecordImpl>>,
+    /// Port of `mrsReferencedByUnsorted`.
+    unsorted: bool,
+}
+
+/// Port of `TwbBuildOrLoadRefResult`.
+#[allow(non_camel_case_types)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BuildOrLoadRefResult {
+    blrNone,
+    blrBuilt,
+    blrBuiltAndSaved,
+    blrLoaded,
+}
+
+impl BuildOrLoadRefResult {
+    /// The message the loader of `xeMainForm` logs for the result.
+    pub fn message(self, only_load: bool) -> &'static str {
+        match self {
+            BuildOrLoadRefResult::blrBuilt => "Done building reference info.",
+            BuildOrLoadRefResult::blrBuiltAndSaved => "Done building and saving reference info.",
+            BuildOrLoadRefResult::blrLoaded => "Done loading reference info.",
+            BuildOrLoadRefResult::blrNone if only_load => "No cached reference info available.",
+            BuildOrLoadRefResult::blrNone => "No reference info built or loaded.",
+        }
+    }
 }
 
 /// Port of `AddReferencedFromID`: `TwbElement` hands the FormID up to its
@@ -58,8 +124,8 @@ pub(crate) fn add_referenced_from_id(form_id: FormID) {
 /// `TwbContainedInElement`).
 fn is_header_element(element: &dyn ElementImpl) -> bool {
     element.value_impl().is_some_and(|value| {
-        value.vb.record_header.load(std::sync::atomic::Ordering::Relaxed)
-            || (element.get_sort_order() == -2 && value.vb.dont_save.load(std::sync::atomic::Ordering::Relaxed))
+        value.vb.record_header.load(Ordering::Relaxed)
+            || (element.get_sort_order() == -2 && value.vb.dont_save.load(Ordering::Relaxed))
     })
 }
 
@@ -148,12 +214,64 @@ fn build_ref(element: &dyn ElementImpl) {
     }
 }
 
+/// The sort key of `CompareReferencedBy` (`TwbFormID.Compare` and `CmpW32`
+/// compare without sign).
+fn referenced_by_key(record: &MainRecordImpl) -> (u32, u32) {
+    let load_order = record.file_impl().map_or(u32::MAX, |file| file.load_order() as u32);
+    (record.get_load_order_form_id().to_cardinal(), load_order)
+}
+
+impl ReferencedBy {
+    /// Port of `SortReferencedBy`, a stable merge sort as `wbMergeSortPtr`,
+    /// with `CompareReferencedBy`: by the load order FormID, then by the
+    /// load order of the file; a record that is gone sorts last. The keys are
+    /// read once per entry (`sort_by_cached_key` is stable as well).
+    fn sort(&mut self) {
+        self.unsorted = false;
+        if self.list.len() > 1 {
+            self.list.sort_by_cached_key(|entry| {
+                entry
+                    .upgrade()
+                    .map_or((u32::MAX, u32::MAX), |entry| referenced_by_key(&entry))
+            });
+        }
+    }
+
+    /// Port of `FindReferencedBy`: the binary search for the first entry
+    /// with the key of `record`.
+    /// UPSTREAM-QUIRK: the search trusts the sort, which a record whose
+    /// FormID changed after the sort no longer follows; such an entry may
+    /// not be found.
+    fn find(&self, record: &MainRecordImpl) -> Option<usize> {
+        let key = referenced_by_key(record);
+        let (mut low, mut high) = (0isize, self.list.len() as isize - 1);
+        let mut found = false;
+        while low <= high {
+            let middle = (low + high) >> 1;
+            let entry = self.list[middle as usize]
+                .upgrade()
+                .map_or((u32::MAX, u32::MAX), |entry| referenced_by_key(&entry));
+            match entry.cmp(&key) {
+                std::cmp::Ordering::Less => low = middle + 1,
+                ordering => {
+                    high = middle - 1;
+                    if ordering == std::cmp::Ordering::Equal {
+                        found = true;
+                        low = middle;
+                    }
+                }
+            }
+        }
+        found.then_some(low as usize)
+    }
+}
+
 impl MainRecordImpl {
-    /// Port of `TwbMainRecord.BuildRef` through `DoBuildRef`: the FormIDs
-    /// of the files the record's elements refer to, sorted, as the record's
-    /// file stores them (`mrReferences`). A record without a definition or
-    /// whose definition is excluded refers to nothing.
-    pub fn build_ref(self: &Arc<Self>) -> Vec<FormID> {
+    /// The FormIDs the elements of the record refer to, sorted, as the
+    /// record's file stores them: the walk of `TwbMainRecord.DoBuildRef`
+    /// (`inherited BuildRef`) without the bookkeeping. A record without a
+    /// definition or whose definition is excluded refers to nothing.
+    pub fn collect_references(self: &Arc<Self>) -> Vec<FormID> {
         let Some(def) = &self.mr_def else { return Vec::new() };
         if def.def_base().def_flags.contains(DefFlag::dfExcludeFromBuildRef) {
             return Vec::new();
@@ -175,23 +293,158 @@ impl MainRecordImpl {
             .collect()
     }
 
-    /// Port of `TwbMainRecord.CompareExchangeFormID`: every element that can
-    /// hold a FormID replaces the load order FormID `old` by `new`. Returns
-    /// whether anything changed.
-    pub fn compare_exchange_form_id(self: &Arc<Self>, old: FormID, new: FormID) -> Result<bool, EditError> {
-        self.do_init();
-        container_compare_exchange(&**self, old, new)
+    /// The file of the record (`_File`).
+    pub fn record_file(&self) -> Option<Arc<FileImpl>> {
+        self.file_impl()
     }
 
-    /// The process of `DoBuildRef` for one collected FormID: the record it
+    /// Port of `mrReferences` (`GetReference`, `ReferencesCount`): the
+    /// FormIDs the record refers to as its file stores them, empty until
+    /// the references are built.
+    pub fn references(&self) -> Vec<FormID> {
+        self.mr_refs.lock().unwrap().references.clone()
+    }
+
+    /// Port of `csRefsBuild` of a main record.
+    pub fn refs_built(&self) -> bool {
+        self.mr_refs.lock().unwrap().built
+    }
+
+    /// The `Inc(eGeneration)` of `SetModified`: the references are to be
+    /// built again.
+    pub(crate) fn mark_refs_stale(&self) {
+        self.mr_refs.lock().unwrap().current = false;
+    }
+
+    /// Port of `TwbMainRecord.BuildRef`: the references are built again
+    /// when the record changed since they were built.
+    pub fn build_ref(self: &Arc<Self>) {
+        let Some(def) = &self.mr_def else { return };
+        if def.def_base().def_flags.contains(DefFlag::dfExcludeFromBuildRef) {
+            return;
+        }
+        {
+            let refs = self.mr_refs.lock().unwrap();
+            if refs.built && refs.current {
+                return;
+            }
+        }
+        self.do_build_ref(false);
+        if FILE_REFS_BUILDING.with(Cell::get) && !self.base.has_state(ElementState::esModified) {
+            self.reset();
+        }
+    }
+
+    /// Port of `UpdateRefs`: a record whose references were built builds
+    /// them again after a change.
+    /// UPSTREAM-QUIRK: upstream also runs this while the record's own init
+    /// changes it (the `AfterLoad` fixes of a record whose references came
+    /// from the cache), and walks the elements built so far; the port waits
+    /// for the next change or `BuildRef`, which sees the whole record.
+    pub fn update_refs(self: &Arc<Self>) {
+        if !self.refs_built() || self.mr_init.is_running_here() {
+            return;
+        }
+        self.build_ref();
+    }
+
+    /// Port of `DoBuildRef`: the references are collected again (or, with
+    /// `remove`, dropped), and the record leaves the referenced-by lists of
+    /// the records it no longer refers to and joins the lists of the new
+    /// ones. Returns whether any list changed.
+    pub(crate) fn do_build_ref(self: &Arc<Self>, remove: bool) -> bool {
+        let Some(def) = &self.mr_def else { return false };
+        if def.def_base().def_flags.contains(DefFlag::dfExcludeFromBuildRef) {
+            return false;
+        }
+        {
+            let mut refs = self.mr_refs.lock().unwrap();
+            if refs.building {
+                return false;
+            }
+            refs.building = true;
+        }
+        let new = if remove {
+            let mut refs = self.mr_refs.lock().unwrap();
+            refs.built = false;
+            refs.current = false;
+            Vec::new()
+        } else {
+            let new = self.collect_references();
+            let mut refs = self.mr_refs.lock().unwrap();
+            refs.built = true;
+            refs.current = true;
+            new
+        };
+        let old = std::mem::take(&mut self.mr_refs.lock().unwrap().references);
+        let changed = self.apply_references(&old, &new, |form_id| self.resolve_reference(form_id));
+        let mut refs = self.mr_refs.lock().unwrap();
+        refs.references = new;
+        refs.building = false;
+        changed
+    }
+
+    /// The merge of `DoBuildRef`: `ProcessRef` for every FormID only in
+    /// `new` (added) or only in `old` (removed), both sorted.
+    fn apply_references(
+        self: &Arc<Self>,
+        old: &[FormID],
+        new: &[FormID],
+        mut resolve: impl FnMut(FormID) -> Option<Arc<MainRecordImpl>>,
+    ) -> bool {
+        let mut changed = false;
+        let mut process = |form_id: FormID, add: bool| {
+            changed = true;
+            if let Some(target) = resolve(form_id) {
+                if add {
+                    target.add_referenced_by(self);
+                } else {
+                    target.remove_referenced_by(self);
+                }
+            }
+        };
+        let (mut i, mut j) = (0, 0);
+        while i < new.len() && j < old.len() {
+            match new[i].to_cardinal().cmp(&old[j].to_cardinal()) {
+                std::cmp::Ordering::Equal => {
+                    i += 1;
+                    j += 1;
+                }
+                std::cmp::Ordering::Less => {
+                    process(new[i], true);
+                    i += 1;
+                }
+                std::cmp::Ordering::Greater => {
+                    process(old[j], false);
+                    j += 1;
+                }
+            }
+        }
+        for form_id in &new[i..] {
+            process(*form_id, true);
+        }
+        for form_id in &old[j..] {
+            process(*form_id, false);
+        }
+        changed
+    }
+
+    /// The process of `ProcessRef` for one collected FormID: the record it
     /// resolves to through the master of the record's file its FileID
     /// names, or through the file itself for a FileID past the masters.
+    /// With `wbComplexFileFileID` the masters of the FileID's module type
+    /// are counted.
     pub fn resolve_reference(&self, form_id: FormID) -> Option<Arc<MainRecordImpl>> {
         let file = self.file_impl()?;
         let masters = file.masters();
-        let target = if crate::interface::globals::complex_file_file_id() {
-            // The slot among the masters of the module type of the FileID.
-            match usize::try_from(file.get_master_index_for_file_id(form_id.file_id())) {
+        let target = if complex_file_file_id() {
+            let file_id = form_id.file_id();
+            if !file_id.is_valid() || (file_id.is_full_slot() && file_id.full_slot() > FileID::max_full_slot()) {
+                return None;
+            }
+            // The slot among the masters of the module type of the FileID; a
+            // slot past them is the file itself.
+            match usize::try_from(file.get_master_index_for_file_id(file_id)) {
                 Ok(index) if index < masters.len() => masters[index].clone(),
                 _ => file,
             }
@@ -206,6 +459,360 @@ impl MainRecordImpl {
         let form_id = form_id.change_file_id(target.get_file_file_id());
         target.record_by_form_id(form_id, true, true)
     }
+
+    /// Port of `AddReferencedBy`: the master keeps the list.
+    pub fn add_referenced_by(self: &Arc<Self>, record: &Arc<MainRecordImpl>) {
+        if let Some(master) = self.master() {
+            return master.add_referenced_by(record);
+        }
+        let mut list = self.mr_referenced_by.lock().unwrap();
+        list.list.push(Arc::downgrade(record));
+        list.unsorted = true;
+    }
+
+    /// Port of `RemoveReferencedBy`.
+    pub fn remove_referenced_by(self: &Arc<Self>, record: &Arc<MainRecordImpl>) {
+        if let Some(master) = self.master() {
+            return master.remove_referenced_by(record);
+        }
+        let mut list = self.mr_referenced_by.lock().unwrap();
+        if list.unsorted {
+            list.sort();
+        }
+        if let Some(index) = list.find(record) {
+            list.list.remove(index);
+            if list.list.is_empty() {
+                list.list = Vec::new();
+            }
+        }
+    }
+
+    /// Port of `ReferencedByCount`: the master's.
+    pub fn referenced_by_count(&self) -> usize {
+        if let Some(master) = self.master() {
+            return master.referenced_by_count();
+        }
+        self.mr_referenced_by.lock().unwrap().list.len()
+    }
+
+    /// Port of `ReferencedBy[i]` for every `i`: the records that refer to
+    /// the master of this record or to one of its overrides, sorted by
+    /// their load order FormID and the load order of their file. A record
+    /// that refers twice (two FormIDs that resolve to the same record) is
+    /// listed twice, as upstream.
+    pub fn referenced_by(&self) -> Vec<Arc<MainRecordImpl>> {
+        if let Some(master) = self.master() {
+            return master.referenced_by();
+        }
+        let mut list = self.mr_referenced_by.lock().unwrap();
+        if list.unsorted {
+            list.sort();
+        }
+        list.list.iter().filter_map(Weak::upgrade).collect()
+    }
+
+    /// The list of `mrReferencedBy`, taken for `YouAreTheMaster`.
+    pub(crate) fn take_referenced_by(&self) -> ReferencedBy {
+        std::mem::take(&mut *self.mr_referenced_by.lock().unwrap())
+    }
+
+    /// The `mrReferencedBy := aReferencedBy` of `YouAreTheMaster`.
+    pub(crate) fn set_referenced_by(&self, list: ReferencedBy) {
+        *self.mr_referenced_by.lock().unwrap() = list;
+    }
+
+    /// Port of `cntRefsBuildAt < eGeneration`: the record changed since its
+    /// references were built.
+    pub(crate) fn refs_out_of_date(&self) -> bool {
+        !self.mr_refs.lock().unwrap().current
+    }
+
+    /// The part of `MastersUpdated` for `mrReferences`: every FormID is
+    /// fixed up, and the list sorted again when one changed. `None` when the
+    /// references are not built, else whether one changed.
+    pub(crate) fn update_references(&self, fixup: impl Fn(FormID) -> FormID) -> Option<bool> {
+        let mut refs = self.mr_refs.lock().unwrap();
+        if !refs.built {
+            return None;
+        }
+        let mut found = false;
+        for form_id in refs.references.iter_mut() {
+            let new = fixup(*form_id);
+            if new != *form_id {
+                found = true;
+                *form_id = new;
+            }
+        }
+        if found {
+            refs.references.sort_by_key(|form_id| form_id.to_cardinal());
+        }
+        Some(found)
+    }
+
+    /// The `LoadRefsFromStream` part of a record: the references from the
+    /// cache, as the file stores them.
+    pub(crate) fn set_references_from_cache(&self, references: Vec<FormID>) {
+        let mut refs = self.mr_refs.lock().unwrap();
+        refs.references = references;
+        refs.built = true;
+        refs.current = true;
+    }
+
+    /// Port of `TwbMainRecord.CompareExchangeFormID`: every element that can
+    /// hold a FormID replaces the load order FormID `old` by `new`, and the
+    /// references are built again when they were. Returns whether anything
+    /// changed.
+    pub fn compare_exchange_form_id(self: &Arc<Self>, old: FormID, new: FormID) -> Result<bool, EditError> {
+        self.do_init();
+        let result = container_compare_exchange(&**self, old, new);
+        // `if csRefsBuild in cntStates then BuildRef`: another record may
+        // have the new FormID already.
+        if self.refs_built() {
+            self.build_ref();
+        }
+        result
+    }
+}
+
+impl FileImpl {
+    /// Adds a state to `flStates`.
+    pub(crate) fn include_file_state(&self, state: FileState) {
+        self.fl_states.write().unwrap().include(state);
+    }
+
+    /// Port of `fsRefsBuild`: the references of the file were built or
+    /// loaded.
+    pub fn refs_built(&self) -> bool {
+        self.get_file_states().contains(FileState::fsRefsBuild)
+    }
+
+    /// Port of `TwbFile.BuildRef`: the references of a file whose
+    /// references are built already are built again for the records that
+    /// changed since; the others are built (or loaded from the cache).
+    pub fn build_ref(self: &Arc<Self>) -> Result<BuildOrLoadRefResult, String> {
+        if self.get_file_states().contains(FileState::fsIsDeltaPatch) {
+            return Ok(BuildOrLoadRefResult::blrNone);
+        }
+        Ok(build_or_load_refs(std::slice::from_ref(self), false)?[0])
+    }
+
+    /// The `inherited BuildRef` of a file whose references are built: every
+    /// record builds its references again if it changed.
+    fn rebuild_changed_refs(self: &Arc<Self>) {
+        let outer = FILE_REFS_BUILDING.with(|building| building.replace(true));
+        for record in self.records() {
+            record.build_ref();
+        }
+        FILE_REFS_BUILDING.with(|building| building.set(outer));
+    }
+}
+
+/// What the build of one record leaves for the apply and the cache.
+pub(crate) struct Collected {
+    pub references: Vec<FormID>,
+    targets: Vec<Option<Arc<MainRecordImpl>>>,
+    /// The time the build took, which decides whether the cache is saved.
+    elapsed: Duration,
+    /// The record values the cache file keeps that need the elements.
+    pub cache: refcache::RecordCacheData,
+}
+
+/// The records whose builds may stay built while the workers build the
+/// references, per thread: the records the definitions read often.
+const KEPT_RECORDS_PER_THREAD: usize = 256;
+
+/// The records of one batch; the batches run one after the other, and a
+/// batch is built again on one thread when two of its builds needed each
+/// other (`threads::init_cycles`).
+const BATCH_RECORDS: usize = 4096;
+
+/// Builds the references of one record for [`build_or_load_refs`]: the
+/// record is built, its FormIDs collected and resolved, the values of the
+/// cache read, and the record reset again unless it is modified (the
+/// `_FileRefsBuilding` reset of `TwbMainRecord.BuildRef`).
+fn collect_one(record: &Arc<MainRecordImpl>, kept: usize) -> Collected {
+    let start = Instant::now();
+    let _pin = pin_record(record);
+    let (references, cache) = {
+        let _read = threads::read_guard();
+        let references = record.collect_references();
+        let cache = refcache::RecordCacheData::read(record);
+        (references, cache)
+    };
+    let targets = references
+        .iter()
+        .map(|form_id| record.resolve_reference(*form_id))
+        .collect();
+    if !record.base.has_state(ElementState::esModified) {
+        record.reset();
+    }
+    drop(_pin);
+    trim_initialized_records(kept, None);
+    Collected {
+        references,
+        targets,
+        elapsed: start.elapsed(),
+        cache,
+    }
+}
+
+/// Builds the references of `records` on the worker threads (all of them
+/// on the calling thread without workers); the result is in the order of
+/// `records` and does not depend on the thread count.
+fn collect_all(records: &[Arc<MainRecordImpl>]) -> Vec<Collected> {
+    let Some(pool) = threads::pool() else {
+        // One thread, with the stack of the workers: a record resolves
+        // deeply through the definitions.
+        return std::thread::scope(|scope| {
+            std::thread::Builder::new()
+                .stack_size(threads::STACK_SIZE)
+                .spawn_scoped(scope, || {
+                    records
+                        .iter()
+                        .map(|record| collect_one(record, KEPT_RECORDS_PER_THREAD))
+                        .collect()
+                })
+                .expect("the reference thread")
+                .join()
+                .expect("the reference thread panicked")
+        });
+    };
+    let kept = KEPT_RECORDS_PER_THREAD * threads::threads();
+    let mut result = Vec::with_capacity(records.len());
+    for batch in records.chunks(BATCH_RECORDS) {
+        let cycles = threads::init_cycles();
+        let collected: Vec<Collected> = pool.install(|| {
+            batch
+                .par_iter()
+                .with_max_len(8)
+                .map(|record| collect_one(record, kept))
+                .collect()
+        });
+        if threads::init_cycles() == cycles {
+            result.extend(collected);
+            continue;
+        }
+        // Two builds needed each other: what they saw of each other could
+        // depend on timing, so the batch is built again on this thread
+        // from records that are not built.
+        eprintln!(
+            "Warning: two records needed each other while they were built; building the references of the batch again on one thread"
+        );
+        for record in batch {
+            record.reset();
+        }
+        trim_initialized_records(0, None);
+        result.extend(batch.iter().map(|record| collect_one(record, KEPT_RECORDS_PER_THREAD)));
+    }
+    result
+}
+
+/// Port of `BuildOrLoadRef` for several files at once, as the loader of
+/// `xeMainForm` runs it for every loaded file: the references of a file are
+/// loaded from its cache file when there is one, else built (unless
+/// `only_load`) and saved to the cache when the file has more than
+/// `wbCacheRecordsThreshold` records or took more than 2 seconds. The
+/// records of all the files to build are built on the worker threads (see
+/// the module documentation). A file whose references are built already
+/// builds those of its changed records again. Returns the result of each
+/// file.
+pub fn build_or_load_refs(files: &[Arc<FileImpl>], only_load: bool) -> Result<Vec<BuildOrLoadRefResult>, String> {
+    let mut results = vec![BuildOrLoadRefResult::blrNone; files.len()];
+    // The files to build, with the cache file to save when they qualify.
+    let mut to_build: Vec<(usize, Option<std::path::PathBuf>)> = Vec::new();
+    let mut loaded: Vec<(usize, Vec<refcache::CachedRecord>)> = Vec::new();
+    for (index, file) in files.iter().enumerate() {
+        let states = file.get_file_states();
+        let modified = file.base.has_state(ElementState::esModified);
+        let internal = file.base.has_state(ElementState::esInternalModified);
+        if !dont_cache() && !states.contains(FileState::fsRefsBuild) && (!modified || internal) {
+            let cache_file = refcache::cache_file_name(file);
+            if !dont_cache_load() && cache_file.as_ref().is_some_and(|path| path.is_file()) {
+                let cache_file = cache_file.expect("checked above");
+                file.include_file_state(FileState::fsRefsBuild);
+                let records = refcache::load(file, &cache_file)?;
+                loaded.push((index, records));
+                results[index] = BuildOrLoadRefResult::blrLoaded;
+            } else if !only_load {
+                file.include_file_state(FileState::fsRefsBuild);
+                to_build.push((index, cache_file.filter(|_| !dont_cache_save())));
+                results[index] = BuildOrLoadRefResult::blrBuilt;
+            }
+        } else if !only_load {
+            if states.contains(FileState::fsRefsBuild) {
+                file.rebuild_changed_refs();
+            } else {
+                file.include_file_state(FileState::fsRefsBuild);
+                to_build.push((index, None));
+            }
+            results[index] = BuildOrLoadRefResult::blrBuilt;
+        }
+    }
+
+    // The references from the caches: resolved on the workers, added on
+    // this thread.
+    for (index, records) in loaded {
+        let file = &files[index];
+        let file_records = file.records();
+        let resolve = |(record, cached): (&Arc<MainRecordImpl>, &refcache::CachedRecord)| {
+            cached
+                .references
+                .iter()
+                .map(|form_id| record.resolve_reference(*form_id))
+                .collect::<Vec<_>>()
+        };
+        let targets: Vec<Vec<Option<Arc<MainRecordImpl>>>> = match threads::pool() {
+            Some(pool) => pool.install(|| file_records.par_iter().zip(records.par_iter()).map(resolve).collect()),
+            None => file_records.iter().zip(records.iter()).map(resolve).collect(),
+        };
+        for ((record, cached), targets) in file_records.iter().zip(records).zip(targets) {
+            record.set_references_from_cache(cached.references);
+            record.set_names_from_cache(cached.editor_id, cached.full_name);
+            for target in targets.into_iter().flatten() {
+                target.add_referenced_by(record);
+            }
+        }
+    }
+
+    // The records of the files to build, in file order.
+    let records: Vec<Arc<MainRecordImpl>> = to_build.iter().flat_map(|(index, _)| files[*index].records()).collect();
+    let collected = collect_all(&records);
+    let mut collected = collected.into_iter();
+    for (index, cache_file) in &to_build {
+        let file = &files[*index];
+        let file_records = file.records();
+        let mut elapsed = Duration::ZERO;
+        let mut cache = Vec::with_capacity(file_records.len());
+        for record in &file_records {
+            let Collected {
+                references,
+                targets,
+                elapsed: record_elapsed,
+                cache: record_cache,
+            } = collected.next().expect("one result per record");
+            elapsed += record_elapsed;
+            let old = std::mem::take(&mut record.mr_refs.lock().unwrap().references);
+            record.apply_references(&old, &references, |form_id| {
+                // The targets resolved on the worker, by the position in
+                // `references`; a FormID only in `old` resolves now.
+                match references.binary_search_by_key(&form_id.to_cardinal(), |id| id.to_cardinal()) {
+                    Ok(position) => targets[position].clone(),
+                    Err(_) => record.resolve_reference(form_id),
+                }
+            });
+            cache.push((references.clone(), record_cache));
+            record.set_references_from_cache(references);
+        }
+        if let Some(cache_file) = cache_file
+            && (file_records.len() > crate::interface::globals::cache_records_threshold() as usize
+                || elapsed > refcache::CACHE_TIME_THRESHOLD)
+            && refcache::save(file, cache_file, &file_records, &cache).is_ok()
+        {
+            // Errors while saving the cache are ignored, as upstream.
+            results[*index] = BuildOrLoadRefResult::blrBuiltAndSaved;
+        }
+    }
+    Ok(results)
 }
 
 /// Port of `TwbContainer.CompareExchangeFormID`: the elements that can hold
@@ -274,115 +881,4 @@ fn compare_exchange(element: &dyn ElementImpl, old: FormID, new: FormID) -> Resu
     })();
     edit::end_update(element);
     result
-}
-
-/// The records that refer to a set of records, found by scanning the files
-/// that can see their FormIDs: the stand-in for upstream's `ReferencedBy`
-/// until the reference index of phase 4 exists.
-pub struct ReferenceScan {
-    /// The referencing records by the master (`MasterOrSelf`) they refer to,
-    /// keyed by its element ID, in file and FormID order.
-    referenced_by: HashMap<usize, Vec<Arc<MainRecordImpl>>>,
-}
-
-impl ReferenceScan {
-    /// Finds the records of every loaded file that refer to one of
-    /// `targets` or to one of their overrides.
-    pub fn new(targets: &[Arc<MainRecordImpl>]) -> Self {
-        let masters: Vec<Arc<MainRecordImpl>> = targets.iter().map(|record| record.master_or_self_impl()).collect();
-        let master_ids: HashSet<usize> = masters.iter().map(|master| master.get_element_id()).collect();
-        let mut referenced_by: HashMap<usize, Vec<Arc<MainRecordImpl>>> = HashMap::new();
-        let mut files: Vec<Arc<FileImpl>> = super::FILES_MAP.read().unwrap().clone();
-        files.sort_by_key(|file| file.load_order());
-        for file in files {
-            // The FormIDs of the targets as this file stores them; a file
-            // that cannot see a target's file cannot refer to it.
-            let needles: HashSet<u32> = masters
-                .iter()
-                .filter_map(|master| {
-                    let form_id = master.get_load_order_form_id();
-                    FileImpl::load_order_form_id_to_file_form_id(&file, form_id)
-                })
-                .map(FormID::to_cardinal)
-                .collect();
-            if needles.is_empty() {
-                continue;
-            }
-            for record in file.records() {
-                if !record.may_hold_any(&needles) {
-                    continue;
-                }
-                let was_initialized = record.container.element_count() > 0;
-                let mut found: Vec<usize> = Vec::new();
-                for form_id in record.build_ref() {
-                    if !needles.contains(&form_id.to_cardinal()) {
-                        continue;
-                    }
-                    let Some(target) = record.resolve_reference(form_id) else {
-                        continue;
-                    };
-                    let id = target.master_or_self_impl().get_element_id();
-                    if master_ids.contains(&id) && !found.contains(&id) {
-                        found.push(id);
-                    }
-                }
-                for id in found {
-                    referenced_by.entry(id).or_default().push(record.clone());
-                }
-                if !was_initialized {
-                    record.reset();
-                }
-            }
-        }
-        ReferenceScan { referenced_by }
-    }
-
-    /// The records that refer to `record` or to its master or overrides
-    /// (`MasterOrSelf.ReferencedBy`).
-    pub fn referenced_by(&self, record: &Arc<MainRecordImpl>) -> Vec<Arc<MainRecordImpl>> {
-        let id = record.master_or_self_impl().get_element_id();
-        self.referenced_by.get(&id).cloned().unwrap_or_default()
-    }
-}
-
-impl MainRecordImpl {
-    /// Whether the record may refer to one of the file FormIDs `needles`:
-    /// a modified record always may, an unmodified one only when its data
-    /// holds the four bytes of one of them.
-    fn may_hold_any(&self, needles: &HashSet<u32>) -> bool {
-        if self.base.has_state(super::ElementState::esModified) {
-            return true;
-        }
-        let compressed;
-        let data: &[u8] = if self.mr_struct().flags.is_compressed() {
-            match self.decompress_uncached() {
-                Some(data) => {
-                    compressed = data;
-                    &compressed
-                }
-                // Undecidable: let the elements decide.
-                None => return true,
-            }
-        } else {
-            match self.raw_data() {
-                Some(data) => data,
-                None => return false,
-            }
-        };
-        data.windows(4)
-            .any(|window| needles.contains(&u32::from_le_bytes([window[0], window[1], window[2], window[3]])))
-    }
-
-    /// The decompressed data of a compressed record, without keeping it.
-    fn decompress_uncached(&self) -> Option<Vec<u8>> {
-        let raw = self.raw_data()?;
-        let length = u32::from_le_bytes(raw.get(..4)?.try_into().ok()?) as usize;
-        let mut data = vec![0u8; length];
-        if length > 0 {
-            xedit_io::CompressionType::ZLib
-                .decompress(raw.get(4..)?, &mut data)
-                .ok()?;
-        }
-        Some(data)
-    }
 }

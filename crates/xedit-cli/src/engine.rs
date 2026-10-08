@@ -16,6 +16,10 @@ pub fn open_session(game: Option<&str>, load: &[String], edit: bool) -> Result<S
         None if load.is_empty() => Session::default(),
         None => return Err(CommandError::new("invalid_params", "--load needs --game")),
     };
+    if game.is_some() {
+        // The cache path follows the data folder of the loaded plugins.
+        xedit_session::refs::init_cache_path();
+    }
     session.allow_edit(edit);
     Ok(session)
 }

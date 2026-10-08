@@ -428,6 +428,10 @@ impl GroupRecordImpl {
             record.end_update();
             result?;
         }
+        // `if csRefsBuild in _File.ContainerStates then Result.BuildRef`.
+        if file.refs_built() {
+            record.build_ref();
+        }
         Ok(Some(record as ElementRef))
     }
 }
@@ -639,6 +643,9 @@ impl MainRecordImpl {
             mr_precombined: std::sync::OnceLock::new(),
             mr_ofst_removed: std::sync::atomic::AtomicBool::new(false),
             mr_duplicate: std::sync::atomic::AtomicBool::new(false),
+            mr_refs: Default::default(),
+            mr_referenced_by: Default::default(),
+            mr_grid_cell: Default::default(),
         });
         let Some(mr_def) = record.mr_def.clone() else {
             return Err(format!("Error: unknown record type {signature}"));
@@ -839,13 +846,19 @@ impl MainRecordImpl {
         }
         let mut overrides = vec![self.clone()];
         overrides.extend(self.overrides());
-        master.you_are_the_master(&overrides);
+        master.you_are_the_master(&overrides, self.take_referenced_by());
         self.mr_overrides.write().unwrap().clear();
     }
 
     /// Port of `YouAreTheMaster`: this record, which was overridden by
-    /// none, becomes the master of `overrides`.
-    pub(crate) fn you_are_the_master(self: &Arc<Self>, overrides: &[Arc<MainRecordImpl>]) {
+    /// none, becomes the master of `overrides` and takes the referenced-by
+    /// list of the old master.
+    pub(crate) fn you_are_the_master(
+        self: &Arc<Self>,
+        overrides: &[Arc<MainRecordImpl>],
+        referenced_by: super::refs::ReferencedBy,
+    ) {
+        self.set_referenced_by(referenced_by);
         *self.mr_master.write().unwrap() = None;
         let mut own = self.mr_overrides.write().unwrap();
         own.clear();
@@ -869,6 +882,8 @@ impl MainRecordImpl {
     /// group goes, the record leaves its file, and an override of it takes
     /// its place as the master of the others.
     pub(crate) fn remove_from_file(self: &Arc<Self>) -> Result<(), EditError> {
+        // The record takes its references back (`DoBuildRef(True)`).
+        self.do_build_ref(true);
         if let Some(group) = self.child_group() {
             group.remove();
         }
@@ -879,13 +894,15 @@ impl MainRecordImpl {
             Some(master) => master.remove_override(self),
             None => {
                 let overrides = self.overrides();
+                let referenced_by = self.take_referenced_by();
                 if let Some(first) = overrides.first() {
-                    first.you_are_the_master(&overrides);
+                    first.you_are_the_master(&overrides, referenced_by);
                 }
             }
         }
         *self.mr_master.write().unwrap() = None;
         self.mr_overrides.write().unwrap().clear();
+        self.take_referenced_by();
         self.clear_fixed_form_id();
         Ok(())
     }

@@ -338,6 +338,9 @@ string_globals! {
     game_steam_id, set_game_steam_id, wbGameSteamID;
     program_path, set_program_path, wbProgramPath;
     data_path, set_data_path, wbDataPath;
+    /// The folder of the reference cache files, with a trailing separator;
+    /// empty for none.
+    cache_path, set_cache_path, wbCachePath;
     the_game_ini_file_name, set_the_game_ini_file_name, wbTheGameIniFileName;
     custom_ini_file_name, set_custom_ini_file_name, wbCustomIniFileName;
 }

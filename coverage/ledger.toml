@@ -1135,8 +1135,10 @@ status = "pending"
 source = "lvReferencedByColumnClick"
 
 [gui."xEdit/xeMainForm.dfm:lvReferencedBy:OnData"]
-status = "pending"
+status = "covered"
+command = "refs.get"
 source = "lvReferencedByLoadData"
+note = "The rows of the Referenced By tab: ReferencedBy of the master of the selected record."
 
 [gui."xEdit/xeMainForm.dfm:lvReferencedBy:OnDataStateChange"]
 status = "pending"
@@ -1296,8 +1298,10 @@ status = "pending"
 source = "mniNavBuildReachableClick"
 
 [gui."xEdit/xeMainForm.dfm:mniNavBuildRef:OnClick"]
-status = "pending"
+status = "covered"
+command = "refs.build"
 source = "mniNavBuildRefClick"
+note = "refs.build with file builds the references of one file again (TwbFile.BuildRef); without it, every loaded file."
 
 [gui."xEdit/xeMainForm.dfm:mniNavCellChildNotVWD:OnClick"]
 status = "pending"
@@ -2855,8 +2859,10 @@ status = "pending"
 source = "xDump.dpr"
 
 [switch.c]
-status = "pending"
+status = "covered"
+command = "refs.build"
 source = "xEdit/xeInit.pas"
+note = "The global CLI option --cache-path: the folder of the reference cache files."
 
 [switch.check]
 status = "pending"
@@ -2915,16 +2921,22 @@ status = "pending"
 source = "xDump.dpr"
 
 [switch.dontcache]
-status = "pending"
+status = "covered"
+command = "refs.build"
 source = "xEdit/xeInit.pas"
+note = "The global CLI option --dont-cache."
 
 [switch.dontcacheload]
-status = "pending"
+status = "covered"
+command = "refs.build"
 source = "xEdit/xeInit.pas"
+note = "The global CLI option --dont-cache-load."
 
 [switch.dontcachesave]
-status = "pending"
+status = "covered"
+command = "refs.build"
 source = "xEdit/xeInit.pas"
+note = "The global CLI option --dont-cache-save."
 
 [switch.dontremoveoffsetdata]
 status = "pending"
@@ -3141,8 +3153,10 @@ status = "pending"
 source = "xDump.dpr"
 
 [switch.nobuildrefs]
-status = "pending"
+status = "covered"
+command = "refs.build"
 source = "xEdit/xeInit.pas"
+note = "The CLI never builds the references on load: a command that needs them (refs.get, formids.change, formids.renumber) or refs.build builds them on first use."
 
 [switch.nofillpnam]
 status = "pending"
@@ -4155,8 +4169,10 @@ status = "pending"
 source = "IwbElement_BeginUpdate"
 
 [script."xejviScriptAdapterElement:cUnit.BuildRef:function"]
-status = "pending"
+status = "covered"
+command = "refs.build"
 source = "IwbElement_BuildRef"
+note = "refs.build with file runs TwbFile.BuildRef; the BuildRef of one record runs after every edit of it."
 
 [script."xejviScriptAdapterElement:cUnit.CanContainFormIDs:function"]
 status = "pending"
@@ -5761,19 +5777,23 @@ status = "pending"
 source = "IwbMainRecord_PrecombinedMesh"
 
 [script."xejviScriptAdapterRecord:cUnit.ReferencedByCount:function"]
-status = "pending"
+status = "covered"
+command = "refs.get"
 source = "IwbMainRecord_ReferencedByCount"
 
 [script."xejviScriptAdapterRecord:cUnit.ReferencedByIndex:function"]
-status = "pending"
+status = "covered"
+command = "refs.get"
 source = "IwbMainRecord_ReferencedByIndex"
 
 [script."xejviScriptAdapterRecord:cUnit.ReferencesByIndex:function"]
-status = "pending"
+status = "covered"
+command = "refs.get"
 source = "IwbMainRecord_ReferencesByIndex"
 
 [script."xejviScriptAdapterRecord:cUnit.ReferencesCount:function"]
-status = "pending"
+status = "covered"
+command = "refs.get"
 source = "IwbMainRecord_ReferencesCount"
 
 [script."xejviScriptAdapterRecord:cUnit.SetEditorID:function"]

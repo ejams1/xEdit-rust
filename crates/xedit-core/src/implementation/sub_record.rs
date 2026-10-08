@@ -22,7 +22,8 @@ use crate::interface::misc::{EditError, Variant, progress};
 use crate::interface::sub_record::RecordMemberDef;
 use crate::interface::sub_record_group::RecordDef;
 use crate::interface::types::{
-    ASSIGN_ADD, ASSIGN_THIS, CallbackType, ConflictPriority, DefFlag, DefType, ElementType, Signature, TriBool,
+    ASSIGN_ADD, ASSIGN_THIS, CallbackType, ConflictPriority, DefFlag, DefType, ElementType, KnownSubRecord, PascalEnum,
+    Signature, TriBool,
 };
 
 use super::edit::{self, Storage};
@@ -250,7 +251,13 @@ impl SubRecordImpl {
     /// loaded order when `MastersUpdated` changes an entry, which sorting
     /// the elements on init does not give.
     pub fn do_init(&self) {
-        self.sr_init.run(|| {
+        self.sr_init.run(|| self.init());
+    }
+
+    /// The body of `TwbSubRecord.Init`, which `SetDataSize` runs again
+    /// while the init runs (from an `AfterLoad` callback).
+    fn init(&self) {
+        {
             if self.skipped() {
                 return;
             }
@@ -297,7 +304,7 @@ impl SubRecordImpl {
             }
             // `srDef.AfterLoad(Self)`.
             def.after_load(&self_ref);
-        });
+        }
     }
 
     /// Port of the `wbAssignAdd` branch of `TwbSubRecord.AssignInternal`
@@ -1597,6 +1604,9 @@ pub(super) fn init_main_record(record: &Arc<MainRecordImpl>) {
     let mut current_def_pos = 0usize;
     let mut current_rec_pos = 0usize;
     let mut found_error = false;
+    // `Exclude(mrStates, mrsGridCellChecked)`.
+    let quick_init_limit = mr_def.get_quick_init_limit();
+    record.mr_grid_cell.lock().unwrap().checked = false;
     loop {
         let elements = record.container.elements();
         let Some(element) = elements.get(current_rec_pos) else {
@@ -1653,6 +1663,11 @@ pub(super) fn init_main_record(record: &Arc<MainRecordImpl>) {
                 continue;
             }
         }
+        // Past `QuickInitLimit` the grid cell counts as checked (where the
+        // quick init of upstream stops).
+        if current_def_pos as i32 > quick_init_limit {
+            record.mr_grid_cell.lock().unwrap().checked = true;
+        }
         if current_def.get_def_type() == DefType::dtSubRecordUnion {
             current_def = current_def
                 .as_record_def()
@@ -1667,6 +1682,14 @@ pub(super) fn init_main_record(record: &Arc<MainRecordImpl>) {
                     record.cache_editor_id(mr_def.get_editor_id(element));
                 } else if signature == known[1] {
                     record.set_full_name(element.get_edit_value());
+                } else if signature == known[KnownSubRecord::ksrGridCell.ord()]
+                    && !record.mr_grid_cell.lock().unwrap().checked
+                {
+                    // `mrsHasGridCell` and `mrGridCell` from the subrecord.
+                    let cell = mr_def.get_grid_cell(element);
+                    let mut grid_cell = record.mr_grid_cell.lock().unwrap();
+                    grid_cell.cell = cell.map(|cell| (cell.x, cell.y));
+                    grid_cell.checked = true;
                 }
             }
             DefType::dtSubRecordArray => {
@@ -1950,8 +1973,15 @@ impl ElementImpl for SubRecordImpl {
         self.sr_init.is_running()
     }
 
+    /// Port of `if csInit in cntStates then begin Reset; Init; end` of
+    /// `SetDataSize`: inside the init of the subrecord itself (an
+    /// `AfterLoad` that resizes it), the init runs again at once.
     fn reset_and_init(&self) {
         self.container.release_elements();
+        if self.sr_init.is_running_here() {
+            self.init();
+            return;
+        }
         self.sr_init.reset();
         self.do_init();
     }

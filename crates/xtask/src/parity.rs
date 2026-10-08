@@ -59,6 +59,7 @@ use crate::memory::{self, Budget, GIB, Limit};
 mod conflicts;
 mod bsarch;
 mod gui;
+mod oracle_refs;
 mod hidden;
 mod lodgen;
 mod nif;
@@ -223,6 +224,8 @@ struct Options {
     /// `parity conflicts --record <FormID>`: the oracle's probe of these
     /// records instead of the check.
     records: Vec<String>,
+    /// `parity refs`: the reference index of each game's corpus.
+    refs: bool,
     games: Vec<&'static Game>,
     /// Lower-case file names. Empty selects the whole corpus.
     files: Vec<String>,
@@ -316,7 +319,7 @@ pub fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
     // The round trip has no oracle binary: the input file is the oracle
     // (and the GUI oracle's saves, when they are cached).
     let oracle_dir = std::env::var_os("XEDIT_ORACLE_DIR").map(PathBuf::from);
-    let gui_oracle = options.oracle_save || options.oracle_edit || options.conflicts;
+    let gui_oracle = options.oracle_save || options.oracle_edit || options.conflicts || options.refs;
     let oracle = if options.roundtrip || gui_oracle {
         PathBuf::new()
     } else {
@@ -338,6 +341,9 @@ pub fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
     }
     if options.conflicts {
         return conflicts::run_conflicts(root, tag, &options, cache, scratch, oracle_dir);
+    }
+    if options.refs {
+        return oracle_refs::run_refs(root, tag, &options, cache, scratch, oracle_dir);
     }
 
     let mut cases = Vec::new();
@@ -1165,7 +1171,7 @@ fn parse(args: &[&str]) -> Result<Options> {
                          [--oracle-timeout <minutes>]";
     let (mode, rest) = args.split_first().context(USAGE)?;
     let (saves, roundtrip, oracle_save, oracle_edit) = match *mode {
-        "dump" | "conflicts" => (false, false, false, false),
+        "dump" | "conflicts" | "refs" => (false, false, false, false),
         "saves" => (true, false, false, false),
         "roundtrip" => (false, true, false, false),
         "oracle-save" => (false, false, true, false),
@@ -1179,6 +1185,7 @@ fn parse(args: &[&str]) -> Result<Options> {
         oracle_edit,
         conflicts: *mode == "conflicts",
         records: Vec::new(),
+        refs: *mode == "refs",
         games: Vec::new(),
         files: Vec::new(),
         oracle_only: false,

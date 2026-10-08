@@ -18,6 +18,7 @@ pub mod edit;
 pub mod formids;
 pub mod lodgen;
 pub mod masters;
+pub mod refs;
 pub mod save;
 pub mod sniff;
 
@@ -129,6 +130,7 @@ impl Registry {
         save::register(&mut registry);
         masters::register(&mut registry);
         formids::register(&mut registry);
+        refs::register(&mut registry);
         archive::register(&mut registry);
         assets::register(&mut registry);
         sniff::register(&mut registry);

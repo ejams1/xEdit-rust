@@ -44,6 +44,22 @@ struct Cli {
     #[arg(long, global = true)]
     threads: Option<usize>,
 
+    /// Folder of the reference cache files (xEdit's -C:). Default: "<AppName>Edit Cache" in the data folder, as xEdit.
+    #[arg(long, global = true)]
+    cache_path: Option<String>,
+
+    /// Neither read nor write reference cache files (xEdit's -DontCache).
+    #[arg(long, global = true)]
+    dont_cache: bool,
+
+    /// Do not read reference cache files (xEdit's -DontCacheLoad).
+    #[arg(long, global = true)]
+    dont_cache_load: bool,
+
+    /// Do not write reference cache files (xEdit's -DontCacheSave).
+    #[arg(long, global = true)]
+    dont_cache_save: bool,
+
     #[command(subcommand)]
     action: Action,
 }
@@ -76,6 +92,11 @@ enum Action {
     Masters {
         #[command(subcommand)]
         action: MastersAction,
+    },
+    /// The reference index: the records that refer to a record, and the reference cache.
+    Refs {
+        #[command(subcommand)]
+        action: RefsAction,
     },
     /// FormIDs of records.
     Formids {
@@ -424,6 +445,31 @@ enum FilesAction {
 }
 
 #[derive(Subcommand)]
+enum RefsAction {
+    /// The records that refer to a record (ReferencedBy of its master) and the records it refers to (refs.get). Builds the references of the loaded files first, or loads them from the cache.
+    Get {
+        /// Load order FormID of the record as hexadecimal digits.
+        form_id: String,
+        /// Plugin whose version of the record to read; the last loaded plugin when omitted.
+        #[arg(long)]
+        file: Option<String>,
+        /// Entries of the referenced-by list to skip.
+        #[arg(long, default_value_t = 0)]
+        offset: usize,
+        /// Entries of the referenced-by list to return at most.
+        #[arg(long)]
+        limit: Option<usize>,
+    },
+    /// Write the referenced-by lists of every loaded file as text (the parity check's format, see refs.pas of the harness).
+    Dump,
+    /// Build the references of the loaded files, or load them from the reference cache, and save the cache (refs.build, BuildOrLoadRef).
+    Build {
+        /// Only this loaded file (Build Reference Info); every loaded file when omitted.
+        #[arg(long)]
+        file: Option<String>,
+        /// Only load the references from the cache; build none.
+        #[arg(long)]
+        only_load: bool,
 enum ArchiveAction {
     /// Read the header and the file table of an archive (archive.list): format, version, flags, warnings and with --files the files.
     List {
@@ -770,6 +816,20 @@ fn command_of(action: Action) -> Result<(String, Value), CommandError> {
                 "blueprint": blueprint, "localized": localized, "dry_run": dry_run
             }),
         ),
+        Action::Refs { action } => match action {
+            RefsAction::Get {
+                form_id,
+                file,
+                offset,
+                limit,
+            } => (
+                "refs.get".to_owned(),
+                json!({ "form_id": form_id, "file": file, "offset": offset, "limit": limit }),
+            ),
+            RefsAction::Dump => unreachable!("handled before"),
+            RefsAction::Build { file, only_load } => {
+                ("refs.build".to_owned(), json!({ "file": file, "only_load": only_load }))
+            }
         Action::Archive { action } => match action {
             ArchiveAction::List {
                 archive,
@@ -1224,6 +1284,12 @@ fn run_mcp(game: Option<String>, load: Vec<String>, edit: bool) -> Result<(), Bo
 fn main() -> ExitCode {
     let cli = Cli::parse();
     xedit_core::threads::set_threads(cli.threads.unwrap_or(0));
+    xedit_session::refs::set_cache_options(
+        cli.cache_path.as_deref(),
+        cli.dont_cache,
+        cli.dont_cache_load,
+        cli.dont_cache_save,
+    );
     if matches!(cli.action, Action::Serve { .. } | Action::Mcp) {
         // stdout carries the protocol; the progress of a load goes to stderr.
         xedit_session::dump::log_progress_to_stderr();
@@ -1257,6 +1323,16 @@ fn main() -> ExitCode {
     // The progress messages of a load and a save go to stderr like the log
     // of xEdit; the result goes to stdout.
     xedit_session::dump::log_progress_to_stderr();
+    if let Action::Refs {
+        action: RefsAction::Dump,
+    } = cli.action
+    {
+        let (game, load, edit) = (cli.game, cli.load, cli.edit);
+        return run_dump(move |out| {
+            let mut session = engine::open_session(game.as_deref(), &load, edit).map_err(|error| error.to_string())?;
+            xedit_session::refs::write_index(&mut session, out).map_err(|error| error.to_string())
+        });
+    }
     let outcome = run(cli.game, cli.load, cli.edit, cli.action);
     match (&outcome, cli.json) {
         (Ok(result), true) => println!("{}", json!({ "ok": true, "result": result })),
