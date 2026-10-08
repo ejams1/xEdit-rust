@@ -1,0 +1,152 @@
+{
+  "description": "Every kind of edit on a plugin that is not localized: copy as override and as new record, set, add and remove elements, delete a record, change a FormID with a referencing record, add, sort and clean masters, renumber, set the ESM flag. CaravanPack.esm loads after TribalPack.esm by file date, as the GUI orders Fallout New Vegas plugins. The oracle builds the reference information (build_refs), which the FormID change needs; no record of CaravanPack.esm has a fix-up that the initialisation would apply.",
+  "game": "fnv",
+  "build_refs": true,
+  "load": [
+    "FalloutNV.esm",
+    "TribalPack.esm",
+    "CaravanPack.esm"
+  ],
+  "commands": [
+    {
+      "command": "records.copy",
+      "params": {
+        "form_id": "000E3778",
+        "from": "FalloutNV.esm",
+        "to": "CaravanPack.esm"
+      }
+    },
+    {
+      "command": "elements.set",
+      "params": {
+        "form_id": "000E3778",
+        "file": "CaravanPack.esm",
+        "path": "DATA\\Value",
+        "value": "1234"
+      }
+    },
+    {
+      "command": "elements.set",
+      "params": {
+        "form_id": "000E3778",
+        "file": "CaravanPack.esm",
+        "path": "FULL",
+        "value": "Oracle Pistol"
+      }
+    },
+    {
+      "command": "elements.set",
+      "params": {
+        "form_id": "000E3778",
+        "file": "CaravanPack.esm",
+        "path": "DNAM\\Animation Multiplier",
+        "value": 1.25
+      }
+    },
+    {
+      "command": "elements.remove",
+      "params": {
+        "form_id": "000E3778",
+        "file": "CaravanPack.esm",
+        "path": "MWD3"
+      }
+    },
+    {
+      "command": "elements.add",
+      "params": {
+        "form_id": "000E3778",
+        "file": "CaravanPack.esm",
+        "name": "EITM"
+      }
+    },
+    {
+      "command": "records.copy",
+      "params": {
+        "form_id": "000E3779",
+        "from": "FalloutNV.esm",
+        "to": "CaravanPack.esm",
+        "as_new": true
+      }
+    },
+    {
+      "command": "records.copy",
+      "params": {
+        "form_id": "0005B6D0",
+        "from": "FalloutNV.esm",
+        "to": "CaravanPack.esm",
+        "as_new": true
+      }
+    },
+    {
+      "command": "elements.set",
+      "params": {
+        "form_id": "02000801",
+        "file": "CaravanPack.esm",
+        "path": "EDID",
+        "value": "OracleWrench"
+      }
+    },
+    {
+      "command": "elements.set",
+      "params": {
+        "form_id": "000E3778",
+        "file": "CaravanPack.esm",
+        "path": "REPL",
+        "value": "02000800"
+      }
+    },
+    {
+      "command": "records.delete",
+      "params": {
+        "form_id": "00174775",
+        "file": "CaravanPack.esm"
+      }
+    },
+    {
+      "command": "formids.change",
+      "params": {
+        "form_id": "02000800",
+        "file": "CaravanPack.esm",
+        "new_form_id": "02000900"
+      }
+    },
+    {
+      "command": "masters.add",
+      "params": {
+        "file": "CaravanPack.esm",
+        "masters": [
+          "TribalPack.esm"
+        ]
+      }
+    },
+    {
+      "command": "masters.sort",
+      "params": {
+        "file": "CaravanPack.esm"
+      }
+    },
+    {
+      "command": "formids.renumber",
+      "params": {
+        "file": "CaravanPack.esm",
+        "start": "000A00"
+      }
+    },
+    {
+      "command": "masters.clean",
+      "params": {
+        "file": "CaravanPack.esm"
+      }
+    },
+    {
+      "command": "files.flags",
+      "params": {
+        "file": "CaravanPack.esm",
+        "esm": true
+      }
+    }
+  ],
+  "save": [
+    "CaravanPack.esm"
+  ]
+}

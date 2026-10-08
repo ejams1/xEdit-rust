@@ -1,0 +1,49 @@
+{
+  "description": "A game setting copied as an override and given an editor ID of another type: the AfterSet of the editor ID rebuilds its DATA for the new first letter (an integer instead of a float), as upstream's GMST definition does.",
+  "game": "fnv",
+  "build_refs": false,
+  "load": [
+    "FalloutNV.esm",
+    "TribalPack.esm"
+  ],
+  "commands": [
+    {
+      "command": "records.copy",
+      "params": {
+        "form_id": "00000803",
+        "from": "FalloutNV.esm",
+        "to": "TribalPack.esm"
+      }
+    },
+    {
+      "command": "elements.set",
+      "params": {
+        "form_id": "00000803",
+        "file": "TribalPack.esm",
+        "path": "EDID",
+        "value": "iGunShellEjectSpeed"
+      }
+    },
+    {
+      "command": "records.copy",
+      "params": {
+        "form_id": "00000805",
+        "from": "FalloutNV.esm",
+        "to": "TribalPack.esm",
+        "as_new": true
+      }
+    },
+    {
+      "command": "elements.set",
+      "params": {
+        "form_id": "01000800",
+        "file": "TribalPack.esm",
+        "path": "EDID",
+        "value": "sOracleSetting"
+      }
+    }
+  ],
+  "save": [
+    "TribalPack.esm"
+  ]
+}

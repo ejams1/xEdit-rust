@@ -17,12 +17,21 @@
 //! The oracle of that check is the input itself, which holds where xEdit
 //! writes a file it loaded unchanged.
 //!
+//! `cargo xtask parity oracle-save` has the GUI build of xEdit save every
+//! corpus plugin (`oracle_save`, `gui`) and compares the port's save with
+//! it; the round trip counts a save that equals a cached oracle save as
+//! equal. `cargo xtask parity oracle-edit` runs the scripted edit sequences
+//! of `crates/xtask/oracle/edits` on both and compares the saved files.
+//!
 //! Environment:
 //!
 //! - `XEDIT_ORACLE_DIR`: unpacked release archive of the baseline tag.
 //! - `XEDIT_<GAME>_DATA` (`XEDIT_FO4_DATA`, `XEDIT_SSE_DATA`, ... see
 //!   `GAMES`): `Data` directory of each game.
 //! - `XEDIT_PARITY_CACHE`: cache directory. Defaults to the user cache directory.
+//! - `XEDIT_PARITY_SCRATCH`: where the saves of the port and the files
+//!   kept for a difference go, so that two branches can run the round
+//!   trip side by side and share the oracle cache. Defaults to the cache.
 
 use std::fs::{self, File};
 use std::io::{BufRead, BufReader, Read, Write};
@@ -36,6 +45,9 @@ use anyhow::{Context, Result, bail, ensure};
 use serde::Serialize;
 
 use crate::memory::{self, Budget, GIB, Limit};
+
+mod gui;
+mod oracle_save;
 
 /// A game whose masters are in the corpus.
 struct Game {
@@ -186,6 +198,10 @@ struct Options {
     saves: bool,
     /// `parity roundtrip`: load and save each plugin, compare with the input.
     roundtrip: bool,
+    /// `parity oracle-save`: compare the port's save with the GUI oracle's.
+    oracle_save: bool,
+    /// `parity oracle-edit`: the scripted edit sequences.
+    oracle_edit: bool,
     games: Vec<&'static Game>,
     /// Lower-case file names. Empty selects the whole corpus.
     files: Vec<String>,
@@ -217,6 +233,12 @@ struct Runner {
     oracle: PathBuf,
     port: Option<PathBuf>,
     cache: PathBuf,
+    /// `XEDIT_PARITY_SCRATCH` (with the tag): the port's saves.
+    scratch: PathBuf,
+    /// `XEDIT_ORACLE_DIR`, for the GUI builds; empty when it is not set.
+    oracle_dir: PathBuf,
+    /// Content hashes of the masters, which many cases share.
+    hashes: Mutex<std::collections::HashMap<PathBuf, u64>>,
     budget: Budget,
     max_memory: u64,
     oracle_timeout: Option<Duration>,
@@ -257,15 +279,28 @@ struct Report<'a> {
 
 pub fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
     let options = parse(args)?;
-    // The round trip has no oracle binary: the input file is the oracle.
-    let oracle = if options.roundtrip {
+    // The round trip has no oracle binary: the input file is the oracle
+    // (and the GUI oracle's saves, when they are cached).
+    let oracle_dir = std::env::var_os("XEDIT_ORACLE_DIR").map(PathBuf::from);
+    let oracle = if options.roundtrip || options.oracle_save || options.oracle_edit {
         PathBuf::new()
     } else {
         let oracle = PathBuf::from(required_var("XEDIT_ORACLE_DIR")?).join("xDump.exe");
         ensure!(oracle.exists(), "{} does not exist", oracle.display());
         oracle
     };
+    if options.oracle_save || options.oracle_edit {
+        ensure!(oracle_dir.is_some(), "environment variable XEDIT_ORACLE_DIR is not set");
+    }
+    let oracle_dir = oracle_dir.unwrap_or_default();
     let cache = cache_dir()?.join(tag);
+    let scratch = match std::env::var_os("XEDIT_PARITY_SCRATCH") {
+        Some(dir) => PathBuf::from(dir).join(tag),
+        None => cache.clone(),
+    };
+    if options.oracle_edit {
+        return oracle_save::run_edits(root, tag, &options, cache, scratch, oracle_dir);
+    }
 
     let mut cases = Vec::new();
     for &game in &options.games {
@@ -333,8 +368,14 @@ pub fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
                 });
             }
         }
-        ensure!(cases.len() > before, "no corpus file found in {}", data.display());
+        // `--file` without `--game` looks in every game.
+        ensure!(
+            cases.len() > before || (options.all_games && !options.files.is_empty()),
+            "no corpus file found in {}",
+            data.display()
+        );
     }
+    ensure!(!cases.is_empty(), "no corpus file selected");
     // Largest first, so that the long runs start early.
     cases.sort_by_key(|case| std::cmp::Reverse(fs::metadata(&case.input).map(|m| m.len()).unwrap_or(0)));
 
@@ -353,6 +394,9 @@ pub fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
         oracle,
         port,
         cache,
+        scratch,
+        oracle_dir,
+        hashes: Mutex::new(std::collections::HashMap::new()),
         budget: Budget::new(budget),
         max_memory: options.max_memory.unwrap_or(budget),
         oracle_timeout: options.oracle_timeout,
@@ -371,6 +415,8 @@ pub fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
                 while let Some(case) = cases.get(next.fetch_add(1, Ordering::Relaxed)) {
                     let checked = if options.roundtrip {
                         check_roundtrip(case, &runner)
+                    } else if options.oracle_save {
+                        oracle_save::check(case, &runner)
                     } else {
                         check(case, &runner)
                     };
@@ -412,6 +458,8 @@ pub fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
     fs::create_dir_all(&report_dir)?;
     let report_name = if options.roundtrip {
         "roundtrip.json"
+    } else if options.oracle_save {
+        "oracle-save.json"
     } else if options.saves {
         "saves.json"
     } else {
@@ -434,6 +482,19 @@ pub fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
             outcomes.len(),
             report_file.display()
         );
+    } else if options.oracle_save {
+        let count = |status: &str| outcomes.iter().filter(|o| o.status == status).count();
+        println!(
+            "{} equal, {} equal-error, {} different, {} oracle-unsupported, {} oracle-failed, {} port-failed of {}. Report: {}",
+            count("equal"),
+            count("equal-error"),
+            count("different"),
+            count("oracle-unsupported"),
+            count("oracle-failed"),
+            count("port-failed") + count("port-memory-limit"),
+            outcomes.len(),
+            report_file.display()
+        );
     } else {
         println!("{equal} of {} equal. Report: {}", outcomes.len(), report_file.display());
     }
@@ -441,6 +502,83 @@ pub fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
         ensure!(equal == outcomes.len(), "parity does not hold");
     }
     Ok(())
+}
+
+/// How a save of the port ended.
+enum PortSave {
+    /// The saved file is written.
+    Written,
+    /// The port refused the save with an upstream message (`save_refused`).
+    Refused(String),
+    /// Anything else; the outcome says what.
+    Stopped,
+}
+
+/// Has the port load `case` and save it to `saved`, as the round trip and
+/// the oracle save do. A save that is not written sets the status and the
+/// detail of `outcome` (`refused`, `unsupported`, `port-failed`,
+/// `port-memory-limit` or `oracle-only` without a port).
+fn port_save(case: &Case, runner: &Runner, saved: &Path, port_log: &Path, outcome: &mut Outcome) -> Result<PortSave> {
+    let Some(port) = &runner.port else {
+        outcome.status = "oracle-only";
+        return Ok(PortSave::Stopped);
+    };
+    let _ = fs::remove_file(saved);
+    let mut command = Command::new(port);
+    command
+        .args(["--json", "--edit", "--game", case.game.mode, "--load"])
+        .arg(&case.input)
+        .args(["save", "--no-backup", "--output"])
+        .arg(saved)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(File::create(port_log)?);
+    let peak_file = port_log.with_extension("peak");
+    let (status, result, reached, peak) = run_limited(runner, case, &mut command, &peak_file, |child| {
+        let mut text = String::new();
+        child.stdout.take().unwrap().read_to_string(&mut text)?;
+        Ok((text, true))
+    })?;
+    outcome.port_peak = peak;
+    let text = result?;
+    outcome.status = "port-failed";
+    if reached && !status.success() {
+        outcome.status = "port-memory-limit";
+        outcome.detail = Some(format!(
+            "  reached the cap of {:.1} GiB (--max-memory), see {}",
+            runner.max_memory as f64 / GIB as f64,
+            port_log.display()
+        ));
+        return Ok(PortSave::Stopped);
+    }
+    let envelope: serde_json::Value = match serde_json::from_str(text.trim()) {
+        Ok(value) => value,
+        Err(_) => {
+            outcome.detail = Some(format!("  {status}, see {}", port_log.display()));
+            return Ok(PortSave::Stopped);
+        }
+    };
+    if envelope["ok"] != serde_json::Value::Bool(true) {
+        let code = envelope["error"]["code"].as_str().unwrap_or("");
+        let message = envelope["error"]["message"].as_str().unwrap_or("");
+        outcome.status = match code {
+            "save_refused" => "refused",
+            "unsupported" => "unsupported",
+            _ => "port-failed",
+        };
+        outcome.detail = Some(format!("  {code}: {message}"));
+        return Ok(if code == "save_refused" {
+            PortSave::Refused(message.to_owned())
+        } else {
+            PortSave::Stopped
+        });
+    }
+    if envelope["result"]["written"] != serde_json::Value::Bool(true) {
+        outcome.detail = Some(format!("  the port reported no written file: {}", text.trim()));
+        return Ok(PortSave::Stopped);
+    }
+    outcome.port_bytes = fs::metadata(saved)?.len();
+    Ok(PortSave::Written)
 }
 
 /// The round trip of one plugin: the port loads it and saves it into the
@@ -454,7 +592,7 @@ pub fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
 /// edits in a way the port cannot yet), `port-failed` or
 /// `port-memory-limit`.
 fn check_roundtrip(case: &Case, runner: &Runner) -> Result<Outcome> {
-    let dir = runner.cache.join(format!("{}-roundtrip", case.game.mode));
+    let dir = runner.scratch.join(format!("{}-roundtrip", case.game.mode));
     fs::create_dir_all(&dir)?;
     let stem = format!("{}.{:016x}", case.name, content_hash(&case.input)?);
     let mut outcome = Outcome {
@@ -467,64 +605,48 @@ fn check_roundtrip(case: &Case, runner: &Runner) -> Result<Outcome> {
         oracle_peak: None,
         port_peak: None,
     };
-    let Some(port) = &runner.port else {
-        outcome.status = "oracle-only";
-        return Ok(outcome);
-    };
     let saved = dir.join(format!("{stem}.saved"));
     let port_log = dir.join(format!("{stem}.port.log"));
-    let _ = fs::remove_file(&saved);
-    let mut command = Command::new(port);
-    command
-        .args(["--json", "--edit", "--game", case.game.mode, "--load"])
-        .arg(&case.input)
-        .args(["save", "--no-backup", "--output"])
-        .arg(&saved)
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(File::create(&port_log)?);
-    let (status, result, reached, peak) = run_limited(
-        runner,
-        case,
-        &mut command,
-        &dir.join(format!("{stem}.port.peak")),
-        |child| {
-            let mut text = String::new();
-            child.stdout.take().unwrap().read_to_string(&mut text)?;
-            Ok((text, true))
-        },
-    )?;
-    outcome.port_peak = peak;
-    let text = result?;
-    if reached && !status.success() {
-        outcome.status = "port-memory-limit";
-        outcome.detail = Some(format!(
-            "  reached the cap of {:.1} GiB (--max-memory), see {}",
-            runner.max_memory as f64 / GIB as f64,
-            port_log.display()
-        ));
-        return Ok(outcome);
-    }
-    let envelope: serde_json::Value = match serde_json::from_str(text.trim()) {
-        Ok(value) => value,
-        Err(_) => {
-            outcome.detail = Some(format!("  {status}, see {}", port_log.display()));
+    match port_save(case, runner, &saved, &port_log, &mut outcome)? {
+        PortSave::Written => {}
+        PortSave::Stopped => return Ok(outcome),
+        // A refusal is confirmed by the oracle's refusal with the same
+        // message, when it is cached.
+        PortSave::Refused(message) => {
+            match oracle_save::cached(case, runner)? {
+                Some(oracle_save::OracleSave::Error(expected)) if expected == message => {
+                    outcome.detail = Some(format!("  the oracle refused the save too: {message}"));
+                }
+                Some(oracle_save::OracleSave::Error(expected)) => {
+                    outcome.status = "different";
+                    outcome.detail = Some(format!(
+                        "  the oracle refused with: {expected}
+  the port refused with:   {message}"
+                    ));
+                }
+                Some(oracle_save::OracleSave::Saved(path)) => {
+                    outcome.status = "different";
+                    outcome.detail = Some(format!(
+                        "  the port refused the save ({message}), the oracle saved it: {}",
+                        path.display()
+                    ));
+                }
+                None => {}
+            }
             return Ok(outcome);
         }
-    };
-    if envelope["ok"] != serde_json::Value::Bool(true) {
-        let code = envelope["error"]["code"].as_str().unwrap_or("");
-        let message = envelope["error"]["message"].as_str().unwrap_or("");
-        outcome.status = match code {
-            "save_refused" => "refused",
-            "unsupported" => "unsupported",
-            _ => "port-failed",
-        };
-        outcome.detail = Some(format!("  {code}: {message}"));
-        return Ok(outcome);
     }
-    if envelope["result"]["written"] != serde_json::Value::Bool(true) {
-        outcome.detail = Some(format!("  the port reported no written file: {}", text.trim()));
+    // The GUI oracle's own save, when `parity oracle-save` has cached it,
+    // decides: a save that equals it is equal whatever it changed in the
+    // input, and one that differs from it is different.
+    if let Some(oracle) = oracle_save::cached(case, runner)? {
+        outcome.port_bytes = fs::metadata(&saved)?.len();
+        let (status, detail) = oracle_save::compare(case, &oracle, &saved, &dir, &stem)?;
+        outcome.status = status;
+        outcome.detail = Some(detail);
+        if status == "equal" {
+            fs::remove_file(&saved)?;
+        }
         return Ok(outcome);
     }
     outcome.port_bytes = fs::metadata(&saved)?.len();
@@ -1000,18 +1122,23 @@ fn first_byte_difference(a: &Path, b: &Path) -> Result<Option<u64>> {
 }
 
 fn parse(args: &[&str]) -> Result<Options> {
-    const USAGE: &str = "usage: cargo xtask parity dump|saves|roundtrip [--game <game>]... [--file <name>]... \
+    const USAGE: &str = "usage: cargo xtask parity dump|saves|roundtrip|oracle-save|oracle-edit [--game <game>]... [--file <name>]... \
                          [--oracle-only] [--jobs <n>] [--memory-budget <GiB>] [--max-memory <GiB>] \
                          [--oracle-timeout <minutes>]";
-    let (saves, roundtrip, rest) = match args {
-        ["dump", rest @ ..] => (false, false, rest),
-        ["saves", rest @ ..] => (true, false, rest),
-        ["roundtrip", rest @ ..] => (false, true, rest),
+    let (mode, rest) = args.split_first().context(USAGE)?;
+    let (saves, roundtrip, oracle_save, oracle_edit) = match *mode {
+        "dump" => (false, false, false, false),
+        "saves" => (true, false, false, false),
+        "roundtrip" => (false, true, false, false),
+        "oracle-save" => (false, false, true, false),
+        "oracle-edit" => (false, false, false, true),
         _ => bail!(USAGE),
     };
     let mut options = Options {
         saves,
         roundtrip,
+        oracle_save,
+        oracle_edit,
         games: Vec::new(),
         files: Vec::new(),
         oracle_only: false,
