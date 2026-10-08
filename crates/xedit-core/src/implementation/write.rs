@@ -712,7 +712,9 @@ impl FileImpl {
         extension: &str,
         name: &str,
     ) -> Result<(), SaveError> {
-        let edit_error = |error: String| SaveError::Internal(format!("{name}: {error}"));
+        // An edit that fails is the exception upstream's `PrepareSave` raises
+        // (a Starfield official module is not editable, `GetIsEditable`).
+        let edit_error = SaveError::Refused;
         let elements = self.container.elements();
         if extension == ".esm" {
             header.set_is_esm(true);

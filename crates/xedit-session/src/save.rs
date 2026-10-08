@@ -21,10 +21,10 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use xedit_core::implementation::{FileImpl, ResetModified, SaveError};
 use xedit_core::interface::globals::{
-    GameMode, app_name, set_allow_esp_masters, set_allow_esp_masters_on_save, set_allow_internal_edit,
-    set_always_save_onam, set_always_save_onam_force, set_app_name, set_can_sort_info, set_complex_file_file_id,
-    set_display_load_order_form_id, set_enforce_all_masters, set_sort_sub_records, set_tool_name,
-    set_vwd_as_quest_children, set_vwd_in_temporary,
+    GameMode, app_name, display_shorter_names, set_allow_esp_masters, set_allow_esp_masters_on_save,
+    set_allow_internal_edit, set_always_save_onam, set_always_save_onam_force, set_app_name, set_can_sort_info,
+    set_complex_file_file_id, set_display_load_order_form_id, set_display_shorter_names, set_enforce_all_masters,
+    set_sort_sub_records, set_tool_name, set_vwd_as_quest_children, set_vwd_in_temporary,
 };
 use xedit_core::interface::{Element, File, FileState};
 
@@ -198,14 +198,20 @@ fn files_save(session: &mut Session, request: FilesSaveRequest) -> Result<FilesS
 
 /// Builds the bytes of the file on a thread with a large stack, because the
 /// record initialization resolves deeply through the definitions.
+/// The names in the messages of the save are the GUI's (`xeMainForm` sets
+/// `wbDisplayShorterNames`: `[TES4:00000000]` for the file header), as the
+/// oracle reports them; the other commands keep the names of xDump.
 fn write_file(file: &Arc<FileImpl>) -> Result<Vec<u8>, CommandError> {
     let file = file.clone();
+    let shorter_names = display_shorter_names();
+    set_display_shorter_names(true);
     let worker = std::thread::Builder::new()
         .stack_size(1 << 30)
-        .spawn(move || file.write_to_bytes(RESET_ON_SAVE))
-        .map_err(|error| CommandError::new("internal", error.to_string()))?;
-    let result = worker
-        .join()
+        .spawn(move || file.write_to_bytes(RESET_ON_SAVE));
+    let result = worker.map(|worker| worker.join());
+    set_display_shorter_names(shorter_names);
+    let result = result
+        .map_err(|error| CommandError::new("internal", error.to_string()))?
         .map_err(|_| CommandError::new("internal", "the save thread panicked"))?;
     result.map_err(|error| match error {
         SaveError::Refused(message) => CommandError::new("save_refused", message),

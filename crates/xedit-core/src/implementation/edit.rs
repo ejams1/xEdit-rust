@@ -517,6 +517,33 @@ pub(crate) fn container_remove_child(
     Some(removed)
 }
 
+/// Port of `TwbContainer.GetSortKeyInternal`: the sort keys of the
+/// elements, separated by `|`.
+pub(crate) fn container_sort_key(base: &super::ContainerBase, extended: bool) -> String {
+    base.elements()
+        .iter()
+        .map(|child| child.get_sort_key(extended))
+        .collect::<Vec<_>>()
+        .join("|")
+}
+
+/// Port of `wbMergeSortPtr(..., CompareSortKeys)` on a sorted array: the
+/// elements in the order of their extended sort keys (`CompareStr`), equal
+/// keys in the order they had. `CompareSortKeys` breaks a tie with the edit
+/// value of the first element compared with itself, which is no tie break.
+pub(crate) fn sort_by_sort_keys(base: &super::ContainerBase) {
+    let elements = base.elements();
+    if elements.len() < 2 {
+        return;
+    }
+    let key_of = |element: &ElementRef| Arc::as_ptr(element) as *const () as usize;
+    let keys: std::collections::HashMap<usize, String> = elements
+        .iter()
+        .map(|element| (key_of(element), element.get_sort_key(true)))
+        .collect();
+    base.sort_by(|a, b| keys[&key_of(a)].cmp(&keys[&key_of(b)]));
+}
+
 /// Port of `CompareSubRecords` as a sort of a main record's elements: by
 /// sort order, then element type; the file order is kept beyond that.
 pub(crate) fn sort_sub_records_of(container: &dyn ElementImpl) {

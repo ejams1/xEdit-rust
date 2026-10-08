@@ -372,6 +372,25 @@ impl GroupRecordImpl {
         self.gr_struct.write().unwrap().label = label;
     }
 
+    /// Port of `TwbGroupRecord.GetGroupLabel`: the label, with the FileID
+    /// of a FormID beyond the masters replaced by the file's own for the
+    /// groups whose label is a FormID.
+    pub(crate) fn get_group_label(&self) -> u32 {
+        let label = self.group_label();
+        if matches!(self.group_type(), 1 | 6..=10)
+            && let Some(file) = self.file.upgrade()
+        {
+            let form_id = FormID::from_cardinal(label);
+            if file.is_new_record(form_id.file_id()) {
+                let file_file_id: FileID = file.get_file_file_id();
+                if form_id.file_id() != file_file_id {
+                    return form_id.change_file_id(file_file_id).to_cardinal();
+                }
+            }
+        }
+        label
+    }
+
     /// Port of `TwbGroupRecord.SetGroupLabel`: the label of a group of the
     /// children of a record; a FormID of a new record of the file takes the
     /// file's own FileID. The children groups of a cell take the label too,
@@ -411,4 +430,210 @@ impl GroupRecordImpl {
         }
         Ok(())
     }
+}
+
+/// The signatures of the placed records `CheckChildOfCell` and
+/// `GetPosition` accept.
+const CELL_CHILDREN: [&[u8; 4]; 11] = [
+    b"REFR", b"PMIS", b"PGRE", b"ACRE", b"ACHR", b"PARW", b"PBEA", b"PFLA", b"PCON", b"PBAR", b"PHZD",
+];
+
+impl MainRecordImpl {
+    /// Port of `CheckChildOfCell`: whether the record is a placed record in
+    /// a persistent, temporary or visible distant children group of a cell.
+    /// UPSTREAM-QUIRK: upstream raises for a placed record outside such a
+    /// group; the flag setters here leave it where it is instead.
+    pub(crate) fn check_child_of_cell(&self) -> bool {
+        if !CELL_CHILDREN.contains(&&self.mr_struct().signature.0) {
+            return false;
+        }
+        let Some(type_group) = self
+            .base
+            .container()
+            .and_then(|container| container.as_element_impl()?.group_record_impl())
+        else {
+            return false;
+        };
+        matches!(type_group.group_type(), 8..=10)
+            && type_group.parent_group().is_some_and(|group| group.group_type() == 6)
+    }
+
+    /// Port of `GetPosition`: `DATA\Position` of a placed record.
+    fn position(&self) -> Option<(f64, f64, f64)> {
+        if !CELL_CHILDREN.contains(&&self.mr_struct().signature.0) {
+            return None;
+        }
+        let axis = |name: &str| match self.get_element_native_value(&format!("DATA\\Position\\{name}")) {
+            crate::interface::misc::Variant::Float(value) => Some(value),
+            other => other.as_ordinal().map(|value| value as f64),
+        };
+        Some((axis("X")?, axis("Y")?, axis("Z")?))
+    }
+
+    /// Port of `EnsureChildGroup` for a cell: its children group, made in
+    /// the group that holds the cell when it has none.
+    fn ensure_cell_child_group(self: &Arc<Self>) -> Option<Arc<GroupRecordImpl>> {
+        if let Some(group) = self.child_group() {
+            return Some(group);
+        }
+        let containing = self.base.container()?.as_element_impl()?.group_record_impl()?;
+        if !containing.is_element_editable(None) {
+            return None;
+        }
+        Some(GroupRecordImpl::create_child(&containing, 6, self))
+    }
+
+    /// Port of `UpdateCellChildGroup`: a placed record whose persistent or
+    /// visible when distant flag changed moves to the children group of its
+    /// cell that the flags call for (persistent 8, visible distant 10 unless
+    /// `wbVWDInTemporary`, else temporary 9); an exterior persistent record
+    /// moves to the persistent cell of its worldspace and a temporary one to
+    /// the cell of its grid position. Emptied groups go.
+    pub(crate) fn update_cell_child_group(self: &Arc<Self>) {
+        let Some(old_type_group) = self
+            .base
+            .container()
+            .and_then(|container| container.as_element_impl()?.group_record_impl())
+        else {
+            return;
+        };
+        if !matches!(old_type_group.group_type(), 8..=10) {
+            return;
+        }
+        let Some(old_child_group) = old_type_group.parent_group() else {
+            return;
+        };
+        if old_child_group.group_type() != 6 {
+            return;
+        }
+        let flags = self.mr_struct().flags;
+        let correct = if flags.is_persistent() {
+            8
+        } else if flags.is_visible_when_distant() && !crate::interface::globals::vwd_in_temporary() {
+            10
+        } else {
+            9
+        };
+        let old_type = old_type_group.group_type();
+        if old_type == correct && correct != 9 {
+            return;
+        }
+        let Some(old_cell) = old_child_group.children_of() else {
+            return;
+        };
+        let not_partial = if old_cell.get_element_exists("DATA") {
+            old_cell.clone()
+        } else {
+            let Some(file) = self.file_impl() else { return };
+            let visible = old_cell.highest_override_visible_for_file(&file);
+            if !visible.get_element_exists("DATA") {
+                return;
+            }
+            visible
+        };
+        let data = not_partial.get_element_native_value("DATA").as_ordinal().unwrap_or(0);
+        let is_exterior = data & 1 == 0;
+        if old_type == correct && !is_exterior {
+            return;
+        }
+        let mut new_cell: Option<Arc<MainRecordImpl>> = None;
+        let new_child_group = if is_exterior {
+            let Some(owner) = old_cell
+                .base
+                .container()
+                .and_then(|container| container.as_element_impl()?.group_record_impl())
+            else {
+                return;
+            };
+            if !matches!(owner.group_type(), 1 | 5) {
+                return;
+            }
+            let add_cell = |name: &str| -> Option<Arc<MainRecordImpl>> {
+                let world = owner
+                    .children_of()
+                    .filter(|record| record.mr_struct().signature == Signature::new(b"WRLD"))?;
+                world
+                    .add(name, true)
+                    .ok()
+                    .flatten()?
+                    .as_element_impl()?
+                    .main_record_impl()
+            };
+            if correct == 8 {
+                if owner.group_type() != 1 {
+                    let Some(cell) = add_cell("CELL[P]") else { return };
+                    let group = cell.ensure_cell_child_group();
+                    new_cell = Some(cell);
+                    group
+                } else {
+                    Some(old_child_group.clone())
+                }
+            } else {
+                let Some((x, y, _)) = self.position() else { return };
+                let grid = (position_to_grid_cell(x), position_to_grid_cell(y));
+                if !not_partial.mr_struct().flags.is_persistent() {
+                    // Upstream raises "Could not determine grid cell of ..."
+                    // here; the record stays where it is.
+                    let Some(cell_grid) = not_partial.get_grid_cell() else {
+                        return;
+                    };
+                    if cell_grid == grid {
+                        if old_type == correct {
+                            return;
+                        }
+                        new_cell = Some(old_cell.clone());
+                    }
+                }
+                if new_cell.is_none() {
+                    new_cell = add_cell(&format!("CELL[{},{}]", grid.0, grid.1));
+                }
+                let Some(cell) = &new_cell else { return };
+                cell.ensure_cell_child_group()
+            }
+        } else {
+            Some(old_child_group.clone())
+        };
+        let Some(new_child_group) = new_child_group else {
+            return;
+        };
+        let Some(new_cell) = new_cell.or_else(|| new_child_group.children_of()) else {
+            return;
+        };
+        let new_type_group = new_child_group
+            .find_child_group(correct, new_cell.mr_struct().form_id.to_cardinal())
+            .unwrap_or_else(|| GroupRecordImpl::create_child(&new_child_group, correct, &new_cell));
+        if Arc::ptr_eq(&old_type_group, &new_type_group) {
+            return;
+        }
+        let self_ref: ElementRef = self.clone();
+        old_type_group.container.remove_element_by_identity(&self_ref);
+        if old_type_group.container.element_count() == 0 {
+            old_type_group.remove();
+        } else {
+            old_type_group.set_modified(true);
+        }
+        let new_type_ref: ElementRef = new_type_group.clone();
+        self.base.set_container(&new_type_ref);
+        new_type_group.container.add_element(self_ref);
+        new_type_group.set_modified(true);
+        // `Sort` without `aForce`: a group sorts once, later records are
+        // appended.
+        new_type_group.sort();
+        if old_child_group.container.element_count() == 0 {
+            old_child_group.remove();
+        } else {
+            old_child_group.set_modified(true);
+        }
+    }
+}
+
+/// Port of one axis of `wbPositionToGridCell`: the cell of a coordinate,
+/// rounded down.
+fn position_to_grid_cell(value: f64) -> i32 {
+    let factor = crate::interface::globals::cell_size_factor();
+    let mut result = (value / factor).trunc() as i32;
+    if value < 0.0 && (value / factor).fract() != 0.0 {
+        result -= 1;
+    }
+    result
 }
