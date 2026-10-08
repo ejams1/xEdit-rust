@@ -421,14 +421,14 @@ impl MaterialFile {
 
 /// `ReadJSONValue`.
 fn read_json_value(tree: &mut Tree, el: El, json: &Json, js: &str, path: &str) -> R<()> {
-    let Some(value) = json.get(js) else {
+    if !json.contains(js) {
         return Ok(());
-    };
+    }
     match js.as_bytes().first() {
-        Some(b'b') => tree.set_native_values(el, path, Variant::Int(i64::from(value.as_bool()))),
-        Some(b'f') => tree.set_native_values(el, path, Variant::Float(value.as_f64())),
-        Some(b'i') => tree.set_native_values(el, path, Variant::Int(value.as_i64() as i32 as i64)),
-        _ => tree.set_edit_values(el, path, &value.as_str()),
+        Some(b'b') => tree.set_native_values(el, path, Variant::Int(i64::from(json.b(js)?))),
+        Some(b'f') => tree.set_native_values(el, path, Variant::Float(json.f(js)?)),
+        Some(b'i') => tree.set_native_values(el, path, Variant::Int(i64::from(json.i(js)?))),
+        _ => tree.set_edit_values(el, path, &json.s(js)?),
     }
 }
 
@@ -438,17 +438,17 @@ fn material_from_json(tree: &mut Tree, el: El, json: &Json) -> R<()> {
         return Ok(());
     }
     // `BaseMaterialFromJSON`.
-    if let Some(value) = json.get("bTileU") {
+    if json.contains("bTileU") {
         let flags = tree
             .elements(el, "TileFlags")?
             .ok_or_else(|| DfError::new("no TileFlags"))?;
-        tree.set_native_values(flags, "U", Variant::Int(i64::from(value.as_bool())))?;
+        tree.set_native_values(flags, "U", Variant::Int(i64::from(json.b("bTileU")?)))?;
     }
-    if let Some(value) = json.get("bTileV") {
+    if json.contains("bTileV") {
         let flags = tree
             .elements(el, "TileFlags")?
             .ok_or_else(|| DfError::new("no TileFlags"))?;
-        tree.set_native_values(flags, "V", Variant::Int(i64::from(value.as_bool())))?;
+        tree.set_native_values(flags, "V", Variant::Int(i64::from(json.b("bTileV")?)))?;
     }
     for (js, path) in BASE_MAP {
         read_json_value(tree, el, json, js, path)?;

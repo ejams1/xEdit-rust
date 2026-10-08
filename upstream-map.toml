@@ -210,7 +210,7 @@ status = "pending"
 [units."Core/wbNifMath.pas"]
 status = "pending"
 rust = "crates/xedit-assets/src/nif_math.rs"
-note = "Missing: StripifyTriangles, which needs meshopt_stripify of wbMeshOptimize (phase 5 step 6)."
+note = "Missing: StripifyTriangles, which needs meshopt_stripify of wbMeshOptimize (phase 5 step 6). Sin and Cos are the Delphi Win64 RTL's, ported from the machine code; ArcTan2 is still the C runtime's."
 
 [units."Core/wbNifScanner.pas"]
 status = "ported"

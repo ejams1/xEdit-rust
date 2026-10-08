@@ -565,13 +565,17 @@ pub(crate) fn nif_data_size(tree: &mut Tree, el: El) -> R<i32> {
 }
 
 /// `TwbNifFile.UnSerializeFromJSON`.
-pub(crate) fn nif_unserialize_from_json(tree: &mut Tree, el: El, json: &Json) -> R<()> {
+pub(crate) fn nif_unserialize_from_json(tree: &mut Tree, el: El, json: &mut Json) -> R<()> {
     tree.clear(el)?;
-    let Json::Obj(entries) = json else {
+    if !json.is_object() {
         return Ok(());
-    };
-    let total = entries.len();
-    for (index, (name, _)) in entries.iter().enumerate() {
+    }
+    // The loop's bound is the count as it starts; a block that finds no
+    // object of its name adds an empty one at the end, which the check of
+    // the last block sees.
+    for index in 0..json.len() {
+        let name = json.names().swap_remove(index);
+        let total = json.len();
         let parts: Vec<&str> = name.split(' ').collect();
         let block_type = if parts.len() > 1 { parts[1] } else { parts[0] };
         if index == 0 && block_type != "NiHeader" {
