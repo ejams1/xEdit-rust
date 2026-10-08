@@ -10,7 +10,7 @@ pub mod encoding;
 pub mod hash;
 pub mod mapped_file;
 
-pub use archive::{Archive, ArchiveError};
+pub use archive::{Archive, ArchiveError, ArchiveType, MultiSourcePacker};
 pub use compression::{CompressionError, CompressionType};
 pub use encoding::{Encoding, EncodingError};
 pub use hash::crc32;

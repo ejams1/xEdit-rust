@@ -1,0 +1,15 @@
+[package]
+name = "bsarch"
+version = "0.1.0"
+description = "Packer and unpacker for Bethesda Game Studios archive files, with the arguments of BSArch"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "bsarch"
+path = "src/main.rs"
+
+[dependencies]
+mimalloc = "0.1"
+xedit-io = { path = "../xedit-io" }

@@ -19,6 +19,43 @@ pub enum Encoding {
     Utf8,
 }
 
+/// Delphi `LowerCase` of a Unicode string: every character is mapped on its
+/// own to its lower case, and a character that maps to several stays as it
+/// is, so the string keeps its length in characters.
+pub fn lower_case(text: &str) -> String {
+    text.chars()
+        .map(|c| {
+            let mut lower = c.to_lowercase();
+            match (lower.next(), lower.next()) {
+                (Some(single), None) => single,
+                _ => c,
+            }
+        })
+        .collect()
+}
+
+/// Delphi `AnsiString(text)`: the bytes of the string in the system ANSI code
+/// page (code page 1252 where the system has none), characters without a
+/// mapping converted as the system does.
+pub fn ansi_bytes(text: &str) -> Vec<u8> {
+    Encoding::Mbcs(ANSI_CODE_PAGE).get_bytes(text)
+}
+
+/// Delphi `string(ansi)`: the string of bytes in the system ANSI code page.
+/// Bytes the code page leaves undefined convert as the system does; a
+/// failure gives the lossy UTF-8 reading instead of an error.
+pub fn ansi_string(bytes: &[u8]) -> String {
+    Encoding::Mbcs(ANSI_CODE_PAGE)
+        .get_string(bytes)
+        .unwrap_or_else(|_| String::from_utf8_lossy(bytes).into_owned())
+}
+
+/// `CP_ACP` on Windows, which the system resolves to its ANSI code page.
+#[cfg(windows)]
+const ANSI_CODE_PAGE: u32 = 0;
+#[cfg(not(windows))]
+const ANSI_CODE_PAGE: u32 = 1252;
+
 /// Bytes that are not valid in the encoding.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("No mapping for the Unicode character exists in the target multi-byte code page")]
