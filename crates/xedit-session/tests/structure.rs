@@ -427,3 +427,65 @@ fn adds_a_placed_record_to_a_cell_and_copies_the_cell_with_it() {
     let group = plugin_cell.child_group().expect("the copy has a child group");
     assert_eq!(group.get_element_count(), 1);
 }
+
+/// A record of an installed game copied as an override keeps every value:
+/// the script properties of Nazeem (unions decided again from the values
+/// assigned before them) and his factions (a subrecord array made from its
+/// definition). Does nothing without `XEDIT_SSE_DATA`.
+#[test]
+fn copies_a_skyrim_npc_as_an_override() {
+    let _guard = test_lock();
+    let Some(data) = std::env::var("XEDIT_SSE_DATA").ok() else {
+        return;
+    };
+    let skyrim = format!("{data}/Skyrim.esm");
+    let update = format!("{data}/Update.esm");
+    if !std::path::Path::new(&update).exists() {
+        return;
+    }
+    xedit_core::implementation::clear_files_map();
+    xedit_core::implementation::reset_load_order_slots();
+    let mut session = Session::load("sse", &[skyrim, update]).unwrap();
+    session.allow_edit(true);
+    let registry = Registry::standard();
+    let copied = registry
+        .call(
+            &mut session,
+            "records.copy",
+            json!({ "form_id": "00013BBF", "from": "Skyrim.esm", "to": "Update.esm" }),
+        )
+        .unwrap();
+    assert_eq!(copied["copy"]["file"], "Update.esm");
+    let source = registry
+        .call(
+            &mut session,
+            "elements.get",
+            json!({ "form_id": "00013BBF", "file": "Skyrim.esm", "path": "VMAD" }),
+        )
+        .unwrap();
+    let copy = registry
+        .call(
+            &mut session,
+            "elements.get",
+            json!({ "form_id": "00013BBF", "file": "Update.esm", "path": "VMAD" }),
+        )
+        .unwrap();
+    assert_eq!(copy["children"], source["children"]);
+    for path in ["Factions", "Items", "AIDT"] {
+        let source = registry
+            .call(
+                &mut session,
+                "elements.get",
+                json!({ "form_id": "00013BBF", "file": "Skyrim.esm", "path": path }),
+            )
+            .unwrap();
+        let copy = registry
+            .call(
+                &mut session,
+                "elements.get",
+                json!({ "form_id": "00013BBF", "file": "Update.esm", "path": path }),
+            )
+            .unwrap();
+        assert_eq!(copy["children"], source["children"], "{path}");
+    }
+}
