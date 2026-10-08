@@ -635,8 +635,7 @@ fn get_col_objects(tree: &mut Tree, node: Option<El>, cols: &mut Vec<(String, El
     if let Some(col) = block_get_collision(tree, node)? {
         let col_name = name(tree, col)?;
         // A sorted `TStringList` with `dupIgnore`.
-        let key = col_name.to_uppercase();
-        match cols.binary_search_by(|(known, _)| known.to_uppercase().cmp(&key)) {
+        match cols.binary_search_by(|(known, _)| xedit_io::encoding::ansi_compare_text(known, &col_name)) {
             Ok(_) => {}
             Err(position) => cols.insert(position, (col_name, col)),
         }
@@ -1035,8 +1034,8 @@ fn compare_morph_models(file: &ProcFileObject, nif: &mut NifFile, log: &mut Vec<
     }
     let mut names0: Vec<String> = m0.iter().map(|&n| tree.edit_values(n, "Name")).collect::<R<_>>()?;
     let mut names1: Vec<String> = m1.iter().map(|&n| tree1.edit_values(n, "Name")).collect::<R<_>>()?;
-    names0.sort_by_key(|n| n.to_uppercase());
-    names1.sort_by_key(|n| n.to_uppercase());
+    names0.sort_by(|a, b| xedit_io::encoding::ansi_compare_text(a, b));
+    names1.sort_by(|a, b| xedit_io::encoding::ansi_compare_text(a, b));
     if names0 != names1 {
         log.push(format!(
             "\t{root_name}: Bones between morph models don't match in _0.nif and _1.nif"

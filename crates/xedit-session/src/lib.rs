@@ -17,6 +17,7 @@ pub mod edit;
 pub mod formids;
 pub mod masters;
 pub mod save;
+pub mod sniff;
 
 use std::collections::BTreeMap;
 
@@ -127,6 +128,7 @@ impl Registry {
         formids::register(&mut registry);
         archive::register(&mut registry);
         assets::register(&mut registry);
+        sniff::register(&mut registry);
         registry
     }
 

@@ -119,11 +119,44 @@ impl Encoding {
     }
 }
 
+/// Delphi `AnsiCompareText` (and the order of `TStringList.Sort`): the
+/// comparison of the user's locale, ignoring case (`CompareString` with
+/// `NORM_IGNORECASE`); elsewhere the upper case strings by code unit.
+pub fn ansi_compare_text(a: &str, b: &str) -> std::cmp::Ordering {
+    platform::compare_text(a, b)
+}
+
 #[cfg(windows)]
 mod platform {
-    use windows_sys::Win32::Globalization::{MultiByteToWideChar, WideCharToMultiByte};
+    use windows_sys::Win32::Globalization::{
+        CompareStringW, LOCALE_USER_DEFAULT, MultiByteToWideChar, NORM_IGNORECASE, WideCharToMultiByte,
+    };
 
     use super::EncodingError;
+
+    pub fn compare_text(a: &str, b: &str) -> std::cmp::Ordering {
+        let a: Vec<u16> = a.encode_utf16().collect();
+        let b: Vec<u16> = b.encode_utf16().collect();
+        let (Ok(a_length), Ok(b_length)) = (i32::try_from(a.len()), i32::try_from(b.len())) else {
+            return a.cmp(&b);
+        };
+        // SAFETY: both buffers are valid for the lengths passed.
+        let result = unsafe {
+            CompareStringW(
+                LOCALE_USER_DEFAULT,
+                NORM_IGNORECASE,
+                a.as_ptr(),
+                a_length,
+                b.as_ptr(),
+                b_length,
+            )
+        };
+        match result {
+            1 => std::cmp::Ordering::Less,
+            3 => std::cmp::Ordering::Greater,
+            _ => std::cmp::Ordering::Equal,
+        }
+    }
 
     pub fn get_string(code_page: u32, bytes: &[u8]) -> Result<String, EncodingError> {
         let length = i32::try_from(bytes.len()).map_err(|_| EncodingError)?;
@@ -189,6 +222,12 @@ mod platform {
 #[cfg(not(windows))]
 mod platform {
     use super::EncodingError;
+
+    pub fn compare_text(a: &str, b: &str) -> std::cmp::Ordering {
+        let a: Vec<u16> = a.to_uppercase().encode_utf16().collect();
+        let b: Vec<u16> = b.to_uppercase().encode_utf16().collect();
+        a.cmp(&b)
+    }
 
     fn encoding(code_page: u32) -> Option<&'static encoding_rs::Encoding> {
         let label = match code_page {

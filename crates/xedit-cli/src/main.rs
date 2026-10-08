@@ -120,6 +120,11 @@ enum Action {
         #[command(subcommand)]
         action: AssetsAction,
     },
+    /// The operations of Sniff on the NIF, KF and material files of a folder or archive.
+    Sniff {
+        #[command(subcommand)]
+        action: SniffAction,
+    },
     /// Run a command by name.
     Call {
         /// Command name as listed by `xedit schema`, for example system.version.
@@ -144,6 +149,49 @@ enum Action {
     },
     /// Serve the commands as Model Context Protocol tools on stdio. The plugins load when the first tool is called.
     Mcp,
+}
+
+#[derive(Subcommand)]
+enum SniffAction {
+    /// List the operations with their settings and defaults (sniff.list).
+    List,
+    /// Run an operation on a folder or archive (sniff.run), as Sniff's -OP: does. Needs --edit unless --dry-run.
+    Run {
+        /// The title of the operation, any case, such as "Update bounds".
+        operation: String,
+        /// The folder or the archive (BSA, BA2) with the files.
+        input: String,
+        /// The folder to write the changed files to; not needed by operations that only report.
+        #[arg(long)]
+        output: Option<String>,
+        /// A settings ini in Sniff's form (the section is the title without spaces).
+        #[arg(long)]
+        settings: Option<String>,
+        /// A setting of the operation's section, NAME=VALUE; repeat for more.
+        #[arg(long = "set", value_name = "NAME=VALUE")]
+        set: Vec<String>,
+        /// Only the files whose path holds this text.
+        #[arg(long)]
+        path_contains: Option<String>,
+        /// Leave the subfolders of an input folder.
+        #[arg(long)]
+        no_subdir: bool,
+        /// Report a file that fails and go on.
+        #[arg(long)]
+        skip_on_errors: bool,
+        /// Write the unchanged files too.
+        #[arg(long)]
+        copy_all: bool,
+        /// Threads; 0 for the CPU count less one.
+        #[arg(long)]
+        threads: Option<i32>,
+        /// Also write the messages to this file, as Sniff's -LOG: does.
+        #[arg(long)]
+        log: Option<String>,
+        /// Process the files and report, but write nothing.
+        #[arg(long)]
+        dry_run: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -897,6 +945,40 @@ fn command_of(action: Action) -> Result<(String, Value), CommandError> {
                 "assets.from-json".to_owned(),
                 json!({ "file": file, "output": output, "kind": kind, "dry_run": dry_run }),
             ),
+        },
+        Action::Sniff { action } => match action {
+            SniffAction::List => ("sniff.list".to_owned(), json!({})),
+            SniffAction::Run {
+                operation,
+                input,
+                output,
+                settings,
+                set,
+                path_contains,
+                no_subdir,
+                skip_on_errors,
+                copy_all,
+                threads,
+                log,
+                dry_run,
+            } => {
+                let mut options = serde_json::Map::new();
+                for pair in set {
+                    let (name, value) = pair.split_once('=').ok_or_else(|| {
+                        CommandError::new("invalid_params", format!("--set {pair}: expected NAME=VALUE"))
+                    })?;
+                    options.insert(name.to_owned(), json!(value));
+                }
+                (
+                    "sniff.run".to_owned(),
+                    json!({
+                        "operation": operation, "input": input, "output": output, "settings": settings,
+                        "options": options, "path_contains": path_contains, "subdir": !no_subdir,
+                        "skip_on_errors": skip_on_errors, "copy_all": copy_all, "threads": threads,
+                        "log": log, "dry_run": dry_run
+                    }),
+                )
+            }
         },
         Action::Call { name, params } => {
             let params = serde_json::from_str(&params)
