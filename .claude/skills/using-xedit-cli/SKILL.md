@@ -1,6 +1,6 @@
 ---
 name: using-xedit-cli
-description: Use when inspecting, editing or saving Bethesda plugins and save games with the native xedit CLI of this repository (version 2, with the write path). Covers the mutation rules (edit flag, dry run, explicit save, readback), loading plugins of any game from Morrowind to Starfield, listing and reading records and elements, setting, adding, removing and copying them, deleting records, changing and renumbering FormIDs, module flags, the masters of a plugin, dumping plugins and saves like xDump, listing, unpacking and packing BSA and BA2 archives (`archive list|extract|pack` and the `bsarch` binary), running several commands in one session with batch, and keeping a session loaded behind a JSON-RPC daemon (serve) or an MCP server (mcp).
+description: Use when inspecting, editing or saving Bethesda plugins and save games with the native xedit CLI of this repository (version 2, with the write path). Covers the mutation rules (edit flag, dry run, explicit save, readback), loading plugins of any game from Morrowind to Starfield, listing and reading records and elements, setting, adding, removing and copying them, deleting records, changing and renumbering FormIDs, module flags, the masters of a plugin, dumping plugins and saves like xDump, listing, unpacking and packing BSA and BA2 archives (`archive list|extract|pack` and the `bsarch` binary), reading and writing NIF meshes and materials (`assets`), running the batch operations of Sniff on them (`sniff list|run` and the `sniff` binary), running several commands in one session with batch, and keeping a session loaded behind a JSON-RPC daemon (serve) or an MCP server (mcp).
 ---
 
 # Using the xedit CLI
@@ -136,6 +136,19 @@ A record or element node has `name`, `display_name` (only when it differs, for e
 - The value is the text the dump prints: `Havok | Dynamic` for flags, an enumeration name or its number, `#RRGGBB` for colours, `None` or an index for a block reference. A reference shows as `<index> <type> "<name>"`.
 - Saving a file the port loaded unchanged gives xEdit's bytes; `cargo xtask parity nif` checks that on every NIF and material of the corpus archives (see the `checking-parity` skill).
 - Error code `load_failed` carries upstream's message (`Error reading NIF block 3 NiTriShapeData: Unexpected end of stream...`, `Unknown NIF version "20.2.0.7" ("User Version"=12, "User Version 2"=155)`: Fallout 76 and Starfield meshes are not supported by xEdit 4.1.5q either), `edit_failed` the message of a value that does not take (`'x' is not a valid integer value`).
+
+## Sniff
+
+The batch operations of Sniff on the NIF, KF and material files of a folder or an archive. They need no `--game` or `--load`.
+
+| CLI | Registry name | What it does |
+|---|---|---|
+| `sniff list` | `sniff.list` | Every operation: title, group, games, file extensions, whether it only reports, its settings section and each setting with its default, and `not_ported` with the reason for those that are not ported yet. |
+| `sniff run <operation> <input> [--output DIR] [--settings INI] [--set NAME=VALUE]... [--path-contains TEXT] [--no-subdir] [--skip-on-errors] [--copy-all] [--threads N] [--log FILE] [--dry-run]` | `sniff.run` | Runs the operation (its title in any case, such as `"Update tangents and binormals"`) on the files below `<input>` (a folder, or a BSA or BA2), as Sniff's `-OP:` automation mode. Changed files go to `--output` (a folder that exists) under their path in the input; an operation that only reports needs none. `--set` sets one setting of the operation's section (`sniff list` names them: `--set bAddIfMissing=1`); `--settings` reads an ini in Sniff's form (`[Main]` and the section named after the title without spaces). The response has Sniff's messages (`Updated: <file>`, `Skipped: <file>: <error>`, the summary), counts and each file's status. Without `--skip-on-errors` the first error stops the run (`aborted`), as Sniff does. Needs `--edit` unless `--dry-run`, which writes nothing (no output files, no log). |
+
+- The `sniff` binary takes Sniff's own arguments: `sniff -S:<settings.ini> -OP:<title> -I:<archive or folder> -O:<folder> -LOG:<file> -skip:yes -subdir:yes|no -threads:N [-P:<path part>] [-all:yes]`, prints the messages and writes the same files and log as `Sniff.exe`. `sniff -list` prints the operations. Without `-S:` it reads `sniff.ini` beside the binary.
+- 36 of the 50 operations are ported; `cargo xtask parity sniff` checks them against `Sniff.exe`. The others fail with error code `unsupported` and the reason: the shape merging, geometry copying and animation adding operations come with phase 5 step 5, `Optimize mesh` and `Analyze mesh` need the mesh optimizer (step 6), `Find textures` needs DDS support (step 2), and `Update MOPP code` calls a Havok DLL that is not ported. `Check for errors` with a texture check on fails each `.dds` file with `The texture checks need wbDDS, which is not ported yet (phase 5 step 2)`; its mesh checks work.
+- Error codes: `invalid_params` (unknown operation, a missing input or output folder, a setting that does not parse: the message is Sniff's), `unsupported`, `io`.
 
 ## Editing an element
 
@@ -277,4 +290,5 @@ Behaviour a user can meet, as of the end of phase 3. Each is an upstream behavio
 - **Starfield.** The complex FileIDs are ported in the master functions but the FormID lookups ignore them, so FormID changes and renumbering across masters are unchecked there. The oracle refuses to save the official Starfield modules whose header the save would edit, and so does the port.
 - **Oblivion saves** do not read (an upstream limit, see "Saves").
 - **Mesh optimizing.** `SpellOptimize`, `SpellStripify` and `SpellTriangulate` of a NIF (and stripifying triangles) need `wbMeshOptimize`, which comes with LOD generation (phase 5 step 6).
+- **Sniff.** 14 of Sniff's 50 operations are not ported yet (`sniff list` gives each one's `not_ported` reason); see "Sniff".
 - **Texture archives.** `archive pack` and `archive extract` stop on `Fallout 4 DDS` and `Starfield DDS` archives (`wbDDS` is phase 5 step 2); listing works. The loose texture and `BSArch.exe -fo4dds` paths are the same gap.
