@@ -1,0 +1,36 @@
+{
+  "description": "Adding a master to a master with many records and cleaning it again: every record of DLCworkshop01.esm goes through MastersUpdated twice (its own FileID moves from 01 to 02 and back).",
+  "game": "fo4",
+  "build_refs": false,
+  "load": [
+    "Fallout4.esm",
+    "DLCRobot.esm",
+    "DLCworkshop01.esm"
+  ],
+  "commands": [
+    {
+      "command": "masters.add",
+      "params": {
+        "file": "DLCworkshop01.esm",
+        "masters": [
+          "DLCRobot.esm"
+        ]
+      }
+    },
+    {
+      "command": "masters.sort",
+      "params": {
+        "file": "DLCworkshop01.esm"
+      }
+    },
+    {
+      "command": "masters.clean",
+      "params": {
+        "file": "DLCworkshop01.esm"
+      }
+    }
+  ],
+  "save": [
+    "DLCworkshop01.esm"
+  ]
+}

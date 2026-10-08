@@ -1,0 +1,100 @@
+{
+  "description": "Edits on a localized master that avoid copying localized strings (the port does not assign them yet): copy as override and as new record, set, add and remove elements including an entry of an array by index, a reference to a new record. DLCRobot.esm loads before DLCworkshop01.esm, as the official order of the GUI has it. The oracle runs without the reference information (build_refs false): building it initialises every record, which adds the required members the port adds only to the records it touches.",
+  "game": "fo4",
+  "build_refs": false,
+  "load": [
+    "Fallout4.esm",
+    "DLCRobot.esm",
+    "DLCworkshop01.esm"
+  ],
+  "commands": [
+    {
+      "command": "records.copy",
+      "params": {
+        "form_id": "00000038",
+        "from": "Fallout4.esm",
+        "to": "DLCworkshop01.esm"
+      }
+    },
+    {
+      "command": "elements.set",
+      "params": {
+        "form_id": "00000038",
+        "file": "DLCworkshop01.esm",
+        "path": "FLTV",
+        "value": "12.5"
+      }
+    },
+    {
+      "command": "records.copy",
+      "params": {
+        "form_id": "00067381",
+        "from": "Fallout4.esm",
+        "to": "DLCworkshop01.esm",
+        "as_new": true
+      }
+    },
+    {
+      "command": "elements.set",
+      "params": {
+        "form_id": "02000EBB",
+        "file": "DLCworkshop01.esm",
+        "path": "LVLD",
+        "value": "25"
+      }
+    },
+    {
+      "command": "elements.remove",
+      "params": {
+        "form_id": "02000EBB",
+        "file": "DLCworkshop01.esm",
+        "path": "Leveled List Entries\\[4]"
+      }
+    },
+    {
+      "command": "elements.add",
+      "params": {
+        "form_id": "02000EBB",
+        "file": "DLCworkshop01.esm",
+        "name": "LVLG"
+      }
+    },
+    {
+      "command": "records.copy",
+      "params": {
+        "form_id": "0000003A",
+        "from": "Fallout4.esm",
+        "to": "DLCworkshop01.esm",
+        "as_new": true
+      }
+    },
+    {
+      "command": "elements.set",
+      "params": {
+        "form_id": "02000EBB",
+        "file": "DLCworkshop01.esm",
+        "path": "LVLG",
+        "value": "02000EBC"
+      }
+    },
+    {
+      "command": "elements.set",
+      "params": {
+        "form_id": "02000EBC",
+        "file": "DLCworkshop01.esm",
+        "path": "EDID",
+        "value": "OracleTimeScale"
+      }
+    },
+    {
+      "command": "files.flags",
+      "params": {
+        "file": "DLCworkshop01.esm",
+        "esm": true
+      }
+    }
+  ],
+  "save": [
+    "DLCworkshop01.esm"
+  ]
+}
