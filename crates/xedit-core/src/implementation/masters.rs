@@ -870,7 +870,7 @@ fn group_masters_updated(group: &Arc<GroupRecordImpl>, update: &MastersUpdate) -
             // `MakeHeaderWriteable`.
             group.set_modified(true);
             edit::invalidate_parent_storage(&**group);
-            group.set_group_label(new.to_cardinal());
+            group.set_raw_group_label(new.to_cardinal());
             true
         });
         if changed {

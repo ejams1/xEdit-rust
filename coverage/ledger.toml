@@ -1223,8 +1223,10 @@ status = "pending"
 source = "mniNavCellChild"
 
 [gui."xEdit/xeMainForm.dfm:mniNavChangeFormID:OnClick"]
-status = "pending"
+status = "covered"
+command = "formids.change"
 source = "mniNavChangeFormIDClick"
+note = "The dialogs are parameters: the new FormID, the target file, whether later overrides follow."
 
 [gui."xEdit/xeMainForm.dfm:mniNavChangeReferencingRecords:OnClick"]
 status = "pending"
@@ -1249,8 +1251,10 @@ status = "pending"
 source = "mniNavCleanupInjectedClick"
 
 [gui."xEdit/xeMainForm.dfm:mniNavCompactFormIDs:OnClick"]
-status = "pending"
+status = "covered"
+command = "formids.renumber"
 source = "mniNavRenumberFormIDsFromClick"
+note = "--compact."
 
 [gui."xEdit/xeMainForm.dfm:mniNavCompareSelected:OnClick"]
 status = "pending"
@@ -1421,12 +1425,15 @@ status = "pending"
 source = "mniNavCleaningObsoleteClick"
 
 [gui."xEdit/xeMainForm.dfm:mniNavRenumberFormIDsFrom:OnClick"]
-status = "pending"
+status = "covered"
+command = "formids.renumber"
 source = "mniNavRenumberFormIDsFromClick"
 
 [gui."xEdit/xeMainForm.dfm:mniNavRenumberFormIDsInject:OnClick"]
-status = "pending"
+status = "covered"
+command = "formids.renumber"
 source = "mniNavRenumberFormIDsFromClick"
+note = "--inject-into, with --preserve-object-ids and --all-or-nothing for the two questions."
 
 [gui."xEdit/xeMainForm.dfm:mniNavSetVWDAuto:OnClick"]
 status = "pending"
@@ -4241,24 +4248,34 @@ status = "pending"
 source = "IwbFile_GetFileName"
 
 [script."xejviScriptAdapterFile:cUnit.GetIsESL:function"]
-status = "pending"
+status = "covered"
+command = "files.flags"
 source = "IwbFile_GetIsLight"
+note = "Read with --dry-run and no flag."
 
 [script."xejviScriptAdapterFile:cUnit.GetIsESM:function"]
-status = "pending"
+status = "covered"
+command = "files.flags"
 source = "IwbFile_GetIsESM"
+note = "Read with --dry-run and no flag."
 
 [script."xejviScriptAdapterFile:cUnit.GetIsLight:function"]
-status = "pending"
+status = "covered"
+command = "files.flags"
 source = "IwbFile_GetIsLight"
+note = "Read with --dry-run and no flag."
 
 [script."xejviScriptAdapterFile:cUnit.GetIsMedium:function"]
-status = "pending"
+status = "covered"
+command = "files.flags"
 source = "IwbFile_GetIsMedium"
+note = "Read with --dry-run and no flag."
 
 [script."xejviScriptAdapterFile:cUnit.GetIsSmall:function"]
-status = "pending"
+status = "covered"
+command = "files.flags"
 source = "IwbFile_GetIsLight"
+note = "Read with --dry-run and no flag."
 
 [script."xejviScriptAdapterFile:cUnit.GetLoadOrder:function"]
 status = "pending"
@@ -4317,23 +4334,28 @@ status = "pending"
 source = "IwbFile_RecordCount"
 
 [script."xejviScriptAdapterFile:cUnit.SetIsESL:function"]
-status = "pending"
+status = "covered"
+command = "files.flags"
 source = "IwbFile_SetIsLight"
 
 [script."xejviScriptAdapterFile:cUnit.SetIsESM:function"]
-status = "pending"
+status = "covered"
+command = "files.flags"
 source = "IwbFile_SetIsESM"
 
 [script."xejviScriptAdapterFile:cUnit.SetIsLight:function"]
-status = "pending"
+status = "covered"
+command = "files.flags"
 source = "IwbFile_SetIsLight"
 
 [script."xejviScriptAdapterFile:cUnit.SetIsMedium:function"]
-status = "pending"
+status = "covered"
+command = "files.flags"
 source = "IwbFile_SetIsMedium"
 
 [script."xejviScriptAdapterFile:cUnit.SetIsSmall:function"]
-status = "pending"
+status = "covered"
+command = "files.flags"
 source = "IwbFile_SetIsLight"
 
 [script."xejviScriptAdapterFile:cUnit.SortMasters:function"]
@@ -5623,8 +5645,10 @@ status = "pending"
 source = "IwbMainRecord_SetIsVisibleWhenDistant"
 
 [script."xejviScriptAdapterRecord:cUnit.SetLoadOrderFormID:function"]
-status = "pending"
+status = "covered"
+command = "formids.change"
 source = "IwbMainRecord_SetLoadOrderFormID"
+note = "formids.change also updates the referencing records, which the script function leaves to CompareExchangeFormID."
 
 [script."xejviScriptAdapterRecord:cUnit.Signature:function"]
 status = "pending"

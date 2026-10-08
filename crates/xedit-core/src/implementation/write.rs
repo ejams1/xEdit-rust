@@ -392,7 +392,7 @@ impl GroupRecordImpl {
 
     /// Port of `TwbElement.Remove` for a group: the group leaves its
     /// container, which is modified by that.
-    fn remove(&self) {
+    pub(crate) fn remove(&self) {
         let Some(this) = self.self_ref.upgrade() else { return };
         let this: ElementRef = this;
         if let Some(container) = self.base.container()

@@ -219,6 +219,20 @@ impl IntegerDefFormater for IntegerDefFormaterUnion {
         }
     }
 
+    /// Port of `TwbIntegerDefFormaterUnion.CompareExchangeFormID`.
+    fn compare_exchange_form_id(
+        &self,
+        int: &mut i64,
+        old: crate::interface::form_id::FormID,
+        new: crate::interface::form_id::FormID,
+        element: ElementArg,
+    ) -> Result<bool, EditError> {
+        match self.decide_member(element) {
+            Some(member) => member.compare_exchange_form_id(int, old, new, element),
+            None => Ok(false),
+        }
+    }
+
     fn get_edit_type(&self, element: ElementArg) -> EditType {
         match self.decide_member(element) {
             Some(member) => member.get_edit_type(element),
