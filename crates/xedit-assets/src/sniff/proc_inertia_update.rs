@@ -375,7 +375,12 @@ impl Proc for ProcInertiaUpdate {
                     }
                 }
                 "bhkConvexVerticesShape" | "bhkMoppBvTreeShape" => {
-                    let mut dm = self.depth_mult;
+                    // `var dm := fDepthMult` is a Double: the inline
+                    // variable takes the type of the expression, which
+                    // excess precision makes a Double (found by parity
+                    // sniff: the penetration depth of Oblivion's MOPP
+                    // shapes differs by an ulp when it is a Single).
+                    let mut dm = f64::from(self.depth_mult);
                     let mut verts: Vec<Vector3> = Vec::new();
                     if block_type(tree, shape) == "bhkConvexVerticesShape" {
                         verts = block_get_vertices(tree, shape, None)?;
@@ -393,7 +398,7 @@ impl Proc for ProcInertiaUpdate {
                         if block_type(tree, data) == "hkPackedNiTriStripsData" {
                             verts = block_get_vertices(tree, data, None)?;
                             // The vertices of strips data are in game units.
-                            dm = (f64::from(dm) / f64::from(hk2gu(nif_version))) as f32;
+                            dm /= f64::from(hk2gu(nif_version));
                         } else if block_type(tree, data) == "bhkCompressedMeshShapeData" {
                             let big_verts = tree.elements(data, "Big Verts")?.ok_or_else(access_violation)?;
                             for i in 0..tree.count(big_verts) {
@@ -466,7 +471,7 @@ impl Proc for ProcInertiaUpdate {
                             body.set_center(tree, center, add(tx, c.x()), add(ty, c.y()), add(tz, c.z()))? || changed;
                     }
                     if self.penetration {
-                        let d = (2.0 * r_min * f64::from(dm)) as f32;
+                        let d = (2.0 * r_min * dm) as f32;
                         changed = body.set_penetration(tree, depth, d)? || changed;
                     }
                 }
