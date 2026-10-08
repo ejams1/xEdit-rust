@@ -31,11 +31,14 @@
 //! keyed by the archive and the settings. With `--sample <n>` the first `n`
 //! files of each archive are unpacked into a folder, which is the input of
 //! both (the loose file path of Sniff); without it the archive is.
+//!
+//! Sniff starts hidden on the harness's own desktop (`hidden.rs`). The work
+//! folder of an archive is removed once it compares equal, and only the
+//! outputs that differ stay otherwise, unless `--keep`.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -48,11 +51,12 @@ use xedit_assets::sniff::procs::PROCS;
 use xedit_io::archive::Archive;
 use xedit_io::encoding::ansi_string;
 
+use super::hidden::HiddenCommand;
 use super::nif::{archive_key, fnv, windows_path};
 use super::{GAMES, Game, cache_dir, required_var};
 
 const USAGE: &str = "usage: cargo xtask parity sniff [--case <name or name part>]... [--game <game>]... \
-                     [--archive <name part>]... [--sample <n>] [--threads <n>] [--keep <n>] [--list]";
+                     [--archive <name part>]... [--sample <n>] [--threads <n>] [--show <n>] [--keep] [--list]";
 
 /// A run of an operation with its settings.
 struct Case {
@@ -457,7 +461,12 @@ struct Options {
     archives: Vec<String>,
     sample: Option<usize>,
     threads: usize,
-    keep: usize,
+    /// How many files of each outcome and lines of each log difference the
+    /// report names for an archive.
+    show: usize,
+    /// Keep the work folders (Sniff's outputs, the logs) of the archives
+    /// that compared equal, and every output of the others.
+    keep: bool,
     list: bool,
 }
 
@@ -468,7 +477,8 @@ fn parse(args: &[&str]) -> Result<Options> {
         archives: Vec::new(),
         sample: None,
         threads: std::thread::available_parallelism().map_or(4, |count| count.get()),
-        keep: 3,
+        show: 3,
+        keep: false,
         list: false,
     };
     let mut rest = args.iter();
@@ -479,7 +489,8 @@ fn parse(args: &[&str]) -> Result<Options> {
             "--archive" => options.archives.push(rest.next().context(USAGE)?.to_lowercase()),
             "--sample" => options.sample = Some(rest.next().context(USAGE)?.parse()?),
             "--threads" => options.threads = rest.next().context(USAGE)?.parse::<usize>()?.max(1),
-            "--keep" => options.keep = rest.next().context(USAGE)?.parse()?,
+            "--show" => options.show = rest.next().context(USAGE)?.parse()?,
+            "--keep" => options.keep = true,
             "--list" => options.list = true,
             _ => bail!(USAGE),
         }
@@ -598,6 +609,36 @@ fn hash_outputs(dir: &Path, outputs: &mut BTreeMap<String, u64>) -> Result<()> {
     Ok(())
 }
 
+/// Frees the work folder of an archive once it is compared: removed when
+/// everything was equal, else only Sniff's outputs of the files that
+/// differ, the logs and the settings stay.
+fn clean_work(work: &Path, differing: &BTreeSet<String>, log_differs: bool) -> Result<()> {
+    if differing.is_empty() && !log_differs {
+        if work.exists() {
+            fs::remove_dir_all(work).with_context(|| format!("removing {}", work.display()))?;
+        }
+        return Ok(());
+    }
+    let _ = fs::remove_file(work.join("Sniff.exe"));
+    for folder in ["oracle-out", "port-out"] {
+        let dir = work.join(folder);
+        if !dir.exists() {
+            continue;
+        }
+        for entry in walkdir::WalkDir::new(&dir) {
+            let entry = entry?;
+            if !entry.file_type().is_file() {
+                continue;
+            }
+            let relative = entry.path().strip_prefix(&dir)?.to_string_lossy().replace('/', "\\");
+            if !differing.contains(&relative.to_lowercase()) {
+                fs::remove_file(entry.path())?;
+            }
+        }
+    }
+    Ok(())
+}
+
 /// Runs Sniff on `input` and returns what it gave.
 #[allow(clippy::too_many_arguments)]
 fn run_sniff(
@@ -624,7 +665,7 @@ fn run_sniff(
     fs::write(&ini, settings_text(case, &extra, source))?;
     let log = work.join("oracle.log");
     let _ = fs::remove_file(&log);
-    let mut command = Command::new(&exe);
+    let mut command = HiddenCommand::new(&exe);
     command
         .current_dir(work)
         .arg(format!("-S:{}", windows_path(&ini)))
@@ -642,18 +683,10 @@ fn run_sniff(
     let mut child = command.spawn().context("starting Sniff")?;
     let size = if input.is_file() { fs::metadata(input)?.len() } else { 0 };
     let timeout = Duration::from_secs(600 + size / 1_000_000);
-    let start = Instant::now();
-    loop {
-        if let Some(status) = child.try_wait()? {
-            ensure!(status.success(), "Sniff ended with {status}");
-            break;
-        }
-        if start.elapsed() > timeout {
-            let _ = child.kill();
-            let _ = child.wait();
-            bail!("Sniff did not finish within {} s", timeout.as_secs());
-        }
-        std::thread::sleep(Duration::from_millis(200));
+    match child.wait_timeout(timeout)? {
+        Some(0) => {}
+        Some(code) => bail!("Sniff ended with exit code {code:#x}"),
+        None => bail!("Sniff did not finish within {} s", timeout.as_secs()),
     }
     ensure!(
         log.exists(),
@@ -1111,6 +1144,7 @@ pub fn run(tag: &str, args: &[&str]) -> Result<()> {
                 let mut counts: BTreeMap<Outcome, usize> = BTreeMap::new();
                 let mut shown: BTreeMap<Outcome, usize> = BTreeMap::new();
                 let mut details = Vec::new();
+                let mut differing: BTreeSet<String> = BTreeSet::new();
                 for name in names {
                     let outcome = match (
                         port.errors.get(name),
@@ -1130,9 +1164,10 @@ pub fn run(tag: &str, args: &[&str]) -> Result<()> {
                     };
                     *counts.entry(outcome).or_default() += 1;
                     if !matches!(outcome, Outcome::Equal | Outcome::EqualError | Outcome::Unchanged) {
+                        differing.insert(name.clone());
                         let seen = shown.entry(outcome).or_default();
                         *seen += 1;
-                        if *seen <= options.keep.max(3) {
+                        if *seen <= options.show {
                             details.push(format!(
                                 "    {} {name}: port {:?} {:?}, oracle {:?} {:?}",
                                 outcome.name(),
@@ -1199,9 +1234,12 @@ pub fn run(tag: &str, args: &[&str]) -> Result<()> {
                     ("log file port only", &extra_port),
                     ("log file oracle only", &extra_oracle),
                 ] {
-                    for line in lines.iter().take(options.keep.max(3)) {
+                    for line in lines.iter().take(options.show) {
                         say(format!("    {label}: {}", line.replace('\t', "\\t")), &mut report);
                     }
+                }
+                if !options.keep {
+                    clean_work(&work, &differing, log_differs)?;
                 }
             }
         }

@@ -254,6 +254,22 @@ impl HiddenChild {
         let _ = self.child.kill();
         let _ = self.child.wait();
     }
+
+    /// Waits until the program ends or `timeout` passes; `None` on timeout
+    /// (the program is then killed), else the exit code.
+    pub fn wait_timeout(&mut self, timeout: std::time::Duration) -> Result<Option<u32>> {
+        let start = std::time::Instant::now();
+        loop {
+            if let Some(code) = self.try_wait()? {
+                return Ok(Some(code));
+            }
+            if start.elapsed() > timeout {
+                self.kill();
+                return Ok(None);
+            }
+            std::thread::sleep(std::time::Duration::from_millis(200));
+        }
+    }
 }
 
 #[cfg(windows)]
@@ -302,9 +318,7 @@ mod tests {
         let mut command = HiddenCommand::new("C:\\Windows\\System32\\cmd.exe");
         command.arg("/c").arg("ping -n 30 127.0.0.1 > nul");
         let mut child = command.spawn().unwrap();
-        std::thread::sleep(Duration::from_millis(500));
-        assert_eq!(child.try_wait().unwrap(), None);
-        child.kill();
+        assert_eq!(child.wait_timeout(Duration::from_millis(500)).unwrap(), None);
         assert!(child.try_wait().unwrap().is_some());
     }
 }

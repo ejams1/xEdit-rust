@@ -30,7 +30,6 @@ use std::collections::{BTreeMap, HashMap};
 use std::fs::{self, File};
 use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
@@ -44,6 +43,7 @@ use xedit_assets::data_format_nif_types::ROTATION_EULER;
 use xedit_io::archive::Archive;
 use xedit_io::encoding::Encoding;
 
+use super::hidden::HiddenCommand;
 use super::{GAMES, Game, cache_dir, required_var};
 
 mod from_json;
@@ -257,7 +257,7 @@ fn run_sniff(
     } else {
         "Universal tweaker"
     };
-    let mut command = Command::new(&exe);
+    let mut command = HiddenCommand::new(&exe);
     command
         .current_dir(work)
         .arg(format!("-S:{}", windows_path(&ini)))
@@ -274,18 +274,10 @@ fn run_sniff(
     let mut child = command.spawn().context("starting Sniff")?;
     let size = fs::metadata(archive)?.len();
     let timeout = Duration::from_secs(300 + size / 2_000_000);
-    let start = Instant::now();
-    loop {
-        if let Some(status) = child.try_wait()? {
-            ensure!(status.success(), "Sniff ended with {status}");
-            break;
-        }
-        if start.elapsed() > timeout {
-            let _ = child.kill();
-            let _ = child.wait();
-            bail!("Sniff did not finish within {} s", timeout.as_secs());
-        }
-        std::thread::sleep(Duration::from_millis(200));
+    match child.wait_timeout(timeout)? {
+        Some(0) => {}
+        Some(code) => bail!("Sniff ended with exit code {code:#x}"),
+        None => bail!("Sniff did not finish within {} s", timeout.as_secs()),
     }
     let bytes = fs::read(&log).with_context(|| format!("Sniff wrote no log {}", log.display()))?;
     Ok(String::from_utf8_lossy(&bytes).into_owned())
