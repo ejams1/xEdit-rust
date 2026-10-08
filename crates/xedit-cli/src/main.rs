@@ -40,6 +40,10 @@ struct Cli {
     #[arg(long, global = true)]
     edit: bool,
 
+    /// Threads that load the plugins and build the records of a dump; 1 runs everything on one thread. Default: RAYON_NUM_THREADS, else one per CPU. The output is the same for every count.
+    #[arg(long, global = true)]
+    threads: Option<usize>,
+
     #[command(subcommand)]
     action: Action,
 }
@@ -664,7 +668,7 @@ fn run(game: Option<String>, load: Vec<String>, edit: bool, action: Action) -> R
 fn run_dump(dump: impl FnOnce(&mut dyn std::io::Write) -> Result<(), String> + Send + 'static) -> ExitCode {
     xedit_session::dump::log_progress_to_stderr();
     let worker = std::thread::Builder::new()
-        .stack_size(1 << 30)
+        .stack_size(xedit_core::threads::STACK_SIZE)
         .spawn(move || {
             let stdout = std::io::stdout();
             let mut out = std::io::BufWriter::with_capacity(1 << 20, stdout.lock());
@@ -720,6 +724,7 @@ fn run_mcp(game: Option<String>, load: Vec<String>, edit: bool) -> Result<(), Bo
 
 fn main() -> ExitCode {
     let cli = Cli::parse();
+    xedit_core::threads::set_threads(cli.threads.unwrap_or(0));
     if matches!(cli.action, Action::Serve { .. } | Action::Mcp) {
         // stdout carries the protocol; the progress of a load goes to stderr.
         xedit_session::dump::log_progress_to_stderr();

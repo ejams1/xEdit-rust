@@ -11,7 +11,9 @@
 //! shape: each variable is a process-wide atomic with a getter and a setter
 //! named after the upstream variable. One process therefore serves one game
 //! mode, as upstream does. Tests that change a setting must hold
-//! [`test_lock`] so that they do not run in parallel.
+//! [`test_lock`] so that they do not run in parallel. The upstream
+//! `threadvar`s (the internal edit count) are thread locals; the threading
+//! model is described in `crate::threads`.
 
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicI64, AtomicU8, AtomicU32, Ordering};
 use std::sync::{Mutex, MutexGuard, RwLock};
@@ -704,10 +706,14 @@ pub fn set_encoding_vmad(value: Encoding) {
     wbEncodingVMAD.store(encoding_to_bits(value), Ordering::Relaxed);
 }
 
-#[allow(non_upper_case_globals)]
-static _InternalEditCount: AtomicI32 = AtomicI32::new(0);
-#[allow(non_upper_case_globals)]
-static _BlockInternalEdit: AtomicBool = AtomicBool::new(false);
+// Upstream `threadvar`s: an internal edit on one thread (the build of a
+// record that drops its offsets) is not one on another.
+thread_local! {
+    #[allow(non_upper_case_globals)]
+    static _InternalEditCount: std::cell::Cell<i32> = const { std::cell::Cell::new(0) };
+    #[allow(non_upper_case_globals)]
+    static _BlockInternalEdit: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
 
 /// Upstream `wbIgnoreStringValue`: a `ToStr` callback returns it from
 /// `ctFromEditValue` to leave the data as it is.
@@ -715,19 +721,19 @@ pub const IGNORE_STRING_VALUE: &str = "<<<Ignore>>>";
 
 /// Port of `wbBeginInternalEdit`. Each `true` result needs one [`end_internal_edit`].
 pub fn begin_internal_edit(force: bool) -> bool {
-    let result = edit_allowed() || ((allow_internal_edit() || force) && !_BlockInternalEdit.load(Ordering::Relaxed));
+    let result = edit_allowed() || ((allow_internal_edit() || force) && !_BlockInternalEdit.get());
     if result {
-        _InternalEditCount.fetch_add(1, Ordering::Relaxed);
+        _InternalEditCount.set(_InternalEditCount.get() + 1);
     }
     result
 }
 
 pub fn end_internal_edit() {
-    _InternalEditCount.fetch_sub(1, Ordering::Relaxed);
+    _InternalEditCount.set(_InternalEditCount.get() - 1);
 }
 
 pub fn is_internal_edit() -> bool {
-    _InternalEditCount.load(Ordering::Relaxed) > 0
+    _InternalEditCount.get() > 0
 }
 
 /// Upstream `wbKnownSubRecordSignatures`: the signatures of the known
@@ -778,8 +784,8 @@ pub fn reset() {
     set_encoding(Encoding::Mbcs(1252));
     set_encoding_trans(Encoding::Mbcs(1252));
     set_encoding_vmad(Encoding::Utf8);
-    _InternalEditCount.store(0, Ordering::Relaxed);
-    _BlockInternalEdit.store(false, Ordering::Relaxed);
+    _InternalEditCount.set(0);
+    _BlockInternalEdit.set(false);
     reset_globals();
     reset_string_globals();
     set_game_mode(GameMode::gmTES3);

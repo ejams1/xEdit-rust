@@ -20,6 +20,7 @@ xedit --game fo4 --load "<Data>\DLCRobot.esm" <command>
 - `--load` takes the full path of a plugin and may repeat; the plugins load in the order given and each takes the next load order slot after its masters. Masters load from the same folder automatically, so loading `Update.esm` also loads `Skyrim.esm`.
 - The hardcoded records of the game load as a file named after the game executable (`SkyrimSE.exe`, `Fallout4.exe`), like xEdit does.
 - Strings of localized plugins come from the loose `Strings` folder or from the game archives next to the plugin (BSA, and BA2 including the Starfield versions).
+- `--threads N` sets the threads that read the groups of a plugin while it loads and that build and write the records of `dump`; the default is `RAYON_NUM_THREADS`, else one per CPU, and `--threads 1` runs everything on one thread. The output (dump, saved bytes, every command result) is the same for every count. `saves dump` writes on one thread, and the commands run on one thread.
 
 Loading is per process: every invocation loads the plugins again. `Skyrim.esm` takes a few seconds and `Starfield.esm` or `SeventySix.esm` much longer; keep a shell loop or a script around one call rather than calling once per record when many records are needed, and prefer `records list --signature` and `records find` over reading records one by one.
 

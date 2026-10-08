@@ -13,10 +13,12 @@ use std::io::Write;
 use std::path::Path;
 use std::sync::{Arc, LazyLock};
 
+use rayon::prelude::*;
+
 use xedit_core::container_handler::{add_archive, add_folder, clear_containers};
 use xedit_core::delphi::{change_file_ext, extract_file_path};
 use xedit_core::implementation::{
-    ElementImpl, FileBytes, FileImpl, MainRecordImpl, game_master_file, trim_initialized_records, wb_file,
+    ElementImpl, FileBytes, FileImpl, MainRecordImpl, game_master_file, pin_record, trim_initialized_records, wb_file,
     wb_file_compare,
 };
 use xedit_core::interface::globals::{
@@ -31,6 +33,7 @@ use xedit_core::interface::{
 use xedit_core::localization::{
     add_default_l_encodings_if_missing, add_l_encoding_if_missing, install_localization_handler, set_l_encoding_default,
 };
+use xedit_core::threads::{self, init_cycles};
 use xedit_io::Encoding;
 
 /// Sends the progress messages to stderr, like the log of xDump.
@@ -320,13 +323,20 @@ pub fn dump_save(path: &str, data_path: &str, mode: GameMode, out: &mut dyn Writ
     let file = wb_file(path, i32::MAX, FileStates::empty()).map_err(|error| error.to_string())?;
     load_resources(&file, path, &data_path, mode);
     load_hardcoded()?;
-    write_container(&file, out).map_err(|error| error.to_string())
+    // A save has no main records to spread over the workers, and the save
+    // definitions keep the tables of the save being read in globals.
+    write_elements(&*file, 0, None, out).map_err(|error| error.to_string())
 }
 
 /// Loads the plugin and writes its dump.
 pub fn dump_file(path: &str, mode: GameMode, out: &mut dyn Write) -> Result<(), String> {
     let file = load_file(path, mode)?;
     write_container(&file, out).map_err(|error| error.to_string())
+}
+
+/// Writes the dump of a loaded file, on the threads of `threads::threads`.
+pub fn write_dump(file: &FileImpl, out: &mut dyn Write) -> std::io::Result<()> {
+    write_container(file, out)
 }
 
 /// Port of the hardcoded load of `xDump.dpr`: when the game master is
@@ -352,9 +362,14 @@ pub(crate) fn load_hardcoded() -> Result<(), String> {
     Ok(())
 }
 
-/// Port of `WriteContainer`.
+/// Port of `WriteContainer`. With more than one thread the main records
+/// are built and written on worker threads (`ParallelDump`); the output is
+/// the same.
 fn write_container(container: &FileImpl, out: &mut dyn Write) -> std::io::Result<()> {
-    write_elements(container, 0, None, out)
+    match threads::pool() {
+        None => write_elements(container, 0, None, out),
+        Some(pool) => ParallelDump::new(pool, out).run(container),
+    }
 }
 
 /// Writes the elements of `container` at nesting `depth`. `record` is the
@@ -368,6 +383,249 @@ fn write_elements(
     for index in 0..container.get_element_count() {
         if let Some(element) = container.get_element(index) {
             write_element(&element, depth, record, out)?;
+        }
+    }
+    Ok(())
+}
+
+/// A main record of a batch, written by a worker at its place in the
+/// output.
+struct RecordJob {
+    record: Arc<MainRecordImpl>,
+    element: ElementRef,
+    depth: usize,
+}
+
+/// The output of a batch in file order.
+enum Segment {
+    /// The line of an element outside of the main records (the file, a
+    /// group), with the element and its depth to write it again.
+    Line(ElementRef, usize, Vec<u8>),
+    /// `<contents skipped>` at a depth.
+    Skipped(usize),
+    /// A main record, by its index in the batch.
+    Record(usize),
+}
+
+/// A batch ends after this many main records, or after records with this
+/// much data, whichever comes first.
+const BATCH_RECORDS: usize = 512;
+const BATCH_BYTES: usize = 4 << 20;
+
+/// The batches on the workers at most. A record that takes long holds the
+/// output of the batches after it, which bounds the memory.
+const BATCHES_IN_FLIGHT: usize = 4;
+
+/// A batch whose records are written on the workers.
+struct Batch {
+    segments: Vec<Segment>,
+    jobs: Arc<Vec<RecordJob>>,
+    /// `init_cycles` when the walk of the batch began.
+    cycles: u64,
+    written: std::sync::mpsc::Receiver<std::io::Result<Vec<Vec<u8>>>>,
+}
+
+/// The dump with the main records built and written on worker threads.
+///
+/// The calling thread walks the tree and writes the lines of the file and
+/// its groups; the main records are collected in batches, and the workers
+/// build and write each record of a batch into a buffer of its own while the
+/// walk goes on. The batches are written to the output in file order, so
+/// the output is the serial output. A worker writes a record as the serial
+/// dump does, trimming the other records after each line and resetting the
+/// record at the end; a record that another thread reads at that moment is
+/// built again for it (see `xedit_core::threads`), and the records the
+/// workers write are pinned, so that a trim does not reset them.
+///
+/// When two builds needed each other (`init_cycles`), what the threads built
+/// meanwhile could depend on timing: the dump waits for the workers, resets
+/// the records, and writes every batch not yet written again on the calling
+/// thread alone.
+struct ParallelDump<'a> {
+    pool: &'static rayon::ThreadPool,
+    out: &'a mut dyn Write,
+    /// The batch being collected.
+    segments: Vec<Segment>,
+    jobs: Vec<RecordJob>,
+    batch_bytes: usize,
+    batch_cycles: u64,
+    /// The batches on the workers, in file order.
+    in_flight: std::collections::VecDeque<Batch>,
+}
+
+impl<'a> ParallelDump<'a> {
+    fn new(pool: &'static rayon::ThreadPool, out: &'a mut dyn Write) -> Self {
+        ParallelDump {
+            pool,
+            out,
+            segments: Vec::new(),
+            jobs: Vec::new(),
+            batch_bytes: 0,
+            batch_cycles: init_cycles(),
+            in_flight: std::collections::VecDeque::new(),
+        }
+    }
+
+    fn run(mut self, container: &FileImpl) -> std::io::Result<()> {
+        self.walk_elements(container, 0)?;
+        self.flush()?;
+        while !self.in_flight.is_empty() {
+            self.write_first()?;
+        }
+        Ok(())
+    }
+
+    fn walk_elements(&mut self, container: &dyn Container, depth: usize) -> std::io::Result<()> {
+        for index in 0..container.get_element_count() {
+            if let Some(element) = container.get_element(index) {
+                self.walk_element(&element, depth)?;
+            }
+        }
+        Ok(())
+    }
+
+    /// `write_element` for the elements outside of the main records; a main
+    /// record goes into the batch.
+    fn walk_element(&mut self, element: &ElementRef, depth: usize) -> std::io::Result<()> {
+        if let Some(record) = element.as_element_impl().and_then(ElementImpl::main_record_impl) {
+            self.batch_bytes += record.header_struct().data_size as usize;
+            self.segments.push(Segment::Record(self.jobs.len()));
+            self.jobs.push(RecordJob {
+                record,
+                element: element.clone(),
+                depth,
+            });
+            if self.jobs.len() >= BATCH_RECORDS || self.batch_bytes >= BATCH_BYTES {
+                self.flush()?;
+            }
+            return Ok(());
+        }
+        if trace_enabled() {
+            eprintln!("{:width$}{}", "", element.get_name(), width = depth * 2);
+        }
+        let mut line = Vec::new();
+        let (name, child_depth) = {
+            let _read = threads::read_guard();
+            let name = element.get_display_name(true);
+            let child_depth = write_line(element, &name, depth, &mut line)?;
+            (name, child_depth)
+        };
+        self.segments.push(Segment::Line(element.clone(), depth, line));
+        if let Some(container) = element.as_container()
+            && !name.starts_with("Hidden: ")
+        {
+            if element.get_skipped() {
+                self.segments.push(Segment::Skipped(child_depth));
+            } else {
+                self.walk_elements(container, child_depth)?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Hands the collected batch to the workers, and writes the batches
+    /// before it that are done while more than `BATCHES_IN_FLIGHT` run.
+    fn flush(&mut self) -> std::io::Result<()> {
+        let jobs = Arc::new(std::mem::take(&mut self.jobs));
+        let (sender, written) = std::sync::mpsc::channel();
+        let batch_jobs = jobs.clone();
+        self.pool.spawn(move || {
+            let result = batch_jobs
+                .par_iter()
+                .with_max_len(1)
+                .map(|job| {
+                    // The record stays built while the worker writes it, and
+                    // is reset at the end as on one thread.
+                    let _pin = pin_record(&job.record);
+                    let mut buffer = Vec::new();
+                    write_element(&job.element, job.depth, None, &mut buffer)?;
+                    Ok(buffer)
+                })
+                .collect();
+            // The dump may have stopped at an error and dropped the receiver.
+            let _ = sender.send(result);
+        });
+        self.in_flight.push_back(Batch {
+            segments: std::mem::take(&mut self.segments),
+            jobs,
+            cycles: self.batch_cycles,
+            written,
+        });
+        self.batch_bytes = 0;
+        self.batch_cycles = init_cycles();
+        while self.in_flight.len() > BATCHES_IN_FLIGHT {
+            self.write_first()?;
+        }
+        Ok(())
+    }
+
+    /// Waits for the first batch on the workers and writes it.
+    fn write_first(&mut self) -> std::io::Result<()> {
+        let Some(batch) = self.in_flight.pop_front() else {
+            return Ok(());
+        };
+        let written = batch
+            .written
+            .recv()
+            .unwrap_or_else(|_| Err(std::io::Error::other("a dump worker stopped")))?;
+        if init_cycles() == batch.cycles {
+            return write_batch(self.out, &batch.segments, &written);
+        }
+        // Two builds needed each other since this batch began: no thread
+        // may build anything while the batches not yet written are written
+        // again, from records that are not built.
+        let mut batches = vec![batch];
+        while let Some(batch) = self.in_flight.pop_front() {
+            let _ = batch.written.recv();
+            batches.push(batch);
+        }
+        eprintln!(
+            "Warning: two records needed each other while they were built; writing the records again on one thread"
+        );
+        for batch in &batches {
+            for job in batch.jobs.iter() {
+                job.record.reset();
+            }
+        }
+        trim_initialized_records(0, None);
+        for batch in &batches {
+            let written = batch
+                .jobs
+                .iter()
+                .map(|job| {
+                    let mut buffer = Vec::new();
+                    write_element(&job.element, job.depth, None, &mut buffer)?;
+                    Ok(buffer)
+                })
+                .collect::<std::io::Result<Vec<_>>>()?;
+            let mut segments = Vec::with_capacity(batch.segments.len());
+            for segment in &batch.segments {
+                segments.push(match segment {
+                    Segment::Line(element, depth, _) => {
+                        let mut line = Vec::new();
+                        write_line(element, &element.get_display_name(true), *depth, &mut line)?;
+                        Segment::Line(element.clone(), *depth, line)
+                    }
+                    Segment::Skipped(depth) => Segment::Skipped(*depth),
+                    Segment::Record(index) => Segment::Record(*index),
+                });
+            }
+            write_batch(self.out, &segments, &written)?;
+        }
+        Ok(())
+    }
+}
+
+/// Writes the output of a batch in file order.
+fn write_batch(out: &mut dyn Write, segments: &[Segment], written: &[Vec<u8>]) -> std::io::Result<()> {
+    for segment in segments {
+        match segment {
+            Segment::Line(_, _, line) => out.write_all(line)?,
+            Segment::Skipped(depth) => {
+                write_indent(out, *depth)?;
+                out.write_all(b"<contents skipped>\r\n")?;
+            }
+            Segment::Record(index) => out.write_all(&written[*index])?,
         }
     }
     Ok(())
@@ -416,13 +674,47 @@ fn write_element(
     if trace_enabled() {
         eprintln!("{:width$}{}", "", element.get_name(), width = depth * 2);
     }
-    let name = element.get_display_name(true);
+    // The line reads other records, which another thread may reset.
+    let (name, child_depth) = {
+        let _read = threads::read_guard();
+        let name = element.get_display_name(true);
+        let child_depth = write_line(element, &name, depth, out)?;
+        (name, child_depth)
+    };
+    // The other records the callbacks of this line built, such as the
+    // navmeshes the edges of a navmesh link to, are released by Delphi when
+    // the callback lets go of them. The port resets them once more than
+    // `KEPT_RECORDS` are built; the record being written stays.
+    trim_initialized_records(kept_records(), record);
+    if let Some(container) = element.as_container()
+        && !name.starts_with("Hidden: ")
+    {
+        if element.get_skipped() {
+            write_indent(out, child_depth)?;
+            out.write_all(b"<contents skipped>\r\n")?;
+        } else {
+            write_elements(container, child_depth, record, out)?;
+        }
+    }
+    // `WriteContainer` holds an `IwbContainerElementRef` on the record while
+    // it writes the elements; releasing it resets the record and frees the
+    // subrecords, so the dump never holds more than one record tree.
+    if let Some(own_record) = &own_record {
+        own_record.reset();
+    }
+    Ok(())
+}
+
+/// The line `WriteElement` writes for the element with the display name
+/// `name`: the name with the value or the summary. Returns the depth of the
+/// children.
+fn write_line(element: &ElementRef, name: &str, depth: usize, out: &mut dyn Write) -> std::io::Result<usize> {
     let value = element.get_value();
     let mut child_depth = depth;
     if element.get_name() != "Unused" && name != "Unused" {
         if !name.is_empty() {
             write_indent(out, depth)?;
-            write_text(out, &name)?;
+            write_text(out, name)?;
         }
         if !name.is_empty() || !value.is_empty() {
             child_depth += 1;
@@ -444,28 +736,7 @@ fn write_element(
             }
         }
     }
-    // The other records the callbacks of this line built, such as the
-    // navmeshes the edges of a navmesh link to, are released by Delphi when
-    // the callback lets go of them. The port resets them once more than
-    // `KEPT_RECORDS` are built; the record being written stays.
-    trim_initialized_records(KEPT_RECORDS, record);
-    if let Some(container) = element.as_container()
-        && !name.starts_with("Hidden: ")
-    {
-        if element.get_skipped() {
-            write_indent(out, child_depth)?;
-            out.write_all(b"<contents skipped>\r\n")?;
-        } else {
-            write_elements(container, child_depth, record, out)?;
-        }
-    }
-    // `WriteContainer` holds an `IwbContainerElementRef` on the record while
-    // it writes the elements; releasing it resets the record and frees the
-    // subrecords, so the dump never holds more than one record tree.
-    if let Some(own_record) = &own_record {
-        own_record.reset();
-    }
-    Ok(())
+    Ok(child_depth)
 }
 
 /// The number of other records whose subrecords stay built while the dump
@@ -475,3 +746,14 @@ fn write_element(
 /// Measured on `DLCCoast.esm`: 64 records peak at 1.3 GB in 78 s, 256 at
 /// 1.6 GB in 69 s, 1024 at 2.1 GB in 67 s.
 const KEPT_RECORDS: usize = 256;
+
+/// The kept records of `KEPT_RECORDS`, times this for the workers of the
+/// parallel dump, which share them.
+const KEPT_RECORDS_PER_WORKER: usize = 4;
+
+fn kept_records() -> usize {
+    match rayon::current_thread_index() {
+        Some(_) => KEPT_RECORDS * KEPT_RECORDS_PER_WORKER,
+        None => KEPT_RECORDS,
+    }
+}

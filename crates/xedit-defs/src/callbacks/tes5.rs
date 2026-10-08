@@ -542,32 +542,35 @@ pub fn wb_tint_layer_to_str(a_int: i64, a_element: ElementArg, a_type: CallbackT
     };
     let race = race.get_winning_override();
     let race_id = race.get_editor_id();
-    let entries = {
-        let mut cache = TINT_LAYERS.lock().unwrap();
-        let cached = cache
+    let find = |cache: &Vec<FaceGenFeature>| {
+        cache
             .iter()
-            .position(|feature| feature.female == female && feature.race_id == race_id);
-        let position = match cached {
-            Some(position) => position,
-            None => {
-                // Cache not found, fill with data from RACE.
-                for female2 in [false, true] {
-                    cache.push(FaceGenFeature {
-                        race_id: race_id.clone(),
-                        female: female2,
-                        entries: tint_layer_entries(&race, female2),
-                    });
-                }
-                match cache
-                    .iter()
-                    .position(|feature| feature.female == female && feature.race_id == race_id)
-                {
-                    Some(position) => position,
-                    None => return result,
-                }
+            .find(|feature| feature.female == female && feature.race_id == race_id)
+            .map(|feature| feature.entries.clone())
+    };
+    let cached = find(&TINT_LAYERS.lock().unwrap());
+    let entries = match cached {
+        Some(entries) => entries,
+        None => {
+            // Cache not found, fill with data from RACE, read without the
+            // lock as in the Fallout 4 callbacks.
+            let built: Vec<FaceGenFeature> = [false, true]
+                .into_iter()
+                .map(|female2| FaceGenFeature {
+                    race_id: race_id.clone(),
+                    female: female2,
+                    entries: tint_layer_entries(&race, female2),
+                })
+                .collect();
+            let mut cache = TINT_LAYERS.lock().unwrap();
+            if find(&cache).is_none() {
+                cache.extend(built);
             }
-        };
-        cache[position].entries.clone()
+            match find(&cache) {
+                Some(entries) => entries,
+                None => return result,
+            }
+        }
     };
     let index = a_int as u32;
     let entry_name = entries

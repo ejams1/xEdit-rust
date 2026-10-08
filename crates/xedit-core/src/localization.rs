@@ -251,6 +251,9 @@ impl LocalizationFile {
 pub struct LocalizationHandlerImpl {
     /// Upstream `lFiles`, keyed by the lower-case file name.
     files: RwLock<HashMap<String, Arc<LocalizationFile>>>,
+    /// Held while the tables of a plugin load, so that two threads that look
+    /// up a string of the same plugin load its tables once.
+    loading: Mutex<()>,
     /// Upstream `NoTranslate`: show the IDs instead of the strings.
     pub no_translate: bool,
 }
@@ -307,6 +310,7 @@ impl LocalizationHandlerImpl {
 
     /// Port of `LoadForFile`: the three tables of the plugin from the containers.
     pub fn load_for_file(&self, plugin_file: &str) {
+        let _loading = self.loading.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
         for kind in LStringType::ALL {
             let path = Self::localization_file_name_by_type(plugin_file, kind);
             let key = path_file_name(&path).to_ascii_lowercase();
@@ -384,6 +388,7 @@ mod tests {
 
     #[test]
     fn reads_z_strings_with_the_language_encoding() {
+        let _guard = crate::interface::globals::test_lock();
         add_default_l_encodings_if_missing(false);
         add_default_l_encodings_if_missing(true);
         let data = strings_file(&[(1, b"Iron Sword"), (2, b"Caf\xe9")], false);
@@ -403,6 +408,8 @@ mod tests {
 
     #[test]
     fn names_the_table_of_a_plugin() {
+        // The language is a process-wide setting that other tests reset.
+        let _guard = crate::interface::globals::test_lock();
         crate::interface::globals::set_language("English");
         assert_eq!(
             LocalizationHandlerImpl::localization_file_name_by_type("Update.esm", LStringType::ILString),
