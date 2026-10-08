@@ -24,7 +24,7 @@ use xedit_core::interface::globals::{
     GameMode, app_name, display_shorter_names, set_allow_esp_masters, set_allow_esp_masters_on_save,
     set_allow_internal_edit, set_always_save_onam, set_always_save_onam_force, set_app_name, set_can_sort_info,
     set_complex_file_file_id, set_display_load_order_form_id, set_display_shorter_names, set_enforce_all_masters,
-    set_sort_sub_records, set_tool_name, set_vwd_as_quest_children, set_vwd_in_temporary,
+    set_flags_as_array, set_sort_sub_records, set_tool_name, set_vwd_as_quest_children, set_vwd_in_temporary,
 };
 use xedit_core::interface::{Element, File, FileState};
 
@@ -41,6 +41,9 @@ pub fn apply_edit_settings(mode: GameMode) {
     // the subrecords of a record keep the order of the definition.
     set_display_load_order_form_id(true);
     set_sort_sub_records(true);
+    // `TfrmMain.FormCreate`: the flags of a flags value are elements of
+    // their own, which the view and the conflict detection compare.
+    set_flags_as_array(true);
     // The default of `wbAllowInternalEdit`, which the games below override:
     // the load adds the required subrecords a record lacks.
     set_allow_internal_edit(true);
@@ -108,6 +111,9 @@ pub fn apply_edit_settings(mode: GameMode) {
             set_always_save_onam_force(true);
         }
     }
+    // `wbSortINFO := wbCanSortINFO`: the responses of a topic sort by their
+    // `PNAM` in the games that can, and a topic gets its INOM and INOA lists.
+    xedit_core::interface::globals::set_sort_info(xedit_core::interface::globals::can_sort_info());
 }
 
 #[derive(Deserialize, JsonSchema)]

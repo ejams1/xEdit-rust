@@ -106,7 +106,7 @@ fn header_masters(path: &Path, header_size: usize) -> Result<Vec<String>> {
 }
 
 /// The file of `name` in `data`, found without regard to case.
-fn find_in(data: &Path, name: &str) -> Result<PathBuf> {
+pub(super) fn find_in(data: &Path, name: &str) -> Result<PathBuf> {
     let direct = data.join(name);
     if direct.exists() {
         // Keep the spelling of the folder listing, which the GUI shows.
@@ -126,7 +126,7 @@ fn find_in(data: &Path, name: &str) -> Result<PathBuf> {
 
 /// The plugins the GUI needs for `names`: their masters, recursively, each
 /// before the plugins that need it, then the plugins themselves.
-fn load_list(game: &Game, data: &Path, names: &[&str]) -> Result<Vec<PathBuf>> {
+pub(super) fn load_list(game: &Game, data: &Path, names: &[&str]) -> Result<Vec<PathBuf>> {
     fn visit(game: &Game, data: &Path, name: &str, seen: &mut Vec<String>, out: &mut Vec<PathBuf>) -> Result<()> {
         if seen.iter().any(|s| s.eq_ignore_ascii_case(name)) {
             return Ok(());
@@ -149,7 +149,7 @@ fn load_list(game: &Game, data: &Path, names: &[&str]) -> Result<Vec<PathBuf>> {
 
 /// The cache key of an oracle run: the contents of the plugins it loads,
 /// the script and the executable's name.
-fn oracle_key(runner: &Runner, plugins: &[PathBuf], script: &str, exe: &str) -> Result<u64> {
+pub(super) fn oracle_key(runner: &Runner, plugins: &[PathBuf], script: &str, exe: &str) -> Result<u64> {
     let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
     let mut mix = |value: u64| {
         for byte in value.to_le_bytes() {
@@ -247,7 +247,7 @@ fn first_difference(a: impl Read, b: impl Read) -> Result<Option<u64>> {
     }
 }
 
-fn zstd_reader(path: &Path) -> Result<impl Read> {
+pub(super) fn zstd_reader(path: &Path) -> Result<impl Read> {
     Ok(zstd::Decoder::new(
         File::open(path).with_context(|| format!("opening {}", path.display()))?,
     )?)
@@ -329,7 +329,7 @@ fn expected_peak(peak_file: &Path, plugins: &[PathBuf]) -> u64 {
 /// Runs the GUI oracle with `script` on `plugins` (masters first) and
 /// returns the status lines and the output folder; `work` is removed by
 /// the caller.
-fn run_gui(
+pub(super) fn run_gui(
     runner: &Runner,
     game: &Game,
     plugins: Vec<PathBuf>,
@@ -369,7 +369,7 @@ fn run_gui(
 
 /// Compresses a file the oracle wrote into the cache, unless another run
 /// put it there first.
-fn keep_compressed(source: &Path, cached: &Path) -> Result<()> {
+pub(super) fn keep_compressed(source: &Path, cached: &Path) -> Result<()> {
     if cached.exists() {
         return Ok(());
     }

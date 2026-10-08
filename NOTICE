@@ -40,9 +40,19 @@ existing Rust crate instead and not port the unit.
                             Simplified BSD License (BSD-2-Clause).
   Core/wbMeshOptimize.pas   meshoptimizer 0.21, Copyright (c) 2016-2024 Arseny
                             Kapoulkine, MIT License.
-  Core/wbDiff.pas,          TDiff 3.1, Copyright Angus Johnson,
-  External/Diff/Diff.pas    freeware with its own conditions. Do not port; use
-                            a Rust diff crate.
+  External/Diff/Diff.pas    TDiff 3.1, Copyright Angus Johnson, freeware with
+                            its own conditions (the copyright notice and the
+                            terms left unchanged, modifications documented
+                            with the modifier's name, free to compile into
+                            binaries). Ported in phase 4 as
+                            crates/xedit-analysis/src/diff.rs, which carries
+                            the notice and the terms unchanged and documents
+                            the translation: the view aligns array entries
+                            with it, and which entries it pairs among equal
+                            alignments decides the conflict status, so a
+                            different diff algorithm would not give xEdit's
+                            result. The integer compare is the only part
+                            ported.
   Core/MSHeap.pas           Windows heap memory manager by Roberto Della
                             Pasqua. Delphi-specific; not ported.
   External/TOM2/TOM2.pas    Generated COM type library import; not ported.

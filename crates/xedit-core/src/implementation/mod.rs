@@ -17,11 +17,14 @@ pub mod assign;
 pub mod copy;
 pub mod edit;
 pub mod file_flags;
+pub mod flag;
 pub mod form_ids;
+mod info_sort;
 pub mod masters;
 pub mod new_form_id;
 pub mod refs;
 mod scan;
+pub mod sortable;
 pub mod structs;
 pub mod write;
 
@@ -182,6 +185,7 @@ macro_rules! element_common {
 pub mod sub_record;
 pub mod value;
 
+use crate::interface::ModuleType;
 pub use edit::Storage;
 pub use write::{ElementState, ResetModified, SaveError};
 
@@ -353,8 +357,9 @@ fn element_by_path_from_any_parent(container: &dyn Container, rest: &str) -> Opt
 
 /// Port of `TwbElement.GetConflictPriority` and the override of
 /// `TwbDataContainer`: from the value definition, resolved against the data
-/// of a data container, else the definition, with `cpFormID` resolved for
-/// the record.
+/// of a data container, else the definition; in the translate mode an
+/// element whose definition is not translatable is ignored, and `cpFormID`
+/// is resolved for the record.
 pub(crate) fn element_conflict_priority(element: &dyn ElementImpl) -> ConflictPriority {
     let self_ref = element.self_element_ref();
     let def: Option<Arc<dyn Def>> = match element.get_value_def() {
@@ -369,6 +374,10 @@ pub(crate) fn element_conflict_priority(element: &dyn ElementImpl) -> ConflictPr
     let mut result = ConflictPriority::cpNormal;
     if let Some(def) = def {
         result = def.get_conflict_priority(self_ref.as_ref());
+        if crate::interface::globals::translation_mode() && !def.def_base().def_flags.contains(DefFlag::dfTranslatable)
+        {
+            result = ConflictPriority::cpIgnore;
+        }
     }
     if result == ConflictPriority::cpFormID {
         result = ConflictPriority::cpCritical;
@@ -469,8 +478,18 @@ pub struct ContainerBase {
 }
 
 impl ContainerBase {
+    /// Port of `AddElement`: the element takes its position as its memory
+    /// order, which the callbacks that size it may read
+    /// (`wbLGDIRankSlotArrayShouldInclude`).
     pub(crate) fn add_element(&self, element: ElementRef) {
-        self.cnt_elements.write().unwrap().push(element);
+        let mut elements = self.cnt_elements.write().unwrap();
+        if let Some(element) = element.as_element_impl() {
+            element
+                .element_base()
+                .e_memory_order
+                .store(elements.len() as i32, Ordering::Relaxed);
+        }
+        elements.push(element);
     }
 
     /// Port of `InsertElement`.
@@ -707,14 +726,45 @@ impl FileImpl {
         }
     }
 
-    /// Port of `IsNewRecord`: whether the FileID is the file's own.
-    fn is_new_record(&self, file_id: FileID) -> bool {
+    /// The masters of each module type (`GetFullMasterCount`,
+    /// `GetMediumMasterCount`, `GetLightMasterCount`).
+    fn master_type_counts(&self) -> (i16, i16, i16) {
+        let (mut full, mut medium, mut light) = (0, 0, 0);
+        for master in self.fl_masters.read().unwrap().iter() {
+            match master.module_type() {
+                ModuleType::mtFull => full += 1,
+                ModuleType::mtMedium => medium += 1,
+                ModuleType::mtLight => light += 1,
+            }
+        }
+        (full, medium, light)
+    }
+
+    /// Port of `IsNewRecord`: whether the FileID is the file's own. Under
+    /// `wbComplexFileFileID` the slot counts within the masters of its
+    /// module type.
+    pub(crate) fn is_new_record(&self, file_id: FileID) -> bool {
+        if crate::interface::globals::complex_file_file_id() {
+            let (full, medium, light) = self.master_type_counts();
+            return match file_id.module_type() {
+                ModuleType::mtLight => file_id.light_slot() >= light,
+                ModuleType::mtMedium => file_id.medium_slot() >= medium,
+                ModuleType::mtFull => file_id.full_slot() >= full,
+            };
+        }
         i32::from(file_id.full_slot()) >= self.master_count()
     }
 
-    /// Port of `GetMasterForFileID` without the complex FileIDs: the master
-    /// at the slot, or the last master for a compare load.
+    /// Port of `GetMasterForFileID`: the master at the slot (of its module
+    /// type under `wbComplexFileFileID`), or the last master for a compare
+    /// load.
     fn get_master_for_file_id(&self, file_id: FileID) -> Option<Arc<FileImpl>> {
+        if crate::interface::globals::complex_file_file_id() {
+            let index = self.get_master_index_for_file_id(file_id);
+            return usize::try_from(index)
+                .ok()
+                .and_then(|index| self.fl_masters.read().unwrap().get(index).cloned());
+        }
         let masters = self.fl_masters.read().unwrap();
         let slot = file_id.full_slot();
         if slot >= 0 && (slot as usize) < masters.len() {
@@ -755,6 +805,14 @@ impl FileImpl {
     /// Port of `GetFileFileID`: the FileID of the file as its own records
     /// use it, which is the number of its masters.
     pub fn get_file_file_id(&self) -> FileID {
+        if crate::interface::globals::complex_file_file_id() {
+            let (full, medium, light) = self.master_type_counts();
+            return match self.module_type() {
+                ModuleType::mtLight => FileID::create_light(light),
+                ModuleType::mtMedium => FileID::create_medium(medium),
+                ModuleType::mtFull => FileID::create_full(full),
+            };
+        }
         FileID::create_full(self.master_count() as i16)
     }
 
@@ -804,7 +862,13 @@ impl FileImpl {
                 form_id = form_id.change_file_id(master.get_file_file_id());
             }
         }
-        if master.is_none() {
+        if master.is_none() && crate::interface::globals::complex_file_file_id() {
+            // The slot among the masters of the module type of the FileID.
+            let index = self.get_master_index_for_file_id(form_id.file_id());
+            master = usize::try_from(index)
+                .ok()
+                .and_then(|index| self.fl_masters.read().unwrap().get(index).cloned());
+        } else if master.is_none() {
             let slot = form_id.file_id().full_slot();
             let masters = self.fl_masters.read().unwrap();
             if slot >= 0 && (slot as usize) < masters.len() {
@@ -844,6 +908,15 @@ impl FileImpl {
 
     /// Port of `FileFileIDtoLoadOrderFileID`.
     fn file_file_id_to_load_order_file_id(&self, file_id: FileID) -> Option<FileID> {
+        if crate::interface::globals::complex_file_file_id() {
+            if let Ok(index) = usize::try_from(self.get_master_index_for_file_id(file_id))
+                && let Some(master) = self.fl_masters.read().unwrap().get(index)
+            {
+                return Some(master.get_load_order_file_id());
+            }
+            let own = self.get_load_order_file_id();
+            return own.is_valid().then_some(own);
+        }
         let slot = file_id.full_slot();
         let masters = self.fl_masters.read().unwrap();
         if slot >= 0 && (slot as usize) < masters.len() {
@@ -864,6 +937,29 @@ impl FileImpl {
             return Some(form_id.change_file_id(self.get_file_file_id()));
         }
         let masters = self.fl_masters.read().unwrap();
+        if crate::interface::globals::complex_file_file_id() {
+            // Port of the `wbComplexFileFileID` branch of
+            // `LoadOrderFileIDtoFileFileID`: the slot among the masters of
+            // the module type.
+            let (mut full, mut medium, mut light) = (0, 0, 0);
+            for master in masters.iter() {
+                let module_type = master.module_type();
+                if master.get_load_order_file_id() == file_id {
+                    let file_file_id = match module_type {
+                        ModuleType::mtLight => FileID::create_light(light),
+                        ModuleType::mtMedium => FileID::create_medium(medium),
+                        ModuleType::mtFull => FileID::create_full(full),
+                    };
+                    return Some(form_id.change_file_id(file_file_id));
+                }
+                match module_type {
+                    ModuleType::mtLight => light += 1,
+                    ModuleType::mtMedium => medium += 1,
+                    ModuleType::mtFull => full += 1,
+                }
+            }
+            return None;
+        }
         let index = masters
             .iter()
             .position(|master| master.get_load_order_file_id() == file_id)?;
@@ -1665,6 +1761,8 @@ pub struct GroupRecordImpl {
     /// Port of `gsSorted`: the group was sorted, and `sort` does nothing
     /// until a change of its members clears it.
     gr_sorted: AtomicBool,
+    /// Port of `gsSorting`: the group sorts now.
+    gr_sorting: AtomicBool,
 }
 
 impl GroupRecordImpl {
@@ -1695,6 +1793,7 @@ impl GroupRecordImpl {
             dc_base,
             dc_end,
             gr_sorted: AtomicBool::new(false),
+            gr_sorting: AtomicBool::new(false),
         });
         if gr_struct.group_type == 0 {
             let order = wb_get_group_order(gr_struct.label_signature());
@@ -1750,6 +1849,11 @@ impl GroupRecordImpl {
     /// records without clearing `gsSorted`, so a group that two duplicates
     /// merge into is sorted only after the first of them.
     pub(crate) fn sort(&self) {
+        // The responses of a topic, in a game that sorts them by their
+        // `PNAM` (`wbCanSortINFO`).
+        if self.sort_topic(false) {
+            return;
+        }
         if self.gr_struct().group_type == 7 || self.gr_sorted.load(Ordering::Relaxed) {
             return;
         }
@@ -2069,7 +2173,9 @@ impl MainRecordImpl {
                     return result.change_file_id(FileID::null());
                 }
             }
-            if i32::from(result.file_id().full_slot()) >= file.master_count() {
+            // `IsNewRecord`, by the slot of the module type under
+            // `wbComplexFileFileID`.
+            if file.is_new_record(result.file_id()) {
                 result = result.change_file_id(file.get_file_file_id());
             }
             result
@@ -2367,6 +2473,7 @@ impl MainRecordImpl {
                 def.after_load(&self_ref);
             }
             sub_record::add_required_members(self);
+            self.sort_info_after_init();
         }
     }
 

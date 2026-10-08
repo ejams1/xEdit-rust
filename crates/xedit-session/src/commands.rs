@@ -17,13 +17,13 @@ use xedit_core::interface::{
     Element, ElementRef, FileRef, FileStates, FormID, MainRecordRef, clear_files, record_by_load_order_form_id,
 };
 
-use crate::dump::{game_tag, load_hardcoded, load_resources, setup_game};
+use crate::dump::{game_tag, load_hardcoded, load_resources, setup_game_for_edit};
 use crate::{CommandError, NoParams, Registry, Session};
 
 impl Session {
     /// Loads the plugins of a game in the order given, with their masters.
     pub fn load(game: &str, plugins: &[String]) -> Result<Self, String> {
-        let mode = setup_game(game)?;
+        let mode = setup_game_for_edit(game)?;
         // The editor's settings apply before the plugins load: the load
         // itself edits records under `wbAllowInternalEdit`.
         crate::save::apply_edit_settings(mode);
