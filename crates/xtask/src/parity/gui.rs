@@ -38,11 +38,11 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, bail, ensure};
 
+use super::hidden::{HiddenChild, HiddenCommand};
 use crate::memory::{Budget, Limit};
 
 /// One run of the GUI oracle.
@@ -159,7 +159,9 @@ impl GuiRun<'_> {
         let script = self.work.join("oracle.pas");
         fs::write(&script, self.script.replace("{{WORK}}", &work_text))?;
 
-        let mut command = Command::new(&exe);
+        // Started hidden: the main form and the module selection are
+        // driven through their window handles, which work hidden too.
+        let mut command = HiddenCommand::new(&exe);
         command
             .arg(format!("-{}", self.mode))
             .arg(format!("-script:{}", windows_path(&script)))
@@ -173,10 +175,7 @@ impl GuiRun<'_> {
             .arg(format!("-I:{}", windows_path(&ini)))
             .arg(format!("-G:{}\\", windows_path(&saves)))
             .arg("-IKnowWhatImDoing")
-            .current_dir(&self.work)
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null());
+            .current_dir(&self.work);
         if !self.build_refs {
             command.arg("-nobuildrefs");
         }
@@ -186,13 +185,12 @@ impl GuiRun<'_> {
         let limit = match Limit::apply(&child, self.max_memory) {
             Ok(limit) => limit,
             Err(error) => {
-                let _ = child.kill();
+                child.kill();
                 return Err(error);
             }
         };
         let watched = watch(&mut child, &self.work, self.timeout, self.hang_timeout);
-        let _ = child.kill();
-        let _ = child.wait();
+        child.kill();
         let peak = limit.peak();
         if limit.reached() {
             bail!(
@@ -212,7 +210,7 @@ impl GuiRun<'_> {
 
 /// Waits for the script's marker, answering the module selection and
 /// failing on any other dialog, a timeout or a hang.
-fn watch(child: &mut std::process::Child, work: &Path, timeout: Duration, hang_timeout: Duration) -> Result<()> {
+fn watch(child: &mut HiddenChild, work: &Path, timeout: Duration, hang_timeout: Duration) -> Result<()> {
     let start = Instant::now();
     let marker = work.join("done.txt");
     let mut clicked = Vec::new();
@@ -222,8 +220,8 @@ fn watch(child: &mut std::process::Child, work: &Path, timeout: Duration, hang_t
         if marker.exists() {
             return Ok(());
         }
-        if let Some(status) = child.try_wait()? {
-            bail!("the oracle exited ({status}) before the script finished");
+        if let Some(code) = child.try_wait()? {
+            bail!("the oracle exited (exit code: {code}) before the script finished");
         }
         let elapsed = start.elapsed();
         if elapsed > timeout {
@@ -238,6 +236,7 @@ fn watch(child: &mut std::process::Child, work: &Path, timeout: Duration, hang_t
                 hang_timeout.as_secs()
             );
         }
+        let mut waiting = false;
         for window in visible_windows(child.id()) {
             match window.class.as_str() {
                 // The main form and the application window.
@@ -271,9 +270,18 @@ fn watch(child: &mut std::process::Child, work: &Path, timeout: Duration, hang_t
                 }
                 "TApplication" => {}
                 "TfrmModuleSelect" => {
+                    // The GUI runs hidden, but the modal module selection
+                    // shows itself: it is found hidden while it is built,
+                    // and answered as soon as it shows (`ShowModal` resets
+                    // a result set before), polling fast meanwhile so that
+                    // it shows for a moment only.
                     if !clicked.contains(&window.handle) {
-                        ensure!(click_button(&window, "OK"), "the module selection has no OK button");
-                        clicked.push(window.handle);
+                        if window.visible {
+                            ensure!(click_button(&window, "OK"), "the module selection has no OK button");
+                            clicked.push(window.handle);
+                        } else {
+                            waiting = true;
+                        }
                     }
                 }
                 _ => {
@@ -297,7 +305,7 @@ fn watch(child: &mut std::process::Child, work: &Path, timeout: Duration, hang_t
                 }
             }
         }
-        std::thread::sleep(Duration::from_millis(250));
+        std::thread::sleep(Duration::from_millis(if waiting { 10 } else { 250 }));
     }
 }
 
@@ -315,6 +323,8 @@ struct Window {
     handle: isize,
     class: String,
     title: String,
+    /// Whether it shows.
+    visible: bool,
     /// The texts of its visible child windows (labels, buttons).
     texts: Vec<String>,
 }
@@ -388,13 +398,23 @@ mod win {
 #[cfg(windows)]
 fn visible_windows(pid: u32) -> Vec<Window> {
     use windows_sys::Win32::Foundation::HWND;
-    use windows_sys::Win32::UI::WindowsAndMessaging::{EnumChildWindows, EnumWindows};
+    use windows_sys::Win32::System::StationsAndDesktops::EnumDesktopWindows;
+    use windows_sys::Win32::UI::WindowsAndMessaging::EnumChildWindows;
     let mut tops: Vec<HWND> = Vec::new();
+    // The GUI runs on the harness's own desktop (`hidden::desktop`), or on
+    // the current one (a null desktop) where that could not be created.
+    let desktop = super::hidden::desktop().unwrap_or(std::ptr::null_mut());
     // SAFETY: the callback only pushes into the vector passed as `LPARAM`,
     // which outlives the call.
-    unsafe { EnumWindows(Some(win::collect), (&raw mut tops) as isize) };
+    unsafe { EnumDesktopWindows(desktop, Some(win::collect), (&raw mut tops) as isize) };
     tops.into_iter()
-        .filter(|&handle| win::process(handle) == pid && win::visible(handle))
+        .filter(|&handle| {
+            // The GUI runs hidden: its main form and the module selection
+            // are read and answered hidden; any other window counts once it
+            // shows.
+            win::process(handle) == pid
+                && (win::visible(handle) || matches!(win::class(handle).as_str(), "TfrmMain" | "TfrmModuleSelect"))
+        })
         .map(|handle| {
             let mut children: Vec<HWND> = Vec::new();
             // SAFETY: as above.
@@ -403,6 +423,7 @@ fn visible_windows(pid: u32) -> Vec<Window> {
                 handle: handle as isize,
                 class: win::class(handle),
                 title: win::text(handle),
+                visible: win::visible(handle),
                 texts: children
                     .into_iter()
                     .filter(|&child| win::visible(child))
@@ -490,7 +511,7 @@ fn click_button(_window: &Window, _caption: &str) -> bool {
 
 /// The kernel and user CPU time of a process in 100 ns units.
 #[cfg(windows)]
-fn cpu_time(child: &std::process::Child) -> u64 {
+fn cpu_time(child: &HiddenChild) -> u64 {
     use std::os::windows::io::AsRawHandle;
     use windows_sys::Win32::Foundation::FILETIME;
     use windows_sys::Win32::System::Threading::GetProcessTimes;
@@ -506,7 +527,7 @@ fn cpu_time(child: &std::process::Child) -> u64 {
 }
 
 #[cfg(not(windows))]
-fn cpu_time(_child: &std::process::Child) -> u64 {
+fn cpu_time(_child: &HiddenChild) -> u64 {
     0
 }
 

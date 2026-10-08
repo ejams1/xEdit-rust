@@ -58,6 +58,7 @@ use crate::memory::{self, Budget, GIB, Limit};
 
 mod bsarch;
 mod gui;
+mod hidden;
 mod nif;
 mod oracle_save;
 mod sniff;

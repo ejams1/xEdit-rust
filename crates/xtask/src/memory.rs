@@ -10,7 +10,6 @@
 //! [`Budget`] keeps the sum of the expected peaks of the running processes
 //! under a limit, so that large files do not run side by side.
 
-use std::process::Child;
 use std::sync::{Condvar, Mutex};
 
 pub const GIB: u64 = 1 << 30;
@@ -30,8 +29,7 @@ impl Limit {
     /// Puts `child` in a new job object that caps its committed memory at
     /// `limit` bytes. Killing the harness closes the job and kills the child.
     #[cfg(windows)]
-    pub fn apply(child: &Child, limit: u64) -> anyhow::Result<Self> {
-        use std::os::windows::io::AsRawHandle;
+    pub fn apply(child: &impl std::os::windows::io::AsRawHandle, limit: u64) -> anyhow::Result<Self> {
         use windows_sys::Win32::System::JobObjects::{
             AssignProcessToJobObject, CreateJobObjectW, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
             JOB_OBJECT_LIMIT_PROCESS_MEMORY, JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JobObjectExtendedLimitInformation,
@@ -73,7 +71,7 @@ impl Limit {
     }
 
     #[cfg(not(windows))]
-    pub fn apply(_child: &Child, limit: u64) -> anyhow::Result<Self> {
+    pub fn apply<T>(_child: &T, limit: u64) -> anyhow::Result<Self> {
         Ok(Self { limit })
     }
 
