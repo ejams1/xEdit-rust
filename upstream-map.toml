@@ -287,7 +287,7 @@ note = "The frame is the processor's fields with the .dfm defaults (on_show); ch
 [units."Sniff/Proc/ProcAnimSkeletonDeath.pas"]
 status = "ported"
 rust = "crates/xedit-assets/src/sniff/proc_anim_skeleton_death.rs"
-note = "The frame is the processor's fields with the .dfm defaults (on_show); the operation reads death.kf and the skeleton.nif beside it from the input folder, which the harness gives it (cargo xtask parity sniff, skeleton-death cases)."
+note = "The frame is the processor's fields with the .dfm defaults (on_show). The operation reads death.kf and the skeleton.nif beside it from the input folder, which the harness builds for it (cargo xtask parity sniff, the skeleton-death cases); Sniff.exe hangs in that case (see the phase 5 status), so the operation is compared by hand (a death.kf of four archives gives the same bytes)."
 
 [units."Sniff/Proc/ProcApplyTransform.pas"]
 status = "ported"
