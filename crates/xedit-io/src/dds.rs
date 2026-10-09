@@ -93,7 +93,6 @@ pub struct Dxgi(pub u8);
 
 /// The members of `TDXGI` without the `DXGI_FORMAT_` prefix (`420_OPAQUE`
 /// is `P420_OPAQUE`).
-#[allow(non_upper_case_globals)]
 impl Dxgi {
     pub const UNKNOWN: Dxgi = Dxgi(0);
     pub const R32G32B32A32_TYPELESS: Dxgi = Dxgi(1);

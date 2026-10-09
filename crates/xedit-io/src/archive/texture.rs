@@ -412,7 +412,11 @@ pub(super) fn unpack_dds(archive: &Archive, entry: &FileEntry) -> Result<Vec<u8>
     // The offset to the image data is the total size of the DDS header.
     let mut mip_offset = size;
     for chunk in &entry.dds.tex_chunks {
-        size = size.wrapping_add(chunk.chunk.size as usize);
+        size += chunk.chunk.size as usize;
+    }
+    // Upstream sums in a 32 bit `Integer`; a texture over 2 GB is not real.
+    if i32::try_from(size).is_err() {
+        return Err(ArchiveError("Texture is too large".to_owned()));
     }
     let mut result = vec![0u8; size];
 

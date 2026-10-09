@@ -182,6 +182,27 @@ mod tests {
         }
     }
 
+    /// `cargo test -p xedit-io --release -- --ignored --nocapture throughput`
+    #[test]
+    #[ignore = "prints timings"]
+    fn throughput() {
+        let pixels = 16 << 20;
+        let src: Vec<u8> = (0..pixels * 3).map(|i| (i * 31) as u8).collect();
+        let mut dst = vec![0u8; pixels * 4];
+        for level in [Level::Scalar, Level::Ssse3, Level::Avx2] {
+            let start = std::time::Instant::now();
+            for _ in 0..8 {
+                rgb_to_bgrx_at(level, &src, &mut dst);
+                std::hint::black_box(&dst);
+            }
+            let seconds = start.elapsed().as_secs_f64();
+            println!(
+                "{level:?}: {:.2} GB/s of 24 bit pixels",
+                8.0 * (pixels * 3) as f64 / seconds / 1e9
+            );
+        }
+    }
+
     #[test]
     fn the_fourth_byte_is_opaque() {
         let mut out = [0u8; 8];

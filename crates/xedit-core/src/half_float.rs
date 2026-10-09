@@ -235,6 +235,31 @@ mod tests {
         }
     }
 
+    /// `cargo test -p xedit-core --release --lib -- --ignored --nocapture throughput`
+    #[test]
+    #[ignore = "prints timings"]
+    fn throughput() {
+        let count = 16 << 20;
+        let floats: Vec<f32> = (0..count).map(|i| (i as f32 - 8e6) * 0.0009).collect();
+        let mut halves = vec![0u16; count];
+        let mut back = vec![0f32; count];
+        for vector in [false, true] {
+            let start = std::time::Instant::now();
+            for _ in 0..8 {
+                single_to_half_slice_at(vector, &floats, &mut halves);
+                std::hint::black_box(&halves);
+            }
+            let to_half = 8.0 * count as f64 / start.elapsed().as_secs_f64() / 1e9;
+            let start = std::time::Instant::now();
+            for _ in 0..8 {
+                half_to_float_slice_at(vector, &halves, &mut back);
+                std::hint::black_box(&back);
+            }
+            let to_float = 8.0 * count as f64 / start.elapsed().as_secs_f64() / 1e9;
+            println!("vector {vector}: {to_half:.2} G floats/s to half, {to_float:.2} G halves/s to float");
+        }
+    }
+
     /// Every one of the 2^32 floats: `cargo test -p xedit-core --release --
     /// --ignored every_float`.
     #[test]
