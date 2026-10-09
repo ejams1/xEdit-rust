@@ -541,13 +541,26 @@ pub fn matches_mask(name: &str, mask: &str) -> bool {
     matches(&name, &mask)
 }
 
-/// Delphi's `RandSeed`: process-wide, never seeded in the LODGen mode, so
-/// the sequence starts at 0 in every run.
+/// Delphi's `RandSeed`: process-wide. Upstream seeds it from the clock at
+/// startup (`Randomize` in the initialization of `xeTipForm`), so the tree
+/// rotations differ from run to run.
 static RAND_SEED: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
 
-/// Sets `RandSeed` (0 at the start of a run, as in a new process).
+/// Sets `RandSeed`.
 pub fn set_rand_seed(seed: u32) {
     RAND_SEED.store(seed, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// `Randomize`: a `RandSeed` from the clock (Delphi takes the low 32 bits
+/// of the performance counter); returns it.
+pub fn randomize() -> u32 {
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|elapsed| elapsed.as_nanos())
+        .unwrap_or(0);
+    let seed = nanos as u32;
+    set_rand_seed(seed);
+    seed
 }
 
 /// Delphi `Random`: a double in [0, 1) of the next `RandSeed`.

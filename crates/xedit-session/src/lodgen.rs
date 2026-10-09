@@ -23,7 +23,8 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use xedit_assets::imaging::ImageFormat;
 use xedit_assets::lod::{
-    LodDefaults, LodEnv, generate_lod_fo4, generate_lod_tes4, generate_lod_tes5, set_rand_seed, worldspaces_for_lod,
+    LodDefaults, LodEnv, generate_lod_fo4, generate_lod_tes4, generate_lod_tes5, randomize, set_rand_seed,
+    worldspaces_for_lod,
 };
 use xedit_assets::sniff::processor::MemIniFile;
 use xedit_core::container_handler::{add_archive, add_folder, clear_containers};
@@ -82,6 +83,9 @@ pub struct LodgenRequest {
     /// `<Game>.ini`); without it only the archives named after the plugins
     /// load.
     pub game_ini: Option<String>,
+    /// The `RandSeed` the tree rotations come from; from the clock by
+    /// default, as upstream's `Randomize` at startup.
+    pub seed: Option<u32>,
     /// List the worldspaces and the options, but generate nothing.
     #[serde(default)]
     pub dry_run: bool,
@@ -108,6 +112,8 @@ pub struct LodgenResponse {
     pub resources: Vec<String>,
     /// The messages of the generator, as the message log shows them.
     pub messages: Vec<String>,
+    /// The `RandSeed` the tree rotations came from (none for a dry run).
+    pub seed: Option<u32>,
     /// Whether this was a dry run.
     pub dry_run: bool,
 }
@@ -498,6 +504,7 @@ fn lodgen_generate(session: &mut Session, request: LodgenRequest) -> Result<Lodg
 
     let previous = xedit_core::interface::misc::progress_callback();
     let messages = capture_messages();
+    let used_seed = std::cell::Cell::new(None);
     let result = (|| -> Result<(Vec<LodgenWorldspace>, Vec<String>, LodEnv), CommandError> {
         let files: Vec<Arc<FileImpl>> = xedit_core::interface::element::files()
             .iter()
@@ -574,7 +581,14 @@ fn lodgen_generate(session: &mut Session, request: LodgenRequest) -> Result<Lodg
         if let Some(path) = &request.settings {
             crate::save::write_atomically(Path::new(path), &xedit_io::encoding::ansi_bytes(&settings.to_text()))?;
         }
-        set_rand_seed(0);
+        let seed = match request.seed {
+            Some(seed) => {
+                set_rand_seed(seed);
+                seed
+            }
+            None => randomize(),
+        };
+        used_seed.set(Some(seed));
         let start = std::time::Instant::now();
         let failed = |error: xedit_assets::lod::LodError| CommandError::new("edit_failed", error.0);
         if oblivion {
@@ -618,6 +632,7 @@ fn lodgen_generate(session: &mut Session, request: LodgenRequest) -> Result<Lodg
         options,
         resources,
         messages,
+        seed: used_seed.get(),
         dry_run: request.dry_run,
     })
 }

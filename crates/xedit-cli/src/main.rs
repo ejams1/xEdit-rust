@@ -151,6 +151,9 @@ enum Action {
         /// The game ini whose archive lists load (-I:).
         #[arg(long)]
         game_ini: Option<String>,
+        /// The RandSeed of the tree rotations; from the clock by default.
+        #[arg(long)]
+        seed: Option<u32>,
         /// List the worldspaces and options, but generate nothing.
         #[arg(long)]
         dry_run: bool,
@@ -1019,6 +1022,7 @@ fn command_of(action: Action) -> Result<(String, Value), CommandError> {
             temp,
             data,
             game_ini,
+            seed,
             dry_run,
         } => {
             let mut options = serde_json::Map::new();
@@ -1032,7 +1036,8 @@ fn command_of(action: Action) -> Result<(String, Value), CommandError> {
                 "lodgen.generate".to_owned(),
                 json!({
                     "worldspaces": worldspaces, "options": options, "settings": settings, "output": output,
-                    "scripts": scripts, "temp": temp, "data": data, "game_ini": game_ini, "dry_run": dry_run
+                    "scripts": scripts, "temp": temp, "data": data, "game_ini": game_ini, "seed": seed,
+                    "dry_run": dry_run
                 }),
             )
         }
