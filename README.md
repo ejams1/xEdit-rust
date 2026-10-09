@@ -41,6 +41,15 @@ The overall bar counts merged phases only: 2 cells per phase out of 20. A phase 
 - Stay mergeable with upstream. One Rust module per Pascal unit with matching names, and `upstream-map.toml` records the last upstream commit merged into each, so upstream changes map onto the port line by line.
 - Get faster than upstream once parity holds
 
+## Non-goals
+
+- No new file formats, record definitions or game support beyond what the baseline tag ships. New upstream releases are taken in through the sync procedure, not ahead of it.
+- No redesign of the data model, the scripting language or the GUI. JvInterpreter Pascal stays the script language; the GUI reproduces the upstream forms on top of the same commands.
+- No separate agent API. Agents use the same command layer as the CLI and the GUI; there is no second surface to keep in step.
+- No dependence on a Delphi compiler. The oracle is the released binary, never a rebuild.
+- No non-Windows platform before the Windows port is complete. Linux and macOS follow, behind thin platform modules.
+- No game files in the repository. The parity corpus comes from local installs through environment variables.
+
 ## Status
 
 - Phases 0 to 2 of the plan are done: every game mode from Morrowind to Starfield and every save format load and dump like the release build, verified file by file against it on the local game installs (Morrowind's masters and Enderal are not verified: the oracle cannot dump Morrowind plugins and Enderal is not installed on the development machine).
@@ -50,15 +59,6 @@ The overall bar counts merged phases only: 2 cells per phase out of 20. A phase 
 - Loading reads the groups of a plugin on all CPUs and `xedit dump` builds and writes the records on all CPUs (`--threads N`; about five times faster on `Skyrim.esm` than on one thread), with output that does not depend on the thread count.
 - Known gaps of the write path, all listed in [docs/PLAN.md](docs/PLAN.md) under "Owed from phase 3": writing the string tables of a localized plugin (a localized string can not be set or copied), copying over an existing override and partial forms, sorted arrays inside a subrecord, the reference index (records that refer to a FormID are found by a scan until phase 4), the identity FormID of a Morrowind record, and one session per process.
 - Later phases (analysis and tool modes, archives and assets, scripting, GUI, performance, release) have not started.
-
-## Non-goals
-
-- No new file formats, record definitions or game support beyond what the baseline tag ships. New upstream releases are taken in through the sync procedure, not ahead of it.
-- No redesign of the data model, the scripting language or the GUI. JvInterpreter Pascal stays the script language; the GUI reproduces the upstream forms on top of the same commands.
-- No separate agent API. Agents use the same command layer as the CLI and the GUI; there is no second surface to keep in step.
-- No dependence on a Delphi compiler. The oracle is the released binary, never a rebuild.
-- No non-Windows platform before the Windows port is complete. Linux and macOS follow, behind thin platform modules.
-- No game files in the repository. The parity corpus comes from local installs through environment variables.
 
 ## License
 
