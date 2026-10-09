@@ -476,6 +476,29 @@ impl Outcome {
             Outcome::OracleMissing => "oracle-missing",
         }
     }
+
+    /// Whether an outcome makes a run fail: the differences of the port
+    /// against the oracle. `oracle-failed` is Sniff's own crash (a file it
+    /// also fails alone on, after `rerun_crashes`), and `oracle-missing` is
+    /// a file it wrote nothing for and did not skip: Sniff's threads share
+    /// state and can lose an output, as the `group-shapes-split` case of
+    /// `parity sniff` shows at 16 threads; neither is the port's
+    /// difference, the same rule as for the sniff harness.
+    fn fatal(self) -> bool {
+        matches!(
+            self,
+            Outcome::DumpDifferent | Outcome::SaveDifferent | Outcome::PortFailed
+        )
+    }
+}
+
+/// The outcomes that make a run fail, with their counts.
+fn failures(totals: &BTreeMap<Outcome, usize>) -> Vec<(Outcome, usize)> {
+    totals
+        .iter()
+        .filter(|(outcome, _)| outcome.fatal())
+        .map(|(outcome, count)| (*outcome, *count))
+        .collect()
 }
 
 fn compare(port: &Output, oracle: Option<&Output>) -> Option<Outcome> {
@@ -650,6 +673,16 @@ pub fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
     report.push('\n');
     fs::create_dir_all(&scratch)?;
     fs::write(scratch.join("nif-report.txt"), report)?;
+    let failed: Vec<String> = failures(&totals)
+        .into_iter()
+        .map(|(outcome, count)| format!("{count} {}", outcome.name()))
+        .collect();
+    ensure!(
+        failed.is_empty(),
+        "the port differs from the oracle: {} (report: {})",
+        failed.join(", "),
+        scratch.join("nif-report.txt").display()
+    );
     Ok(())
 }
 
@@ -683,4 +716,28 @@ fn keep_difference(
 
 fn ext(name: &str) -> &str {
     name.rsplit('.').next().unwrap_or_default()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_clean_run_passes() {
+        let mut totals = BTreeMap::new();
+        totals.insert(Outcome::Equal, 542505);
+        totals.insert(Outcome::EqualError, 250543);
+        // Sniff's own crash and a file it wrote nothing for stay non-fatal.
+        totals.insert(Outcome::OracleFailed, 1);
+        totals.insert(Outcome::OracleMissing, 1);
+        assert!(failures(&totals).is_empty());
+    }
+
+    #[test]
+    fn a_run_with_a_difference_fails() {
+        let mut totals = BTreeMap::new();
+        totals.insert(Outcome::Equal, 9);
+        totals.insert(Outcome::SaveDifferent, 1);
+        assert_eq!(failures(&totals), vec![(Outcome::SaveDifferent, 1)]);
+    }
 }

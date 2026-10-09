@@ -1372,6 +1372,29 @@ impl Outcome {
             Outcome::OracleFailed => "oracle-failed",
         }
     }
+
+    /// Whether an outcome makes a run fail: the differences of the port
+    /// against the oracle. `oracle-failed` is Sniff's own error or crash
+    /// (the `Access violation` of `Remove nodes` on three Fallout 4
+    /// Creation Club meshes repeats alone), and `port-only-output` is an
+    /// output the oracle's threads lost (`group-shapes-split` at 16 threads
+    /// loses 714 of them, which compare equal alone, so that case runs with
+    /// `--threads 1`); neither is the port's difference.
+    fn fatal(self) -> bool {
+        matches!(
+            self,
+            Outcome::OutputDifferent | Outcome::OracleOnly | Outcome::ErrorDifferent | Outcome::PortFailed
+        )
+    }
+}
+
+/// The outcomes that make a run fail, with their counts.
+fn failures(totals: &BTreeMap<Outcome, usize>) -> Vec<(Outcome, usize)> {
+    totals
+        .iter()
+        .filter(|(outcome, _)| outcome.fatal())
+        .map(|(outcome, count)| (*outcome, *count))
+        .collect()
 }
 
 /// The differences of two sorted line lists: the lines only one side has.
@@ -1797,5 +1820,45 @@ pub fn run(tag: &str, args: &[&str]) -> Result<()> {
     );
     fs::create_dir_all(&scratch)?;
     fs::write(scratch.join("sniff-report.txt"), report)?;
+    // The logs are compared and reported, but a difference there does not
+    // fail the run: on a file Sniff crashes on alone (`oracle-failed`,
+    // which is not a failure) the port's `Updated:` line and the summary
+    // counts differ by construction, which the oracle's own crash
+    // explains, not the port.
+    let failed: Vec<String> = failures(&totals)
+        .into_iter()
+        .map(|(outcome, count)| format!("{count} {}", outcome.name()))
+        .collect();
+    ensure!(
+        failed.is_empty(),
+        "the port differs from the oracle: {} (report: {})",
+        failed.join(", "),
+        scratch.join("sniff-report.txt").display()
+    );
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_clean_run_passes() {
+        let mut totals = BTreeMap::new();
+        totals.insert(Outcome::Equal, 123853);
+        totals.insert(Outcome::EqualError, 87);
+        totals.insert(Outcome::Unchanged, 197521);
+        // Sniff's own crash and the output its threads lost stay non-fatal.
+        totals.insert(Outcome::OracleFailed, 3);
+        totals.insert(Outcome::PortOnly, 714);
+        assert!(failures(&totals).is_empty());
+    }
+
+    #[test]
+    fn a_run_with_a_difference_fails() {
+        let mut totals = BTreeMap::new();
+        totals.insert(Outcome::Equal, 10);
+        totals.insert(Outcome::OutputDifferent, 2);
+        assert_eq!(failures(&totals), vec![(Outcome::OutputDifferent, 2)]);
+    }
 }
