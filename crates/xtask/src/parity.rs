@@ -61,6 +61,7 @@ mod conflicts;
 mod bsarch;
 mod gui;
 mod hidden;
+mod modgroups;
 mod oracle_refs;
 mod lodgen;
 mod nif;
@@ -230,6 +231,8 @@ struct Options {
     records: Vec<String>,
     /// `parity refs`: the reference index of each game's corpus.
     refs: bool,
+    /// `parity modgroups`: the mod group scenarios.
+    modgroups: bool,
     games: Vec<&'static Game>,
     /// Lower-case file names. Empty selects the whole corpus.
     files: Vec<String>,
@@ -323,7 +326,12 @@ pub fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
     // The round trip has no oracle binary: the input file is the oracle
     // (and the GUI oracle's saves, when they are cached).
     let oracle_dir = std::env::var_os("XEDIT_ORACLE_DIR").map(PathBuf::from);
-    let gui_oracle = options.oracle_save || options.oracle_edit || options.conflicts || options.refs || options.clean;
+    let gui_oracle = options.oracle_save
+        || options.oracle_edit
+        || options.conflicts
+        || options.refs
+        || options.clean
+        || options.modgroups;
     let oracle = if options.roundtrip || gui_oracle {
         PathBuf::new()
     } else {
@@ -351,6 +359,9 @@ pub fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
     }
     if options.clean {
         return clean::run_clean(root, tag, &options, cache, scratch, oracle_dir);
+    }
+    if options.modgroups {
+        return modgroups::run_modgroups(root, tag, &options, cache, scratch, oracle_dir);
     }
 
     let mut cases = Vec::new();
@@ -1178,7 +1189,7 @@ fn parse(args: &[&str]) -> Result<Options> {
                          [--oracle-timeout <minutes>]";
     let (mode, rest) = args.split_first().context(USAGE)?;
     let (saves, roundtrip, oracle_save, oracle_edit) = match *mode {
-        "dump" | "conflicts" | "refs" | "clean" => (false, false, false, false),
+        "dump" | "conflicts" | "refs" | "clean" | "modgroups" => (false, false, false, false),
         "saves" => (true, false, false, false),
         "roundtrip" => (false, true, false, false),
         "oracle-save" => (false, false, true, false),
@@ -1194,6 +1205,7 @@ fn parse(args: &[&str]) -> Result<Options> {
         clean: *mode == "clean",
         records: Vec::new(),
         refs: *mode == "refs",
+        modgroups: *mode == "modgroups",
         games: Vec::new(),
         files: Vec::new(),
         oracle_only: false,

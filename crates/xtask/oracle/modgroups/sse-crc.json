@@ -1,0 +1,39 @@
+{
+  "description": "CRC32 conditions: a required item with its module's CRC32 among others, a required item without it (the group is invalid), an optional one without it (a warning), a forbidden module that is loaded with another CRC32 (a hint) and without a CRC32 (the group is invalid), a CRC32 list without a valid entry, CRC32s in lower case and with spaces.",
+  "game": "sse",
+  "load": ["Skyrim.esm", "Update.esm", "Dawnguard.esm", "HearthFires.esm", "Dragonborn.esm"],
+  "files": {
+    "HearthFires.modgroups": [
+      "[Crc match]",
+      "Update.esm:{{CRC:Update.esm}}",
+      "HearthFires.esm: 12345678 , {{CRC:HearthFires.esm}} ,",
+      "[Crc mismatch]",
+      "Update.esm:12345678",
+      "HearthFires.esm",
+      "[Optional mismatch]",
+      "+Dawnguard.esm:deadbeef",
+      "Update.esm",
+      "HearthFires.esm",
+      "[Forbidden mismatch]",
+      "!Dragonborn.esm:DEADBEEF",
+      "Dawnguard.esm",
+      "HearthFires.esm",
+      "[Forbidden present]",
+      "!Dragonborn.esm",
+      "Skyrim.esm",
+      "Update.esm",
+      "[Bad crc list]",
+      "Update.esm:xyz,123",
+      "HearthFires.esm"
+    ]
+  },
+  "settings": [
+    "[ModGroups]",
+    "Selection=\"Crc match\",\"Crc mismatch\",\"Optional mismatch\",\"Forbidden mismatch\",\"Forbidden present\",\"Bad crc list\"",
+    "[Init]",
+    "FirstStart=1"
+  ],
+  "menu": ["mniViewModGroupsReload"],
+  "answers": [{"class": "TfrmModGroupSelect", "title": "Reloading", "button": "OK"}],
+  "port": [{"command": "modgroups.select", "params": {"saved": true}}]
+}

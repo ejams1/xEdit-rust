@@ -1259,16 +1259,21 @@ status = "pending"
 source = "mniMessagesSaveSelectedClick"
 
 [gui."xEdit/xeMainForm.dfm:mniModGroups:OnClick"]
-status = "pending"
+status = "presentation"
 source = "mniModGroupsClick"
+note = "Shows the enable and disable items when mod groups exist."
 
 [gui."xEdit/xeMainForm.dfm:mniModGroupsDisabled:OnClick"]
-status = "pending"
+status = "covered"
+command = "conflicts.list"
 source = "mniModGroupsAbleClick"
+note = "A comparison without mod_groups, all_mod_groups or saved_mod_groups has them disabled."
 
 [gui."xEdit/xeMainForm.dfm:mniModGroupsEnabled:OnClick"]
-status = "pending"
+status = "covered"
+command = "conflicts.list"
 source = "mniModGroupsAbleClick"
+note = "Mod groups are enabled per comparison: mod_groups, all_mod_groups or saved_mod_groups of conflicts.list and records.compare."
 
 [gui."xEdit/xeMainForm.dfm:mniNavAdd:OnClick"]
 status = "covered"
@@ -1398,8 +1403,10 @@ status = "pending"
 source = "mniNavCreateMergedPatchClick"
 
 [gui."xEdit/xeMainForm.dfm:mniNavCreateModGroup:OnClick"]
-status = "pending"
+status = "covered"
+command = "modgroups.create"
 source = "mniNavCreateModGroupClick"
+note = "The selected files of the navigation tree are the modules parameter; the dialogs are parameters (include_crcs, file)."
 
 [gui."xEdit/xeMainForm.dfm:mniNavCreateSEQFile:OnClick"]
 status = "pending"
@@ -1415,12 +1422,15 @@ status = "pending"
 source = "mniNavCopyIntoClick"
 
 [gui."xEdit/xeMainForm.dfm:mniNavDeleteModGroups:OnClick"]
-status = "pending"
+status = "covered"
+command = "modgroups.delete"
 source = "mniNavDeleteModGroupsClick"
 
 [gui."xEdit/xeMainForm.dfm:mniNavEditModGroup:OnClick"]
-status = "pending"
+status = "covered"
+command = "modgroups.edit"
 source = "mniNavEditModGroupClick"
+note = "The edit dialog is the new_name, items and add_current_crcs parameters."
 
 [gui."xEdit/xeMainForm.dfm:mniNavFilterApply:OnClick"]
 status = "pending"
@@ -1576,8 +1586,10 @@ source = "mniNavCleaningObsoleteClick"
 note = "A message that the manual cleaning is obsolete (xedit_analysis::cleaning::CLEANING_OBSOLETE); files.clean with quick is the replacement."
 
 [gui."xEdit/xeMainForm.dfm:mniNavUpdateCRCModGroups:OnClick"]
-status = "pending"
+status = "covered"
+command = "modgroups.update_crcs"
 source = "mniNavUpdateCRCModGroupsClick"
+note = "The two questions are add and update, the module and group selections are modules and mod_groups."
 
 [gui."xEdit/xeMainForm.dfm:mniRefByApplyScript:OnClick"]
 status = "pending"
@@ -1679,8 +1691,10 @@ status = "pending"
 source = "mniViewCopyToSelectedRecordsClick"
 
 [gui."xEdit/xeMainForm.dfm:mniViewCreateModGroup:OnClick"]
-status = "pending"
+status = "covered"
+command = "modgroups.create"
 source = "mniNavCreateModGroupClick"
+note = "The records of the view are the modules parameter."
 
 [gui."xEdit/xeMainForm.dfm:mniViewEdit:OnClick"]
 status = "pending"
@@ -1733,8 +1747,10 @@ source = "mniViewHideNoConflictClick"
 note = "The hide_no_conflict parameter of records.compare; the view itself is presentation."
 
 [gui."xEdit/xeMainForm.dfm:mniViewModGroupsReload:OnClick"]
-status = "pending"
+status = "covered"
+command = "modgroups.select"
 source = "mniViewModGroupsReloadClick"
+note = "The mod group files read again with their validation messages, the selection (its dialog) as names, saved, activated; modgroups.select with saved keeps the saved selection, as the dialog offers it."
 
 [gui."xEdit/xeMainForm.dfm:mniViewMoveDown:OnClick"]
 status = "pending"
@@ -2229,56 +2245,73 @@ status = "pending"
 source = "vstViewScroll"
 
 [gui."xEdit/xeModGroupEditForm.dfm:edName:OnChange"]
-status = "pending"
+status = "covered"
+command = "modgroups.edit"
 source = "edNameChange"
+note = "The new_name parameter; CheckState is the invalid_params error."
 
 [gui."xEdit/xeModGroupEditForm.dfm:edName:OnKeyDown"]
-status = "pending"
+status = "presentation"
 source = "edNameKeyDown"
+note = "Display and keyboard handling of the edit dialog."
 
 [gui."xEdit/xeModGroupEditForm.dfm:edName:OnKeyPress"]
-status = "pending"
+status = "presentation"
 source = "edNameKeyPress"
+note = "Display and keyboard handling of the edit dialog."
 
 [gui."xEdit/xeModGroupEditForm.dfm:frmModGroupEdit:OnClose"]
-status = "pending"
+status = "covered"
+command = "modgroups.edit"
 source = "FormClose"
+note = "CheckState: an empty name or fewer than 2 items is invalid_params."
 
 [gui."xEdit/xeModGroupEditForm.dfm:frmModGroupEdit:OnCreate"]
-status = "pending"
+status = "presentation"
 source = "FormCreate"
+note = "Display and keyboard handling of the edit dialog."
 
 [gui."xEdit/xeModGroupEditForm.dfm:frmModGroupEdit:OnKeyDown"]
-status = "pending"
+status = "presentation"
 source = "FormKeyDown"
+note = "Display and keyboard handling of the edit dialog."
 
 [gui."xEdit/xeModGroupEditForm.dfm:frmModGroupEdit:OnShow"]
-status = "pending"
+status = "presentation"
 source = "FormShow"
+note = "Display and keyboard handling of the edit dialog."
 
 [gui."xEdit/xeModGroupEditForm.dfm:vstModGroupItems:OnGetText"]
-status = "pending"
+status = "presentation"
 source = "vstModGroupItemsGetText"
+note = "Display and keyboard handling of the edit dialog."
 
 [gui."xEdit/xeModGroupEditForm.dfm:vstModGroupItems:OnIncrementalSearch"]
-status = "pending"
+status = "presentation"
 source = "vstModGroupItemsIncrementalSearch"
+note = "Display and keyboard handling of the edit dialog."
 
 [gui."xEdit/xeModGroupEditForm.dfm:vstModGroupItems:OnInitChildren"]
-status = "pending"
+status = "presentation"
 source = "vstModGroupItemsInitChildren"
+note = "Display and keyboard handling of the edit dialog."
 
 [gui."xEdit/xeModGroupEditForm.dfm:vstModGroupItems:OnInitNode"]
-status = "pending"
+status = "presentation"
 source = "vstModGroupItemsInitNode"
+note = "Display and keyboard handling of the edit dialog."
 
 [gui."xEdit/xeModGroupEditForm.dfm:vstModGroupItems:OnKeyDown"]
-status = "pending"
+status = "covered"
+command = "modgroups.edit"
 source = "vstModGroupItemsKeyDown"
+note = "Adding, removing and moving items, their flags and CRC32s: the items parameter, each item as a line of a mod group file."
 
 [gui."xEdit/xeModGroupEditForm.dfm:vstModGroupItems:OnNodeClick"]
-status = "pending"
+status = "covered"
+command = "modgroups.edit"
 source = "vstModGroupItemsNodeClick"
+note = "Adding, removing and moving items, their flags and CRC32s: the items parameter, each item as a line of a mod group file."
 
 [gui."xEdit/xeModGroupSelectForm.dfm:acPresetDelete:OnExecute"]
 status = "pending"
@@ -2309,92 +2342,119 @@ status = "pending"
 source = "cbPresetKeyPress"
 
 [gui."xEdit/xeModGroupSelectForm.dfm:edFilter:OnChange"]
-status = "pending"
+status = "presentation"
 source = "edFilterChange"
+note = "Display and keyboard handling of the selection dialog."
 
 [gui."xEdit/xeModGroupSelectForm.dfm:edFilter:OnKeyDown"]
-status = "pending"
+status = "presentation"
 source = "edFilterKeyDown"
+note = "Display and keyboard handling of the selection dialog."
 
 [gui."xEdit/xeModGroupSelectForm.dfm:frmModGroupSelect:OnClose"]
-status = "pending"
+status = "presentation"
 source = "FormClose"
+note = "Display and keyboard handling of the selection dialog."
 
 [gui."xEdit/xeModGroupSelectForm.dfm:frmModGroupSelect:OnCreate"]
-status = "pending"
+status = "presentation"
 source = "FormCreate"
+note = "Display and keyboard handling of the selection dialog."
 
 [gui."xEdit/xeModGroupSelectForm.dfm:frmModGroupSelect:OnKeyDown"]
-status = "pending"
+status = "presentation"
 source = "FormKeyDown"
+note = "Display and keyboard handling of the selection dialog."
 
 [gui."xEdit/xeModGroupSelectForm.dfm:frmModGroupSelect:OnShow"]
-status = "pending"
+status = "presentation"
 source = "FormShow"
+note = "Display and keyboard handling of the selection dialog."
 
 [gui."xEdit/xeModGroupSelectForm.dfm:mniInvertSelection:OnClick"]
-status = "pending"
+status = "covered"
+command = "modgroups.select"
 source = "mniInvertSelectionClick"
+note = "The selection is the names (or all) parameter."
 
 [gui."xEdit/xeModGroupSelectForm.dfm:mniSelectAll:OnClick"]
-status = "pending"
+status = "covered"
+command = "modgroups.select"
 source = "mniSelectAllClick"
+note = "The selection is the names (or all) parameter."
 
 [gui."xEdit/xeModGroupSelectForm.dfm:mniSelectNone:OnClick"]
-status = "pending"
+status = "covered"
+command = "modgroups.select"
 source = "mniSelectNoneClick"
+note = "The selection is the names (or all) parameter."
 
 [gui."xEdit/xeModGroupSelectForm.dfm:pmuModGroups:OnPopup"]
-status = "pending"
+status = "presentation"
 source = "pmuModGroupsPopup"
+note = "Display and keyboard handling of the selection dialog."
 
 [gui."xEdit/xeModGroupSelectForm.dfm:vstModGroups:OnBeforeGetCheckState"]
-status = "pending"
+status = "presentation"
 source = "vstModGroupsBeforeGetCheckState"
+note = "Display and keyboard handling of the selection dialog."
 
 [gui."xEdit/xeModGroupSelectForm.dfm:vstModGroups:OnChecked"]
-status = "pending"
+status = "covered"
+command = "modgroups.select"
 source = "vstModGroupsChecked"
+note = "The selection is the names (or all) parameter."
 
 [gui."xEdit/xeModGroupSelectForm.dfm:vstModGroups:OnCompareNodes"]
-status = "pending"
+status = "presentation"
 source = "vstModGroupsCompareNodes"
+note = "Display and keyboard handling of the selection dialog."
 
 [gui."xEdit/xeModGroupSelectForm.dfm:vstModGroups:OnFreeNode"]
-status = "pending"
+status = "presentation"
 source = "vstModGroupsFreeNode"
+note = "Display and keyboard handling of the selection dialog."
 
 [gui."xEdit/xeModGroupSelectForm.dfm:vstModGroups:OnGetText"]
-status = "pending"
+status = "presentation"
 source = "vstModGroupsGetText"
+note = "Display and keyboard handling of the selection dialog."
 
 [gui."xEdit/xeModGroupSelectForm.dfm:vstModGroups:OnIncrementalSearch"]
-status = "pending"
+status = "presentation"
 source = "vstModGroupsIncrementalSearch"
+note = "Display and keyboard handling of the selection dialog."
 
 [gui."xEdit/xeModGroupSelectForm.dfm:vstModGroups:OnInitChildren"]
-status = "pending"
+status = "presentation"
 source = "vstModGroupsInitChildren"
+note = "Display and keyboard handling of the selection dialog."
 
 [gui."xEdit/xeModGroupSelectForm.dfm:vstModGroups:OnInitNode"]
-status = "pending"
+status = "presentation"
 source = "vstModGroupsInitNode"
+note = "Display and keyboard handling of the selection dialog."
 
 [gui."xEdit/xeModGroupSelectForm.dfm:vstModGroups:OnKeyDown"]
-status = "pending"
+status = "presentation"
 source = "vstModGroupsKeyDown"
+note = "Display and keyboard handling of the selection dialog."
 
 [gui."xEdit/xeModGroupSelectForm.dfm:vstModGroups:OnKeyPress"]
-status = "pending"
+status = "presentation"
 source = "vstModGroupsKeyPress"
+note = "Display and keyboard handling of the selection dialog."
 
 [gui."xEdit/xeModGroupSelectForm.dfm:vstModGroups:OnNodeDblClick"]
-status = "pending"
+status = "covered"
+command = "modgroups.select"
 source = "vstModGroupsNodeDblClick"
+note = "The selection is the names (or all) parameter."
 
 [gui."xEdit/xeModGroupSelectForm.dfm:vstModGroups:OnPaintText"]
-status = "pending"
+status = "presentation"
 source = "vstModGroupsPaintText"
+note = "Display and keyboard handling of the selection dialog."
 
 [gui."xEdit/xeModuleSelectForm.dfm:acPresetDelete:OnExecute"]
 status = "pending"

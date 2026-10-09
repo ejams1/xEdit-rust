@@ -1,0 +1,57 @@
+{
+  "description": "Delete ModGroups on the first group by name, in a file with a UTF-8 preamble: the section is erased and the file written back as an ini file in its encoding. The reload selects the remaining valid group of the saved selection.",
+  "game": "sse",
+  "load": [
+    "Skyrim.esm",
+    "Update.esm",
+    "Dawnguard.esm",
+    "HearthFires.esm",
+    "Dragonborn.esm"
+  ],
+  "files": {
+    "Dragonborn.modgroups": "\ufeff; delete\r\n[A first]\r\nUpdate.esm\r\nDragonborn.esm\r\n\r\n[B second]\r\n Dawnguard.esm \r\nDragonborn.esm\r\n",
+    "Dawnguard.modgroups": [
+      "[C third]",
+      "Update.esm",
+      "Dawnguard.esm"
+    ]
+  },
+  "settings": [
+    "[ModGroups]",
+    "Selection=\"A first\",\"B second\"",
+    "[Init]",
+    "FirstStart=1"
+  ],
+  "menu": [
+    "mniNavDeleteModGroups"
+  ],
+  "answers": [
+    {
+      "class": "TfrmModGroupSelect",
+      "title": "delete",
+      "keys": [
+        13
+      ]
+    },
+    {
+      "class": "#32770",
+      "title": "Confirm",
+      "button": "&Yes"
+    },
+    {
+      "class": "TfrmModGroupSelect",
+      "title": "Reloading",
+      "button": "OK"
+    }
+  ],
+  "port": [
+    {
+      "command": "modgroups.delete",
+      "params": {
+        "names": [
+          "A first"
+        ]
+      }
+    }
+  ]
+}

@@ -176,7 +176,7 @@ pub(super) fn oracle_key(runner: &Runner, plugins: &[PathBuf], script: &str, exe
 /// FNV-1a of a text with its line endings normalised to LF: a checkout with
 /// `core.autocrlf` turns the embedded scripts into CRLF, and the key of a
 /// cached oracle run must not depend on that.
-fn text_hash(text: &str) -> u64 {
+pub(super) fn text_hash(text: &str) -> u64 {
     text.replace("\r\n", "\n")
         .bytes()
         .fold(0xcbf2_9ce4_8422_2325u64, |hash, byte| {
@@ -338,6 +338,30 @@ pub(super) fn run_gui(
     work: PathBuf,
     peak_file: &Path,
 ) -> Result<gui::GuiResult> {
+    run_gui_with(
+        runner,
+        game,
+        plugins,
+        script,
+        build_refs,
+        work,
+        peak_file,
+        &gui::GuiExtras::default(),
+    )
+}
+
+/// [`run_gui`] with extra files in the run folder and dialogs to answer.
+#[allow(clippy::too_many_arguments)]
+pub(super) fn run_gui_with(
+    runner: &Runner,
+    game: &Game,
+    plugins: Vec<PathBuf>,
+    script: String,
+    build_refs: bool,
+    work: PathBuf,
+    peak_file: &Path,
+    extras: &gui::GuiExtras,
+) -> Result<gui::GuiResult> {
     let exe = runner.oracle_dir.join(gui::exe_name(game.mode));
     ensure!(exe.exists(), "{} does not exist", exe.display());
     let expected_peak = expected_peak(peak_file, &plugins);
@@ -355,7 +379,7 @@ pub(super) fn run_gui(
         expected_peak,
         max_memory: runner.max_memory,
     };
-    let result = run.run();
+    let result = run.run_with(extras);
     if let Ok(result) = &result
         && let Some(peak) = result.peak
     {

@@ -62,7 +62,7 @@ const CONFLICT_THIS: [&str; 12] = [
 ];
 
 /// How many differing records an outcome lists.
-const LISTED_DIFFERENCES: usize = 20;
+pub(super) const LISTED_DIFFERENCES: usize = 20;
 
 /// The result for one game.
 #[derive(Serialize)]
@@ -99,15 +99,15 @@ struct ConflictReport<'a> {
 /// What the oracle wrote: the files in load order, the single record count
 /// and the record count of each file, and the other records.
 #[derive(Default)]
-struct Statuses {
-    files: Vec<String>,
+pub(super) struct Statuses {
+    pub(super) files: Vec<String>,
     /// File (lower case) to (single records, records).
-    counts: BTreeMap<String, (u64, u64)>,
+    pub(super) counts: BTreeMap<String, (u64, u64)>,
     /// (file lower case, FormID) to (signature, ConflictAll, ConflictThis).
-    records: BTreeMap<(String, String), (String, String, String)>,
+    pub(super) records: BTreeMap<(String, String), (String, String, String)>,
 }
 
-fn read_oracle(path: &Path) -> Result<Statuses> {
+pub(super) fn read_oracle(path: &Path) -> Result<Statuses> {
     let mut statuses = Statuses::default();
     for line in BufReader::new(zstd_reader(path)?).lines() {
         let line = line?;
@@ -137,7 +137,7 @@ fn read_oracle(path: &Path) -> Result<Statuses> {
     Ok(statuses)
 }
 
-fn read_port(result: &Value) -> Result<Statuses> {
+pub(super) fn read_port(result: &Value) -> Result<Statuses> {
     let mut statuses = Statuses::default();
     for file in result["files"].as_array().context("no files in the port's result")? {
         let name = file["name"].as_str().context("file without a name")?;
@@ -194,7 +194,7 @@ fn corpus(game: &Game, data: &Path, options: &Options) -> Result<Vec<PathBuf>> {
 
 /// A data folder with only `plugins` in it, as hard links where the file
 /// system allows them (copies otherwise), like the GUI's private folder.
-fn private_data(dir: &Path, plugins: &[PathBuf]) -> Result<PathBuf> {
+pub(super) fn private_data(dir: &Path, plugins: &[PathBuf]) -> Result<PathBuf> {
     let data = dir.join("Data");
     fs::create_dir_all(&data)?;
     let wanted: std::collections::HashSet<String> = plugins
@@ -460,7 +460,23 @@ fn check_game(runner: &Runner, game: &'static Game, data: &Path, options: &Optio
         return Ok(outcome);
     }
     let port = read_port(&envelope["result"])?;
+    let (different, mut lines) = compare(&oracle, &port);
+    outcome.different = different;
+    if lines.is_empty() {
+        outcome.status = "equal";
+    } else {
+        outcome.status = "different";
+        if different > LISTED_DIFFERENCES {
+            lines.push(format!("  ... {} more", different - LISTED_DIFFERENCES));
+        }
+        outcome.detail = Some(lines.join("\n"));
+    }
+    Ok(outcome)
+}
 
+/// The differences of the port's statuses to the oracle's: the number of
+/// records that differ and the lines that describe the first of them.
+pub(super) fn compare(oracle: &Statuses, port: &Statuses) -> (usize, Vec<String>) {
     let mut lines = Vec::new();
     let oracle_files: Vec<String> = oracle.files.iter().map(|f| f.to_lowercase()).collect();
     let port_files: Vec<String> = port.files.iter().map(|f| f.to_lowercase()).collect();
@@ -512,15 +528,5 @@ fn check_game(runner: &Runner, game: &'static Game, data: &Path, options: &Optio
             }
         }
     }
-    outcome.different = different;
-    if lines.is_empty() {
-        outcome.status = "equal";
-    } else {
-        outcome.status = "different";
-        if different > LISTED_DIFFERENCES {
-            lines.push(format!("  ... {} more", different - LISTED_DIFFERENCES));
-        }
-        outcome.detail = Some(lines.join("\n"));
-    }
-    Ok(outcome)
+    (different, lines)
 }

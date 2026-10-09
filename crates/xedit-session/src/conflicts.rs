@@ -23,6 +23,7 @@ use xedit_core::implementation::{ElementImpl, FileImpl, MainRecordImpl};
 use xedit_core::interface::types::{ConflictAll, ConflictThis, PascalEnum};
 use xedit_core::interface::{Element, MainRecord};
 
+use crate::modgroups::{ModGroupChoice, ModGroupHides};
 use crate::{CommandError, Registry, Session};
 
 /// Declares the JSON form of a Pascal enumeration: its upstream value names.
@@ -123,6 +124,17 @@ pub struct ConflictsRequest {
     /// comparing the two records, as `-quickshowconflicts` does.
     #[serde(default)]
     pub quick_show_conflicts: bool,
+    /// Activate the valid mod groups of these names, so the records they
+    /// hide are left out of the comparison (`ctHiddenByModGroup`).
+    #[serde(default)]
+    pub mod_groups: Vec<String>,
+    /// Activate every valid mod group, as xEdit does with `-autoload`.
+    #[serde(default)]
+    pub all_mod_groups: bool,
+    /// Activate the valid mod groups of the selection saved in xEdit's
+    /// settings file.
+    #[serde(default)]
+    pub saved_mod_groups: bool,
     /// Listed records to skip.
     #[serde(default)]
     pub offset: usize,
@@ -175,6 +187,22 @@ pub struct ConflictsResponse {
     /// The warnings xEdit writes to its message log while it compares.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub messages: Vec<String>,
+    /// The activated mod groups.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub mod_groups: Vec<String>,
+    /// What the activated mod groups hide: for each module, the modules
+    /// whose records its records hide.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub mod_group_hides: Vec<ModGroupHides>,
+}
+
+/// The mod groups a request activates.
+fn mod_group_choice(mod_groups: &[String], all: bool, saved: bool) -> ModGroupChoice {
+    ModGroupChoice {
+        mod_groups: mod_groups.to_vec(),
+        all_mod_groups: all,
+        saved_mod_groups: saved,
+    }
 }
 
 /// The loaded files in the order of upstream's `Files`.
@@ -194,13 +222,21 @@ fn conflicts_list(session: &mut Session, request: ConflictsRequest) -> Result<Co
             return Err(CommandError::new("unknown_file", format!("{name} is not loaded")));
         }
     }
+    let active = crate::modgroups::activate(
+        session,
+        &mod_group_choice(&request.mod_groups, request.all_mod_groups, request.saved_mod_groups),
+    )?;
     let options = ConflictOptions {
         only_master_and_leafs: request.master_and_leafs,
         quick_show_conflicts: request.quick_show_conflicts,
+        mod_groups: active.filter,
         ..Default::default()
     };
     let results = conflict::conflict_statuses(&files, &options);
-    Ok(list(&files, &results, &request))
+    let mut response = list(&files, &results, &request);
+    response.mod_groups = active.names;
+    response.mod_group_hides = active.hides;
+    Ok(response)
 }
 
 fn is_single(status: ConflictStatus) -> bool {
@@ -213,6 +249,8 @@ fn list(files: &[Arc<FileImpl>], results: &ConflictResults, request: &ConflictsR
         total: 0,
         records: Vec::new(),
         messages: results.messages.clone(),
+        mod_groups: Vec::new(),
+        mod_group_hides: Vec::new(),
     };
     let limit = request.limit.unwrap_or(usize::MAX);
     let listed_file = |file: &FileImpl| {
@@ -311,6 +349,17 @@ pub struct CompareRequest {
     /// "Hide ignored", members no record has, members the definitions hide).
     #[serde(default)]
     pub include_hidden: bool,
+    /// Activate the valid mod groups of these names, so the records they
+    /// hide are left out of the comparison (`ctHiddenByModGroup`).
+    #[serde(default)]
+    pub mod_groups: Vec<String>,
+    /// Activate every valid mod group, as xEdit does with `-autoload`.
+    #[serde(default)]
+    pub all_mod_groups: bool,
+    /// Activate the valid mod groups of the selection saved in xEdit's
+    /// settings file.
+    #[serde(default)]
+    pub saved_mod_groups: bool,
 }
 
 /// One record compared: a column of the view.
@@ -370,9 +419,14 @@ fn records_compare(session: &mut Session, request: CompareRequest) -> Result<Com
         .and_then(ElementImpl::main_record_impl)
         .ok_or_else(|| CommandError::new("internal", "the record is not a main record of a file"))?;
     let files = session_files(session)?;
+    let active = crate::modgroups::activate(
+        session,
+        &mod_group_choice(&request.mod_groups, request.all_mod_groups, request.saved_mod_groups),
+    )?;
     let options = ConflictOptions {
         only_master_and_leafs: request.master_and_leafs,
         hide_no_conflict: request.hide_no_conflict,
+        mod_groups: active.filter,
         ..Default::default()
     };
     let mut context = ConflictContext::new(&options, &files);

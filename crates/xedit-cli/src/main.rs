@@ -64,6 +64,14 @@ struct Cli {
     #[arg(long, global = true)]
     dont_cache_save: bool,
 
+    /// The program's own mod group file. Default: <AppName>Edit.modgroups next to xedit.exe, as xEdit's next to its program.
+    #[arg(long, global = true)]
+    modgroups_file: Option<String>,
+
+    /// The xEdit settings file that keeps the saved mod group selection. Default: xEdit's: <AppName>Edit.ini next to the program when it exists, else Plugins.<app>viewsettings next to the game's Plugins.txt in the local application data.
+    #[arg(long, global = true)]
+    settings: Option<String>,
+
     #[command(subcommand)]
     action: Action,
 }
@@ -96,6 +104,11 @@ enum Action {
     Masters {
         #[command(subcommand)]
         action: MastersAction,
+    },
+    /// Mod groups: the .modgroups files that say which records of a load order hide others, the saved selection, and their CRC32s.
+    Modgroups {
+        #[command(subcommand)]
+        action: ModgroupsAction,
     },
     /// The reference index: the records that refer to a record, and the reference cache.
     Refs {
@@ -179,6 +192,15 @@ enum Action {
         /// Classify a FormID with one override as an override without comparing, as -quickshowconflicts does.
         #[arg(long)]
         quick_show_conflicts: bool,
+        /// Activate the valid mod group of this name, so the records it hides are left out (ctHiddenByModGroup); repeat for several.
+        #[arg(long = "modgroups")]
+        modgroups: Vec<String>,
+        /// Activate every valid mod group, as xEdit's -autoload does.
+        #[arg(long)]
+        all_modgroups: bool,
+        /// Activate the valid mod groups of the selection saved in xEdit's settings file.
+        #[arg(long)]
+        saved_modgroups: bool,
         /// Listed records to skip.
         #[arg(long, default_value_t = 0)]
         offset: usize,
@@ -202,6 +224,15 @@ enum Action {
         /// Also list the rows the view hides (ignored members, members no record has).
         #[arg(long)]
         include_hidden: bool,
+        /// Activate the valid mod group of this name, so the records it hides are left out (ctHiddenByModGroup); repeat for several.
+        #[arg(long = "modgroups")]
+        modgroups: Vec<String>,
+        /// Activate every valid mod group, as xEdit's -autoload does.
+        #[arg(long)]
+        all_modgroups: bool,
+        /// Activate the valid mod groups of the selection saved in xEdit's settings file.
+        #[arg(long)]
+        saved_modgroups: bool,
     },
     /// Write the element tree of a plugin as xDump prints it.
     Dump {
@@ -567,6 +598,110 @@ enum ArchiveAction {
 }
 
 #[derive(Subcommand)]
+enum ModgroupsAction {
+    /// List the valid mod groups by name with their items and whether the saved selection has them (modgroups.list).
+    List {
+        /// Also list the invalid mod groups and those of modules that are not loaded.
+        #[arg(long)]
+        all: bool,
+    },
+    /// Show one mod group with the state of each item (modgroups.show).
+    Show {
+        /// Name of the mod group.
+        name: String,
+        /// The .modgroups file, when several have a group of the name.
+        #[arg(long)]
+        file: Option<String>,
+    },
+    /// Choose the active mod groups and save the selection in xEdit's settings file (modgroups.select). Needs --edit unless --dry-run.
+    Select {
+        /// Name of a valid mod group to select; give several for several.
+        names: Vec<String>,
+        /// Keep the saved selection too.
+        #[arg(long)]
+        saved: bool,
+        /// Select every valid mod group.
+        #[arg(long)]
+        all: bool,
+        /// Report the selection, but write nothing.
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Create a mod group in the .modgroups file of one of its modules (modgroups.create). Needs --edit unless --dry-run.
+    Create {
+        /// Name of the new mod group.
+        name: String,
+        /// Loaded module of the group, in order (the first a target only, the last a source only); repeat for each.
+        #[arg(long = "module")]
+        modules: Vec<String>,
+        /// Item of the group as a line of a .modgroups file ([flags]file[:crc32,...]), in place of --module; repeat for each.
+        #[arg(long = "item")]
+        items: Vec<String>,
+        /// Give each module's item its current CRC32.
+        #[arg(long)]
+        include_crcs: bool,
+        /// Add the current CRC32 to items whose CRC32s lack it.
+        #[arg(long)]
+        add_current_crcs: bool,
+        /// Module of the group whose .modgroups file gets it; the first loaded one when omitted.
+        #[arg(long)]
+        file: Option<String>,
+        /// Report the file that would be written, but write nothing.
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Rename a mod group or replace its items (modgroups.edit). Needs --edit unless --dry-run.
+    Edit {
+        /// Name of the mod group.
+        name: String,
+        /// The .modgroups file, when several have a group of the name.
+        #[arg(long)]
+        file: Option<String>,
+        /// New name of the group.
+        #[arg(long)]
+        new_name: Option<String>,
+        /// New item as a line of a .modgroups file; repeat for each. The items stay when none is given.
+        #[arg(long = "item")]
+        items: Vec<String>,
+        /// Add the current CRC32 to items whose CRC32s lack it.
+        #[arg(long)]
+        add_current_crcs: bool,
+        /// Report the file that would be written, but write nothing.
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Delete mod groups (modgroups.delete). Needs --edit unless --dry-run.
+    Delete {
+        /// Name of a mod group to delete; give several for several.
+        names: Vec<String>,
+        /// Only the groups of this .modgroups file.
+        #[arg(long)]
+        file: Option<String>,
+        /// Report the files that would be written, but write nothing.
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Add the current CRC32s of the modules to the items of mod groups (modgroups.update_crcs). Needs --edit unless --dry-run.
+    UpdateCrcs {
+        /// Do not add CRC32s to items that have none.
+        #[arg(long)]
+        no_add: bool,
+        /// Do not add the current CRC32 to items whose CRC32s lack it.
+        #[arg(long)]
+        no_update: bool,
+        /// Module whose items decide which groups need the update; repeat for several. Every module that lacks a CRC32 when omitted.
+        #[arg(long = "module")]
+        modules: Vec<String>,
+        /// Mod group to update; repeat for several. Every group that needs it when omitted.
+        #[arg(long = "modgroup")]
+        mod_groups: Vec<String>,
+        /// Report what would change, but write nothing.
+        #[arg(long)]
+        dry_run: bool,
+    },
+}
+
+#[derive(Subcommand)]
 enum FormidsAction {
     /// Change the FormID of a record and update the records that refer to it (formids.change). Needs --edit unless --dry-run.
     Change {
@@ -910,6 +1045,68 @@ fn command_of(action: Action) -> Result<(String, Value), CommandError> {
                 }),
             ),
         },
+        Action::Modgroups { action } => match action {
+            ModgroupsAction::List { all } => ("modgroups.list".to_owned(), json!({ "all": all })),
+            ModgroupsAction::Show { name, file } => {
+                ("modgroups.show".to_owned(), json!({ "name": name, "file": file }))
+            }
+            ModgroupsAction::Select {
+                names,
+                saved,
+                all,
+                dry_run,
+            } => (
+                "modgroups.select".to_owned(),
+                json!({ "names": names, "saved": saved, "all": all, "dry_run": dry_run }),
+            ),
+            ModgroupsAction::Create {
+                name,
+                modules,
+                items,
+                include_crcs,
+                add_current_crcs,
+                file,
+                dry_run,
+            } => (
+                "modgroups.create".to_owned(),
+                json!({
+                    "name": name, "modules": modules, "items": items, "include_crcs": include_crcs,
+                    "add_current_crcs": add_current_crcs, "file": file, "dry_run": dry_run
+                }),
+            ),
+            ModgroupsAction::Edit {
+                name,
+                file,
+                new_name,
+                items,
+                add_current_crcs,
+                dry_run,
+            } => (
+                "modgroups.edit".to_owned(),
+                json!({
+                    "name": name, "file": file, "new_name": new_name,
+                    "items": if items.is_empty() { None } else { Some(items) },
+                    "add_current_crcs": add_current_crcs, "dry_run": dry_run
+                }),
+            ),
+            ModgroupsAction::Delete { names, file, dry_run } => (
+                "modgroups.delete".to_owned(),
+                json!({ "names": names, "file": file, "dry_run": dry_run }),
+            ),
+            ModgroupsAction::UpdateCrcs {
+                no_add,
+                no_update,
+                modules,
+                mod_groups,
+                dry_run,
+            } => (
+                "modgroups.update_crcs".to_owned(),
+                json!({
+                    "add": !no_add, "update": !no_update, "modules": modules,
+                    "mod_groups": mod_groups, "dry_run": dry_run
+                }),
+            ),
+        },
         Action::Formids { action } => match action {
             FormidsAction::Change {
                 form_id,
@@ -1098,6 +1295,9 @@ fn command_of(action: Action) -> Result<(String, Value), CommandError> {
             include_single,
             master_and_leafs,
             quick_show_conflicts,
+            modgroups,
+            all_modgroups,
+            saved_modgroups,
             offset,
             limit,
         } => (
@@ -1106,6 +1306,7 @@ fn command_of(action: Action) -> Result<(String, Value), CommandError> {
                 "files": file, "signatures": signature, "min_conflict_all": min_conflict_all,
                 "conflict_this": conflict_this, "include_single": include_single,
                 "master_and_leafs": master_and_leafs, "quick_show_conflicts": quick_show_conflicts,
+                "mod_groups": modgroups, "all_mod_groups": all_modgroups, "saved_mod_groups": saved_modgroups,
                 "offset": offset, "limit": limit
             }),
         ),
@@ -1115,11 +1316,15 @@ fn command_of(action: Action) -> Result<(String, Value), CommandError> {
             master_and_leafs,
             hide_no_conflict,
             include_hidden,
+            modgroups,
+            all_modgroups,
+            saved_modgroups,
         } => (
             "records.compare".to_owned(),
             json!({
                 "form_id": form_id, "file": file, "master_and_leafs": master_and_leafs,
-                "hide_no_conflict": hide_no_conflict, "include_hidden": include_hidden
+                "hide_no_conflict": hide_no_conflict, "include_hidden": include_hidden,
+                "mod_groups": modgroups, "all_mod_groups": all_modgroups, "saved_mod_groups": saved_modgroups
             }),
         ),
         Action::Assets { action } => match action {
@@ -1355,6 +1560,7 @@ fn main() -> ExitCode {
     // `-FillPNAM`, and the settings `-quickautoclean` gives the load.
     xedit_session::commands::set_fill_pnam_on_load(cli.fill_pnam);
     xedit_session::commands::set_quick_clean_on_load(matches!(cli.action, Action::Clean { quick: true, .. }));
+    xedit_session::modgroups::set_file_options(cli.modgroups_file.as_deref(), cli.settings.as_deref());
     if matches!(cli.action, Action::Serve { .. } | Action::Mcp) {
         // stdout carries the protocol; the progress of a load goes to stderr.
         xedit_session::dump::log_progress_to_stderr();

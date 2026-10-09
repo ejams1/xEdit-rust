@@ -1128,6 +1128,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "xedit-loadorder"
+version = "0.1.0"
+dependencies = [
+ "xedit-core",
+ "xedit-io",
+]
+
+[[package]]
 name = "xedit-session"
 version = "0.1.0"
 dependencies = [
@@ -1141,6 +1149,7 @@ dependencies = [
  "xedit-core",
  "xedit-defs",
  "xedit-io",
+ "xedit-loadorder",
 ]
 
 [[package]]
