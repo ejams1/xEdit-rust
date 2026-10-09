@@ -18,9 +18,13 @@
 //! topic that has no list yet, so the lists exist once a topic is built,
 //! which is what the GUI shows and compares.
 //!
-//! Not ported: the `PNAM` that `wbFillPNAM` gives a response without one
-//! (off in the GUI, on in the quick clean mode), and the postponed sort of a
-//! group inside an update (`gsSortPostponed`).
+//! Under `wbFillPNAM` (off in the GUI, on in the quick clean modes and with
+//! `-FillPNAM`) a response without `PNAM` sorts its group when it is built,
+//! and the sort gives every such response of the group the `PNAM` of the
+//! response it follows (an internal edit).
+//!
+//! Not ported: the postponed sort of a group inside an update
+//! (`gsSortPostponed`).
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -28,7 +32,8 @@ use std::sync::atomic::Ordering;
 
 use crate::interface::element::{Container, Element, ElementRef, File, MainRecord};
 use crate::interface::globals::{
-    begin_internal_edit, can_sort_info, display_load_order_form_id, end_internal_edit, fill_inoa, fill_inom, sort_info,
+    begin_internal_edit, can_sort_info, display_load_order_form_id, end_internal_edit, fill_inoa, fill_inom, fill_pnam,
+    is_skyrim, sort_info,
 };
 use crate::interface::misc::{Variant, progress};
 use crate::interface::types::{FileState, Signature};
@@ -238,6 +243,51 @@ fn file_name(record: &MainRecordImpl) -> String {
     record.get_file().map(|file| file.get_name()).unwrap_or_default()
 }
 
+/// The quest of a response for the `PNAM` fill: `QSTI` of the response,
+/// in Skyrim (which has no `QSTI`) `QNAM` of its topic.
+fn info_quest(record: &MainRecordImpl) -> i64 {
+    let value = if is_skyrim() {
+        record
+            .base
+            .container()
+            .and_then(|container| container.as_element_impl()?.group_record_impl())
+            .and_then(|group| group.children_of())
+            .map(|topic| topic.get_element_native_value("QNAM"))
+    } else {
+        Some(record.get_element_native_value("QSTI"))
+    };
+    value.and_then(|value| value.as_ordinal()).unwrap_or(0)
+}
+
+/// The `wbFillPNAM` part of `ProcessDIAL`: a response of the group without
+/// `PNAM` follows the closest response before it in the list that is not
+/// deleted and belongs to the same quest, or gets an empty `PNAM` when
+/// there is none. The edit is internal.
+fn fill_pnam_of(list: &EntryList, target: &Arc<MainRecordImpl>, prev: Option<usize>) {
+    if target.get_element_exists("PNAM") {
+        return;
+    }
+    let quest = info_quest(target);
+    let mut insert = prev;
+    while let Some(insert_id) = insert {
+        let Some(node) = list.nodes.get(&insert_id) else { break };
+        let candidate = &node.record;
+        if !candidate.get_is_deleted() && info_quest(candidate) == quest {
+            let form_id = candidate.get_load_order_form_id().to_cardinal();
+            let set = match target.add("PNAM", false) {
+                Ok(Some(element)) => element.set_native_value(Variant::UInt(u64::from(form_id))).is_ok(),
+                _ => false,
+            };
+            if !set {
+                target.remove_element_by_name("PNAM");
+            }
+            return;
+        }
+        insert = node.prev;
+    }
+    let _ = target.add("PNAM", false);
+}
+
 /// Port of `MasterRecordsFromMasterFilesAndSelf`: the versions of the record
 /// up to itself that are in its own file or a master of it.
 fn master_records_from_master_files_and_self(record: &Arc<MainRecordImpl>) -> Vec<Arc<MainRecordImpl>> {
@@ -280,6 +330,12 @@ fn master_records_from_master_files_and_self(record: &Arc<MainRecordImpl>) -> Ve
 }
 
 impl GroupRecordImpl {
+    /// `TwbGroupRecord.Sort` without `aForce`, as the navigation tree calls
+    /// it before it orders the responses of a topic by their sort order.
+    pub fn sort_responses(&self) {
+        self.sort();
+    }
+
     /// Port of `TwbGroupRecord.Sort` for a group of the responses of a
     /// topic (type 7) when the game sorts them (`wbCanSortINFO`). Returns
     /// whether the group was such a group.
@@ -389,6 +445,9 @@ impl GroupRecordImpl {
                 .is_some_and(|group| std::ptr::eq(Arc::as_ptr(&group), self));
             if !in_this_group {
                 list.remove_entry(&record);
+            } else if only_masters && fill_pnam() && !record.get_is_deleted() && begin_internal_edit(false) {
+                fill_pnam_of(&list, &record, prev);
+                end_internal_edit();
             }
             current = prev;
         }
@@ -450,16 +509,29 @@ impl MainRecordImpl {
         if !(can_sort_info() && sort_info()) || self.get_is_deleted() || self.get_is_partial_form() {
             return;
         }
-        if self.get_signature() != Signature::new(b"DIAL") {
+        let signature = self.get_signature();
+        let is_info = signature == Signature::new(b"INFO");
+        if !is_info && signature != Signature::new(b"DIAL") {
             return;
         }
         if !begin_internal_edit(false) {
             return;
         }
-        let missing = (fill_inom() && self.get_record_by_signature(Signature::new(b"INOM")).is_none())
-            || (fill_inoa() && self.get_record_by_signature(Signature::new(b"INOA")).is_none());
-        if missing && let Some(group) = self.child_group() {
-            group.sort_topic(true);
+        if fill_pnam() && is_info && self.get_record_by_signature(Signature::new(b"PNAM")).is_none() {
+            // A response without `PNAM` sorts its group, which fills it.
+            if let Some(group) = self
+                .base
+                .container()
+                .and_then(|container| container.as_element_impl()?.group_record_impl())
+            {
+                group.sort_topic(true);
+            }
+        } else if !is_info {
+            let missing = (fill_inom() && self.get_record_by_signature(Signature::new(b"INOM")).is_none())
+                || (fill_inoa() && self.get_record_by_signature(Signature::new(b"INOA")).is_none());
+            if missing && let Some(group) = self.child_group() {
+                group.sort_topic(true);
+            }
         }
         end_internal_edit();
     }

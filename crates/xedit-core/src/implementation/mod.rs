@@ -20,6 +20,7 @@ pub mod file_flags;
 pub mod flag;
 pub mod form_ids;
 mod info_sort;
+pub mod injected;
 pub mod masters;
 pub mod new_form_id;
 pub mod refcache;
@@ -27,6 +28,7 @@ pub mod refs;
 mod scan;
 pub mod sortable;
 pub mod structs;
+pub mod undelete;
 pub mod write;
 
 /// The value accessors of an element without a value.
@@ -242,6 +244,31 @@ impl FileBytes {
 }
 
 pub use crate::threads::InitOnce;
+
+/// Runs `work` with the sorted arrays keeping their order (see `NO_SORT`).
+pub(crate) fn without_sorting<T>(work: impl FnOnce() -> T) -> T {
+    let outer = NO_SORT.with(|no_sort| no_sort.replace(true));
+    let result = work();
+    NO_SORT.with(|no_sort| no_sort.set(outer));
+    result
+}
+
+/// Whether `DoInit(True)` may sort a sorted array now.
+pub(crate) fn sorting_allowed() -> bool {
+    !NO_SORT.with(std::cell::Cell::get)
+}
+
+thread_local! {
+    /// Whether the sorted arrays keep their order on this thread for now
+    /// (`DoInit(True)` does not sort): upstream's `MastersUpdated` changes
+    /// the FormIDs in the data through the definitions, without reading the
+    /// elements, so it never sorts an array.
+    static NO_SORT: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+
+    /// The record that builds on this thread for its names only
+    /// (`mrsQuickInit`), by its address; 0 for none.
+    static QUICK_INIT: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
 
 /// The bytes an element reads its data from: the file, or the decompressed
 /// data of a record.
@@ -2024,6 +2051,16 @@ pub struct MainRecordImpl {
     /// Port of `mrsOFSTRemoved` in `mrStates`: the init dropped the offsets
     /// of a worldspace, and `PrepareSave` marks its children modified.
     mr_ofst_removed: AtomicBool,
+    /// Port of `dcfStorageInvalid` of the record: an element of the record
+    /// changed its data (`InvalidateParentStorage`), so a modified record is
+    /// written from its elements. A record that is only marked modified
+    /// (`MarkModifiedRecursive`) writes the data it was loaded with. Never
+    /// cleared: the port keeps the loaded data after a save, where upstream
+    /// takes the written bytes as the new data.
+    pub(crate) mr_storage_invalid: AtomicBool,
+    /// The data `CollapseStorage` merged from the elements (a master
+    /// update), which a save writes while the storage stays valid.
+    pub(crate) mr_collapsed: std::sync::Mutex<Option<Arc<Vec<u8>>>>,
     /// A record that repeats the FormID of the record before it, which
     /// upstream skips on load.
     mr_duplicate: AtomicBool,
@@ -2090,6 +2127,8 @@ impl MainRecordImpl {
             mr_display_name: RwLock::new(None),
             mr_precombined: OnceLock::new(),
             mr_ofst_removed: AtomicBool::new(false),
+            mr_storage_invalid: AtomicBool::new(false),
+            mr_collapsed: std::sync::Mutex::new(None),
             mr_duplicate: AtomicBool::new(duplicate),
             mr_refs: Default::default(),
             mr_referenced_by: Default::default(),
@@ -2170,7 +2209,11 @@ impl MainRecordImpl {
         }
         self.mr_init.run_then(
             || !self.mr_names_known.load(Ordering::Acquire),
-            || self.build(),
+            || {
+                let outer = QUICK_INIT.with(|quick| quick.replace(Arc::as_ptr(self) as usize));
+                self.build();
+                QUICK_INIT.with(|quick| quick.set(outer));
+            },
             || self.release_elements_and_data(),
         );
     }
@@ -2472,6 +2515,14 @@ impl MainRecordImpl {
             self.create_record_header();
             sub_record::init_main_record(self);
             self.mr_names_known.store(true, Ordering::Release);
+            // `mrsQuickInit`: upstream leaves `Init` once the subrecords up
+            // to `QuickInitLimit` are read, before the offsets of a
+            // worldspace are dropped, the `AfterLoad` of the record and the
+            // required members; a build for the names alone stops here too,
+            // so it leaves the record unchanged.
+            if QUICK_INIT.with(std::cell::Cell::get) == std::ptr::from_ref::<Self>(self) as usize {
+                return;
+            }
             // Port of the `wbRemoveOffsetData` step of `TwbMainRecord.Init`:
             // the offsets of a worldspace are dropped.
             if remove_offset_data() && self.mr_struct().signature == Signature::new(b"WRLD") {
@@ -2488,6 +2539,7 @@ impl MainRecordImpl {
                     let internal = crate::interface::globals::begin_internal_edit(true);
                     self.container.remove_element(position);
                     self.set_modified(true);
+                    self.mr_storage_invalid.store(true, Ordering::Relaxed);
                     if internal {
                         crate::interface::globals::end_internal_edit();
                     }
@@ -3140,6 +3192,16 @@ pub trait ElementImpl: Element {
         }
     }
 
+    /// Port of `DoInit(True)` for the containers that sort their elements
+    /// (`TwbArray` and `TwbSubRecord` with a sorted array): the elements
+    /// are sorted when a change made their order stale. The default is the
+    /// init alone.
+    fn do_init_sorted(&self) {}
+
+    /// Clears `srsSortInvalid` or `arrSortInvalid`: the elements keep their
+    /// order until a change makes it stale again.
+    fn clear_sort_invalid(&self) {}
+
     /// Port of `InvalidateStorage`.
     fn invalidate_storage(&self) {
         if let Some(this) = self.as_dyn_element_impl()
@@ -3324,10 +3386,11 @@ pub trait ElementImpl: Element {
 
     /// Port of `TwbContainer.ReverseElements`.
     fn reverse_elements_impl(&self) {
+        // Upstream only reverses the list: the element is not modified and
+        // its storage stays valid, so a save writes the data as loaded
+        // unless something else changes it.
         if let Some(base) = self.container_base() {
             base.reverse();
-            self.set_modified(true);
-            self.invalidate_storage();
         }
     }
 

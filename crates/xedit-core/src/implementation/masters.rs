@@ -820,46 +820,82 @@ fn main_record_masters_updated(record: &Arc<MainRecordImpl>, update: &MastersUpd
     let base = &record.base;
     let was_modified = base.has_state(ElementState::esModified) && !base.has_state(ElementState::esInternalModified);
     let result = with_internal_edit(|| {
-        with_update(&**record, || {
-            record.do_init();
-            let allow_hardcoded_range_use = record
-                .file
-                .upgrade()
-                .is_some_and(|file| file.get_allow_hardcoded_range_use());
-            let refs_out_of_date = record.refs_out_of_date();
-            let mut header_updated = false;
-            let old = record.mr_struct().form_id;
-            if !old.is_null() {
-                let new = update.fixup(old, allow_hardcoded_range_use);
-                if old != new {
-                    record.make_header_writeable(|header| header.form_id = new);
-                    record.clear_fixed_form_id();
-                    header_updated = true;
+        super::without_sorting(|| {
+            with_update(&**record, || {
+                record.do_init();
+                let allow_hardcoded_range_use = record
+                    .file
+                    .upgrade()
+                    .is_some_and(|file| file.get_allow_hardcoded_range_use());
+                let refs_out_of_date = record.refs_out_of_date();
+                let mut header_updated = false;
+                let old = record.mr_struct().form_id;
+                if !old.is_null() {
+                    let new = update.fixup(old, allow_hardcoded_range_use);
+                    if old != new {
+                        record.make_header_writeable(|header| header.form_id = new);
+                        record.clear_fixed_form_id();
+                        header_updated = true;
+                    }
                 }
-            }
-            // With the references built, the elements are only visited when
-            // one of the FormIDs the record refers to changes (or the
-            // references are out of date).
-            let found_one = match record.update_references(|form_id| update.fixup(form_id, allow_hardcoded_range_use)) {
-                Some(found) => found || refs_out_of_date,
-                None => true,
-            };
-            let result = if found_one {
-                container_masters_updated(&**record, update)?
-            } else {
-                false
-            };
-            Ok(result || header_updated)
+                // With the references built, the elements are only visited when
+                // one of the FormIDs the record refers to changes (or the
+                // references are out of date).
+                let found_one =
+                    match record.update_references(|form_id| update.fixup(form_id, allow_hardcoded_range_use)) {
+                        Some(found) => found || refs_out_of_date,
+                        None => true,
+                    };
+                let result = if found_one {
+                    container_masters_updated(&**record, update)?
+                } else {
+                    false
+                };
+                Ok(result || header_updated)
+            })
         })
     });
     if !was_modified && base.has_state(ElementState::esModified) {
-        // `CollapseStorage` is not ported.
+        // `CollapseStorage` is not ported. It merges the data of the
+        // elements in their current order and builds the elements again
+        // over it, so a sorted array keeps the order it had: the sort flags
+        // of the elements are cleared instead.
         base.include_state(ElementState::esInternalModified);
+        clear_sort_invalid(&**record);
+    }
+    if base.has_state(ElementState::esModified) && record.mr_storage_invalid.load(std::sync::atomic::Ordering::Relaxed)
+    {
+        // `CollapseStorage`: the data of the elements in their order becomes
+        // the data of the record.
+        let mut data = Vec::new();
+        if super::without_sorting(|| {
+            super::write::container_write_to_stream(&**record, &mut data, super::ResetModified::rmNo)
+        })
+        .is_ok()
+        {
+            *record.mr_collapsed.lock().unwrap() = Some(Arc::new(data));
+            record
+                .mr_storage_invalid
+                .store(false, std::sync::atomic::Ordering::Relaxed);
+        }
     }
     // A record that did not change releases its elements, as upstream drops
     // its references; a modified record keeps them.
     record.reset();
     result
+}
+
+/// The sorted arrays below `element` keep their order (see
+/// `main_record_masters_updated`).
+fn clear_sort_invalid(element: &dyn ElementImpl) {
+    element.clear_sort_invalid();
+    if let Some(base) = element.container_base() {
+        for child in base.elements() {
+            if let Some(child) = child.as_element_impl() {
+                clear_sort_invalid(child);
+            }
+        }
+    }
 }
 
 /// Port of `TwbGroupRecord.MastersUpdated`: the records of the group, then

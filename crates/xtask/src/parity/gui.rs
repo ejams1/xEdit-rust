@@ -122,10 +122,89 @@ pub(super) fn windows_path(path: &Path) -> String {
     path.to_string_lossy().replace('/', "\\")
 }
 
+/// What a quick auto clean run left (`run_quick_clean`).
+pub struct QuickCleanResult {
+    /// The plugin as the run left it in the private data folder: the
+    /// cleaned plugin when the GUI saved it, else the input.
+    pub plugin: PathBuf,
+    /// Whether the GUI saved the plugin (a backup of it was made).
+    pub saved: bool,
+    /// The message log the GUI writes next to its executable on exit.
+    pub log: String,
+    pub peak: Option<u64>,
+}
+
 impl GuiRun<'_> {
     /// Starts the GUI, answers the module selection and waits for the
     /// script. The run folder is left for the caller to read and remove.
     pub fn run(&self) -> Result<GuiResult> {
+        let (mut command, _) = self.prepare()?;
+        command.arg(format!("-script:{}", windows_path(&self.work.join("oracle.pas"))));
+        if !self.build_refs {
+            command.arg("-nobuildrefs");
+        }
+        let marker = self.work.join("done.txt");
+        let peak = self.spawn_and_watch(command, Until::Marker(&marker))?;
+        let status = fs::read_to_string(self.work.join("status.txt"))
+            .context("the script wrote no status")?
+            .lines()
+            .map(str::to_owned)
+            .collect();
+        Ok(GuiResult {
+            status,
+            out: self.work.join("out"),
+            peak,
+        })
+    }
+
+    /// Runs the quick auto clean mode of the edit tool mode on `target`
+    /// (`-quickautoclean -autoexit -autoload <target>`) instead of a script
+    /// and waits for the GUI to exit. The settings file of the run says the
+    /// 64-bit start question and the developer message were shown, so the
+    /// edit mode shows no prompt; any other dialog fails the run.
+    pub fn run_quick_clean(&self, target: &str) -> Result<QuickCleanResult> {
+        let (mut command, data) = self.prepare()?;
+        // `Settings` lives next to the plugin list (`-P:`), named
+        // `<list>.<game>viewsettings`.
+        // The developer message was shown today (a Delphi date: days since
+        // 1899-12-30), as the GUI records it, and `Patron` skips it in the
+        // auto load modes (`DoInit`: `not wbPatron or not xeAutoLoad`), and
+        // `ShowTip` the tip of the day.
+        let today = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |since| since.as_secs() / 86_400)
+            + 25_569;
+        fs::write(
+            self.work
+                .join(format!("plugins.{}viewsettings", self.mode.to_ascii_lowercase())),
+            format!(
+                "[Init]\r\nFirst64Start=0\r\n\r\n[DeveloperMessage]\r\nLastShownOn={today}\r\nVersion=0\r\n\r\n[Options]\r\nPatron=1\r\nShowTip=0\r\n"
+            ),
+        )?;
+        command
+            .arg("-quickautoclean")
+            .arg("-autoexit")
+            .arg("-autoload")
+            .arg(target);
+        let peak = self.spawn_and_watch(command, Until::Exit)?;
+        let log = fs::read_dir(self.work.join("bin"))?
+            .filter_map(|entry| entry.ok().map(|entry| entry.path()))
+            .find(|path| path.to_string_lossy().ends_with("_log.txt"))
+            .map(|path| fs::read(path).map(|bytes| String::from_utf8_lossy(&bytes).into_owned()))
+            .transpose()?
+            .context("the GUI wrote no log")?;
+
+        let saved = self.work.join("backup").is_dir() && fs::read_dir(self.work.join("backup"))?.next().is_some();
+        Ok(QuickCleanResult {
+            plugin: data.join(target),
+            saved,
+            log,
+            peak,
+        })
+    }
+
+    /// The private run folder and the command line both kinds of run share.
+    fn prepare(&self) -> Result<(HiddenCommand, PathBuf)> {
         if self.work.exists() {
             fs::remove_dir_all(&self.work).with_context(|| format!("removing {}", self.work.display()))?;
         }
@@ -164,7 +243,6 @@ impl GuiRun<'_> {
         let mut command = HiddenCommand::new(&exe);
         command
             .arg(format!("-{}", self.mode))
-            .arg(format!("-script:{}", windows_path(&script)))
             .arg(format!("-D:{}\\", windows_path(&data)))
             .arg(format!("-P:{}", windows_path(&plugins)))
             .arg(format!("-T:{}temp\\", work_text))
@@ -176,11 +254,15 @@ impl GuiRun<'_> {
             .arg(format!("-G:{}\\", windows_path(&saves)))
             .arg("-IKnowWhatImDoing")
             .current_dir(&self.work);
-        if !self.build_refs {
-            command.arg("-nobuildrefs");
-        }
+        Ok((command, data))
+    }
+
+    /// Starts the GUI in its job object and watches it until `until`.
+    fn spawn_and_watch(&self, command: HiddenCommand, until: Until) -> Result<Option<u64>> {
         let _reservation = self.budget.reserve(self.expected_peak.min(self.max_memory));
-        let mut child = command.spawn().with_context(|| format!("starting {}", exe.display()))?;
+        let mut child = command
+            .spawn()
+            .with_context(|| format!("starting {}", self.exe.display()))?;
         // The job object kills the GUI when the harness ends.
         let limit = match Limit::apply(&child, self.max_memory) {
             Ok(limit) => limit,
@@ -189,7 +271,7 @@ impl GuiRun<'_> {
                 return Err(error);
             }
         };
-        let watched = watch(&mut child, &self.work, self.timeout, self.hang_timeout);
+        let watched = watch(&mut child, until, self.timeout, self.hang_timeout);
         child.kill();
         let peak = limit.peak();
         if limit.reached() {
@@ -199,28 +281,35 @@ impl GuiRun<'_> {
             );
         }
         watched?;
-        let status = fs::read_to_string(self.work.join("status.txt"))
-            .context("the script wrote no status")?
-            .lines()
-            .map(str::to_owned)
-            .collect();
-        Ok(GuiResult { status, out, peak })
+        Ok(peak)
     }
+}
+
+/// When a run is done.
+enum Until<'a> {
+    /// The script wrote its marker file.
+    Marker(&'a Path),
+    /// The process exited (the `-autoexit` of the edit mode).
+    Exit,
 }
 
 /// Waits for the script's marker, answering the module selection and
 /// failing on any other dialog, a timeout or a hang.
-fn watch(child: &mut HiddenChild, work: &Path, timeout: Duration, hang_timeout: Duration) -> Result<()> {
+fn watch(child: &mut HiddenChild, until: Until, timeout: Duration, hang_timeout: Duration) -> Result<()> {
     let start = Instant::now();
-    let marker = work.join("done.txt");
     let mut clicked = Vec::new();
     let mut dialogs: Vec<(isize, Instant)> = Vec::new();
     let mut last_cpu = (0u64, Instant::now());
     loop {
-        if marker.exists() {
+        if let Until::Marker(marker) = until
+            && marker.exists()
+        {
             return Ok(());
         }
         if let Some(code) = child.try_wait()? {
+            if let Until::Exit = until {
+                return Ok(());
+            }
             bail!("the oracle exited (exit code: {code}) before the script finished");
         }
         let elapsed = start.elapsed();
@@ -256,7 +345,7 @@ fn watch(child: &mut HiddenChild, work: &Path, timeout: Duration, hang_timeout: 
                             tail(&log, 15)
                         );
                     }
-                    if closing {
+                    if closing && let Until::Marker(marker) = until {
                         // The marker is written before the script returns.
                         std::thread::sleep(Duration::from_secs(2));
                         if !marker.exists() {

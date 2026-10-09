@@ -232,6 +232,11 @@ pub(crate) fn invalidate_storage(element: &dyn ElementImpl) {
     if let Some(storage) = element.storage() {
         storage.set_invalid(true);
     }
+    if let Some(record) = element.main_record_impl() {
+        record
+            .mr_storage_invalid
+            .store(true, std::sync::atomic::Ordering::Relaxed);
+    }
     invalidate_parent_storage(element);
 }
 
@@ -492,6 +497,14 @@ pub(crate) fn remove(element: &dyn ElementImpl) {
         && let Err(error) = record.remove_from_file()
     {
         crate::interface::misc::progress(&error);
+    }
+    // `TwbGroupRecord.Remove` first removes its elements, from the last.
+    // (`RemoveChildGroup` of the record the group holds the children of has
+    // nothing to forget: the port finds a child group by its position.)
+    if let Some(group) = element.group_record_impl() {
+        for child in group.container.elements().into_iter().rev() {
+            child.remove();
+        }
     }
     begin_update(container_impl);
     element.set_modified(true);

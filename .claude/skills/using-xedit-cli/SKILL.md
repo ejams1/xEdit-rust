@@ -49,6 +49,7 @@ xedit --game fo4 --load "<Data>\DLCRobot.esm" <command>
 - The hardcoded records of the game load as a file named after the game executable (`SkyrimSE.exe`, `Fallout4.exe`), like xEdit does. It is not a plugin: it can not be saved, and it is not editable.
 - Strings of localized plugins come from the loose `Strings` folder or from the game archives next to the plugin (BSA, and BA2 including the Starfield versions).
 - `--threads N` sets the threads that read the groups of a plugin while it loads and that build and write the records of `dump`; the default is `RAYON_NUM_THREADS`, else one per CPU, and `--threads 1` runs everything on one thread. The output (dump, saved bytes, every command result) is the same for every count. `saves dump` writes on one thread, and the session commands run on one thread.
+- `--fill-pnam` gives a topic response without `PNAM` the `PNAM` of the response it follows when it is built (xEdit's `-FillPNAM`, in the games that sort responses: Oblivion to Skyrim). `clean --quick` loads with the settings of the quick clean mode, see "Cleaning".
 - `--json` prints one envelope per invocation (see "Output").
 
 Loading is per process: every invocation loads the plugins again. `Skyrim.esm` takes a few seconds and `Starfield.esm` or `SeventySix.esm` much longer. For more than one or two commands, use `batch` (one load, a fixed list of commands) or `serve`/`mcp` (one load, a conversation), and prefer `records list --signature` and `records find` over reading records one by one.
@@ -93,6 +94,8 @@ Changing data (`mutates`, needs `--edit` or `--dry-run`):
 | `masters sort [--file F]` | `masters.sort` | Sorts the masters by load order. |
 | `masters clean [--file F]` | `masters.clean` | Removes the masters no FormID of the plugin points to. |
 | `save [--file F] [--output PATH] [--no-backup]` | `files.save` | Writes a loaded plugin as xEdit saves it. Changes files, not data. |
+| `clean [--file F] [--itm] [--udr] [--quick] [--output PATH] [--no-backup]` | `files.clean` | Cleans a plugin: removes the records identical to their master (ITM), undeletes and disables the deleted references (UDR), or runs xEdit's quick auto clean mode, which saves. See "Cleaning". |
+| `records cleanup-injected [<FormID>...] [--file F]` | `records.cleanup_injected` | Copies the records that refer to injected records of a plugin that is not their master into that plugin and removes those references from the originals (xEdit's "Cleanup injected records"). |
 
 Sessions:
 
@@ -274,6 +277,22 @@ xedit --json --edit --game sse --load "<Data>\Dawnguard.esm" --load "<Data>\MyPa
 xedit --game sse --load "<Data>\MyPatch.esp" masters clean --dry-run
 ```
 
+## Cleaning
+
+`clean` is xEdit's plugin cleaning on one loaded plugin (`--file`, or the only plugin in `--load`); load the plugin with `--load` and its masters load with it.
+
+- `--itm` removes the records whose conflict status is "identical to master" (`ctIdenticalToMaster`, a navigation mesh that is only a benign conflict too), walking the plugin from its last record as the GUI does, so a cell or worldspace goes when all its children went, and every group that ends up empty goes with them. The `itm` count is xEdit's: it counts the removed groups too. A record injected into a master's FormID space is never removed.
+- `--udr` undeletes the deleted placed references (`REFR`, `ACHR`, `ACRE`, `PGRE`, `PMIS` and the Skyrim projectiles) and disables them: the reference gets the data of its master again (moving to the master's cell when it was moved), is set initially disabled, gets the player as an opposite enable parent (`XESP`), loses its enable parent and teleport, and a reference that is not persistent moves to z -30000 (Fallout 3 and New Vegas keep the position, as xEdit's defaults). Deleted navigation meshes can not be undeleted (`deleted_navmeshes`, xEdit's "nav" count), nor can injected references, references without a base record or New Vegas trees with LOD (`not_undeleted`).
+- `--quick` is xEdit's `-quickautoclean`: UDR then ITM, the plugin saved (to `--output`, else over the loaded file with a backup in `<AppName>Edit Backups` unless `--no-backup`), and again while a pass changed the plugin, at most three passes (the third is not saved, as upstream). It loads the plugins as that mode does: the full record definitions (not the simple ones of the other commands), the PNAM of the topic responses filled in where the game sorts them (`-FillPNAM`), no `INOM`/`INOA` lists on the topics. Those settings change the comparison, so only `xedit clean --quick` (or a `serve` session started for it) gives xEdit's quick clean result; a session loaded otherwise adds a warning to `messages`. The global `--fill-pnam` turns on the PNAM fill for any command.
+- `--itm` and `--udr` without `--quick` change memory only; save with `save` in the same `batch` or `serve` session. With `--dry-run`, every mode counts what it would clean in one pass and changes nothing.
+- The response has one entry per pass in `passes` (the filter's node counts, `udr` and `itm` with `processed`, `count`, the `records` cleaned and the `skipped` ones, and `saved` for a quick save), the totals `itm`, `udr` and `deleted_navmeshes` (what xEdit reports to LOOT), `unsaved`, and `messages`, the lines xEdit writes to its message log (`Removing: ...`, `Undeleting: ...`, `Skipping: ...` with the GUI's record names).
+- `records cleanup-injected` takes the records to clean up (all records of the plugin that refer to injected records of a plugin that is not one of its masters when none is named). The records that refer to the injected records of exactly one plugin, the plugin of the first such record, are copied into that plugin as overrides (its missing masters are added, without xEdit's question) and lose those references in their own plugin; `changed_files` names the plugins to save. Records of other plugins are `skipped`.
+
+```
+xedit --json --edit --game sse --load "<Data>\Dawnguard.esm" clean --quick --output "<somewhere>\Dawnguard.esm"
+xedit --json --game fo4 --load "<Data>\DLCRobot.esm" clean --itm --udr --dry-run
+```
+
 ## Saving a plugin
 
 `save` runs `PrepareSave` and `WriteToStream` as upstream does: every unmodified record is copied as loaded, a modified record is rebuilt from its elements (and compressed again when its flag says so), and the file's CRC32 is computed on the result. The response reports `bytes`, `crc32`, `loaded_crc32`, `changed`, `written` and `backup`. A save of an untouched plugin equals the bytes xEdit's own GUI saves for every plugin of the corpus that the oracle saves (239 of 249 plugins; the rest are refusals the oracle gives too, and the Morrowind masters, which it can not save). That is not always the input file: xEdit drops some data on load (the `OFST` of a worldspace) and rewrites the header (the `HEDR` record count, `INCC`, the `ONAM` list of a master, the ESM flag of an `.esm`).
@@ -326,14 +345,15 @@ xedit --json --edit --game sse --load "<Data>\Skyrim.esm" save --no-backup --out
 
 ## Known gaps
 
-Behaviour a user can meet, as of phase 4 step 2. Each is an upstream behaviour not ported yet; say so rather than work around it silently.
+Behaviour a user can meet, as of phase 4 step 5. Each is an upstream behaviour not ported yet; say so rather than work around it silently.
 
 - **LString.** The string tables of a localized plugin are not written. Setting a localized string from text fails (`Can not assign to a localized string: writing the string tables is not ported yet`; only a `STRINGID:` text works), and `records copy` into a localized plugin copies the record with its localized strings empty (the `FULL` of a copied `NPC_` reads `""`). Check the strings of a copy before saving it.
 - **Copy over an existing override.** xEdit's "...with overwriting" (`aAllowOverwrite`) is not ported: `records copy` returns the existing override unchanged. A partial form (`MakePartialForm`), template elements and aligned arrays can not be copied either.
-- **Sorted arrays.** A record that is rebuilt on save sorts its sorted subrecord arrays as upstream does, but an array that is sorted by the value of a subrecord (the `KWDA` keyword arrays, `srsSorted` and `arrSorted`) is not, an array is not sorted again after a FormID update of its entries, and after a master update (`masters add|sort|clean`) the port sorts unchanged sorted arrays that the oracle leaves in file order (30 `MSWP` and 1 `RACE` of `DLCworkshop01.esm`); a saved plugin can therefore differ from xEdit's in the order of those entries.
+- **Sorted arrays.** A record that is rebuilt on save sorts its sorted arrays as upstream does (the subrecord arrays, and the sorted array values, `srsSorted` and `arrSorted`, at their first read by index or write after a change), and a master update (`masters add|sort|clean`) keeps them in their order as xEdit does; the responses of a topic are not sorted again after their FormIDs change (`DLCworkshop01.esm`: three `INFO` of one topic), so such a save can differ from xEdit's in their order.
 - **References.** The index has no "reachable" information (xEdit's "Build Reachable Info"), and a record whose references come from the cache takes only its editor ID and full name from it (its base record, grid cell and GUI names are read from the record when needed). The editor ID index of a file does not learn the records an edit adds.
 - **Flags** are not child elements of their value in `records get`; `compare` shows them as rows, as the view does.
 - **Conflicts.** Mod groups do not change the comparison yet (phase 4 step 6), so no record is `ctHiddenByModGroup` but a `NAVI` override; records the GUI user hid and the compare-to load (`Compare to...`) do not exist; the raw data compare (`wbCompareRawData`) is not ported; compare of selected records of different FormIDs (`Compare Selected`) and the script function `ConflictAllForElements` have no command yet.
+- **Cleaning.** `clean` cleans one plugin per call. xEdit's `-AllowMakePartial` (partial forms of cells and worldspaces with children) is not ported, the UDR options of xEdit's Options dialog are fixed at their defaults, and the LOOT dirty-information report is the counts of the response. The legacy switches (`-quickautoclean`, `-qac`, `-checkforitm`) are not accepted yet (phase 4 step 9). In the oracle check a few saved plugins still differ from xEdit's in the bytes of records the clean did not touch (see `docs/PLAN.md`, owed from step 5).
 - **Morrowind.** Plugins load and dump, but the save stops at `must have a FormID`: the identity FormID of a TES3 record is not ported. The 4.1.5q oracle saves no Morrowind plugin either (its GUI runs Morrowind in view mode), so there is nothing to compare with.
 - **Sessions.** One session per process; `serve` and `mcp` can not load other plugins later, and a named pipe serves one client at a time.
 - **Starfield.** The complex FileIDs (light and medium masters with slots of their own) are followed by the master functions and the FormID lookups, but FormID changes and renumbering across masters are unchecked there. The oracle refuses to save the official Starfield modules whose header the save would edit, and so does the port.

@@ -143,8 +143,13 @@ pub(crate) fn mark_modified_recursive(element: &dyn ElementImpl, types: &[Elemen
     if !types.contains(&element.get_element_type()) {
         return;
     }
-    // `TwbContainer.MarkModifiedRecursive`: `DoInit(False)`, then the elements.
-    if let Some(container) = element.as_container() {
+    // `TwbMainRecord.MarkModifiedRecursive` and
+    // `TwbContainer.MarkModifiedRecursive`: `DoInit(False)`, then the
+    // elements. A record is built before it is marked, so its subrecords
+    // keep their order (the init sorts them only for a modified record).
+    if let Some(record) = element.main_record_impl() {
+        record.do_init();
+    } else if let Some(container) = element.as_container() {
         container.get_element_count();
     }
     if let Some(base) = element.container_base() {
@@ -276,7 +281,10 @@ impl super::sub_record::SubRecordImpl {
         let header = self.header_struct();
         let modified = self.base.has_state(ElementState::esModified);
         if modified || header.data_size == 0 {
-            self.do_init();
+            // `TwbContainer.WriteToStreamInternal` calls `DoInit(True)`,
+            // which sorts the entries of a sorted array value; they are
+            // written in that order when the storage is stale.
+            self.sorted_init();
             let big_size = u32::try_from(self.get_data_size()).unwrap_or(0);
             let header_bytes = if big_size > u32::from(u16::MAX) && game_mode() != GameMode::gmTES3 {
                 out.extend_from_slice(
@@ -447,11 +455,30 @@ impl MainRecordImpl {
         let header_size = size_of_main_record_struct() as usize;
         if self.base.has_state(ElementState::esModified) {
             self.do_init();
+            // `TwbDataContainer.WriteToStreamInternal`: a modified record
+            // whose storage is still valid (it was only marked modified, as
+            // `MarkModifiedRecursive` does, or only its header changed)
+            // writes its data as loaded, compressed again when it is
+            // compressed; a changed element made the storage stale and the
+            // record is written from its elements.
+            let loaded = if self.mr_storage_invalid.load(Ordering::Relaxed) {
+                None
+            } else if let Some(collapsed) = self.mr_collapsed.lock().unwrap().clone() {
+                Some(collapsed.to_vec())
+            } else {
+                self.data().filter(|data| !data.is_empty()).map(<[u8]>::to_vec)
+            };
             let start = out.len();
             out.extend_from_slice(&self.mr_struct().to_bytes());
             if self.mr_struct().flags.is_compressed() {
                 let mut data = Vec::new();
-                container_write_to_stream(&**self, &mut data, reset)?;
+                match &loaded {
+                    Some(loaded) => {
+                        data.extend_from_slice(loaded);
+                        self.base.reset_modified(reset);
+                    }
+                    None => container_write_to_stream(&**self, &mut data, reset)?,
+                }
                 let size = u32::try_from(data.len())
                     .map_err(|_| SaveError::Refused(format!("{} is too large for a record", self.get_name())))?;
                 out.extend_from_slice(&size.to_le_bytes());
@@ -460,7 +487,13 @@ impl MainRecordImpl {
                     .map_err(|error| SaveError::Internal(error.to_string()))?;
                 out.extend_from_slice(&compressed);
             } else {
-                container_write_to_stream(&**self, out, reset)?;
+                match &loaded {
+                    Some(loaded) => {
+                        out.extend_from_slice(loaded);
+                        self.base.reset_modified(reset);
+                    }
+                    None => container_write_to_stream(&**self, out, reset)?,
+                }
             }
             let data_size = u32::try_from(out.len() - start - header_size)
                 .map_err(|_| SaveError::Refused(format!("{} is too large for a record", self.get_name())))?;

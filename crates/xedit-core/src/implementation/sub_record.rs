@@ -58,6 +58,13 @@ pub struct SubRecordImpl {
     /// Whether the subrecord was loaded with data (`dcDataBasePtr` set); a
     /// subrecord made from its definition has none until it takes storage.
     sr_has_data: AtomicBool,
+    /// Port of `srsSorted` for an array value: the definition sorts the
+    /// entries (under `wbSortSubRecords`).
+    sr_sorted: AtomicBool,
+    /// Port of `srsSortInvalid`: set by the init and by every change, the
+    /// entries are sorted at the next `DoInit(True)` (an element read by
+    /// index, the save).
+    sr_sort_invalid: AtomicBool,
 }
 
 impl SubRecordImpl {
@@ -107,6 +114,8 @@ impl SubRecordImpl {
             sr_array_size_prefix: AtomicUsize::new(0),
             sr_is_array: AtomicBool::new(false),
             sr_has_data: AtomicBool::new(true),
+            sr_sorted: AtomicBool::new(false),
+            sr_sort_invalid: AtomicBool::new(false),
         });
         container_base.add_element(sub_record.clone());
         *offset = dc_data_end;
@@ -146,6 +155,8 @@ impl SubRecordImpl {
             sr_array_size_prefix: AtomicUsize::new(0),
             sr_is_array: AtomicBool::new(false),
             sr_has_data: AtomicBool::new(false),
+            sr_sorted: AtomicBool::new(false),
+            sr_sort_invalid: AtomicBool::new(false),
         });
         container_base.add_element(sub_record.clone());
         sub_record.do_init();
@@ -245,11 +256,22 @@ impl SubRecordImpl {
         self.self_ref.upgrade().expect("a subrecord is alive while it is used")
     }
 
+    /// Port of `TwbSubRecord.DoInit(True)`: the init, then the entries of a
+    /// sorted array value sorted by their sort keys when a change (or the
+    /// init) made the order invalid.
+    pub fn sorted_init(&self) {
+        self.do_init();
+        if super::sorting_allowed()
+            && self.sr_sorted.load(Ordering::Relaxed)
+            && self.sr_sort_invalid.swap(false, Ordering::Relaxed)
+        {
+            edit::sort_by_sort_keys(&self.container);
+        }
+    }
+
     /// Port of `TwbSubRecord.Init`: the value elements of the subrecord.
-    /// Not ported: the sort of the entries of a sorted array value
-    /// (`srsSorted`, `DoInit(True)`). The oracle keeps such an array in its
-    /// loaded order when `MastersUpdated` changes an entry, which sorting
-    /// the elements on init does not give.
+    /// The entries of a sorted array value stay in the loaded order until a
+    /// `DoInit(True)` ([`Self::sorted_init`]) sorts them.
     pub fn do_init(&self) {
         self.sr_init.run(|| self.init());
     }
@@ -302,6 +324,15 @@ impl SubRecordImpl {
             } else {
                 create_value_element(&self_ref, &self.file, &mut cursor, value_def, "");
             }
+            // `srsSorted` and `srsSortInvalid` of a sorted array value (the
+            // flags are built in their order already).
+            let sorted = self.sr_is_array.load(Ordering::Relaxed)
+                && sort_sub_records()
+                && self
+                    .value_def()
+                    .is_some_and(|def| def.as_array_def().is_some_and(|array| array.get_sorted()));
+            self.sr_sorted.store(sorted, Ordering::Relaxed);
+            self.sr_sort_invalid.store(sorted, Ordering::Relaxed);
             // `srDef.AfterLoad(Self)`.
             def.after_load(&self_ref);
         }
@@ -2047,6 +2078,30 @@ impl ElementImpl for SubRecordImpl {
         edit::update_count_via_path(self, self.value_def().as_ref());
     }
 
+    fn do_init_sorted(&self) {
+        self.sorted_init();
+    }
+
+    fn clear_sort_invalid(&self) {
+        self.sr_sort_invalid.store(false, Ordering::Relaxed);
+    }
+
+    /// Port of `TwbSubRecord.ElementChanged`.
+    fn element_changed(&self, _child: &ElementRef) {
+        if self.sr_sorted.load(Ordering::Relaxed) {
+            self.sr_sort_invalid.store(true, Ordering::Relaxed);
+        }
+        self.notify_changed();
+    }
+
+    /// Port of `TwbSubRecord.SetModified`.
+    fn set_modified(&self, value: bool) {
+        super::write::element_set_modified(self, value);
+        if value && self.sr_sorted.load(Ordering::Relaxed) {
+            self.sr_sort_invalid.store(true, Ordering::Relaxed);
+        }
+    }
+
     /// Port of `TwbSubRecord.NotifyChangedInternal`.
     fn notify_changed_internal(&self) {
         if self.sr_is_array.load(Ordering::Relaxed) && self.base.has_state(super::ElementState::esModified) {
@@ -2181,7 +2236,7 @@ impl DataContainer for SubRecordImpl {
 }
 
 macro_rules! container_by_elements {
-    ($init:ident) => {
+    ($init:ident, $sorted:ident) => {
         fn as_container_ref(&self) -> Option<ElementRef> {
             self.self_element_ref()
         }
@@ -2216,12 +2271,12 @@ macro_rules! container_by_elements {
         }
 
         fn get_element(&self, index: i32) -> Option<ElementRef> {
-            self.$init();
+            self.$sorted();
             self.container.element_at(usize::try_from(index).ok()?)
         }
 
         fn get_element_by_sort_order(&self, sort_order: i32) -> Option<ElementRef> {
-            self.$init();
+            self.$sorted();
             self.container.element_by_sort_order(sort_order)
         }
 
@@ -2236,7 +2291,7 @@ macro_rules! container_by_elements {
 }
 
 impl Container for SubRecordImpl {
-    container_by_elements!(do_init);
+    container_by_elements!(do_init, sorted_init);
 }
 
 impl Element for SubRecordArrayImpl {
@@ -2441,7 +2496,7 @@ impl SubRecordArrayImpl {
 }
 
 impl Container for SubRecordArrayImpl {
-    container_by_elements!(sorted_init);
+    container_by_elements!(sorted_init, sorted_init);
 }
 
 impl Element for SubRecordStructImpl {
@@ -2608,5 +2663,5 @@ impl SubRecordStructImpl {
 }
 
 impl Container for SubRecordStructImpl {
-    container_by_elements!(no_init);
+    container_by_elements!(no_init, no_init);
 }

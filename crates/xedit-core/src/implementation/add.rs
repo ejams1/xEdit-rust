@@ -642,6 +642,8 @@ impl MainRecordImpl {
             mr_display_name: RwLock::new(None),
             mr_precombined: std::sync::OnceLock::new(),
             mr_ofst_removed: std::sync::atomic::AtomicBool::new(false),
+            mr_storage_invalid: std::sync::atomic::AtomicBool::new(true),
+            mr_collapsed: std::sync::Mutex::new(None),
             mr_duplicate: std::sync::atomic::AtomicBool::new(false),
             mr_refs: Default::default(),
             mr_referenced_by: Default::default(),
@@ -1125,8 +1127,16 @@ impl MainRecordImpl {
         } else if index == -2
             && let Some(element) = self.container.element_by_sort_order(-2)
         {
-            element.assign(ASSIGN_THIS, source, false);
-            result = Some(element);
+            // `TwbContainedInElement.DoAfterSet`: a source in another cell
+            // moves the record there.
+            if let Some(source) = source
+                && self.assign_contained_in(source)
+            {
+                result = self.container.element_by_sort_order(-2);
+            } else {
+                element.assign(ASSIGN_THIS, source, false);
+                result = Some(element);
+            }
         }
         if sort_sub_records() {
             super::edit::sort_sub_records_of(&**self);

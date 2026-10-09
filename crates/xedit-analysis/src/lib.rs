@@ -6,5 +6,7 @@
 //! conflict code of `xeMainForm.pas`, moved out of the GUI) and the array
 //! alignment it uses (`TDiff`).
 
+pub mod cleaning;
 pub mod conflict;
 pub mod diff;
+pub mod filter;

@@ -40,6 +40,10 @@ struct Cli {
     #[arg(long, global = true)]
     edit: bool,
 
+    /// Give the topic responses without PNAM the PNAM of the response they follow when they are built (xEdit's -FillPNAM; the quick clean mode turns it on).
+    #[arg(long, global = true)]
+    fill_pnam: bool,
+
     /// Threads that load the plugins and build the records of a dump; 1 runs everything on one thread. Default: RAYON_NUM_THREADS, else one per CPU. The output is the same for every count.
     #[arg(long, global = true)]
     threads: Option<usize>,
@@ -112,6 +116,30 @@ enum Action {
     Saves {
         #[command(subcommand)]
         action: SavesAction,
+    },
+    /// Clean a plugin (files.clean): remove the records identical to their master (--itm), undelete and disable the deleted references (--udr), or run xEdit's quick auto clean mode (--quick: both, saved, repeated while a pass changes the plugin). Without --edit only --dry-run, which counts.
+    Clean {
+        /// Plugin name; the only loaded plugin when omitted.
+        #[arg(long)]
+        file: Option<String>,
+        /// Remove the records that are identical to their master and the groups left empty.
+        #[arg(long)]
+        itm: bool,
+        /// Undelete and disable the deleted references.
+        #[arg(long)]
+        udr: bool,
+        /// The quick auto clean mode of -quickautoclean; loads the plugins as that mode does (full record definitions, PNAM fill) and saves the plugin.
+        #[arg(long)]
+        quick: bool,
+        /// Count what would be cleaned, change nothing.
+        #[arg(long)]
+        dry_run: bool,
+        /// Where --quick saves the plugin; the loaded path when omitted.
+        #[arg(long)]
+        output: Option<String>,
+        /// Do not move an existing file at the output path to the backup folder.
+        #[arg(long)]
+        no_backup: bool,
     },
     /// Write a loaded plugin to disk as xEdit saves it (files.save).
     Save {
@@ -674,6 +702,17 @@ enum RecordsAction {
         #[arg(long)]
         dry_run: bool,
     },
+    /// Copy the records that refer to injected records of a plugin which is not their master into that plugin and remove those references from the originals (records.cleanup_injected, xEdit's "Cleanup injected records"). Needs --edit unless --dry-run.
+    CleanupInjected {
+        /// Load order FormIDs of the records; every record of the plugin that refers to such injected records when none is given.
+        form_ids: Vec<String>,
+        /// Plugin whose records are cleaned up; the only loaded plugin when omitted.
+        #[arg(long)]
+        file: Option<String>,
+        /// Report the records and the masters, but change nothing.
+        #[arg(long)]
+        dry_run: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -947,6 +986,14 @@ fn command_of(action: Action) -> Result<(String, Value), CommandError> {
                 "records.delete".to_owned(),
                 json!({ "form_id": form_id, "file": file, "dry_run": dry_run }),
             ),
+            RecordsAction::CleanupInjected {
+                form_ids,
+                file,
+                dry_run,
+            } => (
+                "records.cleanup_injected".to_owned(),
+                json!({ "form_ids": form_ids, "file": file, "dry_run": dry_run }),
+            ),
         },
         Action::Elements { action } => match action {
             ElementsAction::Get {
@@ -1019,6 +1066,21 @@ fn command_of(action: Action) -> Result<(String, Value), CommandError> {
                 ("masters.sort".to_owned(), json!({ "file": file, "dry_run": dry_run }))
             }
         },
+        Action::Clean {
+            file,
+            itm,
+            udr,
+            quick,
+            dry_run,
+            output,
+            no_backup,
+        } => (
+            "files.clean".to_owned(),
+            json!({
+                "file": file, "itm": itm, "udr": udr, "quick": quick, "dry_run": dry_run,
+                "output": output, "backup": !no_backup
+            }),
+        ),
         Action::Save {
             file,
             output,
@@ -1290,6 +1352,9 @@ fn main() -> ExitCode {
         cli.dont_cache_load,
         cli.dont_cache_save,
     );
+    // `-FillPNAM`, and the settings `-quickautoclean` gives the load.
+    xedit_session::commands::set_fill_pnam_on_load(cli.fill_pnam);
+    xedit_session::commands::set_quick_clean_on_load(matches!(cli.action, Action::Clean { quick: true, .. }));
     if matches!(cli.action, Action::Serve { .. } | Action::Mcp) {
         // stdout carries the protocol; the progress of a load goes to stderr.
         xedit_session::dump::log_progress_to_stderr();
