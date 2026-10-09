@@ -88,6 +88,41 @@ const CASES: &[Case] = &[
         settings: &[],
     },
     Case {
+        name: "optimize",
+        operation: "Optimize mesh",
+        settings: &[],
+    },
+    Case {
+        name: "optimize-vertex-cache",
+        operation: "Optimize mesh",
+        settings: &[("bOverdraw", "0"), ("bVertexFetch", "0")],
+    },
+    Case {
+        name: "optimize-overdraw",
+        operation: "Optimize mesh",
+        settings: &[("bVertexCache", "0"), ("bVertexFetch", "0")],
+    },
+    Case {
+        name: "optimize-fetch",
+        operation: "Optimize mesh",
+        settings: &[("bVertexCache", "0"), ("bOverdraw", "0")],
+    },
+    Case {
+        name: "optimize-triangulate",
+        operation: "Optimize mesh",
+        settings: &[
+            ("bTriangulate", "1"),
+            ("bVertexCache", "0"),
+            ("bOverdraw", "0"),
+            ("bVertexFetch", "0"),
+        ],
+    },
+    Case {
+        name: "optimize-stripify",
+        operation: "Optimize mesh",
+        settings: &[("bStripify", "1"), ("bOverdraw", "0"), ("bVertexFetch", "0")],
+    },
+    Case {
         name: "replace-assets",
         operation: "Search and replace assets",
         settings: &[
@@ -398,6 +433,16 @@ const CASES: &[Case] = &[
         name: "transform-info-no-scale",
         operation: "Transform information",
         settings: &[("bRotation", "0"), ("bSkipEmpty", "0")],
+    },
+    Case {
+        name: "analyze-mesh",
+        operation: "Analyze mesh",
+        settings: &[],
+    },
+    Case {
+        name: "analyze-mesh-shapes",
+        operation: "Analyze mesh",
+        settings: &[("bPerShape", "1"), ("bThreshold", "0"), ("sCacheSize", "32")],
     },
     Case {
         name: "havok-info",

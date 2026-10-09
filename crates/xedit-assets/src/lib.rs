@@ -14,6 +14,7 @@ pub mod data_format_misc;
 pub mod data_format_nif;
 pub mod data_format_nif_types;
 pub mod json;
+pub mod mesh_optimize;
 pub mod nif_math;
 pub mod nif_scanner;
 pub mod sniff;

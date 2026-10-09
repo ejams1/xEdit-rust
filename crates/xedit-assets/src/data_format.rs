@@ -2550,8 +2550,12 @@ impl Tree {
         if items.is_empty() {
             return Ok(());
         }
+        // `Assert(Length(aMap) = FCount)` and `Assert(aMap[i] < FCount)`.
+        if map.len() != items.len() || map.iter().any(|&target| target as usize >= items.len()) {
+            return Err(self.exception(el, "Assertion failure"));
+        }
         let mut remapped = items.clone();
-        for (index, &target) in map.iter().enumerate().take(items.len()) {
+        for (index, &target) in map.iter().enumerate() {
             remapped[target as usize] = items[index];
         }
         self.nm(el).items = remapped;

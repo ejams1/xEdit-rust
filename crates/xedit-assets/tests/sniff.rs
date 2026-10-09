@@ -158,7 +158,7 @@ fn settings_dry_run_and_report_only() {
         Err(RunError::UnknownOperation(_))
     ));
     assert!(matches!(
-        run(None, &options("Optimize mesh", &input, &output)),
+        run(None, &options("Update MOPP code", &input, &output)),
         Err(RunError::NotPorted(..))
     ));
     let settings = MemIniFile::from_text("[Universaltweaker]\r\nsPath=\r\n");

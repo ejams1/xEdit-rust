@@ -7,9 +7,6 @@
 //! Vectors, quaternions, matrices, transforms and the geometry helpers of
 //! the NIF code: rotations between their forms, strips and triangles,
 //! bounds, face normals and tangent spaces.
-//!
-//! `StripifyTriangles` needs `meshopt_stripify` of `wbMeshOptimize`, which
-//! is ported with LOD generation (phase 5 step 6).
 
 use std::ops::{Add, Div, Mul, Sub};
 
@@ -893,6 +890,12 @@ pub fn triangulate_strip(strip: &[u32]) -> Vec<Triangle> {
 /// `TriangulateStrips`.
 pub fn triangulate_strips(strips: &[Strip]) -> Vec<Triangle> {
     strips.iter().flat_map(|strip| triangulate_strip(strip)).collect()
+}
+
+/// `StripifyTriangles`: one strip of the triangles (`meshopt_stripify`).
+pub fn stripify_triangles(tris: &[Triangle]) -> Strip {
+    let indices = tris2_indices(tris);
+    indices2_strip(&crate::mesh_optimize::stripify(&indices, 0))
 }
 
 /// `CalculateMinMax`.

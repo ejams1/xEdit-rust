@@ -4,7 +4,8 @@
 
 // Ported from xEdit: Core/wbDataFormatNif.pas (TwbNifBlock: GetVertices to
 // RemoveBranch; TwbNifFile: ConvertBlock, GetAssets, GetAssetsList,
-// GetLinkArrays, DetectBSXFlags, SpellFaceNormals, SpellUpdateTangents,
+// GetLinkArrays, DetectBSXFlags, SpellOptimize, SpellStripify,
+// SpellTriangulate, SpellFaceNormals, SpellUpdateTangents,
 // SpellAddUpdateTangents)
 
 //! The geometry of NIF blocks: vertices, normals, texture coordinates,
@@ -12,14 +13,15 @@
 //! the geometry, normals and tangents computed again, branches removed,
 //! and the asset and link lists of a file.
 //!
-//! `SpellOptimize`, `SpellStripify` and `SpellTriangulate` use
-//! `wbMeshOptimize` and are ported with LOD generation (phase 5 step 6).
+//! `SpellOptimize`, `SpellStripify` and `SpellTriangulate` run the
+//! optimizers of `wbMeshOptimize` (`crate::mesh_optimize`) on the shapes.
 
 use super::*;
 use crate::data_format::{df_float_to_str, df_str_to_float};
 use crate::nif_math::{
     BoundSphere, Matrix33, Strip, Transform, Triangle, Vector2, Vector3, calculate_center_radius,
-    calculate_face_normals, calculate_tangents_bitangents2, m33_to_quaternion, quaternion_to_m33, triangulate_strips,
+    calculate_face_normals, calculate_tangents_bitangents2, indices2_strips, indices2_tris, m33_to_quaternion,
+    quaternion_to_m33, triangulate_strips, tris2_indices,
 };
 
 /// `wbGetVector2`: from the native values, or from the text (`asText`).
@@ -1127,6 +1129,365 @@ pub fn detect_bsx_flags(tree: &mut Tree) -> R<u32> {
         result |= 1 << 9;
     }
     Ok(result)
+}
+
+/// `TwbMeshOptimizeOption`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MeshOptimizeOption {
+    VertexCache,
+    Overdraw,
+    VertexFetch,
+    Triangulate,
+    Stripify,
+}
+
+/// `TwbMeshOptimizeOptions`: a set of [`MeshOptimizeOption`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct MeshOptimizeOptions(u8);
+
+impl MeshOptimizeOptions {
+    /// The default of `SpellOptimize`: `[moVertexCache, moOverdraw]`.
+    pub const DEFAULT: MeshOptimizeOptions = MeshOptimizeOptions(0b11);
+
+    pub fn of(options: &[MeshOptimizeOption]) -> MeshOptimizeOptions {
+        let mut result = MeshOptimizeOptions::default();
+        for &option in options {
+            result.include(option);
+        }
+        result
+    }
+    pub fn contains(self, option: MeshOptimizeOption) -> bool {
+        self.0 & (1 << option as u8) != 0
+    }
+    pub fn include(&mut self, option: MeshOptimizeOption) {
+        self.0 |= 1 << option as u8;
+    }
+    pub fn exclude(&mut self, option: MeshOptimizeOption) {
+        self.0 &= !(1 << option as u8);
+    }
+    pub fn is_empty(self) -> bool {
+        self.0 == 0
+    }
+}
+
+/// `MeshOptimize` of `SpellOptimize`: the indices run through the selected
+/// optimizers; true when any of them changed them. `map` receives the
+/// vertex fetch remap.
+fn mesh_optimize(
+    indices: &mut [u32],
+    vertices: &[Vector3],
+    opt: MeshOptimizeOptions,
+    for_strip: bool,
+    map: &mut Vec<u32>,
+) -> R<bool> {
+    use crate::mesh_optimize;
+    let mut result = false;
+    if indices.is_empty() {
+        return Ok(false);
+    }
+    // `CompareMem` of the old and the new indices, then `Move`.
+    let mut apply = |indices: &mut [u32], new: Vec<u32>| -> R<()> {
+        // A shorter result is an empty one (no vertices): `@newindices[0]`
+        // is nil.
+        if new.len() < indices.len() {
+            return Err(crate::sniff::processor::access_violation());
+        }
+        if indices[..] != new[..indices.len()] {
+            let len = indices.len();
+            indices.copy_from_slice(&new[..len]);
+            result = true;
+        }
+        Ok(())
+    };
+    if opt.contains(MeshOptimizeOption::VertexCache) {
+        let new = mesh_optimize::optimize_vertex_cache(indices, for_strip);
+        apply(indices, new)?;
+    }
+    if opt.contains(MeshOptimizeOption::Overdraw) {
+        let new = mesh_optimize::optimize_overdraw(indices, vertices, 1.05);
+        apply(indices, new)?;
+    }
+    if opt.contains(MeshOptimizeOption::VertexFetch) {
+        *map = mesh_optimize::optimize_vertex_fetch_remap(indices);
+        let new = mesh_optimize::remap_indices(indices, map);
+        apply(indices, new)?;
+    }
+    Ok(result)
+}
+
+/// `Remap` of `SpellOptimize`: an element reordered by the vertex fetch
+/// map, with upstream's message for any failure (the assertions of
+/// `TdfContainer.Remap`).
+fn optimize_remap(tree: &mut Tree, element: Option<El>, map: &[u32]) -> R<()> {
+    if let Some(element) = element
+        && tree.remap(element, map).is_err()
+    {
+        return Err(DfError::new(
+            "Vertex fetch optimization error (probably unused vertices in geometry). Use \"Check for errors\" or disable Vertex fetch optimization.",
+        ));
+    }
+    Ok(())
+}
+
+/// `RemapTES4Tangents` of `SpellOptimize`.
+fn remap_tes4_tangents(tree: &mut Tree, shape: El, map: &[u32]) -> R<()> {
+    let Some(exdata) = block_extra_data_by_name(tree, shape, TES4_TANGENTS_EXTRA_DATA_NAME)? else {
+        return Ok(());
+    };
+    let tanbin = tree.native_values(exdata, "Data")?.to_bytes()?;
+    // if tangents length <> map length (original tangents and binormals are invalid) then just create new ones
+    if tanbin.len() / 12 != 2 * map.len() {
+        block_update_tangents(tree, shape, true)?;
+        return Ok(());
+    }
+    let mut newtanbin = vec![0u8; tanbin.len()];
+    let n = map.len();
+    for (i, &target) in map.iter().enumerate() {
+        let target = target as usize;
+        newtanbin[target * 12..target * 12 + 12].copy_from_slice(&tanbin[i * 12..i * 12 + 12]);
+        newtanbin[(n + target) * 12..(n + target) * 12 + 12].copy_from_slice(&tanbin[(n + i) * 12..(n + i) * 12 + 12]);
+    }
+    tree.set_native_values(exdata, "Data", Variant::Bytes(newtanbin))?;
+    Ok(())
+}
+
+/// `Remap` of the vertex arrays of a geometry data block.
+fn remap_geometry_data(tree: &mut Tree, shape: El, data: El, map: &[u32]) -> R<()> {
+    for name in ["Vertices", "Normals", "Tangents", "Bitangents", "Vertex Colors"] {
+        let element = tree.elements(data, name)?;
+        optimize_remap(tree, element, map)?;
+    }
+    if tree.nif.nif_version == NifVersion::Tes4 {
+        remap_tes4_tangents(tree, shape, map)?;
+    }
+    if let Some(entries) = tree.elements(data, "UV Sets")? {
+        for j in 0..tree.count(entries) {
+            let entry = tree.item(entries, j)?;
+            optimize_remap(tree, Some(entry), map)?;
+        }
+    }
+    Ok(())
+}
+
+/// `SpellOptimize`: the triangles of every rendered shape reordered for the
+/// vertex cache and the overdraw, the vertices for the vertex fetch, and
+/// the shapes stripified or triangulated (`SpellStripify`,
+/// `SpellTriangulate`).
+pub fn spell_optimize(tree: &mut Tree, mut options: MeshOptimizeOptions) -> R<bool> {
+    use MeshOptimizeOption::*;
+    let mut result = false;
+    let version = tree.nif.nif_version;
+    if options.contains(Stripify) {
+        if !matches!(version, NifVersion::Tes4 | NifVersion::Fo3 | NifVersion::Tes5) {
+            options.exclude(Stripify);
+        } else {
+            options.exclude(Triangulate);
+        }
+    }
+    if options.is_empty() {
+        return Ok(false);
+    }
+    let triangulate = options.contains(Triangulate);
+    let stripify_ = options.contains(Stripify);
+    // `map` is a variable of the routine, kept from one shape to the next.
+    let mut map: Vec<u32> = Vec::new();
+    let mut i = 0;
+    while i < blocks_count(tree)? {
+        let b = block(tree, i)?;
+        let this_type = block_type(tree, b);
+        // BSTriShape: not its descendants like BSSubIndexTriShape, which reordered tris break
+        if this_type == "BSTriShape" {
+            i += 1;
+            // skip unrendered shapes
+            if block_property_by_type(tree, b, "BSShaderProperty", true)?.is_none() {
+                continue;
+            }
+            let mut opt = options;
+            if !(opt.contains(VertexCache) || opt.contains(Overdraw) || opt.contains(VertexFetch)) {
+                continue;
+            }
+            // don't reorder vertices in skinned shapes
+            if opt.contains(VertexFetch) && block_get_skin(tree, b)?.is_some() {
+                opt.exclude(VertexFetch);
+            }
+            let tris = block_get_triangles(tree, b, None)?;
+            if tris.is_empty() {
+                continue;
+            }
+            let mut indices = tris2_indices(&tris);
+            let vertices = if opt.contains(Overdraw) || opt.contains(VertexFetch) {
+                block_get_vertices(tree, b, None)?
+            } else {
+                Vec::new()
+            };
+            if mesh_optimize(&mut indices, &vertices, opt, false, &mut map)? {
+                if opt.contains(VertexFetch) {
+                    let element = tree.elements(b, "Vertex Data")?;
+                    optimize_remap(tree, element, &map)?;
+                }
+                block_set_triangles(tree, b, &indices2_tris(&indices), None)?;
+                result = true;
+            }
+        } else if this_type == "NiTriShape" || this_type == "NiTriStrips" {
+            let strips_block = this_type == "NiTriStrips";
+            // skip unrendered shapes
+            if (version <= NifVersion::Tes4 && block_property_by_type(tree, b, "NiMaterialProperty", false)?.is_none())
+                || (version >= NifVersion::Fo3 && block_property_by_type(tree, b, "BSShaderProperty", true)?.is_none())
+            {
+                i += 1;
+                continue;
+            }
+            // skip shapes with NiGeomMorpherController
+            if block_get_controller(tree, b, "NiGeomMorpherController", true)?.is_some() {
+                i += 1;
+                continue;
+            }
+            let mut opt = options;
+            // don't reorder vertices in skinned shapes
+            if opt.contains(VertexFetch) && block_get_skin(tree, b)?.is_some() {
+                opt.exclude(VertexFetch);
+            }
+            // NiTriShape is stripified, NiTriStrips triangulated.
+            let convert = if strips_block { triangulate } else { stripify_ };
+            let (shape_type, data_type, other_data_type) = if strips_block {
+                ("NiTriShape", "NiTriStripsData", "NiTriShapeData")
+            } else {
+                ("NiTriStrips", "NiTriShapeData", "NiTriStripsData")
+            };
+            let mut b = b;
+            if convert {
+                convert_block(tree, i, shape_type)?;
+                b = block(tree, i)?;
+                result = true;
+            }
+            i += 1;
+            let Some(data_ref) = tree.elements(b, "Data")? else {
+                continue;
+            };
+            let Some(mut data) = tree.links_to(data_ref)? else {
+                continue;
+            };
+            if block_type(tree, data) != data_type {
+                continue;
+            }
+            let tris = block_get_triangles(tree, data, None)?;
+            if convert {
+                let data_index = tree.index(data)?;
+                convert_block(tree, data_index, other_data_type)?;
+                data = block(tree, data_index)?;
+                result = true;
+            }
+            if tris.is_empty() {
+                continue;
+            }
+            let mut indices = tris2_indices(&tris);
+            let vertices = if opt.contains(Overdraw) || opt.contains(VertexFetch) {
+                block_get_vertices(tree, data, None)?
+            } else {
+                Vec::new()
+            };
+            if strips_block {
+                let num_strips = tree.native_values(data, "Num Strips")?.to_i64()?;
+                let optimized = mesh_optimize(
+                    &mut indices,
+                    &vertices,
+                    opt,
+                    stripify_ || (num_strips != 0 && !triangulate),
+                    &mut map,
+                )?;
+                if optimized && opt.contains(VertexFetch) {
+                    remap_geometry_data(tree, b, data, &map)?;
+                }
+                // restripify only if are not triangulating, and indices have been optimized or existing strips > 1
+                if !triangulate && (optimized || num_strips > 1) {
+                    block_set_strips(
+                        tree,
+                        data,
+                        &indices2_strips(&crate::mesh_optimize::stripify(&indices, 0)),
+                        None,
+                    )?;
+                    result = true;
+                }
+                if triangulate {
+                    block_set_triangles(tree, data, &indices2_tris(&indices), None)?;
+                    result = true;
+                }
+            } else {
+                let optimized = mesh_optimize(&mut indices, &vertices, opt, stripify_, &mut map)?;
+                if optimized && opt.contains(VertexFetch) {
+                    remap_geometry_data(tree, b, data, &map)?;
+                }
+                if optimized && !stripify_ {
+                    block_set_triangles(tree, data, &indices2_tris(&indices), None)?;
+                    result = true;
+                }
+                if stripify_ {
+                    block_set_strips(
+                        tree,
+                        data,
+                        &indices2_strips(&crate::mesh_optimize::stripify(&indices, 0)),
+                        None,
+                    )?;
+                    result = true;
+                }
+            }
+        } else if this_type == "NiSkinPartition" {
+            i += 1;
+            let mut opt = options;
+            opt.exclude(Overdraw);
+            opt.exclude(VertexFetch);
+            let parts = req(tree.elements(b, "Partitions")?)?;
+            for p in 0..tree.count(parts) {
+                let part = tree.item(parts, p)?;
+                let tris = block_get_triangles(tree, b, Some(part))?;
+                if tris.is_empty() {
+                    continue;
+                }
+                let mut indices = tris2_indices(&tris);
+                let num_strips = tree.native_values(part, "Num Strips")?.to_i64()?;
+                let mut optimized = mesh_optimize(
+                    &mut indices,
+                    &[],
+                    opt,
+                    stripify_ || (num_strips != 0 && !triangulate),
+                    &mut map,
+                )?;
+                // updating strips only if not triangulating
+                if !triangulate && ((stripify_ && num_strips == 0) || (optimized && num_strips != 0) || num_strips > 1)
+                {
+                    let strips = indices2_strips(&crate::mesh_optimize::stripify(&indices, 0));
+                    block_set_strips(tree, b, &strips, Some(part))?;
+                    result = true;
+                    continue;
+                }
+                // triangulating stripified partition
+                if triangulate && num_strips != 0 {
+                    tree.set_native_values(part, "Num Strips", Variant::Int(0))?;
+                    optimized = true;
+                }
+                if optimized {
+                    block_set_triangles(tree, b, &indices2_tris(&indices), Some(part))?;
+                    result = true;
+                }
+            }
+        } else {
+            i += 1;
+        }
+    }
+    Ok(result)
+}
+
+/// `SpellStripify`.
+pub fn spell_stripify(tree: &mut Tree) -> R<bool> {
+    spell_optimize(
+        tree,
+        MeshOptimizeOptions::of(&[MeshOptimizeOption::Stripify, MeshOptimizeOption::VertexCache]),
+    )
+}
+
+/// `SpellTriangulate`.
+pub fn spell_triangulate(tree: &mut Tree) -> R<bool> {
+    spell_optimize(tree, MeshOptimizeOptions::of(&[MeshOptimizeOption::Triangulate]))
 }
 
 /// `SpellFaceNormals`.
