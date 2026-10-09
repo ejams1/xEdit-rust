@@ -767,56 +767,77 @@ status = "pending"
 source = "FormShow"
 
 [gui."xEdit/xeLocalizationForm.dfm:btnSave:OnClick"]
-status = "pending"
+status = "covered"
+command = "localization.set"
 source = "btnSaveClick"
+note = "Put of the focused string; editor_text reproduces the memo text (CR LF line breaks and one at the end)."
 
 [gui."xEdit/xeLocalizationForm.dfm:frmLocalization:OnCreate"]
-status = "pending"
+status = "covered"
+command = "localization.files"
 source = "FormCreate"
+note = "The loaded string tables (wbLocalizationHandler), each with its count and modified state."
 
 [gui."xEdit/xeLocalizationForm.dfm:memoText:OnChange"]
-status = "pending"
+status = "presentation"
 source = "memoTextChange"
+note = "Shows the Save button once the memo changes."
 
 [gui."xEdit/xeLocalizationForm.dfm:mniFileExport:OnClick"]
-status = "pending"
+status = "covered"
+command = "localization.export"
 source = "mniFileExportClick"
+note = "ExportToFile; the save dialog is the output parameter."
 
 [gui."xEdit/xeLocalizationForm.dfm:pmuStrings:OnPopup"]
-status = "pending"
+status = "presentation"
 source = "pmuStringsPopup"
+note = "Shows the export item on a table node."
 
 [gui."xEdit/xeLocalizationForm.dfm:vetStrings:OnChange"]
-status = "pending"
+status = "covered"
+command = "localization.get"
 source = "vetStringsChange"
+note = "The text of the focused string."
 
 [gui."xEdit/xeLocalizationForm.dfm:vetStrings:OnGetText"]
-status = "pending"
+status = "covered"
+command = "localization.strings"
 source = "vetStringsGetText"
+note = "The ID and text columns of the strings."
 
 [gui."xEdit/xeLocalizationForm.dfm:vetStrings:OnInitChildren"]
-status = "pending"
+status = "covered"
+command = "localization.strings"
 source = "vetStringsInitChildren"
+note = "The strings of a table."
 
 [gui."xEdit/xeLocalizationForm.dfm:vetStrings:OnInitNode"]
-status = "pending"
+status = "covered"
+command = "localization.strings"
 source = "vetStringsInitNode"
+note = "IndexToID of the strings of a table."
 
 [gui."xEdit/xeLocalizationForm.dfm:vetStrings:OnPaintText"]
-status = "pending"
+status = "presentation"
 source = "vetStringsPaintText"
+note = "A modified table is bold; localization.files reports modified."
 
 [gui."xEdit/xeLocalizePluginForm.dfm:cbTranslation:OnClick"]
-status = "pending"
+status = "presentation"
 source = "cbTranslationClick"
+note = "Enables the translation lists; localization.localize takes translate_from and translate_to."
 
 [gui."xEdit/xeLocalizePluginForm.dfm:frmLocalizePlugin:OnClose"]
-status = "pending"
+status = "covered"
+command = "localization.localize"
 source = "FormClose"
+note = "The checks of the translation lists (no table in both, as many from as to) are the checks of translate_from and translate_to."
 
 [gui."xEdit/xeLocalizePluginForm.dfm:frmLocalizePlugin:OnCreate"]
-status = "pending"
+status = "presentation"
 source = "FormCreate"
+note = "Font and scale."
 
 [gui."xEdit/xeLogAnalyzerForm.dfm:btnAnalyze:OnClick"]
 status = "pending"
@@ -1201,8 +1222,10 @@ status = "pending"
 source = "mniCreateNewFileClick"
 
 [gui."xEdit/xeMainForm.dfm:mniMainLocalizationEditor:OnClick"]
-status = "pending"
+status = "covered"
+command = "localization.files"
 source = "mniMainLocalizationEditorClick"
+note = "The localization editor: localization.files, localization.strings, localization.get, localization.set and localization.export."
 
 [gui."xEdit/xeMainForm.dfm:mniMainOptions:OnClick"]
 status = "pending"
@@ -1509,8 +1532,10 @@ status = "pending"
 source = "mniNavLOManagersDirtyInfoClick"
 
 [gui."xEdit/xeMainForm.dfm:mniNavLocalizationSwitch:OnClick"]
-status = "pending"
+status = "covered"
+command = "localization.localize"
 source = "mniNavLocalizationSwitchClick"
+note = "Localize plugin is localization.localize (with the translation of TfrmLocalizePlugin), Delocalize plugin is localization.delocalize; the GUI closes itself afterwards, the command leaves the save to files.save."
 
 [gui."xEdit/xeMainForm.dfm:mniNavMarkModified:OnClick"]
 status = "pending"
@@ -5945,8 +5970,10 @@ status = "pending"
 source = "Misc_CreateHashTES4"
 
 [script."xejviScriptAdapterResource:cUnit.LocalizationGetStringsFromFile:function"]
-status = "pending"
+status = "covered"
+command = "localization.strings"
 source = "Misc_LocalizationGetStringsFromFile"
+note = "The strings of a loaded table with their IDs."
 
 [script."xejviScriptAdapterResource:cUnit.NifBlockList:function"]
 status = "covered"

@@ -66,6 +66,7 @@ mod oracle_refs;
 mod lodgen;
 mod nif;
 mod oracle_save;
+mod strings;
 mod sniff;
 
 /// A game whose masters are in the corpus.

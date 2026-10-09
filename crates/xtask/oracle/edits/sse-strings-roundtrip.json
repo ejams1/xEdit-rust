@@ -1,0 +1,21 @@
+{
+  "description": "The string tables of a localized master written back unchanged: a string of each table of Dawnguard.esm (a name, a message description, a response text) set to another text and back, so each table is modified and saved with the strings it was loaded with; the oracle saves them when it closes.",
+  "game": "sse",
+  "strings": true,
+  "load": [
+    "Skyrim.esm",
+    "Update.esm",
+    "Dawnguard.esm"
+  ],
+  "commands": [
+    {"command": "elements.set", "params": {"form_id": "02000800", "file": "Dawnguard.esm", "path": "FULL", "value": "Oracle Bow"}},
+    {"command": "elements.set", "params": {"form_id": "02000800", "file": "Dawnguard.esm", "path": "FULL", "value": "Auriel's Bow"}},
+    {"command": "elements.set", "params": {"form_id": "02002845", "file": "Dawnguard.esm", "path": "DESC", "value": "Oracle message"}},
+    {"command": "elements.set", "params": {"form_id": "02002845", "file": "Dawnguard.esm", "path": "DESC", "value": "Soul harvested."}},
+    {"command": "elements.set", "params": {"form_id": "00017021", "file": "Dawnguard.esm", "path": "Responses\\[0]\\NAM1", "value": "Oracle response"}},
+    {"command": "elements.set", "params": {"form_id": "00017021", "file": "Dawnguard.esm", "path": "Responses\\[0]\\NAM1", "value": "(Heavy breathing - sprinting)"}}
+  ],
+  "save": [
+    "Dawnguard.esm"
+  ]
+}

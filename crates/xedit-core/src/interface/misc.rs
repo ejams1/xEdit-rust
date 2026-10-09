@@ -109,6 +109,15 @@ pub trait LocalizationHandler: Send + Sync {
     /// Port of `GetValue`: whether the string `id` was found, and its text or
     /// the error text to show in its place.
     fn get_value(&self, id: u32, element: ElementArg) -> (bool, String);
+
+    /// Port of `SetValue`: the text of string `id` of the element's table
+    /// changes, or a new string is added when `id` is 0 or unknown; the ID
+    /// the element is to hold.
+    fn set_value(&self, id: u32, element: ElementArg, value: &str) -> u32;
+
+    /// Upstream `NoTranslate`: a localized string reads as its ID, and a
+    /// text assigned to it is stored in the plugin (the delocalization).
+    fn no_translate(&self) -> bool;
 }
 
 static LOCALIZATION_HANDLER: RwLock<Option<Arc<dyn LocalizationHandler>>> = RwLock::new(None);
@@ -124,6 +133,18 @@ pub fn localization_get_value(id: u32, element: ElementArg) -> (bool, String) {
         Some(handler) => handler.get_value(id, element),
         None => (false, String::new()),
     }
+}
+
+/// `wbLocalizationHandler.SetValue`; `None` while no handler is set.
+pub fn localization_set_value(id: u32, element: ElementArg, value: &str) -> Option<u32> {
+    let handler = LOCALIZATION_HANDLER.read().unwrap().clone();
+    handler.map(|handler| handler.set_value(id, element, value))
+}
+
+/// `wbLocalizationHandler.NoTranslate`.
+pub fn localization_no_translate() -> bool {
+    let handler = LOCALIZATION_HANDLER.read().unwrap().clone();
+    handler.is_some_and(|handler| handler.no_translate())
 }
 
 impl Variant {

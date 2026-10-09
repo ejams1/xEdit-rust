@@ -50,6 +50,11 @@ pub enum ElementState {
     /// Port of `esModifiedUpdated`: the parent is told of the modification
     /// at the end of the update.
     esModifiedUpdated = 16,
+    /// Port of `esLocalized`: the element holds an ID into the string
+    /// tables, whatever the file says (`SetLocalized(tbTrue)`).
+    esLocalized = 32,
+    /// Port of `esNotLocalized`: the element holds its text.
+    esNotLocalized = 64,
 }
 
 /// Port of `TwbResetModified`: what a save does to the modified states.
@@ -278,6 +283,12 @@ impl super::sub_record::SubRecordImpl {
     /// A subrecord whose header carries size 0 is always rebuilt, because
     /// its real size came from an `XXXX` subrecord that left the record.
     pub(crate) fn write_to_stream_impl(&self, out: &mut Vec<u8>, reset: ResetModified) -> Result<(), SaveError> {
+        // `dcfDontSave` (`dfDontSave` of the definition: the `INOM` and
+        // `INOA` lists a topic gets in memory) writes nothing.
+        if self.dont_save() {
+            self.base.reset_modified(reset);
+            return Ok(());
+        }
         let header = self.header_struct();
         let modified = self.base.has_state(ElementState::esModified);
         if modified || header.data_size == 0 {

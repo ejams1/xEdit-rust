@@ -105,7 +105,11 @@ macro_rules! element_common {
         }
 
         fn get_localized(&self) -> TriBool {
-            TriBool::tbUnknown
+            $crate::implementation::localized_state(self.$base())
+        }
+
+        fn set_localized(&self, value: TriBool) {
+            $crate::implementation::set_localized_state(self.$base(), value)
         }
 
         fn get_conflict_priority(&self) -> ConflictPriority {
@@ -495,6 +499,35 @@ impl ElementBase {
     /// Port of `SetContainer`.
     pub(crate) fn set_container(&self, container: &ElementRef) {
         *self.e_container.write().unwrap() = Some(Arc::downgrade(container));
+    }
+}
+
+/// Port of `TwbElement.GetLocalized`.
+pub(crate) fn localized_state(base: &ElementBase) -> TriBool {
+    if base.has_state(ElementState::esLocalized) {
+        TriBool::tbTrue
+    } else if base.has_state(ElementState::esNotLocalized) {
+        TriBool::tbFalse
+    } else {
+        TriBool::tbUnknown
+    }
+}
+
+/// Port of `TwbElement.SetLocalized`.
+pub(crate) fn set_localized_state(base: &ElementBase, value: TriBool) {
+    match value {
+        TriBool::tbUnknown => {
+            base.exclude_state(ElementState::esLocalized);
+            base.exclude_state(ElementState::esNotLocalized);
+        }
+        TriBool::tbFalse => {
+            base.exclude_state(ElementState::esLocalized);
+            base.include_state(ElementState::esNotLocalized);
+        }
+        TriBool::tbTrue => {
+            base.include_state(ElementState::esLocalized);
+            base.exclude_state(ElementState::esNotLocalized);
+        }
     }
 }
 
@@ -1884,9 +1917,10 @@ impl GroupRecordImpl {
     }
 
     /// Port of `TwbGroupRecord.Sort` without `aForce`, for the groups that
-    /// sort by `CompareGroupContents`. A topic group (type 7) sorts its INFOs
-    /// by their links instead, which xDump does not do without the load
-    /// order FormIDs, so it is left alone.
+    /// sort by `CompareGroupContents`. A topic group (type 7) of a game that
+    /// sorts its responses (`wbCanSortINFO`) sorts them by their links
+    /// instead (`sort_topic`); in the other games (Fallout 4 and later) it
+    /// sorts by `CompareGroupContents` like any group.
     /// UPSTREAM-QUIRK: the merge of a duplicated top level group adds the
     /// records without clearing `gsSorted`, so a group that two duplicates
     /// merge into is sorted only after the first of them.
@@ -1896,7 +1930,7 @@ impl GroupRecordImpl {
         if self.sort_topic(false) {
             return;
         }
-        if self.gr_struct().group_type == 7 || self.gr_sorted.load(Ordering::Relaxed) {
+        if self.gr_sorted.load(Ordering::Relaxed) {
             return;
         }
         self.container.sort_by(compare_group_contents);
@@ -2033,6 +2067,9 @@ pub struct MainRecordImpl {
     /// Port of `mrsQuickInitDone` and `csInitOnce`: the subrecords were
     /// built once, so the names are known after a reset.
     mr_names_known: AtomicBool,
+    /// Port of `mrLGeneration`: the generation of the string tables the
+    /// cached names were read with.
+    mr_l_generation: AtomicI32,
     /// The number of times the subrecords were built.
     mr_builds: std::sync::atomic::AtomicU32,
     /// Port of `mrMaster` and `mrOverrides`.
@@ -2120,6 +2157,7 @@ impl MainRecordImpl {
             mr_editor_id: RwLock::new(String::new()),
             mr_full_name: RwLock::new(String::new()),
             mr_names_known: AtomicBool::new(false),
+            mr_l_generation: AtomicI32::new(0),
             mr_builds: std::sync::atomic::AtomicU32::new(0),
             mr_master: RwLock::new(None),
             mr_overrides: RwLock::new(Vec::new()),
@@ -2175,10 +2213,37 @@ impl MainRecordImpl {
 
     /// Port of `GetFullName`, read while the subrecords are built.
     pub fn get_full_name(&self) -> String {
+        self.check_l_generation();
         if self.can_have(KnownSubRecord::ksrFullName) {
             self.self_arc().quick_init();
         }
         self.mr_full_name.read().unwrap().clone()
+    }
+
+    /// Port of the `mrLGeneration` check of the name getters with
+    /// `mrInvalidateNameCache`: after a language change (`Clear` of the
+    /// string tables) a record of a localized file reads its full name
+    /// again and forgets its display name.
+    fn check_l_generation(&self) {
+        let generation = crate::localization::localization_generation();
+        if self.mr_l_generation.load(Ordering::Relaxed) == generation {
+            return;
+        }
+        self.mr_l_generation.store(generation, Ordering::Relaxed);
+        if !self.file_impl().is_some_and(|file| file.get_is_localized()) {
+            return;
+        }
+        *self.mr_display_name.write().unwrap() = None;
+        let mut full_name = String::new();
+        if self.mr_names_known.load(Ordering::Acquire)
+            && let Some(def) = &self.mr_def
+        {
+            let signature = def.known_sub_record_signatures()[KnownSubRecord::ksrFullName.ord()];
+            if let Some(record) = self.get_record_by_signature(signature) {
+                full_name = record.get_edit_value();
+            }
+        }
+        self.set_full_name(full_name);
     }
 
     /// Port of `GetCanHaveEditorID` and `GetCanHaveFullName`.
@@ -3855,6 +3920,7 @@ impl Element for MainRecordImpl {
     /// of references, cells and responses, or the summary. The special names
     /// of placed records and cells are not ported yet.
     fn get_display_name(&self, _use_suffix: bool) -> String {
+        self.check_l_generation();
         if let Some(cached) = self.mr_display_name.read().unwrap().as_ref() {
             return cached.clone();
         }

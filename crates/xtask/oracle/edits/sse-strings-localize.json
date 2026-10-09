@@ -1,0 +1,15 @@
+{
+  "description": "Localize plugin (mniNavLocalizationSwitchClick) on the oracle's delocalized plugin of sse-strings-delocalize: every localized string becomes a new string of three new tables, with the IDs in the order the strings are gathered.",
+  "game": "sse",
+  "strings": true,
+  "inputs_from": "sse-strings-delocalize",
+  "load": [
+    "ccBGSSSE025-AdvDSGS.esm"
+  ],
+  "commands": [
+    {"command": "localization.localize", "params": {"file": "ccBGSSSE025-AdvDSGS.esm"}}
+  ],
+  "save": [
+    "ccBGSSSE025-AdvDSGS.esm"
+  ]
+}

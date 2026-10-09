@@ -5,6 +5,9 @@
 // Ported from xEdit: Core/wbBSA.pas
 
 //! The resource containers, upstream `wbContainerHandler`: the archives and
+//! the data folder, searched in the order they were added. The read side is
+//! ported (`AddFolder`, `AddBSA`, `ContainerExists`, `OpenResource`,
+//! `ContainerResourceList`); the texture helpers are not.
 //! the data folder, searched in the order they were added: `AddFolder`,
 //! `AddBSA`, `ContainerExists`, `OpenResource`, the resource listings of
 //! the containers (`ContainerResourceList`, `ContainerResourceDict`,
@@ -124,32 +127,66 @@ pub fn open_resource_last(path: &str) -> Option<Vec<u8>> {
 }
 
 impl Container {
+    /// Port of `ResourceList(aList, aFolder)`: the files below `folder`.
+    /// A folder lists its files lower case and relative to itself, the
+    /// files of a directory before those of its subdirectories; an archive
+    /// lists the files whose path starts with `folder` (`FilesByFolder`).
+    fn resource_list(&self, folder: &str, list: &mut Vec<String>) {
+        match self {
+            Container::Folder(path) => {
+                fn walk(root: &Path, dir: &Path, list: &mut Vec<String>) {
+                    let Ok(entries) = std::fs::read_dir(dir) else {
+                        return;
+                    };
+                    let mut dirs = Vec::new();
+                    for entry in entries.flatten() {
+                        let path = entry.path();
+                        if path.is_dir() {
+                            dirs.push(path);
+                        } else if let Ok(relative) = path.strip_prefix(root) {
+                            list.push(relative.to_string_lossy().replace('/', "\\").to_lowercase());
+                        }
+                    }
+                    for dir in dirs {
+                        walk(root, &dir, list);
+                    }
+                }
+                let dir = path.join(folder.replace('\\', "/"));
+                if dir.is_dir() {
+                    walk(path, &dir, list);
+                }
+            }
+            Container::Archive(archive) => {
+                let folder = folder.trim_end_matches(['\\', '/']).to_ascii_lowercase();
+                list.extend(
+                    archive
+                        .file_names()
+                        .into_iter()
+                        .filter(|name| folder.is_empty() || name.starts_with(&folder))
+                        .map(str::to_owned),
+                );
+            }
     /// Port of `ResourceExists`.
     fn resource_exists(&self, path: &str) -> bool {
-        match self {
             Container::Folder(folder) => folder.join(path.replace('\\', "/")).is_file(),
             Container::Archive(archive) => archive.file_exists(path),
         }
     }
-
     /// Port of `ResourceList`: the names of the files below `folder` (all of
     /// them for an empty folder). A folder container gives the lower-case
     /// paths relative to it, an archive the names it holds.
     fn resource_list(&self, folder: &str) -> Vec<String> {
-        match self {
             Container::Folder(root) => {
                 let folder = folder.replace('/', "\\");
                 let start = root.join(folder.replace('\\', "/"));
                 if !start.is_dir() {
                     return Vec::new();
-                }
                 // `TDirectory.GetFiles(fPath + aFolder, '*.*', soAllDirectories)`
                 // names the files with that path in front.
                 let prefix = format!(
                     "{}{}",
                     include_trailing_path_delimiter(&root.display().to_string()),
                     folder
-                );
                 let start_text = if folder.is_empty() {
                     prefix.clone()
                 } else {
@@ -158,7 +195,6 @@ impl Container {
                 let mut files = Vec::new();
                 if list_files(&start, &start_text, &mut files).is_err() {
                     return Vec::new();
-                }
                 let root_length = include_trailing_path_delimiter(&root.display().to_string())
                     .chars()
                     .count();
@@ -169,19 +205,26 @@ impl Container {
                         xedit_io::encoding::lower_case(&relative)
                     })
                     .collect()
-            }
             Container::Archive(archive) => archive
                 .files_by_folder(folder)
                 .into_iter()
                 .map(|file| file.name.clone())
                 .collect(),
+
         }
     }
 }
 
+/// Port of `TwbContainerHandler.ContainerResourceList` for every container
+/// (an empty container name): the files below `folder` of each container,
+/// in the order the containers were added.
+pub fn container_resource_list(folder: &str) -> Vec<String> {
+    let containers = CONTAINERS.read().unwrap().clone();
+    let mut list = Vec::new();
+    for container in containers.iter() {
+        container.resource_list(folder, &mut list);
 /// Upstream `TwbResourceDict`: a set of names.
 pub type ResourceDict = HashSet<String>;
-
 /// Port of `ContainerList`: the full path of every container, in the order
 /// they were added.
 pub fn container_list() -> Vec<String> {
@@ -192,12 +235,10 @@ pub fn container_list() -> Vec<String> {
         .map(|container| container.name())
         .collect()
 }
-
 /// Port of `ContainerResourceList`: the names of the files below `folder`
 /// of the container named `container_name` (of every container for an empty
 /// name), in the order of the containers. Duplicates are not removed.
 pub fn container_resource_list(container_name: &str, folder: &str) -> Vec<String> {
-    let mut list = Vec::new();
     for container in CONTAINERS.read().unwrap().iter() {
         if container_name.is_empty() || container.name().eq_ignore_ascii_case(container_name) {
             list.extend(container.resource_list(folder));
@@ -205,16 +246,20 @@ pub fn container_resource_list(container_name: &str, folder: &str) -> Vec<String
                 break;
             }
         }
+
+
     }
     list
 }
 
+/// Whether any container was added: upstream's `Assigned(wbContainerHandler)`.
+pub fn has_containers() -> bool {
+    !CONTAINERS.read().unwrap().is_empty()
 /// Port of `ContainerResourceDict`: as `container_resource_list`, but into a
 /// set that keeps the first spelling of a name.
 pub fn container_resource_dict(container_name: &str, folder: &str, dict: &mut ResourceDict) {
     dict.extend(container_resource_list(container_name, folder));
 }
-
 /// Port of `TwbContainerHandler.ResourceExists`: whether any container has
 /// the file.
 pub fn resource_exists(path: &str) -> bool {
@@ -224,7 +269,6 @@ pub fn resource_exists(path: &str) -> bool {
         .iter()
         .any(|container| container.resource_exists(path))
 }
-
 /// Port of `TwbContainerHandler.ResourceCount`: in how many containers the
 /// file is, and the names of those containers.
 pub fn resource_count(path: &str) -> (usize, Vec<String>) {
@@ -237,7 +281,6 @@ pub fn resource_count(path: &str) -> (usize, Vec<String>) {
         .collect();
     (containers.len(), containers)
 }
-
 /// Port of `OpenResourceData`: the contents of the file from the container
 /// named `container_name` (the last one that has it for an empty name).
 pub fn open_resource_data(container_name: &str, path: &str) -> Vec<u8> {
@@ -252,12 +295,10 @@ pub fn open_resource_data(container_name: &str, path: &str) -> Vec<u8> {
     }
     Vec::new()
 }
-
 /// A failure of `resource_copy`: the upstream message.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("{0}")]
 pub struct ResourceError(pub String);
-
 /// Port of `TwbContainerHandler.ResourceCopy`: writes the file from the
 /// container named `container_name` (the last one that has it for an empty
 /// name) to `path_out`, a file name when it has an extension, else a folder.
@@ -280,7 +321,6 @@ pub fn resource_copy(container_name: &str, file_name: &str, path_out: &str) -> R
         .rev()
         .find(|container| container_name.is_empty() || container.name().eq_ignore_ascii_case(container_name))
         .unwrap_or_else(|| containers.last().expect("a container"));
-
     // A file name is provided instead of a path.
     let target = if Path::new(path_out).extension().is_some() {
         path_out.to_owned()
@@ -300,32 +340,25 @@ pub fn resource_copy(container_name: &str, file_name: &str, path_out: &str) -> R
         .ok_or_else(|| ResourceError("Resource doesn't exist".to_owned()))?;
     std::fs::write(&target, data).map_err(|error| ResourceError(format!("{target}: {error}")))
 }
-
 /// Upstream `wbLoaderDone`: the callbacks resolve the hash of a file or a
 /// folder to its name only once the load order is loaded.
 static LOADER_DONE: AtomicBool = AtomicBool::new(false);
-
 pub fn loader_done() -> bool {
     LOADER_DONE.load(Ordering::Relaxed)
 }
-
 pub fn set_loader_done(done: bool) {
     LOADER_DONE.store(done, Ordering::Relaxed);
 }
-
 /// `TwbContainerCache`: the names of the files and folders of the
 /// containers by their hash.
 struct ContainerCache {
     file_hashes: HashMap<i64, String>,
     folder_hashes: HashMap<i64, String>,
 }
-
 static CACHE: RwLock<Option<Arc<ContainerCache>>> = RwLock::new(None);
-
 fn invalidate_cache() {
     *CACHE.write().unwrap() = None;
 }
-
 /// `TwbHash.BSCRC32` from Skyrim on, `TwbHash.TES4` before.
 fn cache_hash(text: &str) -> i64 {
     if game_mode() >= GameMode::gmTES5 {
@@ -334,7 +367,6 @@ fn cache_hash(text: &str) -> i64 {
         xedit_io::hash::tes4(text, true) as i64
     }
 }
-
 /// Port of `TwbContainerHandler.BuildCache`.
 ///
 /// DEVIATION: upstream writes the seeds it read back to
@@ -343,7 +375,6 @@ fn cache_hash(text: &str) -> i64 {
 fn build_cache() -> ContainerCache {
     let mut all: ResourceDict = HashSet::new();
     container_resource_dict("", "", &mut all);
-
     let seed_name = format!(
         "{}{}.HashSeed.txt",
         include_trailing_path_delimiter(&crate::delphi::extract_file_path(&crate::delphi::exe_path())),
@@ -354,7 +385,6 @@ fn build_cache() -> ContainerCache {
             all.insert(xedit_io::encoding::lower_case(line).replace('/', "\\"));
         }
     }
-
     let mut files: HashSet<String> = HashSet::new();
     let mut folders: HashSet<String> = HashSet::new();
     let mut cache = ContainerCache {
@@ -367,7 +397,6 @@ fn build_cache() -> ContainerCache {
         if folders.insert(folder.clone()) {
             cache.folder_hashes.entry(cache_hash(&folder)).or_insert(folder);
         }
-
         let mut file = xedit_io::encoding::lower_case(extract_file_name(full_name));
         if game_mode() >= GameMode::gmTES5 {
             file = crate::delphi::change_file_ext(&file, "");
@@ -377,7 +406,6 @@ fn build_cache() -> ContainerCache {
                 .file_hashes
                 .entry(cache_hash(&file))
                 .or_insert_with(|| file.clone());
-
             if game_mode() < GameMode::gmTES5 && extract_file_ext(&file) == ".dds" {
                 file = crate::delphi::change_file_ext(&file, ".ddx");
             }
@@ -392,7 +420,6 @@ fn build_cache() -> ContainerCache {
     }
     cache
 }
-
 fn cache() -> Arc<ContainerCache> {
     if let Some(cache) = CACHE.read().unwrap().as_ref() {
         return cache.clone();
@@ -401,26 +428,22 @@ fn cache() -> Arc<ContainerCache> {
     *CACHE.write().unwrap() = Some(built.clone());
     built
 }
-
 /// Port of `ResolveFileHash`: the name of the file with the hash, or an
 /// empty string. For a file hash of a game from Skyrim on, the name has no
 /// extension.
 pub fn resolve_file_hash(hash: i64) -> String {
     cache().file_hashes.get(&hash).cloned().unwrap_or_default()
 }
-
 /// Port of `ResolveFolderHash`: the name of the folder with the hash, or an
 /// empty string.
 pub fn resolve_folder_hash(hash: i64) -> String {
     cache().folder_hashes.get(&hash).cloned().unwrap_or_default()
 }
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::interface::globals::{set_game_mode, set_game_name, test_lock};
     use xedit_io::archive::{ArchiveType, PackFile};
-
     /// A data folder in the temporary directory with a few files, and a BSA.
     fn setup(tag: &str) -> (PathBuf, PathBuf) {
         let root = std::env::temp_dir().join(format!("xedit-containers-{tag}-{}", std::process::id()));
@@ -453,7 +476,6 @@ mod tests {
         bsa.save().unwrap();
         (data, archive)
     }
-
     #[test]
     fn lists_counts_and_copies_resources() {
         let _lock = test_lock();
@@ -465,7 +487,6 @@ mod tests {
             container_list(),
             [data.display().to_string(), archive.display().to_string()]
         );
-
         // The loose files are listed lower case and relative to the folder, in
         // the order of a directory listing, the archive's as it names them.
         let data_name = data.display().to_string();
@@ -484,17 +505,14 @@ mod tests {
         let mut all = ResourceDict::new();
         container_resource_dict("", "", &mut all);
         assert_eq!(all.len(), 4, "{all:?}");
-
         assert!(resource_exists("meshes\\packed\\c.nif"));
         assert!(!resource_exists("meshes\\missing.nif"));
         let (count, containers) = resource_count("Meshes\\B.nif");
         assert_eq!(count, 2);
         assert_eq!(containers.len(), 2);
-
         // The last container that has the file wins; a name picks a container.
         assert_eq!(open_resource_data("", "meshes\\b.nif"), b"packed b");
         assert_eq!(open_resource_data(&data_name, "meshes\\b.nif"), b"loose b");
-
         let out = data.with_file_name("copies");
         resource_copy("", "meshes\\packed\\c.nif", &out.display().to_string()).unwrap();
         assert_eq!(std::fs::read(out.join("meshes/packed/c.nif")).unwrap(), b"packed c");
@@ -518,7 +536,6 @@ mod tests {
         clear_containers();
         std::fs::remove_dir_all(data.parent().unwrap()).unwrap();
     }
-
     #[test]
     fn resolves_the_names_of_file_and_folder_hashes() {
         let _lock = test_lock();
@@ -526,7 +543,6 @@ mod tests {
         clear_containers();
         add_folder(&data);
         add_archive(&archive).unwrap();
-
         // From Skyrim on the hashes are those of the BA2 and a file name has no extension.
         set_game_name("Fallout4");
         set_game_mode(GameMode::gmFO4);
@@ -535,7 +551,6 @@ mod tests {
         assert_eq!(resolve_folder_hash(folder), "meshes\\packed");
         assert_eq!(resolve_file_hash(i64::from(xedit_io::hash::fo4("c"))), "c");
         assert_eq!(resolve_file_hash(i64::from(xedit_io::hash::fo4("nothing"))), "");
-
         // Before Skyrim the BSA hash takes the extension, and a texture is also known as `.ddx`.
         set_game_mode(GameMode::gmFNV);
         invalidate_cache();
@@ -546,4 +561,35 @@ mod tests {
         clear_containers();
         std::fs::remove_dir_all(data.parent().unwrap()).unwrap();
     }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 }

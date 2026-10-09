@@ -317,6 +317,7 @@ pub fn quick_auto_clean(
 }
 
 fn files_clean(session: &mut Session, request: CleanRequest) -> Result<CleanResponse, CommandError> {
+    crate::commands::refuse_in_translate_mode("files.clean")?;
     let target = session.file(request.file.as_deref())?;
     if target
         .get_file_states()
@@ -385,6 +386,7 @@ fn records_cleanup_injected(
     session: &mut Session,
     request: CleanupInjectedRequest,
 ) -> Result<CleanupInjectedResponse, CommandError> {
+    crate::commands::refuse_in_translate_mode("records.cleanup_injected")?;
     let file = session.file(request.file.as_deref())?;
     let records = if request.form_ids.is_empty() {
         let all = file.records();

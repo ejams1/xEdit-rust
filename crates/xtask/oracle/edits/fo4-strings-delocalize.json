@@ -1,0 +1,15 @@
+{
+  "description": "Delocalize plugin (mniNavLocalizationSwitchClick) on a localized Fallout 4 plugin: every localized string takes its text from the tables into the plugin and the localized flag is cleared.",
+  "game": "fo4",
+  "strings": true,
+  "load": [
+    "Fallout4.esm",
+    "DLCworkshop01.esm"
+  ],
+  "commands": [
+    {"command": "localization.delocalize", "params": {"file": "DLCworkshop01.esm"}}
+  ],
+  "save": [
+    "DLCworkshop01.esm"
+  ]
+}

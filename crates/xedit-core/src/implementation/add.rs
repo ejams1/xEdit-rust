@@ -635,6 +635,7 @@ impl MainRecordImpl {
             mr_editor_id: RwLock::new(String::new()),
             mr_full_name: RwLock::new(String::new()),
             mr_names_known: std::sync::atomic::AtomicBool::new(false),
+            mr_l_generation: std::sync::atomic::AtomicI32::new(0),
             mr_builds: std::sync::atomic::AtomicU32::new(0),
             mr_master: RwLock::new(None),
             mr_overrides: RwLock::new(Vec::new()),

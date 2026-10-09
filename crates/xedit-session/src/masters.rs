@@ -89,6 +89,7 @@ fn edit_failed(message: String) -> CommandError {
 }
 
 fn masters_add(session: &mut Session, request: MastersAddRequest) -> Result<MastersResponse, CommandError> {
+    crate::commands::refuse_in_translate_mode("masters.add")?;
     let file = session.file(request.file.as_deref())?;
     let old = names(&file.masters());
     if request.dry_run {
@@ -105,6 +106,7 @@ fn masters_add(session: &mut Session, request: MastersAddRequest) -> Result<Mast
 }
 
 fn masters_sort(session: &mut Session, request: MastersRequest) -> Result<MastersResponse, CommandError> {
+    crate::commands::refuse_in_translate_mode("masters.sort")?;
     let file = session.file(request.file.as_deref())?;
     let old = names(&file.masters());
     if request.dry_run {
@@ -115,6 +117,7 @@ fn masters_sort(session: &mut Session, request: MastersRequest) -> Result<Master
 }
 
 fn masters_clean(session: &mut Session, request: MastersRequest) -> Result<MastersResponse, CommandError> {
+    crate::commands::refuse_in_translate_mode("masters.clean")?;
     let file = session.file(request.file.as_deref())?;
     let old = names(&file.masters());
     if request.dry_run {

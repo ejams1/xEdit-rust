@@ -52,6 +52,44 @@ pub fn set_fill_pnam_on_load(value: bool) {
     FILL_PNAM_ON_LOAD.store(value, std::sync::atomic::Ordering::Relaxed);
 }
 
+/// Whether [`Session::load`] loads in the translate tool mode.
+static TRANSLATE_ON_LOAD: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// The language [`Session::load`] sets in place of the game's default.
+static LANGUAGE_ON_LOAD: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+
+/// Port of the translate tool mode (`tmTranslate`, `-translate` or an
+/// executable named `...Trans...`): `xeInit.pas` sets `wbTranslationMode`,
+/// which makes every element that is not translatable ignored by the
+/// comparison of records (`GetConflictPriority`), hides the unused, ignored
+/// and never shown fields, and loads the archives for the strings; the main
+/// form then offers none of the commands that change the structure of a
+/// plugin (`refuse_in_translate_mode`), only the values of the translatable
+/// elements and the localization commands. The sessions loaded afterwards
+/// use it.
+pub fn set_translate_on_load(value: bool) {
+    TRANSLATE_ON_LOAD.store(value, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// Port of `-l:<language>`: the language of the string tables, in place of
+/// the default of the game, for the sessions loaded afterwards.
+pub fn set_language_on_load(language: Option<&str>) {
+    *LANGUAGE_ON_LOAD.lock().unwrap() = language.map(str::to_owned);
+}
+
+/// The `if wbTranslationMode then Exit` of the menu handlers that change
+/// the structure of a plugin (and the menu items the translate mode hides):
+/// the command is refused in the translate mode.
+pub(crate) fn refuse_in_translate_mode(command: &str) -> Result<(), CommandError> {
+    if xedit_core::interface::globals::translation_mode() {
+        return Err(CommandError::new(
+            "translate_mode",
+            format!("{command} is not available in the translate mode"),
+        ));
+    }
+    Ok(())
+}
+
 impl Session {
     /// Loads the plugins of a game in the order given, with their masters.
     pub fn load(game: &str, plugins: &[String]) -> Result<Self, String> {
@@ -59,6 +97,17 @@ impl Session {
         // The editor's settings apply before the plugins load: the load
         // itself edits records under `wbAllowInternalEdit`.
         crate::save::apply_edit_settings(mode);
+        if let Some(language) = LANGUAGE_ON_LOAD.lock().unwrap().as_deref() {
+            xedit_core::interface::globals::set_language(language);
+        }
+        let translate = TRANSLATE_ON_LOAD.load(std::sync::atomic::Ordering::Relaxed);
+        xedit_core::interface::globals::set_translation_mode(translate);
+        if translate {
+            use xedit_core::interface::globals::{set_hide_ignored, set_hide_never_show, set_hide_unused};
+            set_hide_unused(true);
+            set_hide_ignored(true);
+            set_hide_never_show(true);
+        }
         // `-FillPNAM`: the responses of a topic get a `PNAM` when they are
         // built (`wbFillPNAM`).
         xedit_core::interface::globals::set_fill_pnam(FILL_PNAM_ON_LOAD.load(std::sync::atomic::Ordering::Relaxed));
@@ -493,6 +542,23 @@ pub struct ElementsSetResponse {
 fn elements_set(session: &mut Session, request: ElementsSetRequest) -> Result<ElementsSetResponse, CommandError> {
     let record = session.record(&request.form_id, request.file.as_deref())?;
     let existing = record.get_element_by_path(&request.path);
+    // The translate mode shows (and so edits) only the translatable
+    // elements: the others are ignored (`GetConflictPriority`) and hidden
+    // from the view (`InitConflictStatus`), and no member can be added.
+    if xedit_core::interface::globals::translation_mode()
+        && existing.as_ref().is_none_or(|element| {
+            element.get_conflict_priority() == xedit_core::interface::types::ConflictPriority::cpIgnore
+        })
+    {
+        return Err(CommandError::new(
+            "translate_mode",
+            format!(
+                "{} \\ {} is not translatable, which the translate mode does not edit",
+                record.get_name(),
+                request.path
+            ),
+        ));
+    }
     let old = match &existing {
         Some(element) => node_of(element, Some(0)),
         None => {

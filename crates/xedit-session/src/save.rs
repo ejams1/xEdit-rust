@@ -155,6 +155,70 @@ pub struct FilesSaveResponse {
     pub written: bool,
     /// Where the previous file went, when one existed and was backed up.
     pub backup: Option<String>,
+    /// The string tables of the plugin with unsaved changes, written (or,
+    /// for a dry run, to be written) to the `Strings` folder next to the
+    /// plugin.
+    pub strings: Vec<StringsSaved>,
+}
+
+/// A string table `files.save` wrote with its plugin.
+#[derive(Serialize, JsonSchema)]
+pub struct StringsSaved {
+    /// File name of the table, such as `Dawnguard_English.STRINGS`.
+    pub table: String,
+    /// Path the table was (or would be) written to.
+    pub output: String,
+    /// Size in bytes.
+    pub bytes: u64,
+    pub written: bool,
+    /// Where the previous file went, when one existed and was backed up.
+    pub backup: Option<String>,
+}
+
+/// The `SaveChanged` part for the localization files: every modified table
+/// of the plugin is written (`WriteToStream`) and is no longer modified.
+/// Upstream writes a table where it was read from or made,
+/// `<data>\Strings\<name>`; here it goes to the `Strings` folder next to
+/// the plugin's output, which is the same place for a plugin saved where it
+/// was loaded from the data folder. A previous file is backed up to
+/// `<AppName>Edit Backups` next to the plugin, where the GUI's rename puts
+/// the old table too.
+fn save_tables(
+    file: &Arc<FileImpl>,
+    output: &Path,
+    dry_run: bool,
+    backup_old: bool,
+) -> Result<Vec<StringsSaved>, CommandError> {
+    let Some(handler) = xedit_core::localization::localization_handler() else {
+        return Ok(Vec::new());
+    };
+    let folder = output.parent().map(Path::to_path_buf).unwrap_or_default();
+    let mut saved = Vec::new();
+    for index in crate::localization::modified_tables_of(&file.get_name()) {
+        let Some((name, bytes)) = handler.with_file(index, |table| (table.name().to_owned(), table.write_to_bytes()))
+        else {
+            continue;
+        };
+        let target = folder.join("Strings").join(&name);
+        let mut entry = StringsSaved {
+            table: name,
+            output: target.to_string_lossy().into_owned(),
+            bytes: bytes.len() as u64,
+            written: false,
+            backup: None,
+        };
+        if !dry_run {
+            if backup_old && target.is_file() {
+                let dir = folder.join(format!("{}Edit Backups", app_name()));
+                entry.backup = Some(backup_into(&target, &dir)?);
+            }
+            write_atomically(&target, &bytes)?;
+            handler.with_file_mut(index, |table| table.set_modified(false));
+            entry.written = true;
+        }
+        saved.push(entry);
+    }
+    Ok(saved)
 }
 
 /// The reset upstream applies with `wbResetModifiedOnSave`, which is on by
@@ -202,20 +266,22 @@ pub(crate) fn save_file(
         changed,
         written: false,
         backup: None,
+        strings: Vec::new(),
     };
     if request.dry_run {
+        response.strings = save_tables(file, &output, true, request.backup)?;
         return Ok(response);
     }
     // `SaveChanged`: a save over the loaded file that did not change it is
-    // removed again.
-    if to_loaded_path && !changed {
-        return Ok(response);
+    // removed again; its string tables are saved all the same.
+    if !(to_loaded_path && !changed) {
+        if request.backup && output.is_file() {
+            response.backup = Some(backup(&output)?);
+        }
+        write_atomically(&output, &bytes)?;
+        response.written = true;
     }
-    if request.backup && output.is_file() {
-        response.backup = Some(backup(&output)?);
-    }
-    write_atomically(&output, &bytes)?;
-    response.written = true;
+    response.strings = save_tables(file, &output, false, request.backup)?;
     Ok(response)
 }
 
@@ -258,7 +324,12 @@ fn backup(target: &Path) -> Result<String, CommandError> {
         .map(Path::to_path_buf)
         .unwrap_or_default()
         .join(format!("{}Edit Backups", app_name()));
-    std::fs::create_dir_all(&dir).map_err(|error| CommandError::new("io", format!("{}: {error}", dir.display())))?;
+    backup_into(target, &dir)
+}
+
+/// `DoBackupModule` into the folder `dir`.
+fn backup_into(target: &Path, dir: &Path) -> Result<String, CommandError> {
+    std::fs::create_dir_all(dir).map_err(|error| CommandError::new("io", format!("{}: {error}", dir.display())))?;
     let name = target
         .file_name()
         .map(|name| name.to_string_lossy().into_owned())

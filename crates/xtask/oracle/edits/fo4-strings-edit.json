@@ -1,0 +1,19 @@
+{
+  "description": "Strings set, added and copied in a localized Fallout 4 plugin: two names changed in place (Put), a description set where the record had none (AddValue: a new ID in the DLSTRINGS table), a misc item of Fallout4.esm copied as an override and as a new record (its localized strings assigned as text, so they become new strings of the plugin's tables).",
+  "game": "fo4",
+  "strings": true,
+  "load": [
+    "Fallout4.esm",
+    "DLCworkshop01.esm"
+  ],
+  "commands": [
+    {"command": "elements.set", "params": {"form_id": "01000802", "file": "DLCworkshop01.esm", "path": "FULL", "value": "Oracle keyword"}},
+    {"command": "elements.set", "params": {"form_id": "01000805", "file": "DLCworkshop01.esm", "path": "FULL", "value": "Oracle Cage"}},
+    {"command": "elements.set", "params": {"form_id": "0100080A", "file": "DLCworkshop01.esm", "path": "DESC", "value": "A rating the oracle described."}},
+    {"command": "records.copy", "params": {"form_id": "0000000A", "from": "Fallout4.esm", "to": "DLCworkshop01.esm"}},
+    {"command": "records.copy", "params": {"form_id": "0000000A", "from": "Fallout4.esm", "to": "DLCworkshop01.esm", "as_new": true}}
+  ],
+  "save": [
+    "DLCworkshop01.esm"
+  ]
+}

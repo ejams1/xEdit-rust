@@ -1,0 +1,17 @@
+{
+  "description": "Localize plugin (mniNavLocalizationSwitchClick) on the oracle's delocalized plugin of sf1-strings-delocalize: every localized string becomes a new string of three new tables, with the IDs in the order the strings are gathered.",
+  "game": "sf1",
+  "strings": true,
+  "inputs_from": "sf1-strings-delocalize",
+  "rename": {"OracleLoc.esm": "SFBGS004.esm"},
+  "load": [
+    "Starfield.esm",
+    "OracleLoc.esm"
+  ],
+  "commands": [
+    {"command": "localization.localize", "params": {"file": "OracleLoc.esm"}}
+  ],
+  "save": [
+    "OracleLoc.esm"
+  ]
+}

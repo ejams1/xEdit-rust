@@ -103,6 +103,20 @@ Changing data (`mutates`, needs `--edit` or `--dry-run`):
 | `modgroups edit <name> [--file F] [--new-name N] [--item LINE]... [--add-current-crcs]` | `modgroups.edit` | Renames a mod group or replaces its items. Changes a file. |
 | `modgroups delete <name>... [--file F]` | `modgroups.delete` | Deletes mod groups. Changes files. |
 | `modgroups update-crcs [--no-add] [--no-update] [--module M]... [--modgroup NAME]...` | `modgroups.update_crcs` | Adds the current CRC32s of the modules to the items of mod groups. Changes files. |
+| `localization set <text> (--table T --id HEX \| --form-id ID --path P [--file F]) [--editor-text]` | `localization.set` | Changes the text of a string of a string table (the localization editor's Save). See "Localization". |
+| `localization export <table> [--output PATH]` | `localization.export` | Writes a table as text, an `[ID]` line and the text per string. |
+| `localization localize [--file F] [--translate-from T]... [--translate-to T]...` | `localization.localize` | "Localize plugin": the strings move into new tables, the plugin holds their IDs. |
+| `localization delocalize [--file F]` | `localization.delocalize` | "Delocalize plugin": the texts go into the plugin, the localized flag is cleared. |
+
+String tables (no `--edit` needed):
+
+| CLI | Registry name | What it does |
+|---|---|---|
+| `localization files [--file F] [--no-load]` | `localization.files` | The loaded string tables, as the localization editor lists them: name, path, count, `modified`, next ID. Loads the tables of the localized plugins first. |
+| `localization strings <table> [--offset N] [--limit N]` | `localization.strings` | The strings of a table with their IDs, in table order. |
+| `localization get (--table T --id HEX \| --form-id ID --path P [--file F])` | `localization.get` | One string, by table and ID or through the localized element that holds it (its table and ID are in the response). |
+| `localization languages` | `localization.languages` | The session's language and the languages and tables the data folder and its archives hold. |
+| `localization language <language> [--discard]` | `localization.language` | Switches the language of the tables (xEdit's Language menu); the records read their names again. |
 
 Sessions:
 
@@ -315,6 +329,23 @@ xedit --json --edit --game sse --load "<Data>\Dawnguard.esm" clean --quick --out
 xedit --json --game fo4 --load "<Data>\DLCRobot.esm" clean --itm --udr --dry-run
 ```
 
+## Localization
+
+A localized plugin (the localized flag of its header; Skyrim, Fallout 4, Fallout 76 and Starfield) holds string IDs where other plugins hold text, and the texts live in its three string tables, `Strings\<plugin>_<language>.STRINGS`, `.DLSTRINGS` (descriptions, book texts, quest log entries) and `.ILSTRINGS` (dialogue), loose or in the game's archives. The commands work as xEdit does:
+
+- **Editing a string.** `elements set` on a localized string of a localized plugin changes the text in the table (the ID stays); a string without an ID (ID 0, an empty text) or with an ID the table lacks gets a new string with the next free ID of the plugin's three tables (`AddValue`). `STRINGID:<hex>` as the value sets the ID itself. `records copy` into a localized plugin assigns the copied strings as text, so they become new strings of the target plugin's tables. `localization set` changes a string of a table directly, by table and ID or through an element; `--editor-text` stores the text as xEdit's editor memo gives it (CR LF line breaks and one at the end).
+- **Tables load lazily, as in xEdit.** A plugin's tables load on the first lookup of a string with an ID (any read of a name or a localized element). A new string for a plugin whose tables are not loaded makes three new, empty tables (an xEdit quirk): saving them would replace the plugin's real tables. Read a localized value of the plugin (or run `localization files`) before adding strings to it.
+- **Saving.** `save` writes the plugin and every modified table of it to the `Strings` folder next to the output (`strings` in the response, with a backup of an existing table in `<AppName>Edit Backups`). A table is written in xEdit's layout, every string once and in table order, so a game's own table, which shares the text of equal strings, grows when it is saved even unchanged; xEdit writes the same bytes.
+- **Localize and delocalize.** `localization localize` gives every localized string of a plugin that is not localized a new ID in new tables (in xEdit's order, the last record first) and sets the flag; with `--translate-from`/`--translate-to` (tables of the data folder's `Strings` folder, in pairs) a text found in the "from" tables takes the string at the same position of the "to" tables. `localization delocalize` puts the texts into the plugin and clears the flag. xEdit closes itself after either; save the plugin and load it again before editing further. The game master can not be (de)localized. A dry run counts `localizable` (and `translated`) strings.
+- **Language.** `--language` (xEdit's `-l:`) picks the tables' language at load (`English`, `En`, `French`, ...; the game's default otherwise). `localization language` switches in a session and is refused with `unsaved_strings` while a table has unsaved changes, unless `--discard`.
+- **Translate mode.** `--translate` loads in xEdit's translate mode: only translatable elements take part in the comparison (`conflicts`, `compare`), `elements set` edits only them, and the commands that change the structure of a plugin (`records copy|delete`, `elements add|remove`, `formids change|renumber`, `masters add|sort|clean`, `clean`, `records cleanup-injected`) fail with `translate_mode`.
+- Error codes: `unknown_table` (not a loaded table: see `localization files`), `unknown_string` (no such ID in the table), `not_localized` (the element is no localized string of a localized plugin), `invalid_state` (localizing a localized plugin, or the reverse), `unsaved_strings`, `translate_mode`.
+
+```
+xedit --json --game sse --load "<Data>\Dawnguard.esm" localization get --form-id 02000800 --path FULL
+xedit --json --edit --game sse --load "<Data>\ccBGSSSE025-AdvDSGS.esm" batch delocalize.json
+```
+
 ## Saving a plugin
 
 `save` runs `PrepareSave` and `WriteToStream` as upstream does: every unmodified record is copied as loaded, a modified record is rebuilt from its elements (and compressed again when its flag says so), and the file's CRC32 is computed on the result. The response reports `bytes`, `crc32`, `loaded_crc32`, `changed`, `written` and `backup`. A save of an untouched plugin equals the bytes xEdit's own GUI saves for every plugin of the corpus that the oracle saves (239 of 249 plugins; the rest are refusals the oracle gives too, and the Morrowind masters, which it can not save). That is not always the input file: xEdit drops some data on load (the `OFST` of a worldspace) and rewrites the header (the `HEDR` record count, `INCC`, the `ONAM` list of a master, the ESM flag of an `.esm`).
@@ -348,6 +379,7 @@ xedit --game fo4 --load "<Data>\DLCRobot.esm" --edit mcp
 
 ## Output
 
+Without `--json` a command prints its result as pretty JSON and an error as `error: <code>: <message>` on stderr with exit code 1. With `--json` it prints one envelope, `{"ok":true,"result":...}` or `{"ok":false,"error":{"code":"...","message":"..."}}`, always on stdout; `batch` puts one envelope per command in the `result` array (`{"ok", "command", "result" or "error"}`). Error codes are stable: `no_session` (no `--game`), `unknown_file`, `ambiguous_file`, `unknown_mod_group`, `ambiguous_mod_group`, `unknown_record`, `unknown_element`, `invalid_params`, `load_failed`, `unknown_command`, `edit_required`, `edit_failed`, `not_editable`, `not_removable`, `save_refused`, `unsupported`, `io`, `internal`, and the localization codes `unknown_table`, `unknown_string`, `not_localized`, `invalid_state`, `unsaved_strings`, `translate_mode`.
 Without `--json` a command prints its result as pretty JSON and an error as `error: <code>: <message>` on stderr with exit code 1. With `--json` it prints one envelope, `{"ok":true,"result":...}` or `{"ok":false,"error":{"code":"...","message":"..."}}`, always on stdout; `batch` puts one envelope per command in the `result` array (`{"ok", "command", "result" or "error"}`). Error codes are stable: `no_session` (no `--game`), `unknown_file`, `ambiguous_file`, `unknown_mod_group`, `ambiguous_mod_group`, `unknown_record`, `unknown_element`, `invalid_params`, `load_failed`, `unknown_command`, `edit_required`, `edit_failed`, `not_editable`, `not_removable`, `save_refused`, `unsupported`, `io`, `internal`.
 Without `--json` a command prints its result as pretty JSON and an error as `error: <code>: <message>` on stderr with exit code 1. With `--json` it prints one envelope, `{"ok":true,"result":...}` or `{"ok":false,"error":{"code":"...","message":"..."}}`, always on stdout; `batch` puts one envelope per command in the `result` array (`{"ok", "command", "result" or "error"}`). Error codes are stable: `no_session` (no `--game`), `unknown_file`, `ambiguous_file`, `unknown_record`, `unknown_element`, `invalid_params`, `load_failed`, `unknown_command`, `edit_required`, `edit_failed`, `not_editable`, `not_removable`, `save_refused`, `archive_failed`, `unsupported`, `io`, `internal`.
 
@@ -368,9 +400,9 @@ xedit --json --edit --game sse --load "<Data>\Skyrim.esm" save --no-backup --out
 
 ## Known gaps
 
-Behaviour a user can meet, as of phase 4 step 6. Each is an upstream behaviour not ported yet; say so rather than work around it silently.
+Behaviour a user can meet, as of phase 4 step 7. Each is an upstream behaviour not ported yet; say so rather than work around it silently.
 
-- **LString.** The string tables of a localized plugin are not written. Setting a localized string from text fails (`Can not assign to a localized string: writing the string tables is not ported yet`; only a `STRINGID:` text works), and `records copy` into a localized plugin copies the record with its localized strings empty (the `FULL` of a copied `NPC_` reads `""`). Check the strings of a copy before saving it.
+- **Strings.** The Fallout 4 DLC keep their string tables in `<plugin> - Main.ba2`, which the load does not read (it reads loose tables and `<plugin>.ba2`, `<plugin> - Interface.ba2`, `<plugin> - Localization.ba2`), so their strings show `<Error: No strings file ...>` unless the tables are loose in `Data\Strings`; editing such a string then makes new, empty tables. The `.cpoverride` code page of a table is read; the archive's files are listed sorted, not in archive order.
 - **Copy over an existing override.** xEdit's "...with overwriting" (`aAllowOverwrite`) is not ported: `records copy` returns the existing override unchanged. A partial form (`MakePartialForm`), template elements and aligned arrays can not be copied either.
 - **Sorted arrays.** A record that is rebuilt on save sorts its sorted arrays as upstream does (the subrecord arrays, and the sorted array values, `srsSorted` and `arrSorted`, at their first read by index or write after a change), and a master update (`masters add|sort|clean`) keeps them in their order as xEdit does; the responses of a topic are not sorted again after their FormIDs change (`DLCworkshop01.esm`: three `INFO` of one topic), so such a save can differ from xEdit's in their order.
 - **References.** The index has no "reachable" information (xEdit's "Build Reachable Info"), and a record whose references come from the cache takes only its editor ID and full name from it (its base record, grid cell and GUI names are read from the record when needed). The editor ID index of a file does not learn the records an edit adds.

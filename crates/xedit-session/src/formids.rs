@@ -200,6 +200,7 @@ pub struct FormIdsChangeResponse {
 }
 
 fn formids_change(session: &mut Session, request: FormIdsChangeRequest) -> Result<FormIdsChangeResponse, CommandError> {
+    crate::commands::refuse_in_translate_mode("formids.change")?;
     let _edit = DryRunEdit::new(request.dry_run);
     let record = session.record(&request.form_id, request.file.as_deref())?;
     let record = record_impl(&record)?;
@@ -579,6 +580,7 @@ fn formids_renumber(
     session: &mut Session,
     request: FormIdsRenumberRequest,
 ) -> Result<FormIdsRenumberResponse, CommandError> {
+    crate::commands::refuse_in_translate_mode("formids.renumber")?;
     let _edit = DryRunEdit::new(request.dry_run);
     let source = session.file(request.file.as_deref())?;
     if !source.get_is_editable() {

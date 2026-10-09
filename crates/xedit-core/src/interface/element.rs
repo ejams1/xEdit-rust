@@ -269,6 +269,10 @@ pub trait Element: Send + Sync {
     /// Whether the element stores an ID into the string tables.
     fn get_localized(&self) -> TriBool;
 
+    /// Upstream `SetLocalized`: whether the element stores an ID into the
+    /// string tables (`tbTrue`), its text (`tbFalse`), or as its file says.
+    fn set_localized(&self, _value: TriBool) {}
+
     fn get_conflict_priority(&self) -> ConflictPriority;
 
     fn get_dont_show(&self) -> bool;

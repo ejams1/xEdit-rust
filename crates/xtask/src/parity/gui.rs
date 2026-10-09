@@ -84,6 +84,10 @@ pub struct GuiResult {
     pub peak: Option<u64>,
     /// The message log of the main form as last read.
     pub log: String,
+    /// The private data folder, which holds what a close saved.
+    pub data: PathBuf,
+    /// The message log the GUI wrote on close (`close_after` only).
+    pub saved_log: Option<String>,
 }
 
 /// A dialog the run expects and how to answer it: the next visible window
@@ -107,6 +111,12 @@ pub struct Answer {
 pub struct GuiExtras {
     pub files: Vec<(PathBuf, Vec<u8>)>,
     pub answers: Vec<Answer>,
+    /// Close the main form once the script is done, so that the GUI saves
+    /// what is unsaved (`TfrmMain.FormClose` runs `SaveChanged`, without
+    /// its dialog in the script mode, one of `wbAutoModes`): the plugins and
+    /// the modified string tables go to the private data folder, and the
+    /// message log to `bin\<name>_log.txt` ([`GuiResult::saved_log`]).
+    pub close_after: bool,
 }
 
 /// The GUI executable of a game mode.
@@ -169,7 +179,7 @@ impl GuiRun<'_> {
 
     /// [`GuiRun::run`] with extra files and dialog answers.
     pub fn run_with(&self, extras: &GuiExtras) -> Result<GuiResult> {
-        let (mut command, _) = self.prepare()?;
+        let (mut command, data) = self.prepare()?;
         for (path, bytes) in &extras.files {
             let target = self.work.join(path);
             if let Some(parent) = target.parent() {
@@ -183,7 +193,12 @@ impl GuiRun<'_> {
         }
         let marker = self.work.join("done.txt");
         let mut log = String::new();
-        let peak = self.spawn_and_watch(command, Until::Marker(&marker), &extras.answers, &mut log)?;
+        let until = if extras.close_after {
+            Until::MarkerThenClose(&marker)
+        } else {
+            Until::Marker(&marker)
+        };
+        let peak = self.spawn_and_watch(command, until, &extras.answers, &mut log)?;
         let status = fs::read_to_string(self.work.join("status.txt"))
             .context("the script wrote no status")?
             .lines()
@@ -194,7 +209,19 @@ impl GuiRun<'_> {
             out: self.work.join("out"),
             peak,
             log,
+            data,
+            saved_log: if extras.close_after { Some(self.read_log()?) } else { None },
         })
+    }
+
+    /// The message log the GUI writes next to its executable on exit.
+    fn read_log(&self) -> Result<String> {
+        fs::read_dir(self.work.join("bin"))?
+            .filter_map(|entry| entry.ok().map(|entry| entry.path()))
+            .find(|path| path.to_string_lossy().ends_with("_log.txt"))
+            .map(|path| fs::read(path).map(|bytes| String::from_utf8_lossy(&bytes).into_owned()))
+            .transpose()?
+            .context("the GUI wrote no log")
     }
 
     /// Runs the quick auto clean mode of the edit tool mode on `target`
@@ -338,6 +365,9 @@ enum Until<'a> {
     Marker(&'a Path),
     /// The process exited (the `-autoexit` of the edit mode).
     Exit,
+    /// The script wrote its marker file; then the main form is closed and
+    /// the run ends once the GUI wrote its log (after `SaveChanged`).
+    MarkerThenClose(&'a Path),
 }
 
 /// Waits for the script's marker (or the exit), answering the module
@@ -359,7 +389,40 @@ fn watch(
     let mut answers = answers.iter();
     let mut next_answer = answers.next();
     let mut main_form = None;
+    let mut closing = false;
     loop {
+        if let Until::MarkerThenClose(marker) = until
+            && !closing
+            && marker.exists()
+        {
+            ensure!(
+                next_answer.is_none(),
+                "the oracle did not show the expected dialog [{}] \"{}\"",
+                next_answer.map(|a| a.class.as_str()).unwrap_or_default(),
+                next_answer.map(|a| a.title.as_str()).unwrap_or_default()
+            );
+            // The marker is written before the script returns.
+            std::thread::sleep(Duration::from_secs(2));
+            for window in visible_windows(child.id()) {
+                if window.class == "TfrmMain" {
+                    close_window(window.handle);
+                }
+            }
+            closing = true;
+        }
+        // `FormClose` writes the message log after `SaveChanged`; the 4.1.5q
+        // GUI then keeps raising exceptions in its message loop on the
+        // hidden desktop instead of exiting, so the log ends the run.
+        if closing
+            && let Until::MarkerThenClose(marker) = until
+            && let Some(bin) = marker.parent().map(|work| work.join("bin"))
+            && fs::read_dir(&bin)?
+                .filter_map(|entry| entry.ok())
+                .any(|entry| entry.file_name().to_string_lossy().ends_with("_log.txt"))
+        {
+            std::thread::sleep(Duration::from_secs(2));
+            return Ok(());
+        }
         if let Until::Marker(marker) = until
             && marker.exists()
         {
@@ -380,7 +443,7 @@ fn watch(
             return Ok(());
         }
         if let Some(code) = child.try_wait()? {
-            if let Until::Exit = until {
+            if matches!(until, Until::Exit) || closing {
                 return Ok(());
             }
             bail!("the oracle exited (exit code: {code}) before the script finished");
@@ -409,7 +472,7 @@ fn watch(
                         log_out.clone_from(&log);
                     }
                     let fatal = log.lines().find(|line| line.starts_with("Fatal:"));
-                    let closing = log.contains("You can close this application now.");
+                    let script_ended = log.contains("You can close this application now.");
                     if let Some(line) = fatal {
                         bail!("the oracle stopped: {line}");
                     }
@@ -422,7 +485,7 @@ fn watch(
                             tail(&log, 15)
                         );
                     }
-                    if closing && let Until::Marker(marker) = until {
+                    if script_ended && let Until::Marker(marker) | Until::MarkerThenClose(marker) = until {
                         // The marker is written before the script returns.
                         std::thread::sleep(Duration::from_secs(2));
                         if !marker.exists() {
@@ -638,6 +701,18 @@ pub(super) fn visible_windows(pid: u32) -> Vec<Window> {
 pub(super) fn visible_windows(_pid: u32) -> Vec<Window> {
     Vec::new()
 }
+
+/// Asks a window to close (`WM_CLOSE`), as its close button does.
+#[cfg(windows)]
+fn close_window(handle: isize) {
+    use windows_sys::Win32::Foundation::HWND;
+    use windows_sys::Win32::UI::WindowsAndMessaging::{PostMessageW, WM_CLOSE};
+    // SAFETY: a window handle of the process; WM_CLOSE takes no pointers.
+    unsafe { PostMessageW(handle as HWND, WM_CLOSE, 0, 0) };
+}
+
+#[cfg(not(windows))]
+fn close_window(_handle: isize) {}
 
 /// Clicks the button of a window whose caption is `caption`.
 #[cfg(windows)]

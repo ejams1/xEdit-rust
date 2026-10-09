@@ -491,6 +491,7 @@ fn run_oracle(
                 button: answer.button.clone(),
             })
             .collect(),
+        close_after: false,
     };
     let peak_file = runner
         .cache
