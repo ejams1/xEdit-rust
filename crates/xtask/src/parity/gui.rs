@@ -109,7 +109,6 @@ pub struct GuiExtras {
     pub answers: Vec<Answer>,
 }
 
-
 /// The GUI executable of a game mode.
 pub fn exe_name(mode: &str) -> &'static str {
     match mode.to_ascii_uppercase().as_str() {
@@ -653,7 +652,6 @@ pub(super) fn click_button(window: &Window, caption: &str) -> bool {
         // A VCL button, or a button of a system dialog (`MessageDlg` shows
         // one: class `#32770`).
         .find(|&child| matches!(win::class(child).as_str(), "TButton" | "Button") && win::text(child) == caption)
-
     else {
         return false;
     };
@@ -938,7 +936,6 @@ fn decode_memo_text(units: &[u16]) -> String {
         .map(char::from)
         .collect()
 }
-
 
 #[cfg(not(windows))]
 pub(super) fn main_form_log(_handle: isize) -> String {
