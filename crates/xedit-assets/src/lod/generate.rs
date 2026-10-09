@@ -1933,7 +1933,7 @@ pub fn split_tree_lod(env: &LodEnv, worldspace: &MainRecordRef, files: &[Arc<Fil
     let list_file_name = list.list_file_name();
     let folder = extract_file_path(&list_file_name);
     for container in xedit_core::container_handler::container_list().iter().rev() {
-        for name in xedit_core::container_handler::container_resource_list(container, &folder) {
+        for name in xedit_core::container_handler::container_resource_list(container, folder) {
             names.add(&name);
         }
     }
@@ -2001,7 +2001,7 @@ pub fn split_tree_lod(env: &LodEnv, worldspace: &MainRecordRef, files: &[Arc<Fil
     let split_path = format!(
         "{}Textures\\Terrain\\LODGen\\AtlasSplit_{}\\",
         env.output_path,
-        change_file_ext(&extract_file_name(&list.atlas_file_name()), "")
+        change_file_ext(extract_file_name(&list.atlas_file_name()), "")
     );
     for tree_type in &list.trees_list {
         let index = tree_type.index;
@@ -2014,11 +2014,11 @@ pub fn split_tree_lod(env: &LodEnv, worldspace: &MainRecordRef, files: &[Arc<Fil
             let tree_file_name = format!(
                 "{split_path}{}\\{}_{}.dds",
                 record.get_file().map(|file| file.get_name()).unwrap_or_default(),
-                change_file_ext(&extract_file_name(&model), ""),
+                change_file_ext(extract_file_name(&model), ""),
                 record.get_form_id().change_file_id(FileID::null()).to_string(false)
             );
             message(&format!("[{tree_file_name}] Saving billboard texture"));
-            force_directories(&extract_file_path(&tree_file_name));
+            force_directories(extract_file_path(&tree_file_name));
             list.save_from_atlas(index as usize, &tree_file_name)?;
             let ini_name = change_file_ext(&tree_file_name, ".txt");
             let mut ini = MemIniFile::load(std::path::Path::new(&ini_name));
