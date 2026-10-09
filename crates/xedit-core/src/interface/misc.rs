@@ -89,6 +89,12 @@ pub fn set_progress_callback(callback: Option<ProgressCallback>) {
     *PROGRESS_CALLBACK.write().unwrap() = callback;
 }
 
+/// The progress callback that is set, to restore it after a command that
+/// sets its own.
+pub fn progress_callback() -> Option<ProgressCallback> {
+    PROGRESS_CALLBACK.read().unwrap().clone()
+}
+
 /// Port of `wbProgress`: sends a status message to the progress callback.
 pub fn progress(status: &str) {
     let callback = PROGRESS_CALLBACK.read().unwrap().clone();

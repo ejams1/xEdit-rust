@@ -404,7 +404,7 @@ impl FileImpl {
     }
 
     /// Port of `GetGroupBySignature`: the top level group with the label.
-    pub(crate) fn group_by_signature(&self, signature: Signature) -> Option<Arc<GroupRecordImpl>> {
+    pub fn group_by_signature(&self, signature: Signature) -> Option<Arc<GroupRecordImpl>> {
         self.container.elements().iter().find_map(|element| {
             let group = element.as_element_impl()?.group_record_impl()?;
             (group.group_type() == 0 && group.gr_struct().label_signature() == signature).then_some(group)

@@ -125,6 +125,36 @@ enum Action {
         #[command(subcommand)]
         action: SniffAction,
     },
+    /// Generate the LOD of worldspaces as xEdit's LODGen mode does (lodgen.generate), with the LODGen form's options. Load every plugin of the load order with --load. Needs --edit unless --dry-run.
+    Lodgen {
+        /// The editor ID of a worldspace to generate LOD for; repeat for more. Without it the form's default.
+        #[arg(long = "worldspace", value_name = "EDITORID")]
+        worldspaces: Vec<String>,
+        /// An option of the LODGen form, NAME=VALUE (AtlasWidth=4096, BuildAtlas=0, ...); repeat for more.
+        #[arg(long = "set", value_name = "NAME=VALUE")]
+        set: Vec<String>,
+        /// The settings file of the options (<APP>LODGen.ini); read, and written back unless a dry run.
+        #[arg(long)]
+        settings: Option<String>,
+        /// The folder for the LOD files (-O:); the data folder by default.
+        #[arg(long)]
+        output: Option<String>,
+        /// The folder with LODGenx64.exe, Texconvx64.exe and the atlas maps (-S:).
+        #[arg(long)]
+        scripts: Option<String>,
+        /// The temporary folder (-T:).
+        #[arg(long)]
+        temp: Option<String>,
+        /// The data folder (-D:); the folder of the plugins by default.
+        #[arg(long)]
+        data: Option<String>,
+        /// The game ini whose archive lists load (-I:).
+        #[arg(long)]
+        game_ini: Option<String>,
+        /// List the worldspaces and options, but generate nothing.
+        #[arg(long)]
+        dry_run: bool,
+    },
     /// Run a command by name.
     Call {
         /// Command name as listed by `xedit schema`, for example system.version.
@@ -980,6 +1010,32 @@ fn command_of(action: Action) -> Result<(String, Value), CommandError> {
                 )
             }
         },
+        Action::Lodgen {
+            worldspaces,
+            set,
+            settings,
+            output,
+            scripts,
+            temp,
+            data,
+            game_ini,
+            dry_run,
+        } => {
+            let mut options = serde_json::Map::new();
+            for pair in set {
+                let (name, value) = pair
+                    .split_once('=')
+                    .ok_or_else(|| CommandError::new("invalid_params", format!("--set {pair}: expected NAME=VALUE")))?;
+                options.insert(name.to_owned(), json!(value));
+            }
+            (
+                "lodgen.generate".to_owned(),
+                json!({
+                    "worldspaces": worldspaces, "options": options, "settings": settings, "output": output,
+                    "scripts": scripts, "temp": temp, "data": data, "game_ini": game_ini, "dry_run": dry_run
+                }),
+            )
+        }
         Action::Call { name, params } => {
             let params = serde_json::from_str(&params)
                 .map_err(|e| CommandError::new("invalid_params", format!("--params is not valid JSON: {e}")))?;

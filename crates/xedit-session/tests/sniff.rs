@@ -102,7 +102,7 @@ fn run_with_options_dry_run_and_log() {
         "invalid_params"
     );
     let mut not_ported = params(true);
-    not_ported["operation"] = json!("Optimize mesh");
+    not_ported["operation"] = json!("Update MOPP code");
     assert_eq!(
         registry.call(&mut session, "sniff.run", not_ported).unwrap_err().code,
         "unsupported"

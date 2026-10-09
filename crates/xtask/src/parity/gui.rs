@@ -118,7 +118,7 @@ pub fn remove_work(work: &Path) {
 }
 
 /// Windows path text with backslashes, as the GUI needs it for `-D:`.
-fn windows_path(path: &Path) -> String {
+pub(super) fn windows_path(path: &Path) -> String {
     path.to_string_lossy().replace('/', "\\")
 }
 
@@ -310,7 +310,7 @@ fn watch(child: &mut HiddenChild, work: &Path, timeout: Duration, hang_timeout: 
 }
 
 /// The last `lines` lines of a text.
-fn tail(text: &str, lines: usize) -> String {
+pub(super) fn tail(text: &str, lines: usize) -> String {
     let all: Vec<&str> = text.lines().collect();
     all[all.len().saturating_sub(lines)..].join(
         "
@@ -319,14 +319,14 @@ fn tail(text: &str, lines: usize) -> String {
 }
 
 /// A visible top level window of a process.
-struct Window {
-    handle: isize,
-    class: String,
-    title: String,
+pub(super) struct Window {
+    pub(super) handle: isize,
+    pub(super) class: String,
+    pub(super) title: String,
     /// Whether it shows.
-    visible: bool,
+    pub(super) visible: bool,
     /// The texts of its visible child windows (labels, buttons).
-    texts: Vec<String>,
+    pub(super) texts: Vec<String>,
 }
 
 #[cfg(windows)]
@@ -396,7 +396,7 @@ mod win {
 }
 
 #[cfg(windows)]
-fn visible_windows(pid: u32) -> Vec<Window> {
+pub(super) fn visible_windows(pid: u32) -> Vec<Window> {
     use windows_sys::Win32::Foundation::HWND;
     use windows_sys::Win32::System::StationsAndDesktops::EnumDesktopWindows;
     use windows_sys::Win32::UI::WindowsAndMessaging::EnumChildWindows;
@@ -436,13 +436,13 @@ fn visible_windows(pid: u32) -> Vec<Window> {
 }
 
 #[cfg(not(windows))]
-fn visible_windows(_pid: u32) -> Vec<Window> {
+pub(super) fn visible_windows(_pid: u32) -> Vec<Window> {
     Vec::new()
 }
 
 /// Clicks the button of a window whose caption is `caption`.
 #[cfg(windows)]
-fn click_button(window: &Window, caption: &str) -> bool {
+pub(super) fn click_button(window: &Window, caption: &str) -> bool {
     use windows_sys::Win32::Foundation::HWND;
     use windows_sys::Win32::UI::WindowsAndMessaging::{BM_CLICK, EnumChildWindows, SendMessageW};
     let mut children: Vec<HWND> = Vec::new();
@@ -459,10 +459,82 @@ fn click_button(window: &Window, caption: &str) -> bool {
     true
 }
 
+/// The items of the first check list box of a window (`TCheckListBox`),
+/// with their handle.
+#[cfg(windows)]
+pub(super) fn check_list_items(window: &Window) -> Option<(isize, Vec<String>)> {
+    use windows_sys::Win32::Foundation::HWND;
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        EnumChildWindows, LB_GETCOUNT, LB_GETTEXT, LB_GETTEXTLEN, SMTO_ABORTIFHUNG, SendMessageTimeoutW,
+    };
+    let mut children: Vec<HWND> = Vec::new();
+    // SAFETY: the callback only pushes into the vector passed as `LPARAM`.
+    unsafe { EnumChildWindows(window.handle as HWND, Some(win::collect), (&raw mut children) as isize) };
+    let list = children
+        .into_iter()
+        .find(|&child| win::class(child) == "TCheckListBox")?;
+    let send = |message: u32, wparam: usize, lparam: isize| -> Option<usize> {
+        let mut result = 0usize;
+        // SAFETY: the messages sent here take no pointers but LB_GETTEXT's,
+        // whose buffer the caller sizes from LB_GETTEXTLEN.
+        let sent =
+            unsafe { SendMessageTimeoutW(list, message, wparam, lparam, SMTO_ABORTIFHUNG, 2000, &raw mut result) };
+        (sent != 0).then_some(result)
+    };
+    let count = send(LB_GETCOUNT, 0, 0)?;
+    let mut items = Vec::new();
+    for index in 0..count {
+        let len = send(LB_GETTEXTLEN, index, 0)?;
+        let mut buffer = vec![0u16; len + 1];
+        let copied = send(LB_GETTEXT, index, buffer.as_mut_ptr() as isize)?;
+        items.push(String::from_utf16_lossy(&buffer[..copied.min(len)]));
+    }
+    Some((list as isize, items))
+}
+
+#[cfg(not(windows))]
+pub(super) fn check_list_items(_window: &Window) -> Option<(isize, Vec<String>)> {
+    None
+}
+
+/// Toggles the check box of an item of a `TCheckListBox`: the item is
+/// selected and a space typed, which `TCheckListBox.KeyPress` takes as a
+/// click on the check box of the selected item.
+#[cfg(windows)]
+pub(super) fn toggle_check_list_item(list: isize, index: usize) {
+    use windows_sys::Win32::Foundation::HWND;
+    use windows_sys::Win32::UI::WindowsAndMessaging::{LB_SETCURSEL, SMTO_ABORTIFHUNG, SendMessageTimeoutW, WM_CHAR};
+    let mut result = 0usize;
+    // SAFETY: LB_SETCURSEL and WM_CHAR take no pointers.
+    unsafe {
+        SendMessageTimeoutW(
+            list as HWND,
+            LB_SETCURSEL,
+            index,
+            0,
+            SMTO_ABORTIFHUNG,
+            2000,
+            &raw mut result,
+        );
+        SendMessageTimeoutW(
+            list as HWND,
+            WM_CHAR,
+            0x20,
+            0x0039_0001,
+            SMTO_ABORTIFHUNG,
+            2000,
+            &raw mut result,
+        );
+    }
+}
+
+#[cfg(not(windows))]
+pub(super) fn toggle_check_list_item(_list: isize, _index: usize) {}
+
 /// The text of the message log of the main form: the first memo below
 /// it. Read with a timeout, as the GUI thread may be busy loading.
 #[cfg(windows)]
-fn main_form_log(handle: isize) -> String {
+pub(super) fn main_form_log(handle: isize) -> String {
     use windows_sys::Win32::Foundation::HWND;
     use windows_sys::Win32::UI::WindowsAndMessaging::{
         EnumChildWindows, SMTO_ABORTIFHUNG, SendMessageTimeoutW, WM_GETTEXT, WM_GETTEXTLENGTH,
@@ -496,16 +568,37 @@ fn main_form_log(handle: isize) -> String {
     if sent == 0 {
         return String::new();
     }
-    String::from_utf16_lossy(&buffer[..copied.min(len)])
+    decode_window_text(&buffer[..copied.min(len)])
+}
+
+/// The text of a window message: UTF-16, where a run of ANSI bytes read
+/// as UTF-16 (the header the LODGen mode puts at the top of its log comes
+/// that way) is taken as the bytes it is.
+pub(super) fn decode_window_text(units: &[u16]) -> String {
+    let mut text = String::new();
+    let mut at = 0;
+    while at < units.len() {
+        let run = units[at..].iter().take_while(|&&unit| unit >= 0x100).count();
+        if run >= 8 {
+            let bytes: Vec<u8> = units[at..at + run].iter().flat_map(|unit| unit.to_le_bytes()).collect();
+            text.push_str(&String::from_utf8_lossy(&bytes));
+            at += run;
+        } else {
+            let end = at + run.max(1);
+            text.push_str(&String::from_utf16_lossy(&units[at..end]));
+            at = end;
+        }
+    }
+    text
 }
 
 #[cfg(not(windows))]
-fn main_form_log(_handle: isize) -> String {
+pub(super) fn main_form_log(_handle: isize) -> String {
     String::new()
 }
 
 #[cfg(not(windows))]
-fn click_button(_window: &Window, _caption: &str) -> bool {
+pub(super) fn click_button(_window: &Window, _caption: &str) -> bool {
     false
 }
 
@@ -545,5 +638,14 @@ mod tests {
         assert!(simple_plugins_txt("TES5"));
         assert!(!simple_plugins_txt("SSE"));
         assert!(!simple_plugins_txt("FO4"));
+    }
+}
+
+#[cfg(test)]
+mod decode_tests {
+    #[test]
+    fn ansi_bytes_read_as_wide_text_decode() {
+        let units: Vec<u16> = "但䰴䑏敇⁮⸴⸱焵砠㐶".encode_utf16().collect();
+        assert_eq!(super::decode_window_text(&units), "FO4LODGen 4.1.5q x64");
     }
 }

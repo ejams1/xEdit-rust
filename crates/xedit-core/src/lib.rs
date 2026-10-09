@@ -7,6 +7,7 @@
 pub mod container_handler;
 pub mod delphi;
 pub mod half_float;
+pub mod helpers;
 pub mod implementation;
 pub mod interface;
 pub mod localization;
