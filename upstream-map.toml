@@ -251,12 +251,14 @@ rust = "crates/xedit-assets/src/sniff/proc_add_bounding_box.rs"
 note = "The frame is the processor's fields with the .dfm defaults (on_show); checked by cargo xtask parity sniff."
 
 [units."Sniff/Proc/ProcAddFacialAnim.pas"]
-status = "pending"
-note = "Not ported yet: phase 5 step 5, on the pattern of the porting-pascal-unit skill (Sniff processors)."
+status = "ported"
+rust = "crates/xedit-assets/src/sniff/proc_add_facial_anim.rs"
+note = "The frame is the processor's fields with the .dfm defaults (on_show); checked by cargo xtask parity sniff."
 
 [units."Sniff/Proc/ProcAddHeadtrackingAnim.pas"]
-status = "pending"
-note = "Not ported yet: phase 5 step 5, on the pattern of the porting-pascal-unit skill (Sniff processors)."
+status = "ported"
+rust = "crates/xedit-assets/src/sniff/proc_add_headtracking_anim.rs"
+note = "The frame is the processor's fields with the .dfm defaults (on_show); checked by cargo xtask parity sniff."
 
 [units."Sniff/Proc/ProcAddLODNode.pas"]
 status = "ported"
@@ -283,8 +285,9 @@ rust = "crates/xedit-assets/src/sniff/proc_anim_quadratic_to_linear.rs"
 note = "The frame is the processor's fields with the .dfm defaults (on_show); checked by cargo xtask parity sniff."
 
 [units."Sniff/Proc/ProcAnimSkeletonDeath.pas"]
-status = "pending"
-note = "Not ported yet: phase 5 step 5, on the pattern of the porting-pascal-unit skill (Sniff processors)."
+status = "ported"
+rust = "crates/xedit-assets/src/sniff/proc_anim_skeleton_death.rs"
+note = "The frame is the processor's fields with the .dfm defaults (on_show); the operation reads death.kf and the skeleton.nif beside it from the input folder, which the harness gives it (cargo xtask parity sniff, skeleton-death cases)."
 
 [units."Sniff/Proc/ProcApplyTransform.pas"]
 status = "ported"
@@ -297,9 +300,9 @@ rust = "crates/xedit-assets/src/sniff/proc_attach_parent.rs"
 note = "The frame is the processor's fields with the .dfm defaults (on_show); checked by cargo xtask parity sniff."
 
 [units."Sniff/Proc/ProcCheckForErrors.pas"]
-status = "pending"
+status = "ported"
 rust = "crates/xedit-assets/src/sniff/proc_check_for_errors.rs"
-note = "Every mesh check. Missing: the texture checks CheckDDS and CheckSSEDdsFormat (phase 5 step 5; wbDDS is ported in xedit_io::dds: is_dds, dxgi, d3dfmt, D3D_NODXGI, d3dfmt_format_name and the header record); a DDS file fails with a message while they are on."
+note = "Every check, the mesh ones and the texture ones (CheckDDS and CheckSSEDdsFormat, on the header of wbDDS as xedit_io::dds); checked by cargo xtask parity sniff (the check-errors cases, check-errors-dds for the texture checks). DEVIATION: the morph model comparison (`The morph model is not the same as the model file`) never runs upstream (its file name is empty) and was not ported."
 
 [units."Sniff/Proc/ProcCollapseLinksArrays.pas"]
 status = "not-ported"
@@ -311,12 +314,14 @@ rust = "crates/xedit-assets/src/sniff/proc_convert_root_node.rs"
 note = "The frame is the processor's fields with the .dfm defaults (on_show); checked by cargo xtask parity sniff."
 
 [units."Sniff/Proc/ProcCopyControlledBlocks.pas"]
-status = "pending"
-note = "Not ported yet: phase 5 step 5, on the pattern of the porting-pascal-unit skill (Sniff processors)."
+status = "ported"
+rust = "crates/xedit-assets/src/sniff/proc_copy_controlled_blocks.rs"
+note = "The frame is the processor's fields with the .dfm defaults (on_show); checked by cargo xtask parity sniff."
 
 [units."Sniff/Proc/ProcCopyGeometryBlocks.pas"]
-status = "pending"
-note = "Not ported yet: phase 5 step 5, on the pattern of the porting-pascal-unit skill (Sniff processors)."
+status = "ported"
+rust = "crates/xedit-assets/src/sniff/proc_copy_geometry_blocks.rs"
+note = "The frame is the processor's fields with the .dfm defaults (on_show); checked by cargo xtask parity sniff. The single file mode loads the source once in OnStart and reads it under a lock (upstream shares it across the threads); a source that fails to load stops the run there."
 
 [units."Sniff/Proc/ProcCopyPriorities.pas"]
 status = "ported"
@@ -329,8 +334,9 @@ rust = "crates/xedit-assets/src/sniff/proc_find_draw_calls.rs"
 note = "The frame is the processor's fields with the .dfm defaults (on_show); checked by cargo xtask parity sniff."
 
 [units."Sniff/Proc/ProcFindTextures.pas"]
-status = "pending"
-note = "Phase 5 step 5. wbDDS is ported (xedit_io::dds: is_dds, dxgi, dxgi_format_name, bits_per_pixel, is_compressed, has_alpha, is_cube_map, is_xbox, d3dfmt, d3dfmt_format_name, MAX_HEADER_SIZE, the header record), and the entry of a texture archive has the DDS record (ProcFileObject.file_entry.dds, is_cube_map, dxgi_format_name)."
+status = "ported"
+rust = "crates/xedit-assets/src/sniff/proc_find_textures.rs"
+note = "The frame is the processor's fields with the .dfm defaults (on_show; the value list editor rows read sResolution, sMipMaps, sHas Alpha, sCubeMap, sBitsPerPixel, sBlock Compressed, sDX10+ Supported, sXBOX Texture); checked by cargo xtask parity sniff. The properties of a file of a texture archive come from its DDS record, those of a loose or archived file from the header read with wbDDS (xedit_io::dds); the header dump is the TwbDDSFile data format of data_format_misc."
 
 [units."Sniff/Proc/ProcFindUVs.pas"]
 status = "ported"
@@ -343,8 +349,9 @@ rust = "crates/xedit-assets/src/sniff/proc_fix_exported_kf_anim.rs"
 note = "The frame is the processor's fields with the .dfm defaults (on_show); checked by cargo xtask parity sniff."
 
 [units."Sniff/Proc/ProcGroupShapes.pas"]
-status = "pending"
-note = "Not ported yet: phase 5 step 5, on the pattern of the porting-pascal-unit skill (Sniff processors)."
+status = "ported"
+rust = "crates/xedit-assets/src/sniff/proc_group_shapes.rs"
+note = "The frame is the processor's fields with the .dfm defaults (on_show); checked by cargo xtask parity sniff."
 
 [units."Sniff/Proc/ProcHavokInfo.pas"]
 status = "ported"
@@ -367,8 +374,9 @@ rust = "crates/xedit-assets/src/sniff/proc_inertia_update.rs"
 note = "The frame is the processor's fields with the .dfm defaults (on_show); checked by cargo xtask parity sniff."
 
 [units."Sniff/Proc/ProcJamAnim.pas"]
-status = "pending"
-note = "Not ported yet: phase 5 step 5, on the pattern of the porting-pascal-unit skill (Sniff processors)."
+status = "ported"
+rust = "crates/xedit-assets/src/sniff/proc_jam_anim.rs"
+note = "The frame is the processor's fields with the .dfm defaults (on_show); checked by cargo xtask parity sniff."
 
 [units."Sniff/Proc/ProcJsonConverter.pas"]
 status = "ported"
@@ -381,8 +389,9 @@ rust = "crates/xedit-assets/src/sniff/proc_merge_properties.rs"
 note = "The frame is the processor's fields with the .dfm defaults (on_show); checked by cargo xtask parity sniff."
 
 [units."Sniff/Proc/ProcMergeShapes.pas"]
-status = "pending"
-note = "Not ported yet: phase 5 step 5, on the pattern of the porting-pascal-unit skill (Sniff processors)."
+status = "ported"
+rust = "crates/xedit-assets/src/sniff/proc_merge_shapes.rs"
+note = "The frame is the processor's fields with the .dfm defaults (on_show); checked by cargo xtask parity sniff."
 
 [units."Sniff/Proc/ProcMoppUpdate.pas"]
 status = "not-ported"
@@ -473,8 +482,9 @@ rust = "crates/xedit-assets/src/sniff/proc_update_bounds.rs"
 note = "The frame is the processor's fields with the .dfm defaults (on_show); checked by cargo xtask parity sniff."
 
 [units."Sniff/Proc/ProcVertexPaint.pas"]
-status = "pending"
-note = "Not ported yet: phase 5 step 5, on the pattern of the porting-pascal-unit skill (Sniff processors)."
+status = "ported"
+rust = "crates/xedit-assets/src/sniff/proc_vertex_paint.rs"
+note = "The frame is the processor's fields with the .dfm defaults (on_show); checked by cargo xtask parity sniff."
 
 [units."Sniff/Proc/ProcWallsReflectionFlag.pas"]
 status = "ported"
@@ -482,8 +492,9 @@ rust = "crates/xedit-assets/src/sniff/proc_walls_reflection_flag.rs"
 note = "The frame is the processor's fields with the .dfm defaults (on_show); checked by cargo xtask parity sniff."
 
 [units."Sniff/Proc/ProcWeiExplosion.pas"]
-status = "pending"
-note = "Not ported yet: phase 5 step 5, on the pattern of the porting-pascal-unit skill (Sniff processors)."
+status = "ported"
+rust = "crates/xedit-assets/src/sniff/proc_wei_explosion.rs"
+note = "The frame is the processor's fields with the .dfm defaults (on_show); checked by cargo xtask parity sniff."
 
 [units."Sniff/SniffProcessor.pas"]
 status = "ported"

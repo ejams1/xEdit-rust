@@ -265,12 +265,14 @@ command = "sniff.run"
 note = "The types a block type converts to (sNodeFrom, sNodeTo)."
 
 [gui."Sniff/Proc/ProcCopyControlledBlocks.dfm:btnBrowse:OnClick"]
-status = "pending"
+status = "presentation"
 source = "btnBrowseClick"
+note = "Enables, fills or browses controls of the frame; sniff.run takes the settings."
 
 [gui."Sniff/Proc/ProcCopyGeometryBlocks.dfm:btnBrowse:OnClick"]
-status = "pending"
+status = "presentation"
 source = "btnBrowseClick"
+note = "Enables, fills or browses controls of the frame; sniff.run takes the settings."
 
 [gui."Sniff/Proc/ProcCopyPriorities.dfm:btnBrowse:OnClick"]
 status = "presentation"
@@ -278,20 +280,25 @@ source = "btnBrowseClick"
 note = "Enables, fills or browses controls of the frame; sniff.run takes the settings."
 
 [gui."Sniff/Proc/ProcFindTextures.dfm:edFormatFilter:OnChange"]
-status = "pending"
+status = "presentation"
 source = "edFormatFilterChange"
+note = "Filters the format list of the frame; the checked formats are the sFormats setting."
 
 [gui."Sniff/Proc/ProcFindTextures.dfm:lvFormat:OnItemChecked"]
-status = "pending"
+status = "covered"
 source = "lvFormatItemChecked"
+command = "sniff.run"
+note = "The DXGI formats the report keeps (sFormats)."
 
 [gui."Sniff/Proc/ProcFindTextures.dfm:mniCheckAll:OnClick"]
-status = "pending"
+status = "presentation"
 source = "mniCheckAllClick"
+note = "Checks or unchecks every format of the list; sniff.run takes the checked ones (sFormats)."
 
 [gui."Sniff/Proc/ProcFindTextures.dfm:mniUncheckAll:OnClick"]
-status = "pending"
+status = "presentation"
 source = "mniCheckAllClick"
+note = "Checks or unchecks every format of the list; sniff.run takes the checked ones (sFormats)."
 
 [gui."Sniff/Proc/ProcHavokSearchMaterial.dfm:edReplace:OnChange"]
 status = "covered"
@@ -392,32 +399,43 @@ source = "miPresetRemoveClick"
 note = "The presets fill the controls of the frame; sniff.run takes the settings themselves."
 
 [gui."Sniff/Proc/ProcVertexPaint.dfm:btnColor2Select:OnClick"]
-status = "pending"
+status = "presentation"
 source = "btnColorSelectClick"
+note = "Browses for a colour of the frame; sniff.run takes the text (sColor2)."
 
 [gui."Sniff/Proc/ProcVertexPaint.dfm:btnColorSelect:OnClick"]
-status = "pending"
+status = "presentation"
 source = "btnColorSelectClick"
+note = "Browses for a colour of the frame; sniff.run takes the text (sColor)."
 
 [gui."Sniff/Proc/ProcVertexPaint.dfm:lblHelper:OnClick"]
-status = "pending"
+status = "presentation"
 source = "lblHelperClick"
+note = "Opens a help form of the frame."
 
 [gui."Sniff/Proc/ProcVertexPaint.dfm:rbAdjustColors:OnClick"]
-status = "pending"
+status = "covered"
 source = "rbSetColorsClick"
+command = "sniff.run"
+note = "Selects the mode of the operation (iMode)."
 
 [gui."Sniff/Proc/ProcVertexPaint.dfm:rbRemoveColors:OnClick"]
-status = "pending"
+status = "covered"
 source = "rbSetColorsClick"
+command = "sniff.run"
+note = "Selects the mode of the operation (iMode)."
 
 [gui."Sniff/Proc/ProcVertexPaint.dfm:rbReplaceColor:OnClick"]
-status = "pending"
+status = "covered"
 source = "rbSetColorsClick"
+command = "sniff.run"
+note = "Selects the mode of the operation (iMode)."
 
 [gui."Sniff/Proc/ProcVertexPaint.dfm:rbSetColors:OnClick"]
-status = "pending"
+status = "covered"
 source = "rbSetColorsClick"
+command = "sniff.run"
+note = "Selects the mode of the operation (iMode)."
 
 [gui."Sniff/frmMain.dfm:FormMain:OnClose"]
 status = "presentation"
