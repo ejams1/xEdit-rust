@@ -181,6 +181,8 @@ note = "CRC32, the lookup hash (xxHash64) and XXH32/XXH64, the name hashes of th
 
 [units."Core/wbHelpers.pas"]
 status = "pending"
+rust = "crates/xedit-core/src/helpers.rs"
+note = "MakeDataFileName, FindBSAs and HasBSAs (the archives of the game ini and of the plugins) and ExecuteCaptureConsoleOutput (the console program whose output becomes progress messages) are ported. Pending: wbDistance and the sibling-record searches (wbStringToSignatures, wbGetSiblingREFRsWithin, wbGetSiblingRecords), the element JSON serialization, wbLeveledListCheckCircular, the file name helpers (wbExtractNameFromPath, wbStripDotGhost, FullPathToFilename, wbExpandFileName, FindMatchText, IsFileCC, DeleteDirectory), CheckAddFilesToString, wbCRC32App, the DDS bitmaps, and the helpers of the GUI, the shell and the scripts (wbFlipBitmap, wbAlphaBlend, the fonts, wbIsAeroEnabled, wbGetLastWriteTime, the extension associations, wbCodeBlock, wbVarArray, the string and pointer array helpers)."
 
 [units."Core/wbImplementation.pas"]
 status = "pending"
