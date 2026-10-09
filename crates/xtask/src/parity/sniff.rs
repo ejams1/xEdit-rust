@@ -32,6 +32,12 @@
 //! files of each archive are unpacked into a folder, which is the input of
 //! both (the loose file path of Sniff); without it the archive is.
 //!
+//! A case whose operation copies from a source folder (`Prep`) gets one
+//! made by the port itself over the unpacked files: `{source}` in its
+//! settings is that folder and `{source-file}` the first file it holds. A
+//! case whose operation reads files beside the input (`Add blocks from
+//! skeleton`) gets an input folder of its own (`Prep::DeathSkeleton`).
+//!
 //! Sniff starts hidden on the harness's own desktop (`hidden.rs`). The work
 //! folder of an archive is removed once it compares equal, and only the
 //! outputs that differ stay otherwise, unless `--keep`.
@@ -543,8 +549,7 @@ const CASES: &[Case] = &[
         name: "find-textures-filter",
         operation: "Find textures",
         settings: &[
-            ("sFormats", "71"),
-            ("sResolution", ">= 256"),
+            ("sFormats", "71,77"),
             ("sMipMaps", "Yes"),
             ("sBlock Compressed", "Yes"),
         ],
@@ -916,9 +921,10 @@ fn settings_text(case: &Case, log: &Path, source: &Path, source_file: &Path) -> 
     text
 }
 
-/// Whether a case names the prepared source folder.
+/// Whether a case names the prepared source folder: `{source}` or the
+/// `{source-file}` of its first file.
 fn uses_source(case: &Case) -> bool {
-    case.settings.iter().any(|(_, value)| value.contains("{source}"))
+    case.settings.iter().any(|(_, value)| value.contains("{source"))
 }
 
 /// The first file of the prepared source folder, by path: the input of a

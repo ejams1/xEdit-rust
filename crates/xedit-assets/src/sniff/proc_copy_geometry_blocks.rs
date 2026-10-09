@@ -198,8 +198,16 @@ impl Proc for ProcCopyGeometryBlocks {
                     }
 
                     if self.copy_texture_set {
-                        let src_set = link(src_tree, src_shader, "Texture Set")?;
-                        let dst_set = link(tree, dst_shader, "Texture Set")?;
+                        // The elements may be missing or link to nothing,
+                        // which upstream checks.
+                        let src_set = match src_tree.elements(src_shader, "Texture Set")? {
+                            Some(element) => src_tree.links_to(element)?,
+                            None => None,
+                        };
+                        let dst_set = match tree.elements(dst_shader, "Texture Set")? {
+                            Some(element) => tree.links_to(element)?,
+                            None => None,
+                        };
                         if let (Some(src_set), Some(dst_set)) = (src_set, dst_set) {
                             tree.assign_from(dst_set, src_tree, Some(src_set))?;
                         }
