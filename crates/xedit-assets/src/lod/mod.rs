@@ -25,7 +25,7 @@ pub use atlas::{
     BinBlock, BinPacker, SourceAtlasTexture, build_atlas, build_atlas_from_atlas_map, build_atlas_from_textures_list,
     get_uv_range_textures_list, prepare_image_alpha,
 };
-pub use generate::{generate_lod_fo4, generate_lod_tes4, generate_lod_tes5, worldspaces_for_lod};
+pub use generate::{generate_lod_fo4, generate_lod_tes4, generate_lod_tes5, split_tree_lod, worldspaces_for_lod};
 pub use trees::{LodSettings, TreeBlock, TreeList, TreeRef, TreeType};
 
 use std::cmp::Ordering;

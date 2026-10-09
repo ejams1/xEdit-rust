@@ -658,52 +658,71 @@ status = "pending"
 source = "FormKeyDown"
 
 [gui."xEdit/xeLODGenForm.dfm:SelectAll1:OnClick"]
-status = "pending"
+status = "covered"
 source = "SelectAll1Click"
+command = "lodgen.generate"
+note = "The worldspaces parameter names the worldspaces to check."
 
 [gui."xEdit/xeLODGenForm.dfm:SelectNone1:OnClick"]
-status = "pending"
+status = "covered"
 source = "SelectNone1Click"
+command = "lodgen.generate"
+note = "The worldspaces parameter names the worldspaces to check."
 
 [gui."xEdit/xeLODGenForm.dfm:btnSplitTreesLOD:OnClick"]
-status = "pending"
+status = "covered"
 source = "btnSplitTreesLODClick"
+command = "lodgen.generate"
+note = "split_trees (xedit lodgen --split-trees) runs wbSplitTreeLOD for the worldspaces; checked by cargo xtask parity lodgen (the harness holds Shift for the oracle)."
 
 [gui."xEdit/xeLODGenForm.dfm:cbBuildAtlas:OnClick"]
-status = "pending"
+status = "covered"
 source = "cbBuildAtlasClick"
+command = "lodgen.generate"
+note = "Fallout 3 and New Vegas always build the atlas (the settings the form forces for the Fallouts)."
 
 [gui."xEdit/xeLODGenForm.dfm:cbChunk:OnClick"]
-status = "pending"
+status = "presentation"
 source = "cbChunkClick"
+note = "Enables the chunk fields; the Chunk, LODLevel and LODX to LODY2 options of lodgen.generate."
 
 [gui."xEdit/xeLODGenForm.dfm:cbObjectsLOD:OnClick"]
-status = "pending"
+status = "presentation"
 source = "cbObjectsLODClick"
+note = "Shows and enables the objects options; the options of lodgen.generate."
 
 [gui."xEdit/xeLODGenForm.dfm:cbTreesLOD:OnClick"]
-status = "pending"
+status = "presentation"
 source = "cbObjectsLODClick"
+note = "Shows and enables the trees options; the options of lodgen.generate."
 
 [gui."xEdit/xeLODGenForm.dfm:cmbCompDiffuse:OnChange"]
-status = "pending"
+status = "presentation"
 source = "cmbCompDiffuseChange"
+note = "Enables the alpha threshold options; the options of lodgen.generate."
 
 [gui."xEdit/xeLODGenForm.dfm:frmLODGen:OnClose"]
-status = "pending"
+status = "covered"
 source = "FormClose"
+command = "lodgen.generate"
+note = "Without a checked worldspace the command fails with the form message (Select worldspace(s) for LOD generation)."
 
 [gui."xEdit/xeLODGenForm.dfm:frmLODGen:OnCreate"]
-status = "pending"
+status = "covered"
 source = "FormCreate"
+command = "lodgen.generate"
+note = "The values of the combo boxes are the values the options accept."
 
 [gui."xEdit/xeLODGenForm.dfm:frmLODGen:OnKeyDown"]
-status = "pending"
+status = "presentation"
 source = "FormKeyDown"
+note = "Escape closes the form."
 
 [gui."xEdit/xeLODGenForm.dfm:frmLODGen:OnShow"]
-status = "pending"
+status = "covered"
 source = "FormShow"
+command = "lodgen.generate"
+note = "The worldspace list and its default checks (the response lists them)."
 
 [gui."xEdit/xeLegendForm.dfm:dgLegend:OnDrawCell"]
 status = "pending"
@@ -1416,8 +1435,10 @@ status = "pending"
 source = "mniNavFilterRemoveClick"
 
 [gui."xEdit/xeMainForm.dfm:mniNavGenerateLOD:OnClick"]
-status = "pending"
+status = "covered"
 source = "mniNavGenerateLODClick"
+command = "lodgen.generate"
+note = "The worldspace list, the form options read from and written to the settings file, and wbGenerateLODTES4, wbGenerateLODTES5 or wbGenerateLODFO4 per worldspace (xedit lodgen); checked by cargo xtask parity lodgen."
 
 [gui."xEdit/xeMainForm.dfm:mniNavHeaderFilesDefault:OnClick"]
 status = "pending"
@@ -3500,8 +3521,10 @@ status = "pending"
 source = "Core/wbInterface.pas"
 
 [tool_mode.tmLODgen]
-status = "pending"
+status = "covered"
 source = "Core/wbInterface.pas"
+command = "lodgen.generate"
+note = "xedit lodgen runs the LODGen mode: no internal edits, shorter names, the archives of the game ini and the plugins loaded as TLoaderThread does; -O:, -S:, -T:, -D: and -I: are the output, scripts, temp, data and game_ini parameters."
 
 [tool_mode.tmMasterRestore]
 status = "pending"

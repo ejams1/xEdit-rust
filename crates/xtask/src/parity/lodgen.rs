@@ -44,7 +44,8 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result, bail, ensure};
 
 use super::gui::{
-    self, Window, check_list_items, click_button, main_form_log, toggle_check_list_item, visible_windows,
+    self, Window, check_list_items, click_button, hold_shift, main_form_log, post_click_button, toggle_check_list_item,
+    visible_windows,
 };
 use super::hidden::{HiddenChild, HiddenCommand};
 use super::nif::fnv;
@@ -70,6 +71,10 @@ struct Case {
     /// billboards and LOD models the vanilla games do not have): the path
     /// below the data folder and where the content comes from.
     overlay: &'static [(&'static str, Source)],
+    /// Split the trees LOD atlases of the worldspaces (the form's hidden
+    /// "Split LOD Atlas" button, shown while Shift is held) instead of
+    /// generating.
+    split: bool,
 }
 
 /// The content of a loose file of an overlay.
@@ -122,6 +127,7 @@ const CASES: &[Case] = &[
         worldspaces: &["SanctuaryHillsWorld"],
         settings: &[],
         overlay: &[],
+        split: false,
     },
     Case {
         name: "fo4-vr",
@@ -130,6 +136,7 @@ const CASES: &[Case] = &[
         worldspaces: &["DLC03VRWorldspace"],
         settings: &[],
         overlay: &[],
+        split: false,
     },
     Case {
         name: "fo4-nukaworld",
@@ -138,6 +145,7 @@ const CASES: &[Case] = &[
         worldspaces: &["NukaWorld"],
         settings: &[],
         overlay: &[],
+        split: false,
     },
     Case {
         name: "fo4-farharbor",
@@ -146,6 +154,7 @@ const CASES: &[Case] = &[
         worldspaces: &["DLC03FarHarbor"],
         settings: &[],
         overlay: &[],
+        split: false,
     },
     Case {
         name: "sse-sovngarde",
@@ -154,6 +163,7 @@ const CASES: &[Case] = &[
         worldspaces: &["Sovngarde"],
         settings: &[],
         overlay: &[],
+        split: false,
     },
     Case {
         name: "sse-soulcairn",
@@ -162,6 +172,7 @@ const CASES: &[Case] = &[
         worldspaces: &["DLC01SoulCairn"],
         settings: &[],
         overlay: &[],
+        split: false,
     },
     Case {
         name: "fnv-strip",
@@ -170,6 +181,7 @@ const CASES: &[Case] = &[
         worldspaces: &["TheStripWorldNew"],
         settings: &[],
         overlay: &[],
+        split: false,
     },
     Case {
         name: "fo3-dcworld05",
@@ -178,6 +190,7 @@ const CASES: &[Case] = &[
         worldspaces: &["DCWorld05"],
         settings: &[],
         overlay: &[],
+        split: false,
     },
     Case {
         name: "tes4-all",
@@ -186,6 +199,7 @@ const CASES: &[Case] = &[
         worldspaces: &[],
         settings: &[],
         overlay: &[],
+        split: false,
     },
     Case {
         name: "sse-japhetsfolly",
@@ -194,6 +208,7 @@ const CASES: &[Case] = &[
         worldspaces: &["JaphetsFollyWorld"],
         settings: &[],
         overlay: &[],
+        split: false,
     },
     Case {
         name: "fnv-gamorrah",
@@ -202,6 +217,7 @@ const CASES: &[Case] = &[
         worldspaces: &["GamorrahWorld"],
         settings: &[],
         overlay: &[],
+        split: false,
     },
     // The atlas in other formats and sizes: DXT5 and BC5, more atlases than
     // one at 1024 pixels.
@@ -217,6 +233,7 @@ const CASES: &[Case] = &[
             ("AtlasHeight", "1024"),
         ],
         overlay: &[],
+        split: false,
     },
     Case {
         name: "fnv-strip-8888-565",
@@ -225,6 +242,7 @@ const CASES: &[Case] = &[
         worldspaces: &["TheStripWorldNew"],
         settings: &[("AtlasDiffuseFormat", "88"), ("AtlasNormalFormat", "82")],
         overlay: &[],
+        split: false,
     },
     Case {
         name: "fnv-strip-888-bc4",
@@ -233,6 +251,7 @@ const CASES: &[Case] = &[
         worldspaces: &["TheStripWorldNew"],
         settings: &[("AtlasDiffuseFormat", "87"), ("AtlasNormalFormat", "204")],
         overlay: &[],
+        split: false,
     },
     Case {
         name: "fnv-strip-dxt1-chunk",
@@ -248,6 +267,7 @@ const CASES: &[Case] = &[
             ("LODY", "-4"),
         ],
         overlay: &[],
+        split: false,
     },
     // The tree LOD of the Fallouts with billboards of the trees (the vanilla
     // games have none), brightened, one with an ini of its own.
@@ -283,6 +303,7 @@ const CASES: &[Case] = &[
                 Source::Archive("textures\\landscape\\trees\\treejosh_lod.dds"),
             ),
         ],
+        split: false,
     },
     // The tree LOD of Skyrim (the billboards in a DXT3 atlas, the list and
     // the blocks, rotated at random) and the trees as 3D objects LOD
@@ -294,6 +315,7 @@ const CASES: &[Case] = &[
         worldspaces: &["Sovngarde"],
         settings: &[("TreesBrightness", "-3")],
         overlay: SSE_BILLBOARDS,
+        split: false,
     },
     Case {
         name: "sse-sovngarde-trees3d",
@@ -302,6 +324,27 @@ const CASES: &[Case] = &[
         worldspaces: &["Sovngarde"],
         settings: &[("Trees3D", "1"), ("AtlasTextureSize", "256")],
         overlay: SSE_TREES_3D,
+        split: false,
+    },
+    // The billboards of the trees LOD atlases of the game, split.
+    Case {
+        name: "sse-split",
+        game: "sse",
+        plugins: SSE_MASTERS,
+        worldspaces: &["Tamriel", "Sovngarde", "DLC2SolstheimWorld", "Blackreach"],
+        settings: &[],
+        overlay: &[],
+        split: true,
+    },
+    // New Vegas has no trees LOD of its own: the messages.
+    Case {
+        name: "fnv-split",
+        game: "fnv",
+        plugins: FNV_MASTERS,
+        worldspaces: &["WastelandNV", "TheStripWorldNew"],
+        settings: &[],
+        overlay: &[],
+        split: true,
     },
 ];
 
@@ -765,6 +808,9 @@ fn watch(child: &mut HiddenChild, limit: &Limit, case: &Case, timeout: Duration)
     let mut dialogs: Vec<(isize, Instant)> = Vec::new();
     let mut last_cpu = (0u64, Instant::now());
     let mut last_trace = Instant::now();
+    let mut form_answered = false;
+    // Shift held for the oracle until its form shows (split cases).
+    let mut shift = None;
     loop {
         if let Some(code) = child.try_wait()? {
             bail!("the oracle exited (exit code: {code}) before the generator finished");
@@ -813,8 +859,12 @@ fn watch(child: &mut HiddenChild, limit: &Limit, case: &Case, timeout: Duration)
                     if let Some(line) = log.lines().find(|line| line.starts_with("Fatal:")) {
                         bail!("the oracle stopped: {line}");
                     }
-                    if log.contains("LOD Generator: finished") {
+                    if finished(&log, case) {
                         return Ok(log);
+                    }
+                    // Shift held as the form opens shows its hidden button.
+                    if case.split && !form_answered && shift.is_none() {
+                        shift = hold_shift(window.handle);
                     }
                 }
                 // The system's windows for the input of the process (the
@@ -833,8 +883,10 @@ fn watch(child: &mut HiddenChild, limit: &Limit, case: &Case, timeout: Duration)
                 "TfrmLODGen" => {
                     if !answered.contains(&window.handle) {
                         if window.visible {
+                            shift = None;
                             answer_lodgen_form(&window, case)?;
                             answered.push(window.handle);
+                            form_answered = true;
                         } else {
                             waiting = true;
                         }
@@ -896,11 +948,39 @@ fn answer_lodgen_form(window: &Window, case: &Case) -> Result<()> {
         items
     );
     std::thread::sleep(Duration::from_millis(200));
-    ensure!(
-        click_button(window, "Generate"),
-        "the LODGen form has no Generate button"
-    );
+    if case.split {
+        ensure!(
+            post_click_button(window, "Split LOD Atlas"),
+            "the LODGen form shows no Split LOD Atlas button (Shift was not seen held)"
+        );
+    } else {
+        ensure!(
+            click_button(window, "Generate"),
+            "the LODGen form has no Generate button"
+        );
+    }
     Ok(())
+}
+
+/// The last message of `wbSplitTreeLOD` for a worldspace.
+const SPLIT_ENDS: &[&str] = &[
+    "[Split atlas] Done.",
+    "Lodsettings file not found for worldspace.",
+    "Worldspace doesn't have a Trees LOD list file.",
+    "Trees LOD atlas texture not found.",
+];
+
+/// Whether the oracle's log shows the end of the case: the generator's
+/// closing line, or the last message of the split of each worldspace.
+fn finished(log: &str, case: &Case) -> bool {
+    if case.split {
+        log.lines()
+            .filter(|line| SPLIT_ENDS.iter().any(|end| line.trim_end().ends_with(end)))
+            .count()
+            >= case.worldspaces.len()
+    } else {
+        log.contains("LOD Generator: finished")
+    }
 }
 
 pub fn run(root_dir: &Path, tag: &str, args: &[&str]) -> Result<()> {
@@ -1364,6 +1444,9 @@ fn run_port(
     }
     if let Some(seed) = seed {
         command.arg("--seed").arg(seed.to_string());
+    }
+    if case.split {
+        command.arg("--split-trees");
     }
     // A plain working folder: `LODGenx64.exe` (.NET) fails on a verbatim
     // (`\\?\`) one, which the harness's may be.
