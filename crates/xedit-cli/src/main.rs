@@ -154,6 +154,9 @@ enum Action {
         /// The RandSeed of the tree rotations; from the clock by default.
         #[arg(long)]
         seed: Option<u32>,
+        /// Split the trees LOD atlas of the worldspaces into billboards (the form's hidden Split Trees LOD button) instead of generating.
+        #[arg(long)]
+        split_trees: bool,
         /// List the worldspaces and options, but generate nothing.
         #[arg(long)]
         dry_run: bool,
@@ -1023,6 +1026,7 @@ fn command_of(action: Action) -> Result<(String, Value), CommandError> {
             data,
             game_ini,
             seed,
+            split_trees,
             dry_run,
         } => {
             let mut options = serde_json::Map::new();
@@ -1036,7 +1040,7 @@ fn command_of(action: Action) -> Result<(String, Value), CommandError> {
                 "lodgen.generate".to_owned(),
                 json!({
                     "worldspaces": worldspaces, "options": options, "settings": settings, "output": output,
-                    "scripts": scripts, "temp": temp, "data": data, "game_ini": game_ini, "seed": seed,
+                    "scripts": scripts, "temp": temp, "data": data, "game_ini": game_ini, "seed": seed, "split_trees": split_trees,
                     "dry_run": dry_run
                 }),
             )

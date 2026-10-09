@@ -4,7 +4,7 @@
 
 // Ported from xEdit: Core/wbLOD.pas (wbFindREFRs,
 // wbFindUniqueWorldspaceREFRs, wbGetLODMeshName, wbGenerateLODTES4,
-// wbGenerateLODTES5, wbGenerateLODFO4), and the worldspace list of
+// wbGenerateLODTES5, wbGenerateLODFO4, wbSplitTreeLOD), and the worldspace list of
 // xEdit/xeMainForm.pas (mniNavGenerateLODClick, DoGenerateLOD)
 
 //! The LOD of a worldspace: the references of the worldspace and its
@@ -16,6 +16,7 @@ use std::sync::Arc;
 use xedit_core::delphi::{float_to_str, float_to_str_f_fixed};
 use xedit_core::implementation::{FileImpl, MainRecordImpl};
 use xedit_core::interface::element::{Container, Element, ElementRef, MainRecordRef};
+use xedit_core::interface::float::FLOAT_DIGITS;
 use xedit_core::interface::form_id::{FileID, FormID};
 use xedit_core::interface::globals::{
     GameMode, app_name, cell_size_factor, game_mode, is_fallout3, is_fallout4, is_skyrim, is_starfield,
@@ -27,8 +28,8 @@ use super::atlas::{build_atlas_from_textures_list, get_uv_range_textures_list, l
 use super::trees::{LodSettings, TreeBlock, TreeList, load_tree_image};
 use super::{
     LODGEN_NAME, ListCompare, LodEnv, LodError, LodResult, StringList, boolean_text, change_file_ext, delimited_text,
-    extract_file_name, extract_file_path, force_directories, lod_extra_options_file_name, lod_settings_file_name,
-    lod_tree_block_file_ext, matches_mask, message, open_resource, resource_exists, trim,
+    extract_file_ext, extract_file_name, extract_file_path, force_directories, lod_extra_options_file_name,
+    lod_settings_file_name, lod_tree_block_file_ext, matches_mask, message, open_resource, resource_exists, trim,
 };
 use crate::sniff::processor::MemIniFile;
 
@@ -1892,4 +1893,149 @@ pub fn generate_lod_fo4(env: &LodEnv, worldspace: &MainRecordRef) -> LodResult<(
 /// `StrToInt`: the exception of a text that is not a number.
 fn str_to_int(text: &str) -> LodResult<i32> {
     crate::variant::str_to_int(text).ok_or_else(|| LodError::new(format!("'{text}' is not a valid integer value")))
+}
+
+/// `wbSplitTreeLOD`: splits the trees LOD atlas of a worldspace (Skyrim,
+/// the Fallouts) into one billboard texture per tree, with a `.txt` of its
+/// size and model, below `<output>Textures\Terrain\LODGen\AtlasSplit_<atlas>\`.
+/// The block files of every container tell which `TREE` or `STAT` records
+/// use each billboard. Returns false when a file is missing (a message
+/// says which).
+pub fn split_tree_lod(env: &LodEnv, worldspace: &MainRecordRef, files: &[Arc<FileImpl>]) -> LodResult<bool> {
+    let id = worldspace.get_editor_id();
+    // split Skyrim's Trees LOD atlas into separate billboard textures
+    let Some(lod_set_data) = open_resource(&lod_settings_file_name(&id)) else {
+        message(&format!("[{id}] Lodsettings file not found for worldspace."));
+        return Ok(false);
+    };
+    LodSettings::load_from_data(&lod_set_data)?;
+    let mut list = TreeList::new(&id);
+    let Some(data) = open_resource(&list.list_file_name()) else {
+        message(&format!(
+            "[{}] Worldspace doesn't have a Trees LOD list file.",
+            list.list_file_name()
+        ));
+        return Ok(false);
+    };
+    list.load_from_data(&data)?;
+    let Some(data) = open_resource(&list.atlas_file_name()) else {
+        message(&format!(
+            "[{}] Trees LOD atlas texture not found.",
+            list.atlas_file_name()
+        ));
+        return Ok(false);
+    };
+    list.load_atlas(&data);
+
+    // scan BTT files to associate lod trees indexes with TREE FormIDs
+    let mut names = StringList::new();
+    names.compare = ListCompare::Ascii;
+    let list_file_name = list.list_file_name();
+    let folder = extract_file_path(&list_file_name);
+    for container in xedit_core::container_handler::container_list().iter().rev() {
+        for name in xedit_core::container_handler::container_resource_list(container, &folder) {
+            names.add(&name);
+        }
+    }
+    // `Sorted := True` sorts what is there; duplicates stay
+    names.sort();
+
+    // array of found TREE records indexed by LST index
+    let mut tree_records: Vec<Vec<MainRecordRef>> = vec![Vec::new(); list.trees_list.len()];
+    let file_by_slot = |slot: i16| files.iter().find(|file| file.load_order() == i32::from(slot));
+    let lod_level = if is_fallout3() { 8 } else { 4 };
+    let mut block = TreeBlock::new((0, 0), lod_level);
+    let extension = format!(".{}", lod_tree_block_file_ext());
+    for name in names.strings() {
+        if !extract_file_ext(name).eq_ignore_ascii_case(&extension) {
+            continue;
+        }
+        let Some(data) = open_resource(name) else {
+            continue;
+        };
+        block.load_from_data(&data)?;
+        // for each tree type in btt file, each reference of the type
+        for (j, &(lst_index, count)) in block.types.iter().enumerate() {
+            for tree_ref in block.refs[j].iter().take(count.max(0) as usize) {
+                let ref_form_id = FormID::from_cardinal(tree_ref.ref_form_id);
+                // a mod the reference is supposed to be from
+                let Some(file) = file_by_slot(ref_form_id.file_id().full_slot()) else {
+                    continue;
+                };
+                let file_form_id = file.load_order_form_id_to_file_form_id(ref_form_id).ok_or_else(|| {
+                    LodError::new(format!(
+                        "FormID [{}] can not be mapped to file FormID for file \"{}\"",
+                        ref_form_id.to_string(true),
+                        file.get_name()
+                    ))
+                })?;
+                let Some(found) = file.record_by_form_id(file_form_id, false, true) else {
+                    continue;
+                };
+                let found: MainRecordRef = found;
+                // found a matching reference of TREE
+                let Some(base) = found.get_base_record() else {
+                    continue;
+                };
+                let signature = base.get_signature();
+                if signature != Signature::new(b"TREE") && signature != Signature::new(b"STAT") {
+                    continue;
+                }
+                let Some(records) = usize::try_from(lst_index)
+                    .ok()
+                    .and_then(|index| tree_records.get_mut(index))
+                else {
+                    return Err(LodError::new(format!("Range check error: tree type {lst_index}")));
+                };
+                // check if we already associated that TREE record with LST index
+                if !records
+                    .iter()
+                    .any(|record| record.get_load_order_form_id() == base.get_load_order_form_id())
+                {
+                    records.push(base.get_master_or_self());
+                }
+            }
+        }
+    }
+
+    let split_path = format!(
+        "{}Textures\\Terrain\\LODGen\\AtlasSplit_{}\\",
+        env.output_path,
+        change_file_ext(&extract_file_name(&list.atlas_file_name()), "")
+    );
+    for tree_type in &list.trees_list {
+        let index = tree_type.index;
+        let records = usize::try_from(index)
+            .ok()
+            .and_then(|index| tree_records.get(index))
+            .ok_or_else(|| LodError::new(format!("Range check error: tree type {index}")))?;
+        for record in records {
+            let model = record.get_winning_override().get_element_edit_value("Model\\MODL");
+            let tree_file_name = format!(
+                "{split_path}{}\\{}_{}.dds",
+                record.get_file().map(|file| file.get_name()).unwrap_or_default(),
+                change_file_ext(&extract_file_name(&model), ""),
+                record.get_form_id().change_file_id(FileID::null()).to_string(false)
+            );
+            message(&format!("[{tree_file_name}] Saving billboard texture"));
+            force_directories(&extract_file_path(&tree_file_name));
+            list.save_from_atlas(index as usize, &tree_file_name)?;
+            let ini_name = change_file_ext(&tree_file_name, ".txt");
+            let mut ini = MemIniFile::load(std::path::Path::new(&ini_name));
+            ini.write_string(
+                "LOD",
+                "Width",
+                &float_to_str_f_fixed(f64::from(tree_type.width), FLOAT_DIGITS as usize),
+            );
+            ini.write_string(
+                "LOD",
+                "Height",
+                &float_to_str_f_fixed(f64::from(tree_type.height), FLOAT_DIGITS as usize),
+            );
+            ini.write_string("LOD", "Model", &model);
+            std::fs::write(&ini_name, xedit_io::encoding::ansi_bytes(&ini.to_text()))?;
+        }
+    }
+    message("[Split atlas] Done.");
+    Ok(true)
 }

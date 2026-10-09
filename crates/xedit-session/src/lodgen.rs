@@ -24,7 +24,7 @@ use serde::{Deserialize, Serialize};
 use xedit_assets::imaging::ImageFormat;
 use xedit_assets::lod::{
     LodDefaults, LodEnv, generate_lod_fo4, generate_lod_tes4, generate_lod_tes5, randomize, set_rand_seed,
-    worldspaces_for_lod,
+    split_tree_lod, worldspaces_for_lod,
 };
 use xedit_assets::sniff::processor::MemIniFile;
 use xedit_core::container_handler::{add_archive, add_folder, clear_containers};
@@ -86,6 +86,14 @@ pub struct LodgenRequest {
     /// The `RandSeed` the tree rotations come from; from the clock by
     /// default, as upstream's `Randomize` at startup.
     pub seed: Option<u32>,
+    /// Split the trees LOD atlas of each worldspace into its billboards
+    /// (`wbSplitTreeLOD`, the form's hidden "Split Trees LOD" button that
+    /// holding Shift shows) instead of generating LOD: one `.dds` and `.txt`
+    /// per tree below `<output>Textures\Terrain\LODGen\AtlasSplit_<atlas>\`.
+    /// Skyrim and the Fallouts before Fallout 4; the settings file is not
+    /// written.
+    #[serde(default)]
+    pub split_trees: bool,
     /// List the worldspaces and the options, but generate nothing.
     #[serde(default)]
     pub dry_run: bool,
@@ -575,7 +583,18 @@ fn lodgen_generate(session: &mut Session, request: LodgenRequest) -> Result<Lodg
             settings: settings.clone(),
             defaults,
         };
+        if request.split_trees && (oblivion || is_fallout4()) {
+            return Err(invalid("Split Trees LOD is for Skyrim, Fallout 3 and New Vegas"));
+        }
         if request.dry_run {
+            return Ok((worldspaces, resources, env));
+        }
+        if request.split_trees {
+            for (ws, checked) in list.iter().zip(&checked) {
+                if *checked {
+                    split_tree_lod(&env, ws, &files).map_err(|error| CommandError::new("edit_failed", error.0))?;
+                }
+            }
             return Ok((worldspaces, resources, env));
         }
         if let Some(path) = &request.settings {

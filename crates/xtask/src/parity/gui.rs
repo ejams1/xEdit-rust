@@ -459,6 +459,109 @@ pub(super) fn click_button(window: &Window, caption: &str) -> bool {
     true
 }
 
+/// Clicks the button of a window whose caption is `caption` without
+/// waiting for its handler (`PostMessage`), for a handler that works for a
+/// while or may show a dialog.
+#[cfg(windows)]
+pub(super) fn post_click_button(window: &Window, caption: &str) -> bool {
+    use windows_sys::Win32::Foundation::HWND;
+    use windows_sys::Win32::UI::WindowsAndMessaging::{BM_CLICK, EnumChildWindows, PostMessageW};
+    let mut children: Vec<HWND> = Vec::new();
+    // SAFETY: the callback only pushes into the vector passed as `LPARAM`.
+    unsafe { EnumChildWindows(window.handle as HWND, Some(win::collect), (&raw mut children) as isize) };
+    let Some(button) = children
+        .into_iter()
+        .find(|&child| win::class(child) == "TButton" && win::text(child) == caption)
+    else {
+        return false;
+    };
+    // SAFETY: a button handle of the window; BM_CLICK takes no pointers.
+    unsafe { PostMessageW(button, BM_CLICK, 0, 0) != 0 }
+}
+
+/// The Shift key held down for the thread of a window, as `GetKeyState` of
+/// that thread sees it, without any input to the user's desktop: a helper
+/// thread moves to the harness's desktop (`SetThreadDesktop`, where the
+/// oracle runs), shares the input state of the window's thread
+/// (`AttachThreadInput`) and sets it (`SetKeyboardState`); dropping it lets
+/// the key go and detaches. Upstream shows hidden buttons when Shift is
+/// held as a form opens.
+pub(super) struct ShiftHold {
+    release: std::sync::mpsc::Sender<()>,
+    thread: Option<std::thread::JoinHandle<()>>,
+}
+
+impl Drop for ShiftHold {
+    fn drop(&mut self) {
+        let _ = self.release.send(());
+        if let Some(thread) = self.thread.take() {
+            let _ = thread.join();
+        }
+    }
+}
+
+/// Holds Shift for the thread of a window; None when the system refuses.
+#[cfg(windows)]
+pub(super) fn hold_shift(window: isize) -> Option<ShiftHold> {
+    use windows_sys::Win32::Foundation::HWND;
+    use windows_sys::Win32::System::StationsAndDesktops::SetThreadDesktop;
+    use windows_sys::Win32::System::Threading::{AttachThreadInput, GetCurrentThreadId};
+    use windows_sys::Win32::UI::Input::KeyboardAndMouse::{GetKeyboardState, SetKeyboardState, VK_LSHIFT, VK_SHIFT};
+    use windows_sys::Win32::UI::WindowsAndMessaging::GetWindowThreadProcessId;
+    let (release, released) = std::sync::mpsc::channel::<()>();
+    let (started, start) = std::sync::mpsc::channel::<bool>();
+    let thread = std::thread::spawn(move || {
+        let set = |down: bool| {
+            let mut state = [0u8; 256];
+            // SAFETY: the buffer has the 256 bytes the functions take.
+            unsafe {
+                let mut done = GetKeyboardState(state.as_mut_ptr()) != 0;
+                let value = if down { 0x80 } else { 0 };
+                state[VK_SHIFT as usize] = value;
+                state[VK_LSHIFT as usize] = value;
+                done &= SetKeyboardState(state.as_ptr()) != 0;
+                done
+            }
+        };
+        // SAFETY: a new thread without windows may change its desktop; the
+        // window handle is only passed to the system.
+        let attached = unsafe {
+            let desktop_ok = super::hidden::desktop().is_none_or(|desktop| SetThreadDesktop(desktop) != 0);
+            let thread = GetWindowThreadProcessId(window as HWND, std::ptr::null_mut());
+            let me = GetCurrentThreadId();
+            (desktop_ok && thread != 0 && AttachThreadInput(me, thread, 1) != 0).then_some((me, thread))
+        };
+        let held = attached.is_some() && set(true);
+        let _ = started.send(held);
+        if let Some((me, thread)) = attached {
+            let _ = released.recv();
+            set(false);
+            // SAFETY: the threads were attached above.
+            unsafe { AttachThreadInput(me, thread, 0) };
+        }
+    });
+    if start.recv().unwrap_or(false) {
+        Some(ShiftHold {
+            release,
+            thread: Some(thread),
+        })
+    } else {
+        drop(release);
+        let _ = thread.join();
+        None
+    }
+}
+
+#[cfg(not(windows))]
+pub(super) fn post_click_button(_window: &Window, _caption: &str) -> bool {
+    false
+}
+
+#[cfg(not(windows))]
+pub(super) fn hold_shift(_window: isize) -> Option<ShiftHold> {
+    None
+}
+
 /// The items of the first check list box of a window (`TCheckListBox`),
 /// with their handle.
 #[cfg(windows)]
