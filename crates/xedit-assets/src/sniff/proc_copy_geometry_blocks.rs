@@ -377,7 +377,9 @@ mod tests {
         proc.on_show(&Storage::new("Copygeometryblocks".to_owned(), None));
         assert_eq!(proc.on_start().unwrap_err().0, "Source directory not found");
         assert!(proc.copy_geom && !proc.copy_transform && !proc.copy_shader && proc.matching_files_checked);
-        proc.source_text = "M:".to_owned();
+        let dir = std::env::temp_dir().join(format!("xedit-copy-geometry-dir-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        proc.source_text = dir.display().to_string();
         proc.on_start().unwrap();
         assert!(proc.source_directory.ends_with('\\'));
 
@@ -389,5 +391,6 @@ mod tests {
         proc.copy_shader_checked = false;
         proc.copy_transform_checked = false;
         assert_eq!(proc.on_start().unwrap_err().0, "Nothing to copy");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
