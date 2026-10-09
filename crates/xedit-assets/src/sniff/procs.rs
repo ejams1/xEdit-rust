@@ -44,14 +44,12 @@ macro_rules! pending {
 
 /// Not ported yet, for step 5 of phase 5.
 const STEP_5: &str = "not ported yet (phase 5 step 5)";
-/// Needs `wbMeshOptimize`, which is phase 5 step 6.
-const MESH_OPTIMIZE: &str = "needs wbMeshOptimize (phase 5 step 6)";
 
 /// `FormCreate`: the operations in the order of `AddProc`.
 pub const PROCS: &[ProcEntry] = &[
     ported!("NIF", "Update tangents and binormals", proc_tangents::ProcTangents),
     ported!("NIF", "Update bounds", proc_update_bounds::ProcUpdateBounds),
-    pending!("NIF", "Optimize mesh", MESH_OPTIMIZE),
+    ported!("NIF", "Optimize mesh", proc_optimize::ProcOptimize),
     ported!(
         "NIF",
         "Search and replace assets",
@@ -93,7 +91,7 @@ pub const PROCS: &[ProcEntry] = &[
     ported!("NIF", "Add bounding box", proc_add_bounding_box::ProcAddBoundingBox),
     ported!("NIF", "Set missing names", proc_set_missing_names::ProcSetMissingNames),
     ported!("Report", "Check for errors", proc_check_for_errors::ProcCheckForErrors),
-    pending!("Report", "Analyze mesh", MESH_OPTIMIZE),
+    ported!("Report", "Analyze mesh", proc_analyze_mesh::ProcAnalyzeMesh),
     ported!(
         "Report",
         "Transform information",

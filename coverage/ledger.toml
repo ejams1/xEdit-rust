@@ -234,12 +234,14 @@ status = "pending"
 source = "btnCancelClick"
 
 [gui."Sniff/Proc/ProcAnalyzeMesh.dfm:lblInfoCache:OnClick"]
-status = "pending"
+status = "presentation"
 source = "lblInfoCacheClick"
+note = "Opens a web page."
 
 [gui."Sniff/Proc/ProcAnalyzeMesh.dfm:lblInfoMetrics:OnClick"]
-status = "pending"
+status = "presentation"
 source = "lblInfoMetricsClick"
+note = "Opens a web page."
 
 [gui."Sniff/Proc/ProcCheckForErrors.dfm:lvChecks:OnSelectItem"]
 status = "presentation"
@@ -337,16 +339,21 @@ source = "rbToJsonClick"
 note = "Enables, fills or browses controls of the frame; sniff.run takes the settings."
 
 [gui."Sniff/Proc/ProcOptimize.dfm:chkStripify:OnClick"]
-status = "pending"
+status = "covered"
 source = "chkStripifyClick"
+command = "sniff.run"
+note = "Stripify and triangulate exclude each other as the settings are read."
 
 [gui."Sniff/Proc/ProcOptimize.dfm:chkTriangulate:OnClick"]
-status = "pending"
+status = "covered"
 source = "chkTriangulateClick"
+command = "sniff.run"
+note = "Stripify and triangulate exclude each other as the settings are read."
 
 [gui."Sniff/Proc/ProcOptimize.dfm:lblInfo:OnClick"]
-status = "pending"
+status = "presentation"
 source = "lblInfoClick"
+note = "Opens a web page."
 
 [gui."Sniff/Proc/ProcShaderFlagsUpdate.dfm:cmbGame:OnSelect"]
 status = "covered"
