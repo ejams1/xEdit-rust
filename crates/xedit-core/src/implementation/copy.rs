@@ -229,7 +229,7 @@ pub fn missing_masters(masters: &[Arc<FileImpl>], target: &Arc<FileImpl>) -> Res
 
 /// Port of `AddRequiredMasters`: the masters the copy needs that the target
 /// file lacks are added, in load order; they must all load before it.
-pub(crate) fn add_required_masters(masters: &FilesSet, target: &Arc<FileImpl>) -> Result<(), EditError> {
+pub fn add_required_masters(masters: &FilesSet, target: &Arc<FileImpl>) -> Result<(), EditError> {
     let missing = missing_masters(masters.files(), target)?;
     if missing.is_empty() {
         return Ok(());

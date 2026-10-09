@@ -179,7 +179,8 @@ fn setup(game: &str, save: Option<&str>, edit: bool) -> Result<GameMode, String>
         GameMode::gmSF1 => xedit_defs::sf1::define_sf1,
         _ => return Err(format!("the definitions of {tag} are not ported yet")),
     };
-    set_simple_records(edit);
+    // The quick clean modes load with the full definitions.
+    set_simple_records(edit && !crate::commands::quick_clean_on_load());
     set_hide_unused(edit);
     set_game_mode(mode);
     // xDump turns the contained-in elements off for Fallout 4 and later, the

@@ -1344,8 +1344,10 @@ source = "mniNavCleanMastersClick"
 note = "One file per call."
 
 [gui."xEdit/xeMainForm.dfm:mniNavCleanupInjected:OnClick"]
-status = "pending"
+status = "covered"
+command = "records.cleanup_injected"
 source = "mniNavCleanupInjectedClick"
+note = "The selection is form_ids, or every record of the plugin that references injected records; AddRequiredMasters without its question."
 
 [gui."xEdit/xeMainForm.dfm:mniNavCompactFormIDs:OnClick"]
 status = "covered"
@@ -1437,20 +1439,26 @@ status = "pending"
 source = "mniNavFilterConflictsClick"
 
 [gui."xEdit/xeMainForm.dfm:mniNavFilterForCleaning:OnClick"]
-status = "pending"
+status = "covered"
+command = "files.clean"
 source = "mniNavFilterForCleaningClick"
+note = "The command applies the filter for cleaning to the tree of the plugin it cleans (xedit_analysis::filter)."
 
 [gui."xEdit/xeMainForm.dfm:mniNavFilterForCleaningObsolete:OnClick"]
-status = "pending"
+status = "presentation"
 source = "mniNavCleaningObsoleteClick"
+note = "A message that the manual cleaning is obsolete (xedit_analysis::cleaning::CLEANING_OBSOLETE); files.clean with quick is the replacement."
 
 [gui."xEdit/xeMainForm.dfm:mniNavFilterForCleaningSelected:OnClick"]
-status = "pending"
+status = "covered"
+command = "files.clean"
 source = "mniNavFilterForCleaningClick"
+note = "The file is the request's file; the filter is applied by the command."
 
 [gui."xEdit/xeMainForm.dfm:mniNavFilterForCleaningSelectedObsolete:OnClick"]
-status = "pending"
+status = "presentation"
 source = "mniNavCleaningObsoleteClick"
+note = "A message that the manual cleaning is obsolete (xedit_analysis::cleaning::CLEANING_OBSOLETE); files.clean with quick is the replacement."
 
 [gui."xEdit/xeMainForm.dfm:mniNavFilterRemove:OnClick"]
 status = "pending"
@@ -1517,12 +1525,15 @@ source = "mniNavRemoveClick"
 note = "A record; an element of a record is elements.remove."
 
 [gui."xEdit/xeMainForm.dfm:mniNavRemoveIdenticalToMaster:OnClick"]
-status = "pending"
+status = "covered"
+command = "files.clean"
 source = "mniNavRemoveIdenticalToMasterClick"
+note = "itm; dry_run counts as tmCheckForITM does. wbAllowMakePartial (partial forms) is not ported."
 
 [gui."xEdit/xeMainForm.dfm:mniNavRemoveIdenticalToMasterObsolete:OnClick"]
-status = "pending"
+status = "presentation"
 source = "mniNavCleaningObsoleteClick"
+note = "A message that the manual cleaning is obsolete (xedit_analysis::cleaning::CLEANING_OBSOLETE); files.clean with quick is the replacement."
 
 [gui."xEdit/xeMainForm.dfm:mniNavRenumberFormIDsFrom:OnClick"]
 status = "covered"
@@ -1554,12 +1565,15 @@ status = "pending"
 source = "mniNavTestClick"
 
 [gui."xEdit/xeMainForm.dfm:mniNavUndeleteAndDisableReferences:OnClick"]
-status = "pending"
+status = "covered"
+command = "files.clean"
 source = "mniNavUndeleteAndDisableReferencesClick"
+note = "udr; dry_run counts as tmCheckForDR does. The UDR options are the defaults of the game."
 
 [gui."xEdit/xeMainForm.dfm:mniNavUndeleteAndDisableReferencesObsolete:OnClick"]
-status = "pending"
+status = "presentation"
 source = "mniNavCleaningObsoleteClick"
+note = "A message that the manual cleaning is obsolete (xedit_analysis::cleaning::CLEANING_OBSOLETE); files.clean with quick is the replacement."
 
 [gui."xEdit/xeMainForm.dfm:mniNavUpdateCRCModGroups:OnClick"]
 status = "pending"

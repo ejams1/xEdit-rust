@@ -20,6 +20,38 @@ use xedit_core::interface::{
 use crate::dump::{game_tag, load_hardcoded, load_resources, setup_game_for_edit};
 use crate::{CommandError, NoParams, Registry, Session};
 
+/// Whether [`Session::load`] turns on the PNAM fill (`wbFillPNAM`).
+static FILL_PNAM_ON_LOAD: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Whether [`Session::load`] loads as the quick clean modes do.
+static QUICK_CLEAN_ON_LOAD: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Port of the settings `xeInit.pas` gives the quick clean modes
+/// (`-quickclean`, `-quickautoclean`) before anything loads: the full
+/// record definitions (`wbSimpleRecords := False`), the internal edits of
+/// the load (`wbAllowInternalEdit := True`), no topic response lists
+/// (`wbFillINOM`, `wbFillINOA` off), the worldspace offsets dropped
+/// (`wbRemoveOffsetData`) and, where the game sorts the responses of a
+/// topic, the PNAM fill (`wbFillPNAM`). The sessions loaded
+/// afterwards use them; `xedit clean --quick` sets them.
+pub fn set_quick_clean_on_load(value: bool) {
+    QUICK_CLEAN_ON_LOAD.store(value, std::sync::atomic::Ordering::Relaxed);
+}
+
+pub(crate) fn quick_clean_on_load() -> bool {
+    QUICK_CLEAN_ON_LOAD.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+/// Port of `-FillPNAM` and of the `wbFillPNAM := True` of the quick clean
+/// modes in `xeInit.pas`: the sessions loaded afterwards give a topic
+/// response without `PNAM` the `PNAM` of the response it follows when it is
+/// built (`TwbMainRecord.Init`), as xEdit does in those modes. It changes
+/// the comparison of responses with masters that have no `PNAM` (the game
+/// masters of Oblivion to Skyrim), so it must be set before the load.
+pub fn set_fill_pnam_on_load(value: bool) {
+    FILL_PNAM_ON_LOAD.store(value, std::sync::atomic::Ordering::Relaxed);
+}
+
 impl Session {
     /// Loads the plugins of a game in the order given, with their masters.
     pub fn load(game: &str, plugins: &[String]) -> Result<Self, String> {
@@ -27,6 +59,28 @@ impl Session {
         // The editor's settings apply before the plugins load: the load
         // itself edits records under `wbAllowInternalEdit`.
         crate::save::apply_edit_settings(mode);
+        // `-FillPNAM`: the responses of a topic get a `PNAM` when they are
+        // built (`wbFillPNAM`).
+        xedit_core::interface::globals::set_fill_pnam(FILL_PNAM_ON_LOAD.load(std::sync::atomic::Ordering::Relaxed));
+        if quick_clean_on_load() {
+            // `xeInit.pas` for `-quickclean` and `-quickautoclean`: the PNAM
+            // fill where the game sorts the responses, the internal edits
+            // of the load (`wbAllowInternalEdit`) also in Oblivion, no
+            // `INOM` and `INOA` lists on the topics, the offsets of the
+            // worldspaces dropped, and the full definitions
+            // (`wbSimpleRecords := False`, applied by `setup_game_for_edit`).
+            use xedit_core::interface::globals::{
+                can_sort_info, set_allow_internal_edit, set_fill_inoa, set_fill_inom, set_fill_pnam,
+                set_remove_offset_data,
+            };
+            if can_sort_info() {
+                set_fill_pnam(true);
+            }
+            set_allow_internal_edit(true);
+            set_fill_inom(false);
+            set_fill_inoa(false);
+            set_remove_offset_data(true);
+        }
         clear_files();
         let mut files = Vec::new();
         for path in plugins {

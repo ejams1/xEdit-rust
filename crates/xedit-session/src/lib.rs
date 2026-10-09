@@ -11,6 +11,7 @@
 pub mod archive;
 pub mod assets;
 pub mod batch;
+pub mod clean;
 pub mod commands;
 pub mod conflicts;
 pub mod dump;
@@ -131,6 +132,7 @@ impl Registry {
         masters::register(&mut registry);
         formids::register(&mut registry);
         refs::register(&mut registry);
+        clean::register(&mut registry);
         archive::register(&mut registry);
         assets::register(&mut registry);
         sniff::register(&mut registry);

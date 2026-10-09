@@ -178,7 +178,7 @@ pub struct ConflictsResponse {
 }
 
 /// The loaded files in the order of upstream's `Files`.
-fn session_files(session: &Session) -> Result<Vec<Arc<FileImpl>>, CommandError> {
+pub(crate) fn session_files(session: &Session) -> Result<Vec<Arc<FileImpl>>, CommandError> {
     session.mode()?;
     let files = xedit_core::interface::files()
         .into_iter()

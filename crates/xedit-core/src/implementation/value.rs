@@ -61,6 +61,12 @@ pub struct ValueBase {
     pub(super) record_header: AtomicBool,
     /// Whether this is the `TwbContainedInElement` of a main record.
     pub(super) contained_in: AtomicBool,
+    /// Port of `arrSorted` of a `TwbArray`: the definition sorts the
+    /// entries (under `wbSortSubRecords`).
+    arr_sorted: AtomicBool,
+    /// Port of `arrSortInvalid`: set by the init and by every change, the
+    /// entries are sorted at the next `DoInit(True)`.
+    arr_sort_invalid: AtomicBool,
 }
 
 impl ValueBase {
@@ -88,6 +94,8 @@ impl ValueBase {
             arr_size_prefix: AtomicUsize::new(0),
             record_header: AtomicBool::new(false),
             contained_in: AtomicBool::new(false),
+            arr_sorted: AtomicBool::new(false),
+            arr_sort_invalid: AtomicBool::new(false),
         }
     }
 
@@ -634,6 +642,16 @@ impl ValueImpl {
                 ValueKind::Array => {
                     let (_, prefix) = array_do_init(&self.vb.vb_value_def, &self_ref, &self.vb.file, &mut cursor);
                     self.vb.arr_size_prefix.store(prefix, Ordering::Relaxed);
+                    // `arrSorted := ArrayDoInit(...); arrSortInvalid :=
+                    // arrSorted`.
+                    let sorted = sort_sub_records()
+                        && self
+                            .vb
+                            .vb_value_def
+                            .as_array_def()
+                            .is_some_and(|array| array.get_sorted());
+                    self.vb.arr_sorted.store(sorted, Ordering::Relaxed);
+                    self.vb.arr_sort_invalid.store(sorted, Ordering::Relaxed);
                 }
                 ValueKind::Union => {
                     union_do_init(&self.vb.vb_value_def, &self_ref, &self.vb.file, &mut cursor);
@@ -1281,7 +1299,34 @@ impl ElementImpl for ValueImpl {
         edit::notify_changed_internal(self);
     }
 
+    /// Port of `TwbArray.DoInit(True)`.
+    fn do_init_sorted(&self) {
+        self.do_init();
+        if super::sorting_allowed()
+            && self.vb.arr_sorted.load(Ordering::Relaxed)
+            && self.vb.arr_sort_invalid.swap(false, Ordering::Relaxed)
+        {
+            edit::sort_by_sort_keys(&self.vb.container);
+        }
+    }
+
+    fn clear_sort_invalid(&self) {
+        self.vb.arr_sort_invalid.store(false, Ordering::Relaxed);
+    }
+
+    /// Port of `TwbArray.SetModified`.
+    fn set_modified(&self, value: bool) {
+        super::write::element_set_modified(self, value);
+        if value && self.vb.arr_sorted.load(Ordering::Relaxed) {
+            self.vb.arr_sort_invalid.store(true, Ordering::Relaxed);
+        }
+    }
+
     fn element_changed(&self, child: &ElementRef) {
+        // `TwbArray.ElementChanged`.
+        if self.vb.arr_sorted.load(Ordering::Relaxed) {
+            self.vb.arr_sort_invalid.store(true, Ordering::Relaxed);
+        }
         if self.vb.record_header.load(Ordering::Relaxed)
             && let Some(record) = self
                 .vb
@@ -1520,7 +1565,8 @@ impl Container for ValueImpl {
     /// Port of `TwbContainer.GetElement` with `cntElementsMap`: the element
     /// map of the definition reorders the elements for the callers.
     fn get_element(&self, index: i32) -> Option<ElementRef> {
-        self.do_init();
+        // `TwbContainer.GetElement`: `DoInit(True)`.
+        self.do_init_sorted();
         let count = self.vb.container.element_count();
         let mut index = usize::try_from(index).ok()?;
         if index >= count {

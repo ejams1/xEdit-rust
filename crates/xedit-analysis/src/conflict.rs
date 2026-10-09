@@ -51,7 +51,9 @@ use std::sync::Arc;
 
 use xedit_core::implementation::sortable::{self, Sortable};
 use xedit_core::implementation::{ElementImpl, FileImpl, MainRecordImpl, pin_record, trim_initialized_records};
-use xedit_core::interface::globals::{align_array_elements, align_array_limit, hide_ignored, translation_mode};
+use xedit_core::interface::globals::{
+    align_array_elements, align_array_limit, fill_pnam, hide_ignored, translation_mode,
+};
 use xedit_core::interface::types::{ConflictAll, ConflictPriority, ConflictThis, DefFlag, DefType, ElementType};
 use xedit_core::interface::{Container, Element, ElementRef, File, FileState, MainRecord, Signature};
 use xedit_core::threads;
@@ -1136,12 +1138,30 @@ impl<'a> ConflictContext<'a> {
 /// classified again on the calling thread, so the result does not depend on
 /// the thread count.
 pub fn conflict_statuses(files: &[Arc<FileImpl>], options: &ConflictOptions) -> ConflictResults {
+    let records: Vec<Arc<MainRecordImpl>> = files.iter().flat_map(|file| file.records()).collect();
+    conflict_statuses_of(&records, files, options)
+}
+
+/// [`conflict_statuses`] for the FormID groups of `records` only: the
+/// status of each of them and of the other records of their FormIDs. The
+/// GMST, DFOB, NAVI and TES4 records are asked in the order of `records`
+/// (the filter of the GUI walks its tree from the last node, so it asks
+/// them from the last).
+///
+/// Under `wbFillPNAM` the build of a response sorts the responses of the
+/// topic's versions and edits them (the `PNAM` fill), so the groups are
+/// compared on one thread then.
+pub fn conflict_statuses_of(
+    records: &[Arc<MainRecordImpl>],
+    files: &[Arc<FileImpl>],
+    options: &ConflictOptions,
+) -> ConflictResults {
     let mut results = ConflictResults::default();
     let mut serial = Vec::new();
     let mut groups: Vec<Arc<MainRecordImpl>> = Vec::new();
     let mut seen: HashSet<usize> = HashSet::new();
-    for file in files {
-        for record in file.records() {
+    {
+        for record in records.iter().cloned() {
             let signature = record.get_signature();
             if is_gmst_or_dfob(signature) || signature.0 == *b"NAVI" || signature.0 == *b"TES4" {
                 serial.push(record);
@@ -1166,7 +1186,8 @@ pub fn conflict_statuses(files: &[Arc<FileImpl>], options: &ConflictOptions) -> 
 
     for batch in groups.chunks(GROUPS_PER_BATCH) {
         let cycles = threads::init_cycles();
-        let classified: Vec<(HashMap<usize, ConflictStatus>, Vec<String>)> = match threads::pool() {
+        let pool = if fill_pnam() { None } else { threads::pool() };
+        let classified: Vec<(HashMap<usize, ConflictStatus>, Vec<String>)> = match pool {
             Some(pool) => pool.install(|| {
                 use rayon::prelude::*;
                 batch

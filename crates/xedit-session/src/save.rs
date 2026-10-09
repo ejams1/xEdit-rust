@@ -163,6 +163,23 @@ const RESET_ON_SAVE: ResetModified = ResetModified::rmSetInternal;
 
 fn files_save(session: &mut Session, request: FilesSaveRequest) -> Result<FilesSaveResponse, CommandError> {
     let file = session.file(request.file.as_deref())?;
+    save_file(&file, request.output, request.dry_run, request.backup)
+}
+
+/// The save of `files.save` for a loaded plugin, which other commands that
+/// save (the quick clean mode) share.
+pub(crate) fn save_file(
+    file: &Arc<FileImpl>,
+    output: Option<String>,
+    dry_run: bool,
+    backup_old: bool,
+) -> Result<FilesSaveResponse, CommandError> {
+    let request = FilesSaveRequest {
+        file: None,
+        output,
+        dry_run,
+        backup: backup_old,
+    };
     if file.get_file_states().contains(FileState::fsIsHardcoded) {
         return Err(CommandError::new(
             "save_refused",
@@ -173,7 +190,7 @@ fn files_save(session: &mut Session, request: FilesSaveRequest) -> Result<FilesS
     let output = request.output.map_or_else(|| loaded_path.clone(), PathBuf::from);
     let to_loaded_path = same_path(&output, &loaded_path);
     let loaded_crc32 = file.crc32();
-    let bytes = write_file(&file)?;
+    let bytes = write_file(file)?;
     let crc32 = file.crc32();
     let changed = crc32 != loaded_crc32;
     let mut response = FilesSaveResponse {

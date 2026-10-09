@@ -475,7 +475,7 @@ impl MainRecordImpl {
 
     /// Port of `EnsureChildGroup` for a cell: its children group, made in
     /// the group that holds the cell when it has none.
-    fn ensure_cell_child_group(self: &Arc<Self>) -> Option<Arc<GroupRecordImpl>> {
+    pub(crate) fn ensure_cell_child_group(self: &Arc<Self>) -> Option<Arc<GroupRecordImpl>> {
         if let Some(group) = self.child_group() {
             return Some(group);
         }
