@@ -260,8 +260,8 @@ note = "Enables, fills or browses controls of the frame; sniff.run takes the set
 
 [gui."Sniff/Proc/ProcConvertRootNode.dfm:cmbNodeFrom:OnSelect"]
 status = "covered"
-source = "cmbNodeFromSelect"
 command = "sniff.run"
+source = "cmbNodeFromSelect"
 note = "The types a block type converts to (sNodeFrom, sNodeTo)."
 
 [gui."Sniff/Proc/ProcCopyControlledBlocks.dfm:btnBrowse:OnClick"]
@@ -286,8 +286,8 @@ note = "Filters the format list of the frame; the checked formats are the sForma
 
 [gui."Sniff/Proc/ProcFindTextures.dfm:lvFormat:OnItemChecked"]
 status = "covered"
-source = "lvFormatItemChecked"
 command = "sniff.run"
+source = "lvFormatItemChecked"
 note = "The DXGI formats the report keeps (sFormats)."
 
 [gui."Sniff/Proc/ProcFindTextures.dfm:mniCheckAll:OnClick"]
@@ -302,32 +302,32 @@ note = "Checks or unchecks every format of the list; sniff.run takes the checked
 
 [gui."Sniff/Proc/ProcHavokSearchMaterial.dfm:edReplace:OnChange"]
 status = "covered"
-source = "rbTES5Click"
 command = "sniff.run"
+source = "rbTES5Click"
 note = "The materials of the game (iGame) and the filters (sFilterSearch, sFilterReplace) that bound the chosen materials."
 
 [gui."Sniff/Proc/ProcHavokSearchMaterial.dfm:edSearch:OnChange"]
 status = "covered"
-source = "rbTES5Click"
 command = "sniff.run"
+source = "rbTES5Click"
 note = "The materials of the game (iGame) and the filters (sFilterSearch, sFilterReplace) that bound the chosen materials."
 
 [gui."Sniff/Proc/ProcHavokSearchMaterial.dfm:rbFO3:OnClick"]
 status = "covered"
-source = "rbTES5Click"
 command = "sniff.run"
+source = "rbTES5Click"
 note = "The materials of the game (iGame) and the filters (sFilterSearch, sFilterReplace) that bound the chosen materials."
 
 [gui."Sniff/Proc/ProcHavokSearchMaterial.dfm:rbTES4:OnClick"]
 status = "covered"
-source = "rbTES5Click"
 command = "sniff.run"
+source = "rbTES5Click"
 note = "The materials of the game (iGame) and the filters (sFilterSearch, sFilterReplace) that bound the chosen materials."
 
 [gui."Sniff/Proc/ProcHavokSearchMaterial.dfm:rbTES5:OnClick"]
 status = "covered"
-source = "rbTES5Click"
 command = "sniff.run"
+source = "rbTES5Click"
 note = "The materials of the game (iGame) and the filters (sFilterSearch, sFilterReplace) that bound the chosen materials."
 
 [gui."Sniff/Proc/ProcHavokSettingsUpdate.dfm:edSettings:OnGetPickList"]
@@ -347,14 +347,14 @@ note = "Enables, fills or browses controls of the frame; sniff.run takes the set
 
 [gui."Sniff/Proc/ProcOptimize.dfm:chkStripify:OnClick"]
 status = "covered"
-source = "chkStripifyClick"
 command = "sniff.run"
+source = "chkStripifyClick"
 note = "Stripify and triangulate exclude each other as the settings are read."
 
 [gui."Sniff/Proc/ProcOptimize.dfm:chkTriangulate:OnClick"]
 status = "covered"
-source = "chkTriangulateClick"
 command = "sniff.run"
+source = "chkTriangulateClick"
 note = "Stripify and triangulate exclude each other as the settings are read."
 
 [gui."Sniff/Proc/ProcOptimize.dfm:lblInfo:OnClick"]
@@ -364,8 +364,8 @@ note = "Opens a web page."
 
 [gui."Sniff/Proc/ProcShaderFlagsUpdate.dfm:cmbGame:OnSelect"]
 status = "covered"
-source = "cmbGameSelect"
 command = "sniff.run"
+source = "cmbGameSelect"
 note = "The flag lists of the game (iGame) that bound iFlags and iFlags2."
 
 [gui."Sniff/Proc/ProcUniversalFixer.dfm:btnBrowse:OnClick"]
@@ -415,26 +415,26 @@ note = "Opens a help form of the frame."
 
 [gui."Sniff/Proc/ProcVertexPaint.dfm:rbAdjustColors:OnClick"]
 status = "covered"
-source = "rbSetColorsClick"
 command = "sniff.run"
+source = "rbSetColorsClick"
 note = "Selects the mode of the operation (iMode)."
 
 [gui."Sniff/Proc/ProcVertexPaint.dfm:rbRemoveColors:OnClick"]
 status = "covered"
-source = "rbSetColorsClick"
 command = "sniff.run"
+source = "rbSetColorsClick"
 note = "Selects the mode of the operation (iMode)."
 
 [gui."Sniff/Proc/ProcVertexPaint.dfm:rbReplaceColor:OnClick"]
 status = "covered"
-source = "rbSetColorsClick"
 command = "sniff.run"
+source = "rbSetColorsClick"
 note = "Selects the mode of the operation (iMode)."
 
 [gui."Sniff/Proc/ProcVertexPaint.dfm:rbSetColors:OnClick"]
 status = "covered"
-source = "rbSetColorsClick"
 command = "sniff.run"
+source = "rbSetColorsClick"
 note = "Selects the mode of the operation (iMode)."
 
 [gui."Sniff/frmMain.dfm:FormMain:OnClose"]
@@ -444,8 +444,8 @@ note = "Window, browse dialogs and tabs of the GUI."
 
 [gui."Sniff/frmMain.dfm:FormMain:OnCreate"]
 status = "covered"
-source = "FormCreate"
 command = "sniff.run"
+source = "FormCreate"
 note = "The automation mode: the list of operations (sniff.list), the settings and the command line."
 
 [gui."Sniff/frmMain.dfm:FormMain:OnShow"]
@@ -470,38 +470,38 @@ note = "Window, browse dialogs and tabs of the GUI."
 
 [gui."Sniff/frmMain.dfm:btnProcess:OnClick"]
 status = "covered"
-source = "btnProcessClick"
 command = "sniff.run"
+source = "btnProcessClick"
 note = "The run of the automation mode; the confirmation dialog and the drag and drop are presentation."
 
 [gui."Sniff/frmMain.dfm:cmbProcGame:OnClick"]
 status = "covered"
-source = "edProcFilterChange"
 command = "sniff.list"
+source = "edProcFilterChange"
 note = "The filter of the list by game and name; sniff.list returns the games of each operation."
 
 [gui."Sniff/frmMain.dfm:edProcFilter:OnChange"]
 status = "covered"
-source = "edProcFilterChange"
 command = "sniff.list"
+source = "edProcFilterChange"
 note = "The filter of the list by game and name; sniff.list returns the games of each operation."
 
 [gui."Sniff/frmMain.dfm:lblProcessedFiles:OnClick"]
 status = "covered"
-source = "lblProcessedFilesTitleClick"
 command = "sniff.run"
+source = "lblProcessedFilesTitleClick"
 note = "The file masks are the ProcessedFiles setting of the operation."
 
 [gui."Sniff/frmMain.dfm:lblProcessedFilesTitle:OnClick"]
 status = "covered"
-source = "lblProcessedFilesTitleClick"
 command = "sniff.run"
+source = "lblProcessedFilesTitleClick"
 note = "The file masks are the ProcessedFiles setting of the operation."
 
 [gui."Sniff/frmMain.dfm:lvProcs:OnSelectItem"]
 status = "covered"
-source = "lvProcsSelectItem"
 command = "sniff.run"
+source = "lvProcsSelectItem"
 note = "Choosing the operation and reading its settings section (ProcessedFiles, OnShow)."
 
 [gui."Sniff/frmMain.dfm:mniInputArchive:OnClick"]
@@ -677,26 +677,26 @@ source = "FormKeyDown"
 
 [gui."xEdit/xeLODGenForm.dfm:SelectAll1:OnClick"]
 status = "covered"
-source = "SelectAll1Click"
 command = "lodgen.generate"
+source = "SelectAll1Click"
 note = "The worldspaces parameter names the worldspaces to check."
 
 [gui."xEdit/xeLODGenForm.dfm:SelectNone1:OnClick"]
 status = "covered"
-source = "SelectNone1Click"
 command = "lodgen.generate"
+source = "SelectNone1Click"
 note = "The worldspaces parameter names the worldspaces to check."
 
 [gui."xEdit/xeLODGenForm.dfm:btnSplitTreesLOD:OnClick"]
 status = "covered"
-source = "btnSplitTreesLODClick"
 command = "lodgen.generate"
+source = "btnSplitTreesLODClick"
 note = "split_trees (xedit lodgen --split-trees) runs wbSplitTreeLOD for the worldspaces; checked by cargo xtask parity lodgen (the harness holds Shift for the oracle)."
 
 [gui."xEdit/xeLODGenForm.dfm:cbBuildAtlas:OnClick"]
 status = "covered"
-source = "cbBuildAtlasClick"
 command = "lodgen.generate"
+source = "cbBuildAtlasClick"
 note = "Fallout 3 and New Vegas always build the atlas (the settings the form forces for the Fallouts)."
 
 [gui."xEdit/xeLODGenForm.dfm:cbChunk:OnClick"]
@@ -721,14 +721,14 @@ note = "Enables the alpha threshold options; the options of lodgen.generate."
 
 [gui."xEdit/xeLODGenForm.dfm:frmLODGen:OnClose"]
 status = "covered"
-source = "FormClose"
 command = "lodgen.generate"
+source = "FormClose"
 note = "Without a checked worldspace the command fails with the form message (Select worldspace(s) for LOD generation)."
 
 [gui."xEdit/xeLODGenForm.dfm:frmLODGen:OnCreate"]
 status = "covered"
-source = "FormCreate"
 command = "lodgen.generate"
+source = "FormCreate"
 note = "The values of the combo boxes are the values the options accept."
 
 [gui."xEdit/xeLODGenForm.dfm:frmLODGen:OnKeyDown"]
@@ -738,8 +738,8 @@ note = "Escape closes the form."
 
 [gui."xEdit/xeLODGenForm.dfm:frmLODGen:OnShow"]
 status = "covered"
-source = "FormShow"
 command = "lodgen.generate"
+source = "FormShow"
 note = "The worldspace list and its default checks (the response lists them)."
 
 [gui."xEdit/xeLegendForm.dfm:dgLegend:OnDrawCell"]
@@ -1454,8 +1454,8 @@ source = "mniNavFilterRemoveClick"
 
 [gui."xEdit/xeMainForm.dfm:mniNavGenerateLOD:OnClick"]
 status = "covered"
-source = "mniNavGenerateLODClick"
 command = "lodgen.generate"
+source = "mniNavGenerateLODClick"
 note = "The worldspace list, the form options read from and written to the settings file, and wbGenerateLODTES4, wbGenerateLODTES5 or wbGenerateLODFO4 per worldspace (xedit lodgen); checked by cargo xtask parity lodgen."
 
 [gui."xEdit/xeMainForm.dfm:mniNavHeaderFilesDefault:OnClick"]
@@ -2770,8 +2770,8 @@ source = "xDump.dpr"
 
 [switch.af]
 status = "covered"
-source = "BSArch.dpr"
 command = "archive.pack"
+source = "BSArch.dpr"
 note = "bsarch accepts -af as BSArch does; xedit archive pack takes it as an option of the same meaning."
 
 [switch.agl]
@@ -2784,8 +2784,8 @@ source = "Tools/TreeLodBillboardCreator/treelod.dpr"
 
 [switch.all]
 status = "covered"
-source = "Sniff/frmMain.pas"
 command = "sniff.run"
+source = "Sniff/frmMain.pas"
 note = "The sniff binary takes -all: as Sniff.exe does; sniff.run takes it as a parameter."
 
 [switch.allbsa]
@@ -2934,8 +2934,8 @@ source = "xDump.dpr"
 
 [switch.dump]
 status = "covered"
-source = "BSArch.dpr"
 command = "archive.list"
+source = "BSArch.dpr"
 note = "bsarch accepts -dump as BSArch does; xedit archive list --files lists the files."
 
 [switch.enforceallmasters]
@@ -2952,14 +2952,14 @@ source = "xEdit/xeInit.pas"
 
 [switch.f]
 status = "covered"
-source = "BSArch.dpr"
 command = "archive.pack"
+source = "BSArch.dpr"
 note = "bsarch accepts -f as BSArch does; xedit archive pack takes it as an option of the same meaning."
 
 [switch.ff]
 status = "covered"
-source = "BSArch.dpr"
 command = "archive.pack"
+source = "BSArch.dpr"
 note = "bsarch accepts -ff as BSArch does; xedit archive pack takes it as an option of the same meaning."
 
 [switch.fillpnam]
@@ -2984,26 +2984,26 @@ source = "xEdit/xeInit.pas"
 
 [switch.fnv]
 status = "covered"
-source = "BSArch.dpr"
 command = "archive.pack"
+source = "BSArch.dpr"
 note = "bsarch accepts it with the upstream spelling (-fnv); xedit archive pack takes it as an option of the same meaning."
 
 [switch.fo3]
 status = "covered"
-source = "BSArch.dpr"
 command = "archive.pack"
+source = "BSArch.dpr"
 note = "bsarch accepts it with the upstream spelling (-fo3); xedit archive pack takes it as an option of the same meaning."
 
 [switch.fo4]
 status = "covered"
-source = "BSArch.dpr"
 command = "archive.pack"
+source = "BSArch.dpr"
 note = "bsarch accepts it with the upstream spelling (-fo4); xedit archive pack takes it as an option of the same meaning."
 
 [switch.fo4dds]
 status = "covered"
-source = "BSArch.dpr"
 command = "archive.pack"
+source = "BSArch.dpr"
 note = "bsarch accepts it with the upstream spelling (-fo4dds); xedit archive pack takes the format fo4dds. Checked against BSArch.exe by cargo xtask parity bsarch."
 
 [switch.forcebsa]
@@ -3044,8 +3044,8 @@ source = "xEdit/xeInit.pas"
 
 [switch.i]
 status = "covered"
-source = "Sniff/frmMain.pas"
 command = "sniff.run"
+source = "Sniff/frmMain.pas"
 note = "The sniff binary takes -I: as Sniff.exe does; sniff.run takes it as a parameter."
 
 [switch.ignoreesl]
@@ -3086,14 +3086,14 @@ source = "xDump.dpr"
 
 [switch.list]
 status = "covered"
-source = "BSArch.dpr"
 command = "archive.list"
+source = "BSArch.dpr"
 note = "bsarch accepts -list as BSArch does; xedit archive list --files lists the files."
 
 [switch.log]
 status = "covered"
-source = "Sniff/frmMain.pas"
 command = "sniff.run"
+source = "Sniff/frmMain.pas"
 note = "The sniff binary takes -LOG: as Sniff.exe does; sniff.run takes it as a parameter."
 
 [switch.m]
@@ -3130,8 +3130,8 @@ source = "xEdit/xeInit.pas"
 
 [switch.mt]
 status = "covered"
-source = "BSArch.dpr"
 command = "archive.pack"
+source = "BSArch.dpr"
 note = "bsarch accepts -mt as BSArch does; xedit archive pack takes it as an option of the same meaning."
 
 [switch.nobsa]
@@ -3168,20 +3168,20 @@ source = "xEdit/xeInit.pas"
 
 [switch.o]
 status = "covered"
-source = "Sniff/frmMain.pas"
 command = "sniff.run"
+source = "Sniff/frmMain.pas"
 note = "The sniff binary takes -O: as Sniff.exe does; sniff.run takes it as a parameter."
 
 [switch.op]
 status = "covered"
-source = "Sniff/frmMain.pas"
 command = "sniff.run"
+source = "Sniff/frmMain.pas"
 note = "The sniff binary takes -OP: as Sniff.exe does; sniff.run takes it as a parameter."
 
 [switch.p]
 status = "covered"
-source = "Sniff/frmMain.pas"
 command = "sniff.run"
+source = "Sniff/frmMain.pas"
 note = "The sniff binary takes -P: as Sniff.exe does; sniff.run takes it as a parameter."
 
 [switch.pseudoesl]
@@ -3254,8 +3254,8 @@ source = "xEdit/xeInit.pas"
 
 [switch.s]
 status = "covered"
-source = "Sniff/frmMain.pas"
 command = "sniff.run"
+source = "Sniff/frmMain.pas"
 note = "The sniff binary takes -S: as Sniff.exe does; sniff.run takes it as a parameter."
 
 [switch.script]
@@ -3268,20 +3268,20 @@ source = "xEdit/xeInit.pas"
 
 [switch.sf1]
 status = "covered"
-source = "BSArch.dpr"
 command = "archive.pack"
+source = "BSArch.dpr"
 note = "bsarch accepts it with the upstream spelling (-sf1); xedit archive pack takes it as an option of the same meaning."
 
 [switch.sf1dds]
 status = "covered"
-source = "BSArch.dpr"
 command = "archive.pack"
+source = "BSArch.dpr"
 note = "bsarch accepts it with the upstream spelling (-sf1dds); xedit archive pack takes the format sf1dds. Checked against BSArch.exe by cargo xtask parity bsarch."
 
 [switch.share]
 status = "covered"
-source = "BSArch.dpr"
 command = "archive.pack"
+source = "BSArch.dpr"
 note = "bsarch accepts -share as BSArch does; xedit archive pack takes it as an option of the same meaning."
 
 [switch.showfixup]
@@ -3294,8 +3294,8 @@ source = "xEdit/xeInit.pas"
 
 [switch.skip]
 status = "covered"
-source = "Sniff/frmMain.pas"
 command = "sniff.run"
+source = "Sniff/frmMain.pas"
 note = "The sniff binary takes -skip: as Sniff.exe does; sniff.run takes it as a parameter."
 
 [switch.skipbsa]
@@ -3316,8 +3316,8 @@ source = "xEdit/xeInit.pas"
 
 [switch.split]
 status = "covered"
-source = "BSArch.dpr"
 command = "archive.pack"
+source = "BSArch.dpr"
 note = "bsarch accepts -split as BSArch does; xedit archive pack takes it as an option of the same meaning."
 
 [switch.sr]
@@ -3334,8 +3334,8 @@ source = "xDump.dpr"
 
 [switch.sse]
 status = "covered"
-source = "BSArch.dpr"
 command = "archive.pack"
+source = "BSArch.dpr"
 note = "bsarch accepts it with the upstream spelling (-sse); xedit archive pack takes it as an option of the same meaning."
 
 [switch.stripemptymasters]
@@ -3348,8 +3348,8 @@ source = "xEdit/xeInit.pas"
 
 [switch.subdir]
 status = "covered"
-source = "Sniff/frmMain.pas"
 command = "sniff.run"
+source = "Sniff/frmMain.pas"
 note = "The sniff binary takes -subdir: as Sniff.exe does; sniff.run takes it as a parameter."
 
 [switch.summary]
@@ -3362,20 +3362,20 @@ source = "xEdit/xeInit.pas"
 
 [switch.tes3]
 status = "covered"
-source = "BSArch.dpr"
 command = "archive.pack"
+source = "BSArch.dpr"
 note = "bsarch accepts it with the upstream spelling (-tes3); xedit archive pack takes it as an option of the same meaning."
 
 [switch.tes4]
 status = "covered"
-source = "BSArch.dpr"
 command = "archive.pack"
+source = "BSArch.dpr"
 note = "bsarch accepts it with the upstream spelling (-tes4); xedit archive pack takes it as an option of the same meaning."
 
 [switch.tes5]
 status = "covered"
-source = "BSArch.dpr"
 command = "archive.pack"
+source = "BSArch.dpr"
 note = "bsarch accepts it with the upstream spelling (-tes5); xedit archive pack takes it as an option of the same meaning."
 
 [switch.thisisfine]
@@ -3384,8 +3384,8 @@ source = "xEdit/xeInit.pas"
 
 [switch.threads]
 status = "covered"
-source = "Sniff/frmMain.pas"
 command = "sniff.run"
+source = "Sniff/frmMain.pas"
 note = "The sniff binary takes -threads: as Sniff.exe does; sniff.run takes it as a parameter."
 
 [switch.top]
@@ -3442,8 +3442,8 @@ source = "xDump.dpr"
 
 [switch.z]
 status = "covered"
-source = "BSArch.dpr"
 command = "archive.pack"
+source = "BSArch.dpr"
 note = "bsarch accepts -z as BSArch does; xedit archive pack takes it as an option of the same meaning."
 
 [game_mode.gmEnderal]
@@ -3540,8 +3540,8 @@ source = "Core/wbInterface.pas"
 
 [tool_mode.tmLODgen]
 status = "covered"
-source = "Core/wbInterface.pas"
 command = "lodgen.generate"
+source = "Core/wbInterface.pas"
 note = "xedit lodgen runs the LODGen mode: no internal edits, shorter names, the archives of the game ini and the plugins loaded as TLoaderThread does; -O:, -S:, -T:, -D: and -I: are the output, scripts, temp, data and game_ini parameters."
 
 [tool_mode.tmMasterRestore]

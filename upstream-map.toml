@@ -595,10 +595,12 @@ status = "pending"
 [units."xEdit/xeInit.pas"]
 status = "pending"
 rust = "crates/xedit-session/src/save.rs"
-note = "The per-game settings the save path reads (apply_edit_settings) are ported. Startup and the command line are pending."
+note = "The per-game settings the save path reads (apply_edit_settings) are ported, and the tmLODgen settings of xEdit (the tool mode, no internal edits, the shorter record names) are set by lodgen.generate. Startup and the command line are pending."
 
 [units."xEdit/xeLODGenForm.pas"]
 status = "pending"
+rust = "crates/xedit-session/src/lodgen.rs"
+note = "The form's options and their lists, the worldspace list with its default checks and the Generate and Split LOD Atlas clicks are lodgen.generate (the worldspaces, the options with the settings file they are read from and written to, split_trees and the seed); checked by cargo xtask parity lodgen (20 cases, all equal). The form and its controls are the GUI phase's."
 
 [units."xEdit/xeLegendForm.pas"]
 status = "pending"
@@ -615,7 +617,7 @@ status = "pending"
 [units."xEdit/xeMainForm.pas"]
 status = "pending"
 rust = "crates/xedit-session/src/save.rs"
-note = "SaveChanged is ported as files.save (one file per call, atomic rename instead of the queued rename). mniNavAddClick is elements.add, mniNavRemoveClick is records.delete and elements.remove, mniNavCopyIntoClick (copy as override, as new record, deep copy) is records.copy, and mniNavAddMastersClick, mniNavSortMastersClick and mniNavCleanMastersClick are masters.add, masters.sort and masters.clean (crates/xedit-session/src/edit.rs and masters.rs), the dialogs as parameters; the copy with overwriting, as a spawn rate override and as a wrapper are not ported. mniNavChangeFormIDClick, mniNavRenumberFormIDsFromClick (with Compact and Inject) and ShowChangeReferencedBy are ported as formids.change and formids.renumber (crates/xedit-session/src/formids.rs), the dialogs as parameters. The form itself is pending. The GUI's wbDisplayShorterNames applies to the messages of files.save, as the oracle reports them."
+note = "SaveChanged is ported as files.save (one file per call, atomic rename instead of the queued rename). mniNavAddClick is elements.add, mniNavRemoveClick is records.delete and elements.remove, mniNavCopyIntoClick (copy as override, as new record, deep copy) is records.copy, and mniNavAddMastersClick, mniNavSortMastersClick and mniNavCleanMastersClick are masters.add, masters.sort and masters.clean (crates/xedit-session/src/edit.rs and masters.rs), the dialogs as parameters; the copy with overwriting, as a spawn rate override and as a wrapper are not ported. mniNavChangeFormIDClick, mniNavRenumberFormIDsFromClick (with Compact and Inject) and ShowChangeReferencedBy are ported as formids.change and formids.renumber (crates/xedit-session/src/formids.rs), the dialogs as parameters. mniNavGenerateLODClick and DoGenerateLOD (the tmLODgen mode: the archives of the game ini and the plugins loaded as TLoaderThread does, no internal edits, the shorter names) are ported as lodgen.generate (crates/xedit-session/src/lodgen.rs); the LODGen form itself is xeLODGenForm.pas. The form itself is pending. The GUI's wbDisplayShorterNames applies to the messages of files.save, as the oracle reports them."
 
 [units."xEdit/xeModGroupEditForm.pas"]
 status = "pending"
