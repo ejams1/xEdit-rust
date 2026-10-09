@@ -272,6 +272,9 @@ globals! {
     master_update_filter_onam, set_master_update_filter_onam, wbMasterUpdateFilterONAM: bool = false;
     master_update_fix_persistence, set_master_update_fix_persistence, wbMasterUpdateFixPersistence: bool = true;
     allow_internal_edit, set_allow_internal_edit, wbAllowInternalEdit: bool = true;
+    /// The loader builds the reference information of the plugins (off in
+    /// Morrowind and in the tool modes that only check or update files).
+    build_refs, set_build_refs, wbBuildRefs: bool = true;
     show_internal_edit, set_show_internal_edit, wbShowInternalEdit: bool = false;
     report_mode, set_report_mode, wbReportMode: bool = false;
     report_unused, set_report_unused, wbReportUnused: bool = false;

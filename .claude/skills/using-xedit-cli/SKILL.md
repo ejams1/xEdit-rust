@@ -72,6 +72,8 @@ Inspection (never mutates):
 | `compare <FormID> [--file F] [--master-and-leafs] [--hide-no-conflict] [--include-hidden] [--modgroups NAME]... [--all-modgroups] [--saved-modgroups]` | `records.compare` | The records of a FormID side by side, row by row, with the conflict status of each row and cell, as the view tab shows them. |
 | `modgroups list [--all]` | `modgroups.list` | The valid mod groups by name (`--all`: every group of every file) with their items, validity, messages and whether the saved selection has them. |
 | `modgroups show <name> [--file F]` | `modgroups.show` | One mod group with the state of each item: loaded, load order, CRC32s, current CRC32, valid. |
+| `check [--file F]... [--record FormID]... [--record-file F] [--last]` | `files.check` | xEdit's "Check for Errors": every element of the plugins (or files, or records) asked for its errors, printed as xEdit's message log shows them (with `--json` the records and errors as data). See "Checking for errors". |
+| `dump --check --game G <plugin>` | (none) | `xDump.exe -check`: the errors of every element of the plugin in xDump's form (children from the last, `Above errors were found in: ...` below each container), to stdout. |
 | `refs get <FormID> [--file F] [--offset N] [--limit N]` | `refs.get` | The records that refer to a record (xEdit's "Referenced By" tab) and the FormIDs it refers to. Builds the reference index first. |
 | `refs build [--file F] [--only-load]` | `refs.build` | Builds the reference index of the loaded files, or loads it from the reference cache, and saves the cache (`BuildOrLoadRef`). |
 | `refs dump` | (none) | The referenced-by lists of every record as text, for the parity check. |
@@ -346,6 +348,20 @@ xedit --json --game sse --load "<Data>\Dawnguard.esm" localization get --form-id
 xedit --json --edit --game sse --load "<Data>\ccBGSSSE025-AdvDSGS.esm" batch delocalize.json
 ```
 
+## Checking for errors
+
+`check` is xEdit's "Check for Errors" (`files.check`). It walks every element below each checked node in order and asks it for `Check`: an unresolved FormID (`[01000ABC] <Error: Could not be resolved>`), a FormID of a record type the field does not take (`Found a GMST reference, expected: ARMO,LVLI`), a `NULL` where none is allowed, an enum or flag value without a name (`<Unknown: 2 $2>`), missing required members, a deleted record or partial form that still has data, a new record in an update module, an object ID beyond a light (`FFF`) or medium module's range, a FormID that differs from its fixed FormID (`HITME`), data shorter than its definition, and the checks of the game's definitions (the story manager of a quest, the variables of a script, the face dials of a Starfield NPC and so on).
+
+- Without `--file` and `--record` it checks the plugins given with `--load`; `--last` checks the last file of the load order as the `-CheckForErrors` mode does (with only a game master loaded that is the file of the hardcoded records, `[00] <game>.exe`).
+- `xedit check` loads the plugins as xEdit's `-CheckForErrors` mode does: no internal edits of the load (`wbAllowInternalEdit` off; the records still get the fixes of their init, because the GUI checks only where editing is allowed) and no reference information (`wbBuildRefs` off, so the story manager check of a quest is skipped). Through `call files.check`, `batch`, `serve` or `mcp` a session checks as the edit mode's menu item does: the reference index is built first.
+- Text output: `Start: Checking for Errors`, `Checking for Errors in <node>`, then per record with errors its name and a line `    <path> -> <error>` per error (the path starts at the record's signature: `OTFT \ INAM - Items \ Item`), and `Done: Checking for Errors, Processed Records: N, Errors found: M` (records with errors). The messages a record logs while it is built (`Error: record STAT contains unexpected (or out of order) subrecord ...`, `Errors were found in: ...`, `Contained subrecords: ...`) come where xEdit logs them, twice, as xEdit builds a record twice during the check. `--json` gives `checked`, `errors_found`, `exit_code` (the errors found, at most 127, the exit code of `-CheckForErrors`), `records` (name, FormID, signature, file and the errors of each) and `messages` (the lines above). The command reads; it changes nothing and needs no `--edit`.
+- The records are checked on all CPUs with the same output as on one thread.
+
+```
+xedit --game sse --load "<Data>\Dawnguard.esm" check
+xedit --json --game fo4 --load "<Data>\DLCRobot.esm" check --record 01000F99
+```
+
 ## Saving a plugin
 
 `save` runs `PrepareSave` and `WriteToStream` as upstream does: every unmodified record is copied as loaded, a modified record is rebuilt from its elements (and compressed again when its flag says so), and the file's CRC32 is computed on the result. The response reports `bytes`, `crc32`, `loaded_crc32`, `changed`, `written` and `backup`. A save of an untouched plugin equals the bytes xEdit's own GUI saves for every plugin of the corpus that the oracle saves (239 of 249 plugins; the rest are refusals the oracle gives too, and the Morrowind masters, which it can not save). That is not always the input file: xEdit drops some data on load (the `OFST` of a worldspace) and rewrites the header (the `HEDR` record count, `INCC`, the `ONAM` list of a master, the ESM flag of an `.esm`).
@@ -400,7 +416,7 @@ xedit --json --edit --game sse --load "<Data>\Skyrim.esm" save --no-backup --out
 
 ## Known gaps
 
-Behaviour a user can meet, as of phase 4 step 7. Each is an upstream behaviour not ported yet; say so rather than work around it silently.
+Behaviour a user can meet, as of phase 4 step 3. Each is an upstream behaviour not ported yet; say so rather than work around it silently.
 
 - **Strings.** The Fallout 4 DLC keep their string tables in `<plugin> - Main.ba2`, which the load does not read (it reads loose tables and `<plugin>.ba2`, `<plugin> - Interface.ba2`, `<plugin> - Localization.ba2`), so their strings show `<Error: No strings file ...>` unless the tables are loose in `Data\Strings`; editing such a string then makes new, empty tables. The `.cpoverride` code page of a table is read; the archive's files are listed sorted, not in archive order.
 - **Copy over an existing override.** xEdit's "...with overwriting" (`aAllowOverwrite`) is not ported: `records copy` returns the existing override unchanged. A partial form (`MakePartialForm`), template elements and aligned arrays can not be copied either.
@@ -410,6 +426,7 @@ Behaviour a user can meet, as of phase 4 step 7. Each is an upstream behaviour n
 - **Mod groups.** The named selection presets of xEdit's selection dialog are not ported. The modules that are not loaded are ordered by name, where xEdit uses its load order, which decides only the order of their `.modgroups` files (and of groups of the same name in them).
 - **Conflicts.** Records the GUI user hid and the compare-to load (`Compare to...`) do not exist; the raw data compare (`wbCompareRawData`) is not ported; compare of selected records of different FormIDs (`Compare Selected`) and the script function `ConflictAllForElements` have no command yet.
 - **Cleaning.** `clean` cleans one plugin per call. xEdit's `-AllowMakePartial` (partial forms of cells and worldspaces with children) is not ported, the UDR options of xEdit's Options dialog are fixed at their defaults, and the LOOT dirty-information report is the counts of the response. The legacy switches (`-quickautoclean`, `-qac`, `-checkforitm`) are not accepted yet (phase 4 step 9). In the oracle check a few saved plugins still differ from xEdit's in the bytes of records the clean did not touch (see `docs/PLAN.md`, owed from step 5).
+- **Check for errors.** The legacy `-CheckForErrors` switch itself is not accepted yet (phase 4 step 9; `xedit check --last` does what it does). The script function `Check` of one element has no command.
 - **Morrowind.** Plugins load and dump, but the save stops at `must have a FormID`: the identity FormID of a TES3 record is not ported. The 4.1.5q oracle saves no Morrowind plugin either (its GUI runs Morrowind in view mode), so there is nothing to compare with.
 - **Sessions.** One session per process; `serve` and `mcp` can not load other plugins later, and a named pipe serves one client at a time.
 - **Starfield.** The complex FileIDs (light and medium masters with slots of their own) are followed by the master functions and the FormID lookups, but FormID changes and renumbering across masters are unchecked there. The oracle refuses to save the official Starfield modules whose header the save would edit, and so does the port.

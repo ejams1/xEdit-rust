@@ -14,6 +14,7 @@
 
 pub mod add;
 pub mod assign;
+pub mod check;
 pub mod copy;
 pub mod edit;
 pub mod file_flags;
@@ -66,7 +67,20 @@ macro_rules! element_common {
     ($base:ident) => {
         element_common!($base, with_values);
     };
+    ($base:ident, own_path) => {
+        element_common!(@common $base, with_values);
+    };
     ($base:ident, $values:ident) => {
+        element_common!(@common $base, $values);
+
+        fn get_path(&self) -> String {
+            match self.$base().container() {
+                Some(container) => format!("{} \\ {}", container.get_path(), self.get_name()),
+                None => self.get_name(),
+            }
+        }
+    };
+    (@common $base:ident, $values:ident) => {
         element_no_values!($values);
         fn get_element_id(&self) -> usize {
             std::ptr::from_ref(self) as *const () as usize
@@ -93,13 +107,6 @@ macro_rules! element_common {
         fn get_full_path(&self) -> String {
             match self.$base().container() {
                 Some(container) => format!("{} \\ {}", container.get_full_path(), self.get_name()),
-                None => self.get_name(),
-            }
-        }
-
-        fn get_path(&self) -> String {
-            match self.$base().container() {
-                Some(container) => format!("{} \\ {}", container.get_path(), self.get_name()),
                 None => self.get_name(),
             }
         }
@@ -306,6 +313,17 @@ pub(crate) fn element_by_name(container: &dyn Container, name: &str) -> Option<E
                 .find(|element| element.get_display_name(true).eq_ignore_ascii_case(name))
         })
         .cloned()
+        .or_else(|| flag_by_name(container, name))
+}
+
+/// The flag of a flags value under `wbFlagsAsArray`, which upstream holds as
+/// an element of the value (`TwbFlag`) and the port builds on demand: a set
+/// flag with the name, found as the other elements are.
+fn flag_by_name(container: &dyn Container, name: &str) -> Option<ElementRef> {
+    let container = container.as_container_ref()?;
+    flag::flags_as_array_of(&container)?.into_iter().find(|flag| {
+        flag.get_name().eq_ignore_ascii_case(name) || flag.get_display_name(true).eq_ignore_ascii_case(name)
+    })
 }
 
 /// Port of `ElementByPath` with `ResolveElementName`: the names separated by
@@ -2203,6 +2221,13 @@ impl MainRecordImpl {
         self.mr_def.as_ref()
     }
 
+    /// Whether the load skipped the record for a duplicate FormID
+    /// (`EwbSkipLoad`): upstream drops it from the tree, the port keeps it
+    /// for its bytes and leaves it out of the analyses.
+    pub fn is_skipped_duplicate(&self) -> bool {
+        self.mr_duplicate.load(Ordering::Relaxed)
+    }
+
     pub(crate) fn cache_editor_id(&self, editor_id: String) {
         *self.mr_editor_id.write().unwrap() = editor_id;
     }
@@ -3899,7 +3924,17 @@ impl Container for GroupRecordImpl {
 }
 
 impl Element for MainRecordImpl {
-    element_common!(element_base);
+    element_common!(element_base, own_path);
+
+    /// Port of `TwbMainRecord.GetPath`: the signature alone, so the path
+    /// of an element in a record starts at its record.
+    fn get_path(&self) -> String {
+        self.mr_struct().signature.to_string()
+    }
+
+    fn get_check(&self) -> String {
+        self.self_arc().check()
+    }
 
     /// Port of `TwbMainRecord.GetName`.
     fn get_name(&self) -> String {

@@ -282,6 +282,16 @@ fn element_as_record(element: &ElementRef) -> Option<Arc<MainRecordImpl>> {
     element.as_element_impl().and_then(ElementImpl::main_record_impl)
 }
 
+/// The names of `element` and its containers up to its file, joined with
+/// ` \ ` (the path through the records, where `GetPath` stops at the
+/// record's signature).
+fn path_through_records(element: &ElementRef) -> String {
+    match element.get_container() {
+        Some(container) => format!("{} \\ {}", path_through_records(&container), element.get_name()),
+        None => element.get_name(),
+    }
+}
+
 /// `CompareStr` of two strings: by their UTF-16 code units.
 fn compare_str(a: &str, b: &str) -> std::cmp::Ordering {
     if a.is_ascii() && b.is_ascii() {
@@ -463,7 +473,9 @@ impl<'a> ConflictContext<'a> {
     /// container itself is found only in such a file.
     pub fn node_datas_for_container(&mut self, container: &ElementRef) -> Vec<ViewNodeData> {
         let file_path = container.get_file().map(|file| file.get_path()).unwrap_or_default();
-        let mut path = container.get_path();
+        // The path through the records: what the gate compared (the hardcoded
+        // file's elements are found under it, see the quirk above).
+        let mut path = path_through_records(container);
         if let Some(rest) = path.strip_prefix(&format!("{file_path} \\ ")) {
             path = rest.to_owned();
         }

@@ -166,6 +166,21 @@ enum Action {
         #[arg(long)]
         no_backup: bool,
     },
+    /// Check for errors (files.check, "Check for Errors"): every element of the files or records is checked, and each record with errors is printed with its errors as xEdit's message log shows them. Loads the plugins as the -CheckForErrors mode does (no internal edits of the load). With --json the records and errors as JSON.
+    Check {
+        /// Loaded file to check; repeat for several. The plugins given with --load when neither a file nor a record is named.
+        #[arg(long)]
+        file: Vec<String>,
+        /// Load order FormID of a record to check; repeat for several.
+        #[arg(long)]
+        record: Vec<String>,
+        /// The loaded file whose version of the records is checked; the last loaded plugin when omitted.
+        #[arg(long)]
+        record_file: Option<String>,
+        /// Check the last file of the load order instead, as xEdit's -CheckForErrors mode does (the hardcoded records when only the game master is loaded).
+        #[arg(long)]
+        last: bool,
+    },
     /// Write a loaded plugin to disk as xEdit saves it (files.save).
     Save {
         /// Plugin name; the only loaded plugin when omitted.
@@ -253,6 +268,9 @@ enum Action {
         game: String,
         /// Path of the plugin.
         file: String,
+        /// Write the errors of the elements instead, as xDump -check does ("Check for Errors" of xDump).
+        #[arg(long)]
+        check: bool,
     },
     /// NIF and KF meshes, BGSM and BGEM materials, LOD, FUZ and DDS files, loose or in an archive.
     Assets {
@@ -1463,6 +1481,15 @@ fn command_of(action: Action) -> Result<(String, Value), CommandError> {
                 "output": output, "backup": !no_backup
             }),
         ),
+        Action::Check {
+            file,
+            record,
+            record_file,
+            last,
+        } => (
+            "files.check".to_owned(),
+            json!({ "files": file, "records": record, "record_file": record_file, "last": last }),
+        ),
         Action::Save {
             file,
             output,
@@ -1747,6 +1774,9 @@ fn main() -> ExitCode {
     xedit_session::commands::set_language_on_load(cli.language.as_deref());
     xedit_session::commands::set_translate_on_load(cli.translate);
     xedit_session::commands::set_quick_clean_on_load(matches!(cli.action, Action::Clean { quick: true, .. }));
+    // The settings `-CheckForErrors` gives the load.
+    let check = matches!(cli.action, Action::Check { .. });
+    xedit_session::commands::set_check_on_load(check);
     xedit_session::modgroups::set_file_options(cli.modgroups_file.as_deref(), cli.settings.as_deref());
     if matches!(cli.action, Action::Serve { .. } | Action::Mcp) {
         // stdout carries the protocol; the progress of a load goes to stderr.
@@ -1763,10 +1793,14 @@ fn main() -> ExitCode {
             }
         };
     }
-    if let Action::Dump { game, file } = cli.action {
+    if let Action::Dump { game, file, check } = cli.action {
         return run_dump(move |out| {
             let mode = xedit_session::dump::setup_game(&game)?;
-            xedit_session::dump::dump_file(&file, mode, out)
+            if check {
+                xedit_session::dump::check_file(&file, mode, out)
+            } else {
+                xedit_session::dump::dump_file(&file, mode, out)
+            }
         });
     }
     if let Action::Saves {
@@ -1794,6 +1828,12 @@ fn main() -> ExitCode {
     let outcome = run(cli.game, cli.load, cli.edit, cli.action);
     match (&outcome, cli.json) {
         (Ok(result), true) => println!("{}", json!({ "ok": true, "result": result })),
+        // `xedit check` prints the message log of "Check for Errors".
+        (Ok(result), false) if check => {
+            for line in result["messages"].as_array().into_iter().flatten() {
+                println!("{}", line.as_str().unwrap_or_default());
+            }
+        }
         (Ok(result), false) => println!("{result:#}"),
         (Err(error), true) => println!("{}", json!({ "ok": false, "error": error })),
         (Err(error), false) => eprintln!("error: {error}"),

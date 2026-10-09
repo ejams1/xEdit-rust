@@ -873,6 +873,12 @@ impl MainRecordImpl {
             own.push(Arc::downgrade(record));
         }
         drop(own);
+        // `SetReferencesInjected` of the records that refer to this one:
+        // they refer to an injected record exactly when it is one.
+        let injected = self.is_injected();
+        for record in self.referenced_by() {
+            record.set_references_injected(injected);
+        }
         if let Some(file) = self.file_impl()
             && !file.is_new_record(self.mr_struct().form_id.file_id())
             && let Some(master_file) = file.get_master_for_file_id(self.mr_struct().form_id.file_id())

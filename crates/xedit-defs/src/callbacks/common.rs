@@ -18,8 +18,9 @@ use xedit_core::delphi::{float_to_str_f_fixed, format_general, round, str_to_flo
 use xedit_core::interface::builders::wb_flags_unknown_is_unused;
 use xedit_core::interface::constructors::get_container_from_union;
 use xedit_core::interface::globals::{
-    GameMode, begin_internal_edit, cell_size_factor, cs, end_internal_edit, game_mode, is_fallout_nv, is_fallout3,
-    is_fallout4, is_fallout76, is_morrowind, is_oblivion, is_skyrim, is_starfield, remove_offset_data, resolve_alias,
+    GameMode, begin_internal_edit, build_refs, cell_size_factor, cs, end_internal_edit, game_mode, is_fallout_nv,
+    is_fallout3, is_fallout4, is_fallout76, is_morrowind, is_oblivion, is_skyrim, is_starfield, remove_offset_data,
+    resolve_alias,
 };
 use xedit_core::interface::misc::{EditError, int_to_hex64, progress, str_to_int_def};
 use xedit_core::interface::string::to_comma_text;
@@ -2408,18 +2409,51 @@ pub fn wb_quest_stage_to_int(a_string: &str, _a_element: ElementArg) -> i64 {
     digits.parse().unwrap_or(0)
 }
 
-/// Upstream `wbQUSTEventToStr`: warns about a quest the story manager
-/// does not know.
+/// Upstream `wbQUSTEventToStr`: warns about a quest that no story manager
+/// quest node (`SMQN`) among the records that refer to it lists.
 ///
-/// UPSTREAM-QUIRK: upstream looks for an `SMQN` among the references to the
-/// quest. The references are only built on request, which the dump never
-/// does, so the quest is never found and the warning always applies, as
-/// the oracle prints it.
+/// UPSTREAM-QUIRK: the references are those of the reference index, which
+/// the dump never builds, so there the quest is never found and the
+/// warning always applies, as the oracle prints it; the modes that build no
+/// references (`wbBuildRefs` off, the `-CheckForErrors` mode) never warn.
 pub fn wb_qust_event_to_str(a_value: &mut String, _a_base_ptr: DataPtr, a_element: ElementArg, a_type: CallbackType) {
     let Some(element) = a_element else { return };
+    if !build_refs() {
+        return;
+    }
     let Some(main_record) = element.get_containing_main_record() else {
         return;
     };
+    let referenced_by = main_record
+        .as_element_impl()
+        .and_then(|record| record.main_record_impl())
+        .map(|record| record.referenced_by())
+        .unwrap_or_default();
+    let master = main_record.get_master_or_self();
+    for referencing in referenced_by {
+        if referencing.get_signature() != Signature::new(b"SMQN") {
+            continue;
+        }
+        let Some(quests) = referencing.get_element_by_name("Quests") else {
+            continue;
+        };
+        let Some(quests) = quests.as_container() else { continue };
+        for index in 0..quests.get_element_count() {
+            let Some(quest) = quests.get_element(index) else {
+                continue;
+            };
+            let Some(first) = quest.as_container().and_then(|quest| quest.get_element(0)) else {
+                continue;
+            };
+            let Some(links_to) = first.get_links_to().and_then(|linked| linked.into_main_record()) else {
+                continue;
+            };
+            let links_to = links_to.get_master_or_self();
+            if std::ptr::addr_eq(Arc::as_ptr(&links_to), Arc::as_ptr(&master)) {
+                return;
+            }
+        }
+    }
     match a_type {
         CallbackType::ctCheck => {
             *a_value = format!(

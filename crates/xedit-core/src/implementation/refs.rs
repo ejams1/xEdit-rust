@@ -71,6 +71,10 @@ pub struct RecordRefs {
     /// Port of `mrReferences`: the FormIDs the record refers to as its file
     /// stores them, sorted.
     references: Vec<FormID>,
+    /// Port of `mrsReferencesInjectedChecked`.
+    pub(crate) injected_checked: bool,
+    /// Port of `mrsReferencesInjected`.
+    pub(crate) references_injected: bool,
 }
 
 /// The records that refer to a main record.

@@ -142,6 +142,9 @@ impl ValueBase {
         let name = self.vb_value_def.get_name();
         if self.e_name_suffix.is_empty() {
             name.to_owned()
+        } else if name.is_empty() {
+            // `TwbValueBase.GetName`: the space only after a name.
+            self.e_name_suffix.clone()
         } else {
             format!("{name} {}", self.e_name_suffix)
         }
@@ -637,7 +640,14 @@ impl ValueImpl {
                 };
             }
             match self.kind {
-                ValueKind::Value => {}
+                // `TwbValue.Init` with `ValueDoInit`: the `AfterLoad` of the
+                // resolved definition (the flags of `wbFlagsAsArray` are
+                // built on demand, `flag.rs`).
+                ValueKind::Value => {
+                    let data = cursor.block.as_slice().get(cursor.pos..cursor.end);
+                    let resolved = resolve(self.vb.vb_value_def.clone(), data, Some(&self_ref));
+                    resolved.after_load(&self_ref);
+                }
                 ValueKind::Struct => struct_do_init(&self.vb.vb_value_def, &self_ref, &self.vb.file, &mut cursor),
                 ValueKind::Array => {
                     let (_, prefix) = array_do_init(&self.vb.vb_value_def, &self_ref, &self.vb.file, &mut cursor);
@@ -1163,6 +1173,18 @@ impl Element for ValueImpl {
         self.vb.vb_value_def.to_native_value(self.data(), Some(&self_ref))
     }
 
+    /// Port of `TwbValueBase.GetCheck`: the `Check` of the definition over
+    /// the data. The terminator of a string list is a `TwbElement`, which
+    /// has none.
+    fn get_check(&self) -> String {
+        if self.kind == ValueKind::Terminator {
+            return String::new();
+        }
+        self.do_init();
+        let self_ref = self.element_ref();
+        self.vb.vb_value_def.check(self.data(), Some(&self_ref))
+    }
+
     /// Port of `TwbValueBase.GetSummary`.
     fn get_summary(&self) -> String {
         self.do_init();
@@ -1302,11 +1324,8 @@ impl ElementImpl for ValueImpl {
     /// Port of `TwbArray.DoInit(True)`.
     fn do_init_sorted(&self) {
         self.do_init();
-        if super::sorting_allowed()
-            && self.vb.arr_sorted.load(Ordering::Relaxed)
-            && self.vb.arr_sort_invalid.swap(false, Ordering::Relaxed)
-        {
-            edit::sort_by_sort_keys(&self.vb.container);
+        if super::sorting_allowed() && self.vb.arr_sorted.load(Ordering::Relaxed) {
+            edit::sort_if_invalid(&self.vb.arr_sort_invalid, &self.vb.container);
         }
     }
 

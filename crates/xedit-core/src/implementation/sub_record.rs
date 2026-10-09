@@ -261,11 +261,8 @@ impl SubRecordImpl {
     /// init) made the order invalid.
     pub fn sorted_init(&self) {
         self.do_init();
-        if super::sorting_allowed()
-            && self.sr_sorted.load(Ordering::Relaxed)
-            && self.sr_sort_invalid.swap(false, Ordering::Relaxed)
-        {
-            edit::sort_by_sort_keys(&self.container);
+        if super::sorting_allowed() && self.sr_sorted.load(Ordering::Relaxed) {
+            edit::sort_if_invalid(&self.sr_sort_invalid, &self.container);
         }
     }
 
@@ -1611,6 +1608,9 @@ pub(super) fn init_main_record(record: &Arc<MainRecordImpl>) {
     let data = &block.as_slice()[data_start..end];
     let mut offset = data_start;
     let ignored = ignore_records();
+    // `lSubRecords` of `DBGSUBREC`, which the 4.1.5q release is built with:
+    // the subrecords as read, for the message of a record with errors.
+    let mut sub_records: Vec<String> = Vec::new();
     while offset < end {
         let Some(sub_record) = SubRecordImpl::create(
             &file,
@@ -1627,6 +1627,7 @@ pub(super) fn init_main_record(record: &Arc<MainRecordImpl>) {
         if ignored.contains(&signature) || record.mr_def.as_ref().is_some_and(|def| def.should_ignore(signature)) {
             sub_record.set_skipped(true);
         }
+        sub_records.push(sub_record.get_display_signature());
     }
     let Some(mr_def) = &record.mr_def else { return };
 
@@ -1775,6 +1776,7 @@ pub(super) fn init_main_record(record: &Arc<MainRecordImpl>) {
     }
     if found_error {
         progress(&format!("Errors were found in: {}", record.get_name()));
+        progress(&format!("Contained subrecords: {}", sub_records.join(" ")));
     }
     if sort_sub_records() && (mr_def.allow_unordered() || record.base.has_state(super::ElementState::esModified)) {
         edit::sort_sub_records_of(&**record);
@@ -1936,6 +1938,26 @@ impl Element for SubRecordImpl {
         };
         let self_ref = self.element_ref();
         value_def.to_native_value(self.data(), Some(&self_ref))
+    }
+
+    /// Port of `TwbSubRecord.GetCheck`: the `Check` of the value definition
+    /// over the data, then the `ToStr` callback of the definition with
+    /// `ctCheck`. A subrecord that is not shown has none.
+    fn get_check(&self) -> String {
+        let Some(def) = self.def() else {
+            return String::new();
+        };
+        if self.get_dont_show() {
+            return String::new();
+        }
+        self.do_init();
+        let self_ref = self.element_ref();
+        let mut result = match self.value_def() {
+            Some(value_def) => value_def.check(self.data(), Some(&self_ref)),
+            None => String::new(),
+        };
+        def.call_to_str(&mut result, Some(&self_ref), CallbackType::ctCheck);
+        result
     }
 
     /// Port of `TwbSubRecord.GetSummary`.
@@ -2319,6 +2341,13 @@ impl Element for SubRecordArrayImpl {
         result
     }
 
+    /// Port of `TwbSubRecordArray.GetCheck` (the entries are built with the
+    /// array, which is upstream's `DoInit(False)`).
+    fn get_check(&self) -> String {
+        let self_ref = self.self_ref.upgrade().map(|array| array as ElementRef);
+        super::check::record_member_check(&*self.arc_def, self_ref.as_ref())
+    }
+
     /// Port of `TwbSubRecordArray.GetSummary`.
     fn get_summary(&self) -> String {
         let self_ref = self.self_ref.upgrade().map(|array| array as ElementRef);
@@ -2489,8 +2518,8 @@ impl SubRecordArrayImpl {
     /// Port of `TwbSubRecordArray.DoInit(True)`: the members are sorted by
     /// their sort keys when a change made the order invalid.
     fn sorted_init(&self) {
-        if self.arc_sorted.load(Ordering::Relaxed) && self.arc_sort_invalid.swap(false, Ordering::Relaxed) {
-            edit::sort_by_sort_keys(&self.container);
+        if self.arc_sorted.load(Ordering::Relaxed) {
+            edit::sort_if_invalid(&self.arc_sort_invalid, &self.container);
         }
     }
 }
@@ -2522,6 +2551,13 @@ impl Element for SubRecordStructImpl {
         self.src_def
             .call_to_str(&mut result, self_ref.as_ref(), CallbackType::ctToStr);
         result
+    }
+
+    /// Port of `TwbSubRecordStruct.GetCheck` (the members are built with the
+    /// structure, which is upstream's `DoInit(False)`).
+    fn get_check(&self) -> String {
+        let self_ref = self.self_ref.upgrade().map(|structure| structure as ElementRef);
+        super::check::record_member_check(&*self.src_def, self_ref.as_ref())
     }
 
     /// Port of `TwbSubRecordStruct.GetSummary`.

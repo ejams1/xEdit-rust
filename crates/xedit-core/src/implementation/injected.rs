@@ -15,12 +15,12 @@
 //! holds the injected records and removes the references from the
 //! original.
 //!
-//! Upstream reads the references of a record from `mrReferences`, which the
-//! reference index fills (`BuildRef`); here they are the FormIDs that
-//! [`MainRecordImpl::build_ref`] collects, every time they are asked for.
-//! Upstream answers `ReferencesInjected` only for a record whose references
-//! were built (`csRefsBuild`); the GUI builds them for every record when it
-//! loads the plugins, so the port answers it always.
+//! `ReferencesInjected` reads the references of the reference index
+//! (`mrReferences`) and is answered only for a record whose references were
+//! built (`csRefsBuild`), which the GUI builds for every record when it
+//! loads the plugins; the commands that need it build the index first. The
+//! injection sources read the FormIDs that [`MainRecordImpl::build_ref`]
+//! collects, every time they are asked for.
 
 use std::sync::Arc;
 
@@ -68,15 +68,46 @@ impl MainRecordImpl {
 
     /// Port of `TwbMainRecord.GetReferencesInjected`: the record refers to
     /// an injected record whose file is not a master of the record's file.
+    /// Answered from the references of the reference index (`mrReferences`,
+    /// built again when the record changed since) once they were built
+    /// (`csRefsBuild`), and kept until a change of the references or of the
+    /// injected record says otherwise (`SetReferencesInjected`); false
+    /// without the index, as upstream.
     pub fn references_injected(self: &Arc<Self>) -> bool {
-        let Some(file) = self.file_impl() else {
-            return false;
+        {
+            let refs = self.mr_refs.lock().unwrap();
+            if refs.injected_checked {
+                return refs.references_injected;
+            }
+        }
+        if !self.refs_built() {
+            return self.mr_refs.lock().unwrap().references_injected;
+        }
+        if self.refs_out_of_date() {
+            self.build_ref();
+        }
+        let result = match self.file_impl() {
+            Some(file) => {
+                let masters = file.masters();
+                self.references().into_iter().any(|form_id| {
+                    injected_source(self, &file, form_id)
+                        .is_some_and(|source| !masters.iter().any(|master| Arc::ptr_eq(master, &source)))
+                })
+            }
+            None => false,
         };
-        let masters = file.masters();
-        self.collect_references().into_iter().any(|form_id| {
-            injected_source(self, &file, form_id)
-                .is_some_and(|source| !masters.iter().any(|master| Arc::ptr_eq(master, &source)))
-        })
+        let mut refs = self.mr_refs.lock().unwrap();
+        refs.injected_checked = true;
+        refs.references_injected = result;
+        result
+    }
+
+    /// Port of `TwbMainRecord.SetReferencesInjected`: `true` answers
+    /// `ReferencesInjected` from now on, `false` has it checked again.
+    pub(crate) fn set_references_injected(&self, value: bool) {
+        let mut refs = self.mr_refs.lock().unwrap();
+        refs.injected_checked = value;
+        refs.references_injected = value;
     }
 
     /// Port of `TwbMainRecord.RemoveInjected`: the elements that refer to an
@@ -104,6 +135,8 @@ impl MainRecordImpl {
                 }
             }
         }
+        // `Exclude(mrStates, mrsReferencesInjectedChecked)`.
+        self.mr_refs.lock().unwrap().injected_checked = false;
         if result && can_remove && self.get_is_removable() {
             result = false;
             self.remove();

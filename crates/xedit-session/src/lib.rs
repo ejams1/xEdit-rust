@@ -11,6 +11,7 @@
 pub mod archive;
 pub mod assets;
 pub mod batch;
+pub mod check;
 pub mod clean;
 pub mod commands;
 pub mod conflicts;
@@ -135,6 +136,7 @@ impl Registry {
         formids::register(&mut registry);
         refs::register(&mut registry);
         clean::register(&mut registry);
+        check::register(&mut registry);
         modgroups::register(&mut registry);
         localization::register(&mut registry);
         archive::register(&mut registry);

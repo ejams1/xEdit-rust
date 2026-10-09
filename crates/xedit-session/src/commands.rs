@@ -42,6 +42,19 @@ pub(crate) fn quick_clean_on_load() -> bool {
     QUICK_CLEAN_ON_LOAD.load(std::sync::atomic::Ordering::Relaxed)
 }
 
+/// Whether [`Session::load`] loads as the `-CheckForErrors` mode does.
+static CHECK_ON_LOAD: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Port of the settings `xeInit.pas` gives the `-CheckForErrors` mode (and
+/// `-CheckForITM`, `-CheckForDR`, `-MasterRestore`, `-clearESM`) before
+/// anything loads: no internal edits of the load (`wbAllowInternalEdit :=
+/// False`; the edits of `wbEditAllowed` still apply) and no reference
+/// information (`wbBuildRefs := False`, which some checks read). The
+/// sessions loaded afterwards use them; `xedit check` sets them.
+pub fn set_check_on_load(value: bool) {
+    CHECK_ON_LOAD.store(value, std::sync::atomic::Ordering::Relaxed);
+}
+
 /// Port of `-FillPNAM` and of the `wbFillPNAM := True` of the quick clean
 /// modes in `xeInit.pas`: the sessions loaded afterwards give a topic
 /// response without `PNAM` the `PNAM` of the response it follows when it is
@@ -129,6 +142,19 @@ impl Session {
             set_fill_inom(false);
             set_fill_inoa(false);
             set_remove_offset_data(true);
+        }
+        // `wbBuildRefs`: the GUI builds the references on load, except in
+        // Morrowind and in the modes that only check.
+        let check = CHECK_ON_LOAD.load(std::sync::atomic::Ordering::Relaxed);
+        xedit_core::interface::globals::set_build_refs(!check && mode != GameMode::gmTES3);
+        if check {
+            // `xeInit.pas` for `tmCheckForErrors`: the load makes no
+            // internal edits and builds no references. The mode edits
+            // (`wbEditAllowed`), so the records the load builds (the file
+            // headers) get the fixes of their init all the same; the CLI's
+            // edit gate is set again after the load.
+            xedit_core::interface::globals::set_allow_internal_edit(false);
+            xedit_core::interface::globals::set_edit_allowed(true);
         }
         clear_files();
         let mut files = Vec::new();
