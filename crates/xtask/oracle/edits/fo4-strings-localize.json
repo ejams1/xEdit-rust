@@ -1,0 +1,16 @@
+{
+  "description": "Localize plugin (mniNavLocalizationSwitchClick) on the oracle's delocalized plugin of fo4-strings-delocalize: every localized string becomes a new string of three new tables, with the IDs in the order the strings are gathered.",
+  "game": "fo4",
+  "strings": true,
+  "inputs_from": "fo4-strings-delocalize",
+  "load": [
+    "Fallout4.esm",
+    "DLCworkshop01.esm"
+  ],
+  "commands": [
+    {"command": "localization.localize", "params": {"file": "DLCworkshop01.esm"}}
+  ],
+  "save": [
+    "DLCworkshop01.esm"
+  ]
+}

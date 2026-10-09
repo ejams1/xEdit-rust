@@ -1,0 +1,19 @@
+{
+  "description": "Strings set and copied in a localized Starfield plugin: SFBGS004.esm loaded under another name (OracleLoc.esm), so it is not an official module, which Starfield does not let be edited; two names changed in place (Put), a misc item of Starfield.esm copied as an override and as a new record (its localized strings assigned as text, so they become new strings of the plugin's tables).",
+  "game": "sf1",
+  "strings": true,
+  "rename": {"OracleLoc.esm": "SFBGS004.esm"},
+  "load": [
+    "Starfield.esm",
+    "OracleLoc.esm"
+  ],
+  "commands": [
+    {"command": "elements.set", "params": {"form_id": "FE000049", "file": "OracleLoc.esm", "path": "FULL", "value": "Oracle keyword"}},
+    {"command": "elements.set", "params": {"form_id": "FE000033", "file": "OracleLoc.esm", "path": "FULL", "value": "Oracle furniture"}},
+    {"command": "records.copy", "params": {"form_id": "0000000A", "from": "Starfield.esm", "to": "OracleLoc.esm"}},
+    {"command": "records.copy", "params": {"form_id": "0000000A", "from": "Starfield.esm", "to": "OracleLoc.esm", "as_new": true}}
+  ],
+  "save": [
+    "OracleLoc.esm"
+  ]
+}

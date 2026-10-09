@@ -226,7 +226,7 @@ pub(super) fn cached(case: &Case, runner: &Runner) -> Result<Option<OracleSave>>
 
 /// The offset of the first byte where two streams differ, or `None` when
 /// they are identical; a length difference counts at the shorter length.
-fn first_difference(a: impl Read, b: impl Read) -> Result<Option<u64>> {
+pub(super) fn first_difference(a: impl Read, b: impl Read) -> Result<Option<u64>> {
     use std::io::BufRead;
     let mut a = BufReader::with_capacity(1 << 20, a);
     let mut b = BufReader::with_capacity(1 << 20, b);
@@ -545,6 +545,29 @@ struct EditSequence {
     commands: Vec<Value>,
     /// The plugins whose saved bytes are compared.
     save: Vec<String>,
+    /// The string tables of the localized plugins are put next to them on
+    /// both sides, the GUI is closed after the script so that it saves the
+    /// tables the edits changed, and every table either side saves is
+    /// compared (see `strings.rs`).
+    #[serde(default)]
+    strings: bool,
+    /// Plugins of `load` taken from the oracle's saves of another sequence,
+    /// named by its file stem, in place of the game's files (the input of a
+    /// localization is the oracle's delocalized plugin).
+    #[serde(default)]
+    inputs_from: Option<String>,
+    /// Plugins loaded under another name: `{"new.esm": "Game.esm"}` loads a
+    /// copy of the game's `Game.esm` (and its string tables) as `new.esm`,
+    /// so an official module that is not editable can be edited.
+    #[serde(default)]
+    rename: std::collections::BTreeMap<String, String>,
+}
+
+impl EditSequence {
+    /// Whether the sequence runs on a staging folder of its own.
+    fn staged(&self) -> bool {
+        self.strings || self.inputs_from.is_some() || !self.rename.is_empty()
+    }
 }
 
 /// The text of a JSON string parameter.
@@ -712,6 +735,14 @@ fn edit_step(index: usize, command: &Value) -> Result<String> {
                 q(&format!("${}", text_param(params, "start")?))
             )
         }
+        "localization.localize" | "localization.delocalize" => {
+            check_params(params, &["file"])?;
+            format!(
+                "SwitchLocalization(FileNamed({}), {});",
+                file()?,
+                pascal_bool(name == "localization.localize")
+            )
+        }
         "files.flags" => {
             check_params(params, &["file", "esm", "medium", "light"])?;
             let mut text = format!("f := FileNamed({});", file()?);
@@ -755,8 +786,20 @@ fn edit_script(sequence: &EditSequence) -> Result<String> {
             "      try\n        FileWriteToStream(FileNamed({literal}), fs, 0);\n      finally\n        fs.Free;\n      end;\n"
         ));
     }
+    // The localization steps need the helpers of `strings.rs`; the script
+    // of a sequence without them is the template without the placeholder.
+    let helpers = if sequence.commands.iter().any(|command| {
+        command["command"]
+            .as_str()
+            .is_some_and(|name| name.starts_with("localization."))
+    }) {
+        format!("{}\n", super::strings::LOCALIZATION_HELPERS)
+    } else {
+        String::new()
+    };
     Ok(TEMPLATE
         .replace("\r\n", "\n")
+        .replace("{{HELPERS}}\n", &helpers)
         .replace("{{STEPS}}\n", &steps)
         .replace("{{SAVES}}\n", &saves))
 }
@@ -822,7 +865,7 @@ pub(super) fn run_edits(
     };
     let mut outcomes = Vec::new();
     for (stem, text, sequence, game) in &sequences {
-        match check_edit(&runner, stem, text, sequence, game) {
+        match check_edit(&runner, &edits, stem, text, sequence, game) {
             Ok(mut list) => outcomes.append(&mut list),
             Err(error) => outcomes.push(Outcome {
                 game: game.name,
@@ -868,20 +911,20 @@ pub(super) fn run_edits(
 /// outcome per saved plugin, named `<sequence>/<plugin>`.
 fn check_edit(
     runner: &Runner,
+    edits: &Path,
     stem: &str,
     text: &str,
     sequence: &EditSequence,
     game: &'static Game,
 ) -> Result<Vec<Outcome>> {
     let data = PathBuf::from(super::required_var(game.data_var)?);
-    let names: Vec<&str> = sequence.load.iter().map(String::as_str).collect();
-    let plugins = load_list(game, &data, &names)?;
-    let script = edit_script(sequence)?;
-    let key = oracle_key(runner, &plugins, &format!("{text}{script}"), gui::exe_name(game.mode))?;
+    let prepared = prepare_edit(runner, edits, stem, text, sequence, game)?;
+    let key = prepared.key;
     let dir = runner.cache.join(format!("{}-oracle-edit", game.mode));
     fs::create_dir_all(&dir)?;
     let oracle_stem = format!("{stem}.{key:016x}");
     let status_file = dir.join(format!("{oracle_stem}.oracle.log"));
+    let strings_file = dir.join(format!("{oracle_stem}.strings.txt"));
     let mut oracle_peak = None;
     if !status_file.exists() {
         let work = runner
@@ -889,14 +932,25 @@ fn check_edit(
             .join("oracle-work")
             .join(format!("{oracle_stem}.{}", std::process::id()));
         let peak_file = dir.join(format!("{oracle_stem}.oracle.peak"));
-        let result = run_gui(
+        // The string tables go into the private data folder.
+        let mut extras = gui::GuiExtras {
+            close_after: sequence.strings,
+            ..Default::default()
+        };
+        for (path, relative) in &prepared.tables {
+            extras
+                .files
+                .push((PathBuf::from("Data").join(relative.replace('\\', "/")), fs::read(path)?));
+        }
+        let result = run_gui_with(
             runner,
             game,
-            plugins,
-            script,
+            prepared.plugins,
+            prepared.script,
             sequence.build_refs,
             work.clone(),
             &peak_file,
+            &extras,
         )?;
         oracle_peak = result.peak;
         if result.status.last().is_some_and(|last| last == "done") {
@@ -905,6 +959,15 @@ fn check_edit(
                     &result.out.join(name),
                     &dir.join(format!("{oracle_stem}.{name}.saved.zst")),
                 )?;
+            }
+            if let Some(log) = &result.saved_log {
+                let mut names = String::new();
+                for (name, path) in super::strings::saved_tables(log, &result.data)? {
+                    keep_compressed(&path, &dir.join(format!("{oracle_stem}.Strings.{name}.saved.zst")))?;
+                    names.push_str(&name);
+                    names.push('\n');
+                }
+                fs::write(&strings_file, names)?;
             }
         }
         fs::write(&status_file, result.status.join("\n"))?;
@@ -938,10 +1001,23 @@ fn check_edit(
     let port_dir = runner.scratch.join(format!("{}-oracle-edit", game.mode));
     fs::create_dir_all(&port_dir)?;
     let mut batch = sequence.commands.clone();
+    // A staged sequence saves into a folder of its own, with the string
+    // tables in `Strings` next to the plugins.
+    let out_dir = port_dir.join(stem).join("out");
+    if sequence.staged() {
+        let _ = fs::remove_dir_all(&out_dir);
+        fs::create_dir_all(&out_dir)?;
+    }
     let saved: Vec<PathBuf> = sequence
         .save
         .iter()
-        .map(|name| port_dir.join(format!("{stem}.{name}.port.saved")))
+        .map(|name| {
+            if sequence.staged() {
+                out_dir.join(name)
+            } else {
+                port_dir.join(format!("{stem}.{name}.port.saved"))
+            }
+        })
         .collect();
     for (name, path) in sequence.save.iter().zip(&saved) {
         let _ = fs::remove_file(path);
@@ -955,8 +1031,8 @@ fn check_edit(
     let port_log = port_dir.join(format!("{stem}.port.log"));
     let mut command = std::process::Command::new(port);
     command.args(["--json", "--edit", "--game", game.mode]);
-    for plugin in &sequence.load {
-        command.arg("--load").arg(find_in(&data, plugin)?);
+    for plugin in &prepared.load {
+        command.arg("--load").arg(plugin);
     }
     let output = command
         .arg("batch")
@@ -986,9 +1062,16 @@ fn check_edit(
         let oracle = dir.join(format!("{oracle_stem}.{name}.saved.zst"));
         outcome.oracle_bytes = fs::metadata(&oracle)?.len();
         outcome.port_bytes = fs::metadata(path)?.len();
+        let input = match prepared.load.iter().find(|path| {
+            path.file_name()
+                .is_some_and(|n| n.to_string_lossy().eq_ignore_ascii_case(name))
+        }) {
+            Some(path) => path.clone(),
+            None => find_in(&data, name)?,
+        };
         let case = Case {
             game,
-            input: find_in(&data, name)?,
+            input,
             name: name.clone(),
             data: data.clone(),
             saves: false,
@@ -1006,7 +1089,120 @@ fn check_edit(
             fs::remove_file(path)?;
         }
     }
+    if sequence.strings {
+        // The tables the port wrote, from the responses of its saves.
+        let mut port_tables: Vec<(String, PathBuf)> = Vec::new();
+        for step in &steps[sequence.commands.len()..] {
+            for table in step["result"]["strings"].as_array().into_iter().flatten() {
+                if let (Some(name), Some(output)) = (table["table"].as_str(), table["output"].as_str()) {
+                    port_tables.push((name.to_owned(), PathBuf::from(output)));
+                }
+            }
+        }
+        let oracle_tables: Vec<String> = fs::read_to_string(&strings_file)?.lines().map(str::to_owned).collect();
+        let mut names: Vec<String> = oracle_tables.clone();
+        for (name, _) in &port_tables {
+            if !names.iter().any(|known| known.eq_ignore_ascii_case(name)) {
+                names.push(name.clone());
+            }
+        }
+        for name in names {
+            let oracle = oracle_tables
+                .iter()
+                .find(|known| known.eq_ignore_ascii_case(&name))
+                .map(|known| dir.join(format!("{oracle_stem}.Strings.{known}.saved.zst")));
+            let port = port_tables
+                .iter()
+                .find(|(known, _)| known.eq_ignore_ascii_case(&name))
+                .map(|(_, path)| path.clone());
+            outcomes.push(super::strings::compare_table(
+                game.name,
+                stem,
+                &name,
+                oracle.as_deref(),
+                port.as_deref(),
+            )?);
+        }
+    }
     Ok(outcomes)
+}
+
+/// What the oracle side of an edit sequence needs: the plugins it loads
+/// (masters first), the port's `--load`, the string tables of the private
+/// data folder, the script and the cache key.
+struct PreparedEdit {
+    plugins: Vec<PathBuf>,
+    load: Vec<PathBuf>,
+    tables: Vec<(PathBuf, String)>,
+    script: String,
+    key: u64,
+}
+
+fn prepare_edit(
+    runner: &Runner,
+    edits: &Path,
+    stem: &str,
+    text: &str,
+    sequence: &EditSequence,
+    game: &'static Game,
+) -> Result<PreparedEdit> {
+    let data = PathBuf::from(super::required_var(game.data_var)?);
+    let script = edit_script(sequence)?;
+    let (plugins, load, tables) = if sequence.staged() {
+        let mut inputs = std::collections::BTreeMap::new();
+        if let Some(other) = &sequence.inputs_from {
+            let path = edits.join(format!("{other}.json"));
+            let other_text = fs::read_to_string(&path).with_context(|| format!("reading {}", path.display()))?;
+            let other_sequence: EditSequence =
+                serde_json::from_str(&other_text).with_context(|| format!("reading {}", path.display()))?;
+            let other_key = prepare_edit(runner, edits, other, &other_text, &other_sequence, game)?.key;
+            let dir = runner.cache.join(format!("{}-oracle-edit", game.mode));
+            for name in &other_sequence.save {
+                let cached = dir.join(format!("{other}.{other_key:016x}.{name}.saved.zst"));
+                ensure!(
+                    cached.exists(),
+                    "{stem} takes {name} from the oracle's save of {other}, which is not cached: run {other} first"
+                );
+                let mut bytes = Vec::new();
+                zstd_reader(&cached)?.read_to_end(&mut bytes)?;
+                inputs.insert(name.clone(), bytes);
+            }
+        }
+        let dir = runner
+            .scratch
+            .join(format!("{}-oracle-edit", game.mode))
+            .join(stem)
+            .join("data");
+        let stage = super::strings::stage(game, &data, &dir, &sequence.load, &sequence.rename, &inputs)?;
+        let tables = if sequence.strings { stage.tables } else { Vec::new() };
+        (stage.plugins, stage.load, tables)
+    } else {
+        let names: Vec<&str> = sequence.load.iter().map(String::as_str).collect();
+        let load = sequence
+            .load
+            .iter()
+            .map(|name| find_in(&data, name))
+            .collect::<Result<Vec<_>>>()?;
+        (load_list(game, &data, &names)?, load, Vec::new())
+    };
+    // The tables are part of the input, by name and contents.
+    let mut table_text = String::new();
+    for (path, name) in &tables {
+        table_text.push_str(&format!("{name}:{:016x}\n", content_hash(path)?));
+    }
+    let key = oracle_key(
+        runner,
+        &plugins,
+        &format!("{text}{script}{table_text}"),
+        gui::exe_name(game.mode),
+    )?;
+    Ok(PreparedEdit {
+        plugins,
+        load,
+        tables,
+        script,
+        key,
+    })
 }
 
 #[cfg(test)]

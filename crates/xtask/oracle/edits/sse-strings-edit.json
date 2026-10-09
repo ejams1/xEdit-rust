@@ -1,0 +1,18 @@
+{
+  "description": "Strings set, added and copied in a localized plugin: a name changed in place (Put), a description set where the record had none (AddValue: a new ID in the DLSTRINGS table), a weapon of Skyrim.esm copied as an override and as a new record (its localized strings assigned as text, so they become new strings of the plugin's tables).",
+  "game": "sse",
+  "strings": true,
+  "load": [
+    "Skyrim.esm",
+    "ccBGSSSE025-AdvDSGS.esm"
+  ],
+  "commands": [
+    {"command": "elements.set", "params": {"form_id": "05000802", "file": "ccBGSSSE025-AdvDSGS.esm", "path": "FULL", "value": "Oracle Dark Bow"}},
+    {"command": "elements.set", "params": {"form_id": "05000802", "file": "ccBGSSSE025-AdvDSGS.esm", "path": "DESC", "value": "A bow the oracle described."}},
+    {"command": "records.copy", "params": {"form_id": "00012EB7", "from": "Skyrim.esm", "to": "ccBGSSSE025-AdvDSGS.esm"}},
+    {"command": "records.copy", "params": {"form_id": "00012EB7", "from": "Skyrim.esm", "to": "ccBGSSSE025-AdvDSGS.esm", "as_new": true}}
+  ],
+  "save": [
+    "ccBGSSSE025-AdvDSGS.esm"
+  ]
+}

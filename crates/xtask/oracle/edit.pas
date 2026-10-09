@@ -17,6 +17,7 @@ unit OracleEdit;
 var
   log: TStringList;
 
+{{HELPERS}}
 function FileNamed(aName: string): IInterface;
 var
   i: Integer;

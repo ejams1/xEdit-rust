@@ -1,0 +1,16 @@
+{
+  "description": "Delocalize plugin (mniNavLocalizationSwitchClick) on a localized Starfield plugin, SFBGS004.esm loaded as OracleLoc.esm (not an official module, so it can be edited): every localized string takes its text from the tables into the plugin and the localized flag is cleared.",
+  "game": "sf1",
+  "strings": true,
+  "rename": {"OracleLoc.esm": "SFBGS004.esm"},
+  "load": [
+    "Starfield.esm",
+    "OracleLoc.esm"
+  ],
+  "commands": [
+    {"command": "localization.delocalize", "params": {"file": "OracleLoc.esm"}}
+  ],
+  "save": [
+    "OracleLoc.esm"
+  ]
+}

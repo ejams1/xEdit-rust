@@ -71,6 +71,13 @@ struct Cli {
     /// The xEdit settings file that keeps the saved mod group selection. Default: xEdit's: <AppName>Edit.ini next to the program when it exists, else Plugins.<app>viewsettings next to the game's Plugins.txt in the local application data.
     #[arg(long, global = true)]
     settings: Option<String>,
+    /// Language of the string tables of localized plugins (xEdit's -l:), such as English or En; the game's default when omitted.
+    #[arg(long, global = true)]
+    language: Option<String>,
+
+    /// Load in xEdit's translate mode (-translate): only the translatable elements are compared and edited, and the commands that change the structure of a plugin are refused.
+    #[arg(long, global = true)]
+    translate: bool,
 
     #[command(subcommand)]
     action: Action,
@@ -109,6 +116,11 @@ enum Action {
     Modgroups {
         #[command(subcommand)]
         action: ModgroupsAction,
+    },
+    /// String tables of localized plugins (the localization editor), the language, and localizing or delocalizing a plugin.
+    Localization {
+        #[command(subcommand)]
+        action: LocalizationAction,
     },
     /// The reference index: the records that refer to a record, and the reference cache.
     Refs {
@@ -498,6 +510,119 @@ enum FilesAction {
         #[arg(long)]
         localized: Option<bool>,
         /// Report the flags the change would give, but change nothing.
+        #[arg(long)]
+        dry_run: bool,
+    },
+}
+
+#[derive(Subcommand)]
+enum LocalizationAction {
+    /// The loaded string tables, as the localization editor lists them (localization.files). Loads the tables of the localized plugins first.
+    Files {
+        /// Only the tables of this plugin.
+        #[arg(long)]
+        file: Option<String>,
+        /// List only the tables loaded so far.
+        #[arg(long)]
+        no_load: bool,
+    },
+    /// The strings of a table with their IDs (localization.strings).
+    Strings {
+        /// File name of the table, such as Dawnguard_English.STRINGS.
+        table: String,
+        /// Strings to skip.
+        #[arg(long, default_value_t = 0)]
+        offset: usize,
+        /// Strings to return at most (default 100).
+        #[arg(long)]
+        limit: Option<usize>,
+    },
+    /// A string by table and ID, or the string a localized element holds (localization.get).
+    Get {
+        /// File name of the table; with --id.
+        #[arg(long)]
+        table: Option<String>,
+        /// String ID as hexadecimal digits; with --table.
+        #[arg(long)]
+        id: Option<String>,
+        /// Load order FormID of a record; with --path.
+        #[arg(long)]
+        form_id: Option<String>,
+        /// Path of the localized string element, such as FULL.
+        #[arg(long)]
+        path: Option<String>,
+        /// Plugin whose version of the record is meant.
+        #[arg(long)]
+        file: Option<String>,
+    },
+    /// Change the text of a string (localization.set, the localization editor's Save). Needs --edit unless --dry-run; save the plugin to write its tables.
+    Set {
+        /// The new text.
+        text: String,
+        /// File name of the table; with --id.
+        #[arg(long)]
+        table: Option<String>,
+        /// String ID as hexadecimal digits; with --table.
+        #[arg(long)]
+        id: Option<String>,
+        /// Load order FormID of a record; with --path.
+        #[arg(long)]
+        form_id: Option<String>,
+        /// Path of the localized string element, such as FULL.
+        #[arg(long)]
+        path: Option<String>,
+        /// Plugin whose version of the record is meant.
+        #[arg(long)]
+        file: Option<String>,
+        /// Store the text as the editor's memo gives it: CR LF line breaks and one at the end.
+        #[arg(long)]
+        editor_text: bool,
+        /// Report the change, make none.
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Write a table as text, an [ID] line and the text per string (localization.export). Needs --edit unless --dry-run.
+    Export {
+        /// File name of the table.
+        table: String,
+        /// Path of the text file; <table>.txt when omitted.
+        #[arg(long)]
+        output: Option<String>,
+        /// Report the size, write nothing.
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// The language of the session and the languages and tables the data folder and its archives hold (localization.languages).
+    Languages,
+    /// Switch the language of the string tables (localization.language). Refused while tables have unsaved changes, unless --discard.
+    Language {
+        /// The language, as localization languages lists it.
+        language: String,
+        /// Drop the unsaved changes of the string tables.
+        #[arg(long)]
+        discard: bool,
+    },
+    /// Localize a plugin: its strings move into new string tables and the plugin holds their IDs (localization.localize, "Localize plugin"). Needs --edit unless --dry-run; save the plugin to write it and its tables.
+    Localize {
+        /// Plugin name; the only loaded plugin when omitted.
+        #[arg(long)]
+        file: Option<String>,
+        /// A table to translate from (repeat); found texts take the string at the same position of the --translate-to tables.
+        #[arg(long)]
+        translate_from: Vec<String>,
+        /// A table to translate to (repeat), as many as --translate-from.
+        #[arg(long)]
+        translate_to: Vec<String>,
+        /// Count the localizable strings, change nothing.
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Delocalize a plugin: the texts of its strings go into the plugin and the localized flag is cleared (localization.delocalize, "Delocalize plugin"). Needs --edit unless --dry-run.
+    Delocalize {
+        /// Plugin name; the only loaded plugin when omitted.
+        #[arg(long)]
+        file: Option<String>,
+        /// Count the localizable strings, change nothing.
         #[arg(long)]
         dry_run: bool,
     },
@@ -990,6 +1115,66 @@ fn command_of(action: Action) -> Result<(String, Value), CommandError> {
                 "blueprint": blueprint, "localized": localized, "dry_run": dry_run
             }),
         ),
+        Action::Localization { action } => match action {
+            LocalizationAction::Files { file, no_load } => (
+                "localization.files".to_owned(),
+                json!({ "file": file, "load": !no_load }),
+            ),
+            LocalizationAction::Strings { table, offset, limit } => (
+                "localization.strings".to_owned(),
+                json!({ "table": table, "offset": offset, "limit": limit }),
+            ),
+            LocalizationAction::Get {
+                table,
+                id,
+                form_id,
+                path,
+                file,
+            } => (
+                "localization.get".to_owned(),
+                json!({ "table": table, "id": id, "form_id": form_id, "path": path, "file": file }),
+            ),
+            LocalizationAction::Set {
+                text,
+                table,
+                id,
+                form_id,
+                path,
+                file,
+                editor_text,
+                dry_run,
+            } => (
+                "localization.set".to_owned(),
+                json!({
+                    "text": text, "table": table, "id": id, "form_id": form_id, "path": path, "file": file,
+                    "editor_text": editor_text, "dry_run": dry_run
+                }),
+            ),
+            LocalizationAction::Export { table, output, dry_run } => (
+                "localization.export".to_owned(),
+                json!({ "table": table, "output": output, "dry_run": dry_run }),
+            ),
+            LocalizationAction::Languages => ("localization.languages".to_owned(), json!({})),
+            LocalizationAction::Language { language, discard } => (
+                "localization.language".to_owned(),
+                json!({ "language": language, "discard": discard }),
+            ),
+            LocalizationAction::Localize {
+                file,
+                translate_from,
+                translate_to,
+                dry_run,
+            } => (
+                "localization.localize".to_owned(),
+                json!({
+                    "file": file, "translate_from": translate_from, "translate_to": translate_to, "dry_run": dry_run
+                }),
+            ),
+            LocalizationAction::Delocalize { file, dry_run } => (
+                "localization.delocalize".to_owned(),
+                json!({ "file": file, "dry_run": dry_run }),
+            ),
+        },
         Action::Refs { action } => match action {
             RefsAction::Get {
                 form_id,
@@ -1559,6 +1744,8 @@ fn main() -> ExitCode {
     );
     // `-FillPNAM`, and the settings `-quickautoclean` gives the load.
     xedit_session::commands::set_fill_pnam_on_load(cli.fill_pnam);
+    xedit_session::commands::set_language_on_load(cli.language.as_deref());
+    xedit_session::commands::set_translate_on_load(cli.translate);
     xedit_session::commands::set_quick_clean_on_load(matches!(cli.action, Action::Clean { quick: true, .. }));
     xedit_session::modgroups::set_file_options(cli.modgroups_file.as_deref(), cli.settings.as_deref());
     if matches!(cli.action, Action::Serve { .. } | Action::Mcp) {

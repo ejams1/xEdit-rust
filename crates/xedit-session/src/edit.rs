@@ -21,7 +21,7 @@ use crate::{CommandError, Registry, Session};
 
 /// Runs a check of the editor (`IsEditable`, `IsRemovable`) as it would go
 /// with editing allowed, so that a dry run reports what the edit would do.
-fn with_edit_allowed<T>(check: impl FnOnce() -> T) -> T {
+pub(crate) fn with_edit_allowed<T>(check: impl FnOnce() -> T) -> T {
     let allowed = edit_allowed();
     set_edit_allowed(true);
     let result = check();
@@ -71,6 +71,7 @@ pub struct ElementsAddResponse {
 }
 
 fn elements_add(session: &mut Session, request: ElementsAddRequest) -> Result<ElementsAddResponse, CommandError> {
+    crate::commands::refuse_in_translate_mode("elements.add")?;
     let record = session.record(&request.form_id, request.file.as_deref())?;
     let record_ref: ElementRef = record.clone();
     let container: ElementRef = match request.path.as_deref().filter(|path| !path.is_empty()) {
@@ -146,6 +147,7 @@ fn elements_remove(
     session: &mut Session,
     request: ElementsRemoveRequest,
 ) -> Result<ElementsRemoveResponse, CommandError> {
+    crate::commands::refuse_in_translate_mode("elements.remove")?;
     let record = session.record(&request.form_id, request.file.as_deref())?;
     let element = record.get_element_by_path(&request.path).ok_or_else(|| {
         CommandError::new(
@@ -232,6 +234,7 @@ fn names(files: &[Arc<FileImpl>]) -> Vec<String> {
 }
 
 fn records_copy(session: &mut Session, request: RecordsCopyRequest) -> Result<RecordsCopyResponse, CommandError> {
+    crate::commands::refuse_in_translate_mode("records.copy")?;
     let source = session.record(&request.form_id, request.from.as_deref())?;
     let target = session.file(Some(&request.to))?;
     let source_ref: ElementRef = source.clone();
@@ -322,6 +325,7 @@ fn count_records(element: &ElementRef) -> usize {
 }
 
 fn records_delete(session: &mut Session, request: RecordsDeleteRequest) -> Result<RecordsDeleteResponse, CommandError> {
+    crate::commands::refuse_in_translate_mode("records.delete")?;
     let file = session.file(request.file.as_deref())?;
     let form_id = parse_form_id(&request.form_id)?;
     let record = file.contained_record_by_load_order_form_id(form_id).ok_or_else(|| {

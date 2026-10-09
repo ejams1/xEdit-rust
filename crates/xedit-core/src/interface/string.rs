@@ -23,7 +23,10 @@ use super::element::{DataPtr, ElementArg, ElementRef};
 use super::form_id::{MastersUpdate, UsedMasters, mark_used_master};
 use super::formaters::comma_text;
 use super::globals::{check_non_cpn_chars, encoding, encoding_trans, is_internal_edit, show_string_bytes};
-use super::misc::{EditError, Variant, localization_get_value, progress, variant_to_string};
+use super::misc::{
+    EditError, Variant, localization_get_value, localization_no_translate, localization_set_value, progress,
+    variant_to_string,
+};
 use super::types::{CallbackType, DefFlag, DefType, EditType, TriBool};
 
 /// Upstream `wbTerminator`.
@@ -439,27 +442,55 @@ impl StringDef {
     /// Port of `TwbStringDef.FromStringNative` and the override of
     /// `TwbLStringDef`: the text in the encoding of the file, sized by the
     /// definition and zero terminated unless the definition says not to. A
-    /// localized string takes a `STRINGID:` text as the string ID; writing a
-    /// new string into the string tables is not ported yet.
+    /// localized string (`TwbLStringDef.FromStringNative`) takes a
+    /// `STRINGID:` text as the string ID; in a localized file the text goes
+    /// into the string tables (`SetValue`) and the element keeps its ID,
+    /// unless `NoTranslate` is on (the delocalization), which stores the
+    /// text in the plugin.
     #[allow(clippy::wrong_self_convention)]
-    fn from_string_native(&self, _data: DataPtr, element: ElementArg, value: &str) -> Result<(), EditError> {
+    fn from_string_native(&self, data: DataPtr, element: ElementArg, value: &str) -> Result<(), EditError> {
         if self.class.is_localized() {
             if let Some(id) = value.strip_prefix(STRING_ID_PREFIX) {
                 let (element, mut bytes) = request_storage(element, 4)?;
-                let id = u32::from_str_radix(id, 16).unwrap_or(0);
+                // `StrToInt64Def('$' + ..., 0)`, kept to 32 bits.
+                let id = i64::from_str_radix(id, 16).unwrap_or(0) as u32;
                 bytes.copy_from_slice(&id.to_le_bytes());
                 element.commit_storage(bytes);
+                element.set_localized(TriBool::tbTrue);
                 return Ok(());
             }
+            // In a localized file the text goes into the tables, unless
+            // `NoTranslate` assigns a string when delocalizing.
             if element
                 .and_then(|element| element.get_file())
                 .is_some_and(|file| file.get_is_localized())
+                && !localization_no_translate()
             {
-                return Err(
-                    "Can not assign to a localized string: writing the string tables is not ported yet".to_owned(),
-                );
+                // Set the localized string's value. `PCardinal(aBasePtr)^`
+                // reads the four bytes at the start of the data; a shorter
+                // one reads as if padded with zeros.
+                let mut old = [0u8; 4];
+                let current = data.unwrap_or_default();
+                let len = current.len().min(4);
+                old[..len].copy_from_slice(&current[..len]);
+                let id = localization_set_value(u32::from_le_bytes(old), element, value).unwrap_or(0);
+                let (element, mut bytes) = request_storage(element, 4)?;
+                bytes.copy_from_slice(&id.to_le_bytes());
+                element.commit_storage(bytes);
+                element.set_localized(TriBool::tbTrue);
+                return Ok(());
             }
+            self.plain_from_string_native(element, value)?;
+            if let Some(element) = element {
+                element.set_localized(TriBool::tbFalse);
+            }
+            return Ok(());
         }
+        self.plain_from_string_native(element, value)
+    }
+
+    /// Port of `TwbStringDef.FromStringNative`.
+    fn plain_from_string_native(&self, element: ElementArg, value: &str) -> Result<(), EditError> {
         let bytes_of_text = self.bsd_get_encoding(element).get_bytes(value);
         let zero_terminated = self.sd_size <= 0 && !self.def.def_flags.contains(DefFlag::dfNoZeroTerminator);
         let new_size = if self.sd_size > 0 {
