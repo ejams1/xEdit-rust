@@ -46,7 +46,9 @@ use anyhow::{Context, Result, bail, ensure};
 use serde::{Deserialize, Serialize};
 
 use xedit_assets::sniff::main_form::{OutputSink, RunError, RunOptions, run as port_run};
-use xedit_assets::sniff::processor::{GameType, MemIniFile, string_list_file_bytes, string_list_lines};
+use xedit_assets::sniff::processor::{
+    GameType, MemIniFile, extract_file_name, same_text, string_list_file_bytes, string_list_lines,
+};
 use xedit_assets::sniff::procs::PROCS;
 use xedit_io::archive::Archive;
 use xedit_io::encoding::ansi_string;
@@ -64,9 +66,87 @@ struct Case {
     name: &'static str,
     /// The title of the operation (`-OP:`).
     operation: &'static str,
+    /// What the case needs besides the archive: the source folder of the
+    /// operations that copy from the files of another one, or an input
+    /// folder of its own.
+    prep: Prep,
     /// The values of the operation's section of the settings ini. `{log}`
-    /// is replaced with the path of a log file the processor writes.
+    /// is replaced with the path of a log file the processor writes,
+    /// `{source}` with the prepared source folder and `{source-file}` with
+    /// the first file it holds.
     settings: &'static [(&'static str, &'static str)],
+}
+
+/// The preparation of a case whose settings name `{source}` or whose
+/// input is not the archive.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+enum Prep {
+    #[default]
+    None,
+    /// `Copy anim priorities`: the priorities of the controlled blocks of
+    /// the KF files set to 33 (the universal tweaker).
+    Priorities,
+    /// `Copy anim controlled blocks`: every controlled block of the KF
+    /// files renamed to `XYZ`, so the destination has none of the tokens
+    /// (the universal tweaker).
+    RenameControlledBlocks,
+    /// The transform of every `NiAVObject` scaled by 1.5 (the universal
+    /// tweaker).
+    TransformScale,
+    /// Every texture name of the shader texture sets set to `x.dds` (the
+    /// universal tweaker).
+    Textures,
+    /// The transform of every node baked into the geometry (`Apply
+    /// transformation`), so the geometry of the files differs.
+    Baked,
+    /// The input is a folder with a `death.kf` of the archive and a
+    /// `skeleton.nif` beside it (`Add blocks from skeleton` reads one from
+    /// the folder of the animation).
+    DeathSkeleton,
+}
+
+impl Prep {
+    fn name(self) -> &'static str {
+        match self {
+            Prep::None => "",
+            Prep::Priorities => "priorities",
+            Prep::RenameControlledBlocks => "rename-controlled",
+            Prep::TransformScale => "transform-scale",
+            Prep::Textures => "textures",
+            Prep::Baked => "baked",
+            Prep::DeathSkeleton => "",
+        }
+    }
+
+    /// The operation the port runs over the unpacked files to make the
+    /// source folder, with its settings; `None` for the preps that make
+    /// the input folder.
+    fn operation(self) -> Option<(&'static str, &'static str)> {
+        Some(match self {
+            Prep::Priorities => (
+                "Universal tweaker",
+                "[Universaltweaker]\r\nProcessedFiles=*.kf\r\nsBlocks=NiControllerSequence\r\n\
+                 sPath=Controlled Blocks\\[*]\\Priority\r\nsValue=33\r\n",
+            ),
+            Prep::RenameControlledBlocks => (
+                "Universal tweaker",
+                "[Universaltweaker]\r\nProcessedFiles=*.kf\r\nsBlocks=NiControllerSequence\r\n\
+                 sPath=Controlled Blocks\\[*]\\Node Name\r\nsValue=XYZ\r\n",
+            ),
+            Prep::TransformScale => (
+                "Universal tweaker",
+                "[Universaltweaker]\r\nProcessedFiles=*.nif\r\nsBlocks=NiAVObject\r\nbDescendants=1\r\n\
+                 sPath=Transform\\Scale\r\niValueMode=2\r\nsValue=1.5\r\n",
+            ),
+            Prep::Textures => (
+                "Universal tweaker",
+                "[Universaltweaker]\r\nProcessedFiles=*.nif\r\nsBlocks=BSShaderTextureSet\r\n\
+                 sPath=Textures\\[*]\r\nsValue=x.dds\r\n",
+            ),
+            Prep::Baked => ("Apply transformation", "[Applytransformation]\r\n"),
+            Prep::None | Prep::DeathSkeleton => return None,
+        })
+    }
 }
 
 /// The cases of the check: every ported operation with its defaults, and
@@ -76,36 +156,43 @@ const CASES: &[Case] = &[
         name: "tangents",
         operation: "Update tangents and binormals",
         settings: &[],
+        prep: Prep::None,
     },
     Case {
         name: "tangents-add",
         operation: "Update tangents and binormals",
         settings: &[("bAddIfMissing", "1"), ("bFaceNormals", "1")],
+        prep: Prep::None,
     },
     Case {
         name: "bounds",
         operation: "Update bounds",
         settings: &[],
+        prep: Prep::None,
     },
     Case {
         name: "optimize",
         operation: "Optimize mesh",
         settings: &[],
+        prep: Prep::None,
     },
     Case {
         name: "optimize-vertex-cache",
         operation: "Optimize mesh",
         settings: &[("bOverdraw", "0"), ("bVertexFetch", "0")],
+        prep: Prep::None,
     },
     Case {
         name: "optimize-overdraw",
         operation: "Optimize mesh",
         settings: &[("bVertexCache", "0"), ("bVertexFetch", "0")],
+        prep: Prep::None,
     },
     Case {
         name: "optimize-fetch",
         operation: "Optimize mesh",
         settings: &[("bVertexCache", "0"), ("bOverdraw", "0")],
+        prep: Prep::None,
     },
     Case {
         name: "optimize-triangulate",
@@ -116,11 +203,13 @@ const CASES: &[Case] = &[
             ("bOverdraw", "0"),
             ("bVertexFetch", "0"),
         ],
+        prep: Prep::None,
     },
     Case {
         name: "optimize-stripify",
         operation: "Optimize mesh",
         settings: &[("bStripify", "1"), ("bOverdraw", "0"), ("bVertexFetch", "0")],
+        prep: Prep::None,
     },
     Case {
         name: "replace-assets",
@@ -129,6 +218,7 @@ const CASES: &[Case] = &[
             ("sReplacements", "textures\\#13#10tex\\#13#10.dds#13#10.DDS#13#10"),
             ("bFixAbsolute", "1"),
         ],
+        prep: Prep::None,
     },
     Case {
         name: "replace-assets-regexp",
@@ -141,16 +231,19 @@ const CASES: &[Case] = &[
             ("bRegExp", "1"),
             ("bReportOnly", "1"),
         ],
+        prep: Prep::None,
     },
     Case {
         name: "json",
         operation: "Convert to and from JSON",
         settings: &[("bToJson", "1"), ("sDigits", "8"), ("iRotation", "1")],
+        prep: Prep::None,
     },
     Case {
         name: "tweaker",
         operation: "Universal tweaker",
         settings: &[],
+        prep: Prep::None,
     },
     Case {
         name: "tweaker-report",
@@ -166,6 +259,7 @@ const CASES: &[Case] = &[
             ("iOldValueMode", "10"),
             ("sOldValue", "^(\\w+)Node"),
         ],
+        prep: Prep::None,
     },
     Case {
         name: "tweaker-math",
@@ -181,6 +275,7 @@ const CASES: &[Case] = &[
             ("iOldValueMode", "8"),
             ("sOldValue", "2"),
         ],
+        prep: Prep::None,
     },
     Case {
         name: "tweaker-array",
@@ -194,16 +289,19 @@ const CASES: &[Case] = &[
             ("iOldValueMode", "6"),
             ("sOldValue", "textures\\"),
         ],
+        prep: Prep::None,
     },
     Case {
         name: "fixer",
         operation: "Universal fixer",
         settings: &[("bSaveLog", "1"), ("sLogFile", "{log}")],
+        prep: Prep::None,
     },
     Case {
         name: "apply-transform",
         operation: "Apply transformation",
         settings: &[],
+        prep: Prep::None,
     },
     Case {
         name: "apply-transform-all",
@@ -215,11 +313,13 @@ const CASES: &[Case] = &[
             ("bSkipRoot", "0"),
             ("bSkipControllerManager", "0"),
         ],
+        prep: Prep::None,
     },
     Case {
         name: "adjust-transform",
         operation: "Adjust transformation",
         settings: &[("sPosZ", "10.5"), ("sScale", "2")],
+        prep: Prep::None,
     },
     Case {
         name: "adjust-transform-names",
@@ -231,56 +331,171 @@ const CASES: &[Case] = &[
             ("sRotY", "45"),
             ("sPosX", "-3"),
         ],
+        prep: Prep::None,
     },
     Case {
         name: "attach-parent",
         operation: "Attach parent NiNode",
         settings: &[],
+        prep: Prep::None,
     },
     Case {
         name: "remove-nodes",
         operation: "Remove nodes",
         settings: &[("sNames", "EditorMarker"), ("bExactMatch", "0")],
+        prep: Prep::None,
     },
     Case {
         name: "remove-nodes-type",
         operation: "Remove nodes",
         settings: &[("iMode", "2"), ("sType", "NiStringExtraData")],
+        prep: Prep::None,
     },
     Case {
         name: "remove-unused",
         operation: "Remove unused nodes",
         settings: &[],
+        prep: Prep::None,
     },
     Case {
         name: "convert-block",
         operation: "Convert block type",
         settings: &[("sNodeFrom", "NiNode"), ("sNodeTo", "BSFadeNode"), ("bRoot", "1")],
+        prep: Prep::None,
     },
     Case {
         name: "convert-block-all",
         operation: "Convert block type",
         settings: &[("sNodeFrom", "BSFadeNode"), ("sNodeTo", "NiNode")],
+        prep: Prep::None,
     },
     Case {
         name: "unskin",
         operation: "Unskin mesh",
         settings: &[],
+        prep: Prep::None,
     },
     Case {
         name: "missing-names",
         operation: "Set missing names",
         settings: &[],
+        prep: Prep::None,
     },
     Case {
         name: "fix-kf",
         operation: "Fix 3DS exported KF",
         settings: &[],
+        prep: Prep::None,
+    },
+    Case {
+        name: "copy-geometry",
+        operation: "Copy geometry blocks",
+        settings: &[("sSourceDirectory", "{source}")],
+        prep: Prep::Baked,
+    },
+    Case {
+        name: "copy-geometry-transform",
+        operation: "Copy geometry blocks",
+        settings: &[
+            ("sSourceDirectory", "{source}"),
+            ("bCopyGeom", "0"),
+            ("bCopyTransform", "1"),
+        ],
+        prep: Prep::TransformScale,
+    },
+    Case {
+        name: "copy-geometry-shader",
+        operation: "Copy geometry blocks",
+        settings: &[
+            ("sSourceDirectory", "{source}"),
+            ("bCopyGeom", "0"),
+            ("bCopyShader", "1"),
+            ("bCopyTextureSet", "1"),
+        ],
+        prep: Prep::Textures,
+    },
+    Case {
+        name: "copy-geometry-single",
+        operation: "Copy geometry blocks",
+        settings: &[
+            ("sSourceDirectory", "{source-file}"),
+            ("bMatchingFiles", "0"),
+            ("bCopyTransform", "1"),
+        ],
+        prep: Prep::Baked,
+    },
+    Case {
+        name: "vertex-paint",
+        operation: "Vertex color painting",
+        settings: &[],
+        prep: Prep::None,
+    },
+    Case {
+        name: "vertex-paint-adjust",
+        operation: "Vertex color painting",
+        settings: &[
+            ("iMode", "1"),
+            ("iAdjustMod", "0"),
+            ("sAdjustH", "0.5"),
+            ("sAdjustS", "1.2"),
+            ("sAdjustL", "1.1"),
+            ("sAdjustA", "0.9"),
+        ],
+        prep: Prep::None,
+    },
+    Case {
+        name: "vertex-paint-adjust-add",
+        operation: "Vertex color painting",
+        settings: &[
+            ("iMode", "1"),
+            ("iAdjustMod", "1"),
+            ("sAdjustH", "0.1"),
+            ("sAdjustS", "-0.2"),
+            ("sAdjustL", "0.1"),
+        ],
+        prep: Prep::None,
+    },
+    Case {
+        name: "vertex-paint-remove",
+        operation: "Vertex color painting",
+        settings: &[("iMode", "2"), ("bAllWhite", "1"), ("sName", "Tri")],
+        prep: Prep::None,
+    },
+    Case {
+        name: "vertex-paint-replace",
+        operation: "Vertex color painting",
+        settings: &[("iMode", "3"), ("sColor2", "FF00FF00"), ("bSkipColor", "1")],
+        prep: Prep::None,
+    },
+    Case {
+        name: "group-shapes",
+        operation: "Group shapes",
+        settings: &[],
+        prep: Prep::None,
+    },
+    Case {
+        name: "group-shapes-split",
+        operation: "Group shapes",
+        settings: &[("bSplit", "1"), ("bAllFeatures", "1")],
+        prep: Prep::None,
+    },
+    Case {
+        name: "merge-shapes",
+        operation: "Merge shapes",
+        settings: &[("sNames", "Scene Root")],
+        prep: Prep::None,
+    },
+    Case {
+        name: "merge-shapes-exact",
+        operation: "Merge shapes",
+        settings: &[("sNames", "Scene Root"), ("bExactMatch", "1")],
+        prep: Prep::None,
     },
     Case {
         name: "merge-properties",
         operation: "Merge properties",
         settings: &[],
+        prep: Prep::None,
     },
     Case {
         name: "merge-properties-named",
@@ -292,36 +507,78 @@ const CASES: &[Case] = &[
                 "NiMaterialProperty,NiAlphaProperty,NiTexturingProperty,BSShaderPPLightingProperty,BSLightingShaderProperty",
             ),
         ],
+        prep: Prep::None,
     },
     Case {
         name: "lod-node",
         operation: "Add NiLODNode",
         settings: &[],
+        prep: Prep::None,
     },
     Case {
         name: "lod-node-screen",
         operation: "Add NiLODNode",
         settings: &[("sLODData", "NiScreenLODData"), ("sProportions", "0.5#13#10#13#100.25")],
+        prep: Prep::None,
     },
     Case {
         name: "bounding-box",
         operation: "Add bounding box",
         settings: &[("sCenterZ", "12.5"), ("sExtentX", "4"), ("sFlags", "4")],
+        prep: Prep::None,
     },
     Case {
         name: "root-collision",
         operation: "Add RootCollisionNode",
         settings: &[],
+        prep: Prep::None,
+    },
+    Case {
+        name: "find-textures",
+        operation: "Find textures",
+        settings: &[],
+        prep: Prep::None,
+    },
+    Case {
+        name: "find-textures-filter",
+        operation: "Find textures",
+        settings: &[
+            ("sFormats", "71"),
+            ("sResolution", ">= 256"),
+            ("sMipMaps", "Yes"),
+            ("sBlock Compressed", "Yes"),
+        ],
+        prep: Prep::None,
+    },
+    Case {
+        name: "find-textures-header",
+        operation: "Find textures",
+        settings: &[("bHeaderDump", "1"), ("sFormats", "71"), ("sMipMaps", "Yes")],
+        prep: Prep::None,
+    },
+    Case {
+        name: "find-textures-copy",
+        operation: "Find textures",
+        settings: &[("bReportOnly", "0"), ("sFormats", "71")],
+        prep: Prep::None,
+    },
+    Case {
+        name: "copy-controlled",
+        operation: "Copy anim controlled blocks",
+        settings: &[("sSourceDirectory", "{source}")],
+        prep: Prep::RenameControlledBlocks,
     },
     Case {
         name: "copy-priorities",
         operation: "Copy anim priorities",
         settings: &[("sSourceDirectory", "{source}")],
+        prep: Prep::Priorities,
     },
     Case {
         name: "remove-controlled",
         operation: "Remove controlled blocks",
         settings: &[],
+        prep: Prep::None,
     },
     Case {
         name: "remove-controlled-others",
@@ -331,16 +588,85 @@ const CASES: &[Case] = &[
             ("bExactMatch", "0"),
             ("bNotMatching", "1"),
         ],
+        prep: Prep::None,
     },
     Case {
         name: "quadratic-to-linear",
         operation: "Quadratic to linear anim",
         settings: &[("sNames", "Bip01"), ("bExactMatch", "0")],
+        prep: Prep::None,
     },
     Case {
         name: "optimize-kf",
         operation: "Optimize Animations",
         settings: &[],
+        prep: Prep::None,
+    },
+    Case {
+        name: "headtracking",
+        operation: "Add headtracking anim",
+        settings: &[],
+        prep: Prep::None,
+    },
+    Case {
+        name: "headtracking-clamp",
+        operation: "Add headtracking anim",
+        settings: &[
+            ("bCycleClampOnly", "1"),
+            ("sKeyValue14", "-1.5"),
+            ("sKeyValue23", "0.5"),
+            ("sKeyTime2", "33"),
+            ("sKeyTime3", "66"),
+        ],
+        prep: Prep::None,
+    },
+    Case {
+        name: "facial",
+        operation: "Add facial anim",
+        settings: &[],
+        prep: Prep::None,
+    },
+    Case {
+        name: "facial-remove",
+        operation: "Add facial anim",
+        settings: &[
+            ("bRemoveExisting", "1"),
+            (
+                "sMods",
+                "99 Anger 0 1#13#10100 Happy 0.5 0.5 1 0#13#10100 HeadYaw 0 0.4",
+            ),
+        ],
+        prep: Prep::None,
+    },
+    Case {
+        name: "jam-anim",
+        operation: "Add NiTransformData",
+        settings: &[],
+        prep: Prep::None,
+    },
+    Case {
+        name: "jam-anim-translation",
+        operation: "Add NiTransformData",
+        settings: &[("bAddRotation", "0")],
+        prep: Prep::None,
+    },
+    Case {
+        name: "wei-explosion",
+        operation: "Weijiesen's blow up thing",
+        settings: &[],
+        prep: Prep::None,
+    },
+    Case {
+        name: "skeleton-death",
+        operation: "Add blocks from skeleton",
+        settings: &[("sNames", "Weapon,HeadAnims")],
+        prep: Prep::DeathSkeleton,
+    },
+    Case {
+        name: "skeleton-death-any",
+        operation: "Add blocks from skeleton",
+        settings: &[("bExactMatch", "0"), ("sNames", "Bip01")],
+        prep: Prep::DeathSkeleton,
     },
     Case {
         name: "havok-settings",
@@ -351,11 +677,13 @@ const CASES: &[Case] = &[
             ("sRestitution", "0.4"),
             ("sRadius", " 0.1 "),
         ],
+        prep: Prep::None,
     },
     Case {
         name: "inertia",
         operation: "Update Havok inertia",
         settings: &[],
+        prep: Prep::None,
     },
     Case {
         name: "inertia-penetration",
@@ -366,21 +694,25 @@ const CASES: &[Case] = &[
             ("sDepthMult", "0.3"),
             ("sMult", "\"1 Head=4\",\"2 Body=\""),
         ],
+        prep: Prep::None,
     },
     Case {
         name: "ragdoll",
         operation: "Update ragdoll constraint",
         settings: &[],
+        prep: Prep::None,
     },
     Case {
         name: "ragdoll-convert",
         operation: "Update ragdoll constraint",
         settings: &[("bConvert", "1")],
+        prep: Prep::None,
     },
     Case {
         name: "havok-material",
         operation: "Search for Havok material",
         settings: &[],
+        prep: Prep::None,
     },
     Case {
         name: "havok-material-replace",
@@ -391,26 +723,31 @@ const CASES: &[Case] = &[
             ("sMaterialReplace", "fo_hav_mat_metal"),
             ("bSkipRoot", "1"),
         ],
+        prep: Prep::None,
     },
     Case {
         name: "shader-flags",
         operation: "Update shader flags",
         settings: &[("iGame", "1"), ("iFlags", "3"), ("iFlags2", "16")],
+        prep: Prep::None,
     },
     Case {
         name: "shader-flags-report",
         operation: "Update shader flags",
         settings: &[("iGame", "0"), ("iMode", "2"), ("iFlags", "4096"), ("bReportOnly", "1")],
+        prep: Prep::None,
     },
     Case {
         name: "walls-reflection",
         operation: "Real Time Reflections - NVSE",
         settings: &[("sNormalIntensity", "0.5")],
+        prep: Prep::None,
     },
     Case {
         name: "check-errors",
         operation: "Check for errors",
         settings: &[("ProcessedFiles", "*.nif, *.kf")],
+        prep: Prep::None,
     },
     Case {
         name: "check-errors-all",
@@ -423,26 +760,37 @@ const CASES: &[Case] = &[
             ("Repeated denegerate tris in strips", "1"),
             ("Unsupported mesh formats", "1"),
         ],
+        prep: Prep::None,
+    },
+    Case {
+        name: "check-errors-dds",
+        operation: "Check for errors",
+        settings: &[("ProcessedFiles", "*.dds"), ("Unsupported texture formats", "1")],
+        prep: Prep::None,
     },
     Case {
         name: "transform-info",
         operation: "Transform information",
         settings: &[],
+        prep: Prep::None,
     },
     Case {
         name: "transform-info-no-scale",
         operation: "Transform information",
         settings: &[("bRotation", "0"), ("bSkipEmpty", "0")],
+        prep: Prep::None,
     },
     Case {
         name: "analyze-mesh",
         operation: "Analyze mesh",
         settings: &[],
+        prep: Prep::None,
     },
     Case {
         name: "analyze-mesh-shapes",
         operation: "Analyze mesh",
         settings: &[("bPerShape", "1"), ("bThreshold", "0"), ("sCacheSize", "32")],
+        prep: Prep::None,
     },
     Case {
         name: "havok-info",
@@ -451,6 +799,7 @@ const CASES: &[Case] = &[
             "sFields",
             "\"Inertia Tensor\",Friction,\"Motion System\",\"Penetration Depth\"",
         )],
+        prep: Prep::None,
     },
     Case {
         name: "havok-info-same-line",
@@ -459,31 +808,37 @@ const CASES: &[Case] = &[
             ("bSameLine", "1"),
             ("sFields", "Restitution,\"Max Linear Velocity\",\"Inertia Tensor\""),
         ],
+        prep: Prep::None,
     },
     Case {
         name: "unwelded",
         operation: "Find unwelded vertices",
         settings: &[],
+        prep: Prep::None,
     },
     Case {
         name: "unwelded-report",
         operation: "Find unwelded vertices",
         settings: &[("sDistance", "0.01"), ("bSkipSame", "1"), ("bReportVertices", "1")],
+        prep: Prep::None,
     },
     Case {
         name: "draw-calls",
         operation: "Find excessive draw calls",
         settings: &[("sCallsNum", "3")],
+        prep: Prep::None,
     },
     Case {
         name: "find-uvs",
         operation: "Find UVs",
         settings: &[("sUMax", "1"), ("sVMax", "1.5")],
+        prep: Prep::None,
     },
     Case {
         name: "soft-particles",
         operation: "Vanilla Plus Particles - NVSE",
         settings: &[],
+        prep: Prep::None,
     },
 ];
 
@@ -548,16 +903,80 @@ fn parse(args: &[&str]) -> Result<Options> {
 }
 
 /// The settings ini of a case, with `{log}` as `log`.
-fn settings_text(case: &Case, log: &Path, source: &Path) -> String {
+fn settings_text(case: &Case, log: &Path, source: &Path, source_file: &Path) -> String {
     let section = case.operation.replace(' ', "");
     let mut text = format!("[Main]\r\nPopupWarning=0\r\n[{section}]\r\n");
     for (name, value) in case.settings {
         let value = value
             .replace("{log}", &windows_path(log))
+            .replace("{source-file}", &windows_path(source_file))
             .replace("{source}", &windows_path(source));
         text.push_str(&format!("{name}={value}\r\n"));
     }
     text
+}
+
+/// Whether a case names the prepared source folder.
+fn uses_source(case: &Case) -> bool {
+    case.settings.iter().any(|(_, value)| value.contains("{source}"))
+}
+
+/// The first file of the prepared source folder, by path: the input of a
+/// case that names `{source-file}`.
+fn first_source_file(dir: &Path) -> Result<Option<PathBuf>> {
+    let mut files: Vec<PathBuf> = Vec::new();
+    for entry in walkdir::WalkDir::new(dir) {
+        let entry = entry?;
+        if entry.file_type().is_file() {
+            files.push(entry.path().to_owned());
+        }
+    }
+    files.sort();
+    Ok(files.into_iter().next())
+}
+
+/// The folder `Add blocks from skeleton` reads: the `death.kf` of the
+/// archive with a `skeleton.nif` beside it (the operation reads the
+/// skeleton from the folder of the animation). `false` when the archive
+/// holds no `death.kf`.
+fn death_skeleton_folder(archive: &Archive, dir: &Path) -> Result<bool> {
+    let death = archive
+        .files()
+        .iter()
+        .find(|entry| same_text(extract_file_name(&entry.name.replace('\\', "/")), "death.kf"));
+    let Some(death) = death else {
+        return Ok(false);
+    };
+    let skeleton = archive
+        .files()
+        .iter()
+        .find(|entry| same_text(extract_file_name(&entry.name.replace('\\', "/")), "skeleton.nif"));
+    let Some(skeleton) = skeleton else {
+        return Ok(false);
+    };
+
+    let done = dir.join(".complete");
+    if done.exists() {
+        return Ok(true);
+    }
+    let _ = fs::remove_dir_all(dir);
+    let folder = match death.name.rfind(['\\', '/']) {
+        Some(index) => &death.name[..=index],
+        None => "",
+    };
+    for (entry, name) in [(death, death.name.clone()), (skeleton, format!("{folder}skeleton.nif"))] {
+        let path = dir.join(name.replace('\\', "/"));
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        fs::write(
+            &path,
+            archive.unpack_entry(entry).map_err(|error| anyhow::anyhow!(error.0))?,
+        )?;
+    }
+    fs::create_dir_all(dir)?;
+    fs::write(done, "")?;
+    Ok(true)
 }
 
 /// What one side gave for one input (an archive or a sample folder).
@@ -699,6 +1118,7 @@ fn run_sniff(
     work: &Path,
     case: &Case,
     source: &Path,
+    source_file: &Path,
     input: &Path,
     path_filter: Option<&str>,
     threads: usize,
@@ -715,7 +1135,7 @@ fn run_sniff(
     let extra = work.join("oracle-extra.log");
     let _ = fs::remove_file(&extra);
     let ini = work.join("oracle.ini");
-    fs::write(&ini, settings_text(case, &extra, source))?;
+    fs::write(&ini, settings_text(case, &extra, source, source_file))?;
     let log = work.join("oracle.log");
     let _ = fs::remove_file(&log);
     let mut command = HiddenCommand::new(&exe);
@@ -757,11 +1177,13 @@ fn run_sniff(
 
 /// Runs the files whose error is a crash again, each alone on one thread,
 /// and puts what they give in place of the crash.
+#[allow(clippy::too_many_arguments)]
 fn rerun_crashes(
     sniff: &Path,
     work: &Path,
     case: &Case,
     source: &Path,
+    source_file: &Path,
     input: &Path,
     extensions: &[String],
     results: &mut Results,
@@ -773,7 +1195,17 @@ fn rerun_crashes(
         .map(|(name, _)| name.clone())
         .collect();
     for name in crashed {
-        let rerun = run_sniff(sniff, work, case, source, input, Some(&name), 1, extensions)?;
+        let rerun = run_sniff(
+            sniff,
+            work,
+            case,
+            source,
+            source_file,
+            input,
+            Some(&name),
+            1,
+            extensions,
+        )?;
         let error = rerun.errors.get(&name).cloned();
         println!("oracle rerun  {name}: {}", error.as_deref().unwrap_or("no error"));
         results.errors.remove(&name);
@@ -807,6 +1239,7 @@ fn rerun_differences(
     work: &Path,
     case: &Case,
     source: &Path,
+    source_file: &Path,
     input: &Path,
     extensions: &[String],
     oracle: &mut Results,
@@ -836,7 +1269,17 @@ fn rerun_differences(
     }
     for name in names {
         let source_name = input_name(&name, extensions);
-        let rerun = run_sniff(sniff, work, case, source, input, Some(&source_name), 1, extensions)?;
+        let rerun = run_sniff(
+            sniff,
+            work,
+            case,
+            source,
+            source_file,
+            input,
+            Some(&source_name),
+            1,
+            extensions,
+        )?;
         let output = rerun.outputs.get(&name).copied();
         let error = rerun.errors.get(&source_name).cloned();
         println!(
@@ -886,6 +1329,7 @@ fn run_port(
     work: &Path,
     case: &Case,
     source: &Path,
+    source_file: &Path,
     input: &Path,
     threads: usize,
     extensions: &[String],
@@ -894,7 +1338,7 @@ fn run_port(
     fs::create_dir_all(&out)?;
     let extra = work.join("port-extra.log");
     let _ = fs::remove_file(&extra);
-    let settings = MemIniFile::from_text(&settings_text(case, &extra, source));
+    let settings = MemIniFile::from_text(&settings_text(case, &extra, source, source_file));
     let outputs: Arc<Mutex<BTreeMap<String, u64>>> = Arc::default();
     let sink_outputs = outputs.clone();
     let options = RunOptions {
@@ -1016,7 +1460,10 @@ fn sample_folder(archive: &Archive, dir: &Path, count: usize, extensions: &[Stri
 /// path in another folder (`Copy anim priorities`): the files of the
 /// archive with the priorities of their controlled blocks set to 33 by the
 /// port's universal tweaker. Made once.
-fn prepare_source(archive: &Archive, dir: &Path, extensions: &[String], threads: usize) -> Result<()> {
+fn prepare_source(archive: &Archive, dir: &Path, extensions: &[String], threads: usize, prep: Prep) -> Result<()> {
+    let (operation, text) = prep
+        .operation()
+        .with_context(|| format!("{} names {{source}} but has no preparation", prep.name()))?;
     let done = dir.join(".complete");
     if done.exists() {
         return Ok(());
@@ -1025,11 +1472,9 @@ fn prepare_source(archive: &Archive, dir: &Path, extensions: &[String], threads:
     sample_folder(archive, &raw, usize::MAX, extensions)?;
     let _ = fs::remove_dir_all(dir);
     fs::create_dir_all(dir)?;
-    let settings = MemIniFile::from_text(
-        "[Universaltweaker]\r\nProcessedFiles=*.kf\r\nsBlocks=NiControllerSequence\r\nsPath=Controlled Blocks\\[*]\\Priority\r\nsValue=33\r\n",
-    );
+    let settings = MemIniFile::from_text(text);
     let options = RunOptions {
-        operation: "Universal tweaker".to_owned(),
+        operation: operation.to_owned(),
         input: windows_path(&raw),
         output: windows_path(dir),
         path_contains: Some(String::new()),
@@ -1106,7 +1551,13 @@ pub fn run(tag: &str, args: &[&str]) -> Result<()> {
             .filter_map(|game| GAMES.iter().find(|known| known.name == harness_game(*game)))
             .filter(|game| options.games.is_empty() || options.games.iter().any(|name| name == game.name))
             .collect();
-        let settings_key = fnv(settings_text(case, Path::new("{log}"), Path::new("{source}")).as_bytes());
+        let settings_key = fnv(settings_text(
+            case,
+            Path::new("{log}"),
+            Path::new("{source}"),
+            Path::new("{source-file}"),
+        )
+        .as_bytes());
 
         for game in games {
             let Some(data) = std::env::var_os(game.data_var).map(PathBuf::from) else {
@@ -1154,38 +1605,73 @@ pub fn run(tag: &str, args: &[&str]) -> Result<()> {
                     .to_string_lossy()
                     .replace(' ', "_");
                 let mut key = format!("{}-{settings_key:016x}", archive_key(&archive_path)?);
-                let input = match options.sample {
-                    Some(count) => {
-                        // The sample holds the first files of the case's
-                        // extensions; a sample of NIFs only keeps the name
-                        // (and cache key) it had before other extensions
-                        // got their own samples.
-                        let tag = if extensions == ["nif"] {
-                            String::new()
-                        } else {
-                            format!("-{}", extensions.join("+"))
-                        };
-                        key.push_str(&format!("-sample{count}{tag}"));
-                        let dir = scratch
-                            .join("sniff-sample")
-                            .join(game.name)
-                            .join(&archive_name)
-                            .join(format!("{count}{tag}"));
-                        if let Err(error) = sample_folder(&archive, &dir, count, &extensions) {
+                // The input folder of a case that needs one of its own.
+                let input = if case.prep == Prep::DeathSkeleton {
+                    // `Add blocks from skeleton` reads `death.kf` and the
+                    // `skeleton.nif` beside it from the input folder, which
+                    // an archive does not give.
+                    let dir = scratch.join("sniff-death").join(game.name).join(&archive_name);
+                    if !death_skeleton_folder(&archive, &dir)? {
+                        say(
+                            format!(
+                                "skipped       {}: no death.kf with a skeleton.nif",
+                                archive_path.display()
+                            ),
+                            &mut report,
+                        );
+                        continue;
+                    }
+                    key.push_str("-deathskeleton");
+                    dir
+                } else {
+                    match options.sample {
+                        Some(count) => {
+                            // The sample holds the first files of the case's
+                            // extensions; a sample of NIFs only keeps the name
+                            // (and cache key) it had before other extensions
+                            // got their own samples.
+                            let tag = if extensions == ["nif"] {
+                                String::new()
+                            } else {
+                                format!("-{}", extensions.join("+"))
+                            };
+                            key.push_str(&format!("-sample{count}{tag}"));
+                            let dir = scratch
+                                .join("sniff-sample")
+                                .join(game.name)
+                                .join(&archive_name)
+                                .join(format!("{count}{tag}"));
+                            if let Err(error) = sample_folder(&archive, &dir, count, &extensions) {
+                                say(
+                                    format!("skipped       {}: {error:#}", archive_path.display()),
+                                    &mut report,
+                                );
+                                continue;
+                            }
+                            dir
+                        }
+                        None => archive_path.clone(),
+                    }
+                };
+                // The source folder of the operations that copy from one.
+                let source = scratch
+                    .join("sniff-source")
+                    .join(case.prep.name())
+                    .join(game.name)
+                    .join(&archive_name);
+                let mut source_file = PathBuf::new();
+                if uses_source(case) {
+                    prepare_source(&archive, &source, &extensions, options.threads, case.prep)?;
+                    match first_source_file(&source)? {
+                        Some(file) => source_file = file,
+                        None => {
                             say(
-                                format!("skipped       {}: {error:#}", archive_path.display()),
+                                format!("skipped       {}: the source folder is empty", archive_path.display()),
                                 &mut report,
                             );
                             continue;
                         }
-                        dir
                     }
-                    None => archive_path.clone(),
-                };
-                // The source folder of the operations that copy from one.
-                let source = scratch.join("sniff-source").join(game.name).join(&archive_name);
-                if case.settings.iter().any(|(_, value)| value.contains("{source}")) {
-                    prepare_source(&archive, &source, &extensions, options.threads)?;
                 }
                 drop(archive);
                 let work = scratch.join("sniff-work").join(case.name).join(&archive_name);
@@ -1196,9 +1682,27 @@ pub fn run(tag: &str, args: &[&str]) -> Result<()> {
                 let mut oracle = if cached.exists() && !options.refresh_oracle {
                     serde_json::from_slice::<Results>(&fs::read(&cached)?)?
                 } else {
-                    let mut results =
-                        run_sniff(&sniff, &work, case, &source, &input, None, options.threads, &extensions)?;
-                    rerun_crashes(&sniff, &work, case, &source, &input, &extensions, &mut results)?;
+                    let mut results = run_sniff(
+                        &sniff,
+                        &work,
+                        case,
+                        &source,
+                        &source_file,
+                        &input,
+                        None,
+                        options.threads,
+                        &extensions,
+                    )?;
+                    rerun_crashes(
+                        &sniff,
+                        &work,
+                        case,
+                        &source,
+                        &source_file,
+                        &input,
+                        &extensions,
+                        &mut results,
+                    )?;
                     fs::create_dir_all(cached.parent().unwrap())?;
                     fs::write(&cached, serde_json::to_vec(&results)?)?;
                     say(
@@ -1216,7 +1720,7 @@ pub fn run(tag: &str, args: &[&str]) -> Result<()> {
                 };
 
                 let start = Instant::now();
-                let port = match run_port(&work, case, &source, &input, options.threads, &extensions) {
+                let port = match run_port(&work, case, &source, &source_file, &input, options.threads, &extensions) {
                     Ok(port) => port,
                     Err(error) => {
                         say(
@@ -1227,7 +1731,17 @@ pub fn run(tag: &str, args: &[&str]) -> Result<()> {
                         continue;
                     }
                 };
-                if rerun_differences(&sniff, &work, case, &source, &input, &extensions, &mut oracle, &port)? {
+                if rerun_differences(
+                    &sniff,
+                    &work,
+                    case,
+                    &source,
+                    &source_file,
+                    &input,
+                    &extensions,
+                    &mut oracle,
+                    &port,
+                )? {
                     fs::write(&cached, serde_json::to_vec(&oracle)?)?;
                 }
 

@@ -42,9 +42,6 @@ macro_rules! pending {
     };
 }
 
-/// Not ported yet, for step 5 of phase 5.
-const STEP_5: &str = "not ported yet (phase 5 step 5)";
-
 /// `FormCreate`: the operations in the order of `AddProc`.
 pub const PROCS: &[ProcEntry] = &[
     ported!("NIF", "Update tangents and binormals", proc_tangents::ProcTangents),
@@ -69,10 +66,14 @@ pub const PROCS: &[ProcEntry] = &[
         proc_adjust_transform::ProcAdjustTransform
     ),
     ported!("NIF", "Attach parent NiNode", proc_attach_parent::ProcAttachParent),
-    pending!("NIF", "Copy geometry blocks", STEP_5),
-    pending!("NIF", "Vertex color painting", STEP_5),
-    pending!("NIF", "Group shapes", STEP_5),
-    pending!("NIF", "Merge shapes", STEP_5),
+    ported!(
+        "NIF",
+        "Copy geometry blocks",
+        proc_copy_geometry_blocks::ProcCopyGeometryBlocks
+    ),
+    ported!("NIF", "Vertex color painting", proc_vertex_paint::ProcVertexPaint),
+    ported!("NIF", "Group shapes", proc_group_shapes::ProcGroupShapes),
+    ported!("NIF", "Merge shapes", proc_merge_shapes::ProcMergeShapes),
     ported!("NIF", "Merge properties", proc_merge_properties::ProcMergeProperties),
     ported!("NIF", "Remove nodes", proc_remove_nodes::ProcRemoveNodes),
     ported!(
@@ -109,12 +110,12 @@ pub const PROCS: &[ProcEntry] = &[
         proc_find_draw_calls::ProcFindDrawCalls
     ),
     ported!("Report", "Find UVs", proc_find_uvs::ProcFindUVs),
-    pending!(
-        "Report",
-        "Find textures",
-        "wbDDS is ported (xedit_io::dds); the processor is phase 5 step 5"
+    ported!("Report", "Find textures", proc_find_textures::ProcFindTextures),
+    ported!(
+        "Animation",
+        "Copy anim controlled blocks",
+        proc_copy_controlled_blocks::ProcCopyControlledBlocks
     ),
-    pending!("Animation", "Copy anim controlled blocks", STEP_5),
     ported!(
         "Animation",
         "Copy anim priorities",
@@ -136,11 +137,23 @@ pub const PROCS: &[ProcEntry] = &[
         proc_fix_exported_kf_anim::ProcFixExportedKFAnim
     ),
     ported!("Animation", "Optimize Animations", proc_optimize_kf::ProcOptimizeKF),
-    pending!("Animation", "Add headtracking anim", STEP_5),
-    pending!("Animation", "Add facial anim", STEP_5),
-    pending!("Animation", "Add NiTransformData", STEP_5),
-    pending!("Animation", "Weijiesen's blow up thing", STEP_5),
-    pending!("Animation", "Add blocks from skeleton", STEP_5),
+    ported!(
+        "Animation",
+        "Add headtracking anim",
+        proc_add_headtracking_anim::ProcAddHeadtrackingAnim
+    ),
+    ported!("Animation", "Add facial anim", proc_add_facial_anim::ProcAddFacialAnim),
+    ported!("Animation", "Add NiTransformData", proc_jam_anim::ProcJamAnim),
+    ported!(
+        "Animation",
+        "Weijiesen's blow up thing",
+        proc_wei_explosion::ProcWeiExplosion
+    ),
+    ported!(
+        "Animation",
+        "Add blocks from skeleton",
+        proc_anim_skeleton_death::ProcAnimSkeletonDeath
+    ),
     pending!(
         "Collision",
         "Update MOPP code",

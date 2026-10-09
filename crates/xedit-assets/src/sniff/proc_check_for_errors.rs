@@ -7,9 +7,10 @@
 //! `Check for errors`: a list of checks of meshes and textures that report
 //! what would break or slow the game; each check is a setting of its own,
 //! named after the check. The texture checks (`CheckDDS`,
-//! `CheckSSEDdsFormat`) read the DDS header with `wbDDS` (`xedit_io::dds`,
-//! ported in phase 5 step 2) and are phase 5 step 5's: a DDS file fails with a
-//! message saying so while they are on.
+//! `CheckSSEDdsFormat`) read the DDS header with `wbDDS`
+//! (`xedit_io::dds`).
+
+use xedit_io::dds;
 
 use crate::data_format::{DfError, El, R, Tree, df_float_to_str};
 use crate::data_format_nif::{
@@ -22,11 +23,15 @@ use crate::data_format_nif::{
 use crate::proc_base;
 use crate::sniff::processor::{
     GameType, Proc, ProcBase, ProcContext, ProcFileObject, Storage, access_violation, ansi_same_text, extract_file_ext,
-    same_text, same_value, same_value_single,
+    is_power_of_2, same_text, same_value, same_value_single,
 };
 
 /// A check (`TCheckProcedure`): the file, the loaded mesh and the log.
 type CheckProc = fn(&ProcFileObject, &mut NifFile, &mut Vec<String>) -> R<()>;
+
+/// The check of a texture (`TCheckProcedure` of a `.dds` file): the file,
+/// the bytes and the log.
+type DdsCheckProc = fn(&ProcFileObject, &[u8], &mut Vec<String>) -> R<()>;
 
 /// `TCheck`.
 struct Check {
@@ -36,8 +41,10 @@ struct Check {
     extensions: &'static [&'static str],
     #[allow(dead_code)]
     comment: &'static str,
-    /// The check, or `None` for a texture check (phase 5 step 5).
+    /// The check of a mesh.
     proc: Option<CheckProc>,
+    /// The check of a texture (`CheckDDS`, `CheckSSEDdsFormat`).
+    dds_proc: Option<DdsCheckProc>,
     active: bool,
 }
 
@@ -59,6 +66,7 @@ const CHECKS: &[Check] = &[
         group: "Meshes",
         extensions: NIF_KF,
         comment: "String index used in blocks for meshes with strings table (Fallout 3 and later games) is out of range, always crashes the game",
+        dds_proc: None,
         proc: Some(check_string_index),
         active: true,
     },
@@ -67,6 +75,7 @@ const CHECKS: &[Check] = &[
         group: "Meshes",
         extensions: NIF_KF,
         comment: "Wrong order of bhkCollisionObject children when child has larger index than its parent, always crashes the game",
+        dds_proc: None,
         proc: Some(check_blocks_order),
         active: true,
     },
@@ -75,6 +84,7 @@ const CHECKS: &[Check] = &[
         group: "Meshes",
         extensions: NIF,
         comment: "Multiple root nodes or blocks not referenced from the root scenegraph, could crash the game",
+        dds_proc: None,
         proc: Some(check_unused_blocks),
         active: true,
     },
@@ -83,6 +93,7 @@ const CHECKS: &[Check] = &[
         group: "Meshes",
         extensions: NIF,
         comment: "Invalid names or the same named blocks (or the same block) is used several times in NiNode children, might cause issues or even crash the game depending on usage context",
+        dds_proc: None,
         proc: Some(check_invalid_repeated_children_names),
         active: true,
     },
@@ -91,6 +102,7 @@ const CHECKS: &[Check] = &[
         group: "Meshes",
         extensions: NIF,
         comment: "References to blocks of wrong type. Always crashes the game",
+        dds_proc: None,
         proc: Some(check_wrong_link_types),
         active: true,
     },
@@ -99,6 +111,7 @@ const CHECKS: &[Check] = &[
         group: "Meshes",
         extensions: NIF,
         comment: "Links in arrays (children, extradatas, properties, etc.) are either empty, point to nonexisting blocks or repeated. Could crash the game",
+        dds_proc: None,
         proc: Some(check_invalid_array_links),
         active: true,
     },
@@ -107,6 +120,7 @@ const CHECKS: &[Check] = &[
         group: "Meshes",
         extensions: NIF,
         comment: "Triangles or strips reference invalid vertices. Unused vertices in geometry. Duplicate vertices in BSTriShape. Multiple strips in NiTriStripsData.",
+        dds_proc: None,
         proc: Some(check_geometry),
         active: true,
     },
@@ -115,6 +129,7 @@ const CHECKS: &[Check] = &[
         group: "Meshes",
         extensions: NIF,
         comment: "Some blocks must have specific name to work properly (BSX for BSXFlags, INV for BsInvMarker, etc.), \"Weapon\" nodes in non-skeletons, [TES4] unnamed NiMaterialProperty",
+        dds_proc: None,
         proc: Some(check_hardcoded_block_names),
         active: true,
     },
@@ -123,6 +138,7 @@ const CHECKS: &[Check] = &[
         group: "Meshes",
         extensions: NIF,
         comment: "Moveable collision has zero mass or uses inertia system without inertia tensor matrix set (will break the physics not only for that object, but other objects using totally different meshes as well), Havok layer and motion settings",
+        dds_proc: None,
         proc: Some(check_collision),
         active: true,
     },
@@ -131,6 +147,7 @@ const CHECKS: &[Check] = &[
         group: "Meshes",
         extensions: NIF,
         comment: "Badly optimized MOPP collision using high poly shapes",
+        dds_proc: None,
         proc: Some(check_collision_mopp),
         active: true,
     },
@@ -139,6 +156,7 @@ const CHECKS: &[Check] = &[
         group: "Meshes",
         extensions: NIF,
         comment: "Check for invalid BSXFlags: Animated, Havok, Ragdoll, Complex, Addon, Editor Marker and Dynamic. Emittance flag is checked by \"Invalid shader types and flags\". Complex and Articulated affect grabbing behaviour only",
+        dds_proc: None,
         proc: Some(check_bsx_flags),
         active: true,
     },
@@ -147,6 +165,7 @@ const CHECKS: &[Check] = &[
         group: "Meshes",
         extensions: NIF,
         comment: "Check for invalid consistency flags value. CT_MUTABLE when shape is controlled by NiGeomMorpherController or NiUVController, CT_STATIC for the rest. CT_VOLATILE isn't used. Affects performance",
+        dds_proc: None,
         proc: Some(check_consistency_flags),
         active: true,
     },
@@ -155,6 +174,7 @@ const CHECKS: &[Check] = &[
         group: "Meshes",
         extensions: NIF,
         comment: "Check for absolute paths and invalid combinations of textures in BSShaderTextureSet",
+        dds_proc: None,
         proc: Some(check_texture_set_slots),
         active: true,
     },
@@ -163,6 +183,7 @@ const CHECKS: &[Check] = &[
         group: "Meshes",
         extensions: NIF,
         comment: "Check for enabled Blending in NiAlphaProperty except NoLighting shader",
+        dds_proc: None,
         proc: Some(check_ni_alpha_property),
         active: false,
     },
@@ -171,6 +192,7 @@ const CHECKS: &[Check] = &[
         group: "Meshes",
         extensions: NIF,
         comment: "Check for invalid combinations of shader type and shader flags: environment mapping, eye envmapping, glow, external emittance, glow + treeanim. etc. Could crash the game",
+        dds_proc: None,
         proc: Some(check_shader_type_flags),
         active: true,
     },
@@ -179,6 +201,7 @@ const CHECKS: &[Check] = &[
         group: "Meshes",
         extensions: NIF,
         comment: "Check for the invalid Modifier Name in descendants of NiPSysModifierCtlr, too long Life Span in NiPSysEmitter, Emitter nodes without NiParticleSystem, mesh emitters without Particle Data. Could crash the game",
+        dds_proc: None,
         proc: Some(check_particle_system),
         active: true,
     },
@@ -187,6 +210,7 @@ const CHECKS: &[Check] = &[
         group: "Meshes",
         extensions: NIF,
         comment: "Check for the invalid Target field in NiCollisionObject, bhkCompressedMeshShape, NiTimeController. Check for invalid node names in NiControllerSequence",
+        dds_proc: None,
         proc: Some(check_target_field),
         active: true,
     },
@@ -195,6 +219,7 @@ const CHECKS: &[Check] = &[
         group: "Meshes",
         extensions: NIF_KF,
         comment: "Check for the incorrect End key not matching the animation Stop time. Could cause animation issues",
+        dds_proc: None,
         proc: Some(check_anim_stop_time),
         active: true,
     },
@@ -203,6 +228,7 @@ const CHECKS: &[Check] = &[
         group: "Meshes",
         extensions: NIF,
         comment: "BSDismemberSkinInstance and Body Parts checks, missing Skin in BSDynamicTriShape, [TES5/SSE] disrepancies between _0 and _1 morph models",
+        dds_proc: None,
         proc: Some(check_skinning_issues),
         active: true,
     },
@@ -211,6 +237,7 @@ const CHECKS: &[Check] = &[
         group: "Meshes",
         extensions: NIF_KF,
         comment: "Root node is a NiNode/NiSequence descendant and the first block, Invalid subshapes in bhkListShape, [TES4] Tangents size not matching the vertices count, Unsupported NiSpecularPropertry in post Oblivion meshes",
+        dds_proc: None,
         proc: Some(check_miscellaneous),
         active: true,
     },
@@ -219,6 +246,7 @@ const CHECKS: &[Check] = &[
         group: "Meshes",
         extensions: NIF,
         comment: "Check for alpha < 1.0 but missing Vertex_Alpha shader flag, possibly redundant all white vertex colors except for leaf animations and parallax, HDR vertex colors (outside of 0..1 range) which sometimes are not intended and lead to rendering issues",
+        dds_proc: None,
         proc: Some(check_vertex_colors),
         active: true,
     },
@@ -227,6 +255,7 @@ const CHECKS: &[Check] = &[
         group: "Meshes",
         extensions: NIF,
         comment: "Check for tiling UVs outside of 0..1 range in CLAMP mode. Causes texture stretching",
+        dds_proc: None,
         proc: Some(check_uvs),
         active: false,
     },
@@ -235,6 +264,7 @@ const CHECKS: &[Check] = &[
         group: "Meshes",
         extensions: NIF,
         comment: "Potential false positives, could be done on purpose: Empty shader flags, Envmap + Light_fade flags and 5th + 6th slots in textureset for BSShaderPPLightingProperty",
+        dds_proc: None,
         proc: Some(check_optional),
         active: false,
     },
@@ -243,6 +273,7 @@ const CHECKS: &[Check] = &[
         group: "Meshes",
         extensions: NIF,
         comment: "Check for strips with repeated degenerate triangles",
+        dds_proc: None,
         proc: Some(check_strips_degenerate),
         active: false,
     },
@@ -252,6 +283,7 @@ const CHECKS: &[Check] = &[
         extensions: DDS,
         comment: "Texture size is not power of 2 or unsupported DXGI format, likely to crash the game",
         proc: None,
+        dds_proc: Some(check_dds),
         active: true,
     },
     Check {
@@ -259,6 +291,7 @@ const CHECKS: &[Check] = &[
         group: "Skyrim SE",
         extensions: NIF,
         comment: "Unsupported nif blocks which crash Skyrim SE: NiTriStrips, stripified NiSkipPartition and bhkMultiSphereShape",
+        dds_proc: None,
         proc: Some(check_sse_nif_format),
         active: false,
     },
@@ -268,6 +301,7 @@ const CHECKS: &[Check] = &[
         extensions: DDS,
         comment: "Uncompressed formats which crash Skyrim SE in Windows 7: R5G6B5, A1R5G5B5, A4R4G4B4 and other reduced bits formats",
         proc: None,
+        dds_proc: Some(check_sse_dds_format),
         active: false,
     },
 ];
@@ -2766,6 +2800,47 @@ fn check_sse_nif_format(_: &ProcFileObject, nif: &mut NifFile, log: &mut Vec<Str
     Ok(())
 }
 
+// ===========================================================================
+/// `CheckDDS`: the size must be a power of two and the format one DirectX
+/// 10 has.
+fn check_dds(_: &ProcFileObject, data: &[u8], log: &mut Vec<String>) -> R<()> {
+    let header = dds::DdsHeader::read(data);
+
+    if !is_power_of_2(header.width) || !is_power_of_2(header.height) {
+        log.push(format!(
+            "\tTexture size {}x{} is not power of 2",
+            header.width, header.height
+        ));
+    }
+
+    if dds::dxgi(data).0 == 0 {
+        let d3d = dds::d3dfmt(data);
+        if dds::D3D_NODXGI.contains(&d3d) {
+            log.push(format!(
+                "\t{} format is unsupported by DirectX 10+ (Skyrim SE, Fallout 4, etc.)",
+                dds::d3dfmt_format_name(d3d)
+            ));
+        }
+    }
+    Ok(())
+}
+
+// ===========================================================================
+/// `CheckSSEDdsFormat`: a reduced bits RGB format crashes Skyrim SE on
+/// Windows 7.
+fn check_sse_dds_format(_: &ProcFileObject, data: &[u8], log: &mut Vec<String>) -> R<()> {
+    let pixel_format = dds::DdsHeader::read(data).pixel_format;
+
+    if pixel_format.flags & dds::DDPF_RGB != 0
+        && (pixel_format.r_bit_mask != 0x00FF_0000
+            || pixel_format.g_bit_mask != 0x0000_FF00
+            || pixel_format.b_bit_mask != 0x0000_00FF)
+    {
+        log.push("\tTexture format is not supported by Skyrim SE on Windows 7".to_owned());
+    }
+    Ok(())
+}
+
 impl Proc for ProcCheckForErrors {
     proc_base!();
 
@@ -2790,8 +2865,24 @@ impl Proc for ProcCheckForErrors {
     fn process_file(&self, file: &mut ProcFileObject, ctx: &mut ProcContext) -> R<Vec<u8>> {
         let mut log: Vec<String> = Vec::new();
         let ext = extract_file_ext(&file.file_name).to_owned();
+        let mut obj_dds: Option<Vec<u8>> = None;
         if self.load_dds && same_text(&ext, ".dds") {
-            return Err(DfError::new("The texture checks are not ported yet (phase 5 step 5)"));
+            let buf = file.get_data()?;
+            if !dds::is_dds(&buf) {
+                log.push("\tNot a valid DDS file".to_owned());
+            } else {
+                obj_dds = Some(buf);
+            }
+        }
+        if let Some(buf) = &obj_dds {
+            for (index, check) in CHECKS.iter().enumerate() {
+                if self.active[index]
+                    && check.does_extension(&ext)
+                    && let Some(proc) = check.dds_proc
+                {
+                    proc(file, buf, &mut log)?;
+                }
+            }
         }
         if self.load_nif && !same_text(&ext, ".dds") {
             let mut nif = NifFile::new()?;
