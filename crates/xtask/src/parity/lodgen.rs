@@ -36,7 +36,7 @@
 //! `<scratch>/<tag>/lodgen/<case>/` and removed when everything compares
 //! equal, unless `--keep`.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
@@ -50,6 +50,7 @@ use super::hidden::{HiddenChild, HiddenCommand};
 use super::nif::fnv;
 use super::{GAMES, Game, cache_dir, required_var};
 use crate::memory::{GIB, Limit};
+use xedit_io::archive::Archive;
 
 const USAGE: &str = "usage: cargo xtask parity lodgen [--case <name or name part>]... [--game <game>]... \
                      [--oracle-only] [--refresh-oracle] [--keep] [--timeout <minutes>] [--list]";
@@ -65,6 +66,18 @@ struct Case {
     worldspaces: &'static [&'static str],
     /// The values of `[<APP> LOD Options]` of the settings file.
     settings: &'static [(&'static str, &'static str)],
+    /// Loose files added to the data folder of the case (synthetic tree
+    /// billboards and LOD models the vanilla games do not have): the path
+    /// below the data folder and where the content comes from.
+    overlay: &'static [(&'static str, Source)],
+}
+
+/// The content of a loose file of an overlay.
+enum Source {
+    /// A file of the game's archives.
+    Archive(&'static str),
+    /// A text, written as it is.
+    Text(&'static str),
 }
 
 const FO4_MASTERS: &[&str] = &[
@@ -108,6 +121,7 @@ const CASES: &[Case] = &[
         plugins: FO4_MASTERS,
         worldspaces: &["SanctuaryHillsWorld"],
         settings: &[],
+        overlay: &[],
     },
     Case {
         name: "fo4-vr",
@@ -115,6 +129,7 @@ const CASES: &[Case] = &[
         plugins: FO4_MASTERS,
         worldspaces: &["DLC03VRWorldspace"],
         settings: &[],
+        overlay: &[],
     },
     Case {
         name: "fo4-nukaworld",
@@ -122,6 +137,7 @@ const CASES: &[Case] = &[
         plugins: FO4_MASTERS,
         worldspaces: &["NukaWorld"],
         settings: &[],
+        overlay: &[],
     },
     Case {
         name: "fo4-farharbor",
@@ -129,6 +145,7 @@ const CASES: &[Case] = &[
         plugins: FO4_MASTERS,
         worldspaces: &["DLC03FarHarbor"],
         settings: &[],
+        overlay: &[],
     },
     Case {
         name: "sse-sovngarde",
@@ -136,6 +153,7 @@ const CASES: &[Case] = &[
         plugins: SSE_MASTERS,
         worldspaces: &["Sovngarde"],
         settings: &[],
+        overlay: &[],
     },
     Case {
         name: "sse-soulcairn",
@@ -143,6 +161,7 @@ const CASES: &[Case] = &[
         plugins: SSE_MASTERS,
         worldspaces: &["DLC01SoulCairn"],
         settings: &[],
+        overlay: &[],
     },
     Case {
         name: "fnv-strip",
@@ -150,6 +169,7 @@ const CASES: &[Case] = &[
         plugins: FNV_MASTERS,
         worldspaces: &["TheStripWorldNew"],
         settings: &[],
+        overlay: &[],
     },
     Case {
         name: "fo3-dcworld05",
@@ -157,6 +177,7 @@ const CASES: &[Case] = &[
         plugins: FO3_MASTERS,
         worldspaces: &["DCWorld05"],
         settings: &[],
+        overlay: &[],
     },
     Case {
         name: "tes4-all",
@@ -164,6 +185,7 @@ const CASES: &[Case] = &[
         plugins: &["Oblivion.esm"],
         worldspaces: &[],
         settings: &[],
+        overlay: &[],
     },
     Case {
         name: "sse-japhetsfolly",
@@ -171,6 +193,7 @@ const CASES: &[Case] = &[
         plugins: SSE_MASTERS,
         worldspaces: &["JaphetsFollyWorld"],
         settings: &[],
+        overlay: &[],
     },
     Case {
         name: "fnv-gamorrah",
@@ -178,7 +201,148 @@ const CASES: &[Case] = &[
         plugins: FNV_MASTERS,
         worldspaces: &["GamorrahWorld"],
         settings: &[],
+        overlay: &[],
     },
+    // The atlas in other formats and sizes: DXT5 and BC5, more atlases than
+    // one at 1024 pixels.
+    Case {
+        name: "fnv-strip-dxt5-bc5",
+        game: "fnv",
+        plugins: FNV_MASTERS,
+        worldspaces: &["TheStripWorldNew"],
+        settings: &[
+            ("AtlasDiffuseFormat", "202"),
+            ("AtlasNormalFormat", "205"),
+            ("AtlasWidth", "1024"),
+            ("AtlasHeight", "1024"),
+        ],
+        overlay: &[],
+    },
+    Case {
+        name: "fnv-strip-8888-565",
+        game: "fnv",
+        plugins: FNV_MASTERS,
+        worldspaces: &["TheStripWorldNew"],
+        settings: &[("AtlasDiffuseFormat", "88"), ("AtlasNormalFormat", "82")],
+        overlay: &[],
+    },
+    Case {
+        name: "fnv-strip-888-bc4",
+        game: "fnv",
+        plugins: FNV_MASTERS,
+        worldspaces: &["TheStripWorldNew"],
+        settings: &[("AtlasDiffuseFormat", "87"), ("AtlasNormalFormat", "204")],
+        overlay: &[],
+    },
+    Case {
+        name: "fnv-strip-dxt1-chunk",
+        game: "fnv",
+        plugins: FNV_MASTERS,
+        worldspaces: &["TheStripWorldNew"],
+        settings: &[
+            ("AtlasDiffuseFormat", "200"),
+            ("DefaultAlphaThreshold", "100"),
+            ("Chunk", "1"),
+            ("LODLevel", "4"),
+            ("LODX", "-4"),
+            ("LODY", "-4"),
+        ],
+        overlay: &[],
+    },
+    // The tree LOD of the Fallouts with billboards of the trees (the vanilla
+    // games have none), brightened, one with an ini of its own.
+    Case {
+        name: "fnv-strip-trees",
+        game: "fnv",
+        plugins: FNV_MASTERS,
+        worldspaces: &["TheStripWorldNew"],
+        settings: &[("TreesBrightness", "5")],
+        overlay: &[
+            (
+                "textures\\terrain\\lodgen\\falloutnv.esm\\NVDatePalm01_00111DA0.dds",
+                Source::Archive("textures\\landscape\\trees\\nvdatepalmlod.dds"),
+            ),
+            (
+                "textures\\terrain\\lodgen\\falloutnv.esm\\NVDatePalm02_00111D9F.dds",
+                Source::Archive("textures\\landscape\\trees\\nvdatepalmlod.dds"),
+            ),
+            (
+                "textures\\terrain\\lodgen\\falloutnv.esm\\NVQueenPalm01_00111D9D.dds",
+                Source::Archive("textures\\landscape\\trees\\nvqueenpalmlod.dds"),
+            ),
+            (
+                "textures\\terrain\\lodgen\\falloutnv.esm\\NVQueenPalm01_00111D9D.txt",
+                Source::Text("[LOD]\r\nWidth=600.5\r\nHeight=0\r\nShiftZ=-12.25\r\nScale=1.5\r\n"),
+            ),
+            (
+                "textures\\terrain\\lodgen\\falloutnv.esm\\NVSagoPalm01_00111DA2.dds",
+                Source::Archive("textures\\landscape\\trees\\nvsagopalmlod.dds"),
+            ),
+            (
+                "textures\\terrain\\lodgen\\falloutnv.esm\\treejoshANV_0008D47C.dds",
+                Source::Archive("textures\\landscape\\trees\\treejosh_lod.dds"),
+            ),
+        ],
+    },
+    // The tree LOD of Skyrim (the billboards in a DXT3 atlas, the list and
+    // the blocks, rotated at random) and the trees as 3D objects LOD
+    // (a LOD model of a tree, and billboards where it has none).
+    Case {
+        name: "sse-sovngarde-trees",
+        game: "sse",
+        plugins: SSE_MASTERS,
+        worldspaces: &["Sovngarde"],
+        settings: &[("TreesBrightness", "-3")],
+        overlay: SSE_BILLBOARDS,
+    },
+    Case {
+        name: "sse-sovngarde-trees3d",
+        game: "sse",
+        plugins: SSE_MASTERS,
+        worldspaces: &["Sovngarde"],
+        settings: &[("Trees3D", "1"), ("AtlasTextureSize", "256")],
+        overlay: SSE_TREES_3D,
+    },
+];
+
+/// Billboards of Sovngarde's trees, from tree LOD atlases of the game.
+const SSE_BILLBOARDS: &[(&str, Source)] = &[
+    (
+        "textures\\terrain\\lodgen\\skyrim.esm\\TreePineForest01_0001306D.dds",
+        Source::Archive("textures\\terrain\\dlc2solstheimworld\\trees\\dlc2solstheimworldtreelod.dds"),
+    ),
+    (
+        "textures\\terrain\\lodgen\\skyrim.esm\\TreePineForest01_0001306D.txt",
+        Source::Text("[LOD]\r\nWidth=512\r\nHeight=900\r\nShiftX=1\r\nShiftY=-2\r\nShiftZ=-20\r\nScale=1.25\r\n"),
+    ),
+    (
+        "textures\\terrain\\lodgen\\skyrim.esm\\TreePineForest02_00018A02.dds",
+        Source::Archive("textures\\terrain\\dlc1hunterhqworld\\trees\\dlc1hunterhqworldtreelod.dds"),
+    ),
+    (
+        "textures\\terrain\\lodgen\\skyrim.esm\\DeadShrub01_000A731C.dds",
+        Source::Archive("textures\\terrain\\dlc2solstheimworld\\trees\\dlc2solstheimworldtreelod.dds"),
+    ),
+];
+
+/// The billboards, and a LOD model for the 3D trees of one of them.
+const SSE_TREES_3D: &[(&str, Source)] = &[
+    (
+        "meshes\\landscape\\trees\\treepineforest02_lod_0.nif",
+        Source::Archive("meshes\\landscape\\trees\\treepineforest01_lod_flat.nif"),
+    ),
+    (
+        "meshes\\landscape\\trees\\treepineforest02_lod_1.nif",
+        Source::Archive("meshes\\landscape\\trees\\treepineforest01_lod_flat.nif"),
+    ),
+    (
+        "textures\\terrain\\lodgen\\skyrim.esm\\TreePineForest01_0001306D.dds",
+        Source::Archive("textures\\terrain\\dlc2solstheimworld\\trees\\dlc2solstheimworldtreelod.dds"),
+    ),
+    (
+        "textures\\terrain\\lodgen\\skyrim.esm\\DeadShrub01_000A731C.dds",
+        Source::Archive("textures\\terrain\\dlc1hunterhqworld\\trees\\dlc1hunterhqworldtreelod.dds"),
+    ),
 ];
 
 struct Options {
@@ -272,14 +436,32 @@ fn archive_extension(game: &Game) -> &'static str {
 /// The private data folder of a case: the plugins copied, the archives
 /// hard linked (or copied across volumes), the default ini next to it.
 fn prepare_data(case: &Case, game: &Game, data: &Path, root: &Path) -> Result<PathBuf> {
-    let private = root.join("Data");
-    fs::create_dir_all(&private)?;
+    let shared = root.join("Data");
+    fs::create_dir_all(&shared)?;
     for plugin in case.plugins {
-        let target = private.join(plugin);
+        let target = shared.join(plugin);
         if !target.exists() {
             fs::copy(data.join(plugin), &target).with_context(|| format!("copying {plugin}"))?;
         }
     }
+    // A case with loose files has a data folder of its own, the plugins
+    // linked to the shared copies.
+    let private = if case.overlay.is_empty() {
+        shared.clone()
+    } else {
+        let private = root.join(format!("Data-{}", case.name));
+        if private.exists() {
+            fs::remove_dir_all(&private)?;
+        }
+        fs::create_dir_all(&private)?;
+        for plugin in case.plugins {
+            let target = private.join(plugin);
+            if fs::hard_link(shared.join(plugin), &target).is_err() {
+                fs::copy(shared.join(plugin), &target)?;
+            }
+        }
+        private
+    };
     let extension = archive_extension(game);
     for entry in fs::read_dir(data)? {
         let entry = entry?;
@@ -303,7 +485,34 @@ fn prepare_data(case: &Case, game: &Game, data: &Path, root: &Path) -> Result<Pa
     if !ini.exists() {
         fs::copy(default_ini(game, data)?, &ini)?;
     }
+    for (name, source) in case.overlay {
+        let bytes = match source {
+            Source::Text(text) => text.as_bytes().to_vec(),
+            Source::Archive(file) => read_from_archives(&private, extension, file)?,
+        };
+        let target = private.join(name.replace('\\', "/"));
+        fs::create_dir_all(target.parent().context("overlay file without a folder")?)?;
+        fs::write(&target, bytes)?;
+    }
     Ok(private)
+}
+
+/// A file of the archives of a data folder.
+fn read_from_archives(data: &Path, extension: &str, file: &str) -> Result<Vec<u8>> {
+    for entry in fs::read_dir(data)? {
+        let path = entry?.path();
+        if !path
+            .extension()
+            .is_some_and(|ext| ext.to_string_lossy().eq_ignore_ascii_case(extension))
+        {
+            continue;
+        }
+        let archive = Archive::open(&path).with_context(|| format!("opening {}", path.display()))?;
+        if let Some(bytes) = archive.read(file).with_context(|| format!("reading {file}"))? {
+            return Ok(bytes);
+        }
+    }
+    bail!("no archive of {} has {file}", data.display())
 }
 
 /// The scripts folder of a side: the LODGen tools and the atlas maps of
@@ -342,6 +551,12 @@ fn oracle_key(case: &Case, game: &Game, data: &Path) -> Result<String> {
         settings_text(case, game)
     );
     let extension = archive_extension(game);
+    for (name, source) in case.overlay {
+        match source {
+            Source::Archive(file) => text.push_str(&format!("|{name}<{file}")),
+            Source::Text(content) => text.push_str(&format!("|{name}={content}")),
+        }
+    }
     let mut names: Vec<PathBuf> = case.plugins.iter().map(|plugin| data.join(plugin)).collect();
     for entry in fs::read_dir(data)? {
         let path = entry?.path();
@@ -774,7 +989,16 @@ pub fn run(root_dir: &Path, tag: &str, args: &[&str]) -> Result<()> {
             continue;
         }
         let started = Instant::now();
-        let port = match run_port(case, game, &port_exe, &oracle_dir, &root, &private) {
+        // The tree rotations are random from a clock seed: the port runs
+        // from the seed the oracle's rotations show.
+        let seed = oracle_seed(&oracle);
+        if seed.is_none() && !tree_rotations(&oracle).iter().all(Vec::is_empty) {
+            println!(
+                "note          {}: no seed explains the oracle's tree rotations",
+                case.name
+            );
+        }
+        let port = match run_port(case, game, &port_exe, &oracle_dir, &root, &private, seed) {
             Ok(outputs) => outputs,
             Err(error) => {
                 println!("port-failed   {}: {error:#}", case.name);
@@ -782,7 +1006,7 @@ pub fn run(root_dir: &Path, tag: &str, args: &[&str]) -> Result<()> {
                 continue;
             }
         };
-        let differences = compare(&oracle, &port);
+        let differences = compare(&oracle, &port, seed);
         let equal = differences.is_empty();
         println!(
             "{:<13} {}: {} files, {} log lines ({} s){}",
@@ -868,13 +1092,38 @@ fn log_lines(log: &[u8]) -> Vec<String> {
 
 /// The differences of two runs: the files only one has or whose bytes
 /// differ, and the first line of the logs that differs.
-fn compare(oracle: &Outputs, port: &Outputs) -> Vec<String> {
+fn compare(oracle: &Outputs, port: &Outputs, seed: Option<u32>) -> Vec<String> {
     let mut differences = Vec::new();
+    // The rotations of the tree references, oracle and port, of the block
+    // files equal but for them.
+    let mut rotations = Vec::new();
+    let mut shifted = false;
     for (name, bytes) in oracle {
         if name == "log.txt" {
             continue;
         }
-        match port.get(name) {
+        let other = port.get(name);
+        if is_tree_block(name)
+            && let (Some(other), Some(_)) = (other, seed)
+            && other.len() == bytes.len()
+        {
+            let offsets = rotation_offsets(bytes);
+            let mut masked = (bytes.clone(), other.clone());
+            for &at in &offsets {
+                masked.0[at..at + 4].fill(0);
+                masked.1[at..at + 4].fill(0);
+            }
+            if masked.0 == masked.1 {
+                shifted |= bytes != other;
+                rotations.extend(
+                    offsets
+                        .iter()
+                        .map(|&at| (rotation_at(bytes, at), rotation_at(other, at))),
+                );
+                continue;
+            }
+        }
+        match other {
             None => differences.push(format!("only the oracle wrote {name}")),
             Some(other) if other != bytes => {
                 let at = bytes
@@ -894,6 +1143,17 @@ fn compare(oracle: &Outputs, port: &Outputs) -> Vec<String> {
     for name in port.keys() {
         if name != "log.txt" && !oracle.contains_key(name) {
             differences.push(format!("only the port wrote {name}"));
+        }
+    }
+    if shifted && let Some(seed) = seed {
+        if same_draw_order(&rotations, seed) {
+            let moved = rotations.iter().filter(|(a, b)| a.to_bits() != b.to_bits()).count();
+            println!(
+                "note          {moved} of {} tree rotations come later in the oracle's Random sequence (numbers the GUI drew elsewhere)",
+                rotations.len()
+            );
+        } else {
+            differences.push("tree rotations: not of the same Random draws as the oracle's".to_owned());
         }
     }
     let (a, b) = (
@@ -919,7 +1179,142 @@ fn compare(oracle: &Outputs, port: &Outputs) -> Vec<String> {
 
 /// Runs the port's `xedit lodgen` on a case; returns its outputs as the
 /// oracle's are collected.
-fn run_port(case: &Case, game: &Game, port_exe: &Path, oracle_dir: &Path, root: &Path, data: &Path) -> Result<Outputs> {
+/// Whether an output is a block file of tree references.
+fn is_tree_block(name: &str) -> bool {
+    name.ends_with(".btt") || name.ends_with(".dtl")
+}
+
+/// The offsets of the rotations of the references of a block file
+/// (`TwbLodTES5TreeBlock`: the type count, then per type its index, its
+/// reference count and 32 bytes per reference, the rotation at 12).
+fn rotation_offsets(bytes: &[u8]) -> Vec<usize> {
+    let int = |at: usize| bytes.get(at..at + 4).map(|b| i32::from_le_bytes(b.try_into().unwrap()));
+    let mut offsets = Vec::new();
+    let mut p = 4;
+    for _ in 0..int(0).unwrap_or(0).max(0) {
+        let Some(count) = int(p + 4) else { break };
+        p += 8;
+        for _ in 0..count.max(0) {
+            if p + 16 > bytes.len() {
+                break;
+            }
+            offsets.push(p + 12);
+            p += 32;
+        }
+    }
+    offsets
+}
+
+fn rotation_at(bytes: &[u8], at: usize) -> f32 {
+    f32::from_le_bytes(bytes[at..at + 4].try_into().unwrap())
+}
+
+/// The rotations of the tree references of the oracle's block files
+/// (`.btt`, `.dtl`), per file.
+fn tree_rotations(oracle: &Outputs) -> Vec<Vec<f32>> {
+    oracle
+        .iter()
+        .filter(|(name, _)| is_tree_block(name))
+        .map(|(_, bytes)| {
+            rotation_offsets(bytes)
+                .into_iter()
+                .map(|at| rotation_at(bytes, at))
+                .collect()
+        })
+        .collect()
+}
+
+const RAND_MULTIPLIER: u32 = 0x0808_8405;
+
+/// The rotation `2 * Pi * Random` of the draw that leaves `RandSeed` at
+/// `seed`.
+fn rotation_of(seed: u32) -> f32 {
+    (2.0 * std::f64::consts::PI * (f64::from(seed) / 4_294_967_296.0)) as f32
+}
+
+/// The index of each rotation in the `Random` sequence from `seed`, within
+/// `draws` draws (the first draw is index 0).
+fn draw_indices(seed: u32, draws: usize) -> HashMap<u32, usize> {
+    let mut indices = HashMap::new();
+    let mut state = seed;
+    for index in 0..draws {
+        state = state.wrapping_mul(RAND_MULTIPLIER).wrapping_add(1);
+        indices.entry(rotation_of(state).to_bits()).or_insert(index);
+    }
+    indices
+}
+
+/// Whether the rotations of the references differ only by numbers the
+/// oracle drew elsewhere: the GUI draws `Random` outside the generator now
+/// and then (the same case shows it in some runs only), which shifts the
+/// rotations of the references after it. The port's draws must come in
+/// the same order and the oracle's no earlier.
+fn same_draw_order(pairs: &[(f32, f32)], seed: u32) -> bool {
+    let indices = draw_indices(seed, pairs.len() * 4 + 64);
+    let mut drawn = Vec::new();
+    for (oracle, port) in pairs {
+        match (indices.get(&oracle.to_bits()), indices.get(&port.to_bits())) {
+            (Some(&oracle), Some(&port)) if oracle >= port => drawn.push((port, oracle)),
+            _ => return false,
+        }
+    }
+    drawn.sort_unstable();
+    drawn
+        .windows(2)
+        .all(|pair| pair[0].0 < pair[1].0 && pair[0].1 < pair[1].1)
+}
+
+/// The `RandSeed` the oracle started from. Upstream seeds `Random` from
+/// the clock (`Randomize` at startup) and draws one number per tree
+/// reference for its rotation (`2 * Pi * Random`); the seed is the one
+/// whose sequence holds every rotation of the oracle's block files within
+/// a few draws per reference. None without tree references.
+fn oracle_seed(oracle: &Outputs) -> Option<u32> {
+    const MULTIPLIER: u32 = RAND_MULTIPLIER;
+    let rotation = rotation_of;
+    let files = tree_rotations(oracle);
+    let all: Vec<u32> = files.iter().flatten().map(|r| r.to_bits()).collect();
+    if all.is_empty() {
+        return None;
+    }
+    // The inverse of the multiplier modulo 2^32 (Newton's iteration).
+    let mut inverse: u32 = MULTIPLIER;
+    for _ in 0..5 {
+        inverse = inverse.wrapping_mul(2u32.wrapping_sub(MULTIPLIER.wrapping_mul(inverse)));
+    }
+    // The first draw is the first reference of one of the files.
+    for first in files.iter().filter_map(|rotations| rotations.first()) {
+        let guess = (f64::from(*first) / (2.0 * std::f64::consts::PI) * 4_294_967_296.0) as i64;
+        for delta in -4096..=4096i64 {
+            let candidate = (guess + delta).rem_euclid(1 << 32) as u32;
+            if rotation(candidate).to_bits() != first.to_bits() {
+                continue;
+            }
+            let mut drawn = std::collections::HashSet::new();
+            let mut seed = candidate;
+            drawn.insert(rotation(seed).to_bits());
+            // A reference the block has already draws too.
+            for _ in 1..all.len() * 4 + 64 {
+                seed = seed.wrapping_mul(MULTIPLIER).wrapping_add(1);
+                drawn.insert(rotation(seed).to_bits());
+            }
+            if all.iter().all(|bits| drawn.contains(bits)) {
+                return Some(candidate.wrapping_sub(1).wrapping_mul(inverse));
+            }
+        }
+    }
+    None
+}
+
+fn run_port(
+    case: &Case,
+    game: &Game,
+    port_exe: &Path,
+    oracle_dir: &Path,
+    root: &Path,
+    data: &Path,
+    seed: Option<u32>,
+) -> Result<Outputs> {
     let side = root.join("port");
     if side.exists() {
         fs::remove_dir_all(&side)?;
@@ -966,6 +1361,9 @@ fn run_port(case: &Case, game: &Game, port_exe: &Path, oracle_dir: &Path, root: 
         .arg(gui::windows_path(&ini));
     for worldspace in case.worldspaces {
         command.arg("--worldspace").arg(worldspace);
+    }
+    if let Some(seed) = seed {
+        command.arg("--seed").arg(seed.to_string());
     }
     // A plain working folder: `LODGenx64.exe` (.NET) fails on a verbatim
     // (`\\?\`) one, which the harness's may be.
