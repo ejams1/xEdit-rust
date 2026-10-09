@@ -319,7 +319,8 @@ mod tests {
         tree.set_edit_values(root, "Name", "Scene Root").unwrap();
         let child = crate::data_format_nif::block_add_child(tree, root, "NiNode").unwrap();
         tree.set_edit_values(child, "Name", "Child").unwrap();
-        tree.set_edit_values(child, "Transform\\Translation", translation).unwrap();
+        tree.set_edit_values(child, "Transform\\Translation", translation)
+            .unwrap();
         nif.save_to_data().unwrap()
     }
 
@@ -359,7 +360,9 @@ mod tests {
         let mut nif = NifFile::new().unwrap();
         nif.load_from_data(&data).unwrap();
         let tree = &mut nif.tree;
-        let child = crate::data_format_nif::block_by_name(tree, "Child", "NiNode").unwrap().unwrap();
+        let child = crate::data_format_nif::block_by_name(tree, "Child", "NiNode")
+            .unwrap()
+            .unwrap();
         assert_eq!(
             tree.edit_values(child, "Transform\\Translation").unwrap(),
             "1.000000 2.000000 3.000000"
