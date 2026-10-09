@@ -1,0 +1,11 @@
+[package]
+name = "xedit-loadorder"
+version = "0.1.0"
+description = "Load order, module information and mod groups of xEdit"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+xedit-core = { path = "../xedit-core" }
+xedit-io = { path = "../xedit-io" }

@@ -1,0 +1,81 @@
+{
+  "description": "Edit ModGroup on the first group by name, unchanged but for the CRC32 question answered Yes: the items whose CRC32 lists lack the current CRC32 get it (a forbidden one too). The file is written back as an ini file without the group (comments and blank lines dropped, the spaces around = removed, a section name that is in the file twice, also in another case) followed by the group as xEdit writes items. The reload selects the one valid group of the saved selection.",
+  "game": "sse",
+  "load": [
+    "Skyrim.esm",
+    "Update.esm",
+    "Dawnguard.esm",
+    "HearthFires.esm",
+    "Dragonborn.esm"
+  ],
+  "files": {
+    "Dawnguard.modgroups": [
+      "; header comment",
+      "[Keep one]",
+      "  Update.esm  ",
+      "Dawnguard.esm = odd",
+      "",
+      "[Dup]",
+      "Skyrim.esm",
+      "Update.esm",
+      "[AAA edit me]",
+      "+ Update.esm : {{CRC:Update.esm}}",
+      " { Dawnguard.esm:12345678,abcdef01",
+      "!-Dragonborn.esm:DEADBEEF",
+      "[Dup]",
+      "Dawnguard.esm",
+      "Update.esm",
+      "[keep TWO]",
+      "key = value",
+      "Skyrim.esm",
+      "[Keep Two]",
+      "HearthFires.esm",
+      "Dragonborn.esm",
+      "[Zz valid]",
+      "Update.esm",
+      "Dragonborn.esm"
+    ]
+  },
+  "settings": [
+    "[ModGroups]",
+    "Selection=\"Keep one\",\"Zz valid\"",
+    "[Init]",
+    "FirstStart=1"
+  ],
+  "menu": [
+    "mniNavEditModGroup"
+  ],
+  "answers": [
+    {
+      "class": "TfrmModGroupSelect",
+      "title": "edit",
+      "keys": [
+        13
+      ]
+    },
+    {
+      "class": "#32770",
+      "title": "Confirm",
+      "button": "&Yes"
+    },
+    {
+      "class": "TfrmModGroupEdit",
+      "title": "Editing",
+      "button": "OK"
+    },
+    {
+      "class": "TfrmModGroupSelect",
+      "title": "Reloading",
+      "button": "OK"
+    }
+  ],
+  "port": [
+    {
+      "command": "modgroups.edit",
+      "params": {
+        "name": "AAA edit me",
+        "add_current_crcs": true
+      }
+    }
+  ]
+}

@@ -68,8 +68,10 @@ Inspection (never mutates):
 | `records find [--file F] [--signature SIG] [--editor-id TEXT] [--name TEXT] [--limit N]` | `records.find` | Records whose editor ID or display name contains the text, compared without case. |
 | `records get <FormID> [--file F] [--depth N]` | `records.get` | One record with its elements as a tree. |
 | `elements get <FormID> <path> [--file F] [--depth N]` | `elements.get` | One element of a record by path. |
-| `conflicts [--file F]... [--signature SIG]... [--min-conflict-all CA] [--conflict-this CT]... [--include-single] [--master-and-leafs] [--quick-show-conflicts] [--offset N] [--limit N]` | `conflicts.list` | The conflict status of the records of the loaded plugins, and per file the counts and the highest status. See "Conflicts". |
-| `compare <FormID> [--file F] [--master-and-leafs] [--hide-no-conflict] [--include-hidden]` | `records.compare` | The records of a FormID side by side, row by row, with the conflict status of each row and cell, as the view tab shows them. |
+| `conflicts [--file F]... [--signature SIG]... [--min-conflict-all CA] [--conflict-this CT]... [--include-single] [--master-and-leafs] [--quick-show-conflicts] [--modgroups NAME]... [--all-modgroups] [--saved-modgroups] [--offset N] [--limit N]` | `conflicts.list` | The conflict status of the records of the loaded plugins, and per file the counts and the highest status. See "Conflicts" and "Mod groups". |
+| `compare <FormID> [--file F] [--master-and-leafs] [--hide-no-conflict] [--include-hidden] [--modgroups NAME]... [--all-modgroups] [--saved-modgroups]` | `records.compare` | The records of a FormID side by side, row by row, with the conflict status of each row and cell, as the view tab shows them. |
+| `modgroups list [--all]` | `modgroups.list` | The valid mod groups by name (`--all`: every group of every file) with their items, validity, messages and whether the saved selection has them. |
+| `modgroups show <name> [--file F]` | `modgroups.show` | One mod group with the state of each item: loaded, load order, CRC32s, current CRC32, valid. |
 | `refs get <FormID> [--file F] [--offset N] [--limit N]` | `refs.get` | The records that refer to a record (xEdit's "Referenced By" tab) and the FormIDs it refers to. Builds the reference index first. |
 | `refs build [--file F] [--only-load]` | `refs.build` | Builds the reference index of the loaded files, or loads it from the reference cache, and saves the cache (`BuildOrLoadRef`). |
 | `refs dump` | (none) | The referenced-by lists of every record as text, for the parity check. |
@@ -96,6 +98,11 @@ Changing data (`mutates`, needs `--edit` or `--dry-run`):
 | `save [--file F] [--output PATH] [--no-backup]` | `files.save` | Writes a loaded plugin as xEdit saves it. Changes files, not data. |
 | `clean [--file F] [--itm] [--udr] [--quick] [--output PATH] [--no-backup]` | `files.clean` | Cleans a plugin: removes the records identical to their master (ITM), undeletes and disables the deleted references (UDR), or runs xEdit's quick auto clean mode, which saves. See "Cleaning". |
 | `records cleanup-injected [<FormID>...] [--file F]` | `records.cleanup_injected` | Copies the records that refer to injected records of a plugin that is not their master into that plugin and removes those references from the originals (xEdit's "Cleanup injected records"). |
+| `modgroups select [<name>...] [--saved] [--all]` | `modgroups.select` | Chooses the active mod groups and saves the selection in xEdit's settings file. Changes a file. |
+| `modgroups create <name> --module M... [--item LINE]... [--include-crcs] [--add-current-crcs] [--file M]` | `modgroups.create` | Adds a mod group to the `.modgroups` file of one of its modules. Changes a file. |
+| `modgroups edit <name> [--file F] [--new-name N] [--item LINE]... [--add-current-crcs]` | `modgroups.edit` | Renames a mod group or replaces its items. Changes a file. |
+| `modgroups delete <name>... [--file F]` | `modgroups.delete` | Deletes mod groups. Changes files. |
+| `modgroups update-crcs [--no-add] [--no-update] [--module M]... [--modgroup NAME]...` | `modgroups.update_crcs` | Adds the current CRC32s of the modules to the items of mod groups. Changes files. |
 
 Sessions:
 
@@ -186,6 +193,21 @@ The batch operations of Sniff on the NIF, KF and material files of a folder or a
 - `--split-trees` splits the trees LOD atlas of each worldspace into one billboard `.dds` and `.txt` per tree (the form's hidden `Split LOD Atlas` button), below `<output>Textures/Terrain/LODGen/AtlasSplit_<atlas>/`; Skyrim, Fallout 3 and New Vegas.
 - Fallout 4 and Skyrim objects LOD find no LOD models in the 4.1.5q definitions (an upstream quirk: the LOD model path it reads does not exist), so they end with `no valid references found`, as the oracle does. Fallout 76 and Starfield are refused (`unsupported`).
 - `cargo xtask parity lodgen` compares the output files and the log with the xEdit GUI's LODGen mode.
+
+## Mod groups
+
+A mod group is a named list of modules in a `.modgroups` file that says which records a user has checked against each other: while it is active, the comparison of a FormID's records leaves out the records of the modules the group says a later module hides, and they get `ctHiddenByModGroup`. The files are xEdit's: `<plugin>.modgroups` next to each plugin of the data folder (also of plugins that are not loaded, whose groups then count for nothing) and the program's own `<AppName>Edit.modgroups` (`--modgroups-file` names another). Each section is a group, each line an item `[flags]file[:crc32,crc32,...]`: no flag is a module that is both a target (can be hidden) and a source (hides the targets above it); `@` target only, `#` source only, `-` neither, `+` optional, `!` forbidden (the group is invalid while it is loaded), `}` load order not checked, `{` order not checked within a block of such items. A CRC32 list makes the item count only for a file with one of those CRC32s.
+
+- A group is valid when every required item is loaded with a listed CRC32, no forbidden one is, the loaded items load in the group's order and at least one source has a target above it. `modgroups list` shows the valid groups of loaded modules, `--all` every group; each has `messages` (the reasons, as xEdit's log says them) and `selected`.
+- **Activating.** `conflicts` and `compare` compare without mod groups unless told: `--modgroups NAME` (repeat) activates valid groups by name, `--all-modgroups` every valid group (as xEdit's `-autoload`), `--saved-modgroups` the saved selection. The result lists `mod_groups` (activated) and `mod_group_hides` (each module with the modules whose records it hides). The first and the last record of a FormID are never hidden.
+- **The saved selection** is the `[ModGroups] Selection` of xEdit's settings file (`--settings` names another; the default is xEdit's own, `<AppName>Edit.ini` next to the program, else `Plugins.<app>viewsettings` next to the game's `Plugins.txt` in `%LOCALAPPDATA%`), so the GUI and the CLI share it. `modgroups select` writes it; the other mutating `modgroups` commands end, as the GUI does, with a reload: the files read again, `validation_messages`, and the saved selection written again with only its valid groups (a group just created is added).
+- **Writing.** The files are written as xEdit writes them: `create` appends the group after an empty line to the file of the module given with `--file` (default: the group's first loaded module), keeping its text and encoding; `edit` and `update-crcs` write the file back as an ini file (comments and blank lines gone, spaces around `=` removed, each section followed by an empty line) with the group at the end, in the ANSI code page; `delete` writes it back as an ini file in its encoding. `update-crcs` gives every item of a chosen group its module's current CRC32 (also the items of modules not chosen, as xEdit), `--no-add` and `--no-update` are xEdit's two questions (No to the first skips the second).
+
+```
+xedit --game sse --load "<Data>\Dragonborn.esm" modgroups list --all
+xedit --edit --game sse --load "<Data>\Dragonborn.esm" modgroups create "DB over DG" --module Dawnguard.esm --module Dragonborn.esm --include-crcs --dry-run
+xedit --game sse --load "<Data>\Dragonborn.esm" conflicts --saved-modgroups --conflict-this ctHiddenByModGroup
+```
 
 ## Editing an element
 
@@ -326,6 +348,7 @@ xedit --game fo4 --load "<Data>\DLCRobot.esm" --edit mcp
 
 ## Output
 
+Without `--json` a command prints its result as pretty JSON and an error as `error: <code>: <message>` on stderr with exit code 1. With `--json` it prints one envelope, `{"ok":true,"result":...}` or `{"ok":false,"error":{"code":"...","message":"..."}}`, always on stdout; `batch` puts one envelope per command in the `result` array (`{"ok", "command", "result" or "error"}`). Error codes are stable: `no_session` (no `--game`), `unknown_file`, `ambiguous_file`, `unknown_mod_group`, `ambiguous_mod_group`, `unknown_record`, `unknown_element`, `invalid_params`, `load_failed`, `unknown_command`, `edit_required`, `edit_failed`, `not_editable`, `not_removable`, `save_refused`, `unsupported`, `io`, `internal`.
 Without `--json` a command prints its result as pretty JSON and an error as `error: <code>: <message>` on stderr with exit code 1. With `--json` it prints one envelope, `{"ok":true,"result":...}` or `{"ok":false,"error":{"code":"...","message":"..."}}`, always on stdout; `batch` puts one envelope per command in the `result` array (`{"ok", "command", "result" or "error"}`). Error codes are stable: `no_session` (no `--game`), `unknown_file`, `ambiguous_file`, `unknown_record`, `unknown_element`, `invalid_params`, `load_failed`, `unknown_command`, `edit_required`, `edit_failed`, `not_editable`, `not_removable`, `save_refused`, `archive_failed`, `unsupported`, `io`, `internal`.
 
 The progress log of a load and a save (`[Skyrim.esm] Loading file`, the string table encodings) goes to stderr, as xEdit's messages do. With several threads the messages of the workers arrive in no fixed order.
@@ -345,14 +368,15 @@ xedit --json --edit --game sse --load "<Data>\Skyrim.esm" save --no-backup --out
 
 ## Known gaps
 
-Behaviour a user can meet, as of phase 4 step 5. Each is an upstream behaviour not ported yet; say so rather than work around it silently.
+Behaviour a user can meet, as of phase 4 step 6. Each is an upstream behaviour not ported yet; say so rather than work around it silently.
 
 - **LString.** The string tables of a localized plugin are not written. Setting a localized string from text fails (`Can not assign to a localized string: writing the string tables is not ported yet`; only a `STRINGID:` text works), and `records copy` into a localized plugin copies the record with its localized strings empty (the `FULL` of a copied `NPC_` reads `""`). Check the strings of a copy before saving it.
 - **Copy over an existing override.** xEdit's "...with overwriting" (`aAllowOverwrite`) is not ported: `records copy` returns the existing override unchanged. A partial form (`MakePartialForm`), template elements and aligned arrays can not be copied either.
 - **Sorted arrays.** A record that is rebuilt on save sorts its sorted arrays as upstream does (the subrecord arrays, and the sorted array values, `srsSorted` and `arrSorted`, at their first read by index or write after a change), and a master update (`masters add|sort|clean`) keeps them in their order as xEdit does; the responses of a topic are not sorted again after their FormIDs change (`DLCworkshop01.esm`: three `INFO` of one topic), so such a save can differ from xEdit's in their order.
 - **References.** The index has no "reachable" information (xEdit's "Build Reachable Info"), and a record whose references come from the cache takes only its editor ID and full name from it (its base record, grid cell and GUI names are read from the record when needed). The editor ID index of a file does not learn the records an edit adds.
 - **Flags** are not child elements of their value in `records get`; `compare` shows them as rows, as the view does.
-- **Conflicts.** Mod groups do not change the comparison yet (phase 4 step 6), so no record is `ctHiddenByModGroup` but a `NAVI` override; records the GUI user hid and the compare-to load (`Compare to...`) do not exist; the raw data compare (`wbCompareRawData`) is not ported; compare of selected records of different FormIDs (`Compare Selected`) and the script function `ConflictAllForElements` have no command yet.
+- **Mod groups.** The named selection presets of xEdit's selection dialog are not ported. The modules that are not loaded are ordered by name, where xEdit uses its load order, which decides only the order of their `.modgroups` files (and of groups of the same name in them).
+- **Conflicts.** Records the GUI user hid and the compare-to load (`Compare to...`) do not exist; the raw data compare (`wbCompareRawData`) is not ported; compare of selected records of different FormIDs (`Compare Selected`) and the script function `ConflictAllForElements` have no command yet.
 - **Cleaning.** `clean` cleans one plugin per call. xEdit's `-AllowMakePartial` (partial forms of cells and worldspaces with children) is not ported, the UDR options of xEdit's Options dialog are fixed at their defaults, and the LOOT dirty-information report is the counts of the response. The legacy switches (`-quickautoclean`, `-qac`, `-checkforitm`) are not accepted yet (phase 4 step 9). In the oracle check a few saved plugins still differ from xEdit's in the bytes of records the clean did not touch (see `docs/PLAN.md`, owed from step 5).
 - **Morrowind.** Plugins load and dump, but the save stops at `must have a FormID`: the identity FormID of a TES3 record is not ported. The 4.1.5q oracle saves no Morrowind plugin either (its GUI runs Morrowind in view mode), so there is nothing to compare with.
 - **Sessions.** One session per process; `serve` and `mcp` can not load other plugins later, and a named pipe serves one client at a time.

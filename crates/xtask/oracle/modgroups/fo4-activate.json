@@ -1,0 +1,30 @@
+{
+  "description": "Fallout 4 with four DLCs: a group with the CRC32s of its modules (one of them also listed with a stale CRC32) whose last module hides the two before it, a group whose target loads after its source with its order ignored (}), and a group of the program's own file that a selection without it leaves inactive.",
+  "game": "fo4",
+  "load": ["Fallout4.esm", "DLCRobot.esm", "DLCworkshop01.esm", "DLCCoast.esm", "DLCworkshop02.esm"],
+  "files": {
+    "DLCCoast.modgroups": [
+      "[Coast hides Robot and Workshop]",
+      "DLCRobot.esm:{{CRC:DLCRobot.esm}}",
+      "DLCworkshop01.esm:0BADF00D,{{CRC:DLCworkshop01.esm}}",
+      "#DLCCoast.esm:{{CRC:DLCCoast.esm}}",
+      "[Workshop2 order ignored]",
+      "}DLCworkshop02.esm",
+      "DLCRobot.esm"
+    ],
+    "<global>": [
+      "[Not active]",
+      "Fallout4.esm",
+      "DLCworkshop02.esm"
+    ]
+  },
+  "settings": [
+    "[ModGroups]",
+    "Selection=\"Coast hides Robot and Workshop\",\"Workshop2 order ignored\"",
+    "[Init]",
+    "FirstStart=1"
+  ],
+  "menu": ["mniViewModGroupsReload"],
+  "answers": [{"class": "TfrmModGroupSelect", "title": "Reloading", "button": "OK"}],
+  "port": [{"command": "modgroups.select", "params": {"saved": true}}]
+}

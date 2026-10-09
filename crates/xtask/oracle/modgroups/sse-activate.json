@@ -1,0 +1,49 @@
+{
+  "description": "The reload of the mod groups activates the saved selection: groups in the files of loaded modules and in the program's own file, chained sources and targets (@, #), an optional item of a module that is not there, a block of items whose order does not matter, a valid group that is not selected, an invalid group of the program's own file (whose messages the reload never shows) and stale names in the selection. The settings file has comments, spaces around = and other sections, which the save of the selection drops or normalises.",
+  "game": "sse",
+  "load": ["Skyrim.esm", "Update.esm", "Dawnguard.esm", "HearthFires.esm", "Dragonborn.esm"],
+  "files": {
+    "Dawnguard.modgroups": [
+      "; Update and Dawnguard",
+      "[Update hidden by Dawnguard]",
+      "Update.esm",
+      "Dawnguard.esm",
+      "",
+      "[Chain]",
+      "@Update.esm",
+      "Dawnguard.esm",
+      "#Dragonborn.esm",
+      "[Not selected]",
+      "Skyrim.esm",
+      "HearthFires.esm"
+    ],
+    "Dragonborn.modgroups": [
+      "[Optional and block]",
+      "Update.esm",
+      "+Missing.esp",
+      "{HearthFires.esm",
+      "{Dawnguard.esm",
+      "Dragonborn.esm"
+    ],
+    "<global>": [
+      "[Global]",
+      "Skyrim.esm",
+      "Update.esm",
+      "[Global invalid]",
+      "Missing.esp",
+      "Update.esm"
+    ]
+  },
+  "settings": [
+    "; settings",
+    "[View]",
+    "  Width = 100  ",
+    "[ModGroups]",
+    "Selection=\"Update hidden by Dawnguard\",Chain,\"Optional and block\",Global,\"Global invalid\",Gone",
+    "[Init]",
+    "FirstStart=1"
+  ],
+  "menu": ["mniViewModGroupsReload"],
+  "answers": [{"class": "TfrmModGroupSelect", "title": "Reloading", "button": "OK"}],
+  "port": [{"command": "modgroups.select", "params": {"saved": true}}]
+}

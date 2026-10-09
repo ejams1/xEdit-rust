@@ -1,0 +1,50 @@
+{
+  "description": "Load order: items in the wrong order (invalid), a first item whose order is ignored (}, which then loads after its source and hides nothing), a block whose highest module loads after the item after it (invalid), an item that is neither source nor target (-), sources without a target above them, a section name twice in a file (both read the first section's items), flags with spaces between them, and lines that are not items.",
+  "game": "sse",
+  "load": ["Skyrim.esm", "Update.esm", "Dawnguard.esm", "HearthFires.esm", "Dragonborn.esm"],
+  "files": {
+    "Update.modgroups": [
+      "[Wrong order]",
+      "Dawnguard.esm",
+      "Update.esm",
+      "[Ignore order]",
+      "}Dragonborn.esm",
+      "Update.esm",
+      "Dawnguard.esm",
+      "[Block bad]",
+      "Skyrim.esm",
+      "{Dragonborn.esm",
+      "{Update.esm",
+      "Dawnguard.esm",
+      "[Neither]",
+      "-Update.esm",
+      "Dawnguard.esm",
+      "Dragonborn.esm",
+      "[Sources only]",
+      "#Update.esm",
+      "#Dawnguard.esm",
+      "[Dup]",
+      "Skyrim.esm",
+      "HearthFires.esm",
+      "[Dup]",
+      "Update.esm",
+      "Dragonborn.esm",
+      "[Odd lines]",
+      "  @ + Skyrim.esm  ",
+      "a:b:c",
+      ":12345678",
+      "+",
+      "HearthFires.esm:",
+      "Dragonborn.esm"
+    ]
+  },
+  "settings": [
+    "[ModGroups]",
+    "Selection=\"Wrong order\",\"Ignore order\",\"Block bad\",Neither,\"Sources only\",Dup,\"Odd lines\"",
+    "[Init]",
+    "FirstStart=1"
+  ],
+  "menu": ["mniViewModGroupsReload"],
+  "answers": [{"class": "TfrmModGroupSelect", "title": "Reloading", "button": "OK"}],
+  "port": [{"command": "modgroups.select", "params": {"saved": true}}]
+}

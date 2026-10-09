@@ -1,0 +1,16 @@
+{
+  "description": "Delete ModGroups on every group (the selection inverted), across a plugin's file and the program's own file, among them two sections of one name in another case: each erasure reads the file again. No group is left, so the reload shows no selection and saves an empty one.",
+  "game": "sse",
+  "load": ["Skyrim.esm", "Update.esm", "Dawnguard.esm", "HearthFires.esm", "Dragonborn.esm"],
+  "files": {
+    "Update.modgroups": ["[One]", "Skyrim.esm", "Update.esm", "[Two]", "Update.esm", "Dawnguard.esm", "[two]", "Dragonborn.esm", "Update.esm"],
+    "<global>": ["[Three]", "Update.esm", "Dragonborn.esm", "", "; trailing comment"]
+  },
+  "settings": ["[ModGroups]", "Selection=One,Three", "[Init]", "FirstStart=1"],
+  "menu": ["mniNavDeleteModGroups"],
+  "answers": [
+    {"class": "TfrmModGroupSelect", "title": "delete", "keys": [106], "button": "OK"},
+    {"class": "#32770", "title": "Confirm", "button": "&Yes"}
+  ],
+  "port": [{"command": "modgroups.delete", "params": {"names": ["One", "Two", "Three"]}}]
+}

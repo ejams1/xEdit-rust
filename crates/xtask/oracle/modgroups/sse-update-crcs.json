@@ -1,0 +1,79 @@
+{
+  "description": "Update CRCs: modules whose items have no CRC32s and a module whose item lacks its current CRC32, both questions answered Yes, every module and every group that needs it chosen. Every item of a chosen group gets its module's CRC32, and each group is written back to the end of its file.",
+  "game": "sse",
+  "load": [
+    "Skyrim.esm",
+    "Update.esm",
+    "Dawnguard.esm",
+    "HearthFires.esm",
+    "Dragonborn.esm"
+  ],
+  "files": {
+    "Dawnguard.modgroups": [
+      "[No crcs]",
+      "Update.esm",
+      "Dawnguard.esm",
+      "[Old crc]",
+      "Update.esm:12345678",
+      "Dawnguard.esm:{{CRC:Dawnguard.esm}}",
+      "Dragonborn.esm",
+      "[Forbidden]",
+      "!HearthFires.esm",
+      "Update.esm",
+      "Dawnguard.esm"
+    ]
+  },
+  "settings": [
+    "[ModGroups]",
+    "Selection=\"No crcs\",\"Old crc\"",
+    "[Init]",
+    "FirstStart=1"
+  ],
+  "menu": [
+    "mniNavUpdateCRCModGroups"
+  ],
+  "answers": [
+    {
+      "class": "#32770",
+      "title": "Confirm",
+      "button": "&Yes"
+    },
+    {
+      "class": "#32770",
+      "title": "Confirm",
+      "button": "&Yes"
+    },
+    {
+      "class": "TfrmModuleSelect",
+      "title": "add or update",
+      "keys": [
+        106
+      ],
+      "button": "OK"
+    },
+    {
+      "class": "TfrmModGroupSelect",
+      "title": "update",
+      "keys": [
+        106
+      ],
+      "button": "OK"
+    },
+    {
+      "class": "#32770",
+      "title": "",
+      "button": "OK"
+    },
+    {
+      "class": "TfrmModGroupSelect",
+      "title": "Reloading",
+      "button": "OK"
+    }
+  ],
+  "port": [
+    {
+      "command": "modgroups.update_crcs",
+      "params": {}
+    }
+  ]
+}

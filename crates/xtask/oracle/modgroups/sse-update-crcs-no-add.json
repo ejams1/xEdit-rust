@@ -1,0 +1,26 @@
+{
+  "description": "Update CRCs with the first question (add CRC32s to items without any) answered No: xEdit then does not ask the second and updates the items whose CRC32s lack the current one. Only the module that lacks its current CRC32 is offered and chosen; every item of the chosen group gets its CRC32 all the same.",
+  "game": "sse",
+  "load": ["Skyrim.esm", "Update.esm", "Dawnguard.esm", "HearthFires.esm", "Dragonborn.esm"],
+  "files": {
+    "Dragonborn.modgroups": [
+      "[No crcs]",
+      "Update.esm",
+      "Dragonborn.esm",
+      "[Old crc]",
+      "Update.esm:12345678",
+      "Dawnguard.esm:{{CRC:Dawnguard.esm}}",
+      "Dragonborn.esm"
+    ]
+  },
+  "settings": ["[ModGroups]", "Selection=\"Old crc\"", "[Init]", "FirstStart=1"],
+  "menu": ["mniNavUpdateCRCModGroups"],
+  "answers": [
+    {"class": "#32770", "title": "Confirm", "button": "&No"},
+    {"class": "TfrmModuleSelect", "title": "update the current CRC", "keys": [106], "button": "OK"},
+    {"class": "TfrmModGroupSelect", "title": "update", "keys": [106], "button": "OK"},
+    {"class": "#32770", "title": "", "button": "OK"},
+    {"class": "TfrmModGroupSelect", "title": "Reloading", "button": "OK"}
+  ],
+  "port": [{"command": "modgroups.update_crcs", "params": {"add": false}}]
+}

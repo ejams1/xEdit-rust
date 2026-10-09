@@ -82,7 +82,33 @@ pub struct GuiResult {
     /// the caller removes with [`remove_work`]).
     pub out: PathBuf,
     pub peak: Option<u64>,
+    /// The message log of the main form as last read.
+    pub log: String,
 }
+
+/// A dialog the run expects and how to answer it: the next visible window
+/// of the class whose title contains `title` gets the `keys` (posted to its
+/// focused control, as a user's key presses) and then a click on the button
+/// `button`, when one is given.
+#[derive(Clone, Debug)]
+pub struct Answer {
+    pub class: String,
+    pub title: String,
+    /// Virtual key codes.
+    pub keys: Vec<u16>,
+    pub button: Option<String>,
+}
+
+/// What a run may add to the plain one: files written into the run folder
+/// before the GUI starts (paths relative to it: `Data\x.modgroups`, the
+/// settings file next to the plugin list), and the dialogs it answers, in
+/// the order they come.
+#[derive(Default)]
+pub struct GuiExtras {
+    pub files: Vec<(PathBuf, Vec<u8>)>,
+    pub answers: Vec<Answer>,
+}
+
 
 /// The GUI executable of a game mode.
 pub fn exe_name(mode: &str) -> &'static str {
@@ -137,14 +163,28 @@ pub struct QuickCleanResult {
 impl GuiRun<'_> {
     /// Starts the GUI, answers the module selection and waits for the
     /// script. The run folder is left for the caller to read and remove.
+    #[allow(dead_code)]
     pub fn run(&self) -> Result<GuiResult> {
+        self.run_with(&GuiExtras::default())
+    }
+
+    /// [`GuiRun::run`] with extra files and dialog answers.
+    pub fn run_with(&self, extras: &GuiExtras) -> Result<GuiResult> {
         let (mut command, _) = self.prepare()?;
+        for (path, bytes) in &extras.files {
+            let target = self.work.join(path);
+            if let Some(parent) = target.parent() {
+                fs::create_dir_all(parent)?;
+            }
+            fs::write(&target, bytes).with_context(|| format!("writing {}", target.display()))?;
+        }
         command.arg(format!("-script:{}", windows_path(&self.work.join("oracle.pas"))));
         if !self.build_refs {
             command.arg("-nobuildrefs");
         }
         let marker = self.work.join("done.txt");
-        let peak = self.spawn_and_watch(command, Until::Marker(&marker))?;
+        let mut log = String::new();
+        let peak = self.spawn_and_watch(command, Until::Marker(&marker), &extras.answers, &mut log)?;
         let status = fs::read_to_string(self.work.join("status.txt"))
             .context("the script wrote no status")?
             .lines()
@@ -154,6 +194,7 @@ impl GuiRun<'_> {
             status,
             out: self.work.join("out"),
             peak,
+            log,
         })
     }
 
@@ -186,7 +227,7 @@ impl GuiRun<'_> {
             .arg("-autoexit")
             .arg("-autoload")
             .arg(target);
-        let peak = self.spawn_and_watch(command, Until::Exit)?;
+        let peak = self.spawn_and_watch(command, Until::Exit, &[], &mut String::new())?;
         let log = fs::read_dir(self.work.join("bin"))?
             .filter_map(|entry| entry.ok().map(|entry| entry.path()))
             .find(|path| path.to_string_lossy().ends_with("_log.txt"))
@@ -257,8 +298,15 @@ impl GuiRun<'_> {
         Ok((command, data))
     }
 
-    /// Starts the GUI in its job object and watches it until `until`.
-    fn spawn_and_watch(&self, command: HiddenCommand, until: Until) -> Result<Option<u64>> {
+    /// Starts the GUI in its job object and watches it until `until`,
+    /// answering `answers`; `log` gets the message log of the main form.
+    fn spawn_and_watch(
+        &self,
+        command: HiddenCommand,
+        until: Until,
+        answers: &[Answer],
+        log: &mut String,
+    ) -> Result<Option<u64>> {
         let _reservation = self.budget.reserve(self.expected_peak.min(self.max_memory));
         let mut child = command
             .spawn()
@@ -271,7 +319,7 @@ impl GuiRun<'_> {
                 return Err(error);
             }
         };
-        let watched = watch(&mut child, until, self.timeout, self.hang_timeout);
+        let watched = watch(&mut child, until, self.timeout, self.hang_timeout, answers, log);
         child.kill();
         let peak = limit.peak();
         if limit.reached() {
@@ -293,17 +341,43 @@ enum Until<'a> {
     Exit,
 }
 
-/// Waits for the script's marker, answering the module selection and
-/// failing on any other dialog, a timeout or a hang.
-fn watch(child: &mut HiddenChild, until: Until, timeout: Duration, hang_timeout: Duration) -> Result<()> {
+/// Waits for the script's marker (or the exit), answering the module
+/// selection and the expected dialogs (`answers`, in order) and failing on
+/// any other dialog, a timeout or a hang. `log_out` gets the message log of
+/// the main form.
+fn watch(
+    child: &mut HiddenChild,
+    until: Until,
+    timeout: Duration,
+    hang_timeout: Duration,
+    answers: &[Answer],
+    log_out: &mut String,
+) -> Result<()> {
     let start = Instant::now();
     let mut clicked = Vec::new();
     let mut dialogs: Vec<(isize, Instant)> = Vec::new();
     let mut last_cpu = (0u64, Instant::now());
+    let mut answers = answers.iter();
+    let mut next_answer = answers.next();
+    let mut main_form = None;
     loop {
         if let Until::Marker(marker) = until
             && marker.exists()
         {
+            // The script's last lines reach the log after the marker.
+            if let Some(handle) = main_form {
+                std::thread::sleep(Duration::from_millis(500));
+                let log = main_form_log(handle);
+                if !log.is_empty() {
+                    *log_out = log;
+                }
+            }
+            ensure!(
+                next_answer.is_none(),
+                "the oracle did not show the expected dialog [{}] \"{}\"",
+                next_answer.map(|a| a.class.as_str()).unwrap_or_default(),
+                next_answer.map(|a| a.title.as_str()).unwrap_or_default()
+            );
             return Ok(());
         }
         if let Some(code) = child.try_wait()? {
@@ -330,7 +404,11 @@ fn watch(child: &mut HiddenChild, until: Until, timeout: Duration, hang_timeout:
             match window.class.as_str() {
                 // The main form and the application window.
                 "TfrmMain" => {
+                    main_form = Some(window.handle);
                     let log = main_form_log(window.handle);
+                    if !log.is_empty() {
+                        log_out.clone_from(&log);
+                    }
                     let fatal = log.lines().find(|line| line.starts_with("Fatal:"));
                     let closing = log.contains("You can close this application now.");
                     if let Some(line) = fatal {
@@ -362,6 +440,33 @@ fn watch(child: &mut HiddenChild, until: Until, timeout: Duration, hang_timeout:
                 // desktop (seen on the long Starfield and Fallout 76 runs),
                 // not a dialog of the GUI.
                 "UAC_InputIndicatorOverlayWnd" | "UAC Input Indicator" => {}
+                _ if window.visible
+                    && !clicked.contains(&window.handle)
+                    && next_answer.is_some_and(|answer| {
+                        answer.class == window.class && window.title.contains(answer.title.as_str())
+                    }) =>
+                {
+                    let answer = next_answer.expect("matched above");
+                    // Let the dialog finish showing before it gets input.
+                    std::thread::sleep(Duration::from_millis(300));
+                    for &key in &answer.keys {
+                        post_key(&window, key);
+                    }
+                    if let Some(button) = &answer.button {
+                        if !answer.keys.is_empty() {
+                            std::thread::sleep(Duration::from_millis(500));
+                        }
+                        ensure!(
+                            click_button(&window, button),
+                            "the dialog [{}] \"{}\" has no {button} button: {}",
+                            window.class,
+                            window.title,
+                            window.texts.join(" | ")
+                        );
+                    }
+                    clicked.push(window.handle);
+                    next_answer = answers.next();
+                }
                 "TfrmModuleSelect" => {
                     // The GUI runs hidden, but the modal module selection
                     // shows itself: it is found hidden while it is built,
@@ -377,6 +482,8 @@ fn watch(child: &mut HiddenChild, until: Until, timeout: Duration, hang_timeout:
                         }
                     }
                 }
+                // An answered dialog that is still closing.
+                _ if clicked.contains(&window.handle) => {}
                 _ => {
                     // A dialog may flash up while the GUI works (a progress
                     // window); one that stays is a prompt nobody answers.
@@ -543,7 +650,10 @@ pub(super) fn click_button(window: &Window, caption: &str) -> bool {
     unsafe { EnumChildWindows(window.handle as HWND, Some(win::collect), (&raw mut children) as isize) };
     let Some(button) = children
         .into_iter()
-        .find(|&child| win::class(child) == "TButton" && win::text(child) == caption)
+        // A VCL button, or a button of a system dialog (`MessageDlg` shows
+        // one: class `#32770`).
+        .find(|&child| matches!(win::class(child).as_str(), "TButton" | "Button") && win::text(child) == caption)
+
     else {
         return false;
     };
@@ -552,12 +662,36 @@ pub(super) fn click_button(window: &Window, caption: &str) -> bool {
     true
 }
 
+/// Posts a key press to the focused control of a window's thread (the
+/// window itself when none has the focus), as the keyboard would deliver
+/// it: VCL forms with `KeyPreview` see it in their `OnKeyDown` first.
+#[cfg(windows)]
+fn post_key(window: &Window, key: u16) {
+    use windows_sys::Win32::Foundation::HWND;
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        GUITHREADINFO, GetGUIThreadInfo, GetWindowThreadProcessId, PostMessageW, WM_KEYDOWN, WM_KEYUP,
+    };
+    let handle = window.handle as HWND;
+    // SAFETY: a window handle from an enumeration; a stale one gives 0.
+    let thread = unsafe { GetWindowThreadProcessId(handle, std::ptr::null_mut()) };
+    let mut info = GUITHREADINFO {
+        cbSize: std::mem::size_of::<GUITHREADINFO>() as u32,
+        ..Default::default()
+    };
+    // SAFETY: `info` is a valid out pointer with its size set.
+    let target = if unsafe { GetGUIThreadInfo(thread, &raw mut info) } != 0 && !info.hwndFocus.is_null() {
+        info.hwndFocus
+    } else {
+        handle
+    };
+    // SAFETY: plain messages without pointers.
+    unsafe {
+        PostMessageW(target, WM_KEYDOWN, usize::from(key), 1);
+        PostMessageW(target, WM_KEYUP, usize::from(key), 0xC000_0001u32 as isize);
 /// Clicks the button of a window whose caption is `caption` without
 /// waiting for its handler (`PostMessage`), for a handler that works for a
 /// while or may show a dialog.
-#[cfg(windows)]
 pub(super) fn post_click_button(window: &Window, caption: &str) -> bool {
-    use windows_sys::Win32::Foundation::HWND;
     use windows_sys::Win32::UI::WindowsAndMessaging::{BM_CLICK, EnumChildWindows, PostMessageW};
     let mut children: Vec<HWND> = Vec::new();
     // SAFETY: the callback only pushes into the vector passed as `LPARAM`.
@@ -567,11 +701,9 @@ pub(super) fn post_click_button(window: &Window, caption: &str) -> bool {
         .find(|&child| win::class(child) == "TButton" && win::text(child) == caption)
     else {
         return false;
-    };
     // SAFETY: a button handle of the window; BM_CLICK takes no pointers.
     unsafe { PostMessageW(button, BM_CLICK, 0, 0) != 0 }
 }
-
 /// The Shift key held down for the thread of a window, as `GetKeyState` of
 /// that thread sees it, without any input to the user's desktop: a helper
 /// thread moves to the harness's desktop (`SetThreadDesktop`, where the
@@ -583,7 +715,6 @@ pub(super) struct ShiftHold {
     release: std::sync::mpsc::Sender<()>,
     thread: Option<std::thread::JoinHandle<()>>,
 }
-
 impl Drop for ShiftHold {
     fn drop(&mut self) {
         let _ = self.release.send(());
@@ -592,11 +723,8 @@ impl Drop for ShiftHold {
         }
     }
 }
-
 /// Holds Shift for the thread of a window; None when the system refuses.
-#[cfg(windows)]
 pub(super) fn hold_shift(window: isize) -> Option<ShiftHold> {
-    use windows_sys::Win32::Foundation::HWND;
     use windows_sys::Win32::System::StationsAndDesktops::SetThreadDesktop;
     use windows_sys::Win32::System::Threading::{AttachThreadInput, GetCurrentThreadId};
     use windows_sys::Win32::UI::Input::KeyboardAndMouse::{GetKeyboardState, SetKeyboardState, VK_LSHIFT, VK_SHIFT};
@@ -638,31 +766,23 @@ pub(super) fn hold_shift(window: isize) -> Option<ShiftHold> {
             release,
             thread: Some(thread),
         })
-    } else {
         drop(release);
         let _ = thread.join();
         None
     }
 }
-
 #[cfg(not(windows))]
 pub(super) fn post_click_button(_window: &Window, _caption: &str) -> bool {
     false
 }
-
 #[cfg(not(windows))]
 pub(super) fn hold_shift(_window: isize) -> Option<ShiftHold> {
     None
 }
-
 /// The items of the first check list box of a window (`TCheckListBox`),
 /// with their handle.
-#[cfg(windows)]
 pub(super) fn check_list_items(window: &Window) -> Option<(isize, Vec<String>)> {
-    use windows_sys::Win32::Foundation::HWND;
-    use windows_sys::Win32::UI::WindowsAndMessaging::{
         EnumChildWindows, LB_GETCOUNT, LB_GETTEXT, LB_GETTEXTLEN, SMTO_ABORTIFHUNG, SendMessageTimeoutW,
-    };
     let mut children: Vec<HWND> = Vec::new();
     // SAFETY: the callback only pushes into the vector passed as `LPARAM`.
     unsafe { EnumChildWindows(window.handle as HWND, Some(win::collect), (&raw mut children) as isize) };
@@ -676,7 +796,6 @@ pub(super) fn check_list_items(window: &Window) -> Option<(isize, Vec<String>)> 
         let sent =
             unsafe { SendMessageTimeoutW(list, message, wparam, lparam, SMTO_ABORTIFHUNG, 2000, &raw mut result) };
         (sent != 0).then_some(result)
-    };
     let count = send(LB_GETCOUNT, 0, 0)?;
     let mut items = Vec::new();
     for index in 0..count {
@@ -687,22 +806,17 @@ pub(super) fn check_list_items(window: &Window) -> Option<(isize, Vec<String>)> 
     }
     Some((list as isize, items))
 }
-
 #[cfg(not(windows))]
 pub(super) fn check_list_items(_window: &Window) -> Option<(isize, Vec<String>)> {
     None
 }
-
 /// Toggles the check box of an item of a `TCheckListBox`: the item is
 /// selected and a space typed, which `TCheckListBox.KeyPress` takes as a
 /// click on the check box of the selected item.
-#[cfg(windows)]
 pub(super) fn toggle_check_list_item(list: isize, index: usize) {
-    use windows_sys::Win32::Foundation::HWND;
     use windows_sys::Win32::UI::WindowsAndMessaging::{LB_SETCURSEL, SMTO_ABORTIFHUNG, SendMessageTimeoutW, WM_CHAR};
     let mut result = 0usize;
     // SAFETY: LB_SETCURSEL and WM_CHAR take no pointers.
-    unsafe {
         SendMessageTimeoutW(
             list as HWND,
             LB_SETCURSEL,
@@ -721,10 +835,19 @@ pub(super) fn toggle_check_list_item(list: isize, index: usize) {
             2000,
             &raw mut result,
         );
+
+
+
+
+
+
+
+
     }
 }
 
 #[cfg(not(windows))]
+fn post_key(_window: &Window, _key: u16) {}
 pub(super) fn toggle_check_list_item(_list: isize, _index: usize) {}
 
 /// The text of the message log of the main form: the first memo below
@@ -764,9 +887,9 @@ pub(super) fn main_form_log(handle: isize) -> String {
     if sent == 0 {
         return String::new();
     }
+    decode_memo_text(&buffer[..copied.min(len)])
     decode_window_text(&buffer[..copied.min(len)])
 }
-
 /// The text of a window message: UTF-16, where a run of ANSI bytes read
 /// as UTF-16 (the header the LODGen mode puts at the top of its log comes
 /// that way) is taken as the bytes it is.
@@ -786,7 +909,36 @@ pub(super) fn decode_window_text(units: &[u16]) -> String {
         }
     }
     text
+
 }
+
+/// The text `WM_GETTEXT` gave for the message log. The memo of the 4.1.5q
+/// GUI answers with its text in the ANSI code page, two bytes to each
+/// UTF-16 unit of the buffer, so read that way it is noise; such a buffer
+/// is unpacked to its bytes (up to the terminating zero) and read as
+/// Windows-1252 (Latin-1 for the bytes 0x80 to 0x9F). A buffer of real
+/// UTF-16 text is taken as it is.
+fn decode_memo_text(units: &[u16]) -> String {
+    let packed = units
+        .iter()
+        .take(64)
+        .filter(|&&unit| {
+            let [low, high] = unit.to_le_bytes();
+            (low.is_ascii_graphic() || low.is_ascii_whitespace())
+                && (high.is_ascii_graphic() || high.is_ascii_whitespace())
+        })
+        .count();
+    if units.is_empty() || packed * 4 < units.len().min(64) * 3 {
+        return String::from_utf16_lossy(units);
+    }
+    units
+        .iter()
+        .flat_map(|unit| unit.to_le_bytes())
+        .take_while(|&byte| byte != 0)
+        .map(char::from)
+        .collect()
+}
+
 
 #[cfg(not(windows))]
 pub(super) fn main_form_log(_handle: isize) -> String {
@@ -823,6 +975,17 @@ fn cpu_time(_child: &HiddenChild) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn memo_text_in_the_ansi_code_page_is_unpacked() {
+        let ansi: Vec<u16> = b"Fatal: x\r\nok\0\0"
+            .chunks(2)
+            .map(|pair| u16::from_le_bytes([pair[0], pair[1]]))
+            .collect();
+        assert_eq!(decode_memo_text(&ansi), "Fatal: x\r\nok");
+        let wide: Vec<u16> = "Fatal: x\r\nok".encode_utf16().collect();
+        assert_eq!(decode_memo_text(&wide), "Fatal: x\r\nok");
+    }
 
     #[test]
     fn games_map_to_their_gui_build() {
