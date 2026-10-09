@@ -928,12 +928,13 @@ fn uses_source(case: &Case) -> bool {
 }
 
 /// The first file of the prepared source folder, by path: the input of a
-/// case that names `{source-file}`.
+/// case that names `{source-file}`. The `.complete` marker of the folder is
+/// not a source file.
 fn first_source_file(dir: &Path) -> Result<Option<PathBuf>> {
     let mut files: Vec<PathBuf> = Vec::new();
     for entry in walkdir::WalkDir::new(dir) {
         let entry = entry?;
-        if entry.file_type().is_file() {
+        if entry.file_type().is_file() && entry.file_name() != ".complete" {
             files.push(entry.path().to_owned());
         }
     }
