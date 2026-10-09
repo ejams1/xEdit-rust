@@ -540,6 +540,34 @@ pub(crate) fn container_sort_key(base: &super::ContainerBase, extended: bool) ->
         .join("|")
 }
 
+thread_local! {
+    /// The containers whose elements this thread sorts now
+    /// ([`sort_if_invalid`]): a read of one of them during its own sort sees
+    /// the elements as they are, as upstream's `DoInit(True)` does once the
+    /// flag is cleared.
+    static SORTING: std::cell::RefCell<Vec<usize>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// The sort of `DoInit(True)` (`arcSortInvalid`, `arrSortInvalid`,
+/// `srsSortInvalid`) for a container that several threads read: the flag
+/// is cleared only once the elements are in their sorted order, so a
+/// reader on another thread never sees them half sorted or unsorted; it
+/// sorts them itself instead (the sort is stable, so the order is the
+/// same). Upstream clears the flag first and sorts on its one thread.
+pub(crate) fn sort_if_invalid(invalid: &AtomicBool, base: &super::ContainerBase) {
+    if !invalid.load(Ordering::Acquire) {
+        return;
+    }
+    let id = std::ptr::from_ref(base) as usize;
+    if SORTING.with(|sorting| sorting.borrow().contains(&id)) {
+        return;
+    }
+    SORTING.with(|sorting| sorting.borrow_mut().push(id));
+    sort_by_sort_keys(base);
+    SORTING.with(|sorting| sorting.borrow_mut().retain(|other| *other != id));
+    invalid.store(false, Ordering::Release);
+}
+
 /// Port of `wbMergeSortPtr(..., CompareSortKeys)` on a sorted array: the
 /// elements in the order of their extended sort keys (`CompareStr`), equal
 /// keys in the order they had. `CompareSortKeys` breaks a tie with the edit

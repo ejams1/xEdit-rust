@@ -1362,8 +1362,10 @@ status = "pending"
 source = "mniNavCheckForCircularLeveledListsClick"
 
 [gui."xEdit/xeMainForm.dfm:mniNavCheckForErrors:OnClick"]
-status = "pending"
+status = "covered"
+command = "files.check"
 source = "mniNavCheckForErrorsClick"
+note = "The selected nodes are the files and records named in the request."
 
 [gui."xEdit/xeMainForm.dfm:mniNavCleanMasters:OnClick"]
 status = "covered"

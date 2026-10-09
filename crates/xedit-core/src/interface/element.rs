@@ -106,6 +106,14 @@ pub trait Element: Send + Sync {
         String::new()
     }
 
+    /// Upstream `Check` (`GetCheck`): the error "Check for Errors" reports
+    /// for the element itself, empty when there is none. The default is
+    /// `TwbElement.GetCheck`'s; the file, the groups, the flags and the
+    /// terminator of a string list keep it.
+    fn get_check(&self) -> String {
+        String::new()
+    }
+
     fn get_links_to(&self) -> Option<ElementRef>;
 
     fn get_element_type(&self) -> ElementType;

@@ -350,6 +350,23 @@ pub fn dump_file(path: &str, mode: GameMode, out: &mut dyn Write) -> Result<(), 
     write_container(&file, out).map_err(|error| error.to_string())
 }
 
+/// Port of `xDump -check`: loads the plugin and writes the errors of its
+/// elements (`CheckForErrors` of `xDump.dpr`, `xedit_analysis::check::dump_check`)
+/// instead of its dump. The `Checking:` lines of the top groups go to the
+/// progress log.
+pub fn check_file(path: &str, mode: GameMode, out: &mut dyn Write) -> Result<(), String> {
+    let file = load_file(path, mode)?;
+    let element: xedit_core::interface::ElementRef = file;
+    let lines = xedit_analysis::check::dump_check(&element, &mut |line| {
+        xedit_core::interface::misc::progress(line);
+    });
+    for line in lines {
+        write_text(out, &line.text()).map_err(|error| error.to_string())?;
+        out.write_all(b"\r\n").map_err(|error| error.to_string())?;
+    }
+    Ok(())
+}
+
 /// Writes the dump of a loaded file, on the threads of `threads::threads`.
 pub fn write_dump(file: &FileImpl, out: &mut dyn Write) -> std::io::Result<()> {
     write_container(file, out)

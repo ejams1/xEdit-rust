@@ -56,6 +56,7 @@ use serde::Serialize;
 
 use crate::memory::{self, Budget, GIB, Limit};
 
+mod check;
 mod clean;
 mod conflicts;
 mod bsarch;
@@ -68,6 +69,14 @@ mod nif;
 mod oracle_save;
 mod strings;
 mod sniff;
+
+/// `parity check-dump`: the dump check runs `xDump -check` and
+/// `xedit dump --check` in place of the dumps, cached apart (`<MODE>-check`).
+static CHECK_DUMP: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+fn check_dump() -> bool {
+    CHECK_DUMP.load(Ordering::Relaxed)
+}
 
 /// A game whose masters are in the corpus.
 struct Game {
@@ -227,6 +236,8 @@ struct Options {
     /// `parity clean`: the quick auto clean mode on every plugin with
     /// masters.
     clean: bool,
+    /// `parity check`: the `-CheckForErrors` mode on every plugin.
+    check: bool,
     /// `parity conflicts --record <FormID>`: the oracle's probe of these
     /// records instead of the check.
     records: Vec<String>,
@@ -332,6 +343,7 @@ pub fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
         || options.conflicts
         || options.refs
         || options.clean
+        || options.check
         || options.modgroups;
     let oracle = if options.roundtrip || gui_oracle {
         PathBuf::new()
@@ -360,6 +372,9 @@ pub fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
     }
     if options.clean {
         return clean::run_clean(root, tag, &options, cache, scratch, oracle_dir);
+    }
+    if options.check {
+        return check::run_check(root, tag, &options, cache, scratch, oracle_dir);
     }
     if options.modgroups {
         return modgroups::run_modgroups(root, tag, &options, cache, scratch, oracle_dir);
@@ -525,6 +540,8 @@ pub fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
         "oracle-save.json"
     } else if options.saves {
         "saves.json"
+    } else if check_dump() {
+        "check-dump.json"
     } else {
         "dump.json"
     };
@@ -1190,7 +1207,11 @@ fn parse(args: &[&str]) -> Result<Options> {
                          [--oracle-timeout <minutes>]";
     let (mode, rest) = args.split_first().context(USAGE)?;
     let (saves, roundtrip, oracle_save, oracle_edit) = match *mode {
-        "dump" | "conflicts" | "refs" | "clean" | "modgroups" => (false, false, false, false),
+        "dump" | "conflicts" | "refs" | "clean" | "check" | "modgroups" => (false, false, false, false),
+        "check-dump" => {
+            CHECK_DUMP.store(true, Ordering::Relaxed);
+            (false, false, false, false)
+        }
         "saves" => (true, false, false, false),
         "roundtrip" => (false, true, false, false),
         "oracle-save" => (false, false, true, false),
@@ -1204,6 +1225,7 @@ fn parse(args: &[&str]) -> Result<Options> {
         oracle_edit,
         conflicts: *mode == "conflicts",
         clean: *mode == "clean",
+        check: *mode == "check",
         records: Vec::new(),
         refs: *mode == "refs",
         modgroups: *mode == "modgroups",
@@ -1444,6 +1466,8 @@ fn run_limited<T>(
 fn check(case: &Case, runner: &Runner) -> Result<Outcome> {
     let dir = if case.saves {
         runner.cache.join(format!("{}-saves", case.game.mode))
+    } else if check_dump() {
+        runner.cache.join(format!("{}-check", case.game.mode))
     } else {
         runner.cache.join(case.game.mode)
     };
@@ -1482,6 +1506,9 @@ fn check(case: &Case, runner: &Runner) -> Result<Outcome> {
             .arg(&case.data);
     } else {
         command.args(["dump", "--game", case.game.mode]);
+        if check_dump() {
+            command.arg("--check");
+        }
     }
     command
         .arg(&case.input)
@@ -1577,6 +1604,9 @@ fn run_oracle(case: &Case, runner: &Runner, dir: &Path, stem: &str) -> Result<Op
     command.arg(format!("-{}", case.game.mode));
     if case.saves {
         command.arg("-saves");
+    }
+    if check_dump() {
+        command.arg("-check");
     }
     command
         .arg("-q")

@@ -89,6 +89,24 @@ pub fn set_progress_callback(callback: Option<ProgressCallback>) {
     *PROGRESS_CALLBACK.write().unwrap() = callback;
 }
 
+thread_local! {
+    /// The messages of [`progress`] on this thread while
+    /// [`capture_progress`] runs.
+    static CAPTURED: std::cell::RefCell<Option<Vec<String>>> = const { std::cell::RefCell::new(None) };
+}
+
+/// Runs `body` with the progress messages of this thread kept for the
+/// caller instead of sent to the callback, so that a caller that works on
+/// several threads can put them in the order one thread would have
+/// written them (the messages "Check for Errors" logs while it builds a
+/// record).
+pub fn capture_progress<T>(body: impl FnOnce() -> T) -> (T, Vec<String>) {
+    let outer = CAPTURED.with(|captured| captured.borrow_mut().replace(Vec::new()));
+    let result = body();
+    let messages = CAPTURED
+        .with(|captured| std::mem::replace(&mut *captured.borrow_mut(), outer))
+        .unwrap_or_default();
+    (result, messages)
 /// The progress callback that is set, to restore it after a command that
 /// sets its own.
 pub fn progress_callback() -> Option<ProgressCallback> {
@@ -97,6 +115,16 @@ pub fn progress_callback() -> Option<ProgressCallback> {
 
 /// Port of `wbProgress`: sends a status message to the progress callback.
 pub fn progress(status: &str) {
+    let captured = CAPTURED.with(|captured| match captured.borrow_mut().as_mut() {
+        Some(messages) => {
+            messages.push(status.to_owned());
+            true
+        }
+        None => false,
+    });
+    if captured {
+        return;
+    }
     let callback = PROGRESS_CALLBACK.read().unwrap().clone();
     if let Some(callback) = callback {
         callback(status);

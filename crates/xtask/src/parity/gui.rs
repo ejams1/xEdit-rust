@@ -169,6 +169,17 @@ pub struct QuickCleanResult {
     pub peak: Option<u64>,
 }
 
+/// What a run of a mode without a script left (`run_auto_mode`).
+pub struct AutoModeResult {
+    /// The private data folder of the run.
+    pub data: PathBuf,
+    /// The message log the GUI writes next to its executable on exit.
+    pub log: String,
+    pub peak: Option<u64>,
+    /// The exit code of the GUI.
+    pub exit_code: Option<u32>,
+}
+
 impl GuiRun<'_> {
     /// Starts the GUI, answers the module selection and waits for the
     /// script. The run folder is left for the caller to read and remove.
@@ -198,7 +209,7 @@ impl GuiRun<'_> {
         } else {
             Until::Marker(&marker)
         };
-        let peak = self.spawn_and_watch(command, until, &extras.answers, &mut log)?;
+        let (peak, _) = self.spawn_and_watch(command, until, &extras.answers, &mut log)?;
         let status = fs::read_to_string(self.work.join("status.txt"))
             .context("the script wrote no status")?
             .lines()
@@ -234,6 +245,30 @@ impl GuiRun<'_> {
     /// 64-bit start question and the developer message were shown, so the
     /// edit mode shows no prompt; any other dialog fails the run.
     pub fn run_quick_clean(&self, target: &str) -> Result<QuickCleanResult> {
+        let run = self.run_auto_mode(&["-quickautoclean", "-autoexit", "-autoload", target])?;
+        let saved = self.work.join("backup").is_dir() && fs::read_dir(self.work.join("backup"))?.next().is_some();
+        Ok(QuickCleanResult {
+            plugin: run.data.join(target),
+            saved,
+            log: run.log,
+            peak: run.peak,
+        })
+    }
+
+    /// Runs the `-CheckForErrors` tool mode on `target`: the GUI loads the
+    /// plugin with its masters (`wbPluginModes`), checks the file node of
+    /// the last loaded file (`tmrGeneratorTimer`), and closes itself with
+    /// the number of errors found, at most 127, as its exit code.
+    pub fn run_check_for_errors(&self, target: &str) -> Result<AutoModeResult> {
+        self.run_auto_mode(&["-CheckForErrors", target])
+    }
+
+    /// Runs one of the modes that load, work and exit without a script
+    /// (`args` after the common switches) and waits for the GUI to exit.
+    /// The settings file of the run says the 64-bit start question and the
+    /// developer message were shown, so the edit mode shows no prompt; any
+    /// other dialog fails the run.
+    fn run_auto_mode(&self, args: &[&str]) -> Result<AutoModeResult> {
         let (mut command, data) = self.prepare()?;
         // `Settings` lives next to the plugin list (`-P:`), named
         // `<list>.<game>viewsettings`.
@@ -252,25 +287,21 @@ impl GuiRun<'_> {
                 "[Init]\r\nFirst64Start=0\r\n\r\n[DeveloperMessage]\r\nLastShownOn={today}\r\nVersion=0\r\n\r\n[Options]\r\nPatron=1\r\nShowTip=0\r\n"
             ),
         )?;
-        command
-            .arg("-quickautoclean")
-            .arg("-autoexit")
-            .arg("-autoload")
-            .arg(target);
-        let peak = self.spawn_and_watch(command, Until::Exit, &[], &mut String::new())?;
+        for arg in args {
+            command.arg(*arg);
+        }
+        let (peak, exit_code) = self.spawn_and_watch(command, Until::Exit, &[], &mut String::new())?;
         let log = fs::read_dir(self.work.join("bin"))?
             .filter_map(|entry| entry.ok().map(|entry| entry.path()))
             .find(|path| path.to_string_lossy().ends_with("_log.txt"))
             .map(|path| fs::read(path).map(|bytes| String::from_utf8_lossy(&bytes).into_owned()))
             .transpose()?
             .context("the GUI wrote no log")?;
-
-        let saved = self.work.join("backup").is_dir() && fs::read_dir(self.work.join("backup"))?.next().is_some();
-        Ok(QuickCleanResult {
-            plugin: data.join(target),
-            saved,
+        Ok(AutoModeResult {
+            data,
             log,
             peak,
+            exit_code,
         })
     }
 
@@ -336,7 +367,7 @@ impl GuiRun<'_> {
         until: Until,
         answers: &[Answer],
         log: &mut String,
-    ) -> Result<Option<u64>> {
+    ) -> Result<(Option<u64>, Option<u32>)> {
         let _reservation = self.budget.reserve(self.expected_peak.min(self.max_memory));
         let mut child = command
             .spawn()
@@ -358,10 +389,13 @@ impl GuiRun<'_> {
                 self.max_memory as f64 / crate::memory::GIB as f64
             );
         }
-        watched?;
-        Ok(peak)
+        let exit_code = watched?;
+        Ok((peak, exit_code))
     }
 }
+
+/// How often the watch reads the message log of the main form.
+const LOG_INTERVAL: Duration = Duration::from_secs(2);
 
 /// When a run is done.
 enum Until<'a> {
@@ -385,7 +419,7 @@ fn watch(
     hang_timeout: Duration,
     answers: &[Answer],
     log_out: &mut String,
-) -> Result<()> {
+) -> Result<Option<u32>> {
     let start = Instant::now();
     let mut clicked = Vec::new();
     let mut dialogs: Vec<(isize, Instant)> = Vec::new();
@@ -394,6 +428,10 @@ fn watch(
     let mut next_answer = answers.next();
     let mut main_form = None;
     let mut closing = false;
+    // The message log is read every `LOG_INTERVAL`: a check of a large
+    // master writes megabytes to it, and every read is a copy of all of it
+    // that the GUI's thread makes.
+    let mut last_log_read: Option<Instant> = None;
     loop {
         if let Until::MarkerThenClose(marker) = until
             && !closing
@@ -425,7 +463,7 @@ fn watch(
                 .any(|entry| entry.file_name().to_string_lossy().ends_with("_log.txt"))
         {
             std::thread::sleep(Duration::from_secs(2));
-            return Ok(());
+            return Ok(None);
         }
         if let Until::Marker(marker) = until
             && marker.exists()
@@ -444,11 +482,11 @@ fn watch(
                 next_answer.map(|a| a.class.as_str()).unwrap_or_default(),
                 next_answer.map(|a| a.title.as_str()).unwrap_or_default()
             );
-            return Ok(());
+            return Ok(None);
         }
         if let Some(code) = child.try_wait()? {
             if matches!(until, Until::Exit) || closing {
-                return Ok(());
+                return Ok(Some(code));
             }
             bail!("the oracle exited (exit code: {code}) before the script finished");
         }
@@ -471,6 +509,10 @@ fn watch(
                 // The main form and the application window.
                 "TfrmMain" => {
                     main_form = Some(window.handle);
+                    if last_log_read.is_some_and(|read| read.elapsed() < LOG_INTERVAL) {
+                        continue;
+                    }
+                    last_log_read = Some(Instant::now());
                     let log = main_form_log(window.handle);
                     if !log.is_empty() {
                         log_out.clone_from(&log);

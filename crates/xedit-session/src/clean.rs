@@ -388,6 +388,9 @@ fn records_cleanup_injected(
 ) -> Result<CleanupInjectedResponse, CommandError> {
     crate::commands::refuse_in_translate_mode("records.cleanup_injected")?;
     let file = session.file(request.file.as_deref())?;
+    // `ReferencesInjected` reads the reference index, which the GUI builds
+    // when it loads the plugins.
+    session.ensure_refs()?;
     let records = if request.form_ids.is_empty() {
         let all = file.records();
         run_on_large_stack(move || {
@@ -444,7 +447,7 @@ fn records_cleanup_injected(
 
 /// Runs `work` on a thread with a large stack: the records build deeply
 /// through the definitions.
-fn run_on_large_stack<T: Send>(work: impl FnOnce() -> T + Send) -> Result<T, CommandError> {
+pub(crate) fn run_on_large_stack<T: Send>(work: impl FnOnce() -> T + Send) -> Result<T, CommandError> {
     std::thread::scope(|scope| {
         std::thread::Builder::new()
             .stack_size(xedit_core::threads::STACK_SIZE)

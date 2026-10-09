@@ -4,8 +4,10 @@
 
 //! The analyses of xEdit over loaded plugins: conflict detection (the
 //! conflict code of `xeMainForm.pas`, moved out of the GUI) and the array
-//! alignment it uses (`TDiff`).
+//! alignment it uses (`TDiff`), the error checks, cleaning and the
+//! navigation tree with its filter.
 
+pub mod check;
 pub mod cleaning;
 pub mod conflict;
 pub mod diff;
