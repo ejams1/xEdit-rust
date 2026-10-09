@@ -1,0 +1,10 @@
+{
+  "description": "Skyrim SE with its DLCs: leveled lists, containers, factions, races, NPCs and the keywords of items that Update and the DLCs change. The handler warns that the merged patch is unsupported for the game first.",
+  "game": "sse",
+  "load": ["Skyrim.esm", "Update.esm", "Dawnguard.esm", "HearthFires.esm", "Dragonborn.esm"],
+  "patch": "Merged Patch",
+  "answers": [
+    {"class": "#32770", "title": "Warning", "button": "&Yes"},
+    {"class": "TInputQueryForm", "title": "New Module File", "text": "Merged Patch", "button": "OK"}
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "description": "Fallout 4 with its DLCs and two plugins the port makes first, which change the same leveled list, container and NPC factions in different ways (counts, an added entry, removed entries, a changed rank): the patch merges them.",
+  "game": "fo4",
+  "load": ["Fallout4.esm", "DLCRobot.esm", "DLCworkshop01.esm", "DLCCoast.esm", "DLCworkshop02.esm", "DLCworkshop03.esm", "DLCNukaWorld.esm"],
+  "make": [
+    {"command": "files.new", "params": {"file": "PatchTestA"}},
+    {"command": "records.copy", "params": {"form_id": "000192FA", "to": "PatchTestA.esp", "from": "DLCNukaWorld.esm"}},
+    {"command": "elements.set", "params": {"form_id": "000192FA", "file": "PatchTestA.esp", "path": "Leveled List Entries\\[1]\\LVLO\\Count", "value": "3"}},
+    {"command": "elements.add", "params": {"form_id": "000192FA", "file": "PatchTestA.esp", "path": "Leveled List Entries", "name": "Leveled List Entry"}},
+    {"command": "elements.set", "params": {"form_id": "000192FA", "file": "PatchTestA.esp", "path": "Leveled List Entries\\[0]\\LVLO\\Item", "value": "000008AB"}},
+    {"command": "elements.set", "params": {"form_id": "000192FA", "file": "PatchTestA.esp", "path": "Leveled List Entries\\[0]\\LVLO\\Level", "value": "2"}},
+    {"command": "records.copy", "params": {"form_id": "00013AD1", "to": "PatchTestA.esp", "from": "DLCNukaWorld.esm"}},
+    {"command": "elements.set", "params": {"form_id": "00013AD1", "file": "PatchTestA.esp", "path": "Items\\[0]\\CNTO\\Count", "value": "5"}},
+    {"command": "records.copy", "params": {"form_id": "00002CB2", "to": "PatchTestA.esp", "from": "DLCNukaWorld.esm"}},
+    {"command": "elements.remove", "params": {"form_id": "00002CB2", "file": "PatchTestA.esp", "path": "Factions\\[0]"}},
+    {"command": "files.new", "params": {"file": "PatchTestB"}},
+    {"command": "records.copy", "params": {"form_id": "000192FA", "to": "PatchTestB.esp", "from": "DLCNukaWorld.esm"}},
+    {"command": "elements.remove", "params": {"form_id": "000192FA", "file": "PatchTestB.esp", "path": "Leveled List Entries\\[0]"}},
+    {"command": "elements.remove", "params": {"form_id": "000192FA", "file": "PatchTestB.esp", "path": "Leveled List Entries\\[5]"}},
+    {"command": "records.copy", "params": {"form_id": "00013AD1", "to": "PatchTestB.esp", "from": "DLCNukaWorld.esm"}},
+    {"command": "elements.remove", "params": {"form_id": "00013AD1", "file": "PatchTestB.esp", "path": "Items\\[3]"}},
+    {"command": "records.copy", "params": {"form_id": "00002CB2", "to": "PatchTestB.esp", "from": "DLCNukaWorld.esm"}},
+    {"command": "elements.set", "params": {"form_id": "00002CB2", "file": "PatchTestB.esp", "path": "Factions\\[2]\\Rank", "value": "1"}}
+  ],
+  "patch": "Merged Patch",
+  "answers": [
+    {"class": "#32770", "title": "Warning", "button": "&Yes"},
+    {"class": "TInputQueryForm", "title": "New Module File", "text": "Merged Patch", "button": "OK"}
+  ]
+}

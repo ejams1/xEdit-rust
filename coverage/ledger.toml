@@ -1218,8 +1218,10 @@ status = "pending"
 source = "mniCopySignatureToClipboardClick"
 
 [gui."xEdit/xeMainForm.dfm:mniCreateNewFile:OnClick"]
-status = "pending"
+status = "covered"
+command = "files.new"
 source = "mniCreateNewFileClick"
+note = "Partial: the new file of AddNewFile with the light and medium flags as parameters; the module templates of AddNewFileWithDialog are not ported."
 
 [gui."xEdit/xeMainForm.dfm:mniMainLocalizationEditor:OnClick"]
 status = "covered"
@@ -1424,8 +1426,10 @@ status = "pending"
 source = "mniNavCreateDeltaPatchClick"
 
 [gui."xEdit/xeMainForm.dfm:mniNavCreateMergedPatch:OnClick"]
-status = "pending"
+status = "covered"
+command = "patch.merged"
 source = "mniNavCreateMergedPatchClick"
+note = "The file name of InputQuery is the file parameter; the question of the games from Skyrim on comes back as warning."
 
 [gui."xEdit/xeMainForm.dfm:mniNavCreateModGroup:OnClick"]
 status = "covered"

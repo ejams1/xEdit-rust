@@ -40,19 +40,19 @@ use super::{GAMES, GIB, Game, Options, Runner};
 const MODGROUPS_SCRIPT: &str = include_str!("../../oracle/modgroups.pas");
 
 /// The name a scenario gives the program's own mod group file.
-const GLOBAL_FILE: &str = "<global>";
+pub(super) const GLOBAL_FILE: &str = "<global>";
 
 /// The text of a file of a scenario: the exact text, or lines that are
 /// written with CRLF after each, as xEdit writes them.
 #[derive(Deserialize, Clone)]
 #[serde(untagged)]
-enum Text {
+pub(super) enum Text {
     Raw(String),
     Lines(Vec<String>),
 }
 
 impl Text {
-    fn text(&self) -> String {
+    pub(super) fn text(&self) -> String {
         match self {
             Text::Raw(text) => text.clone(),
             Text::Lines(lines) => lines.iter().map(|line| format!("{line}\r\n")).collect(),
@@ -129,7 +129,7 @@ struct ModGroupsReport<'a> {
 
 /// The settings file of the GUI next to its plugin list (`-P:`), as
 /// `xeInit` names it: `Plugins.<app>viewsettings` with the case of the list.
-fn settings_name(mode: &str) -> String {
+pub(super) fn settings_name(mode: &str) -> String {
     format!("plugins.{}viewsettings", mode.to_lowercase())
 }
 
@@ -314,8 +314,19 @@ fn crc32(bytes: &[u8]) -> u32 {
 /// The files a scenario puts down: the path in the GUI's run folder, the
 /// path in the port's folder and the bytes.
 fn scenario_files(scenario: &Scenario, game: &Game, plugins: &[PathBuf]) -> Result<Vec<(String, PathBuf, Vec<u8>)>> {
+    put_files(&scenario.files, scenario.settings.as_ref(), game, plugins)
+}
+
+/// The mod group files and the settings file of a scenario: the name, the
+/// path in the GUI's run folder and the bytes.
+pub(super) fn put_files(
+    scenario_files: &BTreeMap<String, Text>,
+    settings: Option<&Text>,
+    game: &Game,
+    plugins: &[PathBuf],
+) -> Result<Vec<(String, PathBuf, Vec<u8>)>> {
     let mut files = Vec::new();
-    for (name, text) in &scenario.files {
+    for (name, text) in scenario_files {
         let bytes = fill_crcs(&text.text(), plugins)?.into_bytes();
         let gui_path = if name == GLOBAL_FILE {
             // `wbModGroupFileName` of the script mode, next to the program.
@@ -325,7 +336,7 @@ fn scenario_files(scenario: &Scenario, game: &Game, plugins: &[PathBuf]) -> Resu
         };
         files.push((name.clone(), gui_path, bytes));
     }
-    if let Some(settings) = &scenario.settings {
+    if let Some(settings) = settings {
         files.push((
             settings_name(game.mode),
             PathBuf::from(settings_name(game.mode)),
@@ -489,6 +500,7 @@ fn run_oracle(
                 title: answer.title.clone(),
                 keys: answer.keys.clone(),
                 button: answer.button.clone(),
+                text: None,
             })
             .collect(),
         close_after: false,

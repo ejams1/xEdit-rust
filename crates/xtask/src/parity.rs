@@ -62,6 +62,7 @@ mod conflicts;
 mod bsarch;
 mod gui;
 mod hidden;
+mod merged;
 mod modgroups;
 mod oracle_refs;
 mod lodgen;
@@ -245,6 +246,8 @@ struct Options {
     refs: bool,
     /// `parity modgroups`: the mod group scenarios.
     modgroups: bool,
+    /// `parity merged`: the merged patch scenarios.
+    merged: bool,
     games: Vec<&'static Game>,
     /// Lower-case file names. Empty selects the whole corpus.
     files: Vec<String>,
@@ -344,7 +347,8 @@ pub fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
         || options.refs
         || options.clean
         || options.check
-        || options.modgroups;
+        || options.modgroups
+        || options.merged;
     let oracle = if options.roundtrip || gui_oracle {
         PathBuf::new()
     } else {
@@ -378,6 +382,9 @@ pub fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
     }
     if options.modgroups {
         return modgroups::run_modgroups(root, tag, &options, cache, scratch, oracle_dir);
+    }
+    if options.merged {
+        return merged::run_merged(root, tag, &options, cache, scratch, oracle_dir);
     }
 
     let mut cases = Vec::new();
@@ -1207,7 +1214,7 @@ fn parse(args: &[&str]) -> Result<Options> {
                          [--oracle-timeout <minutes>]";
     let (mode, rest) = args.split_first().context(USAGE)?;
     let (saves, roundtrip, oracle_save, oracle_edit) = match *mode {
-        "dump" | "conflicts" | "refs" | "clean" | "check" | "modgroups" => (false, false, false, false),
+        "dump" | "conflicts" | "refs" | "clean" | "check" | "modgroups" | "merged" => (false, false, false, false),
         "check-dump" => {
             CHECK_DUMP.store(true, Ordering::Relaxed);
             (false, false, false, false)
@@ -1229,6 +1236,7 @@ fn parse(args: &[&str]) -> Result<Options> {
         records: Vec::new(),
         refs: *mode == "refs",
         modgroups: *mode == "modgroups",
+        merged: *mode == "merged",
         games: Vec::new(),
         files: Vec::new(),
         oracle_only: false,

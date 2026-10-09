@@ -5,6 +5,7 @@
 //! Memory-mapped files, compression and string encodings.
 
 pub mod archive;
+pub mod collate;
 pub mod compression;
 pub mod dds;
 pub mod encoding;

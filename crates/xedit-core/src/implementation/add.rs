@@ -436,6 +436,104 @@ impl GroupRecordImpl {
     }
 }
 
+/// The record header `TwbMainRecord.Create(aContainer, aSignature, aFormID)`
+/// gives a new record: the version of the game's records, no data.
+fn new_main_record_struct(signature: Signature, flags: MainRecordStructFlags, form_id: FormID) -> MainRecordStruct {
+    let version: u16 = match game_mode() {
+        GameMode::gmSF1 => 582,
+        GameMode::gmFO76 => 208,
+        GameMode::gmFO4 | GameMode::gmFO4VR => 131,
+        GameMode::gmSSE | GameMode::gmTES5VR | GameMode::gmEnderalSE => 44,
+        GameMode::gmTES5 | GameMode::gmEnderal => 43,
+        _ => 15,
+    };
+    MainRecordStruct {
+        signature,
+        data_size: 0,
+        flags,
+        form_id: if game_mode() >= GameMode::gmTES4 {
+            form_id
+        } else {
+            FormID::null()
+        },
+        vcs1: 0,
+        version: if game_mode() >= GameMode::gmFO3 { version } else { 0 },
+        vcs2: 0,
+    }
+}
+
+impl MainRecordImpl {
+    /// A new record with the header `mr_struct` in `container`, not yet an
+    /// element of it nor a record of the file.
+    fn new_unattached(container: &ElementRef, file: &Arc<FileImpl>, mr_struct: MainRecordStruct) -> Arc<Self> {
+        let mr_def = crate::interface::constructors::find_record_def(mr_struct.signature);
+        Arc::new_cyclic(|self_ref: &Weak<MainRecordImpl>| MainRecordImpl {
+            self_ref: self_ref.clone(),
+            base: ElementBase::new(Some(container)),
+            container: ContainerBase::default(),
+            file: Arc::downgrade(file),
+            bytes: file.fl_bytes.clone(),
+            mr_struct: RwLock::new(mr_struct),
+            mr_def,
+            dc_data_base: 0,
+            dc_data_end: 0,
+            mr_data_storage: std::sync::Mutex::new(DataStorage::Unloaded),
+            mr_pinned_data: std::sync::OnceLock::new(),
+            mr_init: InitOnce::new(),
+            mr_editor_id: RwLock::new(String::new()),
+            mr_full_name: RwLock::new(String::new()),
+            mr_names_known: std::sync::atomic::AtomicBool::new(false),
+            mr_l_generation: std::sync::atomic::AtomicI32::new(0),
+            mr_builds: std::sync::atomic::AtomicU32::new(0),
+            mr_master: RwLock::new(None),
+            mr_overrides: RwLock::new(Vec::new()),
+            mr_fixed_form_id: std::sync::atomic::AtomicU64::new(super::UNSET_FIXED_FORM_ID),
+            mr_display_name: RwLock::new(None),
+            mr_precombined: std::sync::OnceLock::new(),
+            mr_ofst_removed: std::sync::atomic::AtomicBool::new(false),
+            mr_storage_invalid: std::sync::atomic::AtomicBool::new(true),
+            mr_collapsed: std::sync::Mutex::new(None),
+            mr_duplicate: std::sync::atomic::AtomicBool::new(false),
+            mr_refs: Default::default(),
+            mr_referenced_by: Default::default(),
+            mr_grid_cell: Default::default(),
+        })
+    }
+
+    /// The part of `TwbMainRecord.Create(aContainer, aSignature, aFormID)`
+    /// after the record is registered, inside its `BeginUpdate`: the
+    /// elements built, the record modified, and its required members added.
+    fn init_new(self: &Arc<Self>, mr_def: &Arc<crate::interface::main_record::MainRecordDef>) {
+        self.do_init();
+        self.set_modified(true);
+        self.invalidate_storage();
+        let count = usize::try_from(mr_def.get_member_count()).unwrap_or(0);
+        for index in 0..count {
+            if mr_def.get_member(index).def_base().def_required() {
+                self.assign(index as i32, None, false);
+            }
+        }
+    }
+
+    /// Port of `TwbMainRecord.Create(Self, wbHeaderSignature,
+    /// TwbFormID.Null)` in `TwbFile.CreateNew`: the file header record of a
+    /// new file, with its required members.
+    pub(crate) fn create_header(file: &Arc<FileImpl>) -> Result<Arc<MainRecordImpl>, EditError> {
+        let signature = crate::interface::globals::header_signature();
+        let mr_struct = new_main_record_struct(signature, MainRecordStructFlags::default(), FormID::null());
+        let container: ElementRef = file.clone();
+        let record = MainRecordImpl::new_unattached(&container, file, mr_struct);
+        let Some(mr_def) = record.mr_def.clone() else {
+            return Err(format!("Error: unknown record type {signature}"));
+        };
+        file.container.add_element(record.clone());
+        record.begin_update();
+        record.init_new(&mr_def);
+        record.end_update();
+        Ok(record)
+    }
+}
+
 // ----- the file -----
 
 impl FileImpl {
@@ -596,60 +694,9 @@ impl MainRecordImpl {
                 is_interior = true;
             }
         }
-        let version: u16 = match game_mode() {
-            GameMode::gmSF1 => 582,
-            GameMode::gmFO76 => 208,
-            GameMode::gmFO4 | GameMode::gmFO4VR => 131,
-            GameMode::gmSSE | GameMode::gmTES5VR | GameMode::gmEnderalSE => 44,
-            GameMode::gmTES5 | GameMode::gmEnderal => 43,
-            _ => 15,
-        };
-        let mr_struct = MainRecordStruct {
-            signature,
-            data_size: 0,
-            flags,
-            form_id: if game_mode() >= GameMode::gmTES4 {
-                form_id
-            } else {
-                FormID::null()
-            },
-            vcs1: 0,
-            version: if game_mode() >= GameMode::gmFO3 { version } else { 0 },
-            vcs2: 0,
-        };
+        let mr_struct = new_main_record_struct(signature, flags, form_id);
         let container_ref: ElementRef = container.clone();
-        let mr_def = crate::interface::constructors::find_record_def(signature);
-        let record = Arc::new_cyclic(|self_ref: &Weak<MainRecordImpl>| MainRecordImpl {
-            self_ref: self_ref.clone(),
-            base: ElementBase::new(Some(&container_ref)),
-            container: ContainerBase::default(),
-            file: Arc::downgrade(&file),
-            bytes: file.fl_bytes.clone(),
-            mr_struct: RwLock::new(mr_struct),
-            mr_def,
-            dc_data_base: 0,
-            dc_data_end: 0,
-            mr_data_storage: std::sync::Mutex::new(DataStorage::Unloaded),
-            mr_pinned_data: std::sync::OnceLock::new(),
-            mr_init: InitOnce::new(),
-            mr_editor_id: RwLock::new(String::new()),
-            mr_full_name: RwLock::new(String::new()),
-            mr_names_known: std::sync::atomic::AtomicBool::new(false),
-            mr_l_generation: std::sync::atomic::AtomicI32::new(0),
-            mr_builds: std::sync::atomic::AtomicU32::new(0),
-            mr_master: RwLock::new(None),
-            mr_overrides: RwLock::new(Vec::new()),
-            mr_fixed_form_id: std::sync::atomic::AtomicU64::new(super::UNSET_FIXED_FORM_ID),
-            mr_display_name: RwLock::new(None),
-            mr_precombined: std::sync::OnceLock::new(),
-            mr_ofst_removed: std::sync::atomic::AtomicBool::new(false),
-            mr_storage_invalid: std::sync::atomic::AtomicBool::new(true),
-            mr_collapsed: std::sync::Mutex::new(None),
-            mr_duplicate: std::sync::atomic::AtomicBool::new(false),
-            mr_refs: Default::default(),
-            mr_referenced_by: Default::default(),
-            mr_grid_cell: Default::default(),
-        });
+        let record = MainRecordImpl::new_unattached(&container_ref, &file, mr_struct);
         let Some(mr_def) = record.mr_def.clone() else {
             return Err(format!("Error: unknown record type {signature}"));
         };
@@ -660,15 +707,7 @@ impl MainRecordImpl {
             return Err(error);
         }
         record.begin_update();
-        record.do_init();
-        record.set_modified(true);
-        record.invalidate_storage();
-        let count = usize::try_from(mr_def.get_member_count()).unwrap_or(0);
-        for index in 0..count {
-            if mr_def.get_member(index).def_base().def_required() {
-                record.assign(index as i32, None, false);
-            }
-        }
+        record.init_new(&mr_def);
         if is_interior && let Some(data) = record.get_record_by_signature(Signature::new(b"DATA")) {
             let _ = data.set_edit_value("1");
         }

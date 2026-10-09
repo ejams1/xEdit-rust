@@ -63,6 +63,17 @@ pub fn apply_edit_settings(mode: GameMode) {
         GameMode::gmSF1 => "SF1",
     };
     set_app_name(app);
+    // `wbGameName2`, the title of the game, which messages name.
+    let game_name2 = match mode {
+        GameMode::gmTES4R => "Oblivion Remastered".to_owned(),
+        GameMode::gmEnderalSE => "Enderal Special Edition".to_owned(),
+        GameMode::gmTES5VR => "Skyrim VR".to_owned(),
+        GameMode::gmSSE => "Skyrim Special Edition".to_owned(),
+        GameMode::gmFO4VR => "Fallout4VR".to_owned(),
+        GameMode::gmFO76 => "Fallout 76".to_owned(),
+        _ => xedit_core::interface::globals::game_name(),
+    };
+    xedit_core::interface::globals::set_game_name2(&game_name2);
     match mode {
         GameMode::gmFNV | GameMode::gmFO3 => {
             set_vwd_in_temporary(true);

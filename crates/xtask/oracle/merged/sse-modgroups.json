@@ -1,0 +1,26 @@
+{
+  "description": "Skyrim SE with its DLCs and an active mod group in which Dawnguard hides Update: the 4.1.5q handler reads the overrides of each master, which mod groups do not change, so the patch is the one made without them.",
+  "game": "sse",
+  "load": ["Skyrim.esm", "Update.esm", "Dawnguard.esm", "HearthFires.esm", "Dragonborn.esm"],
+  "patch": "Merged Patch",
+  "files": {
+    "Dawnguard.modgroups": [
+      "[Update hidden by Dawnguard]",
+      "Update.esm",
+      "Dawnguard.esm"
+    ]
+  },
+  "settings": [
+    "[ModGroups]",
+    "Selection=\"Update hidden by Dawnguard\"",
+    "[Init]",
+    "FirstStart=1"
+  ],
+  "menu": ["mniViewModGroupsReload"],
+  "answers": [
+    {"class": "TfrmModGroupSelect", "title": "Reloading", "button": "OK"},
+    {"class": "#32770", "title": "Warning", "button": "&Yes"},
+    {"class": "TInputQueryForm", "title": "New Module File", "text": "Merged Patch", "button": "OK"}
+  ],
+  "port": [{"command": "modgroups.select", "params": {"saved": true}}]
+}

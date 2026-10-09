@@ -57,7 +57,7 @@ pub fn loaded_files() -> Vec<Arc<FileImpl>> {
 }
 
 /// Port of `ExtractFileExt`: the extension with its dot, or nothing.
-fn extract_file_ext(name: &str) -> &str {
+pub fn extract_file_ext(name: &str) -> &str {
     match name.rfind(['.', '\\', '/', ':']) {
         Some(index) if name[index..].starts_with('.') => &name[index..],
         _ => "",

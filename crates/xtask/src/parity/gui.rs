@@ -101,6 +101,9 @@ pub struct Answer {
     /// Virtual key codes.
     pub keys: Vec<u16>,
     pub button: Option<String>,
+    /// Text put into the first edit control of the dialog before the keys
+    /// (`WM_SETTEXT`), such as the file name an `InputQuery` asks for.
+    pub text: Option<String>,
 }
 
 /// What a run may add to the plain one: files written into the run folder
@@ -557,6 +560,15 @@ fn watch(
                     let answer = next_answer.expect("matched above");
                     // Let the dialog finish showing before it gets input.
                     std::thread::sleep(Duration::from_millis(300));
+                    if let Some(text) = &answer.text {
+                        ensure!(
+                            set_edit_text(&window, text),
+                            "the dialog [{}] \"{}\" has no edit control: {}",
+                            window.class,
+                            window.title,
+                            window.texts.join(" | ")
+                        );
+                    }
                     for &key in &answer.keys {
                         post_key(&window, key);
                     }
@@ -779,6 +791,33 @@ pub(super) fn click_button(window: &Window, caption: &str) -> bool {
     // SAFETY: a button handle of the window; BM_CLICK takes no pointers.
     unsafe { SendMessageW(button, BM_CLICK, 0, 0) };
     true
+}
+
+/// Sets the text of the first edit control of a window (a VCL `TEdit`, or
+/// the `Edit` of a system dialog).
+#[cfg(windows)]
+fn set_edit_text(window: &Window, text: &str) -> bool {
+    use windows_sys::Win32::Foundation::HWND;
+    use windows_sys::Win32::UI::WindowsAndMessaging::{EnumChildWindows, SendMessageW, WM_SETTEXT};
+    let mut children: Vec<HWND> = Vec::new();
+    // SAFETY: the callback only pushes into the vector passed as `LPARAM`.
+    unsafe { EnumChildWindows(window.handle as HWND, Some(win::collect), (&raw mut children) as isize) };
+    let Some(edit) = children
+        .into_iter()
+        .find(|&child| matches!(win::class(child).as_str(), "TEdit" | "Edit"))
+    else {
+        return false;
+    };
+    let wide: Vec<u16> = text.encode_utf16().chain(std::iter::once(0)).collect();
+    // SAFETY: an edit control of the window; the text is null-terminated
+    // and outlives the call, which the system copies across processes.
+    unsafe { SendMessageW(edit, WM_SETTEXT, 0, wide.as_ptr() as isize) };
+    true
+}
+
+#[cfg(not(windows))]
+fn set_edit_text(_window: &Window, _text: &str) -> bool {
+    false
 }
 
 /// Posts a key press to the focused control of a window's thread (the
