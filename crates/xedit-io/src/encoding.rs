@@ -119,6 +119,15 @@ impl Encoding {
     }
 }
 
+/// Text of the OEM code page (`CP_OEMCP`), as `OemToChar` reads the output
+/// of a console program.
+pub fn oem_string(bytes: &[u8]) -> String {
+    if bytes.is_empty() {
+        return String::new();
+    }
+    platform::get_string(1, bytes).unwrap_or_else(|_| String::from_utf8_lossy(bytes).into_owned())
+}
+
 /// Delphi `AnsiCompareText` (and the order of `TStringList.Sort`): the
 /// comparison of the user's locale, ignoring case (`CompareString` with
 /// `NORM_IGNORECASE`); elsewhere the upper case strings by code unit.

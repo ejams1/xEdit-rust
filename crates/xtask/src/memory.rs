@@ -101,6 +101,35 @@ impl Limit {
         None
     }
 
+    /// The user and kernel CPU time of every process of the job (the child
+    /// and the processes it started) in 100 ns units.
+    #[cfg(windows)]
+    pub fn cpu_time(&self) -> u64 {
+        use windows_sys::Win32::System::JobObjects::{
+            JOBOBJECT_BASIC_ACCOUNTING_INFORMATION, JobObjectBasicAccountingInformation, QueryInformationJobObject,
+        };
+        let mut info = JOBOBJECT_BASIC_ACCOUNTING_INFORMATION::default();
+        // SAFETY: the job handle is open and the structure is large enough.
+        let queried = unsafe {
+            QueryInformationJobObject(
+                self.job,
+                JobObjectBasicAccountingInformation,
+                (&raw mut info).cast(),
+                size_of::<JOBOBJECT_BASIC_ACCOUNTING_INFORMATION>() as u32,
+                std::ptr::null_mut(),
+            )
+        };
+        if queried == 0 {
+            return 0;
+        }
+        (info.TotalUserTime + info.TotalKernelTime) as u64
+    }
+
+    #[cfg(not(windows))]
+    pub fn cpu_time(&self) -> u64 {
+        0
+    }
+
     /// Whether the process came within 1% of the cap, which means a
     /// failure was caused by the cap and says nothing about the dump.
     pub fn reached(&self) -> bool {

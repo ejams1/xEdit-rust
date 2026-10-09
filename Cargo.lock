@@ -1090,6 +1090,7 @@ dependencies = [
  "arc-swap",
  "rayon",
  "thiserror",
+ "windows-sys",
  "xedit-io",
 ]
 

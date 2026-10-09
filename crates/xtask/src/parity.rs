@@ -59,6 +59,7 @@ use crate::memory::{self, Budget, GIB, Limit};
 mod bsarch;
 mod gui;
 mod hidden;
+mod lodgen;
 mod nif;
 mod oracle_save;
 mod sniff;
@@ -301,6 +302,9 @@ pub fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
     }
     if let Some((&"sniff", rest)) = args.split_first() {
         return sniff::run(tag, rest);
+    }
+    if let Some((&"lodgen", rest)) = args.split_first() {
+        return lodgen::run(root, tag, rest);
     }
     let options = parse(args)?;
     // The round trip has no oracle binary: the input file is the oracle
@@ -1237,7 +1241,7 @@ fn is_vanilla(game: &Game, lower_name: &str) -> bool {
     })
 }
 
-fn build_port(root: &Path) -> Result<PathBuf> {
+pub(super) fn build_port(root: &Path) -> Result<PathBuf> {
     let status = Command::new(env!("CARGO"))
         .args(["build", "--release", "--package", "xedit-cli"])
         .current_dir(root)

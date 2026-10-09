@@ -180,6 +180,20 @@ impl MemIniFile {
         self.read_integer(section, ident, i32::from(default)) != 0
     }
 
+    /// `GetStrings` of `UpdateFile`: each section with its values, an empty
+    /// line after each, with CRLF.
+    pub fn to_text(&self) -> String {
+        let mut text = String::new();
+        for (section, values) in &self.sections {
+            text.push_str(&format!("[{section}]\r\n"));
+            for (name, value) in values {
+                text.push_str(&format!("{name}={value}\r\n"));
+            }
+            text.push_str("\r\n");
+        }
+        text
+    }
+
     /// `WriteString`: replaces the value or adds it, and the section.
     pub fn write_string(&mut self, section: &str, ident: &str, value: &str) {
         let index = match self.sections.iter().position(|(name, _)| ansi_same_text(name, section)) {
