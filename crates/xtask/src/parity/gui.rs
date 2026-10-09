@@ -210,7 +210,11 @@ impl GuiRun<'_> {
             peak,
             log,
             data,
-            saved_log: if extras.close_after { Some(self.read_log()?) } else { None },
+            saved_log: if extras.close_after {
+                Some(self.read_log()?)
+            } else {
+                None
+            },
         })
     }
 
