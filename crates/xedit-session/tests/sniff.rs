@@ -46,10 +46,7 @@ fn list_names_every_operation() {
     assert!(mopp["not_ported"].as_str().unwrap().contains("NifMopp.dll"));
     // It is the only one: every other operation has its processor and the
     // settings of its frame.
-    assert_eq!(
-        operations.iter().filter(|op| !op["not_ported"].is_null()).count(),
-        1
-    );
+    assert_eq!(operations.iter().filter(|op| !op["not_ported"].is_null()).count(), 1);
     let textures = operations.iter().find(|op| op["title"] == "Find textures").unwrap();
     assert_eq!(textures["files"], "*.dds");
     // It writes the files it copies unless `bReportOnly` is on.
@@ -61,7 +58,10 @@ fn list_names_every_operation() {
             .iter()
             .any(|setting| setting["name"] == "bHeaderDump" && setting["default"] == "0")
     );
-    let skeleton = operations.iter().find(|op| op["title"] == "Add blocks from skeleton").unwrap();
+    let skeleton = operations
+        .iter()
+        .find(|op| op["title"] == "Add blocks from skeleton")
+        .unwrap();
     assert!(
         skeleton["settings"]
             .as_array()

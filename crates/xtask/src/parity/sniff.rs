@@ -541,11 +541,7 @@ const CASES: &[Case] = &[
     Case {
         name: "find-textures-filter",
         operation: "Find textures",
-        settings: &[
-            ("sFormats", "71,77"),
-            ("sMipMaps", "Yes"),
-            ("sBlock Compressed", "Yes"),
-        ],
+        settings: &[("sFormats", "71,77"), ("sMipMaps", "Yes"), ("sBlock Compressed", "Yes")],
         prep: Prep::None,
     },
     Case {
