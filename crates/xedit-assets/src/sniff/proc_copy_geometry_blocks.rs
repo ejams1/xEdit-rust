@@ -309,6 +309,64 @@ impl Proc for ProcCopyGeometryBlocks {
 mod tests {
     use super::*;
 
+    /// A NIF with `Scene Root` and a `Child` node at `translation`: the
+    /// block names and types a copy matches on.
+    fn mesh(translation: &str) -> Vec<u8> {
+        let mut nif = NifFile::new().unwrap();
+        let tree = &mut nif.tree;
+        crate::data_format_nif::set_nif_version(tree, NifVersion::Fo3).unwrap();
+        let root = crate::data_format_nif::add_block(tree, "NiNode").unwrap();
+        tree.set_edit_values(root, "Name", "Scene Root").unwrap();
+        let child = crate::data_format_nif::block_add_child(tree, root, "NiNode").unwrap();
+        tree.set_edit_values(child, "Name", "Child").unwrap();
+        tree.set_edit_values(child, "Transform\\Translation", translation).unwrap();
+        nif.save_to_data().unwrap()
+    }
+
+    /// The single file mode: `OnStart` loads it once and every file is
+    /// copied from it (`bMatchingFiles=0`, `bCopyTransform=1`). The oracle
+    /// hangs in this mode, so a unit test stands in for the parity case.
+    #[test]
+    fn the_single_file_mode_copies_the_transform() {
+        let dir = std::env::temp_dir().join(format!("xedit-copy-geometry-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let source = dir.join("source.nif");
+        std::fs::write(&source, mesh("1 2 3")).unwrap();
+        std::fs::write(dir.join("target.nif"), mesh("0 0 0")).unwrap();
+
+        let mut proc = ProcCopyGeometryBlocks::new();
+        proc.copy_geom_checked = false;
+        proc.copy_transform_checked = true;
+        proc.matching_files_checked = false;
+        proc.source_text = source.display().to_string();
+        proc.on_start().unwrap();
+
+        let input = crate::sniff::processor::ProcInput {
+            archive: None,
+            input_directory: format!("{}\\", dir.display()),
+        };
+        let mut file = ProcFileObject {
+            input: &input,
+            file_name: "target.nif".to_owned(),
+            file_entry: None,
+        };
+        let data = proc
+            .process_file(&mut file, &mut crate::sniff::processor::ProcContext::default())
+            .unwrap();
+        assert!(!data.is_empty(), "the target was copied into");
+
+        let mut nif = NifFile::new().unwrap();
+        nif.load_from_data(&data).unwrap();
+        let tree = &mut nif.tree;
+        let child = crate::data_format_nif::block_by_name(tree, "Child", "NiNode").unwrap().unwrap();
+        assert_eq!(
+            tree.edit_values(child, "Transform\\Translation").unwrap(),
+            "1.000000 2.000000 3.000000"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     #[test]
     fn on_start_checks_the_settings() {
         // The defaults copy the geometry from matching files.
