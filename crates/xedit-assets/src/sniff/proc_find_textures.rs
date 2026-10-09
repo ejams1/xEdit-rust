@@ -232,6 +232,11 @@ impl Proc for ProcFindTextures {
         let mut prop;
 
         // BA2 DDS texture, get all props from the archive entry
+        // UPSTREAM-QUIRK: the `prop` record of `ProcessFile` is a local
+        // Delphi does not zero, and this branch never assigns `XBOX`, so
+        // the report prints `XBOX` where the stack holds a non-zero byte
+        // (every line of a Fallout 4 texture archive in the oracle run).
+        // The port reads it as false; nothing else differs.
         if ba2_dds {
             let entry = file.file_entry.ok_or_else(|| DfError::new("no archive entry"))?;
             let mut size = dds::HEADER_SIZE as i64;
