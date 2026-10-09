@@ -220,7 +220,6 @@ fn link(tree: &mut Tree, element: El, path: &str) -> R<Option<El>> {
     tree.links_to(element)
 }
 
-
 impl Proc for ProcVertexPaint {
     proc_base!();
 
@@ -235,8 +234,9 @@ impl Proc for ProcVertexPaint {
         self.all_white_checked = storage.get_bool("bAllWhite", self.all_white_checked);
         // `cbAdjustMod.ItemIndex := StorageGetInteger(...)` raises for an
         // out of range index, which the frame catches and resets to 0.
-        self.adjust_mod_index = match storage.get_integer("iAdjustMod", self.adjust_mod_index) {
-            0 | 1 => self.adjust_mod_index,
+        let adjust_mod = storage.get_integer("iAdjustMod", self.adjust_mod_index);
+        self.adjust_mod_index = match adjust_mod {
+            0 | 1 => adjust_mod,
             _ => 0,
         };
         self.adjust_h_text = storage.get_string("sAdjustH", "");
@@ -640,6 +640,22 @@ mod tests {
         adjust_color(&mut r, &mut g, &mut b, &mut a, 1, 0.5, 0.0, 0.0, 0.5);
         // A hue of 0.5 is cyan; the alpha is clamped to one.
         assert_eq!((r, g, b, a), (0, 255, 255, 1.0));
+    }
+
+    #[test]
+    fn the_adjust_mode_comes_from_the_settings() {
+        let settings = |text: &str| crate::sniff::processor::MemIniFile::from_text(text);
+        let ini = settings("[Vertexcolorpainting]\r\niMode=1\r\niAdjustMod=1\r\nsAdjustH=0.1\r\n");
+        let mut proc = ProcVertexPaint::new();
+        proc.on_show(&Storage::new("Vertexcolorpainting".to_owned(), Some(&ini)));
+        proc.on_start().unwrap();
+        assert_eq!(proc.adjust_mod, 1);
+        // An index the combo box does not have gives the first item.
+        let ini = settings("[Vertexcolorpainting]\r\niMode=1\r\niAdjustMod=7\r\nsAdjustH=0.1\r\n");
+        let mut proc = ProcVertexPaint::new();
+        proc.on_show(&Storage::new("Vertexcolorpainting".to_owned(), Some(&ini)));
+        proc.on_start().unwrap();
+        assert_eq!(proc.adjust_mod, 0);
     }
 
     #[test]

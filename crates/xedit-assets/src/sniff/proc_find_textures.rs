@@ -109,7 +109,7 @@ impl ProcFindTextures {
 /// %d Bit  %s  %s%s%s%s`.
 fn report_line(prop: &Properties) -> String {
     format!(
-        "\tWidth: {:04}  Height: {:04}  Size: {}    {} Bit  {}  {}{}{}{}",
+        "\tWidth: {:4}  Height: {:4}  Size: {}    {} Bit  {}  {}{}{}{}",
         prop.width,
         prop.height,
         format_size(prop.size),
@@ -370,7 +370,7 @@ mod tests {
         let mut prop = properties();
         assert_eq!(
             report_line(&prop),
-            "\tWidth: 0256  Height: 0128  Size: 32 KB    4 Bit  BC1_UNORM    MipMaps"
+            "\tWidth:  256  Height:  128  Size: 32 KB    4 Bit  BC1_UNORM    MipMaps"
         );
         prop.width = 1024;
         prop.height = 1024;

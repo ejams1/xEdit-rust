@@ -935,6 +935,14 @@ fn first_source_file(dir: &Path) -> Result<Option<PathBuf>> {
     Ok(files.into_iter().next())
 }
 
+/// The path of a file up to and including its folder delimiter.
+fn folder_of(name: &str) -> String {
+    match name.rfind(['\\', '/']) {
+        Some(index) => name[..=index].to_owned(),
+        None => String::new(),
+    }
+}
+
 /// The folder `Add blocks from skeleton` reads: the `death.kf` of the
 /// archive with a `skeleton.nif` beside it (the operation reads the
 /// skeleton from the folder of the animation). `false` when the archive
@@ -947,10 +955,21 @@ fn death_skeleton_folder(archive: &Archive, dir: &Path) -> Result<bool> {
     let Some(death) = death else {
         return Ok(false);
     };
+    // The `skeleton.nif` of the same folder, as a game ships them; the
+    // first one of the archive when the folder has none.
     let skeleton = archive
         .files()
         .iter()
-        .find(|entry| same_text(extract_file_name(&entry.name.replace('\\', "/")), "skeleton.nif"));
+        .find(|entry| {
+            same_text(extract_file_name(&entry.name.replace('\\', "/")), "skeleton.nif")
+                && folder_of(&entry.name).eq_ignore_ascii_case(&folder_of(&death.name))
+        })
+        .or_else(|| {
+            archive
+                .files()
+                .iter()
+                .find(|entry| same_text(extract_file_name(&entry.name.replace('\\', "/")), "skeleton.nif"))
+        });
     let Some(skeleton) = skeleton else {
         return Ok(false);
     };
@@ -960,11 +979,11 @@ fn death_skeleton_folder(archive: &Archive, dir: &Path) -> Result<bool> {
         return Ok(true);
     }
     let _ = fs::remove_dir_all(dir);
-    let folder = match death.name.rfind(['\\', '/']) {
-        Some(index) => &death.name[..=index],
-        None => "",
-    };
-    for (entry, name) in [(death, death.name.clone()), (skeleton, format!("{folder}skeleton.nif"))] {
+    let death_folder = folder_of(&death.name);
+    for (entry, name) in [
+        (death, death.name.clone()),
+        (skeleton, format!("{death_folder}skeleton.nif")),
+    ] {
         let path = dir.join(name.replace('\\', "/"));
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent)?;
