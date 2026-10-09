@@ -1,0 +1,7 @@
+{
+  "description": "Fallout New Vegas with its DLCs and packs: the leveled lists, containers and topics (Added Quests, merged in this game only) that several DLCs change.",
+  "game": "fnv",
+  "load": ["FalloutNV.esm", "DeadMoney.esm", "HonestHearts.esm", "OldWorldBlues.esm", "LonesomeRoad.esm", "GunRunnersArsenal.esm", "ClassicPack.esm", "MercenaryPack.esm", "TribalPack.esm", "CaravanPack.esm"],
+  "patch": "Merged Patch",
+  "answers": [{"class": "TInputQueryForm", "title": "New Module File", "text": "Merged Patch", "button": "OK"}]
+}

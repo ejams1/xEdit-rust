@@ -1,0 +1,27 @@
+{
+  "description": "Fallout 4 with its DLCs and an active mod group in which Far Harbor hides Automatron and Wasteland Workshop: the patch is the one made without mod groups, as the 4.1.5q handler ignores them.",
+  "game": "fo4",
+  "load": ["Fallout4.esm", "DLCRobot.esm", "DLCworkshop01.esm", "DLCCoast.esm", "DLCworkshop02.esm", "DLCworkshop03.esm", "DLCNukaWorld.esm"],
+  "patch": "Merged Patch",
+  "files": {
+    "DLCCoast.modgroups": [
+      "[Coast hides Robot and Workshop]",
+      "DLCRobot.esm",
+      "DLCworkshop01.esm",
+      "DLCCoast.esm"
+    ]
+  },
+  "settings": [
+    "[ModGroups]",
+    "Selection=\"Coast hides Robot and Workshop\"",
+    "[Init]",
+    "FirstStart=1"
+  ],
+  "menu": ["mniViewModGroupsReload"],
+  "answers": [
+    {"class": "TfrmModGroupSelect", "title": "Reloading", "button": "OK"},
+    {"class": "#32770", "title": "Warning", "button": "&Yes"},
+    {"class": "TInputQueryForm", "title": "New Module File", "text": "Merged Patch", "button": "OK"}
+  ],
+  "port": [{"command": "modgroups.select", "params": {"saved": true}}]
+}

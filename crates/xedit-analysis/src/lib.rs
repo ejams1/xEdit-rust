@@ -12,3 +12,4 @@ pub mod cleaning;
 pub mod conflict;
 pub mod diff;
 pub mod filter;
+pub mod merged_patch;

@@ -23,6 +23,7 @@ pub mod form_ids;
 mod info_sort;
 pub mod injected;
 pub mod masters;
+pub mod new_file;
 pub mod new_form_id;
 pub mod refcache;
 pub mod refs;
@@ -201,6 +202,7 @@ pub mod value;
 
 use crate::interface::ModuleType;
 pub use edit::Storage;
+pub use info_sort::master_records_from_master_files_and_self;
 pub use write::{ElementState, ResetModified, SaveError};
 
 use std::collections::HashMap;
@@ -1053,9 +1055,12 @@ impl FileImpl {
             }
             return None;
         }
+        // `for i := Pred(GetMasterCount(aNew)) downto 0`: of two masters with
+        // the slot (a file named twice, as the merged patch names the game
+        // master), the last one is taken.
         let index = masters
             .iter()
-            .position(|master| master.get_load_order_file_id() == file_id)?;
+            .rposition(|master| master.get_load_order_file_id() == file_id)?;
         Some(form_id.change_file_id(FileID::create_full(index as i16)))
     }
 

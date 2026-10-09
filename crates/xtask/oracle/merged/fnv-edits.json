@@ -1,0 +1,32 @@
+{
+  "description": "Fallout New Vegas with its DLCs and two plugins the port makes first, which change the same leveled list, container, NPC factions and form list in different ways: the patch merges the leveled list, the container and the factions; the form list is not sorted and its editor ID does not end in OrderedList, so it is left.",
+  "game": "fnv",
+  "load": ["FalloutNV.esm", "DeadMoney.esm", "HonestHearts.esm", "OldWorldBlues.esm", "LonesomeRoad.esm", "GunRunnersArsenal.esm", "ClassicPack.esm", "MercenaryPack.esm", "TribalPack.esm", "CaravanPack.esm"],
+  "make": [
+    {"command": "files.new", "params": {"file": "PatchTestA"}},
+    {"command": "records.copy", "params": {"form_id": "00000AA1", "to": "PatchTestA.esp", "from": "CaravanPack.esm"}},
+    {"command": "elements.set", "params": {"form_id": "00000AA1", "file": "PatchTestA.esp", "path": "Leveled List Entries\\[1]\\LVLO\\Count", "value": "3"}},
+    {"command": "elements.add", "params": {"form_id": "00000AA1", "file": "PatchTestA.esp", "path": "Leveled List Entries", "name": "Leveled List Entry"}},
+    {"command": "elements.set", "params": {"form_id": "00000AA1", "file": "PatchTestA.esp", "path": "Leveled List Entries\\[0]\\LVLO\\Item", "value": "00015197"}},
+    {"command": "elements.set", "params": {"form_id": "00000AA1", "file": "PatchTestA.esp", "path": "Leveled List Entries\\[0]\\LVLO\\Level", "value": "2"}},
+    {"command": "records.copy", "params": {"form_id": "0000000E", "to": "PatchTestA.esp", "from": "CaravanPack.esm"}},
+    {"command": "elements.set", "params": {"form_id": "0000000E", "file": "PatchTestA.esp", "path": "Items\\[0]\\CNTO\\Count", "value": "7"}},
+    {"command": "records.copy", "params": {"form_id": "000156F0", "to": "PatchTestA.esp", "from": "CaravanPack.esm"}},
+    {"command": "elements.remove", "params": {"form_id": "000156F0", "file": "PatchTestA.esp", "path": "Factions\\[0]"}},
+    {"command": "records.copy", "params": {"form_id": "00000163", "to": "PatchTestA.esp", "from": "CaravanPack.esm"}},
+    {"command": "elements.remove", "params": {"form_id": "00000163", "file": "PatchTestA.esp", "path": "FormIDs\\[0]"}},
+    {"command": "files.new", "params": {"file": "PatchTestB"}},
+    {"command": "records.copy", "params": {"form_id": "00000AA1", "to": "PatchTestB.esp", "from": "CaravanPack.esm"}},
+    {"command": "elements.remove", "params": {"form_id": "00000AA1", "file": "PatchTestB.esp", "path": "Leveled List Entries\\[3]"}},
+    {"command": "records.copy", "params": {"form_id": "0000000E", "to": "PatchTestB.esp", "from": "CaravanPack.esm"}},
+    {"command": "elements.remove", "params": {"form_id": "0000000E", "file": "PatchTestB.esp", "path": "Items\\[5]"}},
+    {"command": "records.copy", "params": {"form_id": "000156F0", "to": "PatchTestB.esp", "from": "CaravanPack.esm"}},
+    {"command": "elements.set", "params": {"form_id": "000156F0", "file": "PatchTestB.esp", "path": "Factions\\[2]\\Rank", "value": "2"}},
+    {"command": "records.copy", "params": {"form_id": "00000163", "to": "PatchTestB.esp", "from": "CaravanPack.esm"}},
+    {"command": "elements.remove", "params": {"form_id": "00000163", "file": "PatchTestB.esp", "path": "FormIDs\\[1]"}}
+  ],
+  "patch": "Merged Patch",
+  "answers": [
+    {"class": "TInputQueryForm", "title": "New Module File", "text": "Merged Patch", "button": "OK"}
+  ]
+}

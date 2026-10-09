@@ -1,0 +1,10 @@
+{
+  "description": "Fallout 4 with its six DLCs: leveled lists, containers, form lists, NPCs and the keywords of items that several DLCs change. The handler warns that the merged patch is unsupported for the game first.",
+  "game": "fo4",
+  "load": ["Fallout4.esm", "DLCRobot.esm", "DLCworkshop01.esm", "DLCCoast.esm", "DLCworkshop02.esm", "DLCworkshop03.esm", "DLCNukaWorld.esm"],
+  "patch": "Merged Patch",
+  "answers": [
+    {"class": "#32770", "title": "Warning", "button": "&Yes"},
+    {"class": "TInputQueryForm", "title": "New Module File", "text": "Merged Patch", "button": "OK"}
+  ]
+}

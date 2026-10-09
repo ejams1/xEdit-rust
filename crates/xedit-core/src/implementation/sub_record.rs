@@ -1888,7 +1888,12 @@ impl Element for SubRecordImpl {
     /// the resolved value, or of the definition.
     fn get_display_name(&self, use_suffix: bool) -> String {
         let mut result = self.get_name_signature();
-        if let Some(value_def) = self.value_def()
+        // Upstream reads `srValueDef` as it is: a subrecord that was not
+        // initialised yet has none, and asking for its display name (as
+        // `ElementByName` does for every member it compares) does not
+        // build its elements, which would sort a sorted array of them.
+        let value_def = self.sr_value_def.read().unwrap().clone();
+        if let Some(value_def) = value_def
             && !value_def.get_name().is_empty()
         {
             return format!("{result} - {}", value_def.get_name());

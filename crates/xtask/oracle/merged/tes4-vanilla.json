@@ -1,0 +1,9 @@
+{
+  "description": "Oblivion with its official plugins (.esp files, ordered by their dates): the leveled lists, containers, factions, races, NPCs and creatures that the Shivering Isles and the smaller DLCs change.",
+  "game": "tes4",
+  "load": ["Oblivion.esm", "DLCShiveringIsles.esp", "Knights.esp", "DLCBattlehornCastle.esp", "DLCFrostcrag.esp", "DLCHorseArmor.esp", "DLCMehrunesRazor.esp", "DLCOrrery.esp", "DLCSpellTomes.esp", "DLCThievesDen.esp", "DLCVileLair.esp"],
+  "patch": "Merged Patch",
+  "answers": [
+    {"class": "TInputQueryForm", "title": "New Module File", "text": "Merged Patch", "button": "OK"}
+  ]
+}

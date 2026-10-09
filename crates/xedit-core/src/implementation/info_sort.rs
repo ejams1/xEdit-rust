@@ -290,7 +290,7 @@ fn fill_pnam_of(list: &EntryList, target: &Arc<MainRecordImpl>, prev: Option<usi
 
 /// Port of `MasterRecordsFromMasterFilesAndSelf`: the versions of the record
 /// up to itself that are in its own file or a master of it.
-fn master_records_from_master_files_and_self(record: &Arc<MainRecordImpl>) -> Vec<Arc<MainRecordImpl>> {
+pub fn master_records_from_master_files_and_self(record: &Arc<MainRecordImpl>) -> Vec<Arc<MainRecordImpl>> {
     let Some(master) = record.master() else {
         return vec![record.clone()];
     };

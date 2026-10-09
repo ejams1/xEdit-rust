@@ -112,6 +112,11 @@ enum Action {
         #[command(subcommand)]
         action: MastersAction,
     },
+    /// Patches built from the loaded plugins.
+    Patch {
+        #[command(subcommand)]
+        action: PatchAction,
+    },
     /// Mod groups: the .modgroups files that say which records of a load order hide others, the saved selection, and their CRC32s.
     Modgroups {
         #[command(subcommand)]
@@ -504,6 +509,20 @@ enum SessionAction {
 enum FilesAction {
     /// List the loaded files with their masters and record counts.
     List,
+    /// Make a new empty plugin in the data folder with the game master as its master (files.new, AddNewFile); it exists in memory until saved, so use it in batch or serve. Needs --edit unless --dry-run.
+    New {
+        /// File name; the extension is replaced by .esp, or .esl with --light, as xEdit does.
+        file: String,
+        /// A light module (ESL flag).
+        #[arg(long)]
+        light: bool,
+        /// A medium module (Starfield).
+        #[arg(long)]
+        medium: bool,
+        /// Check the name, make nothing.
+        #[arg(long)]
+        dry_run: bool,
+    },
     /// Read or set the module flags of a plugin header (files.flags). Needs --edit unless --dry-run; --dry-run alone reads them.
     Flags {
         /// Plugin name; the only loaded plugin when omitted.
@@ -1061,6 +1080,27 @@ enum ElementsAction {
 }
 
 #[derive(Subcommand)]
+enum PatchAction {
+    /// Create a merged patch (patch.merged, xEdit's "Create Merged Patch"): a new .esp in the data folder whose overrides merge the leveled lists, container items, factions, keywords and the other lists that several loaded plugins change, with every loaded file it needs as a master; then save it. Needs --edit unless --dry-run, which lists what would be merged.
+    Merged {
+        /// File name of the patch; the extension is replaced by .esp, as xEdit does.
+        file: String,
+        /// List the records and lists the patch would merge; make no plugin.
+        #[arg(long)]
+        dry_run: bool,
+        /// Keep the patch in memory only (for batch and serve, where files.save follows).
+        #[arg(long)]
+        no_save: bool,
+        /// Where to save the patch; the data folder when omitted.
+        #[arg(long)]
+        output: Option<String>,
+        /// Do not move an existing file at the output path to the backup folder.
+        #[arg(long)]
+        no_backup: bool,
+    },
+}
+
+#[derive(Subcommand)]
 enum MastersAction {
     /// Add loaded plugins as masters (masters.add, AddMastersIfMissing), then sort the masters by load order. Needs --edit unless --dry-run.
     Add {
@@ -1114,6 +1154,18 @@ fn command_of(action: Action) -> Result<(String, Value), CommandError> {
         Action::Files {
             action: FilesAction::List,
         } => ("files.list".to_owned(), json!({})),
+        Action::Files {
+            action:
+                FilesAction::New {
+                    file,
+                    light,
+                    medium,
+                    dry_run,
+                },
+        } => (
+            "files.new".to_owned(),
+            json!({ "file": file, "light": light, "medium": medium, "dry_run": dry_run }),
+        ),
         Action::Files {
             action:
                 FilesAction::Flags {
@@ -1447,6 +1499,20 @@ fn command_of(action: Action) -> Result<(String, Value), CommandError> {
             } => (
                 "elements.remove".to_owned(),
                 json!({ "form_id": form_id, "path": path, "file": file, "dry_run": dry_run }),
+            ),
+        },
+        Action::Patch { action } => match action {
+            PatchAction::Merged {
+                file,
+                dry_run,
+                no_save,
+                output,
+                no_backup,
+            } => (
+                "patch.merged".to_owned(),
+                json!({
+                    "file": file, "dry_run": dry_run, "save": !no_save, "output": output, "backup": !no_backup
+                }),
             ),
         },
         Action::Masters { action } => match action {
