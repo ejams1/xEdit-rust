@@ -111,7 +111,11 @@ pub const PROCS: &[ProcEntry] = &[
         proc_find_draw_calls::ProcFindDrawCalls
     ),
     ported!("Report", "Find UVs", proc_find_uvs::ProcFindUVs),
-    pending!("Report", "Find textures", "needs wbDDS (phase 5 step 2)"),
+    pending!(
+        "Report",
+        "Find textures",
+        "wbDDS is ported (xedit_io::dds); the processor is phase 5 step 5"
+    ),
     pending!("Animation", "Copy anim controlled blocks", STEP_5),
     ported!(
         "Animation",

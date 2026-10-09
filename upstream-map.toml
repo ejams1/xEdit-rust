@@ -9,7 +9,7 @@ commit = "fd1e36020b2b5b6217e553dc0038983146a2e2dd"
 [units."BSArch.dpr"]
 status = "ported"
 rust = "crates/bsarch/src/main.rs"
-note = "The console tool: info with -list and -dump, pack and unpack, with the arguments and the text of BSArch.exe (the usage is the oracle's, byte for byte). The pack options -tes3 to -sf1dds, -z, -split, -f, -share, -mt, -af and -ff are accepted; the texture formats (-fo4dds, -sf1dds) stop with the error of phase 5 step 2. Extension: -threads:N."
+note = "The console tool: info with -list and -dump, pack and unpack, with the arguments and the text of BSArch.exe (the usage is the oracle's, byte for byte). The pack options -tes3 to -sf1dds, -z, -split, -f, -share, -mt, -af and -ff are accepted, the texture formats (-fo4dds, -sf1dds) included. Extension: -threads:N."
 
 [units."BSArch/baDefines.inc"]
 status = "pending"
@@ -39,9 +39,9 @@ rust = "crates/xedit-core/src/container_handler.rs"
 note = "The container handler: AddFolder, AddBSA, ContainerExists, ContainerList, OpenResource, OpenResourceData, the resource listings (ContainerResourceList, ContainerResourceDict, ResourceExists, ResourceCount, ResourceCopy) and the file and folder hash tables (BuildCache, ResolveFileHash, ResolveFolderHash, wired into wbFileHashCallback and wbFolderHashCallback behind wbLoaderDone). DEVIATION: BuildCache reads <game>.HashSeed.txt but does not write the .txt2 file beside the program. The unit has no texture helpers in this tag."
 
 [units."Core/wbBSArchive.pas"]
-status = "pending"
+status = "ported"
 rust = "crates/xedit-io/src/archive"
-note = "TwbAsset, TwbBSArchive (reading and writing every BSA, Morrowind and general BA2 version; listing, Info and Warnings; the DX10 file table), TwbSplitPacker and TwbMultiSourcePacker (the steps of Process in upstream's single-thread order with the reading and compressing on all CPUs) are ported; the output equals BSArch.exe -mt:no for every thread count (cargo xtask parity bsarch). Pending, for phase 5 step 2: the DDS code of TwbBSArchive.Pack and Unpack and of LoadFile for the texture archives, in archive/texture.rs."
+note = "TwbAsset, TwbBSArchive (reading and writing every BSA, Morrowind and general BA2 version, the DX10 texture archives included: the DDS branches of Pack and Unpack and of TwbSplitPacker.LoadFile are archive/texture.rs; listing, Info and Warnings), TwbSplitPacker and TwbMultiSourcePacker (the steps of Process in upstream's single-thread order with the reading and compressing on all CPUs) are ported; the output equals BSArch.exe -mt:no for every thread count (cargo xtask parity bsarch, texture archives included). Not ported: the stream-to-stream overloads of wbCompression have no caller. DEVIATION: a texture whose data ends before its last mipmap is cut where the data ends in the route without a packer too (upstream reads past the buffer there)."
 
 [units."Core/wbBetterStringList.pas"]
 status = "pending"
@@ -55,8 +55,9 @@ rust = "crates/xedit-io/src/compression.rs"
 note = "Decompression and compression of every type: zlib (libdeflate level 12 up to 8 MiB, zlib's compress2 level 9 beyond), LZ4 (LZ4_compress_HC level 12) and LZ4F (LZ4F_compressFrame, independent 4 MB blocks), from the C libraries upstream links (lz4 1.10 gives the bytes of the oracle). The stream-to-stream overloads (ZCompressStream, LZ4FCompressStream, TLZ4.Stream_Decode) have no caller in the port and are pending."
 
 [units."Core/wbDDS.pas"]
-status = "pending"
-
+status = "ported"
+rust = "crates/xedit-io/src/dds.rs"
+note = "TwbDDS (IsDDS, IsXBOX, IsCubeMap, HasAlpha, IsCompressed, HeaderDX10, HeaderXBOX, GetHeaderSize, GetMipSize, GetTileMode, GetDXGIFormatName, GetDXGI, GetD3DFMT, GetD3DFMTFormatName, SetUpHeader, GetBitsPerPixel, ConvertR8G8B8toB8G8R8X8) with the TDXGI and TD3DFORMAT numbers, the header records as DdsHeader, DdsHeaderDx10 and DdsHeaderXbox read from and written to byte slices, and the format sets. The conversion of 24 bit pixels runs on SSSE3 or AVX2 (simd.rs) with a scalar version that gives the same bytes; the half-float arrays of xedit-core/src/half_float.rs are the port's addition (F16C, scalar fallback, the same bits for all 2^32 singles)."
 [units."Core/wbDataFormat.pas"]
 status = "ported"
 rust = "crates/xedit-assets/src/data_format.rs"
@@ -294,7 +295,7 @@ note = "The frame is the processor's fields with the .dfm defaults (on_show); ch
 [units."Sniff/Proc/ProcCheckForErrors.pas"]
 status = "pending"
 rust = "crates/xedit-assets/src/sniff/proc_check_for_errors.rs"
-note = "Every mesh check. Missing: the texture checks CheckDDS and CheckSSEDdsFormat, which need wbDDS (phase 5 step 2); a DDS file fails with a message while they are on."
+note = "Every mesh check. Missing: the texture checks CheckDDS and CheckSSEDdsFormat (phase 5 step 5; wbDDS is ported in xedit_io::dds: is_dds, dxgi, d3dfmt, D3D_NODXGI, d3dfmt_format_name and the header record); a DDS file fails with a message while they are on."
 
 [units."Sniff/Proc/ProcCollapseLinksArrays.pas"]
 status = "not-ported"
@@ -325,7 +326,7 @@ note = "The frame is the processor's fields with the .dfm defaults (on_show); ch
 
 [units."Sniff/Proc/ProcFindTextures.pas"]
 status = "pending"
-note = "Needs wbDDS (phase 5 step 2)."
+note = "Phase 5 step 5. wbDDS is ported (xedit_io::dds: is_dds, dxgi, dxgi_format_name, bits_per_pixel, is_compressed, has_alpha, is_cube_map, is_xbox, d3dfmt, d3dfmt_format_name, MAX_HEADER_SIZE, the header record), and the entry of a texture archive has the DDS record (ProcFileObject.file_entry.dds, is_cube_map, dxgi_format_name)."
 
 [units."Sniff/Proc/ProcFindUVs.pas"]
 status = "ported"

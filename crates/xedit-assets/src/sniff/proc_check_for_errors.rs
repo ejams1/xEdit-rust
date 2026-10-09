@@ -7,8 +7,9 @@
 //! `Check for errors`: a list of checks of meshes and textures that report
 //! what would break or slow the game; each check is a setting of its own,
 //! named after the check. The texture checks (`CheckDDS`,
-//! `CheckSSEDdsFormat`) read the DDS header with `wbDDS`, which is phase 5
-//! step 2: a DDS file fails with a message saying so while they are on.
+//! `CheckSSEDdsFormat`) read the DDS header with `wbDDS` (`xedit_io::dds`,
+//! ported in phase 5 step 2) and are phase 5 step 5's: a DDS file fails with a
+//! message saying so while they are on.
 
 use crate::data_format::{DfError, El, R, Tree, df_float_to_str};
 use crate::data_format_nif::{
@@ -35,7 +36,7 @@ struct Check {
     extensions: &'static [&'static str],
     #[allow(dead_code)]
     comment: &'static str,
-    /// The check, or `None` for a texture check, which needs `wbDDS`.
+    /// The check, or `None` for a texture check (phase 5 step 5).
     proc: Option<CheckProc>,
     active: bool,
 }
@@ -2790,9 +2791,7 @@ impl Proc for ProcCheckForErrors {
         let mut log: Vec<String> = Vec::new();
         let ext = extract_file_ext(&file.file_name).to_owned();
         if self.load_dds && same_text(&ext, ".dds") {
-            return Err(DfError::new(
-                "The texture checks need wbDDS, which is not ported yet (phase 5 step 2)",
-            ));
+            return Err(DfError::new("The texture checks are not ported yet (phase 5 step 5)"));
         }
         if self.load_nif && !same_text(&ext, ".dds") {
             let mut nif = NifFile::new()?;

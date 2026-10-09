@@ -10,7 +10,8 @@
 //! the containers (`ContainerResourceList`, `ContainerResourceDict`,
 //! `ResourceExists`, `ResourceCount`, `ResourceCopy`, `OpenResourceData`) and
 //! the tables that give a file or folder hash its name (`ResolveFileHash`,
-//! `ResolveFolderHash`). The texture helpers belong to the DDS code.
+//! `ResolveFolderHash`). The one texture helper of the unit, the `.ddx` name that
+//! `BuildCache` adds for a `.dds` file before Skyrim, is in `build_cache`.
 
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};

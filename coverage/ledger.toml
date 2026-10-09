@@ -2955,9 +2955,10 @@ command = "archive.pack"
 note = "bsarch accepts it with the upstream spelling (-fo4); xedit archive pack takes it as an option of the same meaning."
 
 [switch.fo4dds]
-status = "pending"
+status = "covered"
 source = "BSArch.dpr"
-note = "bsarch accepts -fo4dds; packing a texture archive needs the DDS code of phase 5 step 2."
+command = "archive.pack"
+note = "bsarch accepts it with the upstream spelling (-fo4dds); xedit archive pack takes the format fo4dds. Checked against BSArch.exe by cargo xtask parity bsarch."
 
 [switch.forcebsa]
 status = "pending"
@@ -3226,9 +3227,10 @@ command = "archive.pack"
 note = "bsarch accepts it with the upstream spelling (-sf1); xedit archive pack takes it as an option of the same meaning."
 
 [switch.sf1dds]
-status = "pending"
+status = "covered"
 source = "BSArch.dpr"
-note = "bsarch accepts -sf1dds; packing a texture archive needs the DDS code of phase 5 step 2."
+command = "archive.pack"
+note = "bsarch accepts it with the upstream spelling (-sf1dds); xedit archive pack takes the format sf1dds. Checked against BSArch.exe by cargo xtask parity bsarch."
 
 [switch.share]
 status = "covered"
