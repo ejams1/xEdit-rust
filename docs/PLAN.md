@@ -145,7 +145,7 @@ The review checks:
 - **Model:** Opus 5.5 for NIF, Sniff and LODGen. Sonnet 5.5 for BSA, BA2 and DDS, which are well-specified container formats.
 - **Port:** BSA and BA2 read and write, DDS, BSArch, NIF and material formats, Wwise, Sniff operations, LODGen.
 - **CLI:** `bsarch` with the upstream arguments, `xedit archive list|extract|pack`, `sniff <operation>`, `xedit lodgen`.
-- **Skills:** Asset skills: archive handling, NIF batch operations.
+- **Skills:** Asset skills: `handling-archives` (archive handling: `xedit archive list|extract|pack` and the `bsarch` binary) and `nif-batch-operations` (the Sniff batch operations and `xedit lodgen`).
 - **Performance:** Parallel pack and unpack. SIMD for half-float conversion, hashing and texture block processing.
 - **Gate:** Packed archives are byte-identical to BSArch output. Sniff and LODGen outputs equal the oracle. Met 2026-10-09: the packed archives are byte-identical to `BSArch.exe -mt:no` and the Sniff and LODGen outputs equal the oracle on the corpus (the numbers are in Status).
 - **Steps** (one pull request, `phase-5-assets`; each step lands with its own check; steps 1 and 3 can start at once, the others wait for the steps named):
