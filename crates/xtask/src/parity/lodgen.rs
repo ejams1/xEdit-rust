@@ -970,14 +970,21 @@ const SPLIT_ENDS: &[&str] = &[
     "Trees LOD atlas texture not found.",
 ];
 
+/// Whether a line of the memo log is the last message of the split of a
+/// worldspace. The message log is read from the GUI's memo control, whose
+/// text can end in a run of NUL characters right after the last line (it
+/// has no line break; the `sse-split` run read 26841 of them), so they are
+/// trimmed like the whitespace (`log_lines` trims them the same way).
+fn split_end(line: &str) -> bool {
+    let line = line.trim_end_matches(|c: char| c.is_whitespace() || c == '\0');
+    SPLIT_ENDS.iter().any(|end| line.ends_with(end))
+}
+
 /// Whether the oracle's log shows the end of the case: the generator's
 /// closing line, or the last message of the split of each worldspace.
 fn finished(log: &str, case: &Case) -> bool {
     if case.split {
-        log.lines()
-            .filter(|line| SPLIT_ENDS.iter().any(|end| line.trim_end().ends_with(end)))
-            .count()
-            >= case.worldspaces.len()
+        log.lines().filter(|line| split_end(line)).count() >= case.worldspaces.len()
     } else {
         log.contains("LOD Generator: finished")
     }
@@ -1474,4 +1481,36 @@ fn run_port(
     }
     fs::write(side.join("log.txt"), &log)?;
     collect(&side, &work_text, &root_text, &log)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The message log of the GUI's memo ends in NUL characters, without a
+    /// line break after the last message (`sse-split`: the 4th end was not
+    /// counted, so the run never finished).
+    #[test]
+    fn a_split_end_is_seen_through_the_nul_padding() {
+        assert!(split_end("[Split atlas] Done."));
+        assert!(split_end("[Split atlas] Done.\r"));
+        assert!(split_end("[Split atlas] Done.\0\0\0\0"));
+        assert!(split_end(
+            "[Meshes\\Terrain\\Blackreach\\Trees\\Blackreach.lst] Worldspace doesn't have a Trees LOD list file.\0\0"
+        ));
+        assert!(!split_end("[Tamriel] Saving billboard texture\0\0"));
+        assert!(!split_end(""));
+    }
+
+    #[test]
+    fn a_split_case_finishes_on_one_end_per_worldspace() {
+        let case = CASES.iter().find(|case| case.name == "sse-split").unwrap();
+        let mut log = String::new();
+        for _ in 0..3 {
+            log.push_str("[Split atlas] Done.\r\n");
+        }
+        assert!(!finished(&log, case));
+        log.push_str("[Split atlas] Done.\0\0\0\0");
+        assert!(finished(&log, case));
+    }
 }

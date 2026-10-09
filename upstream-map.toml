@@ -58,6 +58,7 @@ note = "Decompression and compression of every type: zlib (libdeflate level 12 u
 status = "ported"
 rust = "crates/xedit-io/src/dds.rs"
 note = "TwbDDS (IsDDS, IsXBOX, IsCubeMap, HasAlpha, IsCompressed, HeaderDX10, HeaderXBOX, GetHeaderSize, GetMipSize, GetTileMode, GetDXGIFormatName, GetDXGI, GetD3DFMT, GetD3DFMTFormatName, SetUpHeader, GetBitsPerPixel, ConvertR8G8B8toB8G8R8X8) with the TDXGI and TD3DFORMAT numbers, the header records as DdsHeader, DdsHeaderDx10 and DdsHeaderXbox read from and written to byte slices, and the format sets. The conversion of 24 bit pixels runs on SSSE3 or AVX2 (simd.rs) with a scalar version that gives the same bytes; the half-float arrays of xedit-core/src/half_float.rs are the port's addition (F16C, scalar fallback, the same bits for all 2^32 singles)."
+
 [units."Core/wbDataFormat.pas"]
 status = "ported"
 rust = "crates/xedit-assets/src/data_format.rs"
@@ -192,7 +193,9 @@ rust = "crates/xedit-core/src/interface"
 note = "The definition classes are ported by hand, with FromEditValue, FromNativeValue and SetToDefault for every value definition and formater. MastersUpdated and FindUsedMasters of the definitions and formaters (TwbIntegerDef, TwbFormIDDefFormater, TwbIntegerDefFormaterUnion, TwbStringMgefCodeDef), FixupFormID and TwbSlotCounts.Create are ported (form_id.rs). The builder functions are generated into builders.rs by cargo xtask port-defs emit, with their constructors in constructors.rs. CompareExchangeFormID is ported for TwbIntegerDef, TwbFormIDDefFormater and TwbIntegerDefFormaterUnion, and the flag setters of TwbMainRecordStructFlags with the mutual exclusion of the light, medium and update flags. Assign and CanAssign of every definition and formater are ported (def.rs and the files of the classes). The threadvars _InternalEditCount and _BlockInternalEdit are thread locals (globals.rs). Pending: SetLinksTo, PrepareSave of the definitions, and the rest of the unit."
 
 [units."Core/wbLOD.pas"]
-status = "pending"
+status = "ported"
+rust = "crates/xedit-assets/src/lod"
+note = '''The whole unit: the trees LOD (TwbLodTES5Tree, TwbLodTES5TreeList, TwbLodTES5TreeBlock, TwbLodTES5TreeType and TwbLodLODType in trees.rs: the .lst list, the .btt and .dtl blocks, the atlas rectangles), the texture atlases with their map (atlas.rs: TwbBinPacker, wbBuildAtlas, wbBuildAtlasFromTexturesList, wbGetUVRangeTexturesList, wbPrepareImageAlpha), TwbLodSettings, and the distant LOD of Oblivion, the trees and objects LOD of Skyrim, the Fallouts and Fallout 4 with the export file of LODGenx64.exe (generate.rs: wbGenerateLODTES4, wbGenerateLODTES5, wbGenerateLODFO4, wbSplitTreeLOD, wbLODSettingsFileName, wbLODExtraOptionsFileName, wbLODTreeBlockFileExt, wbDefaultNormalTexture and wbDefaultSpecularTexture). The textures go through the part of the Vampyre Imaging Library xEdit uses (crates/xedit-assets/src/imaging). Checked with the GUI's LODGen mode by cargo xtask parity lodgen (20 cases of FO4, SSE, FNV, FO3 and Oblivion, the split of the trees atlases included). Not checked: wbBuildAtlasFromAtlasMap and the canvas gamma are reached only from scripts (phase 6); the FO4 export path and the LODGenx64.exe objects meshes are unreachable on vanilla data (the LOD model path wbGetLODMeshName reads, MNAM\LOD #n (Level n)\Mesh, is not in the 4.1.5q definitions).'''
 
 [units."Core/wbLoadOrder.pas"]
 status = "pending"
