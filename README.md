@@ -3,6 +3,31 @@ Rebuild of the xEdit project in Rust. Additionally features CLI control of all x
 
 The build plan is in [docs/PLAN.md](docs/PLAN.md).
 
+## Progress
+
+Overall: 4 of 10 phases merged.
+
+```text
+[########............] 40%   phases 0-3 of 0-9 merged into main
+```
+
+| Phase | Scope | Progress | State |
+| --- | --- | --- | --- |
+| 0 | Foundations | `[##########]` | Merged |
+| 1 | Read path for the first games | `[##########]` | Merged |
+| 2 | All games and saves | `[##########]` | Merged |
+| 3 | Write path and daemon | `[##########]` | Merged (PR #12) |
+| 4 | Analysis and tool modes | `[#####.....]` 5 of 10 steps | In progress, draft PR #13 |
+| 5 | Archives, assets and LOD | `[######....]` 4 of 7 steps | In progress, draft PR #14 |
+| 6 | Scripting | `[..........]` | Not started |
+| 7 | GUI | `[..........]` | Not started |
+| 8 | Performance | `[..........]` | Not started |
+| 9 | Release and cutover | `[..........]` | Not started |
+
+The overall bar counts merged phases only: 2 cells per phase out of 20. A phase on a draft pull request counts once it merges. Per-phase bars have 10 cells and show completed steps as a share of the phase's steps, as listed in [docs/PLAN.md](docs/PLAN.md).
+
+**Keep this section current.** Update it in the same pull request whenever a step lands, a phase starts or a phase merges: redraw the bars, change the step counts and the state column, and update the overall percentage.
+
 ## Goals
 
 - Port xEdit to Rust with 1:1 functionality*
