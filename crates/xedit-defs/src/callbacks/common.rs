@@ -3087,9 +3087,19 @@ pub fn wb_crowd_property_to_str(
     a_value.push_str(&format!(" {{Curve Table: {}}}", main_record.get_short_name()));
 }
 
-/// Upstream `wbLGDIFiltersToStr`: the legendary mod of the star slot the
-/// filter selects.
+/// Upstream `wbLGDIFiltersToStr` of `wbDefinitionsCommon`: the legendary mod
+/// of the star slot the filter selects.
+///
+/// UPSTREAM-QUIRK: upstream has this routine twice with the same signature,
+/// this one in `wbDefinitionsCommon.pas` and an older, simpler one in
+/// `wbDefinitionsFO76.pas` (line 1703) which the Fallout 76 definitions call.
+/// The transpiler keeps one routine per name and signature, so the two are
+/// one function here and the Fallout 76 body is chosen by the game mode
+/// ([`wb_lgdi_filters_to_str_fo76`]).
 pub fn wb_lgdi_filters_to_str(a_int: i64, a_element: ElementArg, a_type: CallbackType) -> String {
+    if game_mode() == GameMode::gmFO76 {
+        return wb_lgdi_filters_to_str_fo76(a_element);
+    }
     const WARNING: &str = "<Warning: Could not resolve mod index>";
     let mut result = match a_type {
         CallbackType::ctToStr => format!("{a_int} {WARNING}"),
@@ -3193,6 +3203,67 @@ pub fn wb_lgdi_filters_to_str(a_int: i64, a_element: ElementArg, a_type: Callbac
         _ => result = format!("{mod_index:02}"),
     }
     format!("{result} {name}")
+}
+
+/// Upstream `wbLGDIFiltersToStr` of `wbDefinitionsFO76`, line 1703: the older
+/// copy of the routine the Fallout 76 definitions call. It ignores the
+/// callback type, answers 'Unknown Ref' where the filter does not resolve and
+/// otherwise the edit value of the legendary mod of the star slot the filter
+/// selects.
+fn wb_lgdi_filters_to_str_fo76(a_element: ElementArg) -> String {
+    const UNKNOWN: &str = "Unknown Ref";
+    let Some(element) = a_element else {
+        return UNKNOWN.to_owned();
+    };
+    let Some(filter) = element.get_container() else {
+        return UNKNOWN.to_owned();
+    };
+    if filter.as_container().is_none() {
+        return UNKNOWN.to_owned();
+    }
+    let Some(main_record) = element.get_containing_main_record() else {
+        return UNKNOWN.to_owned();
+    };
+    let Some(legendary_mods) = main_record.get_element_by_signature(Signature::new(b"BNAM")) else {
+        return UNKNOWN.to_owned();
+    };
+    let Some(legendary_mods) = legendary_mods.as_container() else {
+        return UNKNOWN.to_owned();
+    };
+    let Some(star_slot) = filter.as_container().and_then(|filter| filter.get_element(0)) else {
+        return UNKNOWN.to_owned();
+    };
+    let base_star_slot = variant_int(&star_slot.get_native_value());
+    let mod_index = variant_int(&element.get_native_value());
+    let mut legendary_index = None;
+    for index in 0..legendary_mods.get_element_count() {
+        let Some(legendary_mod) = legendary_mods.get_element(index) else {
+            continue;
+        };
+        let Some(legendary_mod) = legendary_mod.as_container() else {
+            continue;
+        };
+        let Some(star_slot) = legendary_mod.get_element(0) else {
+            continue;
+        };
+        if variant_int(&star_slot.get_native_value()) == base_star_slot {
+            legendary_index = Some(i64::from(index) + mod_index);
+            break;
+        }
+    }
+    let Some(index) = legendary_index.and_then(|index| i32::try_from(index).ok()) else {
+        return UNKNOWN.to_owned();
+    };
+    let Some(legendary_mod) = legendary_mods.get_element(index) else {
+        return UNKNOWN.to_owned();
+    };
+    let Some(legendary_mod) = legendary_mod.as_container() else {
+        return UNKNOWN.to_owned();
+    };
+    legendary_mod
+        .get_element(1)
+        .map(|mod_base| mod_base.get_edit_value())
+        .unwrap_or_else(|| UNKNOWN.to_owned())
 }
 
 /// Upstream `wbLGDIRankSlotArrayShouldInclude`: the array of a rank slot
