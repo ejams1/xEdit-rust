@@ -13,7 +13,7 @@ use serde_json::json;
 use xedit_core::implementation::{FileBytes, FileImpl, wb_file_from_bytes};
 use xedit_core::interface::globals::{set_data_path, test_lock};
 use xedit_core::interface::types::FileStates;
-use xedit_core::interface::{GameMode, Variant};
+use xedit_core::interface::{Container, GameMode, Variant};
 use xedit_session::{Registry, Session};
 
 fn sub_record(signature: &[u8; 4], data: &[u8]) -> Vec<u8> {
@@ -111,20 +111,16 @@ fn load() -> (Vec<Arc<FileImpl>>, Session) {
 
 /// The references of the entries of the patch's leveled list.
 fn patch_entries(session: &mut Session) -> Vec<u64> {
-    let result = Registry::standard()
-        .call(
-            session,
-            "records.get",
-            json!({ "form_id": "00000800", "file": "Merged.esp" }),
-        )
-        .unwrap();
-    let _ = result;
+    let _ = session;
     let file = xedit_core::interface::files()
         .into_iter()
         .find(|file| file.get_name() == "Merged.esp")
+        .and_then(|file| file.as_element_impl()?.file_impl())
         .unwrap();
-    let record = file.get_record_by_form_id(xedit_core::interface::FormID::from_cardinal(0x800), true, true);
-    let record = record.expect("the patch overrides the list").unwrap();
+    // The game master is the patch's master twice, and its FormIDs point to
+    // the second entry, as in xEdit's patches.
+    let record = file.records().into_iter().next().expect("the patch overrides the list");
+    assert_eq!(record.form_id().to_cardinal(), 0x0100_0800);
     let entries = record.get_element_by_name("Leveled List Entries").unwrap();
     let container = entries.as_container().unwrap();
     (0..container.get_element_count())
@@ -176,7 +172,7 @@ fn the_patch_keeps_the_changes_of_both_plugins() {
     assert_eq!(made["masters"], json!(["Skyrim.esm", "Skyrim.esm"]));
     let mut references = patch_entries(&mut session);
     references.sort_unstable();
-    assert_eq!(references, [0xA02, 0xA03, 0xA04, 0xA05]);
+    assert_eq!(references, [0x0100_0A02, 0x0100_0A03, 0x0100_0A04, 0x0100_0A05]);
 
     let again = registry
         .call(&mut session, "patch.merged", json!({ "file": "Merged" }))
