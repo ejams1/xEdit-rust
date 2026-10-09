@@ -34,9 +34,9 @@
 //!
 //! A case whose operation copies from a source folder (`Prep`) gets one
 //! made by the port itself over the unpacked files: `{source}` in its
-//! settings is that folder and `{source-file}` the first file it holds. A
-//! case whose operation reads files beside the input (`Add blocks from
-//! skeleton`) gets an input folder of its own (`Prep::DeathSkeleton`).
+//! settings is that folder. A case whose operation reads files beside the
+//! input (`Add blocks from skeleton`) gets an input folder of its own
+//! (`Prep::DeathSkeleton`).
 //!
 //! Sniff starts hidden on the harness's own desktop (`hidden.rs`). The work
 //! folder of an archive is removed once it compares equal, and only the
@@ -77,9 +77,8 @@ struct Case {
     /// folder of its own.
     prep: Prep,
     /// The values of the operation's section of the settings ini. `{log}`
-    /// is replaced with the path of a log file the processor writes,
-    /// `{source}` with the prepared source folder and `{source-file}` with
-    /// the first file it holds.
+    /// is replaced with the path of a log file the processor writes and
+    /// `{source}` with the prepared source folder.
     settings: &'static [(&'static str, &'static str)],
 }
 
@@ -420,16 +419,10 @@ const CASES: &[Case] = &[
         ],
         prep: Prep::Textures,
     },
-    Case {
-        name: "copy-geometry-single",
-        operation: "Copy geometry blocks",
-        settings: &[
-            ("sSourceDirectory", "{source-file}"),
-            ("bMatchingFiles", "0"),
-            ("bCopyTransform", "1"),
-        ],
-        prep: Prep::Baked,
-    },
+    // The single file mode (`bMatchingFiles=0`) has no case: `Sniff.exe`
+    // hangs in it (a dialog, with one thread too) as soon as a block of the
+    // source matches one of the file (`Copy geometry blocks`), so the mode
+    // is covered by the unit test of the processor instead.
     Case {
         name: "vertex-paint",
         operation: "Vertex color painting",
@@ -908,38 +901,21 @@ fn parse(args: &[&str]) -> Result<Options> {
 }
 
 /// The settings ini of a case, with `{log}` as `log`.
-fn settings_text(case: &Case, log: &Path, source: &Path, source_file: &Path) -> String {
+fn settings_text(case: &Case, log: &Path, source: &Path) -> String {
     let section = case.operation.replace(' ', "");
     let mut text = format!("[Main]\r\nPopupWarning=0\r\n[{section}]\r\n");
     for (name, value) in case.settings {
         let value = value
             .replace("{log}", &windows_path(log))
-            .replace("{source-file}", &windows_path(source_file))
             .replace("{source}", &windows_path(source));
         text.push_str(&format!("{name}={value}\r\n"));
     }
     text
 }
 
-/// Whether a case names the prepared source folder: `{source}` or the
-/// `{source-file}` of its first file.
+/// Whether a case names the prepared source folder.
 fn uses_source(case: &Case) -> bool {
-    case.settings.iter().any(|(_, value)| value.contains("{source"))
-}
-
-/// The first file of the prepared source folder, by path: the input of a
-/// case that names `{source-file}`. The `.complete` marker of the folder is
-/// not a source file.
-fn first_source_file(dir: &Path) -> Result<Option<PathBuf>> {
-    let mut files: Vec<PathBuf> = Vec::new();
-    for entry in walkdir::WalkDir::new(dir) {
-        let entry = entry?;
-        if entry.file_type().is_file() && entry.file_name() != ".complete" {
-            files.push(entry.path().to_owned());
-        }
-    }
-    files.sort();
-    Ok(files.into_iter().next())
+    case.settings.iter().any(|(_, value)| value.contains("{source}"))
 }
 
 /// The path of a file up to and including its folder delimiter.
@@ -1144,7 +1120,6 @@ fn run_sniff(
     work: &Path,
     case: &Case,
     source: &Path,
-    source_file: &Path,
     input: &Path,
     path_filter: Option<&str>,
     threads: usize,
@@ -1161,7 +1136,7 @@ fn run_sniff(
     let extra = work.join("oracle-extra.log");
     let _ = fs::remove_file(&extra);
     let ini = work.join("oracle.ini");
-    fs::write(&ini, settings_text(case, &extra, source, source_file))?;
+    fs::write(&ini, settings_text(case, &extra, source))?;
     let log = work.join("oracle.log");
     let _ = fs::remove_file(&log);
     let mut command = HiddenCommand::new(&exe);
@@ -1209,7 +1184,6 @@ fn rerun_crashes(
     work: &Path,
     case: &Case,
     source: &Path,
-    source_file: &Path,
     input: &Path,
     extensions: &[String],
     results: &mut Results,
@@ -1221,17 +1195,7 @@ fn rerun_crashes(
         .map(|(name, _)| name.clone())
         .collect();
     for name in crashed {
-        let rerun = run_sniff(
-            sniff,
-            work,
-            case,
-            source,
-            source_file,
-            input,
-            Some(&name),
-            1,
-            extensions,
-        )?;
+        let rerun = run_sniff(sniff, work, case, source, input, Some(&name), 1, extensions)?;
         let error = rerun.errors.get(&name).cloned();
         println!("oracle rerun  {name}: {}", error.as_deref().unwrap_or("no error"));
         results.errors.remove(&name);
@@ -1265,7 +1229,6 @@ fn rerun_differences(
     work: &Path,
     case: &Case,
     source: &Path,
-    source_file: &Path,
     input: &Path,
     extensions: &[String],
     oracle: &mut Results,
@@ -1295,17 +1258,7 @@ fn rerun_differences(
     }
     for name in names {
         let source_name = input_name(&name, extensions);
-        let rerun = run_sniff(
-            sniff,
-            work,
-            case,
-            source,
-            source_file,
-            input,
-            Some(&source_name),
-            1,
-            extensions,
-        )?;
+        let rerun = run_sniff(sniff, work, case, source, input, Some(&source_name), 1, extensions)?;
         let output = rerun.outputs.get(&name).copied();
         let error = rerun.errors.get(&source_name).cloned();
         println!(
@@ -1355,7 +1308,6 @@ fn run_port(
     work: &Path,
     case: &Case,
     source: &Path,
-    source_file: &Path,
     input: &Path,
     threads: usize,
     extensions: &[String],
@@ -1364,7 +1316,7 @@ fn run_port(
     fs::create_dir_all(&out)?;
     let extra = work.join("port-extra.log");
     let _ = fs::remove_file(&extra);
-    let settings = MemIniFile::from_text(&settings_text(case, &extra, source, source_file));
+    let settings = MemIniFile::from_text(&settings_text(case, &extra, source));
     let outputs: Arc<Mutex<BTreeMap<String, u64>>> = Arc::default();
     let sink_outputs = outputs.clone();
     let options = RunOptions {
@@ -1577,13 +1529,7 @@ pub fn run(tag: &str, args: &[&str]) -> Result<()> {
             .filter_map(|game| GAMES.iter().find(|known| known.name == harness_game(*game)))
             .filter(|game| options.games.is_empty() || options.games.iter().any(|name| name == game.name))
             .collect();
-        let settings_key = fnv(settings_text(
-            case,
-            Path::new("{log}"),
-            Path::new("{source}"),
-            Path::new("{source-file}"),
-        )
-        .as_bytes());
+        let settings_key = fnv(settings_text(case, Path::new("{log}"), Path::new("{source}")).as_bytes());
 
         for game in games {
             let Some(data) = std::env::var_os(game.data_var).map(PathBuf::from) else {
@@ -1685,19 +1631,8 @@ pub fn run(tag: &str, args: &[&str]) -> Result<()> {
                     .join(case.prep.name())
                     .join(game.name)
                     .join(&archive_name);
-                let mut source_file = PathBuf::new();
                 if uses_source(case) {
                     prepare_source(&archive, &source, &extensions, options.threads, case.prep)?;
-                    match first_source_file(&source)? {
-                        Some(file) => source_file = file,
-                        None => {
-                            say(
-                                format!("skipped       {}: the source folder is empty", archive_path.display()),
-                                &mut report,
-                            );
-                            continue;
-                        }
-                    }
                 }
                 drop(archive);
                 let work = scratch.join("sniff-work").join(case.name).join(&archive_name);
@@ -1708,27 +1643,9 @@ pub fn run(tag: &str, args: &[&str]) -> Result<()> {
                 let mut oracle = if cached.exists() && !options.refresh_oracle {
                     serde_json::from_slice::<Results>(&fs::read(&cached)?)?
                 } else {
-                    let mut results = run_sniff(
-                        &sniff,
-                        &work,
-                        case,
-                        &source,
-                        &source_file,
-                        &input,
-                        None,
-                        options.threads,
-                        &extensions,
-                    )?;
-                    rerun_crashes(
-                        &sniff,
-                        &work,
-                        case,
-                        &source,
-                        &source_file,
-                        &input,
-                        &extensions,
-                        &mut results,
-                    )?;
+                    let mut results =
+                        run_sniff(&sniff, &work, case, &source, &input, None, options.threads, &extensions)?;
+                    rerun_crashes(&sniff, &work, case, &source, &input, &extensions, &mut results)?;
                     fs::create_dir_all(cached.parent().unwrap())?;
                     fs::write(&cached, serde_json::to_vec(&results)?)?;
                     say(
@@ -1746,7 +1663,7 @@ pub fn run(tag: &str, args: &[&str]) -> Result<()> {
                 };
 
                 let start = Instant::now();
-                let port = match run_port(&work, case, &source, &source_file, &input, options.threads, &extensions) {
+                let port = match run_port(&work, case, &source, &input, options.threads, &extensions) {
                     Ok(port) => port,
                     Err(error) => {
                         say(
@@ -1757,17 +1674,7 @@ pub fn run(tag: &str, args: &[&str]) -> Result<()> {
                         continue;
                     }
                 };
-                if rerun_differences(
-                    &sniff,
-                    &work,
-                    case,
-                    &source,
-                    &source_file,
-                    &input,
-                    &extensions,
-                    &mut oracle,
-                    &port,
-                )? {
+                if rerun_differences(&sniff, &work, case, &source, &input, &extensions, &mut oracle, &port)? {
                     fs::write(&cached, serde_json::to_vec(&oracle)?)?;
                 }
 
