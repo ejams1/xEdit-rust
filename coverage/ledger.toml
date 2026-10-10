@@ -3630,6 +3630,7 @@ source = "Core/wbInterface.pas"
 [tool_mode.tmCheckForErrors]
 status = "pending"
 source = "Core/wbInterface.pas"
+note = "The tool mode (-CheckForErrors and its run of the checks) is step 9; the check it runs is files.check, whose menu item (mniNavCheckForErrorsClick) is covered."
 
 [tool_mode.tmCheckForITM]
 status = "pending"

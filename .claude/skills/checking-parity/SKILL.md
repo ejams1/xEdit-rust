@@ -10,7 +10,7 @@ The official xEdit release build of the tag in `upstream-map.toml` is the oracle
 ## Running the harness
 
 ```
-cargo xtask parity dump|saves|roundtrip|oracle-save|oracle-edit|conflicts|refs|clean|modgroups [--game <game>]... [--file <name>]... [--record <FormID>]... [--oracle-only]
+cargo xtask parity dump|saves|roundtrip|oracle-save|oracle-edit|conflicts|refs|clean|check|check-dump|modgroups [--game <game>]... [--file <name>]... [--record <FormID>]... [--oracle-only]
                     [--jobs <n>] [--memory-budget <GiB>] [--max-memory <GiB>] [--oracle-timeout <minutes>]
 ```
 
@@ -159,6 +159,18 @@ Each case (`CASES` in `crates/xtask/src/parity/lodgen.rs`, `--list` prints them)
 
 9 of 9 scenarios equal (8 on the Skyrim SE masters, 1 on Fallout 4 with four DLCs): every record's status, 29 files and 34 validation lines. What the scenarios taught: Delphi's `Split` keeps an empty part after the last separator, `TMemIniFile` drops a section whose name it had before with its lines, and the 4.1.5q main form's memo returns its text in the ANSI code page to `WM_GETTEXT`.
 
+### Check for errors
+
+`parity check` runs the GUI's own check mode (`-CheckForErrors <plugin>` through `GuiRun::run_check_for_errors`, hidden) on every vanilla plugin of every game (`crates/xtask/src/parity/check.rs`) and compares its message log with the port's `xedit check`. The log holds `Start:` and `Done:` around the error lines: the record's line (`Checking for Errors in [<load order>] <name>`), the `    <path> -> <error>` of every error under it and `Above errors were found in: <element>` after the elements of an element with errors; the "Processed Records" and "Errors found" counts and the exit code are compared too. The oracle is cached as `<cache>/<tag>/<MODE>-oracle-check/<file>.<key>.log.zst` with its exit code and counts. The port loads with the settings of that mode (`commands::set_check_on_load`: the checks run, `wbBuildRefs` off, `wbAllowInternalEdit` off with `wbEditAllowed` on during the load and the check, as `xeInit.pas` does for `tmCheckForErrors`) and checks the records on worker threads in batches of 512. `equal-log-loss` means the oracle's log lost a run of lines (the 4.1.5q memo drops lines under load) but every line it kept matches the port's, in order, and the counts and exit code are equal. `oracle-unsupported`: Morrowind, which the GUI runs in view mode only.
+
+A game master as the target is special: `-CheckForErrors <game master>` has the GUI check the **hardcoded** file (`[00] <game>.exe`), so its log holds the hardcoded file's records and not the master's; the harness runs the port with `check --last` for it (the last loaded file, which is the target) and the master's own content is covered by `parity check-dump` instead.
+
+`parity check-dump` runs `xDump.exe -check` against `xedit dump --check` over the same corpus and compares the output as the dump is compared (an oracle run that ended in an error compares as a prefix: the port matches it up to the crash and then has to finish without an error, `equal-prefix`). The oracle's output is cached in `<cache>/<tag>/<MODE>-check`.
+
+Results (2026-10-09, with the final code): `parity check` over the 5,852,286 records of the 249 vanilla plugins of the 11 games: 245 `equal`, 1 `equal-log-loss` (`fo76/NW.esm`: the oracle's log lost 2,365 of 87,414 lines in one run; its 171,206 records, 12,395 with errors and every line it kept equal), 3 `oracle-unsupported` (the Morrowind masters), 0 `different`, 0 failed (143,951 records with errors, 260,691 error lines). `parity check-dump` over the corpus: 246 of the 246 files the oracle dumps equal (229 `equal` and 17 as prefixes where xDump crashes on the file: `Fallout4.esm` of Fallout 4 and of Fallout 4 VR, `DLCCoast.esm`, `DLCNukaWorld.esm`, `DLCRobot.esm`, `DLCworkshop03.esm` and 5 CC ESLs, `fo76/SeventySix.esm`, and `Starfield.esm`, `ShatteredSpace.esm`, `SFBGS003.esm`, `SFBGS050.esm` and `SFBGS00D.esm`), 0 `different`; the 3 Morrowind masters have no oracle dump at all (xDump fails on them, issue #9). The harness caps each process's committed memory at the budget (23.7 GiB of this machine), so on a loaded machine a big file can end as `port-memory-limit`: `sf1/Starfield.esm` did when other sessions ran their own parity jobs, and it is `equal-prefix` when run alone.
+
+The check found, all fixed in the port: the path of a main record is its signature; `TwbValue.Init` runs the `AfterLoad` of the resolved definition; the sorted array flags are cleared only after the sort, so a reader on another thread saw unsorted entries and parallel output depended on timing; `wbQUSTEventToStr` reads `ReferencedBy` under `wbBuildRefs`; a flag of `wbFlagsAsArray` found by name in a path; `TwbValueBase.GetName` without the space before the suffix of an unnamed value; `Contained subrecords:` after `Errors were found in:` (the release is built with `DBGSUBREC`); `SetReferencesInjected` and the cached `GetReferencesInjected`. The Fallout 76 check-dump found that `wbDefinitionsFO76` has its own, older copy of `wbLGDIFiltersToStr` (the same name and signature as the one in `wbDefinitionsCommon`), which the port answers from the game mode of the one callback (see the comment there); the port had answered Fallout 76's `LGDI` filters with the common copy.
+
 ## Running the oracle
 
 `XEDIT_ORACLE_DIR` points at the unpacked release archive of the baseline tag. The dump checks run `xDump.exe` as below; the save checks run the GUI builds as described under "Oracle save". The game is selected with a switch such as `-FO4` or `-SSE`. Masters are read from the directory of the input file, and `-D:<Data path>` is needed for every plugin but the game master: without it the oracle loads the hardcoded records, cannot find the game master again and stops with `EOSError: System Error. Code: 2`.
@@ -193,6 +205,7 @@ The `xEdit-llm` automation build is a secondary oracle for conflict, reference a
 | Round-trip save | input file bytes | load then save, compare bytes |
 | Conflict status | `ConflictAllForMainRecord`/`ConflictThisForMainRecord` of every record by a `-script:` of the GUI (`oracle/conflicts.pas`) | `xedit conflicts` (`conflicts.list`) |
 | Cleaning | plugin saved by `-quickautoclean` | `xedit clean` |
+| Error checks | the message log of `-CheckForErrors` (the GUI) and of `xDump -check` | `xedit check` (`files.check`) and `xedit dump --check` |
 | Saved bytes | plugin written by a `-script:` of the GUI (`oracle/save.pas`, `oracle/edit.pas`) | `xedit save`, `xedit batch` |
 | Scripts | plugin and log after `-script:` | `xedit script run` |
 | Archives | `BSArch.exe pack -mt:no`, `unpack` and `-dump` output | `bsarch`, `xedit archive pack` (`parity bsarch`) |
