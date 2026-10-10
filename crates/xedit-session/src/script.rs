@@ -45,7 +45,7 @@ use serde::{Deserialize, Serialize};
 use xedit_core::implementation::{ElementImpl, ElementState};
 use xedit_core::interface::globals;
 use xedit_core::interface::{
-    ConflictAll, ConflictThis, ElementRef, ElementType, ElementTypes, FileState, PascalEnum, Signature,
+    ConflictAll, ConflictThis, Element, ElementRef, ElementType, ElementTypes, FileState, PascalEnum, Signature,
 };
 use xedit_io::collate::ansi_compare_text;
 use xedit_script::adapter::{Adapter, Args};
@@ -1610,8 +1610,6 @@ pub fn run_script(
         if silent {
             state.progress_lock -= 1;
         }
-        state.show_start_time -= 1;
-        response.messages = state.messages.clone();
     }
     response.aborted = last_error.is_some();
     response.self_terminated = self_terminated;
@@ -1621,7 +1619,9 @@ pub fn run_script(
     }
 
     // The plugins the script changed: saved as the GUI does at the end of an
-    // auto mode, unless the run was a dry run or saving is off.
+    // auto mode, unless the run was a dry run or saving is off. `SaveChanged`
+    // logs a `Saving: <name>` line per file, after the closing line of the
+    // run.
     for file in crate::conflicts::session_files(session)? {
         let changed = file.get_is_editable() && file.element_base().has_state(ElementState::esUnsaved);
         if !changed {
@@ -1629,12 +1629,23 @@ pub fn run_script(
         }
         if request.save && !request.dry_run {
             let saved = crate::save::save_file(&file, None, false, true)?;
+            // Upstream logs the name it writes below `wbDataPath` (with the
+            // queued-rename timestamp); the port writes the loaded path, so
+            // the line names the file.
+            state
+                .borrow_mut()
+                .progress(&format!("Saving: {}", file.get_name()), false);
             response.files.push(ScriptRunFile::from_save(&file, &saved));
         } else {
             let mut entry = ScriptRunFile::new(&file);
             entry.changed = true;
             response.files.push(entry);
         }
+    }
+    {
+        let mut state = state.borrow_mut();
+        state.show_start_time -= 1;
+        response.messages = state.messages.clone();
     }
     Ok(response)
 }
