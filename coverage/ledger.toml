@@ -4046,31 +4046,38 @@ status = "pending"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.caConflict:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.caConflictBenign:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.caConflictCritical:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.caNoConflict:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.caOnlyOne:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.caOverride:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.caUnknown:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.csAsCreatedEmpty:const"]
@@ -4098,51 +4105,63 @@ status = "pending"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.ctConflictBenign:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.ctConflictLoses:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.ctConflictWins:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.ctHiddenByModGroup:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.ctIdenticalToMaster:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.ctIdenticalToMasterWinsConflict:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.ctIgnored:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.ctMaster:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.ctNotDefined:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.ctOnlyOne:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.ctOverride:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.ctUnknown:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.dtArray:const"]
@@ -4270,59 +4289,73 @@ status = "pending"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.etArray:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.etFile:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.etFlag:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.etGroupRecord:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.etMainRecord:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.etStringListTerminator:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.etStruct:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.etStructChapter:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.etSubRecord:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.etSubRecordArray:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.etSubRecordStruct:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.etSubRecordUnion:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.etUnion:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.etValue:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.gmEnderal:const"]
@@ -5357,7 +5390,8 @@ status = "pending"
 source = "IwbElement_MoveUp"
 
 [script."xejviScriptAdapterElement:cUnit.Name:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbElement_Name"
 
 [script."xejviScriptAdapterElement:cUnit.Path:function"]
@@ -5474,7 +5508,8 @@ status = "pending"
 source = "IwbFile_WriteToStream"
 
 [script."xejviScriptAdapterFile:cUnit.GetFileName:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbFile_GetFileName"
 
 [script."xejviScriptAdapterFile:cUnit.GetIsESL:function"]
@@ -5540,11 +5575,13 @@ status = "pending"
 source = "IwbFile_LoadOrderFormIDtoFileFormID"
 
 [script."xejviScriptAdapterFile:cUnit.MasterByIndex:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbFile_MasterByIndex"
 
 [script."xejviScriptAdapterFile:cUnit.MasterCount:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbFile_MasterCount"
 
 [script."xejviScriptAdapterFile:cUnit.RecordByEditorID:function"]
@@ -5594,7 +5631,8 @@ command = "masters.sort"
 source = "IwbFile_SortMasters"
 
 [script."xejviScriptAdapterHost:cUnit.AddMessage:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "_AddMessage"
 
 [script."xejviScriptAdapterHost:cUnit.AddNewFile:function"]
@@ -5611,11 +5649,13 @@ command = "records.copy"
 source = "_AddRequiredElementMasters"
 
 [script."xejviScriptAdapterHost:cUnit.ApplyFilter:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "_ApplyFilter"
 
 [script."xejviScriptAdapterHost:cUnit.ClearMessages:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "_ClearMessages"
 
 [script."xejviScriptAdapterHost:cUnit.ConflictAllForElements:function"]
@@ -5643,7 +5683,8 @@ status = "pending"
 source = "_ConflictThisForNode"
 
 [script."xejviScriptAdapterHost:cUnit.DataPath:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "_wbDataPath"
 
 [script."xejviScriptAdapterHost:cUnit.ExecuteCaptureConsoleOutput:function"]
@@ -5651,7 +5692,8 @@ status = "pending"
 source = "_ExecuteCaptureConsoleOutput"
 
 [script."xejviScriptAdapterHost:cUnit.FileByIndex:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "_FileByIndex"
 
 [script."xejviScriptAdapterHost:cUnit.FileByLoadOrder:function"]
@@ -5663,15 +5705,18 @@ status = "pending"
 source = "_FileByLoadOrderFileID"
 
 [script."xejviScriptAdapterHost:cUnit.FileByName:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "_FileByName"
 
 [script."xejviScriptAdapterHost:cUnit.FileCount:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "_FileCount"
 
 [script."xejviScriptAdapterHost:cUnit.FilterApplied:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "_FilterApplied"
 
 [script."xejviScriptAdapterHost:cUnit.GenerateLODTES4:function"]
@@ -5695,7 +5740,8 @@ status = "pending"
 source = "_JumpTo"
 
 [script."xejviScriptAdapterHost:cUnit.ProgramPath:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "_wbProgramPath"
 
 [script."xejviScriptAdapterHost:cUnit.RecordByHexFormID:function"]
@@ -5707,7 +5753,8 @@ status = "pending"
 source = "_RecordFromFileByFormID"
 
 [script."xejviScriptAdapterHost:cUnit.RemoveFilter:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "_RemoveFilter"
 
 [script."xejviScriptAdapterHost:cUnit.RemoveNode:function"]
@@ -5715,15 +5762,18 @@ status = "pending"
 source = "_RemoveNode"
 
 [script."xejviScriptAdapterHost:cUnit.ScriptsPath:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "_wbScriptsPath"
 
 [script."xejviScriptAdapterHost:cUnit.TempPath:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "_wbTempPath"
 
 [script."xejviScriptAdapterHost:cUnit.dfFloatDecimalDigits:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "_dfFloatDecimalDigits"
 
 [script."xejviScriptAdapterHost:cUnit.frmFileSelect:function"]
@@ -5735,7 +5785,8 @@ status = "pending"
 source = "_frmMain"
 
 [script."xejviScriptAdapterHost:cUnit.wbAppName:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "_wbAppName"
 
 [script."xejviScriptAdapterHost:cUnit.wbBuildAtlasFromAtlasMap:function"]
@@ -5747,7 +5798,8 @@ status = "pending"
 source = "_wbBuildAtlasFromTexturesList"
 
 [script."xejviScriptAdapterHost:cUnit.wbDataPath:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "_wbDataPath"
 
 [script."xejviScriptAdapterHost:cUnit.wbDecodeTextureHashes:function"]
@@ -5755,19 +5807,23 @@ status = "pending"
 source = "_wbDecodeTextureHashes"
 
 [script."xejviScriptAdapterHost:cUnit.wbGameMasterEsm:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "_wbGameMasterEsm"
 
 [script."xejviScriptAdapterHost:cUnit.wbGameMode:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "_wbGameMode"
 
 [script."xejviScriptAdapterHost:cUnit.wbGameName2:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "_wbGameName2"
 
 [script."xejviScriptAdapterHost:cUnit.wbGameName:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "_wbGameName"
 
 [script."xejviScriptAdapterHost:cUnit.wbGetUVRangeTexturesList:function"]
@@ -5779,11 +5835,13 @@ status = "pending"
 source = "_wbLoadBSAs"
 
 [script."xejviScriptAdapterHost:cUnit.wbOutputPath:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "_wbOutputPath"
 
 [script."xejviScriptAdapterHost:cUnit.wbProgramPath:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "_wbProgramPath"
 
 [script."xejviScriptAdapterHost:cUnit.wbRecordDefMap:function"]
@@ -5791,7 +5849,8 @@ status = "pending"
 source = "_wbRecordDefMap"
 
 [script."xejviScriptAdapterHost:cUnit.wbScriptsPath:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "_wbScriptsPath"
 
 [script."xejviScriptAdapterHost:cUnit.wbSelectedFiles:function"]
@@ -5815,7 +5874,8 @@ status = "pending"
 source = "_wbSimpleRecords"
 
 [script."xejviScriptAdapterHost:cUnit.wbTempPath:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "_wbTempPath"
 
 [script."xejviScriptAdapterHost:cUnit.wbTrackAllEditorID:function"]

@@ -150,7 +150,6 @@ fn check_uses(
 /// removed with `rfReplaceAll, rfIgnoreCase`. The scan continues after the
 /// replacement, as `MatchAgain` does with `Start := i + Length(s)`.
 pub fn strip_namespaces(source: &[u8]) -> Vec<u8> {
-    const PREFIXES: [&[u8]; 5] = [b"system.", b"vcl.", b"winapi.", b"data.", b"web."];
     let mut text = source.to_vec();
     let mut start = 0usize;
     while start < text.len() {
@@ -182,7 +181,7 @@ pub fn strip_namespaces(source: &[u8]) -> Vec<u8> {
         };
         let match_end = j + semicolon + 1;
         let matched = text[start..match_end].to_vec();
-        let replaced = remove_prefixes(&matched, &PREFIXES);
+        let replaced = remove_prefixes(&matched, &NAMESPACE_PREFIXES);
         if replaced != matched {
             let mut next = Vec::with_capacity(text.len());
             next.extend_from_slice(&text[..start]);
@@ -197,6 +196,18 @@ pub fn strip_namespaces(source: &[u8]) -> Vec<u8> {
 
 fn is_space(c: u8) -> bool {
     matches!(c, b' ' | b'\t' | b'\n' | b'\r' | 0x0b | 0x0c)
+}
+
+/// The five prefixes `HasUnitProc` strips from an enumerated unit name
+/// (`xejviScriptHost.pas:309`) and `TxejviScript.Create` strips from a `uses`
+/// clause, in the order the Pascal applies them.
+pub(crate) const NAMESPACE_PREFIXES: [&[u8]; 5] = [b"system.", b"vcl.", b"winapi.", b"data.", b"web."];
+
+/// The port of `HasUnitProc`'s `StringReplace` chain (`xejviScriptHost.pas:309`):
+/// `system.`, `vcl.`, `winapi.`, `data.` and `web.` removed with
+/// `rfReplaceAll, rfIgnoreCase`, which a unit name compares through.
+pub(crate) fn strip_unit_prefixes(name: &[u8]) -> Vec<u8> {
+    remove_prefixes(name, &NAMESPACE_PREFIXES)
 }
 
 fn remove_prefixes(matched: &[u8], prefixes: &[&[u8]]) -> Vec<u8> {
@@ -218,7 +229,7 @@ fn remove_prefixes(matched: &[u8], prefixes: &[&[u8]]) -> Vec<u8> {
 /// `wbScriptsPath + UnitName + '.pas'` (`xejviScriptHost.pas:450`). The
 /// lookup follows the Windows file system (case-insensitive); the fallback
 /// scan keeps the same behaviour on a case-sensitive file system.
-fn find_unit_file(folder: &Path, unit_name: &str) -> Option<PathBuf> {
+pub(crate) fn find_unit_file(folder: &Path, unit_name: &str) -> Option<PathBuf> {
     let candidate = folder.join(format!("{unit_name}.pas"));
     if candidate.is_file() {
         return Some(candidate);

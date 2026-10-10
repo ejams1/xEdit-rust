@@ -351,7 +351,7 @@ enum Action {
         #[arg(long)]
         dry_run: bool,
     },
-    /// The Pascal scripts of the scripts folder (script.list, script.check): the corpus phase 6's interpreter parses and runs. They need no --game or --load.
+    /// The Pascal scripts of the scripts folder (script.list, script.check, script.run): the corpus phase 6's interpreter parses and runs. Not for the commands that run one: `xedit script run` and the legacy -script: switch.
     Script {
         #[command(subcommand)]
         action: ScriptAction,
@@ -395,6 +395,20 @@ enum ScriptAction {
         /// Path of a script to compile; repeat for several (or pass several paths).
         #[arg(required = true, value_name = "FILE")]
         files: Vec<String>,
+    },
+    /// Run a Pascal script over the loaded plugins (script.run), as xEdit's -script: mode does: Initialize, Process per selected element, Finalize, then save the plugins it changed. Loads the plugins with --game and --load. Needs --edit unless --dry-run; exits non-zero when the script aborts.
+    Run {
+        /// Path of the script, or a name below the scripts folder.
+        file: String,
+        /// The scripts folder (xEdit's -S:), which a relative script name resolves against. Default: the XEDIT_SCRIPTS environment variable, else the oracle's Edit Scripts.
+        #[arg(long)]
+        scripts: Option<String>,
+        /// Leave the changed plugins in memory (save them with `xedit save`).
+        #[arg(long)]
+        no_save: bool,
+        /// Run the script with editing disabled and save nothing.
+        #[arg(long)]
+        dry_run: bool,
     },
 }
 
@@ -558,6 +572,12 @@ enum ToolAction {
         /// Where the generateseq mode writes the .seq files; <data path>\Seq when omitted.
         #[arg(long)]
         seq_path: Option<String>,
+        /// The script mode: the script to run, as `xedit script run` takes it.
+        #[arg(long)]
+        script: Option<String>,
+        /// The script mode: the scripts folder a relative script name resolves against (-S:).
+        #[arg(long)]
+        scripts: Option<String>,
     },
 }
 
@@ -1926,11 +1946,14 @@ fn command_of(action: Action) -> Result<(String, Value), CommandError> {
                 no_backup,
                 format,
                 seq_path,
+                script,
+                scripts,
             } => (
                 "tool.run".to_owned(),
                 json!({
                     "mode": mode, "files": files, "dry_run": dry_run, "output": output,
-                    "backup": !no_backup, "format": format, "seq_path": seq_path
+                    "backup": !no_backup, "format": format, "seq_path": seq_path,
+                    "script": script, "scripts": scripts
                 }),
             ),
         },
@@ -2111,6 +2134,15 @@ fn command_of(action: Action) -> Result<(String, Value), CommandError> {
         Action::Script { action } => match action {
             ScriptAction::List { scripts } => ("script.list".to_owned(), json!({ "scripts": scripts })),
             ScriptAction::Check { files } => ("script.check".to_owned(), json!({ "files": files })),
+            ScriptAction::Run {
+                file,
+                scripts,
+                no_save,
+                dry_run,
+            } => (
+                "script.run".to_owned(),
+                json!({ "file": file, "scripts": scripts, "save": !no_save, "dry_run": dry_run }),
+            ),
         },
         Action::Conflicts {
             file,
@@ -2315,6 +2347,8 @@ fn run_legacy(run: xedit_session::tool_modes::LegacyRun) -> ExitCode {
         "output": run.output,
         "backup": true,
         "format": run.format,
+        "script": run.script,
+        "scripts": run.scripts_folder,
     });
     let result = registry.call(&mut session, "tool.run", params);
     let result = match result {
@@ -2435,6 +2469,12 @@ fn main() -> ExitCode {
             action: ScriptAction::Check { .. }
         }
     );
+    let script_run = matches!(
+        cli.action,
+        Action::Script {
+            action: ScriptAction::Run { .. }
+        }
+    );
     let outcome = run(cli.game, cli.load, cli.edit, cli.action);
     match (&outcome, cli.json) {
         (Ok(result), true) => println!("{}", json!({ "ok": true, "result": result })),
@@ -2446,16 +2486,33 @@ fn main() -> ExitCode {
         }
         // `xedit script check` prints one `file:line: message` line per failure.
         (Ok(result), false) if script_check => print_script_check(result),
+        // `xedit script run` prints the message log of the run.
+        (Ok(result), false) if script_run => print_script_run(result),
         (Ok(result), false) => println!("{result:#}"),
         (Err(error), true) => println!("{}", json!({ "ok": false, "error": error })),
         (Err(error), false) => eprintln!("error: {error}"),
     }
-    // `xedit script check` exits non-zero when a script does not parse.
-    let script_failed = script_check && matches!(&outcome, Ok(result) if result["ok"] == Value::Bool(false));
+    // `xedit script check` exits non-zero when a script does not parse, and
+    // `xedit script run` when the script aborted.
+    let script_failed = (script_check && matches!(&outcome, Ok(result) if result["ok"] == Value::Bool(false)))
+        || (script_run && matches!(&outcome, Ok(result) if result["aborted"] == Value::Bool(true)));
     if outcome.is_ok() && !script_failed {
         ExitCode::SUCCESS
     } else {
         ExitCode::FAILURE
+    }
+}
+
+/// The text `xedit script run` prints without `--json`: the lines of xEdit's
+/// message log, and the failure of an aborted script to stderr.
+fn print_script_run(result: &Value) {
+    for line in result["messages"].as_array().into_iter().flatten() {
+        println!("{}", line.as_str().unwrap_or_default());
+    }
+    if result["aborted"] == Value::Bool(true) {
+        let location = result["error_location"].as_str().unwrap_or_default();
+        let error = result["error"].as_str().unwrap_or_default();
+        eprintln!("error: {location}: {error}");
     }
 }
 

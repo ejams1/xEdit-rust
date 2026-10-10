@@ -565,7 +565,7 @@ pub struct ToolModeFile {
 }
 
 impl ToolModeFile {
-    fn new(file: &FileImpl) -> Self {
+    pub(crate) fn new(file: &FileImpl) -> Self {
         Self {
             name: file.get_name(),
             changed: false,
@@ -576,7 +576,7 @@ impl ToolModeFile {
         }
     }
 
-    fn from_save(file: &FileImpl, saved: &FilesSaveResponse) -> Self {
+    pub(crate) fn from_save(file: &FileImpl, saved: &FilesSaveResponse) -> Self {
         Self {
             name: file.get_name(),
             changed: true,
@@ -688,8 +688,8 @@ fn mode_action(mode: ToolMode) -> (&'static str, Option<&'static str>) {
             Some("phase 5 wires the `lodgen.generate` command; this build accepts the mode and runs nothing"),
         ),
         ToolMode::tmScript => (
-            "runs a Pascal script through the JvInterpreter",
-            Some("phase 6 adds the interpreter; this build accepts the mode and runs nothing"),
+            "runs the Pascal script of -script: over the loaded plugins (script.run)",
+            None,
         ),
         ToolMode::tmTranslate => (
             "loads the plugins in the translate mode: only the translatable elements are compared and edited",
@@ -761,7 +761,8 @@ pub struct ToolRunRequest {
     /// `export`, `edit`), the name of the mode (`esmify`, `espify`,
     /// `masterrestore`, `quickclean`, `quickautoclean`, `dump`, `view`), or
     /// the sub mode name of the edit mode the legacy command line passes
-    /// (`quick_clean`, `quick_auto_clean`).
+    /// (`quick_clean`, `quick_auto_clean`), or `script` (`-script:`, which
+    /// needs the `script` parameter).
     pub mode: String,
     /// The modules the mode works on, by plugin name, as the modules of
     /// `xeModulesToUse`; every loaded plugin when omitted.
@@ -783,6 +784,15 @@ pub struct ToolRunRequest {
     /// `generateseq`: where the sequence files go; `<data path>\Seq` when
     /// omitted, as xEdit.
     pub seq_path: Option<String>,
+    /// `script`: the script to run (`-script:<file>`, or a path). The mode
+    /// runs it as `script.run` does, with `save` on: an auto mode saves what
+    /// it changed.
+    #[serde(default)]
+    pub script: Option<String>,
+    /// `script`: the scripts folder a relative script name resolves against
+    /// (`-S:`), else `XEDIT_SCRIPTS`, else the oracle's `Edit Scripts`.
+    #[serde(default)]
+    pub scripts: Option<String>,
 }
 
 fn default_true() -> bool {
@@ -1372,10 +1382,29 @@ fn tool_run(session: &mut Session, request: ToolRunRequest) -> Result<ToolRunRes
             ));
         }
         ToolMode::tmScript => {
-            return Err(CommandError::new(
-                "unsupported",
-                "the script tool mode runs `xedit script run`, which phase 6 adds",
-            ));
+            // `tmrGeneratorTimer`: `DoRunScript`, over the plugins the mode
+            // loaded and the script of `-script:`.
+            let Some(script) = request.script.clone() else {
+                return Err(CommandError::new(
+                    "invalid_params",
+                    "the script mode needs a script: pass -script:<file>, or the `script` parameter",
+                ));
+            };
+            let run = crate::script::script_run_gated(
+                session,
+                crate::script::ScriptRunRequest {
+                    file: script,
+                    scripts: request.scripts.clone(),
+                    save: true,
+                    dry_run: request.dry_run,
+                },
+                &mut crate::script::NavigationSelection,
+            )?;
+            messages.extend(run.messages.iter().cloned());
+            response.files = run.files;
+            if run.aborted {
+                response.note = Some("the script aborted; nothing was saved".to_owned());
+            }
         }
     }
     response.changed = response.files.iter().any(|file| file.changed) || !response.seq.is_empty();
@@ -1408,6 +1437,12 @@ pub struct LegacyRun {
     pub format: Option<String>,
     /// `-R:`: a log file for the message log.
     pub log_file: Option<String>,
+    /// `-script:<file>`: the script of the script mode, which `script.run`
+    /// runs.
+    pub script: Option<String>,
+    /// `-S:<folder>`: the scripts folder, where a relative `-script:` name
+    /// resolves and `script mode` reads the units of a script.
+    pub scripts_folder: Option<String>,
     /// `-autoload` (`xeAutoLoad`).
     pub auto_load: bool,
     /// `-autoexit` (`xeAutoExit`): accepted; the CLI has no window to close.
@@ -1556,8 +1591,9 @@ pub fn parse_legacy(params: &[String], exe_name: &str) -> Result<Option<LegacyRu
     let detected = detect_app_mode(params, exe_name);
     let mut ignored = Vec::new();
     // The parameters the port does not act on: the temporary folder, the
-    // scripts folder, the game ini, the save folder and the code pages.
-    for name in ["T", "S", "M", "I", "G"] {
+    // game ini, the save folder and the code pages. `-S:` is the scripts
+    // folder, which the script mode reads.
+    for name in ["T", "M", "I", "G"] {
         if find_cmd_line_param_switch(params, name).is_some() {
             ignored.push(format!("-{name}:"));
         }
@@ -1745,6 +1781,8 @@ pub fn parse_legacy(params: &[String], exe_name: &str) -> Result<Option<LegacyRu
         output: find_cmd_line_param_switch(params, "O"),
         format,
         log_file: find_cmd_line_param_switch(params, "R"),
+        script: detected.script,
+        scripts_folder: find_cmd_line_param_switch(params, "S"),
         auto_load: has_cmd_line_switch(params, "autoload"),
         auto_exit: has_cmd_line_switch(params, "autoexit"),
         ignored_switches: ignored,
