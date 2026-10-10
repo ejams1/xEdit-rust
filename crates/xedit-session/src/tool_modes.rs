@@ -982,7 +982,18 @@ fn generate_seq_file_for_file(
         return Ok(None);
     }
     let mut form_ids: Vec<xedit_core::interface::FormID> = Vec::new();
-    for record in file.records() {
+    // `aFile.GroupBySignature['QUST']`, walked in the order the group holds
+    // its records (the order of the file), which for the records of a
+    // plugin is not the FormID order of `records()`.
+    let group = file.group_by_signature(xedit_core::interface::Signature::new(b"QUST"));
+    let records: Vec<std::sync::Arc<xedit_core::implementation::MainRecordImpl>> = match group {
+        Some(group) => (0..group.get_element_count())
+            .filter_map(|index| group.get_element(index))
+            .filter_map(|element| element.as_element_impl().and_then(|element| element.main_record_impl()))
+            .collect(),
+        None => Vec::new(),
+    };
+    for record in records {
         if record.get_signature().to_string() != "QUST" {
             continue;
         }

@@ -89,7 +89,14 @@ fn plugin(flags: u32, quest_flags: u16) -> Vec<u8> {
     dnam.extend_from_slice(&[0; 12]);
     let mut quest = sub_record(b"EDID", b"TestQuest\0");
     quest.extend(sub_record(b"DNAM", &dnam));
-    bytes.extend(group(b"QUST", &main_record(b"QUST", 0, 0x0100_0802, &quest)));
+    // The group holds its records in the order of the file, which is the
+    // order of the sequence file; the higher FormID comes first here, so a
+    // reader that walks `records()` (FormID order) is told apart.
+    let mut second = sub_record(b"EDID", b"TestQuest2\0");
+    second.extend(sub_record(b"DNAM", &dnam));
+    let mut records = main_record(b"QUST", 0, 0x0100_0803, &second);
+    records.extend(main_record(b"QUST", 0, 0x0100_0802, &quest));
+    bytes.extend(group(b"QUST", &records));
     bytes
 }
 
@@ -225,10 +232,13 @@ fn generateseq_writes_the_fixed_form_ids_of_the_quests() {
     );
     let seq = &result["seq"][0];
     assert_eq!(seq["plugin"], "Plugin.esp");
-    assert_eq!(seq["form_ids"], json!(["01000802"]));
+    // The group order (the file order), not the FormID order.
+    assert_eq!(seq["form_ids"], json!(["01000803", "01000802"]));
     let path = dir.join("Plugin.seq");
     let bytes = std::fs::read(&path).unwrap();
-    assert_eq!(bytes, 0x0100_0802u32.to_le_bytes(), "one FormID, little endian");
+    let mut expected = 0x0100_0803u32.to_le_bytes().to_vec();
+    expected.extend_from_slice(&0x0100_0802u32.to_le_bytes());
+    assert_eq!(bytes, expected, "the FormIDs in file order, little endian");
 
     // A quest that is not start-game-enabled is left out.
     let dir = scratch("seq-off");
