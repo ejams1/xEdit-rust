@@ -191,6 +191,12 @@ pub struct RoutineDecl {
     pub locals: Vec<LocalDecl>,
     /// `None` for an `interface` declaration; `Some` for a definition.
     pub body: Option<Block>,
+    /// The byte after the header's `;`: where `ExecFunction` re-parses the
+    /// body at call time (`CurPos := Fun.PosBeg; NextToken; InFunction`,
+    /// `JvInterpreter.pas:8412`). `Some` whenever a body follows the header
+    /// (a definition without an `external` directive); [`crate::interpreter::parse_body`]
+    /// reads the `var`/`const` sections and the `begin ... end` from there.
+    pub body_pos: Option<usize>,
     /// The `external 'dll' [name 'F' | index N]` directive.
     pub external: Option<ExternalDecl>,
     /// `overload`, `forward`, a calling convention, ... -- directive
@@ -206,6 +212,16 @@ pub struct RoutineDecl {
 pub enum LocalDecl {
     Const(ConstDecl),
     Var(VarGroup),
+}
+
+/// One routine body as `ExecFunction` re-parses it at call time from
+/// [`RoutineDecl::body_pos`] (`CurPos := Fun.PosBeg; NextToken; InFunction`,
+/// `JvInterpreter.pas:8412`): the `var`/`const` sections of `InFunction`
+/// (`:6553`) and the `begin ... end` block.
+#[derive(Clone, Debug)]
+pub struct RoutineBody {
+    pub locals: Vec<LocalDecl>,
+    pub block: Block,
 }
 
 #[derive(Clone, Debug)]

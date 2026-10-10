@@ -98,6 +98,43 @@ pub fn parse_compile(source: &[u8]) -> Result<Module, Error> {
     }
 }
 
+/// Parses one routine body the way `ExecFunction` re-parses it at call time
+/// (`JvInterpreter.pas:8412`: `CurPos := Fun.PosBeg; NextToken; InFunction`):
+/// from `pos` -- the byte after the routine header's `;` that
+/// [`crate::ast::RoutineDecl::body_pos`] records -- the `var`/`const`
+/// sections of `InFunction` (`:6569`) and the `begin ... end` block. The
+/// compile acceptance of [`parse_compile`] only scans a body for its balanced
+/// `end` (`InterpretFunction`: `FindToken(ttBegin); SkipToEnd`), so a
+/// statement-level error of a routine surfaces here, when the routine first
+/// runs, as upstream.
+pub fn parse_body(source: &[u8], pos: usize) -> Result<RoutineBody, Error> {
+    let mut parser = Parser::new(source);
+    parser.section = Section::Implementation;
+    parser.lexer.set_pos(pos);
+    parser.next_token()?;
+    let mut locals = Vec::new();
+    loop {
+        match parser.tok.kind {
+            TT_VAR => {
+                let groups = parser.parse_var_section_fields()?;
+                locals.extend(groups.into_iter().map(LocalDecl::Var));
+            }
+            TT_CONST => {
+                let decls = parser.parse_const_section()?;
+                locals.extend(decls.into_iter().map(LocalDecl::Const));
+            }
+            TT_BEGIN => break,
+            // `InFunction` reads nothing else between the header and `begin`
+            // (`:6573`), even where the compile pass's `FindToken(ttBegin)`
+            // would have skipped a directive.
+            _ => return Err(parser.expected("'begin'")),
+        }
+        parser.next_token()?;
+    }
+    let block = parser.parse_begin_block()?;
+    Ok(RoutineBody { locals, block })
+}
+
 struct Tok {
     kind: TTokenKind,
     text: Vec<u8>,
@@ -1705,6 +1742,7 @@ impl<'a> Parser<'a> {
             header,
             locals: Vec::new(),
             body: None,
+            body_pos: None,
             external: None,
             directives: Vec::new(),
             span: Span::new(start, self.prev_end),
@@ -1731,6 +1769,9 @@ impl<'a> Parser<'a> {
             decl.span = Span::new(start, self.prev_end);
             return Ok(decl);
         }
+        // The header's `;` end is where `ExecFunction` re-parses the body
+        // (`FunctionDesc.FPosBeg := CurPos`, `JvInterpreter.pas:7959`).
+        decl.body_pos = Some(semicolon_end);
         if self.compile {
             // `InterpretFunction` (`JvInterpreter.pas:8014`): FindToken(ttBegin);
             // SkipToEnd -- compiling scans a body for its balanced `end` and
