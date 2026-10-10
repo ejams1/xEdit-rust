@@ -146,7 +146,7 @@ const BUILT_IN_UNITS: &[&str] = &[
 /// How many differing entries an outcome lists before it summarizes.
 const LISTED_DIFFERENCES: usize = 12;
 
-const USAGE: &str = "usage: cargo xtask parity script [--script <name part>]... [--sample <n>] [--game <game>]... \
+const USAGE: &str = "usage: cargo xtask parity script [--script <name part>]... [--skip <name part>]... [--sample <n>] [--game <game>]... \
                      [--phase parse|run]... [--oracle-only] [--refresh-oracle] [--keep] [--list] [--jobs <n>] \
                      [--memory-budget <GiB>] [--max-memory <GiB>] [--oracle-timeout <minutes>]";
 
@@ -154,6 +154,9 @@ struct Options {
     /// `--script`: scripts whose name holds one of these (without regard to
     /// case); empty selects the whole corpus.
     scripts: Vec<String>,
+    /// `--skip`: scripts whose name holds one of these are left out (the
+    /// slow ones, while the rest of the corpus is gone over).
+    skip: Vec<String>,
     /// `--sample <n>`: the first `n` scripts of each phase (of the corpus
     /// order), for a quick run while porting.
     sample: Option<usize>,
@@ -175,6 +178,7 @@ struct Options {
 fn parse(args: &[&str]) -> Result<Options> {
     let mut options = Options {
         scripts: Vec::new(),
+        skip: Vec::new(),
         sample: None,
         games: Vec::new(),
         all_games: false,
@@ -195,6 +199,10 @@ fn parse(args: &[&str]) -> Result<Options> {
             "--script" => {
                 let name = rest.next().context(USAGE)?;
                 options.scripts.push(name.to_lowercase());
+            }
+            "--skip" => {
+                let name = rest.next().context(USAGE)?;
+                options.skip.push(name.to_lowercase());
             }
             "--sample" => options.sample = Some(rest.next().context(USAGE)?.parse::<usize>()?),
             "--game" => {
@@ -645,11 +653,11 @@ pub(super) fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
             .with_context(|| format!("unknown game {name}"))
     };
     let selected = |name: &str| -> bool {
-        options.scripts.is_empty()
-            || options
-                .scripts
-                .iter()
-                .any(|text| name.to_lowercase().contains(text.as_str()))
+        let lower = name.to_lowercase();
+        if options.skip.iter().any(|text| lower.contains(text.as_str())) {
+            return false;
+        }
+        options.scripts.is_empty() || options.scripts.iter().any(|text| lower.contains(text.as_str()))
     };
     let game_selected = |game: &Game| options.all_games || options.games.iter().any(|g| g.name == game.name);
 
@@ -713,6 +721,21 @@ pub(super) fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
                 println!("skipped       {}: {} is not set", case.script, game.data_var);
                 continue;
             };
+            // A machine may have the variable set to a folder that no longer
+            // holds the game (an emptied install): the case is skipped and
+            // named, as a mode skips a game whose variable is unset.
+            let load = match &case.load {
+                Some(load) => load.clone(),
+                None if game.name == runs.defaults.game => runs.defaults.load.clone(),
+                None => vec![game_master(game.mode).to_owned()],
+            };
+            let missing = load
+                .iter()
+                .find(|name| super::oracle_save::find_in(&data, name).is_err());
+            if let Some(name) = missing {
+                println!("skipped       {}: {name} is not in {}", case.script, data.display());
+                continue;
+            }
             let text = fs::read_to_string(scripts.join(&case.script)).unwrap_or_default();
             let class = class_from(&classes, &case.script, &text);
             let close_after = case.close_after || !case.save.is_empty();
@@ -722,15 +745,7 @@ pub(super) fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
                 class,
                 game,
                 data,
-                // A case that does not name its plugins loads the game
-                // master of its game: the defaults are for the default game
-                // (`Skyrim.esm` for `sse`), and a case that switches game
-                // without naming a load must not inherit them.
-                load: match &case.load {
-                    Some(load) => load.clone(),
-                    None if game.name == runs.defaults.game => runs.defaults.load.clone(),
-                    None => vec![game_master(game.mode).to_owned()],
-                },
+                load,
                 build_refs: case.build_refs.unwrap_or(runs.defaults.build_refs),
                 close_after,
                 save: case.save.clone(),
@@ -1589,23 +1604,12 @@ fn port_run(
         .arg("run")
         .arg(script_dir.join(&task.script))
         .arg("--scripts")
-        .arg(&script_dir)
-        .arg("--output")
-        .arg(&out);
-    if task.build_refs {
-        // The oracle built the reference information after loading (the
-        // script mode does by default); the port builds it on demand.
-        command.arg("--build-refs");
-    }
-    // The oracle ran with `-IKnowIllBreakMyGameWithThis` (a script may edit
-    // the game master); the port needs the same permission.
-    command.arg("--allow-edit-game-master");
-    for plugin in &task.save {
-        // The plugins whose changed state the run writes at its end, as the
-        // GUI's `SaveChanged` does on close.
-        command.arg("--save").arg(plugin);
-    }
-    command.stdin(std::process::Stdio::null());
+        .arg(&script_dir);
+    // The port's `script run` saves the plugins it changed at its end (the
+    // GUI's `SaveChanged` on close), and resolves `wbOutputPath` against
+    // the working directory when nothing set it (the oracle's `-O:` writes
+    // to `out/`, the port's CWD is that folder).
+    command.current_dir(&out).stdin(std::process::Stdio::null());
     let started = std::time::Instant::now();
     let output = command.output()?;
     outcome.port_seconds = Some(started.elapsed().as_secs_f64());
@@ -1760,40 +1764,33 @@ fn compare_files(oracle: &[CapturedFile], port: &[CapturedFile], what: &str, dif
 /// The lines of the script section of a message log: from the
 /// `Start: Applying script` line through [`SCRIPT_END_LINE`], without the
 /// `[mm:ss] ` prefixes and the elapsed time of the `Done:` line. A script
-/// whose `Mode:` keyword is `Silent` makes the GUI suppress its own
-/// progress lines around the run (`wbProgressLock`), so the section is the
-/// lines the script wrote itself: the ones without a time prefix, plus the
-/// closing line.
+/// whose text has a `Mode:` keyword runs with `bShowMessages` off, and the
+/// GUI then suppresses every progress line of the run with
+/// `wbProgressLock` -- the `Start:`, the `Done:` and the script's own
+/// `AddMessage` lines among them, which reach the memo through the same
+/// callback -- so the section is the closing line alone.
 fn script_lines(log: &str) -> Vec<String> {
-    let mut timed = Vec::new();
-    let mut silent = Vec::new();
+    let mut lines = Vec::new();
     let mut inside = false;
     for line in log.lines() {
         let raw = line.trim_end_matches(['\r', '\n']);
         let stripped = strip_time(raw);
-        let has_time = stripped.len() != raw.len();
         let text = match stripped.split_once(", Elapsed Time:") {
             Some((before, _)) => before.to_owned(),
             None => stripped.to_owned(),
         };
         if text == SCRIPT_END_LINE {
-            if inside {
-                timed.push(text);
-            } else {
-                silent.push(text);
-            }
+            lines.push(text);
             break;
         }
         if text.starts_with("Start: Applying script") {
             inside = true;
         }
         if inside {
-            timed.push(text);
-        } else if !has_time {
-            silent.push(text);
+            lines.push(text);
         }
     }
-    if inside { timed } else { silent }
+    lines
 }
 
 /// A line without the `[mm:ss] ` (or `[h:mm:ss] `) of `wbProgress`.
@@ -1853,16 +1850,13 @@ mod tests {
                 "You can close this application now."
             ]
         );
-        // A `Mode: Silent` script: the GUI suppresses its own lines around
-        // the run, so the section is the lines the script wrote.
-        let silent = "[00:00] Loading files...\nSetting Bookmark 1 to [0000003C], use Alt+1 to go back\n[00:06] You can close this application now.\n";
-        assert_eq!(
-            script_lines(silent),
-            vec![
-                "Setting Bookmark 1 to [0000003C], use Alt+1 to go back",
-                "You can close this application now."
-            ]
-        );
+        // A `Mode: Silent` script: every progress line of the run is
+        // suppressed, so the section is the closing line.
+        let silent = "[00:00] Loading files...
+Setting a bookmark
+[00:06] You can close this application now.
+";
+        assert_eq!(script_lines(silent), vec!["You can close this application now."]);
         assert_eq!(script_lines("[00:00] Loading files...\n"), Vec::<String>::new());
     }
 
