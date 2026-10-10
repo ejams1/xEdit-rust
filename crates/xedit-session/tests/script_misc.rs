@@ -412,6 +412,10 @@ fn the_json_surface_works() {
            obj, child, copy: TJsonObject;\n\
            arr: TJsonArray;\n\
          begin\n\
+           // The serialization configuration is process-wide (upstream's\n\
+           // unit variable); set it so the test does not depend on the\n\
+           // demo's own `SetJDOLineBreak(#13#10)`.\n\
+           SetJDOLineBreak(#10);\n\
            obj := TJsonObject.Create;\n\
            obj.S['name'] := 'xedit';\n\
            obj.I['count'] := 3;\n\
@@ -548,4 +552,71 @@ fn the_json_demo_corpus_script_runs_to_the_misc_surface() {
         "the demo should stop at its first JVCL SysUtils call, not elsewhere: {text}"
     );
     assert!(text.contains("Aborted: Applying script \"JSON - Demo\""), "{text}");
+}
+
+/// An adapter error carries its Delphi class name into the run's
+/// `Exception in unit ...: [<class>] <message>` line: the RTL's
+/// `ERegularExpressionError` texts and the JSON library's cast exception
+/// (`ValueError::ExternalClass`).
+#[test]
+fn the_misc_errors_name_their_delphi_class() {
+    let _guard = session_lock();
+    let folder = script_folder(
+        "errors",
+        "Errors.pas",
+        "unit Errors;\n\
+         function Initialize: Integer;\n\
+         var\n\
+           re: TPerlRegEx;\n\
+         begin\n\
+           re := TPerlRegEx.Create;\n\
+           re.Subject := 'abc';\n\
+           re.RegEx := 'z';\n\
+           re.Match;\n\
+           AddMessage(re.Groups[0]);\n\
+           Result := 1;\n\
+         end;\n\
+         end.\n",
+    );
+    let mut session = open_session();
+    let result = run(&mut session, &folder, "Errors.pas", json!({}));
+    assert_eq!(result["aborted"], true);
+    let text = script_fixture::abort_text(&result);
+    assert!(
+        // `UpdateExceptionPos`'s `ieExternal` text, then the run loop's
+        // `[<class>]` prefix -- the oracle's line shape.
+        text.contains(
+            "[ERegularExpressionError] External error in unit 'Errors' on line 1 : Successful match required"
+        ),
+        "{text}"
+    );
+    assert!(text.contains("Aborted: Applying script \"Errors\""), "{text}");
+
+    let folder = script_folder(
+        "errors-json",
+        "ErrorsJson.pas",
+        "unit ErrorsJson;\n\
+         function Initialize: Integer;\n\
+         var\n\
+           obj: TJsonObject;\n\
+           o: TJsonObject;\n\
+         begin\n\
+           obj := TJsonObject.Create;\n\
+           obj.S['name'] := 'x';\n\
+           o := obj.O['name'];\n\
+           AddMessage('never');\n\
+           Result := 1;\n\
+         end;\n\
+         end.\n",
+    );
+    let result = run(&mut session, &folder, "ErrorsJson.pas", json!({}));
+    assert_eq!(result["aborted"], true);
+    let text = script_fixture::abort_text(&result);
+    assert!(
+        text.contains(
+            "[EJsonCastException] External error in unit 'ErrorsJson' on line 1 : Cannot cast String into Object"
+        ),
+        "{text}"
+    );
+    let _ = std::fs::remove_dir_all(&folder);
 }
