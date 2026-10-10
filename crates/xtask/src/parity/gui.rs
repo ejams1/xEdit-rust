@@ -274,13 +274,17 @@ impl GuiRun<'_> {
             &mut dialogs,
         )?;
         let ended = log.contains(SCRIPT_END_LINE);
+        // The close and its log file only happen when the run reached the
+        // closing line or aborted; a run that stopped on a dialog was never
+        // closed.
+        let closed = ended || log.contains(SCRIPT_ABORT_LINE);
         Ok(ScriptRun {
             log,
             dialogs,
             ended,
             peak,
             data,
-            saved_log: if extras.close_after {
+            saved_log: if extras.close_after && closed {
                 Some(self.read_log()?)
             } else {
                 None

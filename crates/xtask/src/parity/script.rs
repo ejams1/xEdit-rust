@@ -339,15 +339,24 @@ fn class_of(name: &str, text: &str) -> Class {
     if name.eq_ignore_ascii_case(API_SCRIPT) {
         return Class::Api;
     }
-    let lower = text.to_lowercase();
-    let word = |needle: &str| lower.contains(needle);
-    if word("tform") || word("showmodal") {
+    let lower = without_comments(text).to_lowercase();
+    if word_in(&lower, "tform") || word_in(&lower, "showmodal") {
         return Class::Form;
     }
-    if word("inputquery") || word("inputbox") {
+    if word_in(&lower, "inputquery") || word_in(&lower, "inputbox") {
         return Class::Interactive;
     }
     Class::Headless
+}
+
+/// `needle` (lower case) as a whole word of the lower case `text`:
+/// `GetFormVersion` must not class a script as one that builds a `TForm`.
+fn word_in(text: &str, needle: &str) -> bool {
+    let is_word = |c: char| c.is_ascii_alphanumeric() || c == '_';
+    text.match_indices(needle).any(|(at, _)| {
+        !text[..at].chars().next_back().is_some_and(is_word)
+            && !text[at + needle.len()..].chars().next().is_some_and(is_word)
+    })
 }
 
 /// The classification of step 1 (`crates/xtask/oracle/scripts/corpus.json`),
@@ -361,10 +370,41 @@ struct CorpusFile {
 #[derive(Deserialize)]
 struct CorpusEntry {
     name: String,
-    class: String,
+    /// The class of a step 1 file that names one (`headless`, `form`,
+    /// `interactive`, `api`).
+    #[serde(default)]
+    class: Option<String>,
+    /// The step 1 file of the phase records the two greps instead: a script
+    /// can be both a form and a dialog script, and the `api` flag marks
+    /// `xEditAPI.pas`.
+    #[serde(default)]
+    form: bool,
+    #[serde(default)]
+    dialogs: bool,
+    #[serde(default)]
+    api: bool,
 }
 
-/// The classes of `corpus.json`, by lower-case script name.
+impl CorpusEntry {
+    fn class_name(&self) -> &'static str {
+        match &self.class {
+            Some(class) => match class.to_lowercase().as_str() {
+                "form" => "form",
+                "interactive" => "interactive",
+                "api" => "api",
+                _ => "headless",
+            },
+            None if self.api => "api",
+            None if self.form => "form",
+            None if self.dialogs => "interactive",
+            None => "headless",
+        }
+    }
+}
+
+/// The classes of `corpus.json` (step 1), by lower-case script name: it
+/// overrides the greps of [`class_of`]. A file that cannot be read at all
+/// leaves the greps in charge.
 fn corpus_classes(root: &Path) -> std::collections::HashMap<String, String> {
     let path = root.join("crates/xtask/oracle/scripts/corpus.json");
     let Ok(text) = fs::read_to_string(&path) else {
@@ -374,7 +414,7 @@ fn corpus_classes(root: &Path) -> std::collections::HashMap<String, String> {
         Ok(file) => file
             .scripts
             .into_iter()
-            .map(|entry| (entry.name.to_lowercase(), entry.class.to_lowercase()))
+            .map(|entry| (entry.name.to_lowercase(), entry.class_name().to_owned()))
             .collect(),
         Err(error) => {
             println!(
@@ -1765,6 +1805,8 @@ mod tests {
         assert_eq!(class_of("a.pas", "f.ShowModal;"), Class::Form);
         assert_eq!(class_of("a.pas", "s := InputQuery('x', 'y', s);"), Class::Interactive);
         assert_eq!(class_of("a.pas", "AddMessage('ok');"), Class::Headless);
+        assert_eq!(class_of("a.pas", "fv := GetFormVersion(rec);"), Class::Headless);
+        assert_eq!(class_of("a.pas", "{ a TForm in a comment }"), Class::Headless);
         assert_eq!(class_of("xEditAPI.pas", "unit xEditAPI; end."), Class::Api);
     }
 
