@@ -1,0 +1,650 @@
+{
+  "description": "The run cases of `cargo xtask parity script`: the form-free scripts of the 4.1.5q `Edit Scripts` folder (the 32 that use a form are covered by the port's form shim instead). A case names the game and the plugins to load (defaults below); `close_after` closes the GUI after the script, so `SaveChanged` writes the plugins it changed into the private data folder and their bytes are compared with the port's. A case with `build_refs` has the oracle build the reference information after loading (the script reads `ReferencedBy`); the port is told the same. Scripts classed interactive are listed for completeness and deferred unless named with --script.",
+  "defaults": {
+    "game": "sse",
+    "load": [
+      "Skyrim.esm"
+    ],
+    "build_refs": false
+  },
+  "cases": [
+    {
+      "script": "Add Prefix Plus Name To EDID.pas",
+      "close_after": true,
+      "save": [
+        "Skyrim.esm"
+      ],
+      "note": "edits records: the saved bytes are compared"
+    },
+    {
+      "script": "Add enable parent to the refs of specific base object.pas",
+      "close_after": true,
+      "save": [
+        "Skyrim.esm"
+      ],
+      "note": "edits records: the saved bytes are compared"
+    },
+    {
+      "script": "Apply custom scripted filter.pas"
+    },
+    {
+      "script": "Apply filter for cleaning.pas",
+      "timeout_minutes": 60
+    },
+    {
+      "script": "Apply filter for deleted navmeshes.pas",
+      "timeout_minutes": 60
+    },
+    {
+      "script": "BASH tags autodetection.pas"
+    },
+    {
+      "script": "Bookmark.pas"
+    },
+    {
+      "script": "Bookmark1.pas"
+    },
+    {
+      "script": "Bookmark1Go.pas"
+    },
+    {
+      "script": "Bookmark2.pas"
+    },
+    {
+      "script": "Bookmark2Go.pas"
+    },
+    {
+      "script": "Bookmark3.pas"
+    },
+    {
+      "script": "Bookmark3Go.pas"
+    },
+    {
+      "script": "Bookmark4.pas"
+    },
+    {
+      "script": "Bookmark4Go.pas"
+    },
+    {
+      "script": "Bookmark5.pas"
+    },
+    {
+      "script": "Bookmark5Go.pas"
+    },
+    {
+      "script": "Change persistent flag.pas"
+    },
+    {
+      "script": "Check for circular previous INFOs.pas"
+    },
+    {
+      "script": "Check for errors.pas"
+    },
+    {
+      "script": "Check for invalid alternate textures.pas"
+    },
+    {
+      "script": "Conflict Status.pas"
+    },
+    {
+      "script": "DDS - Find textures without mipmaps.pas"
+    },
+    {
+      "script": "Detect conflict between elements.pas"
+    },
+    {
+      "script": "Export dialogues.pas",
+      "build_refs": true
+    },
+    {
+      "script": "Export list of cells.pas"
+    },
+    {
+      "script": "FNV - Export dialogues.pas",
+      "game": "fnv",
+      "build_refs": true
+    },
+    {
+      "script": "FO3 and FNV - Translator.pas",
+      "game": "fnv",
+      "close_after": true,
+      "save": [
+        "FalloutNV.esm"
+      ],
+      "note": "edits records: the saved bytes are compared"
+    },
+    {
+      "script": "Fallout4 - Convert ALCH to SPEL.pas",
+      "game": "fo4",
+      "close_after": true,
+      "save": [
+        "Fallout4.esm"
+      ],
+      "note": "edits records: the saved bytes are compared"
+    },
+    {
+      "script": "Fallout4 - Copy XPRI subrecord.pas",
+      "game": "fo4"
+    },
+    {
+      "script": "Fallout4 - Disable PreVis.pas",
+      "game": "fo4",
+      "close_after": true,
+      "save": [
+        "Fallout4.esm"
+      ],
+      "note": "edits records: the saved bytes are compared",
+      "timeout_minutes": 60
+    },
+    {
+      "script": "Fallout4 - Filter for precombined statics.pas",
+      "game": "fo4",
+      "build_refs": true
+    },
+    {
+      "script": "Fallout4 - Import SCLP bone weights.pas",
+      "game": "fo4",
+      "close_after": true,
+      "save": [
+        "Fallout4.esm"
+      ],
+      "note": "edits records: the saved bytes are compared"
+    },
+    {
+      "script": "Find ESP plugins which could be turned into ESL.pas"
+    },
+    {
+      "script": "JSON - Demo.pas"
+    },
+    {
+      "script": "LOD Statistics.pas"
+    },
+    {
+      "script": "List FormIDs from specific space.pas"
+    },
+    {
+      "script": "List LOD objects and meshes.pas"
+    },
+    {
+      "script": "List hardcoded forms from references.pas"
+    },
+    {
+      "script": "List loaded plugins and their masters.pas"
+    },
+    {
+      "script": "List master references.pas"
+    },
+    {
+      "script": "List null FormID.pas"
+    },
+    {
+      "script": "List perk entry points usage.pas"
+    },
+    {
+      "script": "List used baseforms and statistics.pas"
+    },
+    {
+      "script": "List used meshes from references.pas"
+    },
+    {
+      "script": "List used meshes.pas"
+    },
+    {
+      "script": "List winning override references.pas",
+      "build_refs": true
+    },
+    {
+      "script": "Make new records from overrides.pas",
+      "close_after": true,
+      "save": [
+        "Skyrim.esm"
+      ],
+      "note": "edits records: the saved bytes are compared"
+    },
+    {
+      "script": "NIF - Convert OBJ to NIF.pas",
+      "close_after": true,
+      "save": [
+        "Skyrim.esm"
+      ],
+      "note": "edits records: the saved bytes are compared"
+    },
+    {
+      "script": "NIF - List blocks references.pas"
+    },
+    {
+      "script": "Oblivion - Export Dialogues.pas",
+      "game": "tes4"
+    },
+    {
+      "script": "Oblivion - Export all scripts in xml format.pas",
+      "game": "tes4"
+    },
+    {
+      "script": "Oblivion - Items lookup replacement.pas",
+      "game": "tes4",
+      "close_after": true,
+      "save": [
+        "Oblivion.esm"
+      ],
+      "note": "edits records: the saved bytes are compared"
+    },
+    {
+      "script": "Oblivion - OCO faces assignment.pas",
+      "game": "tes4"
+    },
+    {
+      "script": "Output used assets filenames.pas"
+    },
+    {
+      "script": "Put master references in the same cell as overriding references.pas",
+      "close_after": true,
+      "save": [
+        "Skyrim.esm"
+      ],
+      "note": "edits records: the saved bytes are compared"
+    },
+    {
+      "script": "Put worldspace references in the right cells.pas",
+      "close_after": true,
+      "save": [
+        "Skyrim.esm"
+      ],
+      "note": "edits records: the saved bytes are compared"
+    },
+    {
+      "script": "Remove duplicate references.pas",
+      "build_refs": true
+    },
+    {
+      "script": "Remove excess references.pas"
+    },
+    {
+      "script": "Remove identical to previous override records.pas",
+      "timeout_minutes": 60
+    },
+    {
+      "script": "Remove invalid entries from from lists.pas"
+    },
+    {
+      "script": "Remove percentage of references of specific object.pas"
+    },
+    {
+      "script": "Remove same references against the master cell.pas"
+    },
+    {
+      "script": "Renumber FormID of Matching EDID.pas",
+      "build_refs": true,
+      "close_after": true,
+      "save": [
+        "Skyrim.esm"
+      ],
+      "note": "edits records: the saved bytes are compared"
+    },
+    {
+      "script": "Replace landscape texture.pas",
+      "close_after": true,
+      "save": [
+        "Skyrim.esm"
+      ],
+      "note": "edits records: the saved bytes are compared"
+    },
+    {
+      "script": "Replace map marker.pas",
+      "close_after": true,
+      "save": [
+        "Skyrim.esm"
+      ],
+      "note": "edits records: the saved bytes are compared"
+    },
+    {
+      "script": "Replace model alternate textures.pas",
+      "close_after": true,
+      "save": [
+        "Skyrim.esm"
+      ],
+      "note": "edits records: the saved bytes are compared"
+    },
+    {
+      "script": "Replace model file name.pas",
+      "close_after": true,
+      "save": [
+        "Skyrim.esm"
+      ],
+      "note": "edits records: the saved bytes are compared"
+    },
+    {
+      "script": "Replace text in EDID and FULL.pas",
+      "close_after": true,
+      "save": [
+        "Skyrim.esm"
+      ],
+      "note": "edits records: the saved bytes are compared"
+    },
+    {
+      "script": "Report unclamped FormIDs.pas"
+    },
+    {
+      "script": "Restore record names from master.pas",
+      "close_after": true,
+      "save": [
+        "Skyrim.esm"
+      ],
+      "note": "edits records: the saved bytes are compared"
+    },
+    {
+      "script": "Save script source.pas"
+    },
+    {
+      "script": "Scale trees references.pas",
+      "close_after": true,
+      "save": [
+        "Skyrim.esm"
+      ],
+      "note": "edits records: the saved bytes are compared"
+    },
+    {
+      "script": "Set default water level in exterior cells with HasWater flag.pas",
+      "close_after": true,
+      "save": [
+        "Skyrim.esm"
+      ],
+      "note": "edits records: the saved bytes are compared"
+    },
+    {
+      "script": "SetESL.pas"
+    },
+    {
+      "script": "Skyrim - Add keywords.pas",
+      "game": "tes5",
+      "close_after": true,
+      "save": [
+        "Skyrim.esm"
+      ],
+      "note": "edits records: the saved bytes are compared"
+    },
+    {
+      "script": "Skyrim - Add shadow bias to lights.pas",
+      "game": "tes5",
+      "close_after": true,
+      "save": [
+        "Skyrim.esm"
+      ],
+      "note": "edits records: the saved bytes are compared"
+    },
+    {
+      "script": "Skyrim - Check edge links in navmeshes.pas",
+      "game": "tes5"
+    },
+    {
+      "script": "Skyrim - Check script properties.pas",
+      "game": "tes5"
+    },
+    {
+      "script": "Skyrim - Clean edge links in navmeshes.pas",
+      "game": "tes5",
+      "close_after": true,
+      "save": [
+        "Skyrim.esm"
+      ],
+      "note": "edits records: the saved bytes are compared",
+      "timeout_minutes": 60
+    },
+    {
+      "script": "Skyrim - Convert BOOK to SCRL.pas",
+      "game": "tes5",
+      "close_after": true,
+      "save": [
+        "Skyrim.esm"
+      ],
+      "note": "edits records: the saved bytes are compared"
+    },
+    {
+      "script": "Skyrim - Convert LIGH record with mesh to STAT or MISC.pas",
+      "game": "tes5",
+      "build_refs": true,
+      "close_after": true,
+      "save": [
+        "Skyrim.esm"
+      ],
+      "note": "edits records: the saved bytes are compared"
+    },
+    {
+      "script": "Skyrim - Copy book text only from master record.pas",
+      "game": "tes5",
+      "close_after": true,
+      "save": [
+        "Skyrim.esm"
+      ],
+      "note": "edits records: the saved bytes are compared"
+    },
+    {
+      "script": "Skyrim - Copy cells settings.pas",
+      "game": "tes5",
+      "close_after": true,
+      "save": [
+        "Skyrim.esm"
+      ],
+      "note": "edits records: the saved bytes are compared"
+    },
+    {
+      "script": "Skyrim - Create patch for ClimatesOfTamriel and SoundsOfSkyrim-TheWilds.pas",
+      "game": "tes5",
+      "close_after": true,
+      "save": [
+        "Skyrim.esm"
+      ],
+      "note": "edits records: the saved bytes are compared"
+    },
+    {
+      "script": "Skyrim - Export and import weapons stats from spreadsheet file.pas",
+      "game": "tes5",
+      "close_after": true,
+      "save": [
+        "Skyrim.esm"
+      ],
+      "note": "edits records: the saved bytes are compared"
+    },
+    {
+      "script": "Skyrim - Find uncompressed records.pas",
+      "game": "tes5"
+    },
+    {
+      "script": "Skyrim - List actors with more than one vendor faction.pas",
+      "game": "tes5"
+    },
+    {
+      "script": "Skyrim - List interior cells.pas",
+      "game": "tes5"
+    },
+    {
+      "script": "Skyrim - List old version plugins.pas",
+      "game": "tes5"
+    },
+    {
+      "script": "Skyrim - List used scripts.pas",
+      "game": "tes5"
+    },
+    {
+      "script": "Skyrim - Make outfits from inventories.pas",
+      "game": "tes5",
+      "close_after": true,
+      "save": [
+        "Skyrim.esm"
+      ],
+      "note": "edits records: the saved bytes are compared",
+      "timeout_minutes": 60
+    },
+    {
+      "script": "Skyrim - Ore Veins don't respawn.pas",
+      "game": "tes5",
+      "close_after": true,
+      "save": [
+        "Skyrim.esm"
+      ],
+      "note": "edits records: the saved bytes are compared"
+    },
+    {
+      "script": "Skyrim - Read Books Aloud.pas",
+      "game": "tes5",
+      "close_after": true,
+      "save": [
+        "Skyrim.esm"
+      ],
+      "note": "edits records: the saved bytes are compared"
+    },
+    {
+      "script": "Skyrim - Remove frequence variance from sound descriptors.pas",
+      "game": "tes5",
+      "close_after": true,
+      "save": [
+        "Skyrim.esm"
+      ],
+      "note": "edits records: the saved bytes are compared"
+    },
+    {
+      "script": "Skyrim - Remove invalid entries.pas",
+      "game": "tes5",
+      "close_after": true,
+      "save": [
+        "Skyrim.esm"
+      ],
+      "note": "edits records: the saved bytes are compared"
+    },
+    {
+      "script": "Skyrim - Reuse faces.pas",
+      "game": "tes5",
+      "close_after": true,
+      "save": [
+        "Skyrim.esm"
+      ],
+      "note": "edits records: the saved bytes are compared"
+    },
+    {
+      "script": "Skyrim - Set HavokDontSettle flag on BOOK references.pas",
+      "game": "tes5",
+      "close_after": true,
+      "save": [
+        "Skyrim.esm"
+      ],
+      "note": "edits records: the saved bytes are compared"
+    },
+    {
+      "script": "Skyrim - Set HavokDontSettle flag on refs using models from list.pas",
+      "game": "tes5",
+      "close_after": true,
+      "save": [
+        "Skyrim.esm"
+      ],
+      "note": "edits records: the saved bytes are compared"
+    },
+    {
+      "script": "Skyrim - Set first person flags on armors affected by specific plugin.pas",
+      "game": "tes5",
+      "close_after": true,
+      "save": [
+        "Skyrim.esm"
+      ],
+      "note": "edits records: the saved bytes are compared"
+    },
+    {
+      "script": "Skyrim - Show references from location.pas",
+      "game": "tes5"
+    },
+    {
+      "script": "Skyrim - Tweak bloom, eyes adaptation, tint.pas",
+      "game": "tes5",
+      "close_after": true,
+      "save": [
+        "Skyrim.esm"
+      ],
+      "note": "edits records: the saved bytes are compared"
+    },
+    {
+      "script": "Undelete and Disable References.pas",
+      "close_after": true,
+      "save": [
+        "Skyrim.esm"
+      ],
+      "note": "edits records: the saved bytes are compared",
+      "timeout_minutes": 60
+    },
+    {
+      "script": "Undelete navmeshes.pas",
+      "close_after": true,
+      "save": [
+        "Skyrim.esm"
+      ],
+      "note": "edits records: the saved bytes are compared",
+      "timeout_minutes": 60
+    },
+    {
+      "script": "Worldspace change height.pas",
+      "close_after": true,
+      "save": [
+        "Skyrim.esm"
+      ],
+      "note": "edits records: the saved bytes are compared"
+    },
+    {
+      "script": "Worldspace crop.pas"
+    },
+    {
+      "script": "Worldspace displacement.pas",
+      "close_after": true,
+      "save": [
+        "Skyrim.esm"
+      ],
+      "note": "edits records: the saved bytes are compared"
+    },
+    {
+      "script": "Worldspace scale refs position.pas",
+      "close_after": true,
+      "save": [
+        "Skyrim.esm"
+      ],
+      "note": "edits records: the saved bytes are compared"
+    },
+    {
+      "script": "_newscript_.pas"
+    },
+    {
+      "script": "Add prefix or suffix to Editor ID.pas",
+      "note": "asks for input even without a form (InputQuery/InputBox): deferred unless named with --script"
+    },
+    {
+      "script": "Base object variations.pas",
+      "build_refs": true,
+      "note": "asks for input even without a form (InputQuery/InputBox): deferred unless named with --script"
+    },
+    {
+      "script": "Change load order of FormID.pas",
+      "build_refs": true,
+      "note": "asks for input even without a form (InputQuery/InputBox): deferred unless named with --script"
+    },
+    {
+      "script": "List records referencing specific plugin.pas",
+      "note": "asks for input even without a form (InputQuery/InputBox): deferred unless named with --script"
+    },
+    {
+      "script": "Redirect references.pas",
+      "build_refs": true,
+      "note": "asks for input even without a form (InputQuery/InputBox): deferred unless named with --script"
+    },
+    {
+      "script": "Renumber FormID.pas",
+      "build_refs": true,
+      "note": "asks for input even without a form (InputQuery/InputBox): deferred unless named with --script"
+    },
+    {
+      "script": "Skyrim - Copy VMAD subrecord.pas",
+      "game": "tes5",
+      "note": "asks for input even without a form (InputQuery/InputBox): deferred unless named with --script"
+    },
+    {
+      "script": "Skyrim - Filter by script.pas",
+      "game": "tes5",
+      "note": "asks for input even without a form (InputQuery/InputBox): deferred unless named with --script"
+    }
+  ]
+}

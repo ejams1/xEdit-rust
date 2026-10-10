@@ -72,6 +72,11 @@ pub struct GuiRun<'a> {
     pub budget: &'a Budget,
     pub expected_peak: u64,
     pub max_memory: u64,
+    /// Extra command-line switches of the run. The corpus cases pass
+    /// `-IKnowIllBreakMyGameWithThis` (`with -IKnowWhatImDoing` it lets a
+    /// script edit the game master of the private copy, as upstream
+    /// requires: `wbAllowEditGameMaster` alone).
+    pub extra_args: Vec<String>,
 }
 
 /// What the script left after a run.
@@ -205,13 +210,7 @@ impl GuiRun<'_> {
     /// [`GuiRun::run`] with extra files and dialog answers.
     pub fn run_with(&self, extras: &GuiExtras) -> Result<GuiResult> {
         let (mut command, data) = self.prepare()?;
-        for (path, bytes) in &extras.files {
-            let target = self.work.join(path);
-            if let Some(parent) = target.parent() {
-                fs::create_dir_all(parent)?;
-            }
-            fs::write(&target, bytes).with_context(|| format!("writing {}", target.display()))?;
-        }
+        self.write_extras(extras)?;
         command.arg(format!("-script:{}", windows_path(&self.work.join("oracle.pas"))));
         if !self.build_refs {
             command.arg("-nobuildrefs");
@@ -223,7 +222,8 @@ impl GuiRun<'_> {
         } else {
             Until::Marker(&marker)
         };
-        let (peak, _) = self.spawn_and_watch(command, until, &extras.answers, &mut log)?;
+        let mut dialogs = Vec::new();
+        let (peak, _) = self.spawn_and_watch(command, until, &extras.answers, &mut log, &mut dialogs)?;
         let status = fs::read_to_string(self.work.join("status.txt"))
             .context("the script wrote no status")?
             .lines()
@@ -241,6 +241,64 @@ impl GuiRun<'_> {
                 None
             },
         })
+    }
+
+    /// Runs a script file of the run folder in the GUI's script mode as the
+    /// corpus cases do: no marker file, the run ends at
+    /// [`SCRIPT_END_LINE`], and a dialog a corpus script shows (an
+    /// `InputQuery`, a form, a message box) ends it with the dialog
+    /// recorded instead of failing. The script and the units it `uses` are
+    /// placed in the run folder by the caller ([`GuiExtras::files`]); `out`
+    /// is passed as `-O:` so that `wbOutputPath` of the script is under the
+    /// run folder.
+    pub fn run_script(&self, script: &str, extras: &GuiExtras, out: Option<&Path>) -> Result<ScriptRun> {
+        let (mut command, data) = self.prepare()?;
+        self.write_viewsettings()?;
+        self.write_extras(extras)?;
+        command.arg(format!("-script:{}", windows_path(&self.work.join(script))));
+        if let Some(out) = out {
+            command.arg(format!("-O:{}\\", windows_path(out)));
+        }
+        if !self.build_refs {
+            command.arg("-nobuildrefs");
+        }
+        let mut log = String::new();
+        let mut dialogs = Vec::new();
+        let (peak, _) = self.spawn_and_watch(
+            command,
+            Until::ScriptEnd {
+                close_after: extras.close_after,
+            },
+            &[],
+            &mut log,
+            &mut dialogs,
+        )?;
+        let ended = log.contains(SCRIPT_END_LINE);
+        Ok(ScriptRun {
+            log,
+            dialogs,
+            ended,
+            peak,
+            data,
+            saved_log: if extras.close_after {
+                Some(self.read_log()?)
+            } else {
+                None
+            },
+        })
+    }
+
+    /// Writes the files of `extras` into the run folder before the GUI
+    /// starts.
+    fn write_extras(&self, extras: &GuiExtras) -> Result<()> {
+        for (path, bytes) in &extras.files {
+            let target = self.work.join(path);
+            if let Some(parent) = target.parent() {
+                fs::create_dir_all(parent)?;
+            }
+            fs::write(&target, bytes).with_context(|| format!("writing {}", target.display()))?;
+        }
+        Ok(())
     }
 
     /// The message log the GUI writes next to its executable on exit.
@@ -299,23 +357,7 @@ impl GuiRun<'_> {
     /// exit of the GUI, or the line its message log ends an auto mode with.
     fn run_auto_mode_until(&self, args: &[&str], until: Until<'_>) -> Result<AutoModeResult> {
         let (mut command, data) = self.prepare()?;
-        // `Settings` lives next to the plugin list (`-P:`), named
-        // `<list>.<game>viewsettings`.
-        // The developer message was shown today (a Delphi date: days since
-        // 1899-12-30), as the GUI records it, and `Patron` skips it in the
-        // auto load modes (`DoInit`: `not wbPatron or not xeAutoLoad`), and
-        // `ShowTip` the tip of the day.
-        let today = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map_or(0, |since| since.as_secs() / 86_400)
-            + 25_569;
-        fs::write(
-            self.work
-                .join(format!("plugins.{}viewsettings", self.mode.to_ascii_lowercase())),
-            format!(
-                "[Init]\r\nFirst64Start=0\r\n\r\n[DeveloperMessage]\r\nLastShownOn={today}\r\nVersion=0\r\n\r\n[Options]\r\nPatron=1\r\nShowTip=0\r\n"
-            ),
-        )?;
+        self.write_viewsettings()?;
         for arg in args {
             command.arg(*arg);
         }
@@ -334,7 +376,8 @@ impl GuiRun<'_> {
             button: Some("OK".to_owned()),
             text: None,
         }];
-        let (peak, exit_code) = match self.spawn_and_watch(command, until, &answers, &mut log) {
+        let mut dialogs = Vec::new();
+        let (peak, exit_code) = match self.spawn_and_watch(command, until, &answers, &mut log, &mut dialogs) {
             Ok(result) => result,
             Err(error) => bail!(
                 "{error}; the end of the message log:
@@ -358,6 +401,28 @@ impl GuiRun<'_> {
             peak,
             exit_code,
         })
+    }
+
+    /// The settings file of the run: `Settings` lives next to the plugin
+    /// list (`-P:`), named `<list>.<game>viewsettings`. The developer
+    /// message was shown today (a Delphi date: days since 1899-12-30), as
+    /// the GUI records it, and `Patron` skips it in the auto load modes
+    /// (`DoInit`: `not wbPatron or not xeAutoLoad`), and `ShowTip` the tip
+    /// of the day. The script mode shows no such prompt, so this is only
+    /// insurance for a mode that does.
+    fn write_viewsettings(&self) -> Result<()> {
+        let today = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |since| since.as_secs() / 86_400)
+            + 25_569;
+        fs::write(
+            self.work
+                .join(format!("plugins.{}viewsettings", self.mode.to_ascii_lowercase())),
+            format!(
+                "[Init]\r\nFirst64Start=0\r\n\r\n[DeveloperMessage]\r\nLastShownOn={today}\r\nVersion=0\r\n\r\n[Options]\r\nPatron=1\r\nShowTip=0\r\n"
+            ),
+        )?;
+        Ok(())
     }
 
     /// The private run folder and the command line both kinds of run share.
@@ -426,19 +491,24 @@ impl GuiRun<'_> {
             .arg(format!("-M:{}\\", windows_path(&my_games)))
             .arg(format!("-I:{}", windows_path(&ini)))
             .arg(format!("-G:{}\\", windows_path(&saves)))
-            .arg("-IKnowWhatImDoing")
-            .current_dir(&self.work);
+            .arg("-IKnowWhatImDoing");
+        for arg in &self.extra_args {
+            command.arg(arg);
+        }
+        command.current_dir(&self.work);
         Ok((command, data))
     }
 
     /// Starts the GUI in its job object and watches it until `until`,
-    /// answering `answers`; `log` gets the message log of the main form.
+    /// answering `answers`; `log` gets the message log of the main form and
+    /// `dialogs` the dialogs that stayed with their texts.
     fn spawn_and_watch(
         &self,
         command: HiddenCommand,
         until: Until,
         answers: &[Answer],
         log: &mut String,
+        dialogs: &mut Vec<String>,
     ) -> Result<(Option<u64>, Option<u32>)> {
         let _reservation = self.budget.reserve(self.expected_peak.min(self.max_memory));
         let mut child = command
@@ -452,7 +522,16 @@ impl GuiRun<'_> {
                 return Err(error);
             }
         };
-        let watched = watch(&mut child, until, self.timeout, self.hang_timeout, answers, log);
+        let watched = watch(
+            &mut child,
+            until,
+            self.timeout,
+            self.hang_timeout,
+            answers,
+            &self.work,
+            log,
+            dialogs,
+        );
         child.kill();
         let peak = limit.peak();
         if limit.reached() {
@@ -484,19 +563,57 @@ enum Until<'a> {
     /// never delivers (the queued rename of a save, a prompt of a Windows
     /// component), and the files the mode wrote are already on disk.
     LogLine(&'static str),
+    /// [`SCRIPT_END_LINE`] in the message log: `DoRunScript` posted it after
+    /// the script returned. A corpus script may still ask for input (a
+    /// message box, `InputQuery`, a form), so a dialog that stays ends the
+    /// run with the dialog recorded instead of failing it ([`ScriptRun`]).
+    /// With `close_after` the main form is then closed, so that the GUI
+    /// saves what the script changed ([`GuiExtras::close_after`]) and
+    /// writes its log file.
+    ScriptEnd { close_after: bool },
+}
+
+/// The line `DoRunScript` posts after the script (`PostAddMessage('You can
+/// close this application now.')`): the end of a run of the script mode
+/// over a corpus script.
+pub const SCRIPT_END_LINE: &str = "You can close this application now.";
+
+/// `PerformLongAction` logs this when the action raised and was aborted: a
+/// script that fails at runtime never reaches [`SCRIPT_END_LINE`].
+pub const SCRIPT_ABORT_LINE: &str = "Aborted: Applying script";
+
+/// What [`GuiRun::run_script`] left.
+pub struct ScriptRun {
+    /// The message log of the main form as last read.
+    pub log: String,
+    /// The dialogs that stayed and ended the run, as
+    /// `[class] "title": texts`.
+    pub dialogs: Vec<String>,
+    /// Whether the script mode posted [`SCRIPT_END_LINE`] (the script
+    /// compiled and the run reached the end of `DoRunScript`).
+    pub ended: bool,
+    pub peak: Option<u64>,
+    /// The private data folder, which holds what a close saved.
+    pub data: PathBuf,
+    /// The message log the GUI wrote on close (`close_after` only).
+    pub saved_log: Option<String>,
 }
 
 /// Waits for the script's marker (or the exit), answering the module
 /// selection and the expected dialogs (`answers`, in order) and failing on
 /// any other dialog, a timeout or a hang. `log_out` gets the message log of
-/// the main form.
+/// the main form and `dialogs_out` the dialogs that stayed with their
+/// texts.
+#[allow(clippy::too_many_arguments)]
 fn watch(
     child: &mut HiddenChild,
     until: Until,
     timeout: Duration,
     hang_timeout: Duration,
     answers: &[Answer],
+    work: &Path,
     log_out: &mut String,
+    dialogs_out: &mut Vec<String>,
 ) -> Result<Option<u32>> {
     let start = Instant::now();
     let mut clicked = Vec::new();
@@ -523,19 +640,43 @@ fn watch(
             );
             // The marker is written before the script returns.
             std::thread::sleep(Duration::from_secs(2));
-            for window in visible_windows(child.id()) {
-                if window.class == "TfrmMain" {
-                    close_window(window.handle);
+            close_main_form(child);
+            closing = true;
+        }
+        // A corpus script: the script mode posted its closing line, or the
+        // script aborted (`SCRIPT_ABORT_LINE`, a raise at runtime, which
+        // skips the closing line). Without `close_after` the run is done
+        // (the last lines reach the log right after the line); with it, the
+        // main form is closed so that the GUI saves what the script changed.
+        if let Until::ScriptEnd { close_after } = until
+            && !closing
+            && (log_out.contains(SCRIPT_END_LINE) || log_out.contains(SCRIPT_ABORT_LINE))
+        {
+            ensure!(
+                next_answer.is_none(),
+                "the oracle did not show the expected dialog [{}] \"{}\"",
+                next_answer.map(|a| a.class.as_str()).unwrap_or_default(),
+                next_answer.map(|a| a.title.as_str()).unwrap_or_default()
+            );
+            if !close_after {
+                std::thread::sleep(Duration::from_millis(500));
+                if let Some(handle) = main_form {
+                    let log = main_form_log(handle);
+                    if !log.is_empty() {
+                        *log_out = log;
+                    }
                 }
+                return Ok(None);
             }
+            std::thread::sleep(Duration::from_secs(2));
+            close_main_form(child);
             closing = true;
         }
         // `FormClose` writes the message log after `SaveChanged`; the 4.1.5q
         // GUI then keeps raising exceptions in its message loop on the
         // hidden desktop instead of exiting, so the log ends the run.
         if closing
-            && let Until::MarkerThenClose(marker) = until
-            && let Some(bin) = marker.parent().map(|work| work.join("bin"))
+            && let Some(bin) = closing_log_dir(&until, work)
             && fs::read_dir(&bin)?
                 .filter_map(|entry| entry.ok())
                 .any(|entry| entry.file_name().to_string_lossy().ends_with("_log.txt"))
@@ -612,8 +753,11 @@ fn watch(
                         return Ok(None);
                     }
                     // A script that does not compile, or raises outside its
-                    // own handler, is aborted without the closing line.
-                    if log.contains("Aborted: Applying script") {
+                    // own handler, is aborted without the closing line. A
+                    // corpus script may abort at runtime: its case compares
+                    // the abort as the outcome, so it is left to the end of
+                    // the run above.
+                    if log.contains(SCRIPT_ABORT_LINE) && !matches!(until, Until::ScriptEnd { .. }) {
                         bail!(
                             "the oracle aborted the script; the end of the log:
 {}",
@@ -720,6 +864,18 @@ fn watch(
                                 )
                             })
                             .collect();
+                        dialogs_out.push(format!(
+                            "[{}] \"{}\": {}",
+                            window.class,
+                            window.title,
+                            window.texts.join(" | ")
+                        ));
+                        // A corpus script may ask for input: the run ends
+                        // with the dialog recorded, for the case to class.
+                        if matches!(until, Until::ScriptEnd { .. }) {
+                            std::thread::sleep(Duration::from_secs(2));
+                            return Ok(None);
+                        }
                         bail!(
                             "the oracle shows a dialog [{}] \"{}\": {}; every window of the process: {}",
                             window.class,
@@ -889,6 +1045,27 @@ pub(super) fn visible_windows(pid: u32) -> Vec<Window> {
 #[cfg(not(windows))]
 pub(super) fn visible_windows(_pid: u32) -> Vec<Window> {
     Vec::new()
+}
+
+/// Asks the main form of the process to close, which runs `SaveChanged` in
+/// the auto modes (the script mode is one of `wbAutoModes`, so its save has
+/// no dialog).
+fn close_main_form(child: &HiddenChild) {
+    for window in visible_windows(child.id()) {
+        if window.class == "TfrmMain" {
+            close_window(window.handle);
+        }
+    }
+}
+
+/// The folder the GUI writes `<AppName><ToolName>_log.txt` into once a run
+/// ends by closing its main form.
+fn closing_log_dir(until: &Until, work: &Path) -> Option<PathBuf> {
+    match until {
+        Until::MarkerThenClose(marker) => marker.parent().map(|work| work.join("bin")),
+        Until::ScriptEnd { close_after: true } => Some(work.join("bin")),
+        _ => None,
+    }
 }
 
 /// Asks a window to close (`WM_CLOSE`), as its close button does.

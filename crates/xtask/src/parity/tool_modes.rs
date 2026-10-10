@@ -582,6 +582,7 @@ fn check(runner: &Runner, game: &'static Game, data: &Path, name: &str, mode: &M
             budget: &runner.budget,
             expected_peak,
             max_memory: runner.max_memory,
+            extra_args: Vec::new(),
         };
         // `-autoload`: the module selection of the GUI is answered by the
         // GUI itself, as the quick clean check does (the harness would

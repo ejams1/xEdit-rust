@@ -69,6 +69,7 @@ mod modgroups;
 mod nif;
 mod oracle_refs;
 mod oracle_save;
+mod script;
 mod sniff;
 mod strings;
 mod tool_modes;
@@ -344,6 +345,9 @@ pub fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
     }
     if let Some((&"lodgen", rest)) = args.split_first() {
         return lodgen::run(root, tag, rest);
+    }
+    if let Some((&"script", rest)) = args.split_first() {
+        return script::run(root, tag, rest);
     }
     let options = parse(args)?;
     // The round trip has no oracle binary: the input file is the oracle
@@ -1224,7 +1228,7 @@ fn first_byte_difference(a: &Path, b: &Path) -> Result<Option<u64>> {
 }
 
 fn parse(args: &[&str]) -> Result<Options> {
-    const USAGE: &str = "usage: cargo xtask parity dump|saves|roundtrip|oracle-save|oracle-edit|bsarch|conflicts|refs|clean|check|check-dump|modgroups|merged|filter|tool-modes [--game <game>]... [--file <name>]... [--mode <tool mode>]... \
+    const USAGE: &str = "usage: cargo xtask parity dump|saves|roundtrip|oracle-save|oracle-edit|bsarch|conflicts|refs|clean|check|check-dump|modgroups|merged|filter|tool-modes|script [--game <game>]... [--file <name>]... [--mode <tool mode>]... \
                          [--record <FormID>]... [--oracle-only] [--jobs <n>] [--memory-budget <GiB>] \
                          [--max-memory <GiB>] [--oracle-timeout <minutes>]";
     let (mode, rest) = args.split_first().context(USAGE)?;
