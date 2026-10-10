@@ -397,6 +397,7 @@ pub fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
     }
     if options.tool_modes {
         return tool_modes::run_tool_modes(root, tag, &options, cache, scratch, oracle_dir);
+    }
     if options.filter {
         return filter::run_filter(root, tag, &options, cache, scratch, oracle_dir);
     }
@@ -1228,8 +1229,7 @@ fn parse(args: &[&str]) -> Result<Options> {
                          [--oracle-timeout <minutes>]";
     let (mode, rest) = args.split_first().context(USAGE)?;
     let (saves, roundtrip, oracle_save, oracle_edit) = match *mode {
-        "dump" | "conflicts" | "refs" | "clean" | "check" | "modgroups" | "merged" | "tool-modes" => {
-        "dump" | "conflicts" | "refs" | "clean" | "check" | "modgroups" | "merged" | "filter" => {
+        "dump" | "conflicts" | "refs" | "clean" | "check" | "modgroups" | "merged" | "filter" | "tool-modes" => {
             (false, false, false, false)
         }
         "check-dump" => {
