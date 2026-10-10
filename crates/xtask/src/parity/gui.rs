@@ -131,6 +131,17 @@ pub fn exe_name(mode: &str) -> &'static str {
     }
 }
 
+/// The game executable whose hardcoded records xEdit reads, for the games
+/// that keep them in it (Fallout 3 and New Vegas). The later games read
+/// theirs from the game master and need no such file.
+pub fn hardcoded_exe(mode: &str) -> Option<&'static str> {
+    match mode.to_ascii_uppercase().as_str() {
+        "FO3" => Some("Fallout3.exe"),
+        "FNV" => Some("FalloutNV.exe"),
+        _ => None,
+    }
+}
+
 /// Whether the plugin list of a game names only the active plugins, without
 /// the `*` (`wbSimplePluginsTxt`).
 pub fn simple_plugins_txt(mode: &str) -> bool {
@@ -266,6 +277,15 @@ impl GuiRun<'_> {
         self.run_auto_mode(&["-CheckForErrors", target])
     }
 
+    /// Runs one of the other tool modes of `xeInit.pas` that work over the
+    /// loaded files (`-setesm -autoexit <plugin>`, `-onamupdate -autoexit`,
+    /// ...): the mode's switches, `-autoexit` to close the GUI
+    /// (`tmrShutdown` of `tmrGeneratorTimer`) and the plugin a plugin mode
+    /// needs.
+    pub fn run_tool_mode(&self, args: &[&str]) -> Result<AutoModeResult> {
+        self.run_auto_mode(args)
+    }
+
     /// Runs one of the modes that load, work and exit without a script
     /// (`args` after the common switches) and waits for the GUI to exit.
     /// The settings file of the run says the 64-bit start question and the
@@ -293,7 +313,29 @@ impl GuiRun<'_> {
         for arg in args {
             command.arg(*arg);
         }
-        let (peak, exit_code) = self.spawn_and_watch(command, Until::Exit, &[], &mut String::new())?;
+        // The message log is kept, so a run that fails names what the GUI
+        // said (a dialog, a fatal line) with the end of its log.
+        let mut log = String::new();
+        // A task dialog the GUI puts up before its main form (a
+        // `ShowMessage` of the initialisation) has no readable message text:
+        // its content is drawn by the dialog. The runs that work without a
+        // script answer it, so that the mode itself is what the check
+        // judges; the main form of the script mode still fails the run.
+        let answers = [Answer {
+            class: "#32770".to_owned(),
+            title: String::new(),
+            keys: Vec::new(),
+            button: Some("OK".to_owned()),
+            text: None,
+        }];
+        let (peak, exit_code) = match self.spawn_and_watch(command, Until::Exit, &answers, &mut log) {
+            Ok(result) => result,
+            Err(error) => bail!(
+                "{error}; the end of the message log:
+{}",
+                tail(&log, 15)
+            ),
+        };
         let log = fs::read_dir(self.work.join("bin"))?
             .filter_map(|entry| entry.ok().map(|entry| entry.path()))
             .find(|path| path.to_string_lossy().ends_with("_log.txt"))
@@ -339,6 +381,24 @@ impl GuiRun<'_> {
         }
         let plugins = self.work.join("plugins.txt");
         fs::write(&plugins, plugins_txt)?;
+        // The game executable, whose hardcoded records xEdit reads for
+        // Fallout 3 and New Vegas: the module list of the GUI opens it, and
+        // a private data folder without it stops the load with
+        // `Error loading plugin list`. The port reads its own hardcoded
+        // table, so nothing is needed on its side.
+        if let Some(exe_name) = hardcoded_exe(self.mode)
+            && let Some(game_dir) = self
+                .plugins
+                .first()
+                .and_then(|plugin| plugin.parent())
+                .and_then(|data| data.parent())
+        {
+            let game_exe = game_dir.join(exe_name);
+            if game_exe.is_file() {
+                fs::copy(&game_exe, data.join(exe_name))
+                    .with_context(|| format!("copying {}", game_exe.display()))?;
+            }
+        }
         let work_text = format!("{}\\", windows_path(&self.work));
         let script = self.work.join("oracle.pas");
         fs::write(&script, self.script.replace("{{WORK}}", &work_text))?;
@@ -615,11 +675,31 @@ fn watch(
                         }
                     };
                     if seen.elapsed() > Duration::from_secs(10) {
+                        // The whole window list of the process, so a system
+                        // window the GUI did not put up can be told from one
+                        // of its own prompts.
+                        let all: Vec<String> = visible_windows(child.id())
+                            .iter()
+                            .map(|w| {
+                                format!(
+                                    "[{}] \"{}\"{}{}",
+                                    w.class,
+                                    w.title,
+                                    if w.visible { " visible" } else { "" },
+                                    if w.texts.is_empty() {
+                                        String::new()
+                                    } else {
+                                        format!(": {}", w.texts.join(" | "))
+                                    }
+                                )
+                            })
+                            .collect();
                         bail!(
-                            "the oracle shows a dialog [{}] \"{}\": {}",
+                            "the oracle shows a dialog [{}] \"{}\": {}; every window of the process: {}",
                             window.class,
                             window.title,
-                            window.texts.join(" | ")
+                            window.texts.join(" | "),
+                            all.join(", ")
                         );
                     }
                 }
@@ -744,12 +824,37 @@ pub(super) fn visible_windows(pid: u32) -> Vec<Window> {
                 class: win::class(handle),
                 title: win::text(handle),
                 visible: win::visible(handle),
-                texts: children
-                    .into_iter()
-                    .filter(|&child| win::visible(child))
-                    .map(win::control_text)
-                    .filter(|text| !text.is_empty())
-                    .collect(),
+                texts: {
+                    // The texts of the window and of its children, one level
+                    // deeper too: a task dialog (`MessageDlg` and, since
+                    // Delphi 10.4, `ShowMessage`) draws its message in a
+                    // `DirectUIHWND` whose own text is empty and whose
+                    // children hold it.
+                    let mut texts: Vec<String> = children
+                        .iter()
+                        .copied()
+                        .filter(|&child| win::visible(child))
+                        .map(win::control_text)
+                        .filter(|text| !text.is_empty())
+                        .collect();
+                    for child in &children {
+                        if win::class(*child) != "DirectUIHWND" {
+                            continue;
+                        }
+                        let mut inner: Vec<HWND> = Vec::new();
+                        // SAFETY: the callback only pushes into the vector
+                        // passed as `LPARAM`.
+                        unsafe { EnumChildWindows(*child, Some(win::collect), (&raw mut inner) as isize) };
+                        texts.extend(
+                            inner
+                                .into_iter()
+                                .filter(|&inner| win::visible(inner))
+                                .map(win::control_text)
+                                .filter(|text| !text.is_empty()),
+                        );
+                    }
+                    texts
+                },
             }
         })
         .collect()
@@ -776,7 +881,9 @@ fn close_window(_handle: isize) {}
 #[cfg(windows)]
 pub(super) fn click_button(window: &Window, caption: &str) -> bool {
     use windows_sys::Win32::Foundation::HWND;
-    use windows_sys::Win32::UI::WindowsAndMessaging::{BM_CLICK, EnumChildWindows, SendMessageW};
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        BM_CLICK, EnumChildWindows, SMTO_ABORTIFHUNG, SendMessageTimeoutW,
+    };
     let mut children: Vec<HWND> = Vec::new();
     // SAFETY: the callback only pushes into the vector passed as `LPARAM`.
     unsafe { EnumChildWindows(window.handle as HWND, Some(win::collect), (&raw mut children) as isize) };
@@ -788,9 +895,12 @@ pub(super) fn click_button(window: &Window, caption: &str) -> bool {
     else {
         return false;
     };
+    // The click is sent with a timeout: the GUI thread can be blocked (a
+    // hung startup, a dialog of a Windows component), and a plain
+    // SendMessage would then block the harness with it, past every deadline.
     // SAFETY: a button handle of the window; BM_CLICK takes no pointers.
-    unsafe { SendMessageW(button, BM_CLICK, 0, 0) };
-    true
+    let sent = unsafe { SendMessageTimeoutW(button, BM_CLICK, 0, 0, SMTO_ABORTIFHUNG, 5000, std::ptr::null_mut()) };
+    sent != 0
 }
 
 /// Sets the text of the first edit control of a window (a VCL `TEdit`, or

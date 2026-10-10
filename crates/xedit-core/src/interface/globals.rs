@@ -525,6 +525,12 @@ pub fn wb_group_order_count() -> i32 {
     GROUP_ORDER.read().unwrap().len() as i32
 }
 
+/// Upstream `wbGroupOrder`: the signatures of the top level groups of a file
+/// in the order of the definitions (`wbAddGroupOrder`).
+pub fn wb_group_order() -> Vec<Signature> {
+    GROUP_ORDER.read().unwrap().clone()
+}
+
 pub fn clear_group_order() {
     GROUP_ORDER.write().unwrap().clear();
 }

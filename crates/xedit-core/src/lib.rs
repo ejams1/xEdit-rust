@@ -4,6 +4,7 @@
 
 //! Element tree, definition model, records, groups, files and FormIDs.
 
+pub mod command_line;
 pub mod container_handler;
 pub mod delphi;
 pub mod half_float;

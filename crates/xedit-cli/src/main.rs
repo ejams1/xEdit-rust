@@ -171,6 +171,11 @@ enum Action {
         #[arg(long)]
         no_backup: bool,
     },
+    /// The tool modes of xEdit (xeInit.pas): list them, or run one over the loaded plugins (setesm, clearesm, masterupdate, masterrestore, onamupdate, sortandcleanmasters, generateseq, checkforerrors, checkforitm, checkfordr, export).
+    Tool {
+        #[command(subcommand)]
+        action: ToolAction,
+    },
     /// Check for errors (files.check, "Check for Errors"): every element of the files or records is checked, and each record with errors is printed with its errors as xEdit's message log shows them. Loads the plugins as the -CheckForErrors mode does (no internal edits of the load). With --json the records and errors as JSON.
     Check {
         /// Loaded file to check; repeat for several. The plugins given with --load when neither a file nor a record is named.
@@ -350,48 +355,59 @@ enum Action {
 }
 
 #[derive(Subcommand)]
+enum ToolAction {
+    /// List the tool modes of xEdit with their switches and what each does (tool.modes).
+    Modes,
+    /// Run a tool mode over the loaded plugins (tool.run). Needs --edit unless --dry-run. The modes that save (setesm, masterupdate, onamupdate, and the check modes' -quick forms) write every plugin they changed, each to its own path.
+    Run {
+        /// The tool mode: setesm, clearesm, masterupdate, masterrestore, onamupdate, sortandcleanmasters, generateseq, checkforerrors, checkforitm, checkfordr, export, edit, view, translate.
+        mode: String,
+        /// The modules the mode works on (sortandcleanmasters, generateseq); every loaded plugin when omitted.
+        files: Vec<String>,
+        /// Report what the mode would do, but change nothing and write nothing.
+        #[arg(long)]
+        dry_run: bool,
+        /// Where the mode saves the plugin (one plugin); the loaded paths when omitted.
+        #[arg(long)]
+        output: Option<String>,
+        /// Do not move an existing file at the output path to the backup folder.
+        #[arg(long)]
+        no_backup: bool,
+        /// The format of the export mode: RAW (the default) or UESPWIKI.
+        #[arg(long)]
+        format: Option<String>,
+        /// Where the generateseq mode writes the .seq files; <data path>\Seq when omitted.
+        #[arg(long)]
+        seq_path: Option<String>,
 enum SniffAction {
     /// List the operations with their settings and defaults (sniff.list).
     List,
     /// Run an operation on a folder or archive (sniff.run), as Sniff's -OP: does. Needs --edit unless --dry-run.
-    Run {
         /// The title of the operation, any case, such as "Update bounds".
         operation: String,
         /// The folder or the archive (BSA, BA2) with the files.
         input: String,
         /// The folder to write the changed files to; not needed by operations that only report.
-        #[arg(long)]
-        output: Option<String>,
         /// A settings ini in Sniff's form (the section is the title without spaces).
-        #[arg(long)]
         settings: Option<String>,
         /// A setting of the operation's section, NAME=VALUE; repeat for more.
         #[arg(long = "set", value_name = "NAME=VALUE")]
         set: Vec<String>,
         /// Only the files whose path holds this text.
-        #[arg(long)]
         path_contains: Option<String>,
         /// Leave the subfolders of an input folder.
-        #[arg(long)]
         no_subdir: bool,
         /// Report a file that fails and go on.
-        #[arg(long)]
         skip_on_errors: bool,
         /// Write the unchanged files too.
-        #[arg(long)]
         copy_all: bool,
         /// Threads; 0 for the CPU count less one.
-        #[arg(long)]
         threads: Option<i32>,
         /// Also write the messages to this file, as Sniff's -LOG: does.
-        #[arg(long)]
         log: Option<String>,
         /// Process the files and report, but write nothing.
-        #[arg(long)]
-        dry_run: bool,
     },
 }
-
 #[derive(Subcommand)]
 enum AssetsAction {
     /// Print a file as text (ToText) or JSON (ToJSON, as Sniff writes it).
@@ -399,19 +415,13 @@ enum AssetsAction {
         /// The file, or the archive that holds it.
         file: String,
         /// The path of the file inside the archive FILE.
-        #[arg(long)]
         archive_path: Option<String>,
         /// The format of the file: nif, bgsm, bgem, lod, dlodsettings, lst, btt, fuz or dds; by the extension when omitted.
-        #[arg(long)]
         kind: Option<String>,
         /// text or json.
-        #[arg(long)]
-        format: Option<String>,
         /// Decimals of the float values, 6 to 16.
-        #[arg(long)]
         decimals: Option<usize>,
         /// Rotations as Euler angles in degrees instead of an angle and an axis.
-        #[arg(long)]
         euler: bool,
     },
     /// List the blocks of a NIF file.
@@ -419,10 +429,8 @@ enum AssetsAction {
         /// The file, or the archive that holds it.
         file: String,
         /// The path of the file inside the archive FILE.
-        #[arg(long)]
         archive_path: Option<String>,
         /// The format of the file; by the extension when omitted.
-        #[arg(long)]
         kind: Option<String>,
     },
     /// List the NIF block types.
@@ -432,17 +440,12 @@ enum AssetsAction {
         /// The file, or the archive that holds it.
         file: String,
         /// Path to write to.
-        #[arg(long)]
         output: String,
         /// The path of the file inside the archive FILE.
-        #[arg(long)]
         archive_path: Option<String>,
         /// The format of the file; by the extension when omitted.
-        #[arg(long)]
         kind: Option<String>,
         /// Build the file and report it, but write nothing.
-        #[arg(long)]
-        dry_run: bool,
     },
     /// Set a value of a file and write it.
     Set {
@@ -453,34 +456,25 @@ enum AssetsAction {
         /// The new value as the dump prints it.
         value: String,
         /// Path to write to.
-        #[arg(long)]
         output: String,
         /// For a NIF: header, footer, a block index or a block path.
-        #[arg(long)]
         block: Option<String>,
         /// The path of the file inside the archive FILE.
-        #[arg(long)]
         archive_path: Option<String>,
         /// The format of the file; by the extension when omitted.
-        #[arg(long)]
         kind: Option<String>,
         /// Report the value before and after, but write nothing.
-        #[arg(long)]
-        dry_run: bool,
     },
     /// Build a file from its JSON form and write it.
     FromJson {
         /// The JSON file.
         file: String,
         /// Path to write to.
-        #[arg(long)]
         output: String,
         /// The format to build; by the extension before .json when omitted.
-        #[arg(long)]
         kind: Option<String>,
         /// Build the file and report it, but write nothing.
-        #[arg(long)]
-        dry_run: bool,
+
     },
 }
 
@@ -1515,6 +1509,24 @@ fn command_of(action: Action) -> Result<(String, Value), CommandError> {
                 }),
             ),
         },
+        Action::Tool { action } => match action {
+            ToolAction::Modes => ("tool.modes".to_owned(), json!({})),
+            ToolAction::Run {
+                mode,
+                files,
+                dry_run,
+                output,
+                no_backup,
+                format,
+                seq_path,
+            } => (
+                "tool.run".to_owned(),
+                json!({
+                    "mode": mode, "files": files, "dry_run": dry_run, "output": output,
+                    "backup": !no_backup, "format": format, "seq_path": seq_path
+                }),
+            ),
+        },
         Action::Masters { action } => match action {
             MastersAction::Add {
                 masters,
@@ -1826,7 +1838,94 @@ fn run_mcp(game: Option<String>, load: Vec<String>, edit: bool) -> Result<(), Bo
     Ok(())
 }
 
+/// The command line xEdit's own switches were given, or a failure to read
+/// it. `xeInit.pas` reads the game, the tool mode and the settings from the
+/// switches and the executable name; a command line that holds none of them
+/// is the CLI's own syntax and goes to clap.
+fn legacy_command_line() -> Result<Option<xedit_session::tool_modes::LegacyRun>, String> {
+    let params: Vec<String> = std::env::args().skip(1).collect();
+    let exe_name = std::env::current_exe()
+        .ok()
+        .and_then(|path| path.file_name().map(|name| name.to_string_lossy().into_owned()))
+        .unwrap_or_else(|| "xedit.exe".to_owned());
+    xedit_session::tool_modes::parse_legacy(&params, &exe_name)
+}
+
+/// Runs a tool mode of a legacy command line (`-quickautoclean -autoexit
+/// -autoload <plugin>`, the switches a mod manager passes): the plugins load
+/// as the mode loads them, the mode runs, and the message log of xEdit goes
+/// to stdout. The exit code is the count of the check modes, at most 127, as
+/// upstream exits.
+fn run_legacy(run: xedit_session::tool_modes::LegacyRun) -> ExitCode {
+    xedit_session::dump::log_progress_to_stderr();
+    if let Some(path) = &run.data_path {
+        xedit_core::interface::globals::set_data_path(path);
+    }
+    for switch in &run.ignored_switches {
+        eprintln!("warning: {switch} is accepted and not acted on by this build");
+    }
+    let Some(game) = run.game_tag.as_deref() else {
+        eprintln!(
+            "error: invalid_params: the game is not known; pass -SSE, -FO4 and the like, or name the program after its game"
+        );
+        return ExitCode::FAILURE;
+    };
+    xedit_session::tool_modes::set_on_load(run.switches);
+    // A tool mode is an edit mode: `wbEditAllowed` is on and the mode's
+    // settings decide what the load does.
+    let mut session = match engine::open_session(Some(game), &run.plugins, true) {
+        Ok(session) => session,
+        Err(error) => {
+            eprintln!("error: {error}");
+            return ExitCode::FAILURE;
+        }
+    };
+    let registry = Registry::standard();
+    let params = json!({
+        "mode": run.mode,
+        "files": run.modules,
+        "dry_run": false,
+        "output": run.output,
+        "backup": true,
+        "format": run.format,
+    });
+    let result = registry.call(&mut session, "tool.run", params);
+    let result = match result {
+        Ok(result) => result,
+        Err(error) => {
+            eprintln!("error: {error}");
+            return ExitCode::FAILURE;
+        }
+    };
+    let mut log = String::new();
+    for line in result["messages"].as_array().into_iter().flatten() {
+        let line = line.as_str().unwrap_or_default();
+        println!("{line}");
+        log.push_str(line);
+        log.push_str("\r\n");
+    }
+    // `-R:<file>`: xEdit's message log as a file.
+    if let Some(path) = &run.log_file
+        && let Err(error) = std::fs::write(path, &log)
+    {
+        eprintln!("warning: -R:{path}: {error}");
+    }
+    let code = result["exit_code"].as_u64().unwrap_or(0) as u8;
+    ExitCode::from(code)
+}
+
 fn main() -> ExitCode {
+    // `wbCommandLine` first: the switches of xEdit itself (`-quickautoclean`,
+    // `-setesm`, `-D:`, `-SSE`, ...) are not the CLI's syntax and are read as
+    // xEdit reads them.
+    match legacy_command_line() {
+        Ok(Some(run)) => return run_legacy(run),
+        Ok(None) => {}
+        Err(error) => {
+            eprintln!("error: {error}");
+            return ExitCode::FAILURE;
+        }
+    }
     let cli = Cli::parse();
     xedit_core::threads::set_threads(cli.threads.unwrap_or(0));
     xedit_session::refs::set_cache_options(
@@ -1843,6 +1942,18 @@ fn main() -> ExitCode {
     // The settings `-CheckForErrors` gives the load.
     let check = matches!(cli.action, Action::Check { .. });
     xedit_session::commands::set_check_on_load(check);
+    // `xeInit.pas`: the tool mode decides what the load does, so it is set
+    // before the plugins load.
+    if let Action::Tool {
+        action: ToolAction::Run { mode, .. },
+    } = &cli.action
+        && let Some(tool_mode) = xedit_session::tool_modes::mode_of_name(mode)
+    {
+        xedit_session::tool_modes::set_on_load(xedit_session::tool_modes::LoadSwitches {
+            tool_mode,
+            ..Default::default()
+        });
+    }
     xedit_session::modgroups::set_file_options(cli.modgroups_file.as_deref(), cli.settings.as_deref());
     if matches!(cli.action, Action::Serve { .. } | Action::Mcp) {
         // stdout carries the protocol; the progress of a load goes to stderr.

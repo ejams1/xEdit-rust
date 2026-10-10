@@ -108,7 +108,7 @@ pub struct CheckResponse {
     pub messages: Vec<String>,
 }
 
-fn files_check(session: &mut Session, request: CheckRequest) -> Result<CheckResponse, CommandError> {
+pub(crate) fn files_check(session: &mut Session, request: CheckRequest) -> Result<CheckResponse, CommandError> {
     session.mode()?;
     let mut targets: Vec<CheckTarget> = Vec::new();
     for name in &request.files {
