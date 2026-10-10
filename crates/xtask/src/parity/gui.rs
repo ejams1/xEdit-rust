@@ -283,7 +283,7 @@ impl GuiRun<'_> {
     /// (`tmrShutdown` of `tmrGeneratorTimer`) and the plugin a plugin mode
     /// needs.
     pub fn run_tool_mode(&self, args: &[&str]) -> Result<AutoModeResult> {
-        self.run_auto_mode(args)
+        self.run_auto_mode_until(args, Until::LogLine("--= All Done =--"))
     }
 
     /// Runs one of the modes that load, work and exit without a script
@@ -292,6 +292,12 @@ impl GuiRun<'_> {
     /// developer message were shown, so the edit mode shows no prompt; any
     /// other dialog fails the run.
     fn run_auto_mode(&self, args: &[&str]) -> Result<AutoModeResult> {
+        self.run_auto_mode_until(args, Until::Exit)
+    }
+
+    /// [`GuiRun::run_auto_mode`] with the deadline the caller wants: the
+    /// exit of the GUI, or the line its message log ends an auto mode with.
+    fn run_auto_mode_until(&self, args: &[&str], until: Until<'_>) -> Result<AutoModeResult> {
         let (mut command, data) = self.prepare()?;
         // `Settings` lives next to the plugin list (`-P:`), named
         // `<list>.<game>viewsettings`.
@@ -328,7 +334,7 @@ impl GuiRun<'_> {
             button: Some("OK".to_owned()),
             text: None,
         }];
-        let (peak, exit_code) = match self.spawn_and_watch(command, Until::Exit, &answers, &mut log) {
+        let (peak, exit_code) = match self.spawn_and_watch(command, until, &answers, &mut log) {
             Ok(result) => result,
             Err(error) => bail!(
                 "{error}; the end of the message log:
@@ -336,12 +342,16 @@ impl GuiRun<'_> {
                 tail(&log, 15)
             ),
         };
+        // The log file next to the executable is written on exit; a run
+        // that ends at the mode's last line instead (the GUI is killed
+        // before its own exit) keeps the log read from the main form.
         let log = fs::read_dir(self.work.join("bin"))?
             .filter_map(|entry| entry.ok().map(|entry| entry.path()))
             .find(|path| path.to_string_lossy().ends_with("_log.txt"))
             .map(|path| fs::read(path).map(|bytes| String::from_utf8_lossy(&bytes).into_owned()))
             .transpose()?
-            .context("the GUI wrote no log")?;
+            .unwrap_or(log);
+        ensure!(!log.is_empty(), "the GUI wrote no log");
         Ok(AutoModeResult {
             data,
             log,
@@ -468,6 +478,12 @@ enum Until<'a> {
     /// The script wrote its marker file; then the main form is closed and
     /// the run ends once the GUI wrote its log (after `SaveChanged`).
     MarkerThenClose(&'a Path),
+    /// The message log of the main form holds this line: an auto mode ended
+    /// (`--= All Done =--`). The GUI is then killed, because the release
+    /// can wait after its `SaveChanged` for something a hidden desktop
+    /// never delivers (the queued rename of a save, a prompt of a Windows
+    /// component), and the files the mode wrote are already on disk.
+    LogLine(&'static str),
 }
 
 /// Waits for the script's marker (or the exit), answering the module
@@ -547,7 +563,9 @@ fn watch(
             return Ok(None);
         }
         if let Some(code) = child.try_wait()? {
-            if matches!(until, Until::Exit) || closing {
+            // An auto mode the GUI closed itself (`-autoexit`, or a mode
+            // that quits at its end) is done, whatever its deadline was.
+            if matches!(until, Until::Exit | Until::LogLine(_)) || closing {
                 return Ok(Some(code));
             }
             bail!("the oracle exited (exit code: {code}) before the script finished");
@@ -583,6 +601,15 @@ fn watch(
                     let script_ended = log.contains("You can close this application now.");
                     if let Some(line) = fatal {
                         bail!("the oracle stopped: {line}");
+                    }
+                    // An auto mode that says it is done: its files are on
+                    // disk, and whatever the GUI waits for afterwards is not
+                    // the mode's work.
+                    if let Until::LogLine(needle) = until
+                        && log.contains(needle)
+                    {
+                        std::thread::sleep(Duration::from_secs(2));
+                        return Ok(None);
                     }
                     // A script that does not compile, or raises outside its
                     // own handler, is aborted without the closing line.

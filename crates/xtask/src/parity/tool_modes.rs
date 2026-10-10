@@ -613,16 +613,42 @@ fn check(runner: &Runner, game: &'static Game, data: &Path, name: &str, mode: &M
         let mut manifest = Vec::new();
         for plugin in &plugins {
             let file_name = plugin.file_name().context("plugin without a name")?;
-            let saved = result.data.join(file_name);
-            ensure!(saved.is_file(), "{} is missing after the run", saved.display());
-            let same = fs::read(&saved)? == fs::read(plugin)?;
-            manifest.push(serde_json::json!({
-                "name": file_name.to_string_lossy(),
-                "changed": !same,
-            }));
-            if !same {
-                keep_compressed(&saved, &dir.join(format!("{stem}.{}.zst", file_name.to_string_lossy())))?;
+            let plugin_name = file_name.to_string_lossy().into_owned();
+            // The mode saves over the plugin, or (the release queues the
+            // rename of a save to the shutdown of the GUI, which a hidden
+            // desktop may never reach) next to it as
+            // `<name>.save.<timestamp>`.
+            let mut candidates = vec![result.data.join(file_name)];
+            let save_prefix = format!("{plugin_name}.save.");
+            if let Ok(entries) = fs::read_dir(&result.data) {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if path
+                        .file_name()
+                        .is_some_and(|file| file.to_string_lossy().starts_with(&save_prefix))
+                    {
+                        candidates.push(path);
+                    }
+                }
             }
+            let input_bytes = fs::read(plugin)?;
+            let saved = candidates
+                .into_iter()
+                .find(|candidate| fs::read(candidate).is_ok_and(|bytes| bytes != input_bytes));
+            match &saved {
+                Some(saved) => {
+                    keep_compressed(saved, &dir.join(format!("{stem}.{plugin_name}.zst")))?;
+                }
+                None => ensure!(
+                    result.data.join(file_name).is_file(),
+                    "{} is missing after the run",
+                    file_name.to_string_lossy()
+                ),
+            }
+            manifest.push(serde_json::json!({
+                "name": plugin_name,
+                "changed": saved.is_some(),
+            }));
         }
         // `-generateseq` writes its sequence files below the data folder.
         if mode.name == "generateseq" {
@@ -752,6 +778,20 @@ fn check(runner: &Runner, game: &'static Game, data: &Path, name: &str, mode: &M
                 oracle_bytes.len(),
                 port_bytes.len()
             ));
+            // A sequence file is a list of FormIDs: name them.
+            if file_name.ends_with(".seq") {
+                let form_ids = |bytes: &[u8]| -> String {
+                    bytes
+                        .as_chunks::<4>()
+                        .0
+                        .iter()
+                        .map(|chunk| format!("{:08X}", u32::from_le_bytes(*chunk)))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                };
+                lines.push(format!("  oracle FormIDs: {}", form_ids(&oracle_bytes)));
+                lines.push(format!("  port   FormIDs: {}", form_ids(&port_bytes)));
+            }
         }
     }
     // The lines of the message log the mode writes.

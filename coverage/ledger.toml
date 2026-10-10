@@ -3688,7 +3688,8 @@ status = "covered"
 command = "tool.run"
 source = "Core/wbInterface.pas"
 note = "tool.run mode=export [--format RAW|UESPWIKI] [--output PATH]: crates/xedit-session/src/export.rs ports TExportFormat, AnchorProfile, UESPName, UESPType, the sorted profile list (AddProfile, FindProfile, MarkProfile, LockProfile) and the five passes of ExportElement/ExportContainer/ProfileElement/ProfileContainer/ProfileHeader/ProfileArray, with the definitions built as xDump builds them (wbSimpleRecords off, which Session::load reads through tool_modes::loads_like_xdump). The profile file is written and the structure text returned. The save chapters (ProfileChapters, wbFileChapters) have no tool mode here. Known difference, owed: the profiles differ in the type name of one definition (a member the oracle names empty and the port names TwbEnumDef, byte 1198 of the Oblivion profile and byte 37391 of the Fallout New Vegas one) and the structure text follows it; parity tool-modes reports the export as known-difference."
-tool_mode.tmGenerateSEQ]
+
+[tool_mode.tmGenerateSEQ]
 status = "covered"
 command = "tool.run"
 source = "Core/wbInterface.pas"
@@ -3721,7 +3722,8 @@ status = "covered"
 command = "tool.run"
 source = "Core/wbInterface.pas"
 note = "tool.run mode=sortandcleanmasters <module> ..., the SortMasters/CleanMasters loop of the auto mode dispatch. The modules are the ones named (xeModulesToUse); each must be editable. UPSTREAM-QUIRK: the release refuses the switch -sortandcleanmasters (the mode selection of _DoInit compares the whole name with sortandclean), so only -sortandclean or the ...SortAndCleanMasters.exe name selects it; the port's legacy command line accepts both."
-tool_mode.tmTranslate]
+
+[tool_mode.tmTranslate]
 status = "covered"
 command = "tool.run"
 source = "Core/wbInterface.pas"
