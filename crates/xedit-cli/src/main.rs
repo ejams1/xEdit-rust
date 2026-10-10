@@ -2266,6 +2266,13 @@ fn run_legacy(run: xedit_session::tool_modes::LegacyRun) -> ExitCode {
         return ExitCode::FAILURE;
     };
     xedit_session::tool_modes::set_on_load(run.switches);
+    // `xeInit.pas` gives the quick clean modes their load settings (the full
+    // record definitions, the PNAM fill) for `-quickclean` and
+    // `-quickautoclean` alike; `xedit clean --quick` applies them too.
+    xedit_session::commands::set_quick_clean_on_load(matches!(
+        xedit_session::tool_modes::edit_sub_mode_of(&run.mode),
+        Some("quick_clean" | "quick_auto_clean")
+    ));
     // A tool mode is an edit mode: `wbEditAllowed` is on and the mode's
     // settings decide what the load does.
     let mut session = match engine::open_session(Some(game), &run.plugins, true) {

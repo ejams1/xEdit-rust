@@ -35,7 +35,7 @@ xedit --json --edit --game sse --load "<Data>\Dawnguard.esm" clean --quick --dry
 ```
 
 - `--quick` is a pass of UDR then ITM, the plugin saved, and again while a pass changed it, at most three passes (the third is not saved, as upstream). Mod managers run the same mode as `SSEEditQuickAutoClean.exe` and `xedit -SSE -D:"<Data>" -quickautoclean -autoexit` reads that command line.
-- The mode loads the plugins with its own settings (`xeInit.pas`): the full record definitions (not the simple ones), the PNAM of the topic responses filled where the game sorts them (`-FillPNAM`), no `INOM`/`INOA` lists on the topics. `xedit clean --quick` applies them; a session started any other way (a plain `serve`) adds a `<Warning: the plugins were not loaded as the quick clean mode loads them ...>` to `messages` and its comparisons can differ. The global `--fill-pnam` turns the PNAM fill on for any command.
+- The mode loads the plugins with its own settings (`xeInit.pas`): the full record definitions (not the simple ones), the PNAM of the topic responses filled where the game sorts them (`-FillPNAM`), no `INOM`/`INOA` lists on the topics. `xedit clean --quick` and the legacy `-quickclean`/`-quickautoclean` command line apply them; a session started any other way (a plain `serve`) adds a `<Warning: the plugins were not loaded as the quick clean mode loads them ...>` to `messages` and its comparisons can differ. The global `--fill-pnam` turns the PNAM fill on for any command.
 - Use `--quick` for one answer, not for inspection: the per-pass counts and the cleaned records are in the response, but a `--dry-run` first (or `--itm --udr --dry-run`) tells you what the clean will find before any file changes.
 
 ## Records that refer to injected records

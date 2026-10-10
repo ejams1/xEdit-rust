@@ -370,6 +370,10 @@ fn the_legacy_command_line_of_a_mod_manager_is_read() {
         .expect("a legacy command line");
     assert_eq!(run.game_tag.as_deref(), Some("sse"));
     assert_eq!(run.mode, "quick_auto_clean");
+    // The CLI reads the sub mode back from the run's mode to apply the quick
+    // clean load settings (`run_legacy`), so the name has to resolve.
+    assert_eq!(tool_modes::edit_sub_mode_of(&run.mode), Some("quick_auto_clean"));
+    assert_eq!(tool_modes::edit_sub_mode_of("quickclean"), Some("quick_clean"));
     assert!(run.auto_exit && run.auto_load);
     assert_eq!(run.modules, ["MyMod.esp"]);
     assert_eq!(run.plugins.len(), 1);
