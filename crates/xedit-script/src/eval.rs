@@ -1723,8 +1723,14 @@ impl Interpreter {
 
     /// The indexed or member arm of `InternalSetValue` (`:6985-7012`): the
     /// target's arguments evaluate first (they were parsed before the
-    /// `:=`), then the value; an indexed target reads the element and writes
-    /// it back when it is a string or an array.
+    /// `:=`), then the value. The read that opens the arm is a *bare*
+    /// receiver (`MyArgs := TJvInterpreterArgs.Create; MyArgs.Obj :=
+    /// FCurrArgs.Obj`, `:6988`): not indexed and without values, so a
+    /// property registered as an indexed *writer* alone (`AddISet`, the
+    /// `NativeValues[...] := v` of the data format adapter) finds no reader
+    /// and the write goes to the indexed setter below. A reader that answers
+    /// (a string or a native variant array) is then written back through the
+    /// same bare arguments (`SetValue(Identifier, Variable, MyArgs)`).
     fn assign_target(
         &mut self,
         receiver: Option<Value>,
@@ -1738,8 +1744,10 @@ impl Interpreter {
         let value_value = self.expression1(value)?;
         let pos = self.following_token_start(value.span.end);
         if indexed {
+            let mut probe = Args::new();
+            probe.obj = target_args.obj.clone();
             let mut variable = Value::Null;
-            if self.get_value(name.as_bytes(), &mut variable, &mut target_args, self.cur_pos)? {
+            if self.get_value(name.as_bytes(), &mut variable, &mut probe, self.cur_pos)? {
                 if !self.set_element(&mut variable, &value_value, &mut target_args, self.cur_pos)? {
                     return Err(FlowError::Error(ExecError::new(
                         IE_ARRAY_REQUIRED,
@@ -1756,7 +1764,7 @@ impl Interpreter {
                 // write-back happens (a write-back would raise the
                 // array-to-array assignment error, `JvInterpreter.pas:6985-7001`).
                 if (variable.is_str() || matches!(variable, Value::VariantArray(_)))
-                    && !self.set_value(name, &variable, &mut target_args, pos)?
+                    && !self.set_value(name, &variable, &mut probe, pos)?
                 {
                     return Err(FlowError::Error(ExecError::new(
                         IE_UNKNOWN_IDENTIFIER,

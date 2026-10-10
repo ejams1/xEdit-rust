@@ -4544,695 +4544,873 @@ source = "TdfDef_Create"
 note = "The registration is commented out upstream (xEdit/JvI/xejviScriptAdapterDF.pas:767); nothing is reachable under this name in 4.1.5q."
 
 [script."xejviScriptAdapterDF:TdfDef.DefaultDataSize:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TdfDef_DefaultDataSize"
 
 [script."xejviScriptAdapterDF:TdfDef.DefaultValue:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TdfDef_DefaultValue"
 
 [script."xejviScriptAdapterDF:TdfDef.Name:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TdfDef_Read_Name"
 
 [script."xejviScriptAdapterDF:TdfDef.Size:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TdfDef_Size"
 
 [script."xejviScriptAdapterDF:TdfElement.Add:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TdfElement_Add"
 
 [script."xejviScriptAdapterDF:TdfElement.Assign:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TdfElement_Assign"
 
 [script."xejviScriptAdapterDF:TdfElement.BeginUpdate:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TdfElement_BeginUpdate"
 
 [script."xejviScriptAdapterDF:TdfElement.Count:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TdfElement_Read_Count"
 
 [script."xejviScriptAdapterDF:TdfElement.Count:set"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TdfElement_Write_Count"
 
 [script."xejviScriptAdapterDF:TdfElement.DataSize:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TdfElement_DataSize"
 
 [script."xejviScriptAdapterDF:TdfElement.DataType:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TdfElement_DataType"
 
 [script."xejviScriptAdapterDF:TdfElement.Def:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TdfElement_Def"
 
 [script."xejviScriptAdapterDF:TdfElement.Delete:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TdfElement_Delete"
 
 [script."xejviScriptAdapterDF:TdfElement.EditValue:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TdfElement_Read_EditValue"
 
 [script."xejviScriptAdapterDF:TdfElement.EditValue:set"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TdfElement_Write_EditValue"
 
 [script."xejviScriptAdapterDF:TdfElement.EditValues:iget"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TdfElement_Read_EditValues"
 
 [script."xejviScriptAdapterDF:TdfElement.EditValues:iset"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TdfElement_Write_EditValues"
 
 [script."xejviScriptAdapterDF:TdfElement.ElementByName:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TdfElement_ElementByName"
 
 [script."xejviScriptAdapterDF:TdfElement.ElementByPath:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TdfElement_ElementByPath"
 
 [script."xejviScriptAdapterDF:TdfElement.Elements:iget"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TdfElement_Read_Elements"
 
 [script."xejviScriptAdapterDF:TdfElement.Enabled:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TdfElement_Read_Enabled"
 
 [script."xejviScriptAdapterDF:TdfElement.Enabled:set"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TdfElement_Write_Enabled"
 
 [script."xejviScriptAdapterDF:TdfElement.EndUpdate:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TdfElement_EndUpdate"
 
 [script."xejviScriptAdapterDF:TdfElement.FromJSON:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TdfElement_FromJSON"
 
 [script."xejviScriptAdapterDF:TdfElement.Index:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TdfElement_Index"
 
 [script."xejviScriptAdapterDF:TdfElement.IndexOf:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TdfElement_IndexOf"
 
 [script."xejviScriptAdapterDF:TdfElement.Items:iget"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TdfElement_Read_Items"
 
 [script."xejviScriptAdapterDF:TdfElement.LinksTo:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TdfElement_LinksTo"
 
 [script."xejviScriptAdapterDF:TdfElement.LoadFromData:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TdfElement_LoadFromData"
 
 [script."xejviScriptAdapterDF:TdfElement.LoadFromFile:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TdfElement_LoadFromFile"
 
 [script."xejviScriptAdapterDF:TdfElement.LoadFromJSONFile:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TdfElement_LoadFromJSONFile"
 
 [script."xejviScriptAdapterDF:TdfElement.LoadFromResource:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TdfElement_LoadFromResource"
 
 [script."xejviScriptAdapterDF:TdfElement.Move:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TdfElement_Move"
 
 [script."xejviScriptAdapterDF:TdfElement.Name:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TdfElement_Name"
 
 [script."xejviScriptAdapterDF:TdfElement.NativeValue:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TdfElement_Read_NativeValue"
 
 [script."xejviScriptAdapterDF:TdfElement.NativeValue:set"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TdfElement_Write_NativeValue"
 
 [script."xejviScriptAdapterDF:TdfElement.NativeValues:iget"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TdfElement_Read_NativeValues"
 
 [script."xejviScriptAdapterDF:TdfElement.NativeValues:iset"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TdfElement_Write_NativeValues"
 
 [script."xejviScriptAdapterDF:TdfElement.Parent:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TdfElement_Read_Parent"
 
 [script."xejviScriptAdapterDF:TdfElement.Parent:set"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TdfElement_Write_Parent"
 
 [script."xejviScriptAdapterDF:TdfElement.Path:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TdfElement_Path"
 
 [script."xejviScriptAdapterDF:TdfElement.Remove:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TdfElement_Remove"
 
 [script."xejviScriptAdapterDF:TdfElement.Root:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TdfElement_Root"
 
 [script."xejviScriptAdapterDF:TdfElement.SaveToFile:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TdfElement_SaveToFile"
 
 [script."xejviScriptAdapterDF:TdfElement.SaveToJSONFile:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TdfElement_SaveToJSONFile"
 
 [script."xejviScriptAdapterDF:TdfElement.SetToDefault:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TdfElement_SetToDefault"
 
 [script."xejviScriptAdapterDF:TdfElement.TdfElement_Read_Items:idget"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TdfElement_Read_Items"
 
 [script."xejviScriptAdapterDF:TdfElement.ToJSON:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TdfElement_ToJSON"
 
 [script."xejviScriptAdapterDF:TdfElement.ToText:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TdfElement_ToText"
 
 [script."xejviScriptAdapterDF:TwbBGEMFile.Create:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TwbBGEMFile_Create"
 
 [script."xejviScriptAdapterDF:TwbBGSMFile.Create:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TwbBGSMFile_Create"
 
 [script."xejviScriptAdapterDF:TwbDDSFile.Create:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TwbDDSFile_Create"
 
 [script."xejviScriptAdapterDF:TwbFUZFile.Create:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TwbFUZFile_Create"
 
 [script."xejviScriptAdapterDF:TwbLODSettingsFO3File.Create:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TwbLODSettingsFO3File_Create"
 
 [script."xejviScriptAdapterDF:TwbLODSettingsTES5File.Create:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TwbLODSettingsTES5File_Create"
 
 [script."xejviScriptAdapterDF:TwbLODTreeBTTFile.Create:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TwbLODTreeBTTFile_Create"
 
 [script."xejviScriptAdapterDF:TwbLODTreeLSTFile.Create:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TwbLODTreeLSTFile_Create"
 
 [script."xejviScriptAdapterDF:TwbNiRef.Ptr:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TwbNiRef_Ptr"
 
 [script."xejviScriptAdapterDF:TwbNiRef.Template:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TwbNiRef_Template"
 
 [script."xejviScriptAdapterDF:TwbNifBlock.AddChild:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TwbNifBlock_AddChild"
 
 [script."xejviScriptAdapterDF:TwbNifBlock.AddExtraData:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TwbNifBlock_AddExtraData"
 
 [script."xejviScriptAdapterDF:TwbNifBlock.AddProperty:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TwbNifBlock_AddProperty"
 
 [script."xejviScriptAdapterDF:TwbNifBlock.BlockType:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TwbNifBlock_BlockType"
 
 [script."xejviScriptAdapterDF:TwbNifBlock.ChildByType:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TwbNifBlock_ChildByType"
 
 [script."xejviScriptAdapterDF:TwbNifBlock.ChildrenByType:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TwbNifBlock_ChildrenByType"
+note = "The registration is bound and checked; a call that fills the TList/TStrings argument needs the Classes unit (phase 6 step 8) to provide the list objects, and before that it fails with a message naming it."
 
 [script."xejviScriptAdapterDF:TwbNifBlock.ExtraDataByName:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TwbNifBlock_ExtraDataByName"
 
 [script."xejviScriptAdapterDF:TwbNifBlock.ExtraDataByType:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TwbNifBlock_ExtraDataByType"
 
 [script."xejviScriptAdapterDF:TwbNifBlock.ExtraDatasByType:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TwbNifBlock_ExtraDatasByType"
+note = "The registration is bound and checked; a call that fills the TList/TStrings argument needs the Classes unit (phase 6 step 8) to provide the list objects, and before that it fails with a message naming it."
 
 [script."xejviScriptAdapterDF:TwbNifBlock.GetAssetsList:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TwbNifBlock_GetAssetsList"
+note = "UPSTREAM-QUIRK: `{ Deprecated } Result := nil` upstream (wbDataFormatNif.pas:1505): the 0-argument form is unassigned and the 1-argument form adds nothing to the list it is given."
 
 [script."xejviScriptAdapterDF:TwbNifBlock.IsNiObject:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TwbNifBlock_IsNiObject"
 
 [script."xejviScriptAdapterDF:TwbNifBlock.NifFile:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TwbNifBlock_NifFile"
 
 [script."xejviScriptAdapterDF:TwbNifBlock.PropertiesByType:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TwbNifBlock_PropertiesByType"
+note = "The registration is bound and checked; a call that fills the TList/TStrings argument needs the Classes unit (phase 6 step 8) to provide the list objects, and before that it fails with a message naming it."
 
 [script."xejviScriptAdapterDF:TwbNifBlock.PropertyByName:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TwbNifBlock_PropertyByName"
 
 [script."xejviScriptAdapterDF:TwbNifBlock.PropertyByType:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TwbNifBlock_PropertyByType"
 
 [script."xejviScriptAdapterDF:TwbNifBlock.Refs:iget"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TwbNifBlock_Read_Refs"
 
 [script."xejviScriptAdapterDF:TwbNifBlock.RefsCount:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TwbNifBlock_RefsCount"
 
 [script."xejviScriptAdapterDF:TwbNifBlock.Strings:iget"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TwbNifBlock_Read_Strings"
 
 [script."xejviScriptAdapterDF:TwbNifBlock.StringsCount:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TwbNifBlock_StringsCount"
 
 [script."xejviScriptAdapterDF:TwbNifBlock.UpdateBounds:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TwbNifBlock_UpdateBounds"
 
 [script."xejviScriptAdapterDF:TwbNifBlock.UpdateNormals:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TwbNifBlock_UpdateNormals"
 
 [script."xejviScriptAdapterDF:TwbNifBlock.UpdateTangents:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TwbNifBlock_UpdateTangents"
 
 [script."xejviScriptAdapterDF:TwbNifFile.AddBlock:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TwbNifFile_AddBlock"
 
 [script."xejviScriptAdapterDF:TwbNifFile.BlockByName:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TwbNifFile_BlockByName"
 
 [script."xejviScriptAdapterDF:TwbNifFile.BlockByType:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TwbNifFile_BlockByType"
 
 [script."xejviScriptAdapterDF:TwbNifFile.Blocks:iget"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TwbNifFile_Read_Blocks"
 
 [script."xejviScriptAdapterDF:TwbNifFile.BlocksByType:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TwbNifFile_BlocksByType"
 
 [script."xejviScriptAdapterDF:TwbNifFile.BlocksCount:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TwbNifFile_BlocksCount"
 
 [script."xejviScriptAdapterDF:TwbNifFile.ConvertBlock:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TwbNifFile_ConvertBlock"
 
 [script."xejviScriptAdapterDF:TwbNifFile.CopyBlock:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TwbNifFile_CopyBlock"
 
 [script."xejviScriptAdapterDF:TwbNifFile.Create:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TwbNifFile_Create"
 
 [script."xejviScriptAdapterDF:TwbNifFile.Footer:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TwbNifFile_Footer"
 
 [script."xejviScriptAdapterDF:TwbNifFile.GetAssetsList:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TwbNifFile_GetAssetsList"
+note = "The registration is bound and checked; a call that fills the TList/TStrings argument needs the Classes unit (phase 6 step 8) to provide the list objects, and before that it fails with a message naming it."
 
 [script."xejviScriptAdapterDF:TwbNifFile.Header:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TwbNifFile_Header"
 
 [script."xejviScriptAdapterDF:TwbNifFile.InsertBlock:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TwbNifFile_InsertBlock"
 
 [script."xejviScriptAdapterDF:TwbNifFile.InternalUpdates:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TwbNifFile_Read_InternalUpdates"
 
 [script."xejviScriptAdapterDF:TwbNifFile.InternalUpdates:set"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TwbNifFile_Write_InternalUpdates"
 
 [script."xejviScriptAdapterDF:TwbNifFile.NifVersion:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TwbNifFile_Read_NifVersion"
 
 [script."xejviScriptAdapterDF:TwbNifFile.NifVersion:set"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TwbNifFile_Write_NifVersion"
 
 [script."xejviScriptAdapterDF:TwbNifFile.Options:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TwbNifFile_Read_Options"
 
 [script."xejviScriptAdapterDF:TwbNifFile.Options:set"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TwbNifFile_Write_Options"
 
 [script."xejviScriptAdapterDF:TwbNifFile.SpellAddUpdateTangents:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TwbNifFile_SpellAddUpdateTangents"
 
 [script."xejviScriptAdapterDF:TwbNifFile.SpellFaceNormals:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TwbNifFile_SpellFaceNormals"
 
 [script."xejviScriptAdapterDF:TwbNifFile.SpellTriangulate:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TwbNifFile_SpellTriangulate"
 
 [script."xejviScriptAdapterDF:TwbNifFile.SpellUpdateTangents:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TwbNifFile_SpellUpdateTangents"
 
 [script."xejviScriptAdapterDF:sDFUnitName.TdfArray:class"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterDF.pas"
 
 [script."xejviScriptAdapterDF:sDFUnitName.TdfArrayDef:class"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterDF.pas"
 
 [script."xejviScriptAdapterDF:sDFUnitName.TdfBytes:class"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterDF.pas"
 
 [script."xejviScriptAdapterDF:sDFUnitName.TdfBytesDef:class"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterDF.pas"
 
 [script."xejviScriptAdapterDF:sDFUnitName.TdfChars:class"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterDF.pas"
 
 [script."xejviScriptAdapterDF:sDFUnitName.TdfCharsDef:class"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterDF.pas"
 
 [script."xejviScriptAdapterDF:sDFUnitName.TdfContainer:class"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterDF.pas"
 
 [script."xejviScriptAdapterDF:sDFUnitName.TdfDef:class"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterDF.pas"
 
 [script."xejviScriptAdapterDF:sDFUnitName.TdfElement:class"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterDF.pas"
 
 [script."xejviScriptAdapterDF:sDFUnitName.TdfEnum:class"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterDF.pas"
 
 [script."xejviScriptAdapterDF:sDFUnitName.TdfEnumDef:class"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterDF.pas"
 
 [script."xejviScriptAdapterDF:sDFUnitName.TdfFlags:class"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterDF.pas"
 
 [script."xejviScriptAdapterDF:sDFUnitName.TdfFlagsDef:class"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterDF.pas"
 
 [script."xejviScriptAdapterDF:sDFUnitName.TdfFloat:class"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterDF.pas"
 
 [script."xejviScriptAdapterDF:sDFUnitName.TdfFloatDef:class"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterDF.pas"
 
 [script."xejviScriptAdapterDF:sDFUnitName.TdfInteger:class"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterDF.pas"
 
 [script."xejviScriptAdapterDF:sDFUnitName.TdfIntegerDef:class"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterDF.pas"
 
 [script."xejviScriptAdapterDF:sDFUnitName.TdfMappedIntegerDef:class"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterDF.pas"
 
 [script."xejviScriptAdapterDF:sDFUnitName.TdfMerge:class"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterDF.pas"
 
 [script."xejviScriptAdapterDF:sDFUnitName.TdfMergeDef:class"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterDF.pas"
 
 [script."xejviScriptAdapterDF:sDFUnitName.TdfStruct:class"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterDF.pas"
 
 [script."xejviScriptAdapterDF:sDFUnitName.TdfStructDef:class"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterDF.pas"
 
 [script."xejviScriptAdapterDF:sDFUnitName.TdfUnion:class"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterDF.pas"
 
 [script."xejviScriptAdapterDF:sDFUnitName.TdfUnionDef:class"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterDF.pas"
 
 [script."xejviScriptAdapterDF:sDFUnitName.TdfValue:class"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterDF.pas"
 
 [script."xejviScriptAdapterDF:sDFUnitName.TdfValueDef:class"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterDF.pas"
 
 [script."xejviScriptAdapterDF:sDFUnitName.TdfValueUnion:class"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterDF.pas"
 
 [script."xejviScriptAdapterDF:sDFUnitName.TdfValueUnionDef:class"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterDF.pas"
 
 [script."xejviScriptAdapterDF:sDFUnitName.TwbBGEMFile:class"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterDF.pas"
 
 [script."xejviScriptAdapterDF:sDFUnitName.TwbBGSMFile:class"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterDF.pas"
 
 [script."xejviScriptAdapterDF:sDFUnitName.TwbDDSFile:class"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterDF.pas"
 
 [script."xejviScriptAdapterDF:sDFUnitName.TwbFUZFile:class"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterDF.pas"
 
 [script."xejviScriptAdapterDF:sDFUnitName.TwbLODSettingsFO3File:class"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterDF.pas"
 
 [script."xejviScriptAdapterDF:sDFUnitName.TwbLODSettingsTES5File:class"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterDF.pas"
 
 [script."xejviScriptAdapterDF:sDFUnitName.TwbLODTreeBTTFile:class"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterDF.pas"
 
 [script."xejviScriptAdapterDF:sDFUnitName.TwbLODTreeLSTFile:class"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterDF.pas"
 
 [script."xejviScriptAdapterDF:sDFUnitName.TwbNiRef:class"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterDF.pas"
 
 [script."xejviScriptAdapterDF:sDFUnitName.TwbNiRefDef:class"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterDF.pas"
 
 [script."xejviScriptAdapterDF:sDFUnitName.TwbNifBlock:class"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterDF.pas"
 
 [script."xejviScriptAdapterDF:sDFUnitName.TwbNifBlockDef:class"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterDF.pas"
 
 [script."xejviScriptAdapterDF:sDFUnitName.TwbNifFile:class"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterDF.pas"
 
 [script."xejviScriptAdapterDF:sDFUnitName.dfCalcHash:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "JvInterpreter_dfCalcHash"
 
 [script."xejviScriptAdapterDF:sDFUnitName.dfFloatToStr:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "JvInterpreter_dfFloatToStr"
 
 [script."xejviScriptAdapterDF:sDFUnitName.dfStrToFloat:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "JvInterpreter_dfStrToFloat"
 
 [script."xejviScriptAdapterDF:sDFUnitName.dftArray:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterDF.pas"
 
 [script."xejviScriptAdapterDF:sDFUnitName.dftBytes:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterDF.pas"
 
 [script."xejviScriptAdapterDF:sDFUnitName.dftChars:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterDF.pas"
 
 [script."xejviScriptAdapterDF:sDFUnitName.dftFloat16:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterDF.pas"
 
 [script."xejviScriptAdapterDF:sDFUnitName.dftFloat32:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterDF.pas"
 
 [script."xejviScriptAdapterDF:sDFUnitName.dftMerge:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterDF.pas"
 
 [script."xejviScriptAdapterDF:sDFUnitName.dftNone:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterDF.pas"
 
 [script."xejviScriptAdapterDF:sDFUnitName.dftS16:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterDF.pas"
 
 [script."xejviScriptAdapterDF:sDFUnitName.dftS32:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterDF.pas"
 
 [script."xejviScriptAdapterDF:sDFUnitName.dftS64:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterDF.pas"
 
 [script."xejviScriptAdapterDF:sDFUnitName.dftS8:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterDF.pas"
 
 [script."xejviScriptAdapterDF:sDFUnitName.dftStruct:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterDF.pas"
 
 [script."xejviScriptAdapterDF:sDFUnitName.dftU16:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterDF.pas"
 
 [script."xejviScriptAdapterDF:sDFUnitName.dftU32:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterDF.pas"
 
 [script."xejviScriptAdapterDF:sDFUnitName.dftU64:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterDF.pas"
 
 [script."xejviScriptAdapterDF:sDFUnitName.dftU8:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterDF.pas"
 
 [script."xejviScriptAdapterDF:sDFUnitName.dftUnion:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterDF.pas"
 
 [script."xejviScriptAdapterDF:sDFUnitName.nfFO3:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterDF.pas"
 
 [script."xejviScriptAdapterDF:sDFUnitName.nfFO4:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterDF.pas"
 
 [script."xejviScriptAdapterDF:sDFUnitName.nfSSE:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterDF.pas"
 
 [script."xejviScriptAdapterDF:sDFUnitName.nfTES3:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterDF.pas"
 
 [script."xejviScriptAdapterDF:sDFUnitName.nfTES4:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterDF.pas"
 
 [script."xejviScriptAdapterDF:sDFUnitName.nfTES5:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterDF.pas"
 
 [script."xejviScriptAdapterDF:sDFUnitName.nfoCollapseLinkArrays:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterDF.pas"
 
 [script."xejviScriptAdapterDF:sDFUnitName.nfoRemoveUnusedStrings:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterDF.pas"
 
 [script."xejviScriptAdapterElement:cUnit.AssignTemplateByIndex:function"]

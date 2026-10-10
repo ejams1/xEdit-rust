@@ -559,8 +559,9 @@ status = "pending"
 note = "Phase 6 (scripting), step 5 (the element, record, file, container and resource adapters): the 22 Dummy unit functions over IwbContainer and IwbElement (AddElement, AdditionalElementCount, ElementByIndex, ElementByName, ElementByPath, ElementBySignature, ElementCount, ElementExists, RemoveElement, SetElementEditValues, SetElementNativeValues and the rest)."
 
 [units."xEdit/JvI/xejviScriptAdapterDF.pas"]
-status = "pending"
-note = "Phase 6 (scripting), step 6: the script surface of wbDataFormat over xedit-assets, 174 ledger entries (87 gets, 41 AddClass of the TdfDef hierarchy, 25 constants, 8 sets, 7 igets, 2 isets, 3 functions and 1 idget). TdfDef.Create is commented out upstream (line 767) and its entry is excluded in the ledger; this unit is the script adapter phase 5 step 3 recorded as owed."
+status = "ported"
+rust = "crates/xedit-session/src/script_df.rs"
+note = "Phase 6 (scripting), step 6, landed 2026-10-10 (branch p6-step6): the whole unit over the phase 5 data format port (`xedit-assets`), 173 of its 174 ledger entries bound to `crates/xedit-session/src/script_df.rs` (41 classes of the TdfDef/TdfElement hierarchies, the 25 dft*/nfo*/nf* constants, dfFloatToStr/dfStrToFloat/dfCalcHash, 87 gets, 8 sets, 7 igets, 2 isets, 1 idget); `TdfDef.Create` stays excluded (commented out upstream at line 767). A DF object is a `DfElement`/`DfDefObject` wrapper over a document (`DfDoc`, the phase 5 `Tree` plus its root), with the script class derived from the port's element class and definition kind; `LoadFromResource` binds `dfResourceGetDataCallback` to `xedit_core::container_handler::open_resource_data`, and the `TList`/`TStrings` a `GetAssetsList` or a `...ByType` call fills go through `script::ScriptLists` (the JVCL `Classes` unit, step 8). What differs from the GUI's Delphi model is listed in the module docs of script_df.rs (O2V(nil) as Unassigned, `Free` of the root releasing the document, the error class name of the run log)."
 
 [units."xEdit/JvI/xejviScriptAdapterElement.pas"]
 status = "pending"

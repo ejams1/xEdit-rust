@@ -29,6 +29,7 @@ pub mod patch;
 pub mod refs;
 pub mod save;
 pub mod script;
+pub mod script_df;
 pub mod sniff;
 pub mod tool_modes;
 
