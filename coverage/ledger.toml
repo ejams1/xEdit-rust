@@ -2888,7 +2888,7 @@ note = "bsarch accepts -af as BSArch does; xedit archive pack takes it as an opt
 [switch.agl]
 status = "pending"
 source = "xEdit/xeInit.pas"
-
+note = "Read by parse_legacy of tool_modes.rs and named as not acted on; xeAutoGameLink: the GUI activates its Pluggy link; the port's legacy parser reads the switch and names it as not acted on."
 [switch.aim]
 status = "pending"
 source = "Tools/TreeLodBillboardCreator/treelod.dpr"
@@ -2906,43 +2906,50 @@ source = "xDump.dpr"
 [switch.allowdirectsaves]
 status = "pending"
 source = "xEdit/xeInit.pas"
-
+note = "Read by parse_legacy of tool_modes.rs and named as not acted on; wbAllowDirectSave and wbAllowDirectSaveFor; the port saves through a temporary file and a rename, which is what the option is for."
 [switch.allowedithedrversion]
-status = "pending"
+status = "covered"
+command = "tool.run"
 source = "xEdit/xeInit.pas"
-
+note = "wbAllowEditHEDRVersion."
 [switch.allowespmaster]
-status = "pending"
+status = "covered"
+command = "tool.run"
 source = "xEdit/xeInit.pas"
-
+note = "wbAllowESPMasters."
 [switch.allowmakepartial]
-status = "pending"
+status = "covered"
+command = "tool.run"
 source = "xEdit/xeInit.pas"
-
+note = "wbAllowMakePartial; the partial form copies themselves are still pending (MakePartialForm)."
 [switch.allowmasterfilesedit]
-status = "pending"
+status = "covered"
+command = "tool.run"
 source = "xEdit/xeInit.pas"
-
+note = "wbAllowMasterFilesEdit."
 [switch.alwayssaveonam]
-status = "pending"
+status = "covered"
+command = "tool.run"
 source = "xEdit/xeInit.pas"
-
+note = "wbAlwaysSaveOnam; the onamupdate mode sets it and its force twin, as xeMainForm does."
 [switch.autoexit]
-status = "pending"
+status = "covered"
+command = "tool.run"
 source = "xEdit/xeInit.pas"
-
+note = "Accepted by the legacy command line; the CLI has no window to close, and every tool mode ends by itself."
 [switch.autogamelink]
 status = "pending"
 source = "xEdit/xeInit.pas"
-
+note = "Read by parse_legacy of tool_modes.rs and named as not acted on; As -agl."
 [switch.autoload]
-status = "pending"
+status = "covered"
+command = "tool.run"
 source = "xEdit/xeInit.pas"
-
+note = "Accepted by the legacy command line; the CLI loads what --load and -P: name."
 [switch.b]
 status = "pending"
 source = "xEdit/xeInit.pas"
-
+note = "Read by parse_legacy of tool_modes.rs and named as not acted on; The backup folder of the GUI (-B:); the port writes the backup of a file next to it in <AppName>Edit Backups."
 [switch.border]
 status = "pending"
 source = "Tools/TreeLodBillboardCreator/treelod.dpr"
@@ -2992,7 +2999,7 @@ source = "xDump.dpr"
 [switch.customini]
 status = "pending"
 source = "xEdit/xeInit.pas"
-
+note = "Read by parse_legacy of tool_modes.rs and named as not acted on; The custom ini of the game, which the port does not read."
 [switch.d]
 status = "pending"
 source = "xDump.dpr"
@@ -3008,7 +3015,7 @@ source = "xDump.dpr"
 [switch.devmode]
 status = "pending"
 source = "xEdit/xeInit.pas"
-
+note = "Read by parse_legacy of tool_modes.rs and named as not acted on; wbDevMode; only the GUI's developer mode reads it."
 [switch.df]
 status = "pending"
 source = "xDump.dpr"
@@ -3046,7 +3053,7 @@ note = "The global CLI option --dont-cache-save."
 [switch.dontremoveoffsetdata]
 status = "pending"
 source = "xEdit/xeInit.pas"
-
+note = "Read by parse_legacy of tool_modes.rs and named as not acted on; wbRemoveOffsetData; the port always removes the worldspace offsets on load, as the editor does."
 [switch.dr]
 status = "pending"
 source = "xDump.dpr"
@@ -3060,7 +3067,7 @@ note = "bsarch accepts -dump as BSArch does; xedit archive list --files lists th
 [switch.enforceallmasters]
 status = "pending"
 source = "xEdit/xeInit.pas"
-
+note = "Read by parse_legacy of tool_modes.rs and named as not acted on; wbEnforceAllMasters; set from the game (Starfield) rather than the switch."
 [switch.es]
 status = "pending"
 source = "xDump.dpr"
@@ -3068,7 +3075,7 @@ source = "xDump.dpr"
 [switch.exceptiontest]
 status = "pending"
 source = "xEdit/xeInit.pas"
-
+note = "Read by parse_legacy of tool_modes.rs and named as not acted on; A developer switch of the GUI."
 [switch.f]
 status = "covered"
 command = "archive.pack"
@@ -3082,25 +3089,29 @@ source = "BSArch.dpr"
 note = "bsarch accepts -ff as BSArch does; xedit archive pack takes it as an option of the same meaning."
 
 [switch.fillpnam]
-status = "pending"
+status = "covered"
+command = "tool.run"
 source = "xEdit/xeInit.pas"
-
+note = "wbFillPNAM; the global CLI option --fill-pnam and the quick clean modes."
 [switch.filteronam]
-status = "pending"
+status = "covered"
+command = "tool.run"
 source = "xEdit/xeInit.pas"
-
+note = "wbMasterUpdateFilterONAM of the master update and ESMify modes; also read by parse_legacy."
 [switch.fixpersistence]
-status = "pending"
+status = "covered"
+command = "tool.run"
 source = "xEdit/xeInit.pas"
-
+note = "wbMasterUpdateFixPersistence, which TwbFile.PrepareSave reads."
 [switch.fixup]
-status = "pending"
+status = "covered"
+command = "tool.run"
 source = "xEdit/xeInit.pas"
-
+note = "wbAllowInternalEdit := True (the internal edits of the load)."
 [switch.fixuppgrd]
 status = "pending"
 source = "xEdit/xeInit.pas"
-
+note = "Read by parse_legacy of tool_modes.rs and named as not acted on; wbFixupPGRD; the quick clean modes set it."
 [switch.fnv]
 status = "covered"
 command = "archive.pack"
@@ -3128,11 +3139,12 @@ note = "bsarch accepts it with the upstream spelling (-fo4dds); xedit archive pa
 [switch.forcebsa]
 status = "pending"
 source = "xEdit/xeInit.pas"
-
+note = "Read by parse_legacy of tool_modes.rs and named as not acted on; wbLoadBSAs; the archives are phase 5."
 [switch.forceinternalediting]
-status = "pending"
+status = "covered"
+command = "tool.run"
 source = "xEdit/xeInit.pas"
-
+note = "As -fixup."
 [switch.format]
 status = "pending"
 source = "Tools/TreeLodBillboardCreator/treelod.dpr"
@@ -3140,15 +3152,16 @@ source = "Tools/TreeLodBillboardCreator/treelod.dpr"
 [switch.g]
 status = "pending"
 source = "xEdit/xeInit.pas"
-
+note = "Read by parse_legacy of tool_modes.rs and named as not acted on; The save folder of the game; the port reads a save from the path it is given."
 [switch.generateseq]
-status = "pending"
+status = "covered"
+command = "tool.run"
 source = "xEdit/xeInit.pas"
-
+note = "-generateseq:<plugin>: the SEQ generation of the edit mode (xeQuickSEQ); tool.run mode=generateseq <plugin>."
 [switch.givemetheredpill]
 status = "pending"
 source = "xEdit/xeInit.pas"
-
+note = "Read by parse_legacy of tool_modes.rs and named as not acted on; The Starfield save unlock trio of the GUI."
 [switch.height]
 status = "pending"
 source = "Tools/TreeLodBillboardCreator/treelod.dpr"
@@ -3158,9 +3171,10 @@ status = "pending"
 source = "xDump.dpr"
 
 [switch.hidefixup]
-status = "pending"
+status = "covered"
+command = "tool.run"
 source = "xEdit/xeInit.pas"
-
+note = "As -showfixup."
 [switch.i]
 status = "covered"
 command = "sniff.run"
@@ -3170,35 +3184,37 @@ note = "The sniff binary takes -I: as Sniff.exe does; sniff.run takes it as a pa
 [switch.ignoreesl]
 status = "pending"
 source = "xEdit/xeInit.pas"
-
+note = "Read by parse_legacy of tool_modes.rs and named as not acted on; wbIgnoreLight; the load order of the port is given by --load."
 [switch.ignorelight]
 status = "pending"
 source = "xEdit/xeInit.pas"
-
+note = "Read by parse_legacy of tool_modes.rs and named as not acted on; As -IgnoreESL."
 [switch.ignoremedium]
 status = "pending"
 source = "xEdit/xeInit.pas"
-
+note = "Read by parse_legacy of tool_modes.rs and named as not acted on; wbIgnoreMedium."
 [switch.ignoresmall]
 status = "pending"
 source = "xEdit/xeInit.pas"
-
+note = "Read by parse_legacy of tool_modes.rs and named as not acted on; As -IgnoreESL."
 [switch.ignoreupdate]
 status = "pending"
 source = "xEdit/xeInit.pas"
-
+note = "Read by parse_legacy of tool_modes.rs and named as not acted on; wbIgnoreUpdate."
 [switch.iknowillbreakmygamewiththis]
-status = "pending"
+status = "covered"
+command = "tool.run"
 source = "xEdit/xeInit.pas"
-
+note = "-IKnowWhatImDoing -IKnowIllBreakMyGameWithThis sets wbAllowEditGameMaster."
 [switch.iknowwhatimdoing]
-status = "pending"
+status = "covered"
+command = "tool.run"
 source = "xEdit/xeInit.pas"
-
+note = "Read by parse_legacy; the switches it unlocks (-AllowMakePartial, -AllowMasterFilesEdit, -AllowEditHEDRVersion, -StripEmptyMasters, -AllowESPMaster) are applied by apply_on_load where the port has the feature."
 [switch.itjustworkstm]
 status = "pending"
 source = "xEdit/xeInit.pas"
-
+note = "Read by parse_legacy of tool_modes.rs and named as not acted on; The Starfield save unlock trio of the GUI."
 [switch.l]
 status = "pending"
 source = "xDump.dpr"
@@ -3218,7 +3234,7 @@ note = "The sniff binary takes -LOG: as Sniff.exe does; sniff.run takes it as a 
 [switch.m]
 status = "pending"
 source = "xEdit/xeInit.pas"
-
+note = "Read by parse_legacy of tool_modes.rs and named as not acted on; The My Games folder of the game, which the port does not read."
 [switch.maskdiff]
 status = "pending"
 source = "Tools/TreeLodBillboardCreator/treelod.dpr"
@@ -3226,7 +3242,7 @@ source = "Tools/TreeLodBillboardCreator/treelod.dpr"
 [switch.memory]
 status = "pending"
 source = "xEdit/xeInit.pas"
-
+note = "Read by parse_legacy of tool_modes.rs and named as not acted on; wbSpeedOverMemory."
 [switch.mipmap]
 status = "pending"
 source = "Tools/TreeLodBillboardCreator/treelod.dpr"
@@ -3234,7 +3250,7 @@ source = "Tools/TreeLodBillboardCreator/treelod.dpr"
 [switch.moprofile]
 status = "pending"
 source = "xEdit/xeInit.pas"
-
+note = "Read by parse_legacy of tool_modes.rs and named as not acted on; The Mod Organizer hook; the port has no DLL hook."
 [switch.more]
 status = "pending"
 source = "xDump.dpr"
@@ -3242,11 +3258,11 @@ source = "xDump.dpr"
 [switch.moreinfoforindex]
 status = "pending"
 source = "xEdit/xeInit.pas"
-
+note = "Read by parse_legacy of tool_modes.rs and named as not acted on; wbMoreInfoForIndex."
 [switch.moreunknown]
 status = "pending"
 source = "xEdit/xeInit.pas"
-
+note = "Read by parse_legacy of tool_modes.rs and named as not acted on; wbMoreInfoForUnknown."
 [switch.mt]
 status = "covered"
 command = "archive.pack"
@@ -3261,32 +3277,35 @@ source = "xDump.dpr"
 status = "covered"
 command = "refs.build"
 source = "xEdit/xeInit.pas"
-note = "The CLI never builds the references on load: a command that needs them (refs.get, formids.change, formids.renumber) or refs.build builds them on first use."
-
 [switch.nofillpnam]
-status = "pending"
+status = "covered"
+command = "tool.run"
 source = "xEdit/xeInit.pas"
-
+note = "As -FillPNAM."
 [switch.nofilteronam]
-status = "pending"
+status = "covered"
+command = "tool.run"
 source = "xEdit/xeInit.pas"
-
+note = "As -filteronam."
 [switch.nofixpersistence]
-status = "pending"
+status = "covered"
+command = "tool.run"
 source = "xEdit/xeInit.pas"
-
+note = "As -FixPersistence."
 [switch.nofixup]
-status = "pending"
+status = "covered"
+command = "tool.run"
 source = "xEdit/xeInit.pas"
-
+note = "wbAllowInternalEdit := False."
 [switch.noreportinjected]
 status = "pending"
 source = "xEdit/xeInit.pas"
-
+note = "Read by parse_legacy of tool_modes.rs and named as not acted on; wbReportInjected := False."
 [switch.nosortinfo]
-status = "pending"
+status = "covered"
+command = "tool.run"
 source = "xEdit/xeInit.pas"
-
+note = "As -sortinfo."
 [switch.o]
 status = "covered"
 command = "sniff.run"
@@ -3308,59 +3327,63 @@ note = "The sniff binary takes -P: as Sniff.exe does; sniff.run takes it as a pa
 [switch.pseudoesl]
 status = "pending"
 source = "xEdit/xeInit.pas"
-
+note = "Read by parse_legacy of tool_modes.rs and named as not acted on; wbPseudoLight; the load order of the port is given by --load."
 [switch.pseudolight]
 status = "pending"
 source = "xEdit/xeInit.pas"
-
+note = "Read by parse_legacy of tool_modes.rs and named as not acted on; As -PseudoESL."
 [switch.pseudomedium]
 status = "pending"
 source = "xEdit/xeInit.pas"
-
+note = "Read by parse_legacy of tool_modes.rs and named as not acted on; wbPseudoMedium."
 [switch.pseudosmall]
 status = "pending"
 source = "xEdit/xeInit.pas"
-
+note = "Read by parse_legacy of tool_modes.rs and named as not acted on; As -PseudoESL."
 [switch.pseudoupdate]
 status = "pending"
 source = "xEdit/xeInit.pas"
-
+note = "Read by parse_legacy of tool_modes.rs and named as not acted on; wbPseudoUpdate."
 [switch.q]
 status = "pending"
 source = "xDump.dpr"
 
 [switch.qac]
-status = "pending"
+status = "covered"
+command = "tool.run"
 source = "xEdit/xeInit.pas"
-
+note = "The legacy switch -qac of the quick auto clean mode; `xedit clean --quick` and the legacy command line both run it."
 [switch.qc]
-status = "pending"
+status = "covered"
+command = "tool.run"
 source = "xEdit/xeInit.pas"
-
+note = "The legacy switch -qc of the quick clean mode (the same as -quickautoclean without its auto save); the CLI's `clean --quick`."
 [switch.qsc]
 status = "pending"
 source = "xEdit/xeInit.pas"
-
+note = "Read by parse_legacy of tool_modes.rs and named as not acted on; xeQuickShowConflicts of the edit mode; `xedit conflicts --quick-show-conflicts` classifies without comparing."
 [switch.quickautoclean]
-status = "pending"
+status = "covered"
+command = "tool.run"
 source = "xEdit/xeInit.pas"
-
+note = "As -qac."
 [switch.quickclean]
-status = "pending"
+status = "covered"
+command = "tool.run"
 source = "xEdit/xeInit.pas"
-
+note = "As -qc."
 [switch.quickedit]
 status = "pending"
 source = "xEdit/xeInit.pas"
-
+note = "Read by parse_legacy of tool_modes.rs and named as not acted on; -quickedit:<plugin>: the edit mode auto loads one plugin; the CLI loads what --load names."
 [switch.quickshowconflicts]
 status = "pending"
 source = "xEdit/xeInit.pas"
-
+note = "Read by parse_legacy of tool_modes.rs and named as not acted on; As -qsc."
 [switch.r]
 status = "pending"
 source = "xEdit/xeInit.pas"
-
+note = "Read by parse_legacy of tool_modes.rs and named as not acted on; The log file of the session; the legacy command line writes the messages of the run to -R:<file>."
 [switch.report]
 status = "pending"
 source = "xDump.dpr"
@@ -3368,11 +3391,11 @@ source = "xDump.dpr"
 [switch.reportinjected]
 status = "pending"
 source = "xEdit/xeInit.pas"
-
+note = "Read by parse_legacy of tool_modes.rs and named as not acted on; wbReportInjected."
 [switch.resetsettings]
 status = "pending"
 source = "xEdit/xeInit.pas"
-
+note = "Read by parse_legacy of tool_modes.rs and named as not acted on; The settings file of the GUI, which the port does not read."
 [switch.s]
 status = "covered"
 command = "sniff.run"
@@ -3382,11 +3405,11 @@ note = "The sniff binary takes -S: as Sniff.exe does; sniff.run takes it as a pa
 [switch.script]
 status = "pending"
 source = "xEdit/xeInit.pas"
-
+note = "Read by parse_legacy of tool_modes.rs and named as not acted on; The -script:<file> switch selects the script mode and the game of the script's extension; running the script is phase 6."
 [switch.scripthost]
 status = "pending"
 source = "xEdit/xeInit.pas"
-
+note = "Read by parse_legacy of tool_modes.rs and named as not acted on; The script host of the GUI (JvInterpreter); phase 6."
 [switch.sf1]
 status = "covered"
 command = "archive.pack"
@@ -3406,13 +3429,15 @@ source = "BSArch.dpr"
 note = "bsarch accepts -share as BSArch does; xedit archive pack takes it as an option of the same meaning."
 
 [switch.showfixup]
-status = "pending"
+status = "covered"
+command = "tool.run"
 source = "xEdit/xeInit.pas"
-
+note = "wbShowInternalEdit."
 [switch.simpleformids]
-status = "pending"
+status = "covered"
+command = "tool.run"
 source = "xEdit/xeInit.pas"
-
+note = "wbPrettyFormID := False."
 [switch.skip]
 status = "covered"
 command = "sniff.run"
@@ -3422,19 +3447,21 @@ note = "The sniff binary takes -skip: as Sniff.exe does; sniff.run takes it as a
 [switch.skipbsa]
 status = "pending"
 source = "xEdit/xeInit.pas"
-
+note = "Read by parse_legacy of tool_modes.rs and named as not acted on; wbLoadBSAs; the archives are phase 5."
 [switch.skipinternalediting]
-status = "pending"
+status = "covered"
+command = "tool.run"
 source = "xEdit/xeInit.pas"
-
+note = "As -nofixup."
 [switch.sortinfo]
-status = "pending"
+status = "covered"
+command = "tool.run"
 source = "xEdit/xeInit.pas"
-
+note = "wbSortINFO."
 [switch.speed]
 status = "pending"
 source = "xEdit/xeInit.pas"
-
+note = "Read by parse_legacy of tool_modes.rs and named as not acted on; wbSpeedOverMemory."
 [switch.split]
 status = "covered"
 command = "archive.pack"
@@ -3460,13 +3487,14 @@ source = "BSArch.dpr"
 note = "bsarch accepts it with the upstream spelling (-sse); xedit archive pack takes it as an option of the same meaning."
 
 [switch.stripemptymasters]
-status = "pending"
+status = "covered"
+command = "tool.run"
 source = "xEdit/xeInit.pas"
-
+note = "wbStripEmptyMasters."
 [switch.stripmasters]
 status = "pending"
 source = "xEdit/xeInit.pas"
-
+note = "Read by parse_legacy of tool_modes.rs and named as not acted on; wbStripMasters and wbStripMastersFileNames; the masters commands do not strip named masters yet."
 [switch.subdir]
 status = "covered"
 command = "sniff.run"
@@ -3480,7 +3508,7 @@ source = "xDump.dpr"
 [switch.t]
 status = "pending"
 source = "xEdit/xeInit.pas"
-
+note = "Read by parse_legacy of tool_modes.rs and named as not acted on; The temporary folder of the GUI."
 [switch.tes3]
 status = "covered"
 command = "archive.pack"
@@ -3502,7 +3530,7 @@ note = "bsarch accepts it with the upstream spelling (-tes5); xedit archive pack
 [switch.thisisfine]
 status = "pending"
 source = "xEdit/xeInit.pas"
-
+note = "Read by parse_legacy of tool_modes.rs and named as not acted on; The Starfield save unlock trio of the GUI."
 [switch.threads]
 status = "covered"
 command = "sniff.run"
@@ -3516,15 +3544,15 @@ source = "xDump.dpr"
 [switch.trackalleditorid]
 status = "pending"
 source = "xEdit/xeInit.pas"
-
+note = "Read by parse_legacy of tool_modes.rs and named as not acted on; wbTrackAllEditorID."
 [switch.veryquickshowconflicts]
 status = "pending"
 source = "xEdit/xeInit.pas"
-
+note = "Read by parse_legacy of tool_modes.rs and named as not acted on; As -vqsc."
 [switch.vqsc]
 status = "pending"
 source = "xEdit/xeInit.pas"
-
+note = "Read by parse_legacy of tool_modes.rs and named as not acted on; xeVeryQuickShowConflicts."
 [switch.width]
 status = "pending"
 source = "Tools/TreeLodBillboardCreator/treelod.dpr"
@@ -3624,76 +3652,83 @@ status = "pending"
 source = "Core/wbInterface.pas"
 
 [tool_mode.tmCheckForDR]
-status = "pending"
+status = "covered"
+command = "files.clean"
 source = "Core/wbInterface.pas"
-
+note = "tool.run mode=checkfordr counts the deleted references of the last loaded plugin the same way and exits with the count."
 [tool_mode.tmCheckForErrors]
-status = "pending"
+status = "covered"
+command = "files.check"
 source = "Core/wbInterface.pas"
-note = "The tool mode (-CheckForErrors and its run of the checks) is step 9; the check it runs is files.check, whose menu item (mniNavCheckForErrorsClick) is covered."
-
+note = "xedit check, which loads as the mode does (commands::set_check_on_load) and checks the last file of the load order with `check --last`; tool.run mode=checkforerrors runs it and returns the exit code (the count, at most 127)."
 [tool_mode.tmCheckForITM]
-status = "pending"
+status = "covered"
+command = "files.clean"
 source = "Core/wbInterface.pas"
-
+note = "tool.run mode=checkforitm counts the records identical to their master of the last loaded plugin (files.clean with dry_run, the Counting/Counted wording of the mode) and exits with the count, at most 127; nothing is saved."
 [tool_mode.tmDump]
 status = "pending"
 source = "Core/wbInterface.pas"
-
+note = "The mode of xDump.exe; the port's dump is `xedit dump --game <game> <plugin>` (the dump check of the harness). The mode name is accepted by tool.run and by the legacy command line."
 [tool_mode.tmESMify]
-status = "pending"
+status = "covered"
+command = "tool.run"
 source = "Core/wbInterface.pas"
-
+note = "UPSTREAM-QUIRK: the release 4.1.5q has no branch for tmESMify in the auto mode dispatch of xeMainForm.pas, so -setesm changes nothing (the load only sets wbMasterUpdateFilterONAM); the port follows it and says so in the result. files.flags --esm true is the port of TwbFile.SetIsESM."
 [tool_mode.tmESPify]
-status = "pending"
+status = "covered"
+command = "tool.run"
 source = "Core/wbInterface.pas"
-
 [tool_mode.tmEdit]
-status = "pending"
+status = "covered"
+command = "tool.run"
 source = "Core/wbInterface.pas"
-
 [tool_mode.tmExport]
-status = "pending"
+status = "covered"
+command = "tool.run"
 source = "Core/wbInterface.pas"
-
-[tool_mode.tmGenerateSEQ]
-status = "pending"
+note = "tool.run mode=export [--format RAW|UESPWIKI] [--output PATH]: crates/xedit-session/src/export.rs ports TExportFormat, AnchorProfile, UESPName, UESPType, the sorted profile list (AddProfile, FindProfile, MarkProfile, LockProfile) and the five passes of ExportElement/ExportContainer/ProfileElement/ProfileContainer/ProfileHeader/ProfileArray, with the definitions built as xDump builds them (wbSimpleRecords off, which Session::load reads through tool_modes::loads_like_xdump). The profile file is written and the structure text returned. The save chapters (ProfileChapters, wbFileChapters) have no tool mode here. Known difference, owed: the profiles differ in the type name of one definition (a member the oracle names empty and the port names TwbEnumDef, byte 1198 of the Oblivion profile and byte 37391 of the Fallout New Vegas one) and the structure text follows it; parity tool-modes reports the export as known-difference."
+tool_mode.tmGenerateSEQ]
+status = "covered"
+command = "tool.run"
 source = "Core/wbInterface.pas"
-
+note = "The mode name is the port's; upstream reaches the SEQ generation with -generateseq:<plugin>, a parameter of the edit mode (xeQuickSEQ)."
 [tool_mode.tmLODgen]
 status = "covered"
 command = "lodgen.generate"
 source = "Core/wbInterface.pas"
+note = "Accepted by tool.run and by the legacy command line (phases of xeInit); the LOD generation itself is phase 5 (the lodgen.generate command)."
 note = "xedit lodgen runs the LODGen mode: no internal edits, shorter names, the archives of the game ini and the plugins loaded as TLoaderThread does; -O:, -S:, -T:, -D: and -I: are the output, scripts, temp, data and game_ini parameters."
 
 [tool_mode.tmMasterRestore]
-status = "pending"
+status = "covered"
+command = "tool.run"
 source = "Core/wbInterface.pas"
-
 [tool_mode.tmMasterUpdate]
-status = "pending"
+status = "covered"
+command = "tool.run"
 source = "Core/wbInterface.pas"
-
 [tool_mode.tmOnamUpdate]
-status = "pending"
+status = "covered"
+command = "tool.run"
 source = "Core/wbInterface.pas"
-
 [tool_mode.tmScript]
 status = "pending"
 source = "Core/wbInterface.pas"
-
+note = "Accepted by tool.run and by the legacy command line, including the -script: switch and the .FNVpas style executable names; the interpreter is phase 6 (xedit script run)."
 [tool_mode.tmSortAndCleanMasters]
-status = "pending"
+status = "covered"
+command = "tool.run"
 source = "Core/wbInterface.pas"
-
-[tool_mode.tmTranslate]
-status = "pending"
+note = "tool.run mode=sortandcleanmasters <module> ..., the SortMasters/CleanMasters loop of the auto mode dispatch. The modules are the ones named (xeModulesToUse); each must be editable. UPSTREAM-QUIRK: the release refuses the switch -sortandcleanmasters (the mode selection of _DoInit compares the whole name with sortandclean), so only -sortandclean or the ...SortAndCleanMasters.exe name selects it; the port's legacy command line accepts both."
+tool_mode.tmTranslate]
+status = "covered"
+command = "tool.run"
 source = "Core/wbInterface.pas"
-
 [tool_mode.tmView]
-status = "pending"
+status = "covered"
+command = "tool.run"
 source = "Core/wbInterface.pas"
-
 [script."xejviScriptAdapter:cInterface.wbGridCell:function"]
 status = "pending"
 source = "JvInterpreter_wbGridCell"

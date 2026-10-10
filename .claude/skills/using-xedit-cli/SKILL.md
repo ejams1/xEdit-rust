@@ -79,6 +79,7 @@ Inspection (never mutates):
 | `refs dump` | (none) | The referenced-by lists of every record as text, for the parity check. |
 | `call system.version` | `system.version` | The version of the build. |
 | `dump --game G <plugin>` | (none) | The whole plugin as `xDump.exe` prints it, to stdout; progress goes to stderr. |
+| `tool modes` | `tool.modes` | The seventeen tool modes of xEdit with the switch of each, whether the game of the session has it, what it does and what of it is missing here. |
 | `saves dump --game G --data <Data> <save>` | (none) | A save or co-save as `xDump.exe -saves` prints it. The plugins the save lists load from `<Data>`. |
 | `schema` | (none) | The registry: every command with its request and response JSON Schema. |
 
@@ -111,6 +112,7 @@ Changing data (`mutates`, needs `--edit` or `--dry-run`):
 | `localization export <table> [--output PATH]` | `localization.export` | Writes a table as text, an `[ID]` line and the text per string. |
 | `localization localize [--file F] [--translate-from T]... [--translate-to T]...` | `localization.localize` | "Localize plugin": the strings move into new tables, the plugin holds their IDs. |
 | `localization delocalize [--file F]` | `localization.delocalize` | "Delocalize plugin": the texts go into the plugin, the localized flag is cleared. |
+| `tool run <mode> [<plugin>...] [--output PATH] [--format RAW\|UESPWIKI] [--seq-path DIR]` | `tool.run` | Runs a tool mode of xEdit over the loaded plugins (`setesm`, `clearesm`, `masterupdate`, `masterrestore`, `onamupdate`, `sortandcleanmasters`, `generateseq`, `checkforerrors`, `checkforitm`, `checkfordr`, `export`, `edit`, `view`, `translate`). See "Tool modes". |
 
 String tables (no `--edit` needed):
 
@@ -388,6 +390,36 @@ xedit --json --game fo4 --load "<Data>\DLCRobot.esm" check --record 01000F99
 - Error codes: `save_refused` carries an upstream `PrepareSave` message, which the oracle gives for the same file (a Starfield blueprint module, a record in the wrong group, an `.esp` master where the game forbids it, an official Starfield module whose header the save would have to edit: `[TES4:00000000] can not be edited`). The messages of a save name records as the xEdit GUI does (`EditorID "Name" [SIG:FormID]`), so they read like the GUI's; the other commands keep xDump's names.
 - Only the worldspace records are initialized by a save of an unmodified file (upstream drops their `OFST` subrecord and marks their children modified), so a big master saves in seconds; the children of its worldspaces are rebuilt record by record.
 
+## Tool modes
+
+xEdit is started in a tool mode: the executable name (`SSEEditQuickAutoClean.exe`, `SSEEditLODGen.exe`) or a switch selects it, and the mode decides how the plugins load and what runs over them once they are loaded. `xedit tool modes` lists all seventeen with the switch of each; `xedit tool run <mode>` runs one. A mode that changes things loads with its own settings, acts over the loaded files and saves everything it changed, each plugin to its own path (with a backup, unless `--no-backup`), as the GUI's `SaveChanged` at the end of an auto mode does.
+
+| Mode | What it does over the loaded plugins |
+|---|---|
+| `masterupdate` | Sets the ESM flag of every loaded plugin that is not one, and marks the header of the files that have masters modified so their `ONAM` list is rebuilt (`-filteronam` follows the switch). Fallout 3 and New Vegas only, as in xEdit. Saves every plugin it changed. |
+| `masterrestore` | Clears the ESM flag of the `.esp` files that have it (Fallout 3 and New Vegas only, as in xEdit). |
+| `clearesm` | The same clearing, in every game (the `-clearESM` mode). |
+| `setesm` | **Changes nothing**: the release 4.1.5q has no branch for the mode in its auto mode dispatch (an upstream bug this port reproduces; the result says so). The load just sets the ONAM filter. Use `files flags --esm true` to set the flag. |
+| `onamupdate` | Marks the header of every editable plugin with masters modified, so its ONAM list is rebuilt (`-onamupdate`, the Skyrim games). |
+| `sortandcleanmasters` | Sorts the masters of the named plugin by load order and removes the unused ones. |
+| `generateseq` | Writes `<data>\Seq\<plugin>.seq` with the fixed FormIDs of the start-game-enabled quests the plugin adds (or sets the flag on), as the edit mode's `-generateseq:<plugin>` does; `--seq-path` puts them elsewhere. |
+| `checkforerrors` | xEdit's "Check for Errors" on the last file of the load order; the response's `exit_code` is the count, at most 127 (`check --last` does the same). |
+| `checkforitm`, `checkfordr` | Count the records identical to their master, or the deleted references, of the last file of the load order and change nothing (the `Counting`/`Counted` lines of xEdit's log); `exit_code` is the count. |
+| `export` | xDump's `-export RAW`: the profile of the game's record definitions. `--format UESPWIKI` writes the wiki tables instead; the profile file goes to `--output` (default `<AppName>ExportPlugins.txt` next to the program, as xDump writes it) and the structure of the definitions comes back as the response's `text`. |
+| `edit`, `view`, `translate` | Loading modes: `edit` is the default, `view` loads read-only and `translate` is `--translate`. They report what they are. |
+
+- The modes reachable as their own commands are not run twice: `dump` points at `xedit dump`, `lodgen` (phase 5) and `script` (phase 6) are accepted and leave the work to those phases, and `quickclean`/`quickautoclean` are `xedit clean --quick`.
+- `--dry-run` reports what the mode would change without changing anything; for `export` that means it writes nothing and still returns the text.
+- The modes take (and the modes of the GUI take) the switches of `xeInit.pas` too: `-filteronam`, `-FixPersistence`, `-alwayssaveonam`, `-IKnowWhatImDoing` and the switches it unlocks, `-FillPNAM`, `-sortinfo`, `-nobuildrefs`, `-fixup`/`-nofixup`. The ones the port reads and does not act on are named in the result.
+
+**The command line of xEdit itself.** Mod managers start xEdit with its own switches (`SSEEdit.exe -quickautoclean -autoexit -autoload "<plugin>"`, `-IKnowWhatImDoing`, `-D:<data>`, `-P:<plugins.txt>`), and those are not the CLI's syntax (`--game`, `--load`). The port reads them as xEdit does: a command line that holds one of them is taken as a tool mode invocation — the tool mode, the game (`-SSE`, `-FO4`, ... or the executable name), the plugin list (`-P:` or the plugin named as a parameter), the data folder (`-D:`), the settings above, and the switches the port does not act on, which it names on stderr. The mode runs, its message log goes to stdout and the exit code is what xEdit exits with (the count of the check modes, at most 127). `-R:<file>` writes the log to a file.
+
+```
+xedit -SSE -D:"<Data>" -P:"<plugins.txt>" -quickautoclean -autoexit
+xedit -FO4 -D:"<Data>" -checkforitm "<plugin>.esp"; echo $?   # the ITM count
+xedit -TES4 -D:"<Data>" -P:"<plugins.txt>" -quickedit:"<plugin>.esp" -autoexit
+```
+
 ## Daemon and MCP server
 
 `serve` and `mcp` load the session once and run the same registry commands against it, so an edit stays in memory between calls and loading is paid once. Use them for a long session: several edits with reads in between, an agent exploring a load order, a save after a check. Both take the global `--game`, `--load`, `--edit` and `--threads` options at startup; the edit gate is fixed then and no request can lift it. Both build their method or tool list from the registry when they run, so every command, including ones added later, is there without any change; `rpc.discover` (serve) and `tools/list` (mcp) show what this build has.
@@ -434,7 +466,7 @@ xedit --json --edit --game sse --load "<Data>\Skyrim.esm" save --no-backup --out
 
 ## Known gaps
 
-Behaviour a user can meet, as of phase 4 step 8. Each is an upstream behaviour not ported yet; say so rather than work around it silently.
+Behaviour a user can meet, as of phase 4 step 9. Each is an upstream behaviour not ported yet; say so rather than work around it silently.
 
 - **Strings.** The Fallout 4 DLC keep their string tables in `<plugin> - Main.ba2`, which the load does not read (it reads loose tables and `<plugin>.ba2`, `<plugin> - Interface.ba2`, `<plugin> - Localization.ba2`), so their strings show `<Error: No strings file ...>` unless the tables are loose in `Data\Strings`; editing such a string then makes new, empty tables. The `.cpoverride` code page of a table is read; the archive's files are listed sorted, not in archive order.
 - **Copy over an existing override.** xEdit's "...with overwriting" (`aAllowOverwrite`) is not ported: `records copy` returns the existing override unchanged. A partial form (`MakePartialForm`), template elements and aligned arrays can not be copied either.
@@ -443,8 +475,9 @@ Behaviour a user can meet, as of phase 4 step 8. Each is an upstream behaviour n
 - **Flags** are not child elements of their value in `records get`; `compare` shows them as rows, as the view does.
 - **Mod groups.** The named selection presets of xEdit's selection dialog are not ported. The modules that are not loaded are ordered by name, where xEdit uses its load order, which decides only the order of their `.modgroups` files (and of groups of the same name in them).
 - **Conflicts.** Records the GUI user hid and the compare-to load (`Compare to...`) do not exist; the raw data compare (`wbCompareRawData`) is not ported; compare of selected records of different FormIDs (`Compare Selected`) and the script function `ConflictAllForElements` have no command yet.
-- **Cleaning.** `clean` cleans one plugin per call. xEdit's `-AllowMakePartial` (partial forms of cells and worldspaces with children) is not ported, the UDR options of xEdit's Options dialog are fixed at their defaults, and the LOOT dirty-information report is the counts of the response. The legacy switches (`-quickautoclean`, `-qac`, `-checkforitm`) are not accepted yet (phase 4 step 9). In the oracle check a few saved plugins still differ from xEdit's in the bytes of records the clean did not touch (see `docs/PLAN.md`, owed from step 5).
-- **Check for errors.** The legacy `-CheckForErrors` switch itself is not accepted yet (phase 4 step 9; `xedit check --last` does what it does). The script function `Check` of one element has no command.
+- **Cleaning.** `clean` cleans one plugin per call. xEdit's `-AllowMakePartial` (partial forms of cells and worldspaces with children) is not ported, the UDR options of xEdit's Options dialog are fixed at their defaults, and the LOOT dirty-information report is the counts of the response. In the oracle check a few saved plugins still differ from xEdit's in the bytes of records the clean did not touch (see `docs/PLAN.md`, owed from step 5).
+- **Check for errors.** The script function `Check` of one element has no command.
+- **Tool modes.** `-setesm` changes nothing: xEdit 4.1.5q's auto mode dispatch has no branch for it, and the port follows the release (`files flags --esm true` sets the flag). The `-lodgen` and `-script` modes are accepted and run nothing (phases 5 and 6). Of the legacy switches, the ones the port reads and does not act on (the temporary folder, the game ini, the code pages, the archive loading, the pseudo light/medium/update flags and the rest, see `coverage/ledger.toml`) are named on stderr. The plugin list of `-P:` is read for the modules it marks active; the game's own `Plugins.txt` is not found by itself, so pass `-P:` (or a plugin name) and `-D:`. The save chapters are not exported (`-export` writes the plugin definitions only).
 - **Morrowind.** Plugins load and dump, but the save stops at `must have a FormID`: the identity FormID of a TES3 record is not ported. The 4.1.5q oracle saves no Morrowind plugin either (its GUI runs Morrowind in view mode), so there is nothing to compare with.
 - **New files.** `files new` makes `.esp` and `.esl` plugins from the light and medium flags; the module templates of xEdit's "Create New File" dialog are not ported.
 - **Sessions.** One session per process; `serve` and `mcp` can not load other plugins later, and a named pipe serves one client at a time.

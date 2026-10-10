@@ -316,7 +316,7 @@ pub fn quick_auto_clean(
     files_clean(session, request)
 }
 
-fn files_clean(session: &mut Session, request: CleanRequest) -> Result<CleanResponse, CommandError> {
+pub(crate) fn files_clean(session: &mut Session, request: CleanRequest) -> Result<CleanResponse, CommandError> {
     crate::commands::refuse_in_translate_mode("files.clean")?;
     let target = session.file(request.file.as_deref())?;
     if target

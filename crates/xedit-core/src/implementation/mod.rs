@@ -4523,7 +4523,7 @@ impl MainRecord for MainRecordImpl {
 
 /// Port of `wbIsModule`: the game executable, or a plugin by its extension,
 /// also when it is ghosted.
-fn is_module(file_name: &str) -> bool {
+pub fn is_module(file_name: &str) -> bool {
     let lower = file_name.to_ascii_lowercase();
     let base = lower.strip_suffix(".ghost").unwrap_or(&lower);
     path_file_name(file_name).eq_ignore_ascii_case(&game_exe_name())

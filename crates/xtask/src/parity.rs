@@ -69,6 +69,7 @@ mod lodgen;
 mod nif;
 mod oracle_save;
 mod strings;
+mod tool_modes;
 mod sniff;
 
 /// `parity check-dump`: the dump check runs `xDump -check` and
@@ -248,9 +249,13 @@ struct Options {
     modgroups: bool,
     /// `parity merged`: the merged patch scenarios.
     merged: bool,
+    /// `parity tool-modes`: the tool modes that work over the loaded files.
+    tool_modes: bool,
     games: Vec<&'static Game>,
     /// Lower-case file names. Empty selects the whole corpus.
     files: Vec<String>,
+    /// `parity tool-modes`: the tool modes to run; empty selects all.
+    modes: Vec<String>,
     oracle_only: bool,
     jobs: usize,
     /// No `--game` was given.
@@ -348,7 +353,8 @@ pub fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
         || options.clean
         || options.check
         || options.modgroups
-        || options.merged;
+        || options.merged
+        || options.tool_modes;
     let oracle = if options.roundtrip || gui_oracle {
         PathBuf::new()
     } else {
@@ -385,6 +391,9 @@ pub fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
     }
     if options.merged {
         return merged::run_merged(root, tag, &options, cache, scratch, oracle_dir);
+    }
+    if options.tool_modes {
+        return tool_modes::run_tool_modes(root, tag, &options, cache, scratch, oracle_dir);
     }
 
     let mut cases = Vec::new();
@@ -1214,7 +1223,9 @@ fn parse(args: &[&str]) -> Result<Options> {
                          [--oracle-timeout <minutes>]";
     let (mode, rest) = args.split_first().context(USAGE)?;
     let (saves, roundtrip, oracle_save, oracle_edit) = match *mode {
-        "dump" | "conflicts" | "refs" | "clean" | "check" | "modgroups" | "merged" => (false, false, false, false),
+        "dump" | "conflicts" | "refs" | "clean" | "check" | "modgroups" | "merged" | "tool-modes" => {
+            (false, false, false, false)
+        }
         "check-dump" => {
             CHECK_DUMP.store(true, Ordering::Relaxed);
             (false, false, false, false)
@@ -1237,8 +1248,10 @@ fn parse(args: &[&str]) -> Result<Options> {
         refs: *mode == "refs",
         modgroups: *mode == "modgroups",
         merged: *mode == "merged",
+        tool_modes: *mode == "tool-modes",
         games: Vec::new(),
         files: Vec::new(),
+        modes: Vec::new(),
         oracle_only: false,
         // The memory budget decides how many of them run at once.
         jobs: 3,
@@ -1264,6 +1277,7 @@ fn parse(args: &[&str]) -> Result<Options> {
                 options.games.push(game);
             }
             "--file" => options.files.push(rest.next().context(USAGE)?.to_lowercase()),
+            "--mode" => options.modes.push(rest.next().context(USAGE)?.to_lowercase()),
             "--record" => options.records.push(rest.next().context(USAGE)?.to_uppercase()),
             "--oracle-only" => options.oracle_only = true,
             "--jobs" => options.jobs = rest.next().context(USAGE)?.parse::<usize>()?.max(1),

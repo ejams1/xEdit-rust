@@ -17,6 +17,7 @@ pub mod commands;
 pub mod conflicts;
 pub mod dump;
 pub mod edit;
+pub mod export;
 pub mod formids;
 pub mod localization;
 pub mod lodgen;
@@ -26,6 +27,7 @@ pub mod new_file;
 pub mod patch;
 pub mod refs;
 pub mod save;
+pub mod tool_modes;
 pub mod sniff;
 
 use std::collections::BTreeMap;
@@ -143,6 +145,7 @@ impl Registry {
         localization::register(&mut registry);
         new_file::register(&mut registry);
         patch::register(&mut registry);
+        tool_modes::register(&mut registry);
         archive::register(&mut registry);
         assets::register(&mut registry);
         sniff::register(&mut registry);

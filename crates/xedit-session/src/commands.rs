@@ -106,10 +106,22 @@ pub(crate) fn refuse_in_translate_mode(command: &str) -> Result<(), CommandError
 impl Session {
     /// Loads the plugins of a game in the order given, with their masters.
     pub fn load(game: &str, plugins: &[String]) -> Result<Self, String> {
-        let mode = setup_game_for_edit(game)?;
+        // `xDump.dpr` builds its definitions with settings of its own, which
+        // the export of the definitions has to see (`wbSimpleRecords` among
+        // them); every other mode loads them as the editor does.
+        let xdump = crate::tool_modes::loads_like_xdump();
+        let mode = if xdump {
+            crate::dump::setup_game(game)?
+        } else {
+            setup_game_for_edit(game)?
+        };
         // The editor's settings apply before the plugins load: the load
         // itself edits records under `wbAllowInternalEdit`.
         crate::save::apply_edit_settings(mode);
+        // `xeInit.pas`: the tool mode's own settings, which decide what the
+        // load does (the internal edits, the reference information, the
+        // translate mode and so on).
+        crate::tool_modes::apply_on_load();
         if let Some(language) = LANGUAGE_ON_LOAD.lock().unwrap().as_deref() {
             xedit_core::interface::globals::set_language(language);
         }
