@@ -351,6 +351,11 @@ enum Action {
         #[arg(long)]
         dry_run: bool,
     },
+    /// The Pascal scripts of the scripts folder: the corpus a script runs on. `xedit script list` (script.list) lists them.
+    Script {
+        #[command(subcommand)]
+        action: ScriptAction,
+    },
     /// Run a command by name.
     Call {
         /// Command name as listed by `xedit schema`, for example system.version.
@@ -375,6 +380,16 @@ enum Action {
     },
     /// Serve the commands as Model Context Protocol tools on stdio. The plugins load when the first tool is called.
     Mcp,
+}
+
+#[derive(Subcommand)]
+enum ScriptAction {
+    /// List the *.pas scripts of the scripts folder (script.list), as the Apply Script menu lists them.
+    List {
+        /// The scripts folder (xEdit's -S:). Default: the XEDIT_SCRIPTS environment variable, else the oracle's Edit Scripts (XEDIT_ORACLE_DIR), else the Edit Scripts folder beside xedit.exe.
+        #[arg(long)]
+        scripts: Option<String>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -2087,6 +2102,9 @@ fn command_of(action: Action) -> Result<(String, Value), CommandError> {
                 }),
             )
         }
+        Action::Script { action } => match action {
+            ScriptAction::List { scripts } => ("script.list".to_owned(), json!({ "scripts": scripts })),
+        },
         Action::Conflicts {
             file,
             signature,

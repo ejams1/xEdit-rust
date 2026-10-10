@@ -1,0 +1,914 @@
+{
+  "description": "The scripts of the Edit Scripts folder of the xEdit 4.1.5q release, the corpus phase 6 checks: every *.pas of the folder with its line count and whether it builds a VCL form (a grep for TForm or ShowModal), pops up a dialog (a grep for InputQuery or InputBox) or is the declaration-only xEditAPI.pas (marked api). The scripts are in the order xedit script list gives them (the form's list order); the line count counts a last line that has no line break, as reading the file does. Neither flag is a parse, and a script can be both a form and a dialog script.",
+  "source": "Edit Scripts",
+  "counts": {
+    "scripts": 150,
+    "form": 32,
+    "dialogs": 11,
+    "headless": 110,
+    "api": 1
+  },
+  "scripts": [
+    {
+      "name": "_newscript_.pas",
+      "lines": 33,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Add enable parent to the refs of specific base object.pas",
+      "lines": 31,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Add into container.pas",
+      "lines": 151,
+      "form": true,
+      "dialogs": true
+    },
+    {
+      "name": "Add prefix or suffix to Editor ID.pas",
+      "lines": 52,
+      "form": false,
+      "dialogs": true
+    },
+    {
+      "name": "Add Prefix Plus Name To EDID.pas",
+      "lines": 63,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Apply custom scripted filter.pas",
+      "lines": 108,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Apply filter for cleaning.pas",
+      "lines": 55,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Apply filter for deleted navmeshes.pas",
+      "lines": 49,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Assets browser.pas",
+      "lines": 512,
+      "form": true,
+      "dialogs": false
+    },
+    {
+      "name": "Assets manager.pas",
+      "lines": 1680,
+      "form": true,
+      "dialogs": false
+    },
+    {
+      "name": "Base object variations.pas",
+      "lines": 89,
+      "form": false,
+      "dialogs": true
+    },
+    {
+      "name": "BASH tags autodetection.pas",
+      "lines": 241,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Bookmark.pas",
+      "lines": 63,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Bookmark1.pas",
+      "lines": 24,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Bookmark1Go.pas",
+      "lines": 17,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Bookmark2.pas",
+      "lines": 24,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Bookmark2Go.pas",
+      "lines": 17,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Bookmark3.pas",
+      "lines": 24,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Bookmark3Go.pas",
+      "lines": 17,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Bookmark4.pas",
+      "lines": 24,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Bookmark4Go.pas",
+      "lines": 17,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Bookmark5.pas",
+      "lines": 24,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Bookmark5Go.pas",
+      "lines": 17,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Change load order of FormID.pas",
+      "lines": 70,
+      "form": false,
+      "dialogs": true
+    },
+    {
+      "name": "Change persistent flag.pas",
+      "lines": 34,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Check for circular previous INFOs.pas",
+      "lines": 43,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Check for errors.pas",
+      "lines": 30,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Check for invalid alternate textures.pas",
+      "lines": 102,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Conflict Status.pas",
+      "lines": 89,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Copy as override.pas",
+      "lines": 52,
+      "form": true,
+      "dialogs": false
+    },
+    {
+      "name": "Copy FormID to clipboard.pas",
+      "lines": 26,
+      "form": true,
+      "dialogs": false
+    },
+    {
+      "name": "Copy version control info from another plugin.pas",
+      "lines": 78,
+      "form": true,
+      "dialogs": false
+    },
+    {
+      "name": "Create Shared Infos.pas",
+      "lines": 298,
+      "form": true,
+      "dialogs": false
+    },
+    {
+      "name": "DDS - Find textures without mipmaps.pas",
+      "lines": 48,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Detect conflict between elements.pas",
+      "lines": 75,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Execute external applications.pas",
+      "lines": 34,
+      "form": true,
+      "dialogs": false
+    },
+    {
+      "name": "Export dialogues.pas",
+      "lines": 550,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Export list of cells.pas",
+      "lines": 31,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "ExportImportTexts.pas",
+      "lines": 327,
+      "form": true,
+      "dialogs": false
+    },
+    {
+      "name": "Fallout4 - Convert ALCH to SPEL.pas",
+      "lines": 58,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Fallout4 - Copy XPRI subrecord.pas",
+      "lines": 26,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Fallout4 - Disable PreVis.pas",
+      "lines": 73,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Fallout4 - Filter for precombined statics.pas",
+      "lines": 117,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Fallout4 - Import SCLP bone weights.pas",
+      "lines": 126,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Fallout4 - Workshop Menu Editor.pas",
+      "lines": 566,
+      "form": true,
+      "dialogs": true
+    },
+    {
+      "name": "Find cell in worldspace.pas",
+      "lines": 183,
+      "form": true,
+      "dialogs": false
+    },
+    {
+      "name": "Find ESP plugins which could be turned into ESL.pas",
+      "lines": 75,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Find records.pas",
+      "lines": 246,
+      "form": true,
+      "dialogs": false
+    },
+    {
+      "name": "FNV - Export dialogues.pas",
+      "lines": 381,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "FO3 and FNV - Translator.pas",
+      "lines": 305,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "FUZer.pas",
+      "lines": 213,
+      "form": true,
+      "dialogs": false
+    },
+    {
+      "name": "JSON - Demo.pas",
+      "lines": 115,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "List FormIDs from specific space.pas",
+      "lines": 23,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "List hardcoded forms from references.pas",
+      "lines": 42,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "List loaded plugins and their masters.pas",
+      "lines": 25,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "List LOD objects and meshes.pas",
+      "lines": 65,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "List master references.pas",
+      "lines": 79,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "List null FormID.pas",
+      "lines": 19,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "List perk entry points usage.pas",
+      "lines": 58,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "List records referencing specific plugin.pas",
+      "lines": 47,
+      "form": false,
+      "dialogs": true
+    },
+    {
+      "name": "List used baseforms and statistics.pas",
+      "lines": 46,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "List used meshes from references.pas",
+      "lines": 50,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "List used meshes.pas",
+      "lines": 44,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "List winning override references.pas",
+      "lines": 17,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "LOD Statistics.pas",
+      "lines": 165,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "LODGen.pas",
+      "lines": 1242,
+      "form": true,
+      "dialogs": false
+    },
+    {
+      "name": "Make new records from overrides.pas",
+      "lines": 45,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Merge overrides into master.pas",
+      "lines": 129,
+      "form": true,
+      "dialogs": false
+    },
+    {
+      "name": "NIF - Batch JSON converter.pas",
+      "lines": 159,
+      "form": true,
+      "dialogs": false
+    },
+    {
+      "name": "NIF - Batch textures replacement.pas",
+      "lines": 384,
+      "form": true,
+      "dialogs": false
+    },
+    {
+      "name": "NIF - Batch update tangents and bitangents.pas",
+      "lines": 132,
+      "form": true,
+      "dialogs": false
+    },
+    {
+      "name": "NIF - Convert OBJ to NIF.pas",
+      "lines": 405,
+      "form": true,
+      "dialogs": false
+    },
+    {
+      "name": "NIF - List blocks references.pas",
+      "lines": 74,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Oblivion - Export all scripts in xml format.pas",
+      "lines": 46,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Oblivion - Export Dialogues.pas",
+      "lines": 230,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Oblivion - Items lookup replacement.pas",
+      "lines": 210,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Oblivion - OCO faces assignment.pas",
+      "lines": 139,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Output used assets filenames.pas",
+      "lines": 49,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Put master references in the same cell as overriding references.pas",
+      "lines": 25,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Put worldspace references in the right cells.pas",
+      "lines": 79,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Redirect references.pas",
+      "lines": 39,
+      "form": false,
+      "dialogs": true
+    },
+    {
+      "name": "Regular Expressions Workbench.pas",
+      "lines": 207,
+      "form": true,
+      "dialogs": false
+    },
+    {
+      "name": "Remove duplicate references.pas",
+      "lines": 160,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Remove excess references.pas",
+      "lines": 45,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Remove identical to previous override records.pas",
+      "lines": 49,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Remove invalid entries from from lists.pas",
+      "lines": 79,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Remove percentage of references of specific object.pas",
+      "lines": 40,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Remove same references against the master cell.pas",
+      "lines": 108,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Renumber FormID of Matching EDID.pas",
+      "lines": 115,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Renumber FormID.pas",
+      "lines": 63,
+      "form": false,
+      "dialogs": true
+    },
+    {
+      "name": "Replace landscape texture.pas",
+      "lines": 26,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Replace map marker.pas",
+      "lines": 27,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Replace model alternate textures.pas",
+      "lines": 40,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Replace model file name.pas",
+      "lines": 38,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Replace text in EDID and FULL.pas",
+      "lines": 46,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Report masters.pas",
+      "lines": 94,
+      "form": true,
+      "dialogs": false
+    },
+    {
+      "name": "Report unclamped FormIDs.pas",
+      "lines": 15,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Restore record names from master.pas",
+      "lines": 32,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Save script source.pas",
+      "lines": 34,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "SaveAs.pas",
+      "lines": 175,
+      "form": true,
+      "dialogs": false
+    },
+    {
+      "name": "Scale trees references.pas",
+      "lines": 25,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Set default water level in exterior cells with HasWater flag.pas",
+      "lines": 17,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "SetESL.pas",
+      "lines": 72,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Skyrim - Add keywords.pas",
+      "lines": 90,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Skyrim - Add shadow bias to lights.pas",
+      "lines": 21,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Skyrim - Book Covers Patch.pas",
+      "lines": 119,
+      "form": true,
+      "dialogs": false
+    },
+    {
+      "name": "Skyrim - Check edge links in navmeshes.pas",
+      "lines": 178,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Skyrim - Check script properties.pas",
+      "lines": 120,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Skyrim - Clean edge links in navmeshes.pas",
+      "lines": 329,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Skyrim - Convert BOOK to SCRL.pas",
+      "lines": 50,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Skyrim - Convert LIGH record with mesh to STAT or MISC.pas",
+      "lines": 85,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Skyrim - Copy book text only from master record.pas",
+      "lines": 20,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Skyrim - Copy cells settings.pas",
+      "lines": 67,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Skyrim - Copy VMAD subrecord.pas",
+      "lines": 47,
+      "form": false,
+      "dialogs": true
+    },
+    {
+      "name": "Skyrim - Create patch for ClimatesOfTamriel and SoundsOfSkyrim-TheWilds.pas",
+      "lines": 127,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Skyrim - Export and import weapons stats from spreadsheet file.pas",
+      "lines": 140,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Skyrim - Filter by script.pas",
+      "lines": 90,
+      "form": false,
+      "dialogs": true
+    },
+    {
+      "name": "Skyrim - Find uncompressed records.pas",
+      "lines": 24,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Skyrim - List actors with more than one vendor faction.pas",
+      "lines": 40,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Skyrim - List interior cells.pas",
+      "lines": 122,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Skyrim - List old version plugins.pas",
+      "lines": 38,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Skyrim - List used scripts.pas",
+      "lines": 77,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Skyrim - Make outfits from inventories.pas",
+      "lines": 107,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Skyrim - Ore Veins don't respawn.pas",
+      "lines": 73,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Skyrim - Read Books Aloud.pas",
+      "lines": 179,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Skyrim - Remove frequence variance from sound descriptors.pas",
+      "lines": 11,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Skyrim - Remove invalid entries.pas",
+      "lines": 58,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Skyrim - Reuse faces.pas",
+      "lines": 164,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Skyrim - Set first person flags on armors affected by specific plugin.pas",
+      "lines": 19,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Skyrim - Set HavokDontSettle flag on BOOK references.pas",
+      "lines": 17,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Skyrim - Set HavokDontSettle flag on refs using models from list.pas",
+      "lines": 45,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Skyrim - Show references from location.pas",
+      "lines": 42,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Skyrim - Tree LOD files patcher.pas",
+      "lines": 199,
+      "form": true,
+      "dialogs": false
+    },
+    {
+      "name": "Skyrim - Tweak bloom, eyes adaptation, tint.pas",
+      "lines": 63,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Skyrim SE - Generate Large References.pas",
+      "lines": 481,
+      "form": true,
+      "dialogs": false
+    },
+    {
+      "name": "Undelete and Disable References.pas",
+      "lines": 78,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Undelete navmeshes.pas",
+      "lines": 98,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Update records form version.pas",
+      "lines": 27,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Weather Editor.pas",
+      "lines": 863,
+      "form": true,
+      "dialogs": false
+    },
+    {
+      "name": "Worldspace browser.pas",
+      "lines": 1641,
+      "form": true,
+      "dialogs": true
+    },
+    {
+      "name": "Worldspace change height.pas",
+      "lines": 59,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Worldspace copy landscape area to another worldspace.pas",
+      "lines": 339,
+      "form": true,
+      "dialogs": false
+    },
+    {
+      "name": "Worldspace copy landscape.pas",
+      "lines": 238,
+      "form": true,
+      "dialogs": false
+    },
+    {
+      "name": "Worldspace crop.pas",
+      "lines": 40,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Worldspace displacement.pas",
+      "lines": 66,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "Worldspace move references into another worldspace.pas",
+      "lines": 331,
+      "form": true,
+      "dialogs": false
+    },
+    {
+      "name": "Worldspace region change height.pas",
+      "lines": 315,
+      "form": true,
+      "dialogs": false
+    },
+    {
+      "name": "Worldspace region move.pas",
+      "lines": 415,
+      "form": true,
+      "dialogs": false
+    },
+    {
+      "name": "Worldspace scale refs position.pas",
+      "lines": 104,
+      "form": false,
+      "dialogs": false
+    },
+    {
+      "name": "xEditAPI.pas",
+      "lines": 1633,
+      "form": false,
+      "dialogs": false,
+      "api": true
+    }
+  ]
+}
