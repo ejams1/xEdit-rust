@@ -153,12 +153,6 @@ fn records_of(result: &Value) -> Vec<String> {
         .unwrap_or_default()
 }
 
-/// The records the tree keeps, by name (`GMST - Game Setting [00000800]
-/// <fMaster>`).
-fn kept_names(result: &Value) -> Vec<String> {
-    records_of(result)
-}
-
 /// Whether a kept record is the one of the FormID (`[00000800]`).
 fn is_form_id(names: &[String], form_id: &str) -> Vec<String> {
     names
@@ -189,13 +183,12 @@ fn filters_by_signature_and_editor_id() {
             json!({ "options": { "by_signature": "CELL" }, "list_records": true }),
         )
         .unwrap();
-    let kept = kept_names(&result);
+    let kept = records_of(&result);
     assert_eq!(kept.len(), 1, "{kept:?}");
     assert_eq!(is_form_id(&kept, "00000801").len(), 1, "{kept:?}");
-    // The cell is in the master only, so the plugin lost everything. The
-    // counts of the files stay below a line (`FileFiltered` counts the file
-    // header record with them, and a file with no record left reports
-    // nothing filtered), which is what the GUI logs.
+    // The cell is in the master only, so the plugin lost everything. A file
+    // with no record left reports nothing filtered (its `FileFiltered` stays
+    // 0), while the master logs the line of its own partial count.
     let files = result["files"].as_array().unwrap();
     let names: Vec<&str> = files.iter().map(|file| file["name"].as_str().unwrap()).collect();
     assert_eq!(names, ["Master.esm", "Plugin.esp"]);
@@ -216,7 +209,7 @@ fn filters_by_signature_and_editor_id() {
             json!({ "options": { "by_editor_id": "fmaster" }, "list_records": true }),
         )
         .unwrap();
-    let kept = kept_names(&result);
+    let kept = records_of(&result);
     // The game setting and its override.
     assert_eq!(kept.len(), 2, "{kept:?}");
     assert_eq!(is_form_id(&kept, "00000800").len(), 2, "{kept:?}");
@@ -271,7 +264,7 @@ fn only_one_and_conflict_only_keep_the_overridden_record() {
             json!({ "only_one": true, "list_records": true }),
         )
         .unwrap();
-    let kept = kept_names(&result);
+    let kept = records_of(&result);
     // UPSTREAM-QUIRK: the filter drops the records with overrides and keeps
     // the ones without any: the game setting with its override goes, the
     // cell and the plugin's own record stay (with the two file headers).
@@ -289,7 +282,7 @@ fn only_one_and_conflict_only_keep_the_overridden_record() {
             json!({ "conflict_only": true, "list_records": true }),
         )
         .unwrap();
-    assert_eq!(kept_names(&result).len(), 0, "{:?}", kept_names(&result));
+    assert_eq!(records_of(&result).len(), 0, "{:?}", records_of(&result));
 
     // The cleaning preset alone keeps the records it does not filter, which
     // the cells without conflicts show.
@@ -318,7 +311,7 @@ fn the_reachable_filter_needs_the_reachable_information() {
             json!({ "options": { "by_not_reachable_status": false }, "list_records": true }),
         )
         .unwrap();
-    assert_eq!(kept_names(&result).len(), 6, "{:?}", kept_names(&result));
+    assert_eq!(records_of(&result).len(), 6, "{:?}", records_of(&result));
     let built = registry
         .call(&mut session, "refs.build_reachable", json!({ "build_refs": true }))
         .unwrap();
@@ -332,7 +325,7 @@ fn the_reachable_filter_needs_the_reachable_information() {
             json!({ "options": { "by_not_reachable_status": false }, "list_records": true }),
         )
         .unwrap();
-    let kept = kept_names(&result);
+    let kept = records_of(&result);
     assert_eq!(kept.len(), 5, "{kept:?}");
     let signatures = signatures(&kept);
     assert_eq!(signatures.iter().filter(|name| *name == "GMST").count(), 3, "{kept:?}");
@@ -344,7 +337,7 @@ fn the_reachable_filter_needs_the_reachable_information() {
             json!({ "options": { "by_not_reachable_status": true }, "list_records": true }),
         )
         .unwrap();
-    let kept = kept_names(&result);
+    let kept = records_of(&result);
     assert_eq!(kept.len(), 1, "{kept:?}");
     assert_eq!(is_form_id(&kept, "00000801").len(), 1, "{kept:?}");
     let _ = std::fs::remove_dir_all(&dir);
@@ -385,7 +378,7 @@ fn a_preset_is_saved_listed_loaded_and_deleted() {
         .unwrap();
     assert_eq!(result["options"]["by_signature"], "GMST");
     assert_eq!(result["options"]["deleted"], true);
-    assert_eq!(kept_names(&result).len(), 0, "no record is deleted");
+    assert_eq!(records_of(&result).len(), 0, "no record is deleted");
     let deleted = registry
         .call(&mut session, "filter.preset.delete", json!({ "name": "mine" }))
         .unwrap();
