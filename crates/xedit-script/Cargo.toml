@@ -1,0 +1,9 @@
+[package]
+name = "xedit-script"
+version = "0.1.0"
+description = "The JvInterpreter Pascal front end: the tokenizer of JvInterpreterParser.pas and the syntax tree of the parser of JvInterpreter.pas"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]

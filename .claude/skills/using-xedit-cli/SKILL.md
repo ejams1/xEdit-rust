@@ -189,11 +189,14 @@ The batch operations of Sniff on the NIF, KF and material files of a folder or a
 
 The Pascal scripts of the scripts folder, the corpus phase 6's interpreter parses and runs (xEdit's "Apply Script"). They need no `--game` or `--load`.
 
+`xedit script check <file>...` compiles the given scripts and the units they `uses` with the JvInterpreter front end (phase 6 step 2, `crates/xedit-script`): as `TJvInterpreterUnit.Compile` does, a routine body is only scanned for its balanced `end`, so a statement-level error surfaces when the script runs, not here; unresolved identifiers belong to `script run`. The units a script uses resolve from the scripts folder; a unit with no file there is a unit compiled into xEdit and parses to nothing. It is read-only, exits non-zero when a script does not compile, and prints each failure as `file:line: message` (with `--json`, the structured result).
+
 | CLI | Registry name | What it does |
 |---|---|---|
 | `script list [--scripts DIR]` | `script.list` | Every `*.pas` of the scripts folder with its line count, as xEdit's script list shows them (the form's `_newscript_.pas` template included). The folder is `--scripts`, else `XEDIT_SCRIPTS`, else the oracle's `Edit Scripts` (`XEDIT_ORACLE_DIR`), else `Edit Scripts` beside `xedit.exe` (upstream's `wbScriptsPath`, which `-S:` sets); only the top folder is read. Read-only; error code `io` when the folder cannot be read. |
+| `script check <file>...` | `script.check` | Compiles each script and the units it uses; the response has `ok`, `scripts_folder`, `total`, `parsed`, `failed` and per file `ok` with `errors` (`file`, `line`, `message`). |
 
-- `script check` (a script and the units it `uses`) and `script run` (Initialize/Process/Finalize over the loaded plugins) are later steps of phase 6. The corpus they are checked on is `crates/xtask/oracle/scripts/corpus.json`: the 150 scripts of the 4.1.5q `Edit Scripts`, 32 of which build a form and 11 ask the user for input (110 headless), with `xEditAPI.pas` the declaration-only API the scripts `uses`.
+- `script run` (Initialize/Process/Finalize over the loaded plugins) is a later step of phase 6. The corpus `script check` is run on is `crates/xtask/oracle/scripts/corpus.json`: the 150 scripts of the 4.1.5q `Edit Scripts`, 32 of which build a form and 11 ask the user for input (110 headless), with `xEditAPI.pas` the declaration-only API the scripts `uses`.
 
 ## LOD generation
 

@@ -248,6 +248,16 @@ status = "pending"
 rust = "crates/xedit-assets/src/sniff/main_form.rs"
 note = "CalcThreads and the worker threads of Sniff (process_all, with the results committed in file order). The progress window is the GUI's."
 
+[units."External/jvcl/jvcl/run/JvInterpreter.pas"]
+status = "pending"
+rust = "crates/xedit-script/src/interpreter.rs"
+note = "Phase 6 step 2: the parser front end is ported, as an AST builder instead of the interpreter's parse-and-execute pass (crates/xedit-script/src/interpreter.rs: InterpretUnit and the Interpret*/Expression/ReadArgs routines, ReadFunctionHeader, ParseDataType, InterpretVar/InterpretConst/InterpretType -- the last extended for type aliases and enums, which only the declaration-only xEditAPI.pas of the corpus needs; run by script.check). The unit overall stays pending: the value model and types (JvInterpreter_Types.pas), the adapter registration model in full, routine calls with var/out parameters, CallFunction/CallFunctionEx, exceptions with the error location, the statement hook and the for/case 64-bit behaviour are phase 6 steps 3 and later. The tokenizer of this front end is the separate JvInterpreterParser.pas entry."
+
+[units."External/jvcl/jvcl/run/JvInterpreterParser.pas"]
+status = "ported"
+rust = "crates/xedit-script/src/interpreter_parser.rs"
+note = "Phase 6 step 2: the tokenizer as-is -- TTokenKind, the PaTokenizeTag hash tables (verbatim, duplicate entries and all), TokenTyp, Prior, TypToken and TJvInterpreterParser.Token with its quirks (the #nnn quoted form, the unterminated-string swallow, the doubled-quote cleanup, PrevPoint before whitespace). A bad remark raises ieBadRemark at the remark's position. The port works byte for byte on the ANSI string the interpreter builds; the corpus is ASCII."
+
 [units."Sniff.dpr"]
 status = "ported"
 rust = "crates/sniff/src/main.rs"
