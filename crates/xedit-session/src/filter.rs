@@ -39,10 +39,9 @@ use xedit_analysis::filter::{FilterOptions, FilterReport, NavTree, apply_filter_
 use xedit_core::implementation::ElementImpl;
 use xedit_core::interface::PascalEnum;
 use xedit_core::interface::globals::{reachable_build, set_reachable_build};
+use xedit_core::interface::types::{ConflictAll, ConflictThis};
 use xedit_core::interface::{Element, File};
 use xedit_loadorder::ini_files::{MemIniFile, same_text};
-
-use xedit_core::interface::types::{ConflictAll, ConflictThis};
 
 use crate::conflicts::{ConflictAllName, ConflictThisName};
 use crate::{CommandError, Registry, Session};
@@ -366,7 +365,9 @@ fn filter_apply(session: &mut Session, request: FilterApplyRequest) -> Result<Fi
     }
     options.conflict_only = request.conflict_only;
     options.only_one = request.only_one;
-    options.no_game_master = request.no_game_master;
+    // `ReInitTree(FilterNoGameMaster or wbTranslationMode, ...)`: the
+    // translate mode leaves the game master out of the tree too.
+    options.no_game_master = request.no_game_master || xedit_core::interface::globals::translation_mode();
     let active = crate::modgroups::activate(
         session,
         &crate::modgroups::ModGroupChoice {
@@ -377,11 +378,11 @@ fn filter_apply(session: &mut Session, request: FilterApplyRequest) -> Result<Fi
     )?;
     options.mod_groups_enabled = active.filter.is_some();
 
-    let mut tree = NavTree::new(&files);
-    let report = if options.no_game_master {
-        // `ReInitTree(FilterNoGameMaster, ...)`: the game master is left out
-        // of the tree.
-        let kept: Vec<Arc<xedit_core::implementation::FileImpl>> = files
+    // `ReInitTree(FilterNoGameMaster or wbTranslationMode, FilterFiles)`:
+    // the tree holds the files the request names, without the game master
+    // when the very quick conflicts mode asked for it.
+    let tree_files: Vec<Arc<xedit_core::implementation::FileImpl>> = if options.no_game_master {
+        files
             .iter()
             .filter(|file| {
                 !file
@@ -389,17 +390,17 @@ fn filter_apply(session: &mut Session, request: FilterApplyRequest) -> Result<Fi
                     .contains(xedit_core::interface::FileState::fsIsGameMaster)
             })
             .cloned()
-            .collect();
-        let mut tree = NavTree::new(&kept);
-        let report = apply_filter_with(&mut tree, &options, &files, active.filter.clone());
-        let mut report = report.map_err(edit_failed)?;
-        report
-            .files
-            .retain(|file| kept.iter().any(|kept| kept.get_name().eq_ignore_ascii_case(&file.name)));
-        return Ok(response_of(&tree, &options, request.list_records, report, &active));
+            .collect()
     } else {
-        apply_filter_with(&mut tree, &options, &files, active.filter.clone()).map_err(edit_failed)?
+        files.clone()
     };
+    let mut tree = NavTree::new(&tree_files);
+    let mut report = apply_filter_with(&mut tree, &options, &files, active.filter.clone()).map_err(edit_failed)?;
+    report.files.retain(|file| {
+        tree_files
+            .iter()
+            .any(|kept| kept.get_name().eq_ignore_ascii_case(&file.name))
+    });
     Ok(response_of(&tree, &options, request.list_records, report, &active))
 }
 
@@ -449,12 +450,7 @@ fn edit_failed(message: String) -> CommandError {
 /// `filter.remove`: the request.
 #[derive(Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
-pub struct FilterRemoveRequest {
-    /// Also drop the reachable information of the plugins (`BuildAllRef`
-    /// and the reachable states are kept; only the tree is rebuilt).
-    #[serde(default)]
-    pub reset_reachable: bool,
-}
+pub struct FilterRemoveRequest {}
 
 /// `filter.remove`: the response.
 #[derive(Serialize, JsonSchema)]
@@ -470,11 +466,10 @@ pub struct FilterRemoveResponse {
 /// Port of `mniNavFilterRemoveClick`: `ReInitTree(False, nil)` and no
 /// filter. The port's tree is built on demand, so what is left is the list
 /// of the loaded files, which is what the GUI's tree shows after the call.
-fn filter_remove(session: &mut Session, request: FilterRemoveRequest) -> Result<FilterRemoveResponse, CommandError> {
+fn filter_remove(session: &mut Session, _: FilterRemoveRequest) -> Result<FilterRemoveResponse, CommandError> {
     session.mode()?;
     let files = crate::conflicts::session_files(session)?;
     let tree = NavTree::new(&files);
-    let _ = request.reset_reachable;
     Ok(FilterRemoveResponse {
         files: tree_files(&tree)
             .into_iter()
@@ -722,6 +717,9 @@ fn write_preset(ini: &mut MemIniFile, name: &str, options: &FilterOptions) {
     write_bool(ini, "Persistent", options.persistent);
     write_bool(ini, "UnnecessaryPersistent", options.unnecessary_persistent);
     write_bool(ini, "MasterIsTemporary", options.master_is_temporary);
+    // `FilterSavePreset` writes no `IsMaster`, which its `FilterLoadPreset`
+    // reads back with the default false; the port writes it, so a preset
+    // keeps the checkbox through a save and a load.
     write_bool(ini, "IsMaster", options.is_master);
     write_bool(ini, "PersistentPosChanged", options.persistent_pos_changed);
     write_bool(ini, "Deleted", options.deleted);

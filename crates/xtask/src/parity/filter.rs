@@ -17,8 +17,10 @@
 //!
 //! The port runs the same configurations as one `xedit batch` (and
 //! `refs.build_reachable` first when the scenario builds the reachable
-//! information, which the oracle clicks `mniNavBuildReachable` for) and
-//! compares the two passes, the nodes left and the records each file lost.
+//! information, which the oracle clicks `mniNavBuildReachable` for) from a
+//! folder of hard links to the plugins, as the GUI's private data folder
+//! (no archives and no strings files on either side), and compares the two
+//! passes, the nodes left and the records each file lost.
 //! The oracle's log is cached in
 //! `<cache>/<tag>/<MODE>-oracle-filter/<scenario>.<key>/`; the key hashes
 //! the plugins, the generated script and the scenario.
