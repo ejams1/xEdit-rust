@@ -3885,6 +3885,14 @@ status = "covered"
 command = "tool.run"
 source = "Core/wbInterface.pas"
 
+[script."xejviScriptAdapter:cInterface.cTwbGridCell:rec"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cInterface.cTwbVector:rec"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
 [script."xejviScriptAdapter:cInterface.wbGridCell:function"]
 status = "pending"
 source = "JvInterpreter_wbGridCell"
@@ -3892,6 +3900,10 @@ source = "JvInterpreter_wbGridCell"
 [script."xejviScriptAdapter:cInterface.wbVector:function"]
 status = "pending"
 source = "JvInterpreter_wbVector"
+
+[script."xejviScriptAdapter:cInterface:extunit"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.Assigned:function"]
 status = "pending"
@@ -3912,6 +3924,482 @@ source = "GetRecordDefNames"
 [script."xejviScriptAdapter:cUnit.ObjectToElement:function"]
 status = "pending"
 source = "ObjectToElement"
+
+[script."xejviScriptAdapter:cUnit.atBookArt:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.atDialogueViews:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.atDistantLOD:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.atFacegen:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.atFont:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.atGeometry:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.atGrass:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.atIcon:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.atInterface:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.atLODSettings:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.atLSData:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.atMaterial:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.atMenus:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.atMesh:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.atMusic:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.atNone:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.atPrevis:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.atProgram:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.atScript:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.atSeq:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.atShaders:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.atSound:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.atSource:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.atSourceSSE:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.atSpeedTree:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.atSplash:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.atStrings:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.atTexture:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.atVideo:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.atVoice:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.caConflict:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.caConflictBenign:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.caConflictCritical:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.caNoConflict:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.caOnlyOne:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.caOverride:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.caUnknown:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.csAsCreatedEmpty:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.csInit:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.csInitDone:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.csInitOnce:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.csInitializing:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.csRefsBuild:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.ctConflictBenign:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.ctConflictLoses:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.ctConflictWins:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.ctHiddenByModGroup:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.ctIdenticalToMaster:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.ctIdenticalToMasterWinsConflict:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.ctIgnored:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.ctMaster:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.ctNotDefined:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.ctOnlyOne:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.ctOverride:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.ctUnknown:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.dtArray:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.dtByteArray:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.dtEmpty:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.dtFloat:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.dtInteger:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.dtIntegerFormater:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.dtLString:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.dtLenString:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.dtRecord:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.dtString:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.dtStruct:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.dtStructChapter:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.dtSubRecord:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.dtSubRecordArray:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.dtSubRecordStruct:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.dtSubRecordUnion:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.dtUnion:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.esDeciding:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.esExtendedSortKeyValid:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.esHidden:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.esInternalModified:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.esModified:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.esNotReachable:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.esNotSuitableToAddTo:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.esParentHidden:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.esParentHiddenChecked:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.esReachable:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.esResolving:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.esSortKeyValid:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.esTagged:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.esUnsaved:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.etArray:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.etFile:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.etFlag:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.etGroupRecord:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.etMainRecord:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.etStringListTerminator:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.etStruct:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.etStructChapter:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.etSubRecord:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.etSubRecordArray:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.etSubRecordStruct:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.etSubRecordUnion:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.etUnion:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.etValue:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.gmEnderal:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.gmEnderalSE:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.gmFNV:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.gmFO3:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.gmFO4:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.gmFO4VR:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.gmFO76:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.gmSF1:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.gmSSE:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.gmTES3:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.gmTES4:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.gmTES4R:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.gmTES5:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.gmTES5VR:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.resMaterial:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.resMesh:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.resMusic:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.resSound:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
+
+[script."xejviScriptAdapter:cUnit.resTexture:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.wbFilterStrings:function"]
 status = "pending"
@@ -4018,8 +4506,9 @@ command = "elements.set"
 source = "IwbContainer_SetElementNativeValues"
 
 [script."xejviScriptAdapterDF:TdfDef.Create:get"]
-status = "pending"
+status = "excluded"
 source = "TdfDef_Create"
+note = "The registration is commented out upstream (xEdit/JvI/xejviScriptAdapterDF.pas:767); nothing is reachable under this name in 4.1.5q."
 
 [script."xejviScriptAdapterDF:TdfDef.DefaultDataSize:get"]
 status = "pending"
@@ -4204,6 +4693,10 @@ source = "TdfElement_SaveToJSONFile"
 [script."xejviScriptAdapterDF:TdfElement.SetToDefault:get"]
 status = "pending"
 source = "TdfElement_SetToDefault"
+
+[script."xejviScriptAdapterDF:TdfElement.TdfElement_Read_Items:idget"]
+status = "pending"
+source = "TdfElement_Read_Items"
 
 [script."xejviScriptAdapterDF:TdfElement.ToJSON:get"]
 status = "pending"
@@ -4433,6 +4926,170 @@ source = "TwbNifFile_SpellTriangulate"
 status = "pending"
 source = "TwbNifFile_SpellUpdateTangents"
 
+[script."xejviScriptAdapterDF:sDFUnitName.TdfArray:class"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterDF.pas"
+
+[script."xejviScriptAdapterDF:sDFUnitName.TdfArrayDef:class"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterDF.pas"
+
+[script."xejviScriptAdapterDF:sDFUnitName.TdfBytes:class"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterDF.pas"
+
+[script."xejviScriptAdapterDF:sDFUnitName.TdfBytesDef:class"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterDF.pas"
+
+[script."xejviScriptAdapterDF:sDFUnitName.TdfChars:class"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterDF.pas"
+
+[script."xejviScriptAdapterDF:sDFUnitName.TdfCharsDef:class"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterDF.pas"
+
+[script."xejviScriptAdapterDF:sDFUnitName.TdfContainer:class"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterDF.pas"
+
+[script."xejviScriptAdapterDF:sDFUnitName.TdfDef:class"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterDF.pas"
+
+[script."xejviScriptAdapterDF:sDFUnitName.TdfElement:class"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterDF.pas"
+
+[script."xejviScriptAdapterDF:sDFUnitName.TdfEnum:class"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterDF.pas"
+
+[script."xejviScriptAdapterDF:sDFUnitName.TdfEnumDef:class"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterDF.pas"
+
+[script."xejviScriptAdapterDF:sDFUnitName.TdfFlags:class"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterDF.pas"
+
+[script."xejviScriptAdapterDF:sDFUnitName.TdfFlagsDef:class"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterDF.pas"
+
+[script."xejviScriptAdapterDF:sDFUnitName.TdfFloat:class"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterDF.pas"
+
+[script."xejviScriptAdapterDF:sDFUnitName.TdfFloatDef:class"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterDF.pas"
+
+[script."xejviScriptAdapterDF:sDFUnitName.TdfInteger:class"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterDF.pas"
+
+[script."xejviScriptAdapterDF:sDFUnitName.TdfIntegerDef:class"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterDF.pas"
+
+[script."xejviScriptAdapterDF:sDFUnitName.TdfMappedIntegerDef:class"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterDF.pas"
+
+[script."xejviScriptAdapterDF:sDFUnitName.TdfMerge:class"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterDF.pas"
+
+[script."xejviScriptAdapterDF:sDFUnitName.TdfMergeDef:class"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterDF.pas"
+
+[script."xejviScriptAdapterDF:sDFUnitName.TdfStruct:class"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterDF.pas"
+
+[script."xejviScriptAdapterDF:sDFUnitName.TdfStructDef:class"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterDF.pas"
+
+[script."xejviScriptAdapterDF:sDFUnitName.TdfUnion:class"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterDF.pas"
+
+[script."xejviScriptAdapterDF:sDFUnitName.TdfUnionDef:class"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterDF.pas"
+
+[script."xejviScriptAdapterDF:sDFUnitName.TdfValue:class"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterDF.pas"
+
+[script."xejviScriptAdapterDF:sDFUnitName.TdfValueDef:class"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterDF.pas"
+
+[script."xejviScriptAdapterDF:sDFUnitName.TdfValueUnion:class"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterDF.pas"
+
+[script."xejviScriptAdapterDF:sDFUnitName.TdfValueUnionDef:class"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterDF.pas"
+
+[script."xejviScriptAdapterDF:sDFUnitName.TwbBGEMFile:class"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterDF.pas"
+
+[script."xejviScriptAdapterDF:sDFUnitName.TwbBGSMFile:class"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterDF.pas"
+
+[script."xejviScriptAdapterDF:sDFUnitName.TwbDDSFile:class"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterDF.pas"
+
+[script."xejviScriptAdapterDF:sDFUnitName.TwbFUZFile:class"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterDF.pas"
+
+[script."xejviScriptAdapterDF:sDFUnitName.TwbLODSettingsFO3File:class"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterDF.pas"
+
+[script."xejviScriptAdapterDF:sDFUnitName.TwbLODSettingsTES5File:class"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterDF.pas"
+
+[script."xejviScriptAdapterDF:sDFUnitName.TwbLODTreeBTTFile:class"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterDF.pas"
+
+[script."xejviScriptAdapterDF:sDFUnitName.TwbLODTreeLSTFile:class"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterDF.pas"
+
+[script."xejviScriptAdapterDF:sDFUnitName.TwbNiRef:class"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterDF.pas"
+
+[script."xejviScriptAdapterDF:sDFUnitName.TwbNiRefDef:class"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterDF.pas"
+
+[script."xejviScriptAdapterDF:sDFUnitName.TwbNifBlock:class"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterDF.pas"
+
+[script."xejviScriptAdapterDF:sDFUnitName.TwbNifBlockDef:class"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterDF.pas"
+
+[script."xejviScriptAdapterDF:sDFUnitName.TwbNifFile:class"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterDF.pas"
+
 [script."xejviScriptAdapterDF:sDFUnitName.dfCalcHash:function"]
 status = "pending"
 source = "JvInterpreter_dfCalcHash"
@@ -4444,6 +5101,106 @@ source = "JvInterpreter_dfFloatToStr"
 [script."xejviScriptAdapterDF:sDFUnitName.dfStrToFloat:function"]
 status = "pending"
 source = "JvInterpreter_dfStrToFloat"
+
+[script."xejviScriptAdapterDF:sDFUnitName.dftArray:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterDF.pas"
+
+[script."xejviScriptAdapterDF:sDFUnitName.dftBytes:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterDF.pas"
+
+[script."xejviScriptAdapterDF:sDFUnitName.dftChars:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterDF.pas"
+
+[script."xejviScriptAdapterDF:sDFUnitName.dftFloat16:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterDF.pas"
+
+[script."xejviScriptAdapterDF:sDFUnitName.dftFloat32:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterDF.pas"
+
+[script."xejviScriptAdapterDF:sDFUnitName.dftMerge:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterDF.pas"
+
+[script."xejviScriptAdapterDF:sDFUnitName.dftNone:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterDF.pas"
+
+[script."xejviScriptAdapterDF:sDFUnitName.dftS16:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterDF.pas"
+
+[script."xejviScriptAdapterDF:sDFUnitName.dftS32:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterDF.pas"
+
+[script."xejviScriptAdapterDF:sDFUnitName.dftS64:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterDF.pas"
+
+[script."xejviScriptAdapterDF:sDFUnitName.dftS8:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterDF.pas"
+
+[script."xejviScriptAdapterDF:sDFUnitName.dftStruct:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterDF.pas"
+
+[script."xejviScriptAdapterDF:sDFUnitName.dftU16:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterDF.pas"
+
+[script."xejviScriptAdapterDF:sDFUnitName.dftU32:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterDF.pas"
+
+[script."xejviScriptAdapterDF:sDFUnitName.dftU64:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterDF.pas"
+
+[script."xejviScriptAdapterDF:sDFUnitName.dftU8:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterDF.pas"
+
+[script."xejviScriptAdapterDF:sDFUnitName.dftUnion:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterDF.pas"
+
+[script."xejviScriptAdapterDF:sDFUnitName.nfFO3:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterDF.pas"
+
+[script."xejviScriptAdapterDF:sDFUnitName.nfFO4:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterDF.pas"
+
+[script."xejviScriptAdapterDF:sDFUnitName.nfSSE:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterDF.pas"
+
+[script."xejviScriptAdapterDF:sDFUnitName.nfTES3:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterDF.pas"
+
+[script."xejviScriptAdapterDF:sDFUnitName.nfTES4:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterDF.pas"
+
+[script."xejviScriptAdapterDF:sDFUnitName.nfTES5:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterDF.pas"
+
+[script."xejviScriptAdapterDF:sDFUnitName.nfoCollapseLinkArrays:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterDF.pas"
+
+[script."xejviScriptAdapterDF:sDFUnitName.nfoRemoveUnusedStrings:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterDF.pas"
 
 [script."xejviScriptAdapterElement:cUnit.AssignTemplateByIndex:function"]
 status = "pending"
@@ -5065,6 +5822,474 @@ source = "_wbTempPath"
 status = "pending"
 source = "_wbTrackAllEditorID"
 
+[script."xejviScriptAdapterMisc:Controls.akBottom:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
+
+[script."xejviScriptAdapterMisc:Controls.akLeft:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
+
+[script."xejviScriptAdapterMisc:Controls.akRight:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
+
+[script."xejviScriptAdapterMisc:Controls.akTop:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
+
+[script."xejviScriptAdapterMisc:ExtCtrls.lpAbove:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
+
+[script."xejviScriptAdapterMisc:ExtCtrls.lpBelow:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
+
+[script."xejviScriptAdapterMisc:ExtCtrls.lpLeft:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
+
+[script."xejviScriptAdapterMisc:ExtCtrls.lpRight:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
+
+[script."xejviScriptAdapterMisc:FileCtrl.SelectDirectory:function"]
+status = "pending"
+source = "JvInterpreter_SelectDirectory"
+
+[script."xejviScriptAdapterMisc:Forms.pmAuto:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
+
+[script."xejviScriptAdapterMisc:Forms.pmExplicit:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
+
+[script."xejviScriptAdapterMisc:Forms.pmNone:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
+
+[script."xejviScriptAdapterMisc:Forms.poMainFormCenter:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
+
+[script."xejviScriptAdapterMisc:Math.CompareValue:function"]
+status = "pending"
+source = "JvInterpreter_CompareValue"
+
+[script."xejviScriptAdapterMisc:Math.EnsureRange:function"]
+status = "pending"
+source = "JvInterpreter_EnsureRange"
+
+[script."xejviScriptAdapterMisc:Math.FMod:function"]
+status = "pending"
+source = "JvInterpreter_FMod"
+
+[script."xejviScriptAdapterMisc:Math.GetPrecisionMode:function"]
+status = "pending"
+source = "JvInterpreter_GetPrecisionMode"
+
+[script."xejviScriptAdapterMisc:Math.GetRoundMode:function"]
+status = "pending"
+source = "JvInterpreter_GetRoundMode"
+
+[script."xejviScriptAdapterMisc:Math.InRange:function"]
+status = "pending"
+source = "JvInterpreter_InRange"
+
+[script."xejviScriptAdapterMisc:Math.InverseLerp:function"]
+status = "pending"
+source = "JvInterpreter_LerpInverse"
+
+[script."xejviScriptAdapterMisc:Math.IsZero:function"]
+status = "pending"
+source = "JvInterpreter_IsZero"
+
+[script."xejviScriptAdapterMisc:Math.Lerp:function"]
+status = "pending"
+source = "JvInterpreter_Lerp"
+
+[script."xejviScriptAdapterMisc:Math.LerpUnclamped:function"]
+status = "pending"
+source = "JvInterpreter_LerpUnclamped"
+
+[script."xejviScriptAdapterMisc:Math.NegativeValue:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
+
+[script."xejviScriptAdapterMisc:Math.PositiveValue:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
+
+[script."xejviScriptAdapterMisc:Math.RoundTo:function"]
+status = "pending"
+source = "JvInterpreter_RoundTo"
+
+[script."xejviScriptAdapterMisc:Math.SetPrecisionMode:function"]
+status = "pending"
+source = "JvInterpreter_SetPrecisionMode"
+
+[script."xejviScriptAdapterMisc:Math.SetRoundMode:function"]
+status = "pending"
+source = "JvInterpreter_SetRoundMode"
+
+[script."xejviScriptAdapterMisc:Math.Sign:function"]
+status = "pending"
+source = "JvInterpreter_Sign"
+
+[script."xejviScriptAdapterMisc:Math.SimpleRoundTo:function"]
+status = "pending"
+source = "JvInterpreter_SimpleRoundTo"
+
+[script."xejviScriptAdapterMisc:Math.ZeroValue:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
+
+[script."xejviScriptAdapterMisc:Math.pmDouble:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
+
+[script."xejviScriptAdapterMisc:Math.pmExtended:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
+
+[script."xejviScriptAdapterMisc:Math.pmReserved:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
+
+[script."xejviScriptAdapterMisc:Math.pmSingle:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
+
+[script."xejviScriptAdapterMisc:Math.rmDown:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
+
+[script."xejviScriptAdapterMisc:Math.rmNearest:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
+
+[script."xejviScriptAdapterMisc:Math.rmTruncate:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
+
+[script."xejviScriptAdapterMisc:Math.rmUp:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
+
+[script."xejviScriptAdapterMisc:Menus.maAutomatic:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
+
+[script."xejviScriptAdapterMisc:Menus.maManual:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
+
+[script."xejviScriptAdapterMisc:ShellApi.ShellExecute:function"]
+status = "pending"
+source = "JvInterpreter_ShellExecute"
+
+[script."xejviScriptAdapterMisc:ShellApi.ShellExecuteWait:function"]
+status = "pending"
+source = "JvInterpreter_ShellExecuteWait"
+
+[script."xejviScriptAdapterMisc:StdCtrls.cbChecked:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
+
+[script."xejviScriptAdapterMisc:StdCtrls.cbGrayed:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
+
+[script."xejviScriptAdapterMisc:StdCtrls.cbUnchecked:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
+
+[script."xejviScriptAdapterMisc:StrUtils.ContainsStr:function"]
+status = "pending"
+source = "JvInterpreter_ContainsStr"
+
+[script."xejviScriptAdapterMisc:StrUtils.ContainsText:function"]
+status = "pending"
+source = "JvInterpreter_ContainsText"
+
+[script."xejviScriptAdapterMisc:StrUtils.DupeString:function"]
+status = "pending"
+source = "JvInterpreter_DupeString"
+
+[script."xejviScriptAdapterMisc:StrUtils.EndsStr:function"]
+status = "pending"
+source = "JvInterpreter_EndsStr"
+
+[script."xejviScriptAdapterMisc:StrUtils.EndsText:function"]
+status = "pending"
+source = "JvInterpreter_EndsText"
+
+[script."xejviScriptAdapterMisc:StrUtils.IfThen:function"]
+status = "pending"
+source = "JvInterpreter_IfThen"
+
+[script."xejviScriptAdapterMisc:StrUtils.IndexStr:function"]
+status = "pending"
+source = "JvInterpreter_IndexStr"
+
+[script."xejviScriptAdapterMisc:StrUtils.IndexText:function"]
+status = "pending"
+source = "JvInterpreter_IndexText"
+
+[script."xejviScriptAdapterMisc:StrUtils.LeftStr:function"]
+status = "pending"
+source = "JvInterpreter_LeftStr"
+
+[script."xejviScriptAdapterMisc:StrUtils.MatchStr:function"]
+status = "pending"
+source = "JvInterpreter_MatchStr"
+
+[script."xejviScriptAdapterMisc:StrUtils.MatchText:function"]
+status = "pending"
+source = "JvInterpreter_MatchText"
+
+[script."xejviScriptAdapterMisc:StrUtils.MidStr:function"]
+status = "pending"
+source = "JvInterpreter_MidStr"
+
+[script."xejviScriptAdapterMisc:StrUtils.ReverseString:function"]
+status = "pending"
+source = "JvInterpreter_ReverseString"
+
+[script."xejviScriptAdapterMisc:StrUtils.RightStr:function"]
+status = "pending"
+source = "JvInterpreter_RightStr"
+
+[script."xejviScriptAdapterMisc:StrUtils.SplitString:function"]
+status = "pending"
+source = "JvInterpreter_SplitString"
+
+[script."xejviScriptAdapterMisc:StrUtils.StartsStr:function"]
+status = "pending"
+source = "JvInterpreter_StartsStr"
+
+[script."xejviScriptAdapterMisc:StrUtils.StartsText:function"]
+status = "pending"
+source = "JvInterpreter_StartsText"
+
+[script."xejviScriptAdapterMisc:StrUtils.StuffString:function"]
+status = "pending"
+source = "JvInterpreter_StuffString"
+
+[script."xejviScriptAdapterMisc:SysUtils.Dec:function"]
+status = "pending"
+source = "JvInterpreter_Dec"
+
+[script."xejviScriptAdapterMisc:SysUtils.DirectoryExists:function"]
+status = "pending"
+source = "JvInterpreter_DirectoryExists"
+
+[script."xejviScriptAdapterMisc:SysUtils.ExcludeTrailingBackslash:function"]
+status = "pending"
+source = "JvInterpreter_ExcludeTrailingBackslash"
+
+[script."xejviScriptAdapterMisc:SysUtils.FileExists:function"]
+status = "pending"
+source = "JvInterpreter_FileExists"
+
+[script."xejviScriptAdapterMisc:SysUtils.ForceDirectories:function"]
+status = "pending"
+source = "JvInterpreter_ForceDirectories"
+
+[script."xejviScriptAdapterMisc:SysUtils.Frac:function"]
+status = "pending"
+source = "JvInterpreter_Frac"
+
+[script."xejviScriptAdapterMisc:SysUtils.HighInteger:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
+
+[script."xejviScriptAdapterMisc:SysUtils.Inc:function"]
+status = "pending"
+source = "JvInterpreter_Inc"
+
+[script."xejviScriptAdapterMisc:SysUtils.IncludeTrailingBackslash:function"]
+status = "pending"
+source = "JvInterpreter_IncludeTrailingBackslash"
+
+[script."xejviScriptAdapterMisc:SysUtils.Int:function"]
+status = "pending"
+source = "JvInterpreter_Int"
+
+[script."xejviScriptAdapterMisc:SysUtils.IntToHex64:function"]
+status = "pending"
+source = "JvInterpreter_IntToHex64"
+
+[script."xejviScriptAdapterMisc:SysUtils.LowInteger:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
+
+[script."xejviScriptAdapterMisc:SysUtils.Pred:function"]
+status = "pending"
+source = "JvInterpreter_Pred"
+
+[script."xejviScriptAdapterMisc:SysUtils.SameText:function"]
+status = "pending"
+source = "JvInterpreter_SameText"
+
+[script."xejviScriptAdapterMisc:SysUtils.SameValue:function"]
+status = "pending"
+source = "JvInterpreter_SameValue"
+
+[script."xejviScriptAdapterMisc:SysUtils.StrToFloatDef:function"]
+status = "pending"
+source = "JvInterpreter_StrToFloatDef"
+
+[script."xejviScriptAdapterMisc:SysUtils.StrToInt64:function"]
+status = "pending"
+source = "JvInterpreter_StrToInt64"
+
+[script."xejviScriptAdapterMisc:SysUtils.StrToInt64Def:function"]
+status = "pending"
+source = "JvInterpreter_StrToInt64Def"
+
+[script."xejviScriptAdapterMisc:SysUtils.StringReplace:function"]
+status = "pending"
+source = "JvInterpreter_StringReplace"
+
+[script."xejviScriptAdapterMisc:SysUtils.Succ:function"]
+status = "pending"
+source = "JvInterpreter_Succ"
+
+[script."xejviScriptAdapterMisc:SysUtils.TEncoding:class"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
+
+[script."xejviScriptAdapterMisc:SysUtils.fmCreate:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
+
+[script."xejviScriptAdapterMisc:SysUtils.rfIgnoreCase:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
+
+[script."xejviScriptAdapterMisc:SysUtils.rfReplaceAll:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
+
+[script."xejviScriptAdapterMisc:System.MaxInt:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
+
+[script."xejviScriptAdapterMisc:System.MinInt:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
+
+[script."xejviScriptAdapterMisc:System.StringOfChar:function"]
+status = "pending"
+source = "JvInterpreter_StringOfChar"
+
+[script."xejviScriptAdapterMisc:System.varAny:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
+
+[script."xejviScriptAdapterMisc:System.varBoolean:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
+
+[script."xejviScriptAdapterMisc:System.varByRef:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
+
+[script."xejviScriptAdapterMisc:System.varByte:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
+
+[script."xejviScriptAdapterMisc:System.varCurrency:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
+
+[script."xejviScriptAdapterMisc:System.varDate:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
+
+[script."xejviScriptAdapterMisc:System.varDispatch:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
+
+[script."xejviScriptAdapterMisc:System.varDouble:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
+
+[script."xejviScriptAdapterMisc:System.varEmpty:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
+
+[script."xejviScriptAdapterMisc:System.varError:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
+
+[script."xejviScriptAdapterMisc:System.varInt64:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
+
+[script."xejviScriptAdapterMisc:System.varInteger:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
+
+[script."xejviScriptAdapterMisc:System.varLongWord:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
+
+[script."xejviScriptAdapterMisc:System.varNull:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
+
+[script."xejviScriptAdapterMisc:System.varOleStr:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
+
+[script."xejviScriptAdapterMisc:System.varShortInt:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
+
+[script."xejviScriptAdapterMisc:System.varSingle:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
+
+[script."xejviScriptAdapterMisc:System.varSmallInt:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
+
+[script."xejviScriptAdapterMisc:System.varStrArg:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
+
+[script."xejviScriptAdapterMisc:System.varString:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
+
+[script."xejviScriptAdapterMisc:System.varTypeMask:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
+
+[script."xejviScriptAdapterMisc:System.varUInt64:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
+
+[script."xejviScriptAdapterMisc:System.varUString:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
+
+[script."xejviScriptAdapterMisc:System.varUnknown:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
+
+[script."xejviScriptAdapterMisc:System.varVariant:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
+
+[script."xejviScriptAdapterMisc:System.varWord:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
+
 [script."xejviScriptAdapterMisc:TEncoding.ASCII:get"]
 status = "pending"
 source = "TEncoding_ASCII"
@@ -5168,6 +6393,166 @@ source = "TStrings_Read_ValueFromIndex"
 [script."xejviScriptAdapterMisc:TStrings.ValueFromIndex:iset"]
 status = "pending"
 source = "TStrings_Write_ValueFromIndex"
+
+[script."xejviScriptAdapterMisc:Types.EqualsValue:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
+
+[script."xejviScriptAdapterMisc:Types.GreaterThanValue:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
+
+[script."xejviScriptAdapterMisc:Types.LessThanValue:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
+
+[script."xejviScriptAdapterMisc:Variants.VarType:function"]
+status = "pending"
+source = "JvInterpreter_VarType"
+
+[script."xejviScriptAdapterMisc:Variants.VarTypeAsText:function"]
+status = "pending"
+source = "JvInterpreter_VarTypeAsText"
+
+[script."xejviScriptAdapterMisc:Vcl.Clipbrd.GetClipboardText:function"]
+status = "pending"
+source = "JvInterpreter_Clipboard_GetAsText"
+
+[script."xejviScriptAdapterMisc:Vcl.Clipbrd.SetClipboardText:function"]
+status = "pending"
+source = "JvInterpreter_Clipboard_SetAsText"
+
+[script."xejviScriptAdapterMisc:Windows.CopyFile:function"]
+status = "pending"
+source = "JvInterpreter_CopyFile"
+
+[script."xejviScriptAdapterMisc:Windows.CreateProcessWait:function"]
+status = "pending"
+source = "JvInterpreter_CreateProcessWait"
+
+[script."xejviScriptAdapterMisc:Windows.GetKeyState:function"]
+status = "pending"
+source = "JvInterpreter_GetKeyState"
+
+[script."xejviScriptAdapterMisc:Windows.SW_HIDE:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
+
+[script."xejviScriptAdapterMisc:Windows.SW_MAXIMIZE:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
+
+[script."xejviScriptAdapterMisc:Windows.SW_MINIMIZE:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
+
+[script."xejviScriptAdapterMisc:Windows.SW_RESTORE:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
+
+[script."xejviScriptAdapterMisc:Windows.SW_SHOW:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
+
+[script."xejviScriptAdapterMisc:Windows.SW_SHOWDEFAULT:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
+
+[script."xejviScriptAdapterMisc:Windows.SW_SHOWMAXIMIZED:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
+
+[script."xejviScriptAdapterMisc:Windows.SW_SHOWMINIMIZED:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
+
+[script."xejviScriptAdapterMisc:Windows.SW_SHOWMINNOACTIVE:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
+
+[script."xejviScriptAdapterMisc:Windows.SW_SHOWNA:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
+
+[script."xejviScriptAdapterMisc:Windows.SW_SHOWNOACTIVATE:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
+
+[script."xejviScriptAdapterMisc:Windows.SW_SHOWNORMAL:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
+
+[script."xejviScriptAdapterMisc:Windows.Sleep:function"]
+status = "pending"
+source = "JvInterpreter_Sleep"
+
+[script."xejviScriptAdapterMiscJson:JsonDataObjects.SetJDOIndentChar:function"]
+status = "pending"
+source = "JsonDataObjects_Write_IndentChar"
+
+[script."xejviScriptAdapterMiscJson:JsonDataObjects.SetJDOLineBreak:function"]
+status = "pending"
+source = "JsonDataObjects_Write_LineBreak"
+
+[script."xejviScriptAdapterMiscJson:JsonDataObjects.SetJDONullConvertsToValueTypes:function"]
+status = "pending"
+source = "JsonDataObjects_Write_NullConvertsToValueTypes"
+
+[script."xejviScriptAdapterMiscJson:JsonDataObjects.SetJDOUseUtcTime:function"]
+status = "pending"
+source = "JsonDataObjects_Write_UseUtcTime"
+
+[script."xejviScriptAdapterMiscJson:JsonDataObjects.TJsonArray:class"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMiscJson.pas"
+
+[script."xejviScriptAdapterMiscJson:JsonDataObjects.TJsonBaseObject:class"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMiscJson.pas"
+
+[script."xejviScriptAdapterMiscJson:JsonDataObjects.TJsonObject:class"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMiscJson.pas"
+
+[script."xejviScriptAdapterMiscJson:JsonDataObjects.jdtArray:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMiscJson.pas"
+
+[script."xejviScriptAdapterMiscJson:JsonDataObjects.jdtBool:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMiscJson.pas"
+
+[script."xejviScriptAdapterMiscJson:JsonDataObjects.jdtDateTime:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMiscJson.pas"
+
+[script."xejviScriptAdapterMiscJson:JsonDataObjects.jdtFloat:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMiscJson.pas"
+
+[script."xejviScriptAdapterMiscJson:JsonDataObjects.jdtInt:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMiscJson.pas"
+
+[script."xejviScriptAdapterMiscJson:JsonDataObjects.jdtLong:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMiscJson.pas"
+
+[script."xejviScriptAdapterMiscJson:JsonDataObjects.jdtNone:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMiscJson.pas"
+
+[script."xejviScriptAdapterMiscJson:JsonDataObjects.jdtObject:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMiscJson.pas"
+
+[script."xejviScriptAdapterMiscJson:JsonDataObjects.jdtString:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMiscJson.pas"
+
+[script."xejviScriptAdapterMiscJson:JsonDataObjects.jdtULong:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMiscJson.pas"
 
 [script."xejviScriptAdapterMiscJson:TJsonArray.A:iget"]
 status = "pending"
@@ -5300,6 +6685,14 @@ source = "TJsonArray_Read_S"
 [script."xejviScriptAdapterMiscJson:TJsonArray.S:iset"]
 status = "pending"
 source = "TJsonArray_Write_S"
+
+[script."xejviScriptAdapterMiscJson:TJsonArray.TJsonArray_Read_V:idget"]
+status = "pending"
+source = "TJsonArray_Read_V"
+
+[script."xejviScriptAdapterMiscJson:TJsonArray.TJsonArray_Write_V:idset"]
+status = "pending"
+source = "TJsonArray_Write_V"
 
 [script."xejviScriptAdapterMiscJson:TJsonArray.Types:iget"]
 status = "pending"
@@ -5473,6 +6866,14 @@ source = "TJsonObject_Read_S"
 status = "pending"
 source = "TJsonObject_Write_S"
 
+[script."xejviScriptAdapterMiscJson:TJsonObject.TJsonObject_Read_V:idget"]
+status = "pending"
+source = "TJsonObject_Read_V"
+
+[script."xejviScriptAdapterMiscJson:TJsonObject.TJsonObject_Write_V:idset"]
+status = "pending"
+source = "TJsonObject_Write_V"
+
 [script."xejviScriptAdapterMiscJson:TJsonObject.Types:iget"]
 status = "pending"
 source = "TJsonObject_Read_Types"
@@ -5484,6 +6885,50 @@ source = "TJsonObject_Read_U"
 [script."xejviScriptAdapterMiscJson:TJsonObject.U:iset"]
 status = "pending"
 source = "TJsonObject_Write_U"
+
+[script."xejviScriptAdapterMiscRegEx:RegularExpressionsCore.TPerlRegEx:class"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMiscRegEx.pas"
+
+[script."xejviScriptAdapterMiscRegEx:RegularExpressionsCore.preAnchored:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMiscRegEx.pas"
+
+[script."xejviScriptAdapterMiscRegEx:RegularExpressionsCore.preCaseLess:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMiscRegEx.pas"
+
+[script."xejviScriptAdapterMiscRegEx:RegularExpressionsCore.preExtended:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMiscRegEx.pas"
+
+[script."xejviScriptAdapterMiscRegEx:RegularExpressionsCore.preMultiLine:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMiscRegEx.pas"
+
+[script."xejviScriptAdapterMiscRegEx:RegularExpressionsCore.preNoAutoCapture:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMiscRegEx.pas"
+
+[script."xejviScriptAdapterMiscRegEx:RegularExpressionsCore.preNotBOL:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMiscRegEx.pas"
+
+[script."xejviScriptAdapterMiscRegEx:RegularExpressionsCore.preNotEOL:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMiscRegEx.pas"
+
+[script."xejviScriptAdapterMiscRegEx:RegularExpressionsCore.preNotEmpty:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMiscRegEx.pas"
+
+[script."xejviScriptAdapterMiscRegEx:RegularExpressionsCore.preSingleLine:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMiscRegEx.pas"
+
+[script."xejviScriptAdapterMiscRegEx:RegularExpressionsCore.preUnGreedy:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMiscRegEx.pas"
 
 [script."xejviScriptAdapterMiscRegEx:TPerlRegEx.Compile:get"]
 status = "pending"
@@ -5632,6 +7077,94 @@ source = "TPerlRegEx_SubjectLeft"
 [script."xejviScriptAdapterMiscRegEx:TPerlRegEx.SubjectRight:get"]
 status = "pending"
 source = "TPerlRegEx_SubjectRight"
+
+[script."xejviScriptAdapterMiscVcl:CheckLst.TCheckListBox:class"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMiscVcl.pas"
+
+[script."xejviScriptAdapterMiscVcl:CheckLst.TNotifyEvent:handler"]
+status = "pending"
+source = "TJvInterpreterCheckListBoxEvents"
+
+[script."xejviScriptAdapterMiscVcl:Classes.TBinaryReader:class"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMiscVcl.pas"
+
+[script."xejviScriptAdapterMiscVcl:Classes.TBinaryWriter:class"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMiscVcl.pas"
+
+[script."xejviScriptAdapterMiscVcl:Classes.TBytesStream:class"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMiscVcl.pas"
+
+[script."xejviScriptAdapterMiscVcl:ComCtrls.TLVOwnerDataEvent:handler"]
+status = "pending"
+source = "TJvInterpreterListViewEvents"
+
+[script."xejviScriptAdapterMiscVcl:ComCtrls.TLVSelectItemEvent:handler"]
+status = "pending"
+source = "TJvInterpreterListViewEvents"
+
+[script."xejviScriptAdapterMiscVcl:Controls.seBorder:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMiscVcl.pas"
+
+[script."xejviScriptAdapterMiscVcl:Controls.seClient:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMiscVcl.pas"
+
+[script."xejviScriptAdapterMiscVcl:Controls.seFont:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMiscVcl.pas"
+
+[script."xejviScriptAdapterMiscVcl:ExtCtrls.TBoundLabel:class"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMiscVcl.pas"
+
+[script."xejviScriptAdapterMiscVcl:ExtCtrls.TCustomLabeledEdit:class"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMiscVcl.pas"
+
+[script."xejviScriptAdapterMiscVcl:ExtCtrls.TLabeledEdit:class"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMiscVcl.pas"
+
+[script."xejviScriptAdapterMiscVcl:IOUtils.TDirectory:rec"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMiscVcl.pas"
+
+[script."xejviScriptAdapterMiscVcl:IOUtils.TFile:rec"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMiscVcl.pas"
+
+[script."xejviScriptAdapterMiscVcl:IOUtils.soAllDirectories:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMiscVcl.pas"
+
+[script."xejviScriptAdapterMiscVcl:IOUtils.soTopDirectoryOnly:const"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMiscVcl.pas"
+
+[script."xejviScriptAdapterMiscVcl:IniFiles.TCustomIniFile:class"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMiscVcl.pas"
+
+[script."xejviScriptAdapterMiscVcl:IniFiles.THashedStringList:class"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMiscVcl.pas"
+
+[script."xejviScriptAdapterMiscVcl:IniFiles.TIniFile:class"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMiscVcl.pas"
+
+[script."xejviScriptAdapterMiscVcl:IniFiles.TMemIniFile:class"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMiscVcl.pas"
+
+[script."xejviScriptAdapterMiscVcl:Registry.TRegistryIniFile:class"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMiscVcl.pas"
 
 [script."xejviScriptAdapterMiscVcl:TBinaryReader.Create:get"]
 status = "pending"
@@ -5880,6 +7413,22 @@ source = "TCustomLabeledEdit_Read_LabelSpacing"
 [script."xejviScriptAdapterMiscVcl:TCustomLabeledEdit.LabelSpacing:set"]
 status = "pending"
 source = "TCustomLabeledEdit_Write_LabelSpacing"
+
+[script."xejviScriptAdapterMiscVcl:TDirectory.GetDirectories:recget"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMiscVcl.pas"
+
+[script."xejviScriptAdapterMiscVcl:TDirectory.GetFiles:recget"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMiscVcl.pas"
+
+[script."xejviScriptAdapterMiscVcl:TFile.ReadAllText:recget"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMiscVcl.pas"
+
+[script."xejviScriptAdapterMiscVcl:TFile.WriteAllText:recget"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterMiscVcl.pas"
 
 [script."xejviScriptAdapterMiscVcl:THashedStringList.Create:get"]
 status = "pending"
@@ -6147,6 +7696,10 @@ source = "IwbMainRecord_WinningOverride"
 status = "pending"
 source = "TwbFastStringList_Create"
 
+[script."xejviScriptAdapterResource:TwbFastStringList.TwbFastStringList:class"]
+status = "pending"
+source = "xEdit/JvI/xejviScriptAdapterResource.pas"
+
 [script."xejviScriptAdapterResource:cUnit.AssetTypeByExtension:function"]
 status = "pending"
 source = "TwbAsset_AssetTypeByExtension"
@@ -6302,12 +7855,14 @@ status = "pending"
 source = "Misc_wbIsPseudoLightMode"
 
 [script."xejviScriptAdapterResource:cUnit.wbMD5Data:function"]
-status = "pending"
+status = "excluded"
 source = "Misc_wbMD5Data"
+note = "The registration is commented out upstream (xEdit/JvI/xejviScriptAdapterResource.pas:424); nothing is reachable under this name in 4.1.5q."
 
 [script."xejviScriptAdapterResource:cUnit.wbMD5File:function"]
-status = "pending"
+status = "excluded"
 source = "Misc_wbMD5File"
+note = "The registration is commented out upstream (xEdit/JvI/xejviScriptAdapterResource.pas:425); nothing is reachable under this name in 4.1.5q."
 
 [script."xejviScriptAdapterResource:cUnit.wbNormalizeResourceName:function"]
 status = "pending"
@@ -6318,12 +7873,14 @@ status = "pending"
 source = "Misc_wbPositionToGridCell"
 
 [script."xejviScriptAdapterResource:cUnit.wbSHA1Data:function"]
-status = "pending"
+status = "excluded"
 source = "Misc_wbSHA1Data"
+note = "The registration is commented out upstream (xEdit/JvI/xejviScriptAdapterResource.pas:427); nothing is reachable under this name in 4.1.5q."
 
 [script."xejviScriptAdapterResource:cUnit.wbSHA1File:function"]
-status = "pending"
+status = "excluded"
 source = "Misc_wbSHA1File"
+note = "The registration is commented out upstream (xEdit/JvI/xejviScriptAdapterResource.pas:428); nothing is reachable under this name in 4.1.5q."
 
 [script."xejviScriptAdapterResource:cUnit.wbStringListInString:function"]
 status = "pending"

@@ -28,6 +28,7 @@ pub mod new_file;
 pub mod patch;
 pub mod refs;
 pub mod save;
+pub mod script;
 pub mod sniff;
 pub mod tool_modes;
 
@@ -144,6 +145,7 @@ impl Registry {
         sniff::register(&mut registry);
         lodgen::register(&mut registry);
         refs::register(&mut registry);
+        script::register(&mut registry);
         clean::register(&mut registry);
         check::register(&mut registry);
         modgroups::register(&mut registry);
