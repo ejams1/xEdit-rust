@@ -58,7 +58,9 @@ pub struct ElementsAddRequest {
 /// `elements.add`: the response.
 #[derive(Serialize, JsonSchema)]
 pub struct ElementsAddResponse {
-    /// Full path of the element added, or of the container for a dry run.
+    /// Full path of the element added, or of the container for a dry run,
+    /// in the upstream `FullPath` shape (` \ [00] File.esm \ [1] GRUP ...
+    /// \ [0] Record`, `wbImplementation.pas:19641-19652`).
     pub path: String,
     /// The element added (or found, when the member was there already).
     pub element: Option<ElementNode>,

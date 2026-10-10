@@ -238,9 +238,10 @@ fn the_element_functions_read_the_tree() {
             "Start: Applying script \"Elements\"",
             "name=GMST - Game Setting [00000802] <fThird>",
             "path=GMST",
-            // `FullPath` of the port has no `[position]` where upstream
-            // writes one; the difference is owed to the step-10 comparison.
-            "full=Master.esm \\ GRUP Top \"GMST\" \\ GMST - Game Setting [00000802] <fThird>",
+            // `TwbElement.GetFullPath` (`wbImplementation.pas:19641-19652`):
+            // the container chain with the index of every level and the
+            // prefixed file name; verified against the oracle.
+            "full= \\ [00] Master.esm \\ [1] GRUP Top \"GMST\" \\ [2] GMST - Game Setting [00000802] <fThird>",
             // `GetShortNameInternal` with `wbDisplayShorterNames` off, and
             // `GetDisplayName`'s fallback to the summary for a\ GMST without a
             // `FULL` subrecord.
@@ -251,9 +252,12 @@ fn the_element_functions_read_the_tree() {
             // and `DefType` of a record is its record definition.
             "value=",
             "edit=00000802",
-            // The native value of the `Float` member of the `DATA` union: the
-            // port reports the single as a double without Delphi's `Single`
-            // rounding (a step-10 comparison item).
+            // The native value of the `Float` member of the `DATA` union:
+            // `TwbFloatDef.ToValue` with six `RoundToEx` digits through the
+            // single-precision `10^digit` factor, the ported upstream quirk;
+            // the oracle prints the same shape (`399.999999990097` for a
+            // `400.0` game setting, probe of 4.1.5q, 2026-10-10), so no
+            // single rounding is applied at the native value.
             "native=3.49999999116335",
             "datanative=3.49999999116335",
             "type=etMainRecord",
@@ -262,9 +266,13 @@ fn the_element_functions_read_the_tree() {
             "edid=fThird",
             // A Cardinal concatenated as its decimal text, as in Delphi.
             "formid=2050",
-            // The port's main record has the `Record Header` among its
-            // elements (the path `Record Header\...` the corpus scripts use);
-            // upstream keeps the header outside `Elements`.
+            // The element count and the first child: upstream's main record
+            // keeps the `Record Header` among its elements (`TwbElement.
+            // Create` adds every child to its container,
+            // `wbImplementation.pas:19316-19322`; `TwbMainRecord.Init`
+            // creates the header with the record as its container,
+            // `:10453-10465`; `TwbContainer.GetElementCount` is the child
+            // array, `:7664-7669`), so both match the oracle's script output.
             "count=3",
             "byindex=Record Header",
             // `ElementByName` is a name or display name lookup upstream too:
@@ -278,7 +286,7 @@ fn the_element_functions_read_the_tree() {
             "file=Master.esm",
             "name=GMST - Game Setting [00000801] <fOther>",
             "path=GMST",
-            "full=Master.esm \\ GRUP Top \"GMST\" \\ GMST - Game Setting [00000801] <fOther>",
+            "full= \\ [00] Master.esm \\ [1] GRUP Top \"GMST\" \\ [1] GMST - Game Setting [00000801] <fOther>",
             "short=GMST - Game Setting [00000801] <fOther>",
             "display=2.5",
             "base=GMST - Game Setting [00000801] <fOther>",
@@ -302,7 +310,7 @@ fn the_element_functions_read_the_tree() {
             "file=Master.esm",
             "name=GMST - Game Setting [00000800] <fMaster>",
             "path=GMST",
-            "full=Master.esm \\ GRUP Top \"GMST\" \\ GMST - Game Setting [00000800] <fMaster>",
+            "full= \\ [00] Master.esm \\ [1] GRUP Top \"GMST\" \\ [0] GMST - Game Setting [00000800] <fMaster>",
             "short=GMST - Game Setting [00000800] <fMaster>",
             "display=1.5",
             "base=GMST - Game Setting [00000800] <fMaster>",
@@ -326,7 +334,7 @@ fn the_element_functions_read_the_tree() {
             "file=Master.esm",
             "name=GMST - Game Setting [01000802] <fPlugin>",
             "path=GMST",
-            "full=Plugin.esp \\ GRUP Top \"GMST\" \\ GMST - Game Setting [01000802] <fPlugin>",
+            "full= \\ [01] Plugin.esp \\ [1] GRUP Top \"GMST\" \\ [1] GMST - Game Setting [01000802] <fPlugin>",
             "short=GMST - Game Setting [01000802] <fPlugin>",
             "display=5.5",
             "base=GMST - Game Setting [01000802] <fPlugin>",
@@ -350,7 +358,7 @@ fn the_element_functions_read_the_tree() {
             "file=Plugin.esp",
             "name=GMST - Game Setting [00000800] <fOverride>",
             "path=GMST",
-            "full=Plugin.esp \\ GRUP Top \"GMST\" \\ GMST - Game Setting [00000800] <fOverride>",
+            "full= \\ [01] Plugin.esp \\ [1] GRUP Top \"GMST\" \\ [0] GMST - Game Setting [00000800] <fOverride>",
             "short=GMST - Game Setting [00000800] <fOverride>",
             "display=4.5",
             "base=GMST - Game Setting [00000800] <fOverride>",
@@ -618,9 +626,12 @@ begin
   sl := TStringList.Create;
   GetMasters(f, sl);
   AddMessage('slcount=' + sl.Count);
-  // An indexed property read (`sl.Strings[0]`) is not dispatched by the
-  // interpreter yet (see the PLAN notes); the call form is.
-  AddMessage('sl0=' + sl.Strings(0));
+  // The indexed property (`Strings`, `JvInterpreter_Classes.pas:1268-1271`):
+  // both the named and the default form, read and written.
+  AddMessage('sl0=' + sl.Strings[0]);
+  AddMessage('slid0=' + sl[0]);
+  sl[0] := 'changed';
+  AddMessage('sl0b=' + sl[0]);
   sl.Free;
 end;
 end.
@@ -652,6 +663,8 @@ fn the_file_functions_read_the_load_order() {
             "loadorderid=01",
             "slcount=1",
             "sl0=Master.esm",
+            "slid0=Master.esm",
+            "sl0b=changed",
             "Done: Applying script \"FilesB\", Processed Records: 7, Elapsed Time: 00:00",
             "You can close this application now.",
         ]
@@ -866,4 +879,33 @@ fn the_corpus_script_that_edits_a_record() {
         &saved[xlig..xlig + 28]
     );
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// The native value of a single-precision game setting (the defect-4
+/// finding): the port reports the double of `TwbFloatDef.ToValue` with its
+/// six `RoundToEx` digits through the single-precision `10^digit` factor
+/// (the ported upstream quirk, `wbInterface.pas:16789-16796` for the digit
+/// substitution and `:5499-5505` for `RoundToEx`). The oracle's script
+/// output matches: a `400.0` game setting prints `399.999999990097`
+/// (probe of 4.1.5q on `Skyrim.esm`'s `fSunXExtreme`, 2026-10-10), so no
+/// single-rounding is applied at the native value.
+#[test]
+fn the_native_value_of_a_single_float_matches_the_oracle() {
+    let _guard = test_lock();
+    let mut session = open_session();
+    let registry = Registry::standard();
+    let element = registry
+        .call(
+            &mut session,
+            "elements.get",
+            json!({ "form_id": "00000802", "path": "DATA\\Float" }),
+        )
+        .unwrap();
+    assert_eq!(
+        element["native"].as_f64().unwrap(),
+        3.4999999911633495,
+        "native={:?}",
+        element["native"]
+    );
+    assert_eq!(element["value"], "3.500000");
 }

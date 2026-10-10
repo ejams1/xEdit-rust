@@ -2045,6 +2045,15 @@ impl Interpreter {
                 result?;
                 return Ok(());
             }
+            // A clause that did not match and whose section held more than
+            // its one executed statement: the `InterpretExcept` loop reads
+            // the next token and reports `'end' expected` at it
+            // (`JvInterpreter.pas:7520-7550`); `DoFinallyExcept` swallows
+            // the `EJvInterpreterError` (`:7586-7594`), so the try completes
+            // and the script continues.
+            if let Some((pos, _)) = &on.extra_head {
+                return Err(FlowError::Error(self.expected_at(*pos, "'end'")));
+            }
         }
         match else_arm {
             Some(arm) => self.exec_statement(arm),

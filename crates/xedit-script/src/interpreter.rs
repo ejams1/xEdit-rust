@@ -1198,15 +1198,36 @@ impl<'a> Parser<'a> {
             }
             self.next_token()?;
             let body = Box::new(self.parse_statement()?);
+            if self.tok.kind == TT_SEMICOLON {
+                self.next_token()?;
+            }
+            // `On1` interprets the handler's first statement; further
+            // statements of the section are never executed (`SkipToEnd`,
+            // `JvInterpreter.pas:7496-7500`) and are only remembered by their
+            // first token, which a clause that does not match reports
+            // (`'end' expected`, the `:7520-7550` loop). They are parsed for
+            // their syntax like every statement of the port's front end.
+            let mut extra_head = None;
+            loop {
+                match self.tok.kind {
+                    TT_ON | TT_ELSE | TT_END | TT_EMPTY => break,
+                    _ => {}
+                }
+                if extra_head.is_none() {
+                    extra_head = Some((self.tok.start, self.text_string()));
+                }
+                self.parse_statement()?;
+                if self.tok.kind == TT_SEMICOLON {
+                    self.next_token()?;
+                }
+            }
             ons.push(OnClause {
                 var,
                 class,
                 body,
+                extra_head,
                 span: Span::new(on_start, self.prev_end),
             });
-            if self.tok.kind == TT_SEMICOLON {
-                self.next_token()?;
-            }
             match self.tok.kind {
                 TT_ON => {}
                 TT_ELSE => {

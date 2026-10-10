@@ -44,6 +44,14 @@ pub trait Element: Send + Sync {
 
     fn get_full_path(&self) -> String;
 
+    /// The name `TwbElement.GetFullPath` (`wbImplementation.pas:19641-19652`)
+    /// writes at the root of the path. A file's own carries its load order
+    /// prefix, `TwbFile.GetName` (`:4853-4859`); every other element uses
+    /// its name.
+    fn get_full_path_name(&self) -> String {
+        self.get_name()
+    }
+
     /// Number of bytes of data that the element owns.
     fn get_data_size(&self) -> i32;
 

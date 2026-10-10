@@ -82,3 +82,21 @@ fn every_corpus_script_parses() {
         }
     }
 }
+
+/// `SetESL.pas` through the full statement grammar: its `Initialize` has an
+/// `except on Exception do` handler with two statements, which upstream
+/// accepts because `On1` interprets one statement and skips the rest of the
+/// section (`JvInterpreter.pas:7496-7500`); `check` never reaches it (routine
+/// bodies are scanned for their balanced `end`).
+#[test]
+fn the_setesl_multi_statement_handler_parses() {
+    let Some(folder) = scripts_folder() else {
+        return;
+    };
+    let path = folder.join("SetESL.pas");
+    if !path.is_file() {
+        return;
+    }
+    let source = std::fs::read(&path).unwrap_or_else(|error| panic!("reading {}: {error}", path.display()));
+    xedit_script::parse(&source).unwrap_or_else(|error| panic!("SetESL.pas does not parse: {error:?}"));
+}

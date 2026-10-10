@@ -518,7 +518,8 @@ pub struct ElementsGetRequest {
 
 #[derive(Serialize, JsonSchema)]
 pub struct ElementDetail {
-    /// Full path of the element.
+    /// Full path of the element, in the upstream `FullPath` shape
+    /// (`wbImplementation.pas:19641-19652`).
     pub path: String,
     #[serde(flatten)]
     pub node: ElementNode,
@@ -563,7 +564,8 @@ pub struct ElementsSetRequest {
 /// `elements.set`: the response.
 #[derive(Serialize, JsonSchema)]
 pub struct ElementsSetResponse {
-    /// Full path of the element.
+    /// Full path of the element, in the upstream `FullPath` shape
+    /// (`wbImplementation.pas:19641-19652`).
     pub path: String,
     /// The element before the change.
     pub old: ElementNode,
