@@ -862,13 +862,15 @@ const C_UNIT: &str = "";
 /// functions that need no form (the `TfrmMain` fields they read are the
 /// [`ScriptRunState`]), the file functions of `xejviScriptAdapterFile.pas`
 /// and the `Name` of `xejviScriptAdapterElement.pas` a script over the loaded
-/// plugins needs, and the `et*`/`ca*`/`ct*` constants of
-/// `xejviScriptAdapter.pas` the filter hooks read.
+/// plugins needs, the `et*`/`ca*`/`ct*` constants of
+/// `xejviScriptAdapter.pas` the filter hooks read, and the whole data format
+/// surface of `xejviScriptAdapterDF.pas` (`crate::script_df::register`,
+/// phase 6 step 6).
 ///
 /// The remaining registrations of those units (the record, element and
 /// container API, `RecordByFormID`, `AddNewFile`, the conflict helpers, the
 /// LOD and atlas helpers, and everything of the form) belong to phase 6
-/// steps 5 to 9, which extend this function.
+/// steps 5, 7, 8 and 9, which extend this function.
 ///
 /// The element values the functions hand out are [`ScriptElement`]s; the
 /// element API of the later steps downcasts them with
