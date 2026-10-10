@@ -36,14 +36,13 @@
 //! the records a call has to process after its own body so that a cycle of
 //! references does not recurse forever) is a thread local here, as the
 //! `threadvar`-like process-wide variable upstream; a build runs on one
-//! thread. The collector queues a record whose body is not the one running,
-//! and the walk enters every record once ([`ENTERED`], which upstream has in
-//! the `esReachable` mark): a record a definition hides and a non-winning
-//! override never take that mark upstream, and a cycle of references through
-//! such records would be walked again and again.
+//! thread. The collector queues a record whose body is not the one running;
+//! only the call that owns the collector drains it (a nested call's own list
+//! is empty upstream), and it processes every record the queue grew to by
+//! the time it reaches it, as upstream's `while i <= High(mrcMainRecords)`
+//! does.
 
 use std::cell::{Cell, RefCell};
-use std::collections::HashSet;
 use std::sync::Arc;
 
 use crate::interface::def::Def;
@@ -167,23 +166,6 @@ thread_local! {
     /// Port of `_IgnoreCollector`: the next record is processed even while a
     /// call is running.
     static IGNORE_COLLECTOR: Cell<bool> = const { Cell::new(false) };
-    /// The records whose body the walk ran, by address.
-    ///
-    /// Upstream has this in `esReachable`, which a record a definition
-    /// hides (`GetDontShow`) and a non-winning override never take: a record
-    /// of either kind is entered every time a reference reaches it again,
-    /// and the walk of the five Skyrim SE masters cycles through the
-    /// material and impact records until the stack of the worker is gone.
-    /// The set stops the second visit; the parts a build marks are the same
-    /// either way, because a second visit only repeats what the first did.
-    static ENTERED: RefCell<HashSet<usize>> = RefCell::new(HashSet::new());
-}
-
-/// Clears the records the walk entered, as `ResetReachable` clears
-/// `esReachable`: `TwbFile.BuildReachable` of the files after the first one
-/// sees what the walk before it reached.
-pub fn begin_reachable_walk() {
-    ENTERED.with_borrow_mut(HashSet::clear);
 }
 
 /// Port of `IwbElementInternal.Reached` of the element classes.
@@ -274,11 +256,6 @@ fn reached_main_record(record: &Arc<MainRecordImpl>) -> bool {
         COLLECTOR.with_borrow_mut(|queue| queue.push(record.clone()));
         return false;
     }
-    // The body runs once per walk ([`ENTERED`]); upstream takes the same
-    // mark in `esReachable` for the records it does not hide.
-    if !ENTERED.with_borrow_mut(|entered| entered.insert(Arc::as_ptr(record) as usize)) {
-        return false;
-    }
     let top_level = !COLLECTING.with(Cell::get);
     if top_level {
         COLLECTING.with(|flag| flag.set(true));
@@ -286,20 +263,25 @@ fn reached_main_record(record: &Arc<MainRecordImpl>) -> bool {
 
     let result = reached_main_record_body(record);
 
-    // `while i <= High(Collector.mrcMainRecords)`.
-    let mut index = 0;
-    loop {
-        let next = COLLECTOR.with_borrow(|queue| queue.get(index).cloned());
-        match next {
-            Some(record) => {
-                IGNORE_COLLECTOR.with(|flag| flag.set(true));
-                reached_main_record(&record);
-                index += 1;
-            }
-            None => break,
-        }
-    }
+    // `while i <= High(Collector.mrcMainRecords)`: only the frame that owns
+    // the collector drains it. A call whose `_Collector` is already assigned
+    // queues into the owner's list and its own `Collector` stays empty, so
+    // its own drain loop runs over nothing; the shared queue of the port
+    // would otherwise be walked again by every queued record, which changes
+    // the order the bodies run in and costs the square of the queue.
     if top_level {
+        let mut index = 0;
+        loop {
+            let next = COLLECTOR.with_borrow(|queue| queue.get(index).cloned());
+            match next {
+                Some(record) => {
+                    IGNORE_COLLECTOR.with(|flag| flag.set(true));
+                    reached_main_record(&record);
+                    index += 1;
+                }
+                None => break,
+            }
+        }
         COLLECTING.with(|flag| flag.set(false));
         COLLECTOR.with_borrow_mut(Vec::clear);
     }
@@ -476,18 +458,18 @@ pub(crate) fn element_is_not_reachable(element: &dyn ElementImpl) -> bool {
 }
 
 /// Port of `TwbMainRecord.GetIsReachable`: the master's state, and its own
-/// with the one of every override.
+/// or the one of any override.
 fn main_record_is_reachable(record: &Arc<MainRecordImpl>) -> bool {
     if let Some(master) = record.master() {
         return main_record_is_reachable(&master);
     }
-    if !is_reachable_state(record.element_base()) {
-        return false;
+    if is_reachable_state(record.element_base()) {
+        return true;
     }
     record
         .overrides()
         .iter()
-        .all(|over| is_reachable_state(over.element_base()))
+        .any(|over| is_reachable_state(over.element_base()))
 }
 
 /// Port of `TwbMainRecord.GetIsNotReachable`: the master's state, and its
