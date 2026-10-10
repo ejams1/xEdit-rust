@@ -166,6 +166,9 @@ globals! {
     never_sorted, set_never_sorted, wbNeverSorted: bool = false;
     themes_supported, set_themes_supported, wbThemesSupported: bool = true;
     report_mod_groups, set_report_mod_groups, wbReportModGroups: bool = false;
+    /// `TfrmMain.ReachableBuild`: "Build Reachable Info" ran, which the
+    /// "not reachable" filter option reads (`mniNavBuildReachableClick`).
+    reachable_build, set_reachable_build, xeReachableBuild: bool = false;
     require_ctrl_for_dbl_click, set_require_ctrl_for_dbl_click, wbRequireCtrlForDblClick: bool = false;
     focus_added_element, set_focus_added_element, wbFocusAddedElement: bool = true;
     check_non_cpn_chars, set_check_non_cpn_chars, wbCheckNonCPNChars: bool = false;

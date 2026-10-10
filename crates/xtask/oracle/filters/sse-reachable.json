@@ -1,0 +1,25 @@
+{
+  "description": "The not-reachable filter option after \"Build Reachable Info\" (mniNavBuildReachableClick): the records the game reaches while it runs, on the Skyrim master and its DLC.",
+  "game": "sse",
+  "load": ["Skyrim.esm", "Update.esm", "Dawnguard.esm", "HearthFires.esm", "Dragonborn.esm"],
+  "build_reachable": true,
+  "configs": [
+    {
+      "name": "not-reachable",
+      "by_not_reachable_status": true
+    },
+    {
+      "name": "reachable",
+      "by_not_reachable_status": false
+    },
+    {
+      "name": "not-reachable-cells",
+      "by_not_reachable_status": true,
+      "by_signature": "CELL"
+    },
+    {
+      "name": "injected",
+      "by_inject_status": true
+    }
+  ]
+}

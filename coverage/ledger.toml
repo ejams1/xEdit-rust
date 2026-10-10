@@ -600,64 +600,84 @@ status = "pending"
 source = "FormKeyDown"
 
 [gui."xEdit/xeFilterOptionsForm.dfm:btnFilterAdd:OnClick"]
-status = "pending"
+status = "presentation"
 source = "btnFilterAddClick"
+note = "Adds a name to the dialog's preset combo box; filter.preset.save writes the preset under any name."
 
 [gui."xEdit/xeFilterOptionsForm.dfm:btnFilterDel:OnClick"]
-status = "pending"
+status = "covered"
+command = "filter.preset.delete"
 source = "btnFilterDelClick"
+note = "Erases the `[Filter <name>]` section of the settings file."
 
 [gui."xEdit/xeFilterOptionsForm.dfm:btnFilterSave:OnClick"]
-status = "pending"
+status = "covered"
+command = "filter.preset.save"
 source = "btnFilterSaveClick"
+note = "Writes the checkboxes of the dialog as the preset; the options are the request."
 
 [gui."xEdit/xeFilterOptionsForm.dfm:clbBaseRecordSignatures:OnKeyPress"]
-status = "pending"
+status = "presentation"
 source = "clbKeyPress"
+note = "+ - * check every entry of the list, none, or invert; the request carries the signatures themselves."
 
 [gui."xEdit/xeFilterOptionsForm.dfm:clbConflictAll:OnKeyPress"]
-status = "pending"
+status = "presentation"
 source = "clbKeyPress"
+note = "+ - * check every status of the list, none, or invert; filter.apply takes the set."
 
 [gui."xEdit/xeFilterOptionsForm.dfm:clbConflictThis:OnKeyPress"]
-status = "pending"
+status = "presentation"
 source = "clbKeyPress"
+note = "+ - * check every status of the list, none, or invert; filter.apply takes the set."
 
 [gui."xEdit/xeFilterOptionsForm.dfm:clbRecordSignatures:OnKeyPress"]
-status = "pending"
+status = "presentation"
 source = "clbKeyPress"
+note = "+ - * check every signature of the list, none, or invert; filter.apply takes the list as by_signature."
 
 [gui."xEdit/xeFilterOptionsForm.dfm:cmbPreset:OnSelect"]
-status = "pending"
+status = "covered"
+command = "filter.apply"
 source = "cmbPresetSelect"
+note = "FilterLoadPreset fills the checkboxes from the `[Filter <name>]` section; filter.apply with preset does the same, and filter.presets lists the names."
 
 [gui."xEdit/xeFilterOptionsForm.dfm:frmFilterOptions:OnClose"]
-status = "pending"
+status = "covered"
+command = "filter.preset.save"
 source = "FormClose"
+note = "Writes View|LastUsedFilter and, when the checkboxes differ from the preset (FilterHasPresetChanged, which the response's changed reports), asks to save them over it; the settings hint itself is presentation."
 
 [gui."xEdit/xeFilterOptionsForm.dfm:frmFilterOptions:OnCreate"]
-status = "pending"
+status = "presentation"
 source = "FormCreate"
+note = "Fills the checklists with the conflict statuses and the signatures of the loaded definitions; filter.apply takes the names and signatures directly."
 
 [gui."xEdit/xeFilterOptionsForm.dfm:frmFilterOptions:OnKeyDown"]
-status = "pending"
+status = "presentation"
 source = "FormKeyDown"
+note = "Escape cancels the dialog."
 
 [gui."xEdit/xeFilterOptionsForm.dfm:frmFilterOptions:OnShow"]
-status = "pending"
+status = "covered"
+command = "filter.presets"
 source = "FormShow"
+note = "FilterListPresets lists the names and the last used one (the response's last_used); filter.apply with preset loads one."
 
 [gui."xEdit/xeFilterOptionsForm.dfm:mniInvertSelection:OnClick"]
-status = "pending"
+status = "presentation"
 source = "mniSelectionClick"
+note = "Inverts the checks of a list of the dialog; the request carries the set."
 
 [gui."xEdit/xeFilterOptionsForm.dfm:mniSelectAll:OnClick"]
-status = "pending"
+status = "presentation"
 source = "mniSelectionClick"
+note = "Checks every entry of a list of the dialog; the request carries the set (a set of every status filters nothing, as upstream turns it off)."
 
 [gui."xEdit/xeFilterOptionsForm.dfm:mniSelectNone:OnClick"]
-status = "pending"
+status = "presentation"
 source = "mniSelectionClick"
+note = "Unchecks every entry of a list of the dialog; an empty set empties the tree (filter.apply)."
 
 [gui."xEdit/xeGameSelectForm.dfm:ListBox1:OnDblClick"]
 status = "pending"
@@ -964,32 +984,44 @@ status = "pending"
 source = "cbRegExFilterClick"
 
 [gui."xEdit/xeMainForm.dfm:cbViewFilterKeepChildren:OnClick"]
-status = "pending"
+status = "covered"
+command = "records.compare"
 source = "edViewFilterChange"
+note = "keep_children of the view filter (ApplyViewFilter)."
 
 [gui."xEdit/xeMainForm.dfm:cbViewFilterKeepParentsSiblings:OnClick"]
-status = "pending"
+status = "covered"
+command = "records.compare"
 source = "edViewFilterChange"
+note = "keep_parents_siblings of the view filter (ApplyViewFilter)."
 
 [gui."xEdit/xeMainForm.dfm:cbViewFilterKeepSiblings:OnClick"]
-status = "pending"
+status = "covered"
+command = "records.compare"
 source = "edViewFilterChange"
+note = "keep_siblings of the view filter (ApplyViewFilter)."
 
 [gui."xEdit/xeMainForm.dfm:cobReferencedByFilter:OnChange"]
-status = "pending"
+status = "covered"
+command = "refs.get"
 source = "edReferencedByFilterChange"
+note = "The And/Or switch between the name and the signature is filter_or."
 
 [gui."xEdit/xeMainForm.dfm:cobReferencedByFilter:OnKeyDown"]
-status = "pending"
+status = "presentation"
 source = "edReferencedByFilterNameKeyDown"
+note = "Moves the focus between the filter controls."
 
 [gui."xEdit/xeMainForm.dfm:cobViewFilter:OnChange"]
-status = "pending"
+status = "covered"
+command = "records.compare"
 source = "edViewFilterChange"
+note = "The And/Or switch between the name and the value is view_filter_or."
 
 [gui."xEdit/xeMainForm.dfm:cobViewFilter:OnKeyDown"]
-status = "pending"
+status = "presentation"
 source = "edViewFilterNameKeyDown"
+note = "Moves the focus between the filter controls."
 
 [gui."xEdit/xeMainForm.dfm:edEditorIDSearch:OnChange"]
 status = "pending"
@@ -1028,63 +1060,83 @@ status = "pending"
 source = "edFormIDSearchKeyDown"
 
 [gui."xEdit/xeMainForm.dfm:edReferencedByFilterFileName:OnChange"]
-status = "pending"
+status = "covered"
+command = "refs.get"
 source = "edReferencedByFilterChange"
+note = "filter_file (ApplyReferencedByFilter)."
 
 [gui."xEdit/xeMainForm.dfm:edReferencedByFilterFileName:OnKeyDown"]
-status = "pending"
+status = "presentation"
 source = "edReferencedByFilterNameKeyDown"
+note = "Moves the focus between the filter controls."
 
 [gui."xEdit/xeMainForm.dfm:edReferencedByFilterFileName:OnKeyPress"]
-status = "pending"
+status = "presentation"
 source = "edFilterNoBeepOnEnterKeyPress"
+note = "Swallows the beep of Enter."
 
 [gui."xEdit/xeMainForm.dfm:edReferencedByFilterName:OnChange"]
-status = "pending"
+status = "covered"
+command = "refs.get"
 source = "edReferencedByFilterChange"
+note = "filter_name (ApplyReferencedByFilter)."
 
 [gui."xEdit/xeMainForm.dfm:edReferencedByFilterName:OnKeyDown"]
-status = "pending"
+status = "presentation"
 source = "edReferencedByFilterNameKeyDown"
+note = "Moves the focus between the filter controls."
 
 [gui."xEdit/xeMainForm.dfm:edReferencedByFilterName:OnKeyPress"]
-status = "pending"
+status = "presentation"
 source = "edFilterNoBeepOnEnterKeyPress"
+note = "Swallows the beep of Enter."
 
 [gui."xEdit/xeMainForm.dfm:edReferencedByFilterSignature:OnChange"]
-status = "pending"
+status = "covered"
+command = "refs.get"
 source = "edReferencedByFilterChange"
+note = "filter_signature (ApplyReferencedByFilter)."
 
 [gui."xEdit/xeMainForm.dfm:edReferencedByFilterSignature:OnKeyDown"]
-status = "pending"
+status = "presentation"
 source = "edReferencedByFilterNameKeyDown"
+note = "Moves the focus between the filter controls."
 
 [gui."xEdit/xeMainForm.dfm:edReferencedByFilterSignature:OnKeyPress"]
-status = "pending"
+status = "presentation"
 source = "edFilterNoBeepOnEnterKeyPress"
+note = "Swallows the beep of Enter."
 
 [gui."xEdit/xeMainForm.dfm:edViewFilterName:OnChange"]
-status = "pending"
+status = "covered"
+command = "records.compare"
+note = "view_filter_name of the view filter (IsViewNodeFiltered)."
 source = "edViewFilterChange"
 
 [gui."xEdit/xeMainForm.dfm:edViewFilterName:OnKeyDown"]
-status = "pending"
+status = "presentation"
+note = "Moves the focus between the filter controls."
 source = "edViewFilterNameKeyDown"
 
 [gui."xEdit/xeMainForm.dfm:edViewFilterName:OnKeyPress"]
-status = "pending"
+status = "presentation"
+note = "Swallows the beep of Enter."
 source = "edFilterNoBeepOnEnterKeyPress"
 
 [gui."xEdit/xeMainForm.dfm:edViewFilterValue:OnChange"]
-status = "pending"
+status = "covered"
+command = "records.compare"
+note = "view_filter_value of the view filter (IsViewNodeFiltered)."
 source = "edViewFilterChange"
 
 [gui."xEdit/xeMainForm.dfm:edViewFilterValue:OnKeyDown"]
-status = "pending"
+status = "presentation"
+note = "Moves the focus between the filter controls."
 source = "edViewFilterNameKeyDown"
 
 [gui."xEdit/xeMainForm.dfm:edViewFilterValue:OnKeyPress"]
-status = "pending"
+status = "presentation"
+note = "Swallows the beep of Enter."
 source = "edFilterNoBeepOnEnterKeyPress"
 
 [gui."xEdit/xeMainForm.dfm:fpnlReferencedByFilter:OnResize"]
@@ -1324,8 +1376,10 @@ status = "pending"
 source = "mniNavBatchChangeReferencingRecordsClick"
 
 [gui."xEdit/xeMainForm.dfm:mniNavBuildReachable:OnClick"]
-status = "pending"
+status = "covered"
+command = "refs.build_reachable"
 source = "mniNavBuildReachableClick"
+note = "Builds the references of the files that have none, then ResetReachable and BuildReachable for every file; the flag the by_not_reachable_status option of filter.apply reads."
 
 [gui."xEdit/xeMainForm.dfm:mniNavBuildRef:OnClick"]
 status = "covered"
@@ -1462,20 +1516,28 @@ source = "mniNavEditModGroupClick"
 note = "The edit dialog is the new_name, items and add_current_crcs parameters."
 
 [gui."xEdit/xeMainForm.dfm:mniNavFilterApply:OnClick"]
-status = "pending"
+status = "covered"
+command = "filter.apply"
 source = "mniNavFilterApplyClick"
+note = "The dialog is the options of the request (or of a preset of the settings file); the report holds the pass counts and the records the filter took out of each file."
 
 [gui."xEdit/xeMainForm.dfm:mniNavFilterApplySelected:OnClick"]
-status = "pending"
+status = "covered"
+command = "filter.apply"
 source = "mniNavFilterApplyClick"
+note = "The file selection dialog is the files parameter; ModGroupsEnabled is the mod groups the request activates."
 
 [gui."xEdit/xeMainForm.dfm:mniNavFilterConflicts:OnClick"]
-status = "pending"
+status = "covered"
+command = "filter.apply"
 source = "mniNavFilterConflictsClick"
+note = "The preset is the options of the request: conflict_this with ctIdenticalToMasterWinsConflict, ctConflictWins and ctConflictLoses, flatten_blocks, flatten_cell_childs, assign_pers_wrld_child and inherit_conflict_by_parent (xedit_analysis::filter::FilterOptions::for_conflicts). The xeVeryQuickShowConflicts mode sets conflict_only and no_game_master too; both have no oracle scenario (the script host does not expose them)."
 
 [gui."xEdit/xeMainForm.dfm:mniNavFilterConflictsSelected:OnClick"]
-status = "pending"
+status = "covered"
+command = "filter.apply"
 source = "mniNavFilterConflictsClick"
+note = "As mniNavFilterConflicts, with the files parameter for the selection."
 
 [gui."xEdit/xeMainForm.dfm:mniNavFilterForCleaning:OnClick"]
 status = "covered"
@@ -1500,8 +1562,10 @@ source = "mniNavCleaningObsoleteClick"
 note = "A message that the manual cleaning is obsolete (xedit_analysis::cleaning::CLEANING_OBSOLETE); files.clean with quick is the replacement."
 
 [gui."xEdit/xeMainForm.dfm:mniNavFilterRemove:OnClick"]
-status = "pending"
+status = "covered"
+command = "filter.remove"
 source = "mniNavFilterRemoveClick"
+note = "ReInitTree without a filter: the port's tree is built on demand, so the command reports the tree of the loaded files and that no filter is applied."
 
 [gui."xEdit/xeMainForm.dfm:mniNavGenerateLOD:OnClick"]
 status = "covered"

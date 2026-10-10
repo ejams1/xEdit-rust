@@ -197,6 +197,17 @@ pub struct RefsGetRequest {
     /// Entries of the referenced-by list to return at most; all when
     /// omitted.
     pub limit: Option<usize>,
+    /// `edReferencedByFilterName`: keep the entries whose name contains this
+    /// text, without regard to case.
+    pub filter_name: Option<String>,
+    /// `edReferencedByFilterSignature`.
+    pub filter_signature: Option<String>,
+    /// `edReferencedByFilterFileName`.
+    pub filter_file: Option<String>,
+    /// `cobReferencedByFilter` at 1: the name or the signature may match
+    /// instead of both (the file always has to match).
+    #[serde(default)]
+    pub filter_or: bool,
 }
 
 /// A FormID a record refers to.
@@ -222,8 +233,12 @@ pub struct RefsGetResponse {
     /// `ReferencedBy` of the master: the records that refer to the record or
     /// one of its overrides, by load order FormID and then by the load order
     /// of their file, from `offset`. A record that refers to it through two
-    /// FormIDs is listed twice, as in xEdit.
+    /// FormIDs is listed twice, as in xEdit. With a filter it holds the
+    /// entries that match (`ApplyReferencedByFilter`).
     pub referenced_by: Vec<RecordRef>,
+    /// `ReferencedByCount`: the entries before the filter (`N` of the tab
+    /// caption `Referenced by (N / F: M)`).
+    pub filtered_count: usize,
     /// `References` of the record itself: the FormIDs its elements refer
     /// to, sorted as stored.
     pub references: Vec<Reference>,
@@ -236,6 +251,51 @@ fn refs_get(session: &mut Session, request: RefsGetRequest) -> Result<RefsGetRes
     let master = record.master_or_self_impl();
     let referenced_by = master.referenced_by();
     let count = referenced_by.len();
+    // `ApplyReferencedByFilter`: the name, signature and file of an entry as
+    // the tab shows them, lower case, the name and signature joined by AND
+    // or OR, the file always.
+    let name_filter = request
+        .filter_name
+        .as_deref()
+        .map(|text| text.trim().to_ascii_lowercase());
+    let signature_filter = request
+        .filter_signature
+        .as_deref()
+        .map(|text| text.trim().to_ascii_lowercase());
+    let file_filter = request
+        .filter_file
+        .as_deref()
+        .map(|text| text.trim().to_ascii_lowercase());
+    let use_name = name_filter.as_ref().is_some_and(|text| !text.is_empty());
+    let use_signature = signature_filter.as_ref().is_some_and(|text| !text.is_empty());
+    let use_file = file_filter.as_ref().is_some_and(|text| !text.is_empty());
+    let matching = |record: &std::sync::Arc<MainRecordImpl>| {
+        let name = record.get_name().to_lowercase();
+        let signature = record.get_signature().to_string().to_lowercase();
+        let file = record
+            .get_file()
+            .map(|file| file.get_name().to_lowercase())
+            .unwrap_or_default();
+        let name_matches = !use_name || name.contains(name_filter.as_deref().unwrap_or_default());
+        let signature_matches = !use_signature || signature.contains(signature_filter.as_deref().unwrap_or_default());
+        let file_matches = !use_file || file.contains(file_filter.as_deref().unwrap_or_default());
+        file_matches
+            && if request.filter_or {
+                name_matches || signature_matches
+            } else {
+                name_matches && signature_matches
+            }
+    };
+    let filtered: Vec<_> = if use_name || use_signature || use_file {
+        referenced_by
+            .iter()
+            .filter(|record| matching(record))
+            .cloned()
+            .collect()
+    } else {
+        referenced_by.clone()
+    };
+    let filtered_count = filtered.len();
     let limit = request.limit.unwrap_or(usize::MAX);
     let references = record
         .references()
@@ -249,12 +309,13 @@ fn refs_get(session: &mut Session, request: RefsGetRequest) -> Result<RefsGetRes
         record: record_ref(&record),
         master: record_ref(&master),
         referenced_by_count: count,
-        referenced_by: referenced_by
+        referenced_by: filtered
             .iter()
             .skip(request.offset)
             .take(limit)
             .map(|record| record_ref(record))
             .collect(),
+        filtered_count,
         references,
     })
 }

@@ -378,7 +378,7 @@ impl GroupRecordImpl {
     /// Port of `TwbGroupRecord.GetGroupLabel`: the label, with the FileID
     /// of a FormID beyond the masters replaced by the file's own for the
     /// groups whose label is a FormID.
-    pub(crate) fn get_group_label(&self) -> u32 {
+    pub fn get_group_label(&self) -> u32 {
         let label = self.group_label();
         if matches!(self.group_type(), 1 | 6..=10)
             && let Some(file) = self.file.upgrade()
@@ -632,7 +632,7 @@ impl MainRecordImpl {
 
 /// Port of one axis of `wbPositionToGridCell`: the cell of a coordinate,
 /// rounded down.
-fn position_to_grid_cell(value: f64) -> i32 {
+pub fn position_to_grid_cell(value: f64) -> i32 {
     let factor = crate::interface::globals::cell_size_factor();
     let mut result = (value / factor).trunc() as i32;
     if value < 0.0 && (value / factor).fract() != 0.0 {

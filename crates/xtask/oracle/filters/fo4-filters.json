@@ -1,0 +1,44 @@
+{
+  "description": "The Fallout 4 specific paths of the filter: the precombined mesh of the placed records, the injected records, the visible-when-distant flag, the responses of a topic (wbSortINFO), and the conflicts preset with the flattening of the worldspace blocks and the persistent cell children.",
+  "game": "fo4",
+  "load": ["Fallout4.esm", "DLCRobot.esm"],
+  "configs": [
+    {
+      "name": "conflicts",
+      "conflict_this": ["ctIdenticalToMasterWinsConflict", "ctConflictWins", "ctConflictLoses"],
+      "flatten_blocks": true,
+      "flatten_cell_childs": true,
+      "assign_pers_wrld_child": true,
+      "inherit_conflict_by_parent": true
+    },
+    {
+      "name": "precombined-mesh",
+      "by_has_precombined_mesh": true
+    },
+    {
+      "name": "refr",
+      "by_signature": "REFR"
+    },
+    {
+      "name": "injected",
+      "by_inject_status": true
+    },
+    {
+      "name": "references-injected",
+      "by_references_injected_status": true
+    },
+    {
+      "name": "vwd",
+      "by_vwd": true
+    },
+    {
+      "name": "element-value-robot",
+      "by_element_value": "Robot"
+    },
+    {
+      "name": "editor-id-regex-dlc01",
+      "by_editor_id": "^DLC01",
+      "regex_comparison": true
+    }
+  ]
+}

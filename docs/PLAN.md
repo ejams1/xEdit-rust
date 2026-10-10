@@ -143,7 +143,7 @@ The review checks:
   1. **Reference index** (done): `mrReferencedBy`, `BuildRef` of every element, `BuildOrLoadRef` and its cache file, the referenced-by lists in place of the phase 3 `ReferenceScan`, built across files in parallel; `xedit refs`.
   2. **Conflict detection** (done): `ConflictLevelForMainRecord`, `ConflictLevelForContainer`, `ConflictLevelForNodeDatas` and the rest of the conflict code of `xeMainForm`, moved into the core; the injected and sibling cases; run across records in parallel; `xedit conflicts`, `xedit compare`.
   3. **Error checks** (done): `CheckForErrors` and `CheckForErrorsLinear` with every `Check` callback of the definitions; `xedit check`.
-  4. **Filters** (after 1 and 2): the filter options of `xeFilterOptionsForm` and `ApplyFilter`, filter for cleaning, filter for conflicts, the referenced-by and view filters; `xedit filter`.
+  4. **Filters** (done; after 1 and 2): the filter options of `xeFilterOptionsForm` and `ApplyFilter`, filter for cleaning, filter for conflicts, the referenced-by and view filters; `xedit filter`.
   5. **Cleaning** (done; after 2): ITM removal, UDR (undelete and disable references), quick auto clean, cleanup of injected records, `mniNavCleaningObsolete`; `xedit clean`.
   6. **Mod groups** (done): `wbModGroups`, mod group files and CRCs, their effect on conflict status; `xedit modgroups`.
   7. **Localization** (done): adding and writing strings, the string tables of a localized file on save, localize and delocalize a plugin, the translate mode; `xedit localization`.
