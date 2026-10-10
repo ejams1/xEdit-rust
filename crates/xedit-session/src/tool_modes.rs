@@ -1094,6 +1094,20 @@ fn save_changed(
     Ok(())
 }
 
+/// The sub mode of the edit mode a name asks for: the switch
+/// (`-quickautoclean`), the mode name of `tool.run` (`quickautoclean`) or
+/// the sub mode name itself (`quick_auto_clean`), which the legacy command
+/// line carries (`parse_legacy`). `None` is the edit mode without a sub
+/// mode.
+pub fn edit_sub_mode_of(name: &str) -> Option<&'static str> {
+    EDIT_SUB_MODES
+        .iter()
+        .find(|(names, sub)| {
+            name.eq_ignore_ascii_case(sub) || names.iter().any(|name_of| name.eq_ignore_ascii_case(name_of))
+        })
+        .map(|(_, sub)| *sub)
+}
+
 /// The tool mode a name asks for, with the names `xeInit.pas` accepts for
 /// its modes and the sub modes of the edit mode.
 pub fn mode_of_name(name: &str) -> Option<ToolMode> {
@@ -1279,13 +1293,7 @@ fn tool_run(session: &mut Session, request: ToolRunRequest) -> Result<ToolRunRes
             // The sub modes of the edit mode (`xeInit.pas`): the quick clean
             // modes run over the last loaded plugin, as `xedit clean --quick`
             // does.
-            let sub = EDIT_SUB_MODES
-                .iter()
-                .find(|(names, sub)| {
-                    request.mode.eq_ignore_ascii_case(sub)
-                        || names.iter().any(|name| request.mode.eq_ignore_ascii_case(name))
-                })
-                .map(|(_, sub)| *sub);
+            let sub = edit_sub_mode_of(&request.mode);
             if sub == Some("quick_clean") || sub == Some("quick_auto_clean") {
                 let output = request.output.clone();
                 // `xeInit.pas` sets `xeQuickCleanAutoSave` for
