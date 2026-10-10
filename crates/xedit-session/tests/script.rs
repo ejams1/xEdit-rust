@@ -747,3 +747,226 @@ fn the_corpus_scripts_run_end_to_end() {
     );
     assert_eq!(run_lines.last().unwrap(), "You can close this application now.");
 }
+
+//=== The data format adapter (phase 6 step 6) ================================
+
+/// A script over the `wbDataFormat` surface: it builds a NIF, writes it, its
+/// JSON and a DDS header, clears and rebuilds the file from the JSON, and
+/// reports every step through `AddMessage`.
+#[test]
+fn a_script_builds_a_nif_through_the_data_format_adapter() {
+    let _guard = test_lock();
+    let dir = temp_dir("df-nif");
+    let nif_path = dir.join("built.nif");
+    let json_path = dir.join("built.json");
+    let dds_path = dir.join("built.dds");
+    let text = format!(
+        "unit DfBuild;\n\
+         function Initialize: Integer;\n\
+         var\n\
+           nif: TwbNifFile;\n\
+           node, child: TwbNifBlock;\n\
+           dds: TwbDDSFile;\n\
+         begin\n\
+           nif := TwbNifFile.Create;\n\
+           nif.SetToDefault;\n\
+           nif.NifVersion := nfSSE;\n\
+           AddMessage('version: ' + nif.NifVersion);\n\
+           node := nif.AddBlock('NiNode');\n\
+           node.EditValues['Name'] := 'Root';\n\
+           child := node.AddChild('NiNode');\n\
+           child.EditValues['Name'] := 'Child';\n\
+           AddMessage('blocks: ' + nif.BlocksCount);\n\
+           child := nif.Blocks[1];\n\
+           AddMessage('child: ' + child.EditValues['Name']);\n\
+           AddMessage('path: ' + child.Path);\n\
+           AddMessage('refs: ' + node.RefsCount);\n\
+           AddMessage('object: ' + node.IsNiObject('NiNode', True));\n\
+           nif.SaveToFile('{nif}');\n\
+           nif.SaveToJSONFile('{json}', True);\n\
+           nif.SetToDefault;\n\
+           AddMessage('cleared: ' + nif.BlocksCount);\n\
+           nif.LoadFromJSONFile('{json}');\n\
+           AddMessage('rebuilt: ' + nif.BlocksCount);\n\
+           child := nif.Blocks[1];\n\
+           AddMessage('rebuilt child: ' + child.EditValues['Name']);\n\
+           nif.Free;\n\
+           dds := TwbDDSFile.Create;\n\
+           dds.SetToDefault;\n\
+           AddMessage('dds mips: ' + dds.NativeValues['HEADER\\dwMipMapCount']);\n\
+           dds.SaveToFile('{dds}');\n\
+           dds.Free;\n\
+           Result := 1;\n\
+         end;\n\
+         end.\n",
+        nif = nif_path.display(),
+        json = json_path.display(),
+        dds = dds_path.display(),
+    );
+    let folder = script_folder("df-build", "DfBuild.pas", &text);
+    let mut session = open_session();
+    let result = run(&mut session, &folder, "DfBuild.pas", json!({}));
+    assert_eq!(result["aborted"], false, "{:?} {:?}", result["error"], lines(&result));
+    assert_eq!(result["self_terminated"], 1);
+    let build_lines = lines(&result);
+    let expected = [
+        "version: 5",
+        "blocks: 2",
+        "child: Child",
+        "path: 1 NiNode",
+        "object: True",
+        "cleared: 0",
+        "rebuilt: 2",
+        "rebuilt child: Child",
+        "dds mips: 0",
+    ];
+    for line in expected {
+        assert!(
+            build_lines.contains(&line.to_owned()),
+            "{line} missing of {build_lines:?}"
+        );
+    }
+    let refs = build_lines
+        .iter()
+        .find(|line| line.starts_with("refs: "))
+        .expect("a refs line");
+    let refs: i32 = refs.trim_start_matches("refs: ").parse().expect("a number");
+    assert!(refs > 0, "{build_lines:?}");
+
+    // The files the script wrote: the NIF carries the SSE magic, the JSON
+    // the rebuilt block, the DDS the header of the empty file.
+    let nif = std::fs::read(&nif_path).expect("the NIF");
+    assert!(
+        nif.starts_with(b"Gamebryo File Format, Version 20.2.0.7"),
+        "{:?}",
+        String::from_utf8_lossy(&nif[..40.min(nif.len())])
+    );
+    let json = std::fs::read_to_string(&json_path).expect("the JSON");
+    assert!(json.contains("Child"), "{json}");
+    assert!(dds_path.is_file(), "the DDS header was written");
+
+    // `LoadFromResource`: the `dfResourceGetDataCallback` of the GUI is the
+    // container handler, so the folder the file was written to is added as a
+    // container and the resource name finds it. A name no container has
+    // raises the oracle's message.
+    xedit_core::container_handler::add_folder(&dir);
+    let resource = script_folder(
+        "df-resource",
+        "DfResource.pas",
+        "unit DfResource;\n\
+         function Initialize: Integer;\n\
+         var\n\
+           nif: TwbNifFile;\n\
+         begin\n\
+           nif := TwbNifFile.Create;\n\
+           nif.LoadFromResource('built.nif');\n\
+           AddMessage('resource blocks: ' + nif.BlocksCount);\n\
+           nif.Free;\n\
+           Result := 1;\n\
+         end;\n\
+         end.\n",
+    );
+    let mut session = open_session();
+    let result = run(&mut session, &resource, "DfResource.pas", json!({}));
+    assert_eq!(result["aborted"], false, "{:?}", result["error"]);
+    let resource_lines = lines(&result);
+    assert!(
+        resource_lines.contains(&"resource blocks: 2".to_owned()),
+        "{resource_lines:?}"
+    );
+
+    let missing = script_folder(
+        "df-missing",
+        "DfMissing.pas",
+        "unit DfMissing;\n\
+         function Initialize: Integer;\n\
+         var\n\
+           nif: TwbNifFile;\n\
+         begin\n\
+           nif := TwbNifFile.Create;\n\
+           nif.LoadFromResource('no\\such\\mesh.nif');\n\
+           Result := 1;\n\
+         end;\n\
+         end.\n",
+    );
+    let mut session = open_session();
+    let result = run(&mut session, &missing, "DfMissing.pas", json!({}));
+    assert_eq!(result["aborted"], true);
+    let error = result["error"].as_str().unwrap();
+    assert!(
+        error.contains("Resource not found (File \"no\\such\\mesh.nif\")"),
+        "{error}"
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+    let _ = std::fs::remove_dir_all(&folder);
+    let _ = std::fs::remove_dir_all(&resource);
+    let _ = std::fs::remove_dir_all(&missing);
+}
+
+/// The corpus NIF of the oracle's `Edit Scripts` (`LODGen_flat_lod.nif`, a
+/// Skyrim mesh of 6 blocks), walked through the adapter: needs
+/// `XEDIT_ORACLE_DIR`, so the test does nothing without it.
+#[test]
+fn a_corpus_nif_walks_through_the_data_format_adapter() {
+    let _guard = test_lock();
+    let Some(oracle) = std::env::var_os("XEDIT_ORACLE_DIR") else {
+        return;
+    };
+    let corpus = PathBuf::from(&oracle).join("Edit Scripts").join("LODGen_flat_lod.nif");
+    let text = format!(
+        "unit DfCorpus;\n\
+         function Initialize: Integer;\n\
+         var\n\
+           nif: TwbNifFile;\n\
+           block: TwbNifBlock;\n\
+           el: TdfElement;\n\
+           i: Integer;\n\
+         begin\n\
+           nif := TwbNifFile.Create;\n\
+           nif.LoadFromFile('{file}');\n\
+           AddMessage('version: ' + nif.NifVersion);\n\
+           AddMessage('blocks: ' + nif.BlocksCount);\n\
+           for i := 0 to nif.BlocksCount - 1 do begin\n\
+             block := nif.Blocks[i];\n\
+             AddMessage('block: ' + block.BlockType);\n\
+           end;\n\
+           block := nif.Blocks[0];\n\
+           AddMessage('name: ' + block.EditValues['Name']);\n\
+           AddMessage('node: ' + block.IsNiObject('NiNode', True));\n\
+           AddMessage('shape: ' + nif.Blocks[1].IsNiObject('NiTriBasedGeom', True));\n\
+           AddMessage('header magic: ' + nif.Header.EditValues['Magic']);\n\
+           block := nif.Blocks[4];\n\
+           el := block.Elements['Textures'];\n\
+           AddMessage('texture 0: ' + el[0].EditValue);\n\
+           AddMessage('texture 0 name: ' + el[0].Name);\n\
+           nif.Free;\n\
+           Result := 1;\n\
+         end;\n\
+         end.\n",
+        file = corpus.display(),
+    );
+    let folder = script_folder("df-corpus", "DfCorpus.pas", &text);
+    let mut session = open_session();
+    let result = run(&mut session, &folder, "DfCorpus.pas", json!({}));
+    assert_eq!(result["aborted"], false, "{:?}", result["error"]);
+    let lines = lines(&result);
+    for line in [
+        "version: 4",
+        "blocks: 6",
+        "block: NiNode",
+        "block: NiTriShape",
+        "block: NiTriShapeData",
+        "block: BSLightingShaderProperty",
+        "block: BSShaderTextureSet",
+        "block: NiAlphaProperty",
+        "name: Scene Root",
+        "node: True",
+        "shape: True",
+        "header magic: Gamebryo File Format, Version 20.2.0.7",
+        "texture 0 name: Textures #0",
+    ] {
+        assert!(lines.contains(&line.to_owned()), "{line} missing of {lines:?}");
+    }
+    let _ = std::fs::remove_dir_all(&folder);
+}

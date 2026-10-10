@@ -645,6 +645,31 @@ fn values_of<T: PascalEnum>(set: ElementLikeSet<T>) -> Vec<T> {
     T::ALL.iter().copied().filter(|value| set.contains(*value)).collect()
 }
 
+/// The script list objects the adapter steps append to: `TList` and
+/// `TStrings` of the JVCL `Classes` unit (phase 6 step 8), which the DF
+/// adapter's `GetAssetsList` and `...ByType` methods fill with the object a
+/// script passes in. The unit that registers the classes sets the two
+/// closures; until then the calls that need one raise a clear error.
+/// `list_add` appends an item to a `TList`, `strings_add` a string to a
+/// `TStrings`.
+#[derive(Clone, Default)]
+pub struct ScriptLists {
+    pub list_add: Option<ScriptListAdd>,
+    pub strings_add: Option<ScriptStringsAdd>,
+}
+
+/// `TList(V2O(list)).Add(value)`: the list object and the item appended.
+pub type ScriptListAdd = Rc<dyn Fn(&Value, Value) -> Result<(), ValueError>>;
+/// `TStrings(V2O(list)).Add(text)`: the list object and the text appended.
+pub type ScriptStringsAdd = Rc<dyn Fn(&Value, &str) -> Result<(), ValueError>>;
+
+impl ScriptLists {
+    /// Whether any list implementation is registered.
+    pub fn is_empty(&self) -> bool {
+        self.list_add.is_none() && self.strings_add.is_none()
+    }
+}
+
 /// The state of one `script.run`: the script variables `OnSetValue` writes,
 /// the message log the run produces, the loaded files the file functions
 /// read, and the counters of the progress callback.
@@ -677,6 +702,9 @@ pub struct ScriptRunState {
     pub pending_filter: Option<PendingFilter>,
     /// When the run began, for `wbFormatElapsedTime`.
     started: std::time::Instant,
+    /// The script list objects the adapter steps append to (`TList`,
+    /// `TStrings`); none until the JVCL `Classes` unit registers them.
+    pub lists: ScriptLists,
 }
 
 /// One `ApplyFilter`/`RemoveFilter` a script called. The adapter function
@@ -690,7 +718,7 @@ pub enum PendingFilter {
 }
 
 impl ScriptRunState {
-    fn new(files: Vec<ElementRef>, element_class: Rc<ClassDef>) -> Self {
+    pub fn new(files: Vec<ElementRef>, element_class: Rc<ClassDef>) -> Self {
         ScriptRunState {
             variables: ScriptVariables::default(),
             messages: Vec::new(),
@@ -702,6 +730,7 @@ impl ScriptRunState {
             filter_applied: false,
             pending_filter: None,
             started: std::time::Instant::now(),
+            lists: ScriptLists::default(),
         }
     }
 
@@ -1153,6 +1182,10 @@ fn register_functions(adapter: &mut Adapter, state: &Rc<RefCell<ScriptRunState>>
     for value in ConflictThis::ALL {
         adapter.add_const(C_UNIT, value.enum_name(), Value::Integer(value.ord() as i32));
     }
+
+    //=== The data format adapter (xejviScriptAdapterDF.pas, step 6) ==========
+
+    crate::script_df::register(adapter, state);
 }
 
 /// The `OnSetValue` hook (`xejviScriptHost.pas:60`): the identifiers a script
