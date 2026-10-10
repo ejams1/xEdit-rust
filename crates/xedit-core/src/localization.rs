@@ -587,7 +587,7 @@ impl LocalizationHandlerImpl {
             }
         };
         if has_containers() {
-            for name in container_resource_list("strings") {
+            for name in container_resource_list("", "strings") {
                 if name.to_ascii_lowercase().ends_with("strings") {
                     parse(&change_file_ext(&name, "").to_lowercase());
                 }
@@ -604,7 +604,7 @@ impl LocalizationHandlerImpl {
     /// containers hold (a table in several containers is listed for each).
     pub fn available_localization_files() -> Vec<String> {
         if has_containers() {
-            container_resource_list("strings")
+            container_resource_list("", "strings")
                 .into_iter()
                 .filter(|name| name.to_ascii_lowercase().ends_with("strings"))
                 .map(|name| path_file_name(&name).to_owned())

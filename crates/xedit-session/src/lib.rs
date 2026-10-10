@@ -28,8 +28,8 @@ pub mod new_file;
 pub mod patch;
 pub mod refs;
 pub mod save;
-pub mod tool_modes;
 pub mod sniff;
+pub mod tool_modes;
 
 use std::collections::BTreeMap;
 
@@ -139,6 +139,10 @@ impl Registry {
         save::register(&mut registry);
         masters::register(&mut registry);
         formids::register(&mut registry);
+        archive::register(&mut registry);
+        assets::register(&mut registry);
+        sniff::register(&mut registry);
+        lodgen::register(&mut registry);
         refs::register(&mut registry);
         clean::register(&mut registry);
         check::register(&mut registry);
@@ -148,10 +152,6 @@ impl Registry {
         patch::register(&mut registry);
         tool_modes::register(&mut registry);
         filter::register(&mut registry);
-        archive::register(&mut registry);
-        assets::register(&mut registry);
-        sniff::register(&mut registry);
-        lodgen::register(&mut registry);
         registry
     }
 

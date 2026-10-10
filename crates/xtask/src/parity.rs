@@ -56,22 +56,22 @@ use serde::Serialize;
 
 use crate::memory::{self, Budget, GIB, Limit};
 
+mod bsarch;
 mod check;
 mod clean;
 mod conflicts;
 mod filter;
-mod bsarch;
 mod gui;
 mod hidden;
+mod lodgen;
 mod merged;
 mod modgroups;
-mod oracle_refs;
-mod lodgen;
 mod nif;
+mod oracle_refs;
 mod oracle_save;
+mod sniff;
 mod strings;
 mod tool_modes;
-mod sniff;
 
 /// `parity check-dump`: the dump check runs `xDump -check` and
 /// `xedit dump --check` in place of the dumps, cached apart (`<MODE>-check`).
@@ -1224,9 +1224,9 @@ fn first_byte_difference(a: &Path, b: &Path) -> Result<Option<u64>> {
 }
 
 fn parse(args: &[&str]) -> Result<Options> {
-    const USAGE: &str = "usage: cargo xtask parity dump|saves|roundtrip|oracle-save|oracle-edit|bsarch [--game <game>]... [--file <name>]... \
-                         [--oracle-only] [--jobs <n>] [--memory-budget <GiB>] [--max-memory <GiB>] \
-                         [--oracle-timeout <minutes>]";
+    const USAGE: &str = "usage: cargo xtask parity dump|saves|roundtrip|oracle-save|oracle-edit|bsarch|conflicts|refs|clean|check|check-dump|modgroups|merged|filter|tool-modes [--game <game>]... [--file <name>]... [--mode <tool mode>]... \
+                         [--record <FormID>]... [--oracle-only] [--jobs <n>] [--memory-budget <GiB>] \
+                         [--max-memory <GiB>] [--oracle-timeout <minutes>]";
     let (mode, rest) = args.split_first().context(USAGE)?;
     let (saves, roundtrip, oracle_save, oracle_edit) = match *mode {
         "dump" | "conflicts" | "refs" | "clean" | "check" | "modgroups" | "merged" | "filter" | "tool-modes" => {
