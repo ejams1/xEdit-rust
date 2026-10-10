@@ -185,6 +185,19 @@ The batch operations of Sniff on the NIF, KF and material files of a folder or a
 - 49 of the 50 operations are ported; `cargo xtask parity sniff` checks them against `Sniff.exe`. `Update MOPP code` fails with error code `unsupported`: it calls `NifMopp.dll`, the Havok MOPP builder, which the port does not have. `ProcCollapseLinksArrays` is not registered in the 4.1.5q form and has no operation. `Find textures` reports the DDS files that match its filters, or copies them without `bReportOnly`, over the DDS record of a texture archive entry and the header `wbDDS` reads otherwise; the texture checks of `Check for errors` (`Invalid texture size or format`, `Unsupported texture formats`) run on DDS files while they are on (`ProcessedFiles=*.dds`, the setting of the check list), and a file that is not a DDS is reported as `Not a valid DDS file`.
 - Error codes: `invalid_params` (unknown operation, a missing input or output folder, a setting that does not parse: the message is Sniff's), `unsupported`, `io`.
 
+## Scripts
+
+The Pascal scripts of the scripts folder, the corpus phase 6's interpreter parses and runs (xEdit's "Apply Script"). They need no `--game` or `--load`.
+
+`xedit script check <file>...` compiles the given scripts and the units they `uses` with the JvInterpreter front end (phase 6 step 2, `crates/xedit-script`): as `TJvInterpreterUnit.Compile` does, a routine body is only scanned for its balanced `end`, so a statement-level error surfaces when the script runs, not here; unresolved identifiers belong to `script run`. The units a script uses resolve from the scripts folder; a unit with no file there is a unit compiled into xEdit and parses to nothing. It is read-only, exits non-zero when a script does not compile, and prints each failure as `file:line: message` (with `--json`, the structured result).
+
+| CLI | Registry name | What it does |
+|---|---|---|
+| `script list [--scripts DIR]` | `script.list` | Every `*.pas` of the scripts folder with its line count, as xEdit's script list shows them (the form's `_newscript_.pas` template included). The folder is `--scripts`, else `XEDIT_SCRIPTS`, else the oracle's `Edit Scripts` (`XEDIT_ORACLE_DIR`), else `Edit Scripts` beside `xedit.exe` (upstream's `wbScriptsPath`, which `-S:` sets); only the top folder is read. Read-only; error code `io` when the folder cannot be read. |
+| `script check <file>...` | `script.check` | Compiles each script and the units it uses; the response has `ok`, `scripts_folder`, `total`, `parsed`, `failed` and per file `ok` with `errors` (`file`, `line`, `message`). |
+
+- `script run` (Initialize/Process/Finalize over the loaded plugins) is a later step of phase 6. The corpus `script check` is run on is `crates/xtask/oracle/scripts/corpus.json`: the 150 scripts of the 4.1.5q `Edit Scripts`, 32 of which build a form and 11 ask the user for input (110 headless), with `xEditAPI.pas` the declaration-only API the scripts `uses`.
+
 ## LOD generation
 
 `xedit lodgen` runs xEdit's LODGen mode (`-lodgen`, the LODGen form and `wbLOD`) on the loaded plugins: Oblivion's distant LOD (`.lod` and `.cmp` files of every worldspace), the trees LOD (billboard atlas, `.lst` list, `.btt` or `.dtl` blocks) and objects LOD of Skyrim and the Fallouts, and the objects LOD of Fallout 4. Load every plugin of the load order with `--load` (in load order) and give `--game`.
@@ -507,5 +520,6 @@ Behaviour a user can meet, as of phase 4. Each is an upstream behaviour not port
 - **Oblivion saves** do not read (an upstream limit, see "Saves").
 - **Mesh optimizing.** `SpellOptimize`, `SpellStripify` and `SpellTriangulate` of a NIF are ported (`wbMeshOptimize`) but have no command of their own; `sniff run "Optimize mesh"` runs them on a folder.
 - **Sniff.** `Update MOPP code` is not ported (`sniff list` gives its `not_ported` reason; it needs `NifMopp.dll`), and `ProcCollapseLinksArrays` has no operation in the 4.1.5q form; see "Sniff".
+- **Scripts.** Only `xedit script list` exists so far (phase 6 step 1): `script check` and `script run` are later steps, and the legacy `-script:` switch and the `tmScript` tool mode run nothing yet. The 40 script registrations the ledger marks covered are the phase 3 and 4 commands of the same names (`elements.set`, `records.copy`, ...); the rest are pending.
 - **Texture archives.** Packing and extracting work for `Fallout 4 DDS` and `Starfield DDS` archives. The Xbox 360 conversion of `BSArchPro` (`xtexconv.exe`) is part of the GUI tool and not ported, so the archive target is always the PC. A texture whose data ends before its last mipmap is cut where the data ends, where `BSArch.exe` reads past its buffer in the route without a split.
 - **Vector instructions.** The pixel conversion of the texture code (24 to 32 bit) runs on SSSE3 or AVX2 and the half-float array conversions (`xedit_core::half_float`) on F16C where the machine has them, each with a scalar version that gives the same bytes; `XEDIT_SIMD=off` takes the scalar route everywhere.

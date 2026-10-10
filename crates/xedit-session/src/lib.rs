@@ -28,6 +28,7 @@ pub mod new_file;
 pub mod patch;
 pub mod refs;
 pub mod save;
+pub mod script;
 pub mod sniff;
 pub mod tool_modes;
 
@@ -137,6 +138,7 @@ impl Registry {
         conflicts::register(&mut registry);
         edit::register(&mut registry);
         save::register(&mut registry);
+        script::register(&mut registry);
         masters::register(&mut registry);
         formids::register(&mut registry);
         archive::register(&mut registry);

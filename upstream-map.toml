@@ -248,6 +248,16 @@ status = "pending"
 rust = "crates/xedit-assets/src/sniff/main_form.rs"
 note = "CalcThreads and the worker threads of Sniff (process_all, with the results committed in file order). The progress window is the GUI's."
 
+[units."External/jvcl/jvcl/run/JvInterpreter.pas"]
+status = "pending"
+rust = "crates/xedit-script/src/interpreter.rs"
+note = "Phase 6 steps 2 and 3: the parser front end is ported, as an AST builder instead of the interpreter's parse-and-execute pass (crates/xedit-script/src/interpreter.rs: InterpretUnit and the Interpret*/Expression/ReadArgs routines, ReadFunctionHeader, ParseDataType, InterpretVar/InterpretConst/InterpretType -- the last extended for type aliases and enums, which only the declaration-only xEditAPI.pas of the corpus needs), and the runtime over it landed in step 3: the value model (crates/xedit-script/src/values.rs: the extended variant types of :1417-1445, JvInterpreterVarAsType/Var2Type, JvInterpreterVarCopy/Assignment, V2O ... P2R, S2V/V2S, TypeName2VarTyp, the array record and the variant operators of Expression), the adapter registration model and the GetValue/SetValue/GetElement/SetElement dispatch with the sorted identifier lists (crates/xedit-script/src/adapter.rs: AddFunction/AddConst/AddClass/AddGet/AddSet/AddIGet/AddISet/AddIDGet/AddIDSet/AddRec/AddRecGet/AddRecSet/AddHandler/AddEvent/AddExtUnit/AddSrcUnit/AddSrcFun/AddSrcVar/AddExtFun, CheckArgs and FindFunDesc), and the evaluator (crates/xedit-script/src/eval.rs: Compile/ReadUnit/InterpretUses over parse_compile with ExecFunction's body re-parse through interpreter::parse_body, the var/const parameter modes with the UpdateVarParams write-back, CallFunction/CallFunctionEx and Run's main convention, InterpretRaise/exceptions with UpdateExceptionPos and GetLastErrorLocation, the OnStatement hook, and the for/case 64-bit integer acceptance of Expression2). The unit stays pending: the RTTI surface (GetValueRTTI, method-property and event assignment) is the VCL form shim's (step 9), the host compile/run loop of xeScriptHost/xeMainForm is step 4, AddIntfGet and the OLE automation branch are not ported (no varUnknown without COM; OLE is compiled out of the xEdit build), and an external DLL routine registers but calls through Adapter::external_call, the host's CallDll seam. The tokenizer of this front end is the separate JvInterpreterParser.pas entry."
+
+[units."External/jvcl/jvcl/run/JvInterpreterParser.pas"]
+status = "ported"
+rust = "crates/xedit-script/src/interpreter_parser.rs"
+note = "Phase 6 step 2: the tokenizer as-is -- TTokenKind, the PaTokenizeTag hash tables (verbatim, duplicate entries and all), TokenTyp, Prior, TypToken and TJvInterpreterParser.Token with its quirks (the #nnn quoted form, the unterminated-string swallow, the doubled-quote cleanup, PrevPoint before whitespace). A bad remark raises ieBadRemark at the remark's position. The port works byte for byte on the ANSI string the interpreter builds; the corpus is ASCII."
+
 [units."Sniff.dpr"]
 status = "ported"
 rust = "crates/sniff/src/main.rs"
@@ -542,42 +552,55 @@ status = "pending"
 
 [units."xEdit/JvI/xejviScriptAdapter.pas"]
 status = "pending"
+note = "Phase 6 (scripting) ports this unit in step 7: its 132 ledger entries are the 10 functions (Assigned, ObjectToElement, FullPathToFilename, EnableSkyrimSaveFormat, GetRecordDefNames, wbFilterStrings, wbRemoveDuplicateStrings and wbVersionNumber of the Dummy unit, and wbVector and wbGridCell of the wbInterface unit), the 119 constants of the Dummy unit, the TwbVector and TwbGridCell records (AddRec) and the wbInterface unit itself (AddExtUnit), the unit the other adapters register under. Its Init calls RegisterJvInterpreterAdapter of the eight other xEdit adapters (xejviScriptAdapterMisc registers MiscVcl, MiscRegEx and MiscJson itself) and of the 14 JVCL units, so the script surface it sets up is complete only with steps 5 to 9."
 
 [units."xEdit/JvI/xejviScriptAdapterContainer.pas"]
 status = "pending"
+note = "Phase 6 (scripting), step 5 (the element, record, file, container and resource adapters): the 22 Dummy unit functions over IwbContainer and IwbElement (AddElement, AdditionalElementCount, ElementByIndex, ElementByName, ElementByPath, ElementBySignature, ElementCount, ElementExists, RemoveElement, SetElementEditValues, SetElementNativeValues and the rest)."
 
 [units."xEdit/JvI/xejviScriptAdapterDF.pas"]
 status = "pending"
+note = "Phase 6 (scripting), step 6: the script surface of wbDataFormat over xedit-assets, 174 ledger entries (87 gets, 41 AddClass of the TdfDef hierarchy, 25 constants, 8 sets, 7 igets, 2 isets, 3 functions and 1 idget). TdfDef.Create is commented out upstream (line 767) and its entry is excluded in the ledger; this unit is the script adapter phase 5 step 3 recorded as owed."
 
 [units."xEdit/JvI/xejviScriptAdapterElement.pas"]
 status = "pending"
+note = "Phase 6 (scripting), step 5: the 54 Dummy unit functions over IwbElement, IwbMainRecord and the element tree (AssignTemplateByName, BuildRef, ElementAssign, ElementByPath, GetElementEditValues, SetElementEditValues, GetLinksTo, GetIsEditable, Check and the rest)."
 
 [units."xEdit/JvI/xejviScriptAdapterFile.pas"]
 status = "pending"
+note = "Phase 6 (scripting), step 5: the 36 Dummy unit functions over IwbFile and the load order (FileByName, FileByLoadOrder, RecordByFormID, AddMasterIfMissing, AddMasters, AddMastersIfMissing, SortMasters, CleanMasters and the rest)."
 
 [units."xEdit/JvI/xejviScriptAdapterHost.pas"]
 status = "pending"
+note = "Phase 6 (scripting): step 4 for the session side and the GUI phase for the form side. The 56 Dummy unit functions bind frmMain and the loaded files (wbGameMode, wbGameName, wbDataPath, wbScriptsPath, wbSettingsFileName, AddMessage, ClearMessages, FileByIndex, FileByLoadOrder, RecordByFormID, ConflictThisForMainRecord, ConflictAllForElements, FilterApplied, ApplyFilter, RemoveFilter, JumpTo, AddNewFile, AddNewFileName, AddRequiredElementMasters, wbSelectedFiles, the LODGen helpers wbGetUVRangeTexturesList, wbBuildAtlasFromTexturesList and wbBuildAtlasFromAtlasMap - the last the script-only caller phase 5 step 6 recorded as owed)."
 
 [units."xEdit/JvI/xejviScriptAdapterMisc.pas"]
 status = "pending"
+note = "Phase 6 (scripting), step 7: the 166 registrations of the misc family (TEncoding of the SysUtils unit as its one class, 76 constants, 63 functions, 19 gets, 5 sets, 1 iget, 1 iset: the string set operations, the file and version helpers, wbVector maths and the rest); it also registers the MiscVcl, MiscRegEx and MiscJson adapters."
 
 [units."xEdit/JvI/xejviScriptAdapterMiscJson.pas"]
 status = "pending"
+note = "Phase 6 (scripting), step 7: the 100 registrations of the JsonDataObjects surface (TJsonBaseObject, TJsonArray and TJsonObject as the 3 classes, 10 constants, 4 functions, 39 gets, 21 igets, 18 isets, 2 idgets, 2 idsets and 1 set) over the port's JSON of xedit-assets."
 
 [units."xEdit/JvI/xejviScriptAdapterMiscRegEx.pas"]
 status = "pending"
+note = "Phase 6 (scripting), step 7: the 48 registrations of TPerlRegEx (1 class, 10 constants, 28 gets, 6 sets and 3 igets). Its two AddHandler lines are commented out upstream, so they have no ledger entry; the port stands in the regex crate for PCRE, so lookaround and backreferences are not there."
 
 [units."xEdit/JvI/xejviScriptAdapterMiscVcl.pas"]
 status = "pending"
+note = "Phase 6 (scripting): step 7 for the functions and gets, step 9 for the 12 AddClass (and step 4 for the AddRec and AddRecGet of the IOUtils classes). The 103 registrations are the VCL and RTL classes scripts use: TBinaryReader and TBinaryWriter, TIniFile, TMemIniFile, TRegistryIniFile, THashedStringList, the check list box and list view events (3 AddHandler) and the IOUtils TDirectory and TFile records."
 
 [units."xEdit/JvI/xejviScriptAdapterRecord.pas"]
 status = "pending"
+note = "Phase 6 (scripting), step 5: the 49 Dummy unit functions over IwbMainRecord (BaseRecord, EditorID, FixedFormID, GetFormVCS1, GetFormVCS2, GetGridCell, GetIsDeleted, GetIsPersistent, GetLoadOrderFormID, GetPosition, GetRotation, HasPrecombinedMesh, HighestOverrideOrSelf, IsMaster, IsWinningOverride, MasterOrSelf, OverrideByIndex, OverrideCount, ReferencedByCount, SetEditorID, Signature, UpdateRefs and the rest)."
 
 [units."xEdit/JvI/xejviScriptAdapterResource.pas"]
 status = "pending"
+note = "Phase 6 (scripting), step 5: the 42 live registrations (40 functions, the TWbFastStringList class and its Create get: the resource listings, the CRC32 and the other hashes, the asset type by extension, the DDS bitmap conversions and the refr and grid cell helpers) plus the four functions that are commented out upstream (wbMD5Data, wbMD5File, wbSHA1Data and wbSHA1File, lines 424 to 428), whose entries are excluded in the ledger."
 
 [units."xEdit/JvI/xejviScriptHost.pas"]
 status = "pending"
+note = "Phase 6 (scripting), step 4 (host and run loop): the JvInterpreter script itself (TxejviScript and TxejviScriptHost): the OnSetValue, OnGetUnitSource and OnStatement hooks, the ScriptProcessElements and ScriptProcessSignatures the host sets, the unit sources of the scripts folder with IsUnitCompiledIn and the xEditAPI and UITypes special cases, Compile, CallFunction and CallFunctionEx, FunctionExists and FunctionIsEmpty, and GetLastErrorLocation. The interpreter core is JvInterpreter.pas of the pinned jvcl submodule (steps 2 and 3 of phase 6); the run loop around the script is xeMainForm.pas."
 
 [units."xEdit/xeDefines.inc"]
 status = "pending"
@@ -660,6 +683,7 @@ status = "pending"
 
 [units."xEdit/xeScriptHost.pas"]
 status = "pending"
+note = "Phase 6 (scripting), step 4 (host and run loop): the IxeScript interface and the TxeScriptHost registry (Create, CreateForName, Init, CreateScript) that xeMainForm.ApplyScript drives; the JvInterpreter script behind it is xejviScriptHost.pas. The run loop itself (Initialize, the ScriptProcessElements filter with FunctionIsEmpty, Process per selected element, Finalize, the Aborted: Applying script text) is xeMainForm.pas and the script command runs it."
 
 [units."xEdit/xeTipForm.pas"]
 status = "pending"

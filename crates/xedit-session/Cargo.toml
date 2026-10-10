@@ -17,6 +17,7 @@ xedit-core = { path = "../xedit-core" }
 xedit-defs = { path = "../xedit-defs" }
 xedit-io = { path = "../xedit-io" }
 xedit-loadorder = { path = "../xedit-loadorder" }
+xedit-script = { path = "../xedit-script" }
 
 [dev-dependencies]
 criterion = "0.5"

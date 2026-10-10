@@ -351,6 +351,11 @@ enum Action {
         #[arg(long)]
         dry_run: bool,
     },
+    /// The Pascal scripts of the scripts folder (script.list, script.check): the corpus phase 6's interpreter parses and runs. They need no --game or --load.
+    Script {
+        #[command(subcommand)]
+        action: ScriptAction,
+    },
     /// Run a command by name.
     Call {
         /// Command name as listed by `xedit schema`, for example system.version.
@@ -375,6 +380,22 @@ enum Action {
     },
     /// Serve the commands as Model Context Protocol tools on stdio. The plugins load when the first tool is called.
     Mcp,
+}
+
+#[derive(Subcommand)]
+enum ScriptAction {
+    /// List the *.pas scripts of the scripts folder (script.list), as the Apply Script menu lists them.
+    List {
+        /// The scripts folder (xEdit's -S:). Default: the XEDIT_SCRIPTS environment variable, else the oracle's Edit Scripts (XEDIT_ORACLE_DIR), else the Edit Scripts folder beside xedit.exe.
+        #[arg(long)]
+        scripts: Option<String>,
+    },
+    /// Compile the given scripts and the units they use (script.check, read-only); exit 0 when all compile, non-zero listing each failure as `file:line: message` (with --json the failures as JSON).
+    Check {
+        /// Path of a script to compile; repeat for several (or pass several paths).
+        #[arg(required = true, value_name = "FILE")]
+        files: Vec<String>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -2087,6 +2108,10 @@ fn command_of(action: Action) -> Result<(String, Value), CommandError> {
                 }),
             )
         }
+        Action::Script { action } => match action {
+            ScriptAction::List { scripts } => ("script.list".to_owned(), json!({ "scripts": scripts })),
+            ScriptAction::Check { files } => ("script.check".to_owned(), json!({ "files": files })),
+        },
         Action::Conflicts {
             file,
             signature,
@@ -2404,6 +2429,12 @@ fn main() -> ExitCode {
             xedit_session::refs::write_index(&mut session, out).map_err(|error| error.to_string())
         });
     }
+    let script_check = matches!(
+        cli.action,
+        Action::Script {
+            action: ScriptAction::Check { .. }
+        }
+    );
     let outcome = run(cli.game, cli.load, cli.edit, cli.action);
     match (&outcome, cli.json) {
         (Ok(result), true) => println!("{}", json!({ "ok": true, "result": result })),
@@ -2413,13 +2444,40 @@ fn main() -> ExitCode {
                 println!("{}", line.as_str().unwrap_or_default());
             }
         }
+        // `xedit script check` prints one `file:line: message` line per failure.
+        (Ok(result), false) if script_check => print_script_check(result),
         (Ok(result), false) => println!("{result:#}"),
         (Err(error), true) => println!("{}", json!({ "ok": false, "error": error })),
         (Err(error), false) => eprintln!("error: {error}"),
     }
-    if outcome.is_ok() {
+    // `xedit script check` exits non-zero when a script does not parse.
+    let script_failed = script_check && matches!(&outcome, Ok(result) if result["ok"] == Value::Bool(false));
+    if outcome.is_ok() && !script_failed {
         ExitCode::SUCCESS
     } else {
         ExitCode::FAILURE
     }
+}
+
+/// The text `xedit script check` prints without `--json`: every failure as
+/// `file:line: message`, then the counts.
+fn print_script_check(result: &Value) {
+    for file in result["files"].as_array().into_iter().flatten() {
+        if file["ok"] != Value::Bool(false) {
+            continue;
+        }
+        for error in file["errors"].as_array().into_iter().flatten() {
+            println!(
+                "{}:{}: {}",
+                error["file"].as_str().unwrap_or_default(),
+                error["line"].as_i64().unwrap_or(0),
+                error["message"].as_str().unwrap_or_default()
+            );
+        }
+    }
+    println!(
+        "{} of {} scripts parse",
+        result["parsed"].as_u64().unwrap_or(0),
+        result["total"].as_u64().unwrap_or(0)
+    );
 }

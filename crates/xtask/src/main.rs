@@ -384,22 +384,109 @@ fn enum_values(sources: &BTreeMap<String, String>, name: &str) -> Result<BTreeMa
     bail!("enumeration {name} not found upstream")
 }
 
+/// The registration kinds of `TJvInterpreterAdapter` the `xejvi*` adapter
+/// units call. The longer names come first (`RecGet` before `Rec`), so a
+/// kind is never cut short. `AddExtUnit` declares a script unit rather than
+/// a member of one and takes a single argument, so it has a pattern of its
+/// own.
+const REGISTRATION_KINDS: &str = "Function|Const|Class|IDGet|IDSet|IGet|ISet|Get|Set|RecGet|Rec|Handler";
+
 /// Functions, properties and methods registered with the script interpreter.
 fn script_registrations(sources: &BTreeMap<String, String>) -> BTreeMap<String, Option<String>> {
-    let registration =
-        Regex::new(r"\bAdd(Function|Get|Set|IGet|ISet|IDGet|IDSet)\(\s*(\w+)\s*,\s*'(\w+)'\s*,\s*(\w+)").unwrap();
+    let registration = Regex::new(&format!(
+        r"\bAdd({REGISTRATION_KINDS})\(\s*'?([\w.]+)'?\s*,\s*'?([\w.]+)'?(?:\s*,\s*'?([\w.]+)'?)?"
+    ))
+    .unwrap();
+    let ext_unit = Regex::new(r"\bAddExtUnit\(\s*'?([\w.]+)'?\s*\)").unwrap();
     let mut found = BTreeMap::new();
     for (path, text) in sources.iter().filter(|(path, _)| path.starts_with("xEdit/JvI/")) {
         let unit = Path::new(path).file_stem().unwrap().to_string_lossy();
-        for captures in registration.captures_iter(text) {
-            let key = format!(
-                "{unit}:{}.{}:{}",
-                &captures[2],
-                &captures[3],
-                captures[1].to_lowercase()
-            );
-            found.insert(key, Some(captures[4].to_owned()));
+        let text = without_comments(text);
+        for captures in registration.captures_iter(&text) {
+            let kind = captures[1].to_lowercase();
+            let key = if kind == "recget" {
+                // `AddRecGet(UnitName, RecordType, Identifier, Proc, ...)`:
+                // the record type owns the method, so the methods of one
+                // record type stay apart.
+                format!("{unit}:{}.{}:{kind}", &captures[3], &captures[4])
+            } else {
+                format!("{unit}:{}.{}:{kind}", &captures[2], &captures[3])
+            };
+            // The source is the handler routine where the call has one:
+            // the fourth argument of the kinds registered as
+            // `(Class, 'Name', Proc, ...)`, the third of `AddIDGet` and
+            // `AddIDSet`, which name no identifier and are
+            // `(Class, Proc, ParamCount, ...)`. The other kinds (a
+            // constant, a class, a record, a record method, `AddExtUnit`)
+            // register a declaration, and the unit file is the source.
+            let source = match kind.as_str() {
+                "function" | "get" | "set" | "iget" | "iset" | "handler" => captures.get(4),
+                "idget" | "idset" => captures.get(3),
+                _ => None,
+            }
+            .map(|handler| handler.as_str().to_owned())
+            .or_else(|| Some(path.clone()));
+            found.insert(key, source);
+        }
+        for captures in ext_unit.captures_iter(&text) {
+            found.insert(format!("{unit}:{}:extunit", &captures[1]), Some(path.clone()));
         }
     }
     found
+}
+
+/// `text` with its comments removed: `//` runs to the end of the line,
+/// `{...}` and `(*...*)` are blocks, and a quoted string is kept as it is
+/// (a registration a script writes in a string is not a registration, and
+/// the commented-out ones of the adapter units are not either).
+fn without_comments(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut chars = text.chars().peekable();
+    while let Some(c) = chars.next() {
+        match c {
+            '\'' => {
+                out.push(c);
+                while let Some(c) = chars.next() {
+                    out.push(c);
+                    if c == '\'' {
+                        // `''` is an escaped quote inside the literal.
+                        if chars.peek() == Some(&'\'') {
+                            out.push(chars.next().unwrap());
+                        } else {
+                            break;
+                        }
+                    }
+                }
+            }
+            '/' if chars.peek() == Some(&'/') => {
+                for c in chars.by_ref() {
+                    if c == '\n' {
+                        out.push(c);
+                        break;
+                    }
+                }
+            }
+            '{' => {
+                out.push(' ');
+                for c in chars.by_ref() {
+                    if c == '}' {
+                        break;
+                    }
+                }
+            }
+            '(' if chars.peek() == Some(&'*') => {
+                out.push(' ');
+                chars.next();
+                let mut previous = '\0';
+                for c in chars.by_ref() {
+                    if previous == '*' && c == ')' {
+                        break;
+                    }
+                    previous = c;
+                }
+            }
+            _ => out.push(c),
+        }
+    }
+    out
 }
