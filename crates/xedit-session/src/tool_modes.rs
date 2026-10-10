@@ -1057,9 +1057,11 @@ fn save_changed(
     output: Option<&str>,
     backup: bool,
 ) -> Result<(), CommandError> {
+    // `SaveChanged` saves the files that are editable and unsaved: the game
+    // master and the hardcoded file are never written.
     let unsaved: Vec<&std::sync::Arc<FileImpl>> = loaded
         .iter()
-        .filter(|file| file.element_base().has_state(ElementState::esUnsaved))
+        .filter(|file| file.get_is_editable() && file.element_base().has_state(ElementState::esUnsaved))
         .collect();
     // `output` names one file; a mode that changed several plugins saves
     // each of them where it was loaded from, as the GUI does.

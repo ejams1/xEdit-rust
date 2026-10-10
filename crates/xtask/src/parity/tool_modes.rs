@@ -589,7 +589,12 @@ fn check(runner: &Runner, game: &'static Game, data: &Path, name: &str, mode: &M
             expected_peak,
             max_memory: runner.max_memory,
         };
-        let args: Vec<String> = mode.gui.iter().map(|arg| arg.replace("{{target}}", name)).collect();
+        // `-autoload`: the module selection of the GUI is answered by the
+        // GUI itself, as the quick clean check does (the harness would
+        // click its OK button, which a hidden desktop does not always
+        // deliver, and a run then waits there for the desktop's user).
+        let mut args: Vec<String> = vec!["-autoload".to_owned()];
+        args.extend(mode.gui.iter().map(|arg| arg.replace("{{target}}", name)));
         let args: Vec<&str> = args.iter().map(String::as_str).collect();
         let started = std::time::Instant::now();
         let result = match run.run_tool_mode(&args) {
