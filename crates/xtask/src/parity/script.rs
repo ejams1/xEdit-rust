@@ -717,7 +717,15 @@ pub(super) fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
                 class,
                 game,
                 data,
-                load: case.load.clone().unwrap_or_else(|| runs.defaults.load.clone()),
+                // A case that does not name its plugins loads the game
+                // master of its game: the defaults are for the default game
+                // (`Skyrim.esm` for `sse`), and a case that switches game
+                // without naming a load must not inherit them.
+                load: match &case.load {
+                    Some(load) => load.clone(),
+                    None if game.name == runs.defaults.game => runs.defaults.load.clone(),
+                    None => vec![game_master(game.mode).to_owned()],
+                },
                 build_refs: case.build_refs.unwrap_or(runs.defaults.build_refs),
                 close_after,
                 save: case.save.clone(),
