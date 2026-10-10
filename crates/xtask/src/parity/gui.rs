@@ -395,8 +395,7 @@ impl GuiRun<'_> {
         {
             let game_exe = game_dir.join(exe_name);
             if game_exe.is_file() {
-                fs::copy(&game_exe, data.join(exe_name))
-                    .with_context(|| format!("copying {}", game_exe.display()))?;
+                fs::copy(&game_exe, data.join(exe_name)).with_context(|| format!("copying {}", game_exe.display()))?;
             }
         }
         let work_text = format!("{}\\", windows_path(&self.work));
