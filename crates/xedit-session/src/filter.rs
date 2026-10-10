@@ -860,7 +860,6 @@ fn refs_build_reachable(
                 let element: &dyn ElementImpl = file.as_element_impl().expect("a file is an element implementation");
                 xedit_core::implementation::reachable::reset_reachable(element);
             }
-            xedit_core::implementation::reachable::begin_reachable_walk();
             for file in &files {
                 xedit_core::implementation::reachable::build_reachable(file);
             }
