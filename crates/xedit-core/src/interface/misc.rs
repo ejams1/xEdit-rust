@@ -89,6 +89,12 @@ pub fn set_progress_callback(callback: Option<ProgressCallback>) {
     *PROGRESS_CALLBACK.write().unwrap() = callback;
 }
 
+/// The progress callback that is set, to restore it after a command that
+/// sets its own.
+pub fn progress_callback() -> Option<ProgressCallback> {
+    PROGRESS_CALLBACK.read().unwrap().clone()
+}
+
 thread_local! {
     /// The messages of [`progress`] on this thread while
     /// [`capture_progress`] runs.
@@ -107,10 +113,6 @@ pub fn capture_progress<T>(body: impl FnOnce() -> T) -> (T, Vec<String>) {
         .with(|captured| std::mem::replace(&mut *captured.borrow_mut(), outer))
         .unwrap_or_default();
     (result, messages)
-/// The progress callback that is set, to restore it after a command that
-/// sets its own.
-pub fn progress_callback() -> Option<ProgressCallback> {
-    PROGRESS_CALLBACK.read().unwrap().clone()
 }
 
 /// Port of `wbProgress`: sends a status message to the progress callback.

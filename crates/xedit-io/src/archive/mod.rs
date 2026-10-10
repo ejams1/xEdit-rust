@@ -906,6 +906,15 @@ impl Archive {
         self.file_by_name(file_name).is_some()
     }
 
+    /// The paths of the files of the archive, lower case with backslashes,
+    /// sorted. Upstream lists them in the order of the archive
+    /// (`FilesByFolder`), which the table here does not keep.
+    pub fn file_names(&self) -> Vec<String> {
+        let mut names: Vec<String> = self.files.iter().map(|file| normalize_path(&file.name)).collect();
+        names.sort_unstable();
+        names
+    }
+
     /// Port of `FilesByFolder`: the files whose name starts with the folder,
     /// compared without case, all of them for an empty folder.
     pub fn files_by_folder(&self, folder: &str) -> Vec<&FileEntry> {

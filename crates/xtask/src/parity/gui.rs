@@ -951,41 +951,12 @@ fn set_edit_text(window: &Window, text: &str) -> bool {
     true
 }
 
-#[cfg(not(windows))]
-fn set_edit_text(_window: &Window, _text: &str) -> bool {
-    false
-}
-
-/// Posts a key press to the focused control of a window's thread (the
-/// window itself when none has the focus), as the keyboard would deliver
-/// it: VCL forms with `KeyPreview` see it in their `OnKeyDown` first.
-#[cfg(windows)]
-fn post_key(window: &Window, key: u16) {
-    use windows_sys::Win32::Foundation::HWND;
-    use windows_sys::Win32::UI::WindowsAndMessaging::{
-        GUITHREADINFO, GetGUIThreadInfo, GetWindowThreadProcessId, PostMessageW, WM_KEYDOWN, WM_KEYUP,
-    };
-    let handle = window.handle as HWND;
-    // SAFETY: a window handle from an enumeration; a stale one gives 0.
-    let thread = unsafe { GetWindowThreadProcessId(handle, std::ptr::null_mut()) };
-    let mut info = GUITHREADINFO {
-        cbSize: std::mem::size_of::<GUITHREADINFO>() as u32,
-        ..Default::default()
-    };
-    // SAFETY: `info` is a valid out pointer with its size set.
-    let target = if unsafe { GetGUIThreadInfo(thread, &raw mut info) } != 0 && !info.hwndFocus.is_null() {
-        info.hwndFocus
-    } else {
-        handle
-    };
-    // SAFETY: plain messages without pointers.
-    unsafe {
-        PostMessageW(target, WM_KEYDOWN, usize::from(key), 1);
-        PostMessageW(target, WM_KEYUP, usize::from(key), 0xC000_0001u32 as isize);
 /// Clicks the button of a window whose caption is `caption` without
 /// waiting for its handler (`PostMessage`), for a handler that works for a
 /// while or may show a dialog.
+#[cfg(windows)]
 pub(super) fn post_click_button(window: &Window, caption: &str) -> bool {
+    use windows_sys::Win32::Foundation::HWND;
     use windows_sys::Win32::UI::WindowsAndMessaging::{BM_CLICK, EnumChildWindows, PostMessageW};
     let mut children: Vec<HWND> = Vec::new();
     // SAFETY: the callback only pushes into the vector passed as `LPARAM`.
@@ -995,9 +966,11 @@ pub(super) fn post_click_button(window: &Window, caption: &str) -> bool {
         .find(|&child| win::class(child) == "TButton" && win::text(child) == caption)
     else {
         return false;
+    };
     // SAFETY: a button handle of the window; BM_CLICK takes no pointers.
     unsafe { PostMessageW(button, BM_CLICK, 0, 0) != 0 }
 }
+
 /// The Shift key held down for the thread of a window, as `GetKeyState` of
 /// that thread sees it, without any input to the user's desktop: a helper
 /// thread moves to the harness's desktop (`SetThreadDesktop`, where the
@@ -1009,6 +982,7 @@ pub(super) struct ShiftHold {
     release: std::sync::mpsc::Sender<()>,
     thread: Option<std::thread::JoinHandle<()>>,
 }
+
 impl Drop for ShiftHold {
     fn drop(&mut self) {
         let _ = self.release.send(());
@@ -1017,8 +991,11 @@ impl Drop for ShiftHold {
         }
     }
 }
+
 /// Holds Shift for the thread of a window; None when the system refuses.
+#[cfg(windows)]
 pub(super) fn hold_shift(window: isize) -> Option<ShiftHold> {
+    use windows_sys::Win32::Foundation::HWND;
     use windows_sys::Win32::System::StationsAndDesktops::SetThreadDesktop;
     use windows_sys::Win32::System::Threading::{AttachThreadInput, GetCurrentThreadId};
     use windows_sys::Win32::UI::Input::KeyboardAndMouse::{GetKeyboardState, SetKeyboardState, VK_LSHIFT, VK_SHIFT};
@@ -1060,23 +1037,31 @@ pub(super) fn hold_shift(window: isize) -> Option<ShiftHold> {
             release,
             thread: Some(thread),
         })
+    } else {
         drop(release);
         let _ = thread.join();
         None
     }
 }
+
 #[cfg(not(windows))]
 pub(super) fn post_click_button(_window: &Window, _caption: &str) -> bool {
     false
 }
+
 #[cfg(not(windows))]
 pub(super) fn hold_shift(_window: isize) -> Option<ShiftHold> {
     None
 }
+
 /// The items of the first check list box of a window (`TCheckListBox`),
 /// with their handle.
+#[cfg(windows)]
 pub(super) fn check_list_items(window: &Window) -> Option<(isize, Vec<String>)> {
+    use windows_sys::Win32::Foundation::HWND;
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
         EnumChildWindows, LB_GETCOUNT, LB_GETTEXT, LB_GETTEXTLEN, SMTO_ABORTIFHUNG, SendMessageTimeoutW,
+    };
     let mut children: Vec<HWND> = Vec::new();
     // SAFETY: the callback only pushes into the vector passed as `LPARAM`.
     unsafe { EnumChildWindows(window.handle as HWND, Some(win::collect), (&raw mut children) as isize) };
@@ -1090,6 +1075,7 @@ pub(super) fn check_list_items(window: &Window) -> Option<(isize, Vec<String>)> 
         let sent =
             unsafe { SendMessageTimeoutW(list, message, wparam, lparam, SMTO_ABORTIFHUNG, 2000, &raw mut result) };
         (sent != 0).then_some(result)
+    };
     let count = send(LB_GETCOUNT, 0, 0)?;
     let mut items = Vec::new();
     for index in 0..count {
@@ -1100,17 +1086,22 @@ pub(super) fn check_list_items(window: &Window) -> Option<(isize, Vec<String>)> 
     }
     Some((list as isize, items))
 }
+
 #[cfg(not(windows))]
 pub(super) fn check_list_items(_window: &Window) -> Option<(isize, Vec<String>)> {
     None
 }
+
 /// Toggles the check box of an item of a `TCheckListBox`: the item is
 /// selected and a space typed, which `TCheckListBox.KeyPress` takes as a
 /// click on the check box of the selected item.
+#[cfg(windows)]
 pub(super) fn toggle_check_list_item(list: isize, index: usize) {
+    use windows_sys::Win32::Foundation::HWND;
     use windows_sys::Win32::UI::WindowsAndMessaging::{LB_SETCURSEL, SMTO_ABORTIFHUNG, SendMessageTimeoutW, WM_CHAR};
     let mut result = 0usize;
     // SAFETY: LB_SETCURSEL and WM_CHAR take no pointers.
+    unsafe {
         SendMessageTimeoutW(
             list as HWND,
             LB_SETCURSEL,
@@ -1129,20 +1120,48 @@ pub(super) fn toggle_check_list_item(list: isize, index: usize) {
             2000,
             &raw mut result,
         );
+    }
+}
 
+#[cfg(not(windows))]
+pub(super) fn toggle_check_list_item(_list: isize, _index: usize) {}
 
+#[cfg(not(windows))]
+fn set_edit_text(_window: &Window, _text: &str) -> bool {
+    false
+}
 
-
-
-
-
-
+/// Posts a key press to the focused control of a window's thread (the
+/// window itself when none has the focus), as the keyboard would deliver
+/// it: VCL forms with `KeyPreview` see it in their `OnKeyDown` first.
+#[cfg(windows)]
+fn post_key(window: &Window, key: u16) {
+    use windows_sys::Win32::Foundation::HWND;
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        GUITHREADINFO, GetGUIThreadInfo, GetWindowThreadProcessId, PostMessageW, WM_KEYDOWN, WM_KEYUP,
+    };
+    let handle = window.handle as HWND;
+    // SAFETY: a window handle from an enumeration; a stale one gives 0.
+    let thread = unsafe { GetWindowThreadProcessId(handle, std::ptr::null_mut()) };
+    let mut info = GUITHREADINFO {
+        cbSize: std::mem::size_of::<GUITHREADINFO>() as u32,
+        ..Default::default()
+    };
+    // SAFETY: `info` is a valid out pointer with its size set.
+    let target = if unsafe { GetGUIThreadInfo(thread, &raw mut info) } != 0 && !info.hwndFocus.is_null() {
+        info.hwndFocus
+    } else {
+        handle
+    };
+    // SAFETY: plain messages without pointers.
+    unsafe {
+        PostMessageW(target, WM_KEYDOWN, usize::from(key), 1);
+        PostMessageW(target, WM_KEYUP, usize::from(key), 0xC000_0001u32 as isize);
     }
 }
 
 #[cfg(not(windows))]
 fn post_key(_window: &Window, _key: u16) {}
-pub(super) fn toggle_check_list_item(_list: isize, _index: usize) {}
 
 /// The text of the message log of the main form: the first memo below
 /// it. Read with a timeout, as the GUI thread may be busy loading.
@@ -1182,8 +1201,8 @@ pub(super) fn main_form_log(handle: isize) -> String {
         return String::new();
     }
     decode_memo_text(&buffer[..copied.min(len)])
-    decode_window_text(&buffer[..copied.min(len)])
 }
+
 /// The text of a window message: UTF-16, where a run of ANSI bytes read
 /// as UTF-16 (the header the LODGen mode puts at the top of its log comes
 /// that way) is taken as the bytes it is.
@@ -1203,15 +1222,15 @@ pub(super) fn decode_window_text(units: &[u16]) -> String {
         }
     }
     text
-
 }
 
 /// The text `WM_GETTEXT` gave for the message log. The memo of the 4.1.5q
 /// GUI answers with its text in the ANSI code page, two bytes to each
 /// UTF-16 unit of the buffer, so read that way it is noise; such a buffer
 /// is unpacked to its bytes (up to the terminating zero) and read as
-/// Windows-1252 (Latin-1 for the bytes 0x80 to 0x9F). A buffer of real
-/// UTF-16 text is taken as it is.
+/// Windows-1252 (Latin-1 for the bytes 0x80 to 0x9F). A buffer that is not
+/// packed that way is read by [`decode_window_text`], which takes runs of
+/// ANSI bytes read as UTF-16 (the LODGen header) as the bytes they are.
 fn decode_memo_text(units: &[u16]) -> String {
     let packed = units
         .iter()
@@ -1223,7 +1242,7 @@ fn decode_memo_text(units: &[u16]) -> String {
         })
         .count();
     if units.is_empty() || packed * 4 < units.len().min(64) * 3 {
-        return String::from_utf16_lossy(units);
+        return decode_window_text(units);
     }
     units
         .iter()

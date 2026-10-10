@@ -3847,8 +3847,7 @@ note = "The mode name is the port's; upstream reaches the SEQ generation with -g
 status = "covered"
 command = "lodgen.generate"
 source = "Core/wbInterface.pas"
-note = "Accepted by tool.run and by the legacy command line (phases of xeInit); the LOD generation itself is phase 5 (the lodgen.generate command)."
-note = "xedit lodgen runs the LODGen mode: no internal edits, shorter names, the archives of the game ini and the plugins loaded as TLoaderThread does; -O:, -S:, -T:, -D: and -I: are the output, scripts, temp, data and game_ini parameters."
+note = "Accepted by tool.run and by the legacy command line (phases of xeInit); xedit lodgen runs the LODGen mode: no internal edits, shorter names, the archives of the game ini and the plugins loaded as TLoaderThread does; -O:, -S:, -T:, -D: and -I: are the output, scripts, temp, data and game_ini parameters."
 
 [tool_mode.tmMasterRestore]
 status = "covered"

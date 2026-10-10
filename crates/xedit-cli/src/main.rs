@@ -378,6 +378,141 @@ enum Action {
 }
 
 #[derive(Subcommand)]
+enum SniffAction {
+    /// List the operations with their settings and defaults (sniff.list).
+    List,
+    /// Run an operation on a folder or archive (sniff.run), as Sniff's -OP: does. Needs --edit unless --dry-run.
+    Run {
+        /// The title of the operation, any case, such as "Update bounds".
+        operation: String,
+        /// The folder or the archive (BSA, BA2) with the files.
+        input: String,
+        /// The folder to write the changed files to; not needed by operations that only report.
+        #[arg(long)]
+        output: Option<String>,
+        /// A settings ini in Sniff's form (the section is the title without spaces).
+        #[arg(long)]
+        settings: Option<String>,
+        /// A setting of the operation's section, NAME=VALUE; repeat for more.
+        #[arg(long = "set", value_name = "NAME=VALUE")]
+        set: Vec<String>,
+        /// Only the files whose path holds this text.
+        #[arg(long)]
+        path_contains: Option<String>,
+        /// Leave the subfolders of an input folder.
+        #[arg(long)]
+        no_subdir: bool,
+        /// Report a file that fails and go on.
+        #[arg(long)]
+        skip_on_errors: bool,
+        /// Write the unchanged files too.
+        #[arg(long)]
+        copy_all: bool,
+        /// Threads; 0 for the CPU count less one.
+        #[arg(long)]
+        threads: Option<i32>,
+        /// Also write the messages to this file, as Sniff's -LOG: does.
+        #[arg(long)]
+        log: Option<String>,
+        /// Process the files and report, but write nothing.
+        #[arg(long)]
+        dry_run: bool,
+    },
+}
+
+#[derive(Subcommand)]
+enum AssetsAction {
+    /// Print a file as text (ToText) or JSON (ToJSON, as Sniff writes it).
+    Dump {
+        /// The file, or the archive that holds it.
+        file: String,
+        /// The path of the file inside the archive FILE.
+        #[arg(long)]
+        archive_path: Option<String>,
+        /// The format of the file: nif, bgsm, bgem, lod, dlodsettings, lst, btt, fuz or dds; by the extension when omitted.
+        #[arg(long)]
+        kind: Option<String>,
+        /// text or json.
+        #[arg(long)]
+        format: Option<String>,
+        /// Decimals of the float values, 6 to 16.
+        #[arg(long)]
+        decimals: Option<usize>,
+        /// Rotations as Euler angles in degrees instead of an angle and an axis.
+        #[arg(long)]
+        euler: bool,
+    },
+    /// List the blocks of a NIF file.
+    Blocks {
+        /// The file, or the archive that holds it.
+        file: String,
+        /// The path of the file inside the archive FILE.
+        #[arg(long)]
+        archive_path: Option<String>,
+        /// The format of the file; by the extension when omitted.
+        #[arg(long)]
+        kind: Option<String>,
+    },
+    /// List the NIF block types.
+    Types,
+    /// Load a file and write it back as xEdit saves it.
+    Save {
+        /// The file, or the archive that holds it.
+        file: String,
+        /// Path to write to.
+        #[arg(long)]
+        output: String,
+        /// The path of the file inside the archive FILE.
+        #[arg(long)]
+        archive_path: Option<String>,
+        /// The format of the file; by the extension when omitted.
+        #[arg(long)]
+        kind: Option<String>,
+        /// Build the file and report it, but write nothing.
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Set a value of a file and write it.
+    Set {
+        /// The file, or the archive that holds it.
+        file: String,
+        /// Path of the element, with \ between the names, below BLOCK for a NIF.
+        path: String,
+        /// The new value as the dump prints it.
+        value: String,
+        /// Path to write to.
+        #[arg(long)]
+        output: String,
+        /// For a NIF: header, footer, a block index or a block path.
+        #[arg(long)]
+        block: Option<String>,
+        /// The path of the file inside the archive FILE.
+        #[arg(long)]
+        archive_path: Option<String>,
+        /// The format of the file; by the extension when omitted.
+        #[arg(long)]
+        kind: Option<String>,
+        /// Report the value before and after, but write nothing.
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Build a file from its JSON form and write it.
+    FromJson {
+        /// The JSON file.
+        file: String,
+        /// Path to write to.
+        #[arg(long)]
+        output: String,
+        /// The format to build; by the extension before .json when omitted.
+        #[arg(long)]
+        kind: Option<String>,
+        /// Build the file and report it, but write nothing.
+        #[arg(long)]
+        dry_run: bool,
+    },
+}
+
+#[derive(Subcommand)]
 enum ToolAction {
     /// List the tool modes of xEdit with their switches and what each does (tool.modes).
     Modes,
@@ -402,102 +537,6 @@ enum ToolAction {
         /// Where the generateseq mode writes the .seq files; <data path>\Seq when omitted.
         #[arg(long)]
         seq_path: Option<String>,
-enum SniffAction {
-    /// List the operations with their settings and defaults (sniff.list).
-    List,
-    /// Run an operation on a folder or archive (sniff.run), as Sniff's -OP: does. Needs --edit unless --dry-run.
-        /// The title of the operation, any case, such as "Update bounds".
-        operation: String,
-        /// The folder or the archive (BSA, BA2) with the files.
-        input: String,
-        /// The folder to write the changed files to; not needed by operations that only report.
-        /// A settings ini in Sniff's form (the section is the title without spaces).
-        settings: Option<String>,
-        /// A setting of the operation's section, NAME=VALUE; repeat for more.
-        #[arg(long = "set", value_name = "NAME=VALUE")]
-        set: Vec<String>,
-        /// Only the files whose path holds this text.
-        path_contains: Option<String>,
-        /// Leave the subfolders of an input folder.
-        no_subdir: bool,
-        /// Report a file that fails and go on.
-        skip_on_errors: bool,
-        /// Write the unchanged files too.
-        copy_all: bool,
-        /// Threads; 0 for the CPU count less one.
-        threads: Option<i32>,
-        /// Also write the messages to this file, as Sniff's -LOG: does.
-        log: Option<String>,
-        /// Process the files and report, but write nothing.
-    },
-}
-#[derive(Subcommand)]
-enum AssetsAction {
-    /// Print a file as text (ToText) or JSON (ToJSON, as Sniff writes it).
-    Dump {
-        /// The file, or the archive that holds it.
-        file: String,
-        /// The path of the file inside the archive FILE.
-        archive_path: Option<String>,
-        /// The format of the file: nif, bgsm, bgem, lod, dlodsettings, lst, btt, fuz or dds; by the extension when omitted.
-        kind: Option<String>,
-        /// text or json.
-        /// Decimals of the float values, 6 to 16.
-        decimals: Option<usize>,
-        /// Rotations as Euler angles in degrees instead of an angle and an axis.
-        euler: bool,
-    },
-    /// List the blocks of a NIF file.
-    Blocks {
-        /// The file, or the archive that holds it.
-        file: String,
-        /// The path of the file inside the archive FILE.
-        archive_path: Option<String>,
-        /// The format of the file; by the extension when omitted.
-        kind: Option<String>,
-    },
-    /// List the NIF block types.
-    Types,
-    /// Load a file and write it back as xEdit saves it.
-    Save {
-        /// The file, or the archive that holds it.
-        file: String,
-        /// Path to write to.
-        output: String,
-        /// The path of the file inside the archive FILE.
-        archive_path: Option<String>,
-        /// The format of the file; by the extension when omitted.
-        kind: Option<String>,
-        /// Build the file and report it, but write nothing.
-    },
-    /// Set a value of a file and write it.
-    Set {
-        /// The file, or the archive that holds it.
-        file: String,
-        /// Path of the element, with \ between the names, below BLOCK for a NIF.
-        path: String,
-        /// The new value as the dump prints it.
-        value: String,
-        /// Path to write to.
-        output: String,
-        /// For a NIF: header, footer, a block index or a block path.
-        block: Option<String>,
-        /// The path of the file inside the archive FILE.
-        archive_path: Option<String>,
-        /// The format of the file; by the extension when omitted.
-        kind: Option<String>,
-        /// Report the value before and after, but write nothing.
-    },
-    /// Build a file from its JSON form and write it.
-    FromJson {
-        /// The JSON file.
-        file: String,
-        /// Path to write to.
-        output: String,
-        /// The format to build; by the extension before .json when omitted.
-        kind: Option<String>,
-        /// Build the file and report it, but write nothing.
-
     },
 }
 
@@ -564,6 +603,75 @@ enum FilesAction {
         #[arg(long)]
         localized: Option<bool>,
         /// Report the flags the change would give, but change nothing.
+        #[arg(long)]
+        dry_run: bool,
+    },
+}
+
+#[derive(Subcommand)]
+enum ArchiveAction {
+    /// Read the header and the file table of an archive (archive.list): format, version, flags, warnings and with --files the files.
+    List {
+        /// Path of the archive.
+        archive: String,
+        /// List the files.
+        #[arg(long)]
+        files: bool,
+        /// Only the files below this folder of the archive.
+        #[arg(long)]
+        folder: Option<String>,
+        /// Files to skip.
+        #[arg(long, default_value_t = 0)]
+        offset: usize,
+        /// Files to return at most.
+        #[arg(long, default_value_t = 1000)]
+        limit: usize,
+    },
+    /// Unpack an archive into a folder (archive.extract). Needs --edit unless --dry-run.
+    Extract {
+        /// Path of the archive.
+        archive: String,
+        /// Folder that exists to unpack into; the folder of the archive when omitted.
+        output: Option<String>,
+        /// Threads that decompress and write; 0 uses every CPU. The files are the same for every count.
+        #[arg(long, default_value_t = 0)]
+        threads: usize,
+        /// Report what would be written, but write nothing.
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Pack folders, files and archives into an archive (archive.pack), byte for byte as BSArch does. Needs --edit unless --dry-run.
+    Pack {
+        /// Path of the archive to write.
+        archive: String,
+        /// Folders, files and archives to pack; later ones win on files with the same name.
+        #[arg(required = true)]
+        sources: Vec<String>,
+        /// Archive format: tes3, tes4, fo3, fnv, tes5, sse, fo4, fo4dds, sf1 or sf1dds.
+        #[arg(long)]
+        format: String,
+        /// Compress the files: zlib, lz4, lz4f, or without a value the default of the format.
+        #[arg(short = 'z', long, num_args = 0..=1, default_missing_value = "default")]
+        compress: Option<String>,
+        /// Split into archives of this many GB (at most 8), 0 for none. Default: BSA formats 2 GB, BA2 formats none.
+        #[arg(long, allow_hyphen_values = true)]
+        split: Option<i64>,
+        /// Pack only the files whose name matches one of these masks (* and ?); repeat for several.
+        #[arg(long = "filter")]
+        filters: Vec<String>,
+        /// Do not let identical files share their data.
+        #[arg(long)]
+        no_share: bool,
+        /// Threads that read and compress; 0 uses every CPU. The archives are the same for every count.
+        #[arg(long, default_value_t = 0)]
+        threads: usize,
+        /// Override the archive flags of a BSA with this hexadecimal value.
+        #[arg(long)]
+        archive_flags: Option<String>,
+        /// Override the file flags of a BSA with this hexadecimal value.
+        #[arg(long)]
+        file_flags: Option<String>,
+        /// Add the sources and report the files that would be packed, but write nothing.
         #[arg(long)]
         dry_run: bool,
     },
@@ -720,71 +828,6 @@ enum RefsAction {
         /// Only load the references from the cache; build none.
         #[arg(long)]
         only_load: bool,
-enum ArchiveAction {
-    /// Read the header and the file table of an archive (archive.list): format, version, flags, warnings and with --files the files.
-    List {
-        /// Path of the archive.
-        archive: String,
-        /// List the files.
-        #[arg(long)]
-        files: bool,
-        /// Only the files below this folder of the archive.
-        #[arg(long)]
-        folder: Option<String>,
-        /// Files to skip.
-        #[arg(long, default_value_t = 0)]
-        offset: usize,
-        /// Files to return at most.
-        #[arg(long, default_value_t = 1000)]
-        limit: usize,
-    },
-    /// Unpack an archive into a folder (archive.extract). Needs --edit unless --dry-run.
-    Extract {
-        /// Path of the archive.
-        archive: String,
-        /// Folder that exists to unpack into; the folder of the archive when omitted.
-        output: Option<String>,
-        /// Threads that decompress and write; 0 uses every CPU. The files are the same for every count.
-        #[arg(long, default_value_t = 0)]
-        threads: usize,
-        /// Report what would be written, but write nothing.
-        #[arg(long)]
-        dry_run: bool,
-    },
-    /// Pack folders, files and archives into an archive (archive.pack), byte for byte as BSArch does. Needs --edit unless --dry-run.
-    Pack {
-        /// Path of the archive to write.
-        archive: String,
-        /// Folders, files and archives to pack; later ones win on files with the same name.
-        #[arg(required = true)]
-        sources: Vec<String>,
-        /// Archive format: tes3, tes4, fo3, fnv, tes5, sse, fo4, fo4dds, sf1 or sf1dds.
-        #[arg(long)]
-        format: String,
-        /// Compress the files: zlib, lz4, lz4f, or without a value the default of the format.
-        #[arg(short = 'z', long, num_args = 0..=1, default_missing_value = "default")]
-        compress: Option<String>,
-        /// Split into archives of this many GB (at most 8), 0 for none. Default: BSA formats 2 GB, BA2 formats none.
-        #[arg(long, allow_hyphen_values = true)]
-        split: Option<i64>,
-        /// Pack only the files whose name matches one of these masks (* and ?); repeat for several.
-        #[arg(long = "filter")]
-        filters: Vec<String>,
-        /// Do not let identical files share their data.
-        #[arg(long)]
-        no_share: bool,
-        /// Threads that read and compress; 0 uses every CPU. The archives are the same for every count.
-        #[arg(long, default_value_t = 0)]
-        threads: usize,
-        /// Override the archive flags of a BSA with this hexadecimal value.
-        #[arg(long)]
-        archive_flags: Option<String>,
-        /// Override the file flags of a BSA with this hexadecimal value.
-        #[arg(long)]
-        file_flags: Option<String>,
-        /// Add the sources and report the files that would be packed, but write nothing.
-        #[arg(long)]
-        dry_run: bool,
     },
     /// Build the reachable information of the loaded files (refs.build_reachable, mniNavBuildReachableClick): the references first when they are missing, then ResetReachable and BuildReachable for every file. Sets the state the --by-not-reachable-status option of `filter apply` reads.
     BuildReachable {
@@ -1508,6 +1551,47 @@ fn command_of(action: Action) -> Result<(String, Value), CommandError> {
                 "blueprint": blueprint, "localized": localized, "dry_run": dry_run
             }),
         ),
+        Action::Archive { action } => match action {
+            ArchiveAction::List {
+                archive,
+                files,
+                folder,
+                offset,
+                limit,
+            } => (
+                "archive.list".to_owned(),
+                json!({ "archive": archive, "files": files, "folder": folder, "offset": offset, "limit": limit }),
+            ),
+            ArchiveAction::Extract {
+                archive,
+                output,
+                threads,
+                dry_run,
+            } => (
+                "archive.extract".to_owned(),
+                json!({ "archive": archive, "output": output, "threads": threads, "dry_run": dry_run }),
+            ),
+            ArchiveAction::Pack {
+                archive,
+                sources,
+                format,
+                compress,
+                split,
+                filters,
+                no_share,
+                threads,
+                archive_flags,
+                file_flags,
+                dry_run,
+            } => (
+                "archive.pack".to_owned(),
+                json!({
+                    "archive": archive, "sources": sources, "format": format, "compress": compress,
+                    "split": split, "filters": filters, "share": !no_share, "threads": threads,
+                    "archive_flags": archive_flags, "file_flags": file_flags, "dry_run": dry_run
+                }),
+            ),
+        },
         Action::Localization { action } => match action {
             LocalizationAction::Files { file, no_load } => (
                 "localization.files".to_owned(),
@@ -1593,45 +1677,6 @@ fn command_of(action: Action) -> Result<(String, Value), CommandError> {
             RefsAction::BuildReachable { no_build_refs } => (
                 "refs.build_reachable".to_owned(),
                 json!({ "build_refs": !no_build_refs }),
-        Action::Archive { action } => match action {
-            ArchiveAction::List {
-                archive,
-                files,
-                folder,
-                offset,
-                limit,
-            } => (
-                "archive.list".to_owned(),
-                json!({ "archive": archive, "files": files, "folder": folder, "offset": offset, "limit": limit }),
-            ),
-            ArchiveAction::Extract {
-                archive,
-                output,
-                threads,
-                dry_run,
-            } => (
-                "archive.extract".to_owned(),
-                json!({ "archive": archive, "output": output, "threads": threads, "dry_run": dry_run }),
-            ),
-            ArchiveAction::Pack {
-                archive,
-                sources,
-                format,
-                compress,
-                split,
-                filters,
-                no_share,
-                threads,
-                archive_flags,
-                file_flags,
-                dry_run,
-            } => (
-                "archive.pack".to_owned(),
-                json!({
-                    "archive": archive, "sources": sources, "format": format, "compress": compress,
-                    "split": split, "filters": filters, "share": !no_share, "threads": threads,
-                    "archive_flags": archive_flags, "file_flags": file_flags, "dry_run": dry_run
-                }),
             ),
         },
         Action::Filter { action } => filter_command(action)?,
@@ -1918,55 +1963,6 @@ fn command_of(action: Action) -> Result<(String, Value), CommandError> {
             "files.save".to_owned(),
             json!({ "file": file, "output": output, "dry_run": dry_run, "backup": !no_backup }),
         ),
-        Action::Conflicts {
-            file,
-            signature,
-            min_conflict_all,
-            conflict_this,
-            include_single,
-            master_and_leafs,
-            quick_show_conflicts,
-            modgroups,
-            all_modgroups,
-            saved_modgroups,
-            offset,
-            limit,
-        } => (
-            "conflicts.list".to_owned(),
-            json!({
-                "files": file, "signatures": signature, "min_conflict_all": min_conflict_all,
-                "conflict_this": conflict_this, "include_single": include_single,
-                "master_and_leafs": master_and_leafs, "quick_show_conflicts": quick_show_conflicts,
-                "mod_groups": modgroups, "all_mod_groups": all_modgroups, "saved_mod_groups": saved_modgroups,
-                "offset": offset, "limit": limit
-            }),
-        ),
-        Action::Compare {
-            form_id,
-            file,
-            master_and_leafs,
-            hide_no_conflict,
-            include_hidden,
-            modgroups,
-            all_modgroups,
-            saved_modgroups,
-            view_filter_name,
-            view_filter_value,
-            view_filter_or,
-            keep_children,
-            keep_siblings,
-            keep_parents_siblings,
-        } => (
-            "records.compare".to_owned(),
-            json!({
-                "form_id": form_id, "file": file, "master_and_leafs": master_and_leafs,
-                "hide_no_conflict": hide_no_conflict, "include_hidden": include_hidden,
-                "mod_groups": modgroups, "all_mod_groups": all_modgroups, "saved_mod_groups": saved_modgroups,
-                "view_filter_name": view_filter_name, "view_filter_value": view_filter_value,
-                "view_filter_or": view_filter_or, "keep_children": keep_children,
-                "keep_siblings": keep_siblings, "keep_parents_siblings": keep_parents_siblings
-            }),
-        ),
         Action::Assets { action } => match action {
             AssetsAction::Dump {
                 file,
@@ -2091,6 +2087,55 @@ fn command_of(action: Action) -> Result<(String, Value), CommandError> {
                 }),
             )
         }
+        Action::Conflicts {
+            file,
+            signature,
+            min_conflict_all,
+            conflict_this,
+            include_single,
+            master_and_leafs,
+            quick_show_conflicts,
+            modgroups,
+            all_modgroups,
+            saved_modgroups,
+            offset,
+            limit,
+        } => (
+            "conflicts.list".to_owned(),
+            json!({
+                "files": file, "signatures": signature, "min_conflict_all": min_conflict_all,
+                "conflict_this": conflict_this, "include_single": include_single,
+                "master_and_leafs": master_and_leafs, "quick_show_conflicts": quick_show_conflicts,
+                "mod_groups": modgroups, "all_mod_groups": all_modgroups, "saved_mod_groups": saved_modgroups,
+                "offset": offset, "limit": limit
+            }),
+        ),
+        Action::Compare {
+            form_id,
+            file,
+            master_and_leafs,
+            hide_no_conflict,
+            include_hidden,
+            modgroups,
+            all_modgroups,
+            saved_modgroups,
+            view_filter_name,
+            view_filter_value,
+            view_filter_or,
+            keep_children,
+            keep_siblings,
+            keep_parents_siblings,
+        } => (
+            "records.compare".to_owned(),
+            json!({
+                "form_id": form_id, "file": file, "master_and_leafs": master_and_leafs,
+                "hide_no_conflict": hide_no_conflict, "include_hidden": include_hidden,
+                "mod_groups": modgroups, "all_mod_groups": all_modgroups, "saved_mod_groups": saved_modgroups,
+                "view_filter_name": view_filter_name, "view_filter_value": view_filter_value,
+                "view_filter_or": view_filter_or, "keep_children": keep_children,
+                "keep_siblings": keep_siblings, "keep_parents_siblings": keep_parents_siblings
+            }),
+        ),
         Action::Call { name, params } => {
             let params = serde_json::from_str(&params)
                 .map_err(|e| CommandError::new("invalid_params", format!("--params is not valid JSON: {e}")))?;
