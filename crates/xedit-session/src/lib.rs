@@ -138,6 +138,7 @@ impl Registry {
         conflicts::register(&mut registry);
         edit::register(&mut registry);
         save::register(&mut registry);
+        script::register(&mut registry);
         masters::register(&mut registry);
         formids::register(&mut registry);
         archive::register(&mut registry);
@@ -145,7 +146,6 @@ impl Registry {
         sniff::register(&mut registry);
         lodgen::register(&mut registry);
         refs::register(&mut registry);
-        script::register(&mut registry);
         clean::register(&mut registry);
         check::register(&mut registry);
         modgroups::register(&mut registry);

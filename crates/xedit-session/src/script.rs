@@ -2,15 +2,20 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-// Ported from xEdit: xeScriptForm.pas (ReadScriptsList), xeInit.pas (wbScriptsPath)
+// Ported from xEdit: xeScriptForm.pas (ReadScriptsList), xeInit.pas
+// (wbScriptsPath) and xEdit/JvI/xejviScriptHost.pas (the scripts folder the
+// units of a script's `uses` resolve from)
 
 //! The commands of phase 6: `script.list` lists the Pascal scripts of the
-//! scripts folder, the corpus `script.check` and `script.run` work on. The
-//! folder is upstream's `wbScriptsPath`: the `--scripts` folder, else
+//! scripts folder, the corpus `script.check` compiles against and `script.run`
+//! will run. `script.check` compiles the given scripts and the units they
+//! `uses` (the front end of `crates/xedit-script`, phase 6 step 2); only
+//! syntax is checked -- unresolved identifiers and the type semantics of the
+//! interpreter belong to `script.run` (phase 6 steps 3 to 5) -- and, as
+//! `TJvInterpreterUnit.Compile` does, a routine body is only scanned for its
+//! balanced `end`, so a statement-level error surfaces when the script runs.
+//! The folder is upstream's `wbScriptsPath`: the `--scripts` folder, else
 //! `XEDIT_SCRIPTS`, else the oracle's `Edit Scripts`.
-//!
-//! Only `script.list` is registered here so far; `script.check` (the parser)
-//! and `script.run` (the host and run loop) are later steps of phase 6.
 
 use std::path::{Path, PathBuf};
 
@@ -119,11 +124,108 @@ fn script_list(_session: &mut Session, request: ScriptListRequest) -> Result<Scr
     })
 }
 
+/// `script.check`: the request.
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ScriptCheckRequest {
+    /// Paths of the scripts to parse.
+    pub files: Vec<String>,
+    /// Folder the units a script `uses` resolve from. Default: the
+    /// `XEDIT_SCRIPTS` environment variable, else the `Edit Scripts` folder
+    /// below `XEDIT_ORACLE_DIR`.
+    pub scripts: Option<String>,
+}
+
+/// One syntax failure.
+#[derive(Serialize, JsonSchema)]
+pub struct ScriptErrorInfo {
+    /// The file the failure was raised in: the script, or a unit it uses.
+    pub file: String,
+    /// The line, counted as the interpreter counts it (`#13` characters
+    /// before the position, plus one); 0 when the file could not be read.
+    pub line: i64,
+    /// The interpreter's message, as `EJvInterpreterError` formats it.
+    pub message: String,
+}
+
+/// The result of one script.
+#[derive(Serialize, JsonSchema)]
+pub struct ScriptFileResult {
+    /// The script as it was given.
+    pub file: String,
+    /// Whether the script and the units it uses compile.
+    pub ok: bool,
+    pub errors: Vec<ScriptErrorInfo>,
+}
+
+/// `script.check`: the response.
+#[derive(Serialize, JsonSchema)]
+pub struct ScriptCheckResponse {
+    /// Whether every script compiles.
+    pub ok: bool,
+    /// The scripts folder the units resolved from.
+    pub scripts_folder: String,
+    /// The scripts checked.
+    pub total: usize,
+    /// The scripts that compile.
+    pub parsed: usize,
+    /// The scripts that do not compile.
+    pub failed: usize,
+    pub files: Vec<ScriptFileResult>,
+}
+
+fn script_check(_session: &mut Session, request: ScriptCheckRequest) -> Result<ScriptCheckResponse, CommandError> {
+    if request.files.is_empty() {
+        return Err(CommandError::new("invalid_params", "no files given"));
+    }
+    let folder = scripts_folder(request.scripts.as_deref());
+    if !folder.is_dir() {
+        return Err(CommandError::new("io", format!("{}: not a folder", folder.display())));
+    }
+    let mut files = Vec::new();
+    let mut parsed = 0usize;
+    for file in &request.files {
+        let check = xedit_script::check::check_file(Path::new(file), &folder);
+        let ok = check.ok();
+        if ok {
+            parsed += 1;
+        }
+        files.push(ScriptFileResult {
+            file: check.file,
+            ok,
+            errors: check
+                .errors
+                .into_iter()
+                .map(|error| ScriptErrorInfo {
+                    file: error.file,
+                    line: error.line,
+                    message: error.message,
+                })
+                .collect(),
+        });
+    }
+    let total = files.len();
+    Ok(ScriptCheckResponse {
+        ok: parsed == total,
+        scripts_folder: folder.to_string_lossy().into_owned(),
+        total,
+        parsed,
+        failed: total - parsed,
+        files,
+    })
+}
+
 pub fn register(registry: &mut Registry) {
     registry.register(
         "script.list",
         "List the *.pas scripts of the scripts folder (XEDIT_SCRIPTS, the oracle's Edit Scripts by default).",
         false,
         script_list,
+    );
+    registry.register(
+        "script.check",
+        "Compile scripts and the units they use, as TJvInterpreterUnit.Compile does (JvInterpreterParser/JvInterpreter), resolved from the scripts folder; reports each failure as file:line: message.",
+        false,
+        script_check,
     );
 }
