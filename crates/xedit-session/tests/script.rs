@@ -970,3 +970,243 @@ fn a_corpus_nif_walks_through_the_data_format_adapter() {
     }
     let _ = std::fs::remove_dir_all(&folder);
 }
+
+//=== The JVCL RTL units (phase 6 step 8) ====================================
+
+/// `BoolToStr` is not a script function of the oracle (none of the units it
+/// builds registers one), so the script spells it out.
+const RTL_BOOL_HELPER: &str = "\
+function BoolToStr2(b: Boolean): string;
+begin
+  if b then Result := 'True' else Result := 'False';
+end;
+";
+
+/// The `System`, `SysUtils`, `Math` and `Classes` units in one script: every
+/// `Show` line is a value the RTL computes, and the test reads the exact
+/// lines back, so a regression in one function shows as the line that
+/// changed.
+const RTL_SCRIPT: &str = "\
+procedure Show(const s: string);
+begin
+  AddMessage(s);
+end;
+function Initialize: Integer;
+var
+  i, j, k: Integer;
+  f: Double;
+  s: string;
+  arr: array[0..2] of integer;
+  sl, sl2: TStringList;
+  lst: TList;
+  ms: TMemoryStream;
+  fs: TFileStream;
+  fh, fsize: Integer;
+begin
+  Result := 0;
+  // System
+  Show('upcase=' + UpCase('x'));
+  Show('chr=' + Chr(65));
+  Show('ord=' + IntToStr(Ord('A')));
+  Show('abs=' + IntToStr(Abs(-7)));
+  Show('round=' + IntToStr(Round(2.5)) + ',' + IntToStr(Round(3.5)));
+  Show('trunc=' + IntToStr(Trunc(-2.7)));
+  Show('sqrt=' + FloatToStr(Sqrt(16)));
+  Show('sqr=' + FloatToStr(Sqr(1.5)));
+  Show('pos=' + IntToStr(Pos('c', 'abcd')));
+  Show('copy=' + Copy('abcdef', 2, 3) + ',' + Copy('abcdef', 0, 2));
+  s := 'abcdef';
+  Delete(s, 2, 2);
+  Show('delete=' + s);
+  Insert('XY', s, 1);
+  Show('insert=' + s);
+  Show('varto=' + VarToStr(12) + VarIsEmpty(1) + VarIsNull(Null));
+  SetLength(s, 3);
+  Show('setlength=' + IntToStr(Length(s)));
+  arr[0] := 5; arr[1] := 6; arr[2] := 7;
+  Show('array=' + IntToStr(Length(arr)) + ',' + IntToStr(arr[0]) + ',' + IntToStr(arr[2]));
+  Show('bounds=' + IntToStr(Low(arr)) + ',' + IntToStr(High(arr)));
+  DeleteFromArray(arr, 0);
+  InsertIntoArray(arr, 0, 9);
+  Show('array2=' + IntToStr(Length(arr)) + ',' + IntToStr(arr[0]));
+  // SysUtils
+  Show('case=' + UpperCase('aBc') + ',' + LowerCase('aBc'));
+  Show('trim=' + Trim('  x  ') + ',');
+  Show('strtoint=' + IntToStr(StrToInt('42')) + ',' + IntToStr(StrToIntDef('x', 7)));
+  Show('hex=' + IntToHex(255, 4));
+  Show('format=' + Format('%s: %d %.4d', ['n', 12, 7]));
+  Show('float=' + FloatToStr(0.5) + ',' + FloatToStr(StrToFloat('2.25')));
+  Show('quoted=' + QuotedStr('a''b'));
+  Show('ident=' + BoolToStr2(IsValidIdent('a1b')) + BoolToStr2(IsValidIdent('1a')));
+  Show('path=' + ExtractFileName('a\\b\\c.d') + ',' + ExtractFileExt('a\\b\\c.d') + ',' + ChangeFileExt('c.d', '.e'));
+  Show('date=' + FormatDateTime('yyyy-mm-dd', EncodeDate(2024, 2, 29)));
+  DecodeDate(EncodeDate(2024, 2, 29), i, j, k);
+  Show('dateday=' + IntToStr(DayOfWeek(EncodeDate(2024, 2, 29))) + ',' + BoolToStr2(IsLeapYear(2024)));
+  // Math
+  Show('math=' + IntToStr(Floor(2.7)) + ',' + IntToStr(Ceil(2.1)) + ',' + IntToStr(Max(3, 5)) + ',' + IntToStr(Min(3, 5)));
+  Show('power=' + FloatToStr(Power(2, 10)) + ',' + FloatToStr(IntPower(3, 3)));
+  // Classes: TStringList
+  sl := TStringList.Create;
+  sl.Add('beta');
+  sl.Add('alpha');
+  sl.Add('gamma');
+  Show('sl=' + IntToStr(sl.Count) + ',' + sl[0] + ',' + IntToStr(sl.IndexOf('alpha')));
+  sl.Sort;
+  Show('sorted=' + sl[0] + ',' + sl[2]);
+  sl.Values['k'] := 'v';
+  Show('values=' + sl.Values['k'] + ',' + sl.Names[3]);
+  sl.CommaText := 'a,b,c';
+  Show('comma=' + sl.CommaText + ',' + IntToStr(sl.Count));
+  sl.Text := 'one' + #13#10 + 'two';
+  Show('text=' + IntToStr(sl.Count) + ',' + sl[1]);
+  sl2 := TStringList.Create;
+  sl2.Sorted := True;
+  sl2.Duplicates := dupIgnore;
+  sl2.Add('b');
+  sl2.Add('a');
+  sl2.Add('a');
+  Show('sortedlist=' + IntToStr(sl2.Count) + ',' + sl2[0] + ',' + sl2[1]);
+  sl2.SaveToFile(ScriptsPath + 'rtl-test.txt');
+  sl2.LoadFromFile(ScriptsPath + 'rtl-test.txt');
+  Show('roundtrip=' + IntToStr(sl2.Count) + ',' + sl2[1]);
+  ms := TMemoryStream.Create;
+  sl2.SaveToStream(ms);
+  Show('stream=' + IntToStr(ms.Size));
+  ms.Free;
+  sl.Free;
+  sl2.Free;
+  // Classes: TList
+  lst := TList.Create;
+  lst.Add('x');
+  lst.Add('y');
+  Show('list=' + IntToStr(lst.Count) + ',' + lst[0] + ',' + IntToStr(lst.IndexOf('y')) + ',' + lst.Last);
+  lst.Delete(0);
+  Show('list2=' + IntToStr(lst.Count) + ',' + lst[0]);
+  lst.Free;
+  // SysUtils + Classes: a file behind a TFileStream
+  fh := FileCreate(ScriptsPath + 'rtl-test.bin');
+  FileClose(fh);
+  fs := TFileStream.Create(ScriptsPath + 'rtl-test.bin', fmOpenReadWrite);
+  fs.Write('abc', 3);
+  Show('file=' + IntToStr(fs.Size) + ',' + IntToStr(fs.Position));
+  fs.Free;
+  Show('filesize=' + IntToStr(FileAge(ScriptsPath + 'rtl-test.bin') <> -1));
+  DeleteFile(ScriptsPath + 'rtl-test.bin');
+  // SysUtils: exceptions
+  try
+    raise Exception.Create('boom');
+  except
+    on E: Exception do
+      Show('except=' + E.Message);
+  end;
+  // SysUtils: the picture formatter
+  Show('formatfloat=' + FormatFloat('0.00', 1.005));
+  f := 1.0;
+  fsize := 0;
+  Show('done=' + FloatToStr(f) + IntToStr(fsize));
+end;
+end.
+";
+
+#[test]
+fn the_jvcl_rtl_units_run_a_script() {
+    let _guard = test_lock();
+    let source = format!("unit Rtl;\n{RTL_BOOL_HELPER}\n{RTL_SCRIPT}");
+    let folder = script_folder("Rtl", "Rtl.pas", &source);
+    let mut session = open_session();
+    let result = run(&mut session, &folder, "Rtl.pas", json!({}));
+    assert_eq!(result["aborted"], false, "{:?}", lines(&result));
+    let lines = lines(&result);
+    let expected = [
+        "upcase=X",
+        "chr=A",
+        "ord=65",
+        "abs=7",
+        // `Round` is half to even, as the RTL's.
+        "round=2,4",
+        "trunc=-2",
+        "sqrt=4",
+        "sqr=2.25",
+        "pos=3",
+        // `Copy` clamps a zero index and drops a character of the count.
+        "copy=bcd,a",
+        "delete=adef",
+        "insert=XYadef",
+        // `VarToStr(12)` is `12`, `VarIsEmpty(1)` False, `VarIsNull(Null)` True.
+        "varto=12FalseTrue",
+        "setlength=3",
+        "array=3,5,7",
+        "bounds=0,2",
+        "array2=3,9",
+        "case=ABC,abc",
+        "trim=x,",
+        "strtoint=42,7",
+        "hex=00FF",
+        "format=n: 12 0007",
+        "float=0.5,2.25",
+        "quoted='a''b'",
+        "ident=TrueFalse",
+        "path=c.d,.d,c.e",
+        "date=2024-02-29",
+        // 2024-02-29 was a Thursday (5); 2024 is a leap year.
+        "dateday=5,True",
+        "math=2,3,5,3",
+        "power=1024,27",
+        "sl=3,beta,1",
+        "sorted=alpha,gamma",
+        "values=v,k",
+        "comma=a,b,c,3",
+        "text=2,two",
+        "sortedlist=2,a,b",
+        "roundtrip=2,b",
+        // `sl2` holds "a\r\n" and "b\r\n".
+        "stream=6",
+        "list=2,x,1,y",
+        "list2=1,y",
+        "file=3,3",
+        "filesize=1",
+        "except=boom",
+        "formatfloat=1.00",
+        "done=10",
+    ];
+    let section: Vec<String> = lines.iter().skip(1).take(expected.len()).cloned().collect();
+    let expected: Vec<String> = expected.iter().map(|line| (*line).to_owned()).collect();
+    assert_eq!(section, expected, "{lines:?}");
+}
+
+/// The corpus scripts the JVCL units of this step unblock: each one needs
+/// `System`/`SysUtils`/`Math`/`Classes` calls and runs headless over the
+/// two-plugin session to its `Done:` line. Needs the oracle's `Edit
+/// Scripts`, so the test does nothing without `XEDIT_ORACLE_DIR`.
+#[test]
+fn the_corpus_scripts_that_need_the_jvcl_units_run() {
+    let _guard = test_lock();
+    let Some(oracle) = std::env::var_os("XEDIT_ORACLE_DIR") else {
+        return;
+    };
+    let folder = PathBuf::from(oracle).join("Edit Scripts");
+    // Each entry: the script, and a line its run must produce.
+    let scripts = [
+        ("List perk entry points usage.pas", None),
+        ("List LOD objects and meshes.pas", None),
+        ("Check for invalid alternate textures.pas", None),
+        ("Worldspace scale refs position.pas", None),
+        ("Skyrim - List used scripts.pas", Some("No scripts found.")),
+    ];
+    for (name, line) in scripts {
+        if !folder.join(name).is_file() {
+            continue;
+        }
+        let mut session = open_session();
+        let result = run(&mut session, &folder, name, json!({}));
+        let lines = lines(&result);
+        assert_eq!(result["aborted"], false, "{name}: {lines:?}");
+        assert!(
+            lines.iter().any(|entry| entry.starts_with("Done: Applying script")),
+            "{name}: {lines:?}"
+        );
+        if let Some(line) = line {
+            assert!(lines.iter().any(|entry| entry == line), "{name}: {lines:?}");
+        }
+    }
+}

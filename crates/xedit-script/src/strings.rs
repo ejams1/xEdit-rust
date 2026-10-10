@@ -66,11 +66,15 @@ impl Duplicates {
 /// Upstream they cast the object to `TStrings` and call its methods; the
 /// port keeps the same shape: a value's [`ScriptObject::string_list`] is the
 /// list, and a value of another class is not one (upstream's unchecked cast
-/// has no defined behaviour, the port leaves the function a no-op).
+/// has no defined behaviour, the port leaves the function a no-op). The
+/// `Classes` unit of phase 6 step 8 registers the whole member set on top of
+/// this trait, so the operations its methods need beyond the host
+/// functions' are here too.
 pub trait StringList: ScriptObject {
     /// The lines, in order.
     fn lines(&self) -> &[Vec<u8>];
-    /// The objects of the lines (`TStrings.Objects`), one per line.
+    /// The objects of the lines (`TStrings.Objects`), one per line;
+    /// `Value::Empty` is the nil object.
     fn objects(&self) -> &[Value];
     /// `TStrings.Sorted`.
     fn sorted(&self) -> bool;
@@ -85,12 +89,34 @@ pub trait StringList: ScriptObject {
     fn add_object(&mut self, text: Vec<u8>, object: Value) -> i32;
     /// `TStrings.Strings[i] := value`: the line at an index that exists.
     fn set_line(&mut self, index: i32, text: Vec<u8>);
+    /// `TStrings.Objects[i] := value`.
+    fn set_object(&mut self, index: i32, object: Value);
     /// `TStrings.Delete`.
     fn delete(&mut self, index: i32);
     /// `TStrings.Insert`: the line and object at an index, unsorted.
     fn insert(&mut self, index: i32, text: Vec<u8>, object: Value);
     /// `TStrings.IndexOf` (`Find` on a sorted list).
     fn index_of(&self, text: &[u8]) -> i32;
+    /// `TStringList.CompareStrings`: the ordering `Find`, `Sort` and a
+    /// sorted `Add` use (the `Classes` unit's `Find` needs the comparison
+    /// itself for its insertion point).
+    fn compare_strings(&self, left: &[u8], right: &[u8]) -> std::cmp::Ordering;
+    /// `TStrings.Exchange`.
+    fn exchange(&mut self, first: i32, second: i32);
+    /// `TStrings.Move`.
+    fn move_line(&mut self, from: i32, to: i32);
+    /// `TStrings.Sorted := True` sorts the lines (`TStringList`).
+    fn set_sorted(&mut self, sorted: bool);
+    /// `TStrings.Duplicates := value`.
+    fn set_duplicates(&mut self, duplicates: Duplicates);
+    /// `TStringList.Sort`: orders the lines with `CompareStrings`.
+    fn sort(&mut self);
+    /// `TStrings.Capacity`.
+    fn capacity(&self) -> usize {
+        self.lines().len()
+    }
+    /// `TStrings.Capacity := N`.
+    fn reserve(&mut self, _capacity: usize) {}
 }
 
 /// `TStringList`: a `StringList` the host owns, with the class an `AddClass`
@@ -227,6 +253,15 @@ impl StringList for ScriptStringList {
         }
     }
 
+    fn set_object(&mut self, index: i32, object: Value) {
+        if let Some(slot) = usize::try_from(index)
+            .ok()
+            .and_then(|index| self.objects.get_mut(index))
+        {
+            *slot = object;
+        }
+    }
+
     fn delete(&mut self, index: i32) {
         if let Some(index) = usize::try_from(index).ok().filter(|index| *index < self.lines.len()) {
             self.lines.remove(index);
@@ -254,6 +289,71 @@ impl StringList for ScriptStringList {
             .position(|line| self.compare(line, text) == std::cmp::Ordering::Equal)
             .map(|index| index as i32)
             .unwrap_or(-1)
+    }
+
+    fn compare_strings(&self, left: &[u8], right: &[u8]) -> std::cmp::Ordering {
+        self.compare(left, right)
+    }
+
+    fn exchange(&mut self, first: i32, second: i32) {
+        let first = usize::try_from(first).ok();
+        let second = usize::try_from(second).ok();
+        if let (Some(first), Some(second)) = (first, second)
+            && first < self.lines.len()
+            && second < self.lines.len()
+        {
+            self.lines.swap(first, second);
+            if first < self.objects.len() && second < self.objects.len() {
+                self.objects.swap(first, second);
+            }
+        }
+    }
+
+    fn move_line(&mut self, from: i32, to: i32) {
+        let from = usize::try_from(from).ok();
+        let to = usize::try_from(to).ok();
+        if let (Some(from), Some(to)) = (from, to)
+            && from < self.lines.len()
+            && to < self.lines.len()
+        {
+            let line = self.lines.remove(from);
+            self.lines.insert(to, line);
+            if from < self.objects.len() {
+                let object = self.objects.remove(from);
+                self.objects.insert(to.min(self.objects.len()), object);
+            }
+        }
+    }
+
+    fn set_sorted(&mut self, sorted: bool) {
+        if sorted && !self.is_sorted {
+            self.sort();
+        }
+        self.is_sorted = sorted;
+    }
+
+    fn set_duplicates(&mut self, duplicates: Duplicates) {
+        self.dups = duplicates;
+    }
+
+    fn sort(&mut self) {
+        let mut pairs: Vec<(Vec<u8>, Value)> = self
+            .lines
+            .iter()
+            .cloned()
+            .zip((0..self.lines.len()).map(|index| self.objects.get(index).cloned().unwrap_or(Value::Empty)))
+            .collect();
+        pairs.sort_by(|left, right| self.compare(&left.0, &right.0));
+        self.lines = pairs.iter().map(|pair| pair.0.clone()).collect();
+        self.objects = pairs.into_iter().map(|pair| pair.1).collect();
+    }
+
+    fn capacity(&self) -> usize {
+        self.lines.capacity()
+    }
+
+    fn reserve(&mut self, capacity: usize) {
+        self.lines.reserve(capacity);
     }
 }
 

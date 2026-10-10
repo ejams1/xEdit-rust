@@ -38,6 +38,38 @@ const HEADER: &str = "Mozilla Public";
 /// Upstream directories whose Pascal units are tracked in the map.
 const UNIT_DIRS: &[&str] = &["Core", "xEdit", "xDump", "BSArch", "Sniff", "Tools"];
 
+/// The JVCL interpreter units `xejviScriptAdapter.pas` registers in its
+/// `Init` (`:356-371`), plus the two interpreter core files the port covers
+/// (`JvInterpreter.pas`, `JvInterpreterParser.pas`, which register nothing
+/// themselves and are tracked in the map), as file names below the pinned
+/// `External/jvcl` submodule's `jvcl/run` directory. Their registrations are
+/// tracked in the ledger like the adapter units' because they are part of
+/// the script API a shipped script sees; the submodule is outside
+/// [`UNIT_DIRS`], so `sync` reads these files by name.
+const JVCL_UNITS: &[&str] = &[
+    "JvInterpreter",
+    "JvInterpreterParser",
+    "JvInterpreterFm",
+    "JvInterpreter_System",
+    "JvInterpreter_SysUtils",
+    "JvInterpreter_Classes",
+    "JvInterpreter_Dialogs",
+    "JvInterpreter_Windows",
+    "JvInterpreter_Graphics",
+    "JvInterpreter_Controls",
+    "JvInterpreter_Buttons",
+    "JvInterpreter_StdCtrls",
+    "JvInterpreter_ComCtrls",
+    "JvInterpreter_ExtCtrls",
+    "JvInterpreter_Forms",
+    "JvInterpreter_Menus",
+    "JvInterpreter_Math",
+];
+
+/// Directory of the JVCL units inside the upstream checkout (the
+/// `External/jvcl` submodule, pinned per `upstream-map.toml`).
+const JVCL_DIR: &str = "External/jvcl/jvcl/run";
+
 const UNIT_STATUSES: &[&str] = &["pending", "ported", "replaced", "not-ported"];
 const LEDGER_STATUSES: &[&str] = &["pending", "covered", "presentation", "excluded"];
 
@@ -313,6 +345,14 @@ fn pascal_sources(upstream: &Path) -> Result<BTreeMap<String, String>> {
             }
         }
     }
+    // The registered JVCL units, which live in the `External/jvcl` submodule
+    // rather than in a directory of the xEdit checkout itself.
+    for unit in JVCL_UNITS {
+        let path = upstream.join(JVCL_DIR).join(format!("{unit}.pas"));
+        if path.is_file() {
+            files.push(path);
+        }
+    }
     files
         .iter()
         .map(|path| Ok((relative(upstream, path)?, read_text(path)?)))
@@ -385,11 +425,18 @@ fn enum_values(sources: &BTreeMap<String, String>, name: &str) -> Result<BTreeMa
 }
 
 /// The registration kinds of `TJvInterpreterAdapter` the `xejvi*` adapter
-/// units call. The longer names come first (`RecGet` before `Rec`), so a
-/// kind is never cut short. `AddExtUnit` declares a script unit rather than
-/// a member of one and takes a single argument, so it has a pattern of its
-/// own.
+/// units and the JVCL interpreter units call. The longer names come first
+/// (`RecGet` before `Rec`), so a kind is never cut short. `AddExtUnit`
+/// declares a script unit rather than a member of one and takes a single
+/// argument, so it has a pattern of its own.
 const REGISTRATION_KINDS: &str = "Function|Const|Class|IDGet|IDSet|IGet|ISet|Get|Set|RecGet|Rec|Handler";
+
+/// The units whose registrations are tracked: the `xejvi*` adapter units of
+/// `xEdit/JvI/` and the JVCL interpreter units of the submodule (their
+/// directory, [`JVCL_DIR`]).
+fn is_registration_unit(path: &str) -> bool {
+    path.starts_with("xEdit/JvI/") || path.starts_with(&format!("{JVCL_DIR}/"))
+}
 
 /// Functions, properties and methods registered with the script interpreter.
 fn script_registrations(sources: &BTreeMap<String, String>) -> BTreeMap<String, Option<String>> {
@@ -399,7 +446,7 @@ fn script_registrations(sources: &BTreeMap<String, String>) -> BTreeMap<String, 
     .unwrap();
     let ext_unit = Regex::new(r"\bAddExtUnit\(\s*'?([\w.]+)'?\s*\)").unwrap();
     let mut found = BTreeMap::new();
-    for (path, text) in sources.iter().filter(|(path, _)| path.starts_with("xEdit/JvI/")) {
+    for (path, text) in sources.iter().filter(|(path, _)| is_registration_unit(path)) {
         let unit = Path::new(path).file_stem().unwrap().to_string_lossy();
         let text = without_comments(text);
         for captures in registration.captures_iter(&text) {

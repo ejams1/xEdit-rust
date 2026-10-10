@@ -24,6 +24,12 @@ use std::rc::Rc;
 use crate::values::{ClassDef, ScriptObject, Value};
 
 /// The `TList` interface the adapter functions use.
+///
+/// The `Classes` unit of phase 6 step 8 registers the whole `TList` member
+/// set on top of this trait, so the operations its methods need beyond the
+/// host functions' three (`set`, the removes and moves, the capacity) are
+/// here too; every implementation is the same list, so the port has one
+/// object for a `TList` however it was created.
 pub trait List: ScriptObject {
     /// The entries, in order.
     fn items(&self) -> &[Value];
@@ -37,6 +43,28 @@ pub trait List: ScriptObject {
     fn count(&self) -> i32 {
         self.items().len() as i32
     }
+    /// `TList.Items[Index] := Value` (`AddISet`/`AddIDSet`).
+    fn set(&mut self, index: i32, value: Value);
+    /// `TList.Delete`.
+    fn delete_at(&mut self, index: i32);
+    /// `TList.Insert`.
+    fn insert(&mut self, index: i32, value: Value);
+    /// `TList.Exchange`.
+    fn exchange(&mut self, first: i32, second: i32);
+    /// `TList.Move`.
+    fn move_item(&mut self, from: i32, to: i32);
+    /// `TList.Remove`: the index the item had, -1 when it is not there.
+    fn remove(&mut self, value: &Value) -> i32;
+    /// `TList.Pack`: drops the nil entries.
+    fn pack(&mut self);
+    /// `TList.Count := N`: grows with nil entries or truncates.
+    fn resize(&mut self, count: usize);
+    /// `TList.Capacity`.
+    fn capacity(&self) -> usize {
+        self.items().len()
+    }
+    /// `TList.Capacity := N`.
+    fn reserve(&mut self, _capacity: usize) {}
 }
 
 /// The `TList` the host owns.
@@ -92,6 +120,73 @@ impl List for ScriptList {
 
     fn clear(&mut self) {
         self.items.clear();
+    }
+
+    fn set(&mut self, index: i32, value: Value) {
+        if let Some(slot) = usize::try_from(index).ok().and_then(|index| self.items.get_mut(index)) {
+            *slot = value;
+        }
+    }
+
+    fn delete_at(&mut self, index: i32) {
+        if let Some(index) = usize::try_from(index).ok().filter(|index| *index < self.items.len()) {
+            self.items.remove(index);
+        }
+    }
+
+    fn insert(&mut self, index: i32, value: Value) {
+        let index = usize::try_from(index).unwrap_or(0).min(self.items.len());
+        self.items.insert(index, value);
+    }
+
+    fn exchange(&mut self, first: i32, second: i32) {
+        let first = usize::try_from(first).ok();
+        let second = usize::try_from(second).ok();
+        if let (Some(first), Some(second)) = (first, second)
+            && first < self.items.len()
+            && second < self.items.len()
+        {
+            self.items.swap(first, second);
+        }
+    }
+
+    fn move_item(&mut self, from: i32, to: i32) {
+        let from = usize::try_from(from).ok();
+        let to = usize::try_from(to).ok();
+        if let (Some(from), Some(to)) = (from, to)
+            && from < self.items.len()
+            && to < self.items.len()
+        {
+            let value = self.items.remove(from);
+            self.items.insert(to, value);
+        }
+    }
+
+    fn remove(&mut self, value: &Value) -> i32 {
+        match self.items.iter().position(|entry| entry == value) {
+            Some(index) => {
+                self.items.remove(index);
+                index as i32
+            }
+            None => -1,
+        }
+    }
+
+    fn pack(&mut self) {
+        self.items
+            .retain(|item| !matches!(item, Value::Pointer(0) | Value::Null));
+    }
+
+    fn resize(&mut self, count: usize) {
+        self.items.resize(count, Value::Pointer(0));
+    }
+
+    fn capacity(&self) -> usize {
+        self.items.capacity()
+    }
+
+    fn reserve(&mut self, capacity: usize) {
+        self.items.reserve(capacity);
     }
 }
 
