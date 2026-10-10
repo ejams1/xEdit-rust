@@ -106,10 +106,20 @@ macro_rules! element_common {
                 .load(std::sync::atomic::Ordering::Relaxed)
         }
 
+        /// `TwbElement.GetFullPath` (`wbImplementation.pas:19641-19652`): the
+        /// container's path, the element's index in it and the element's
+        /// name, each level joined with `' \\ '`. The root writes
+        /// `get_full_path_name` (a file's prefixed name) behind a leading
+        /// `' \\ '` and has no index (its container is `nil` upstream).
         fn get_full_path(&self) -> String {
             match self.$base().container() {
-                Some(container) => format!("{} \\ {}", container.get_full_path(), self.get_name()),
-                None => self.get_name(),
+                Some(container) => {
+                    let index = container
+                        .as_container()
+                        .map_or(-1, |container| container.index_of_id(self.get_element_id()));
+                    format!("{} \\ [{}] {}", container.get_full_path(), index, self.get_name())
+                }
+                None => format!(" \\ {}", self.get_full_path_name()),
             }
         }
 
@@ -3585,6 +3595,13 @@ impl ElementImplCasts for ElementRef {
 impl Element for FileImpl {
     element_common!(element_base);
     element_display_name!(element_base);
+
+    /// `TwbFile.GetName` (`wbImplementation.pas:4853-4859`): the load order
+    /// prefix in front of the file name (`[00] Master.esm`), the name
+    /// `FullPath` writes at its root.
+    fn get_full_path_name(&self) -> String {
+        format!("[{}] {}", self.get_load_order_file_id(), self.get_name())
+    }
 
     fn get_name(&self) -> String {
         path_file_name(&self.fl_file_name).to_owned()

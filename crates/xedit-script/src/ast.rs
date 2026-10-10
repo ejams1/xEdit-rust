@@ -381,6 +381,13 @@ pub struct OnClause {
     pub var: Option<String>,
     pub class: String,
     pub body: Box<Stmt>,
+    /// The first token of the statements after `body` (position and text), a
+    /// handler with more than one statement. Upstream interprets `body` and
+    /// then skips the rest of the section: a matched clause skips them
+    /// silently (`SkipToEnd`, `JvInterpreter.pas:7496-7500`), a clause that
+    /// does not match reports `'end' expected` at that token (the
+    /// `InterpretExcept` loop, `:7520-7550`).
+    pub extra_head: Option<(usize, String)>,
     pub span: Span,
 }
 

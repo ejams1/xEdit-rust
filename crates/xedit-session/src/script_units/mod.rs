@@ -612,24 +612,49 @@ fn register_string_list_members(adapter: &mut Adapter, class: &Rc<ClassDef>) {
             Ok(())
         }),
     );
-    object_get(
-        adapter,
+    // `TStrings.Strings` is an *indexed* property upstream: `_Classes.pas`
+    // registers `AddIGet`/`AddISet` (`JvInterpreter_Classes.pas:1268-1269`)
+    // with the `AddIDGet`/`AddIDSet` default (`:1270-1271`), so
+    // `sl.Strings[i]` goes through the indexed dispatch
+    // (`JvInterpreter.pas:4462-4475`) and `sl[i]` through `GetID`/`SetID`
+    // (`:4875-4889`); the getter reads the index from `Args.Values[0]`, the
+    // setter takes its value from the `Value` parameter
+    // (`TStrings_Read_Strings`/`TStrings_Write_Strings`, `:583`/`:590`).
+    // There is no plain get for the name, as upstream: the call form
+    // `sl.Strings(0)` is not registered either.
+    let strings_get: xedit_script::adapter::AdapterGetFn = Rc::new(|value: &mut Value, args: &mut Args| {
+        *value = Value::Str(Vec::new());
+        if let Some(Value::Object(object)) = &args.obj
+            && let Some(list) = object.borrow_mut().string_list()
+        {
+            let index = integer_at(args, 0)? as i32;
+            if let Some(line) = usize::try_from(index).ok().and_then(|index| list.lines().get(index)) {
+                *value = Value::Str(line.clone());
+            }
+        }
+        Ok(())
+    });
+    adapter.add_iget(
+        class.clone(),
         "Strings",
+        strings_get.clone(),
         1,
         instance(),
-        Rc::new(|value: &mut Value, args: &mut Args| {
-            *value = Value::Str(Vec::new());
-            if let Some(Value::Object(object)) = &args.obj
-                && let Some(list) = object.borrow_mut().string_list()
-            {
-                let index = integer_at(args, 0)? as i32;
-                if let Some(line) = usize::try_from(index).ok().and_then(|index| list.lines().get(index)) {
-                    *value = Value::Str(line.clone());
-                }
-            }
-            Ok(())
-        }),
+        VarType::Empty,
     );
+    adapter.add_id_get(class.clone(), strings_get, 1, instance(), VarType::Empty);
+    let strings_set: xedit_script::adapter::AdapterSetFn = Rc::new(|value: &Value, args: &mut Args| {
+        if let Some(Value::Object(object)) = &args.obj
+            && let Some(list) = object.borrow_mut().string_list_mut()
+        {
+            let index = integer_at(args, 0)? as i32;
+            let text = to_str(value).unwrap_or_default();
+            list.set_line(index, text);
+        }
+        Ok(())
+    });
+    adapter.add_iset(class.clone(), "Strings", strings_set.clone(), 1, instance());
+    adapter.add_id_set(class.clone(), strings_set, 1, instance());
     object_get(
         adapter,
         "Text",
@@ -649,21 +674,6 @@ fn register_string_list_members(adapter: &mut Adapter, class: &Rc<ClassDef>) {
             }
             Ok(())
         }),
-    );
-    adapter.add_set(
-        class.clone(),
-        "Strings",
-        Rc::new(|_value: &Value, args: &mut Args| {
-            if let Some(Value::Object(object)) = &args.obj
-                && let Some(list) = object.borrow_mut().string_list_mut()
-            {
-                let index = integer_at(args, 0)? as i32;
-                list.set_line(index, string_at(args, 1).into_bytes());
-            }
-            Ok(())
-        }),
-        1,
-        instance(),
     );
     object_get(
         adapter,

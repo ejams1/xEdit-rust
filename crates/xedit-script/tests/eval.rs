@@ -1602,3 +1602,119 @@ end.
         ]
     );
 }
+
+//=== The `Assigned` argument path (the defect-5 finding) ====================
+
+/// Registers `Assigned` the way `xejviScriptAdapter.pas` does (step 7 binds
+/// the real one): false for an unassigned value. The defect-5 finding said
+/// `not Assigned(global)` failed with `Not enough parameters` while a local
+/// variable named the then-unregistered identifier; the argument/name path
+/// is what these tests pin, with the registration in place.
+fn register_assigned(interpreter: &mut Interpreter) {
+    interpreter.adapter.add_function(
+        "",
+        "Assigned",
+        Rc::new(|value: &mut Value, args: &mut Args| {
+            let argument = args.values.first().cloned().unwrap_or(Value::Empty);
+            *value = Value::Bool(!matches!(argument, Value::Empty | Value::Null));
+            Ok(())
+        }),
+        1,
+        vec![ParamType::value(VarType::Empty)],
+        VarType::Bool,
+    );
+}
+
+#[test]
+fn a_global_variable_argument_passes_through_assigned() {
+    let mut interpreter = Interpreter::new();
+    register_assigned(&mut interpreter);
+    let source = "unit u;\r\nvar G: integer;\r\nfunction Initialize: integer;\r\nbegin\r\n  if Assigned(G) then Result := 7 else Result := 1;\r\nend;\r\nend.\r\n";
+    assert_eq!(run_initialize(&mut interpreter, source).unwrap(), Value::Integer(7));
+}
+
+#[test]
+fn a_local_variable_argument_passes_through_assigned() {
+    let mut interpreter = Interpreter::new();
+    register_assigned(&mut interpreter);
+    let source = "unit u;\r\nfunction Initialize: integer;\r\nvar G: integer;\r\nbegin\r\n  G := 0;\r\n  if not Assigned(G) then Result := 1 else Result := 7;\r\nend;\r\nend.\r\n";
+    assert_eq!(run_initialize(&mut interpreter, source).unwrap(), Value::Integer(7));
+}
+
+#[test]
+fn a_global_interface_argument_passes_through_assigned_in_process() {
+    // The shape of `Copy as override.pas` line 19: a unit-level `IInterface`
+    // variable as the argument, inside `Process`.
+    let mut interpreter = Interpreter::new();
+    register_assigned(&mut interpreter);
+    let class = interpreter.adapter.add_class("", "TObject", None);
+    let object: Rc<RefCell<dyn ScriptObject>> = Rc::new(RefCell::new(TestObject {
+        class,
+        data: RefCell::new(TestData::default()),
+    }));
+    let source = "unit u;\r\nvar ToFile: IInterface;\r\nfunction Process(e: IInterface): integer;\r\nbegin\r\n  ToFile := e;\r\n  if Assigned(ToFile) then Result := 7 else Result := 1;\r\nend;\r\nend.\r\n";
+    interpreter.compile(source.as_bytes()).unwrap();
+    let mut args = Args::new();
+    args.values.push(Value::Object(object));
+    assert_eq!(
+        interpreter.call_function_ex(None, "Process", &mut args).unwrap(),
+        Value::Integer(7)
+    );
+}
+
+//=== The multi-statement `on` handler (defect 6) ============================
+
+#[test]
+fn an_interpreted_on_handler_runs_only_its_first_statement() {
+    // `On1` interprets the handler's first statement and `SkipToEnd` skips
+    // the rest of the section (`JvInterpreter.pas:7496-7500`); `SetESL.pas`
+    // writes its `except on Exception do` handler as two statements.
+    let mut interpreter = Interpreter::new();
+    register_exception(&mut interpreter);
+    let source = "\
+unit u;
+function Initialize: integer;
+var log: integer;
+begin
+  log := 0;
+  try
+    raise Exception.Create('x');
+  except on Exception do
+    log := 1;
+    log := 2;
+  end;
+  Result := log;
+end;
+end.
+";
+    assert_eq!(run_initialize(&mut interpreter, source).unwrap(), Value::Integer(1));
+}
+
+#[test]
+fn an_unmatched_on_handler_with_extra_statements_reports_end_expected() {
+    // The clause does not match: the one statement is skipped and the
+    // `InterpretExcept` loop reads the second statement's token,
+    // `'end' expected` (`JvInterpreter.pas:7520-7550`); `DoFinallyExcept`
+    // swallows the `EJvInterpreterError` (`:7586-7594`), so the try
+    // completes and the script continues with the extra statements unrun.
+    let mut interpreter = Interpreter::new();
+    register_exception(&mut interpreter);
+    interpreter.adapter.add_class("SysUtils", "EDivByZero", None);
+    let source = "\
+unit u;
+function Initialize: integer;
+var log: integer;
+begin
+  log := 0;
+  try
+    raise Exception.Create('x');
+  except on EDivByZero do
+    log := 1;
+    log := 2;
+  end;
+  Result := log + 100;
+end;
+end.
+";
+    assert_eq!(run_initialize(&mut interpreter, source).unwrap(), Value::Integer(100));
+}

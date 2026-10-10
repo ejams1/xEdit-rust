@@ -98,9 +98,16 @@ impl Element for FlagImpl {
     }
 
     fn get_full_path(&self) -> String {
+        // `TwbElement.GetFullPath` (`wbImplementation.pas:19641-19652`), the
+        // same body as the `element_common!` macro.
         match self.container_ref() {
-            Some(container) => format!("{} \\ {}", container.get_full_path(), self.get_name()),
-            None => self.get_name(),
+            Some(container) => {
+                let index = container
+                    .as_container()
+                    .map_or(-1, |container| container.index_of_id(self.get_element_id()));
+                format!("{} \\ [{}] {}", container.get_full_path(), index, self.get_name())
+            }
+            None => format!(" \\ {}", self.get_full_path_name()),
         }
     }
 
