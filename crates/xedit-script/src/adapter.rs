@@ -657,6 +657,19 @@ impl VarList {
     }
 }
 
+/// One registration of an [`Adapter`], as [`Adapter::registrations`]
+/// reports it: the kind (the `Add*` name it was made with, lower case), the
+/// unit it belongs to, the class for a method or property, and the
+/// identifier (`None` for the `AddIDGet`/`AddIDSet` kinds, which register no
+/// name, and for `AddExtUnit`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RegistrationKey {
+    pub kind: &'static str,
+    pub unit: String,
+    pub class: Option<String>,
+    pub identifier: Option<String>,
+}
+
 /// The interpreter's adapter: every registration and the dispatch that
 /// answers `GetValue`/`SetValue`/`GetElement`/`SetElement`.
 #[derive(Default)]
@@ -951,6 +964,86 @@ impl Adapter {
         self.ext_unit_list.push(ExtUnitEntry {
             identifier: identifier.to_owned(),
         });
+    }
+
+    /// Every registration of the adapter, for the coverage ledger's check
+    /// that each entry a script can name is bound (`cargo xtask check`'s
+    /// script section is the source of truth; this is the port-side proof a
+    /// test compares it with).
+    pub fn registrations(&self) -> Vec<RegistrationKey> {
+        let mut keys = Vec::new();
+        let method = |kind, method: &Method| RegistrationKey {
+            kind,
+            unit: method.unit_name.clone(),
+            class: method.class_type.as_ref().map(|class| class.name.clone()),
+            identifier: Some(method.identifier.clone()),
+        };
+        let set_method = |kind, method: &SetMethod| RegistrationKey {
+            kind,
+            unit: method.unit_name.clone(),
+            class: method.class_type.as_ref().map(|class| class.name.clone()),
+            identifier: Some(method.identifier.clone()),
+        };
+        keys.extend(self.function_list.iter().map(|m| method("function", m)));
+        keys.extend(self.const_list.iter().map(|entry| RegistrationKey {
+            kind: "const",
+            unit: entry.unit_name.clone(),
+            class: None,
+            identifier: Some(entry.identifier.clone()),
+        }));
+        keys.extend(self.class_list.iter().map(|class| RegistrationKey {
+            kind: "class",
+            unit: class.unit.clone(),
+            class: None,
+            identifier: Some(class.name.clone()),
+        }));
+        keys.extend(self.get_list.iter().map(|m| method("get", m)));
+        keys.extend(self.set_list.iter().map(|m| set_method("set", m)));
+        keys.extend(self.iget_list.iter().map(|m| method("iget", m)));
+        keys.extend(self.iset_list.iter().map(|m| set_method("iset", m)));
+        keys.extend(self.id_get_list.iter().map(|m| RegistrationKey {
+            kind: "idget",
+            unit: m.unit_name.clone(),
+            class: m.class_type.as_ref().map(|class| class.name.clone()),
+            identifier: None,
+        }));
+        keys.extend(self.id_set_list.iter().map(|m| RegistrationKey {
+            kind: "idset",
+            unit: m.unit_name.clone(),
+            class: m.class_type.as_ref().map(|class| class.name.clone()),
+            identifier: None,
+        }));
+        keys.extend(self.record_list.iter().map(|record| RegistrationKey {
+            kind: "rec",
+            unit: record.unit.clone(),
+            class: None,
+            identifier: Some(record.name.clone()),
+        }));
+        keys.extend(self.record_get_list.iter().map(|m| RegistrationKey {
+            kind: "recget",
+            unit: m.record.unit.clone(),
+            class: Some(m.record.name.clone()),
+            identifier: Some(m.identifier.clone()),
+        }));
+        keys.extend(self.record_set_list.iter().map(|m| RegistrationKey {
+            kind: "recset",
+            unit: m.record.unit.clone(),
+            class: Some(m.record.name.clone()),
+            identifier: Some(m.identifier.clone()),
+        }));
+        keys.extend(self.event_handler_list.iter().map(|handler| RegistrationKey {
+            kind: "handler",
+            unit: handler.unit_name.clone(),
+            class: None,
+            identifier: Some(handler.identifier.clone()),
+        }));
+        keys.extend(self.ext_unit_list.iter().map(|unit| RegistrationKey {
+            kind: "extunit",
+            unit: String::new(),
+            class: None,
+            identifier: Some(unit.identifier.clone()),
+        }));
+        keys
     }
 
     /// `AddSrcUnit` (`JvInterpreter.pas:3207`): registers a unit's source;

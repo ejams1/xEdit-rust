@@ -875,7 +875,15 @@ pub(crate) const C_UNIT: &str = "";
 /// The element values the functions hand out are [`ScriptElement`]s; the
 /// element API of the later steps downcasts them with
 /// [`ScriptRunState::element_of`].
-fn register_functions(adapter: &mut Adapter, state: &Rc<RefCell<ScriptRunState>>) {
+///
+/// `vcl` is the VCL seam of phase 6 step 9 (the form shim): the four
+/// `JvInterpreterFm.pas` registrations and, later, the ten VCL units route
+/// through it. Headless, [`crate::script_rtl::NoVcl`] is passed.
+fn register_functions(
+    adapter: &mut Adapter,
+    state: &Rc<RefCell<ScriptRunState>>,
+    vcl: Rc<RefCell<dyn crate::script_rtl::Vcl>>,
+) {
     fn host_function(
         adapter: &mut Adapter,
         identifier: &str,
@@ -1197,6 +1205,13 @@ fn register_functions(adapter: &mut Adapter, state: &Rc<RefCell<ScriptRunState>>
     crate::script_misc::register(adapter, &classes);
     crate::script_misc_regex::register(adapter, &classes);
     crate::script_misc_json::register(adapter, &classes);
+
+    //=== The JVCL RTL units (phase 6 step 8) ================================
+    // After step 7's classes, whose `TStrings`/`TStringList` this step
+    // registers the rest of (the members both units carry are registered
+    // once, by the unit that comes first).
+
+    crate::script_rtl::register(adapter, state, vcl);
 }
 
 /// The `OnSetValue` hook (`xejviScriptHost.pas:60`): the identifiers a script
@@ -1502,7 +1517,10 @@ pub fn run_script(
     let mut interpreter = Interpreter::new();
     let element_class = interpreter.adapter.add_class(C_UNIT, "IwbElement", None);
     let state = Rc::new(RefCell::new(ScriptRunState::new(files, element_class)));
-    register_functions(&mut interpreter.adapter, &state);
+    // The VCL seam: `NoVcl` headless (phase 6 step 9 replaces it with the
+    // form shim when one exists).
+    let vcl: Rc<RefCell<dyn crate::script_rtl::Vcl>> = Rc::new(RefCell::new(crate::script_rtl::NoVcl));
+    register_functions(&mut interpreter.adapter, &state, vcl);
     crate::script_units::register_units(&mut interpreter.adapter, &state);
     {
         let state = state.clone();

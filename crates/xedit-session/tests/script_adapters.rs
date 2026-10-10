@@ -399,7 +399,7 @@ begin
   AddMessage('container=' + Name(c));
   AddMessage('last=' + Name(LastElement(e)));
   AddMessage('indexof=' + IntToStr(IndexOf(e, ElementBySignature(e, 'DATA'))));
-  AddMessage('equals=' + BoolToStr(Equals(e, e)));
+  AddMessage('equals=' + Equals(e, e));
   AddMessage('containing=' + Name(ContainingMainRecord(ElementBySignature(e, 'EDID'))));
 end;
 end.
@@ -411,13 +411,15 @@ fn the_container_functions_walk_an_element() {
     let folder = script_folder("Containers", CONTAINER_SCRIPT);
     let mut session = open_session();
     let result = run(&mut session, &folder, "Containers", json!({}));
-    // `IntToStr`/`BoolToStr` are the `SysUtils` unit of phase 6 step 8, which
-    // the port does not register yet: the script stops on its first call and
-    // the element functions before it are what the assertions read.
+    // The script runs to the end: `IntToStr` is the `SysUtils` unit of phase
+    // 6 step 8, and the boolean concatenation reads `True`/`False` there.
+    assert_eq!(result["aborted"], false, "{:?}", lines(&result));
     let lines = lines(&result);
     assert_eq!(lines[1], "container=GMST - Game Setting [00000802] <fThird>");
     assert_eq!(lines[2], "last=DATA - Value");
-    assert!(lines[3].contains("Undeclared Identifier 'IntToStr'"), "{:?}", lines);
+    assert_eq!(lines[3], "indexof=2");
+    assert_eq!(lines[4], "equals=True");
+    assert_eq!(lines[5], "containing=GMST - Game Setting [00000802] <fThird>");
     let _ = std::fs::remove_dir_all(&folder);
 }
 
@@ -477,12 +479,12 @@ begin
   AddMessage('override0=' + Name(OverrideByIndex(m, 0)));
   AddMessage('winning=' + Name(WinningOverride(m)));
   AddMessage('highest=' + Name(HighestOverrideOrSelf(m, 1)));
-  AddMessage('ismaster=' + BoolToStr(IsMaster(m)));
-  AddMessage('iswinning=' + BoolToStr(IsWinningOverride(m)));
+  AddMessage('ismaster=' + IsMaster(m));
+  AddMessage('iswinning=' + IsWinningOverride(m));
   AddMessage('version=' + IntToStr(GetFormVersion(m)));
   AddMessage('childgroup=' + Name(ChildGroup(m)));
-  AddMessage('deleted=' + BoolToStr(GetIsDeleted(m)));
-  AddMessage('persistent=' + BoolToStr(GetIsPersistent(m)));
+  AddMessage('deleted=' + GetIsDeleted(m));
+  AddMessage('persistent=' + GetIsPersistent(m));
   AddMessage('refcount=' + IntToStr(ReferencedByCount(m)));
 end;
 end.
@@ -494,12 +496,14 @@ fn the_record_functions_walk_the_overrides() {
     let folder = script_folder("Records", RECORD_SCRIPT);
     let mut session = open_session();
     let result = run(&mut session, &folder, "Records", json!({}));
+    // The script runs to the end: `IntToStr` is the `SysUtils` unit of phase
+    // 6 step 8, and the boolean concatenation reads `True`/`False` there.
+    assert_eq!(result["aborted"], false, "{:?}", lines(&result));
     let lines = lines(&result);
-    let text = lines.join("\n");
-    // The record functions resolve (no `Undeclared Identifier`); the `IntToStr`
-    // of the `SysUtils` unit of step 8 stops the script at the second call.
     assert_eq!(lines[1], "self=GMST - Game Setting [00000800] <fMaster>");
-    assert!(text.contains("Undeclared Identifier 'IntToStr'"), "{lines:?}");
+    assert_eq!(lines[2], "overrides=1");
+    assert_eq!(lines[6], "ismaster=True");
+    assert_eq!(lines[7], "iswinning=False");
     let _ = std::fs::remove_dir_all(&folder);
 }
 
@@ -516,10 +520,10 @@ begin
   AddMessage('override0=' + Name(OverrideByIndex(m, 0)));
   AddMessage('winning=' + Name(WinningOverride(m)));
   AddMessage('highest=' + Name(HighestOverrideOrSelf(m, 1)));
-  AddMessage('iswinning=' + BoolToStr(IsWinningOverride(m)));
+  AddMessage('iswinning=' + IsWinningOverride(m));
   AddMessage('childgroup=' + Name(ChildGroup(m)));
-  AddMessage('deleted=' + BoolToStr(GetIsDeleted(m)));
-  AddMessage('persistent=' + BoolToStr(GetIsPersistent(m)));
+  AddMessage('deleted=' + GetIsDeleted(m));
+  AddMessage('persistent=' + GetIsPersistent(m));
   m := OverrideByIndex(m, 0);
   AddMessage('override master=[' + Name(Master(m)) + ']');
   AddMessage('override masterorself=[' + Name(MasterOrSelf(m)) + ']');
@@ -589,7 +593,7 @@ begin
   AddMessage('hasmaster=' + HasMaster(f, 'Master.esm'));
   AddMessage('loadorder=' + IntToStr(GetLoadOrder(f)));
   AddMessage('esm=' + BoolToStr(GetIsESM(f)));
-  AddMessage('canbelight=' + BoolToStr(CanBeLight(f)));
+  AddMessage('canbelight=' + CanBeLight(f));
   sl := TStringList.Create;
   GetMasters(f, sl);
   AddMessage('slcount=' + IntToStr(sl.Count) + ' sl0=' + sl.Strings[0]);

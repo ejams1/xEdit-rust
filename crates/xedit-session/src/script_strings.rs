@@ -654,6 +654,59 @@ impl SharedStringList for StringListObject {
     fn index_of(&self, text: &[u8]) -> i32 {
         self.index_of(&line_text(text)) as i32
     }
+
+    // The members phase 6 step 8 extended the shared trait with for the
+    // `Classes` unit's `TStrings`/`TStringList` surface.
+
+    fn set_object(&mut self, index: i32, object: Value) {
+        if let Ok(index) = usize::try_from(index)
+            && index < self.objects.len()
+        {
+            self.objects[index] = object;
+        }
+    }
+
+    fn compare_strings(&self, left: &[u8], right: &[u8]) -> std::cmp::Ordering {
+        self.compare(&line_text(left), &line_text(right))
+    }
+
+    fn exchange(&mut self, first: i32, second: i32) {
+        if let (Ok(first), Ok(second)) = (usize::try_from(first), usize::try_from(second))
+            && first < self.strings.len()
+            && second < self.strings.len()
+        {
+            self.strings.swap(first, second);
+            if first < self.objects.len() && second < self.objects.len() {
+                self.objects.swap(first, second);
+            }
+        }
+    }
+
+    fn move_line(&mut self, from: i32, to: i32) {
+        if let (Ok(from), Ok(to)) = (usize::try_from(from), usize::try_from(to))
+            && from < self.strings.len()
+            && to < self.strings.len()
+        {
+            let text = self.strings.remove(from);
+            self.strings.insert(to, text);
+            if from < self.objects.len() {
+                let object = self.objects.remove(from);
+                self.objects.insert(to.min(self.objects.len()), object);
+            }
+        }
+    }
+
+    fn set_sorted(&mut self, sorted: bool) {
+        StringListObject::set_sorted(self, sorted);
+    }
+
+    fn set_duplicates(&mut self, duplicates: Duplicates) {
+        self.duplicates = duplicates.as_int();
+    }
+
+    fn sort(&mut self) {
+        StringListObject::sort(self);
+    }
 }
 
 /// One stored line as text (the list keeps bytes, as the shared model does).

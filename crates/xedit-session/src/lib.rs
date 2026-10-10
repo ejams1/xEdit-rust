@@ -35,6 +35,7 @@ pub mod script_df;
 pub mod script_misc;
 pub mod script_misc_json;
 pub mod script_misc_regex;
+pub mod script_rtl;
 pub mod script_strings;
 pub(crate) mod script_units;
 pub mod sniff;
