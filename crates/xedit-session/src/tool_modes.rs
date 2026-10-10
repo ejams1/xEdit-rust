@@ -685,7 +685,7 @@ fn mode_action(mode: ToolMode) -> (&'static str, Option<&'static str>) {
         ToolMode::tmMasterRestore => ("clears the ESM flag of the `.esp` files that have it", None),
         ToolMode::tmLODgen => (
             "generates the LOD of a load order",
-            Some("phase 5 wires the `lodgen.generate` command; this build accepts the mode and runs nothing"),
+            Some("the mode itself generates nothing; run the `lodgen.generate` command (`xedit lodgen`) instead"),
         ),
         ToolMode::tmScript => (
             "runs the Pascal script of -script: over the loaded plugins (script.run)",
@@ -1378,7 +1378,7 @@ fn tool_run(session: &mut Session, request: ToolRunRequest) -> Result<ToolRunRes
         ToolMode::tmLODgen => {
             return Err(CommandError::new(
                 "unsupported",
-                "the LODGen tool mode runs the `lodgen.generate` command, which phase 5 wires",
+                "the LODGen tool mode generates nothing; run the `lodgen.generate` command (`xedit lodgen`)",
             ));
         }
         ToolMode::tmScript => {

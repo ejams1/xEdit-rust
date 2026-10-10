@@ -316,7 +316,9 @@ pub struct ScriptRunResponse {
     /// The elements `Process` ran on.
     pub processed: u64,
     /// The script raised: the message log holds the exception and the
-    /// `Aborted: Applying script` line, and nothing was saved.
+    /// `Aborted: Applying script` line. Plugins the script changed before
+    /// the failure are still saved at the end, unless `dry_run` is set or
+    /// saving is off (the GUI's close saves them too).
     pub aborted: bool,
     /// The `Initialize`/`Process`/`Finalize` result that ended the run
     /// (`Script terminated itself, Result=<n>`), if one did.
