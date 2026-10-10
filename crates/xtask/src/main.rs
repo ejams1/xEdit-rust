@@ -429,7 +429,7 @@ fn enum_values(sources: &BTreeMap<String, String>, name: &str) -> Result<BTreeMa
 /// (`RecGet` before `Rec`), so a kind is never cut short. `AddExtUnit`
 /// declares a script unit rather than a member of one and takes a single
 /// argument, so it has a pattern of its own.
-const REGISTRATION_KINDS: &str = "Function|Const|Class|IDGet|IDSet|IGet|ISet|Get|Set|RecGet|Rec|Handler";
+const REGISTRATION_KINDS: &str = "Function|Const|Class|IDGet|IDSet|IGet|ISet|Get|Set|RecGet|RecSet|Rec|Handler|ExtFun";
 
 /// The units whose registrations are tracked: the `xejvi*` adapter units of
 /// `xEdit/JvI/` and the JVCL interpreter units of the submodule (their
@@ -451,10 +451,10 @@ fn script_registrations(sources: &BTreeMap<String, String>) -> BTreeMap<String, 
         let text = without_comments(text);
         for captures in registration.captures_iter(&text) {
             let kind = captures[1].to_lowercase();
-            let key = if kind == "recget" {
-                // `AddRecGet(UnitName, RecordType, Identifier, Proc, ...)`:
-                // the record type owns the method, so the methods of one
-                // record type stay apart.
+            let key = if kind == "recget" || kind == "recset" {
+                // `AddRecGet`/`AddRecSet(UnitName, RecordType, Identifier,
+                // Proc, ...)`: the record type owns the method, so the
+                // methods of one record type stay apart.
                 format!("{unit}:{}.{}:{kind}", &captures[3], &captures[4])
             } else {
                 format!("{unit}:{}.{}:{kind}", &captures[2], &captures[3])

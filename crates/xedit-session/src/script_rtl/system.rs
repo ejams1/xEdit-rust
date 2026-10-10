@@ -27,8 +27,8 @@ use xedit_script::values::{ArrayInstance, Value, ValueError, VarType, VariantArr
 
 use super::{
     BYREF, DELPHI_VAR_ANY, DELPHI_VAR_ARRAY, DELPHI_VAR_CLASS, DELPHI_VAR_OBJECT, DELPHI_VAR_POINTER,
-    DELPHI_VAR_RECORD, DELPHI_VAR_SET, DELPHI_VAR_STRING, DELPHI_VAR_TYPE_MASK, EMPTY, INTEGER, STR_OR_ARRAY_BYREF,
-    arg, arg_char, arg_f64, arg_i32, arg_str, constant, method, text_value,
+    DELPHI_VAR_RECORD, DELPHI_VAR_SET, DELPHI_VAR_STRING, DELPHI_VAR_TYPE_MASK, DELPHI_VAR_USTRING, EMPTY, INTEGER,
+    STR_OR_ARRAY_BYREF, arg, arg_char, arg_f64, arg_i32, arg_str, constant, method, text_value,
 };
 
 /// `cSystem = 'System'` (`JvInterpreter_System.pas:552`).
@@ -441,7 +441,13 @@ fn delphi_var_type(value: &Value) -> i32 {
         Value::Int64(_) => 20,
         Value::Double(_) => 5,
         Value::Date(_) => 7,
-        Value::Str(_) => DELPHI_VAR_STRING,
+        // The interpreter's strings are Unicode strings, so `VarType` of
+        // one is `varUString` (`$102`) -- the oracle's answer for
+        // `VarType('x')` (probe of 2026-10-10), and the same answer the
+        // `Variants` unit's own `VarType` of `xejviScriptAdapterMisc.pas`
+        // gives. The `varString`/`varUString` *constants* keep Delphi's
+        // codes (`$100`/`$102`).
+        Value::Str(_) => DELPHI_VAR_USTRING,
         Value::Bool(_) => 11,
         Value::Set(_) => DELPHI_VAR_SET,
         Value::Pointer(_) => DELPHI_VAR_POINTER,
