@@ -81,12 +81,6 @@ const MODES: &[Mode] = &[
     },
     Mode {
         name: "sortandcleanmasters",
-        // UPSTREAM-QUIRK:  is not one of the names
-        // the mode selection of  matches (
-        // compares the whole name), so the release refuses that switch and
-        // shows its "select mode" message;  is the switch
-        // that selects the mode (as the
-        // executable name does).
         // UPSTREAM-QUIRK: the release refuses the switch
         // `-sortandcleanmasters` (the mode selection of `_DoInit` compares
         // the whole name with `sortandclean`), so the switch that selects

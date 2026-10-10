@@ -837,6 +837,31 @@ fn find_record_def_by_name(name: &str) -> Option<Arc<MainRecordDef>> {
     find_record_def(Signature::new(&bytes))
 }
 
+/// The names of a signature list (`FilterSignatures`, `FilterBaseSignatures`),
+/// folded to upper case. Upstream fills `TStringList`s with
+/// `CaseSensitive = False`, whose `Find` and `IndexOf` compare with
+/// `AnsiCompareText`, so lower case input ("weap") matches the upper case
+/// signatures of the records. Every value the port compares a name with (the
+/// signature of a record, its base, the group labels, the definition names)
+/// is an upper case four character signature, so folding the parsed names to
+/// upper case reproduces the case-insensitive lookups.
+fn parse_signature_text(text: &str) -> BTreeSet<String> {
+    parse_comma_text(text)
+        .into_iter()
+        .map(|name| name.to_ascii_uppercase())
+        .collect()
+}
+
+/// The `Inc(x, 500)` of the persistent reference assignment and the bounds
+/// of `Cells` (`SetLength(Cells, 1000, 1000)`): the release stores and moves
+/// a reference only when its shifted grid cell is inside `0..999`, so a
+/// cell coordinate below -500 or at or above 500 stays in the persistent
+/// cell.
+fn shifted_grid_cell_in_bounds(cell: (i32, i32)) -> bool {
+    let (x, y) = (cell.0 + 500, cell.1 + 500);
+    (0..1000).contains(&x) && (0..1000).contains(&y)
+}
+
 impl FilterChecks {
     /// The prelude of `mniNavFilterApplyClick` before the two passes.
     fn new(mut options: FilterOptions) -> FilterChecks {
@@ -859,14 +884,12 @@ impl FilterChecks {
 
         // `if FilterBySignature then Signatures.CommaText := FilterSignatures`
         // (a sorted list without duplicates).
-        let mut signatures: Option<BTreeSet<String>> = options
-            .by_signature
-            .as_ref()
-            .map(|text| parse_comma_text(text).into_iter().collect());
+        let mut signatures: Option<BTreeSet<String>> =
+            options.by_signature.as_ref().map(|text| parse_signature_text(text));
         let mut base_signatures: Option<BTreeSet<String>> = options
             .by_base_signature
             .as_ref()
-            .map(|text| parse_comma_text(text).into_iter().collect());
+            .map(|text| parse_signature_text(text));
 
         // A base editor ID of 8 or 9 characters is the FormID of a base
         // record.
@@ -1273,7 +1296,12 @@ fn is_unnecessary_persistent(record: &Arc<MainRecordImpl>) -> bool {
     if base.get_record_by_signature(Signature::new(b"SCRI")).is_some() {
         return false;
     }
-    if !(is_morrowind() || is_oblivion())
+    // UPSTREAM-QUIRK: `if not wbIsMorrowind or not wbIsOblivion then` parses
+    // as `(not wbIsMorrowind) or (not wbIsOblivion)`, which is always true
+    // (no game is both Morrowind and Oblivion), so the release applies the
+    // ACTI/WNAM guard in every game. The always-true condition is
+    // transcribed as written.
+    if (!is_morrowind() || !is_oblivion())
         && base.get_signature().0 == *b"ACTI"
         && base.get_record_by_signature(Signature::new(b"WNAM")).is_some()
     {
@@ -1515,7 +1543,9 @@ pub fn apply_filter_with(
                                         {
                                             let cell_of =
                                                 (position_to_grid_cell(position.0), position_to_grid_cell(position.1));
-                                            cells.entry(cell_of).or_default().push(current);
+                                            if shifted_grid_cell_in_bounds(cell_of) {
+                                                cells.entry(cell_of).or_default().push(current);
+                                            }
                                         }
                                         node = previous;
                                     }
@@ -1523,6 +1553,7 @@ pub fn apply_filter_with(
                             }
                             if pers_cell.is_some()
                                 && let Some(grid_cell) = record.get_grid_cell()
+                                && shifted_grid_cell_in_bounds(grid_cell)
                                 && let Some(nodes) = cells.remove(&grid_cell)
                             {
                                 for node in nodes {
