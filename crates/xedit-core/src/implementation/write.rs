@@ -89,6 +89,17 @@ impl ElementBase {
         self.e_states.load(Ordering::Relaxed) & state as u32 != 0
     }
 
+    /// Port of `TwbElement.SetElementState`: `aValue` joins the states
+    /// (`Clear` leaves them). The element adapter's `SetElementState` and
+    /// `ClearElementState` call this.
+    pub fn set_state(&self, state: ElementState, value: bool) {
+        if value {
+            self.e_states.fetch_or(state as u32, Ordering::Relaxed);
+        } else {
+            self.e_states.fetch_and(!(state as u32), Ordering::Relaxed);
+        }
+    }
+
     pub(crate) fn include_state(&self, state: ElementState) {
         self.e_states.fetch_or(state as u32, Ordering::Relaxed);
     }

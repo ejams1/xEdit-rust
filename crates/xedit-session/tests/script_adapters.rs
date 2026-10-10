@@ -1,0 +1,869 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
+//! Phase 6 step 5: the registrations of `xejviScriptAdapterElement.pas`,
+//! `xejviScriptAdapterRecord.pas`, `xejviScriptAdapterFile.pas`,
+//! `xejviScriptAdapterContainer.pas` and `xejviScriptAdapterResource.pas`,
+//! exercised by scripts over a synthetic load order.
+//!
+//! The first half runs small scripts of its own that call the functions of
+//! the five units and asserts their values and their effect on the saved
+//! plugin bytes; the second half runs scripts of the 4.1.5q corpus that need
+//! these units (`XEDIT_ORACLE_DIR`, skipped without it).
+
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
+
+use serde_json::json;
+use xedit_core::implementation::{FileBytes, FileImpl, wb_file_from_bytes};
+use xedit_core::interface::globals::GameMode;
+use xedit_core::interface::globals::test_lock;
+use xedit_core::interface::types::FileStates;
+use xedit_session::{Registry, Session};
+
+fn sub_record(signature: &[u8; 4], data: &[u8]) -> Vec<u8> {
+    let mut bytes = signature.to_vec();
+    bytes.extend_from_slice(&(data.len() as u16).to_le_bytes());
+    bytes.extend_from_slice(data);
+    bytes
+}
+
+fn main_record(signature: &[u8; 4], flags: u32, form_id: u32, data: &[u8]) -> Vec<u8> {
+    let mut bytes = signature.to_vec();
+    bytes.extend_from_slice(&(data.len() as u32).to_le_bytes());
+    bytes.extend_from_slice(&flags.to_le_bytes());
+    bytes.extend_from_slice(&form_id.to_le_bytes());
+    bytes.extend_from_slice(&0u32.to_le_bytes());
+    bytes.extend_from_slice(&44u16.to_le_bytes());
+    bytes.extend_from_slice(&0u16.to_le_bytes());
+    bytes.extend_from_slice(data);
+    bytes
+}
+
+fn group(label: u32, group_type: i32, records: &[u8]) -> Vec<u8> {
+    let mut bytes = b"GRUP".to_vec();
+    bytes.extend_from_slice(&((24 + records.len()) as u32).to_le_bytes());
+    bytes.extend_from_slice(&label.to_le_bytes());
+    bytes.extend_from_slice(&group_type.to_le_bytes());
+    bytes.extend_from_slice(&0u32.to_le_bytes());
+    bytes.extend_from_slice(&0u32.to_le_bytes());
+    bytes.extend_from_slice(records);
+    bytes
+}
+
+fn group_label(name: &[u8; 4]) -> u32 {
+    u32::from_le_bytes(*name)
+}
+
+fn header(flags: u32, record_count: u32, next_object_id: u32, masters: &[&str]) -> Vec<u8> {
+    let mut hedr = Vec::new();
+    hedr.extend_from_slice(&1.7f32.to_le_bytes());
+    hedr.extend_from_slice(&record_count.to_le_bytes());
+    hedr.extend_from_slice(&next_object_id.to_le_bytes());
+    let mut data = sub_record(b"HEDR", &hedr);
+    data.extend(sub_record(b"CNAM", b"xedit-rust\0"));
+    for master in masters {
+        let mut name = master.as_bytes().to_vec();
+        name.push(0);
+        data.extend(sub_record(b"MAST", &name));
+        data.extend(sub_record(b"DATA", &0u64.to_le_bytes()));
+    }
+    data.extend(sub_record(b"INCC", &0u32.to_le_bytes()));
+    main_record(b"TES4", flags, 0, &data)
+}
+
+/// A game setting with an editor ID and a value.
+fn gmst(form_id: u32, editor_id: &[u8], value: f32) -> Vec<u8> {
+    let mut data = sub_record(b"EDID", editor_id);
+    data.extend(sub_record(b"DATA", &value.to_le_bytes()));
+    main_record(b"GMST", 0, form_id, &data)
+}
+
+fn open(name: &str, bytes: Vec<u8>) -> Arc<FileImpl> {
+    wb_file_from_bytes(name, i32::MAX, FileStates::empty(), FileBytes::Owned(bytes)).unwrap()
+}
+
+/// A master with three game settings and a plugin with one override, one new
+/// record and one record with an editor ID of its own.
+fn open_session() -> Session {
+    xedit_core::implementation::clear_files_map();
+    xedit_core::implementation::reset_load_order_slots();
+    xedit_core::interface::clear_files();
+    xedit_session::dump::setup_game("sse").unwrap();
+    xedit_session::save::apply_edit_settings(GameMode::gmSSE);
+    let mut master = header(1, 3, 0x802, &[]);
+    master.extend(group(
+        group_label(b"GMST"),
+        0,
+        &[
+            gmst(0x800, b"fMaster\0", 1.5),
+            gmst(0x801, b"fOther\0", 2.5),
+            gmst(0x802, b"fThird\0", 3.5),
+        ]
+        .concat(),
+    ));
+    let mut plugin = header(0, 3, 0x802, &["Master.esm"]);
+    plugin.extend(group(
+        group_label(b"GMST"),
+        0,
+        // An override names the master's FormID (`00000800`); a record of the
+        // plugin's own carries its slot (`01000802`).
+        &[
+            gmst(0x0000_0800, b"fOverride\0", 4.5),
+            gmst(0x0100_0802, b"fPlugin\0", 5.5),
+        ]
+        .concat(),
+    ));
+    let master = open("Master.esm", master);
+    let plugin = open("Plugin.esp", plugin);
+    let mut session = Session::with_files(GameMode::gmSSE, vec![master, plugin]);
+    session.allow_edit(true);
+    session
+}
+
+/// A scripts folder of its own for a test, holding the script.
+fn script_folder(name: &str, text: &str) -> PathBuf {
+    let dir = std::env::temp_dir().join(format!("xedit-adapter-{}-{name}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join(format!("{name}.pas")), text).unwrap();
+    dir
+}
+
+fn run(session: &mut Session, folder: &Path, name: &str, extra: serde_json::Value) -> serde_json::Value {
+    let mut params = json!({
+        "file": format!("{name}.pas"),
+        "scripts": folder.display().to_string(),
+        "save": false,
+    });
+    for (key, value) in extra.as_object().unwrap() {
+        params[key] = value.clone();
+    }
+    Registry::standard()
+        .call(session, "script.run", params)
+        .unwrap_or_else(|error| panic!("{error}"))
+}
+
+/// The messages without the `[mm:ss]` prefixes the lines of the action carry.
+fn lines(result: &serde_json::Value) -> Vec<String> {
+    result["messages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|line| {
+            let line = line.as_str().unwrap();
+            match line.strip_prefix('[') {
+                Some(rest) => match rest.split_once("] ") {
+                    Some((time, text)) if time.contains(':') => text.to_owned(),
+                    _ => line.to_owned(),
+                },
+                None => line.to_owned(),
+            }
+        })
+        .collect()
+}
+
+/// The index of a subrecord in a plugin's bytes, or `None`.
+fn sub_record_at(bytes: &[u8], signature: &[u8]) -> Option<usize> {
+    bytes.windows(signature.len()).position(|window| window == signature)
+}
+
+/// The loaded plugin, for the assertions on the saved bytes.
+fn plugin_file(_session: &Session) -> Arc<FileImpl> {
+    use xedit_core::interface::Element;
+    xedit_core::interface::files()
+        .into_iter()
+        .filter_map(|file| file.as_element_impl().and_then(|element| element.file_impl()))
+        .find(|file| file.get_name() == "Plugin.esp")
+        .expect("the plugin is loaded")
+}
+
+/// Runs a script of the corpus of the oracle's `Edit Scripts`; `None`
+/// without `XEDIT_ORACLE_DIR`.
+fn corpus_folder() -> Option<PathBuf> {
+    let oracle = std::env::var_os("XEDIT_ORACLE_DIR")?;
+    Some(PathBuf::from(oracle).join("Edit Scripts"))
+}
+
+//=== IwbElement =============================================================
+
+const ELEMENT_SCRIPT: &str = "\
+unit Elements;
+function Process(e: IInterface): Integer;
+var
+  f: IInterface;
+begin
+  Result := 0;
+  if Signature(e) <> 'GMST' then Exit;
+  AddMessage('name=' + Name(e));
+  AddMessage('path=' + Path(e));
+  AddMessage('full=' + FullPath(e));
+  AddMessage('short=' + ShortName(e));
+  AddMessage('display=' + DisplayName(e));
+  AddMessage('base=' + BaseName(e));
+  AddMessage('value=' + GetValue(e));
+  AddMessage('edit=' + GetEditValue(e));
+  AddMessage('native=' + GetNativeValue(ElementByPath(e, 'DATA\\Float')));
+  AddMessage('datanative=' + GetElementNativeValues(e, 'DATA\\Float'));
+  AddMessage('type=' + ElementTypeAsText(e));
+  AddMessage('deftype=' + DefTypeAsText(e));
+  AddMessage('sig=' + Signature(e));
+  AddMessage('edid=' + EditorID(e));
+  AddMessage('formid=' + GetLoadOrderFormID(e));
+  AddMessage('count=' + ElementCount(e));
+  AddMessage('byindex=' + Name(ElementByIndex(e, 0)));
+  AddMessage('byname=' + Name(ElementByName(e, 'DATA')));
+  AddMessage('bysig=' + Name(ElementBySignature(e, 'EDID')));
+  AddMessage('bypath=' + Name(ElementByPath(e, 'DATA')));
+  AddMessage('exists=' + ElementExists(e, 'EDID'));
+  AddMessage('editvals=' + GetElementEditValues(e, 'EDID'));
+  AddMessage('count2=' + ElementCount(e));
+  f := GetFile(e);
+  AddMessage('file=' + GetFileName(f));
+end;
+end.
+";
+
+#[test]
+fn the_element_functions_read_the_tree() {
+    let _guard = test_lock();
+    let folder = script_folder("Elements", ELEMENT_SCRIPT);
+    let mut session = open_session();
+    let result = run(&mut session, &folder, "Elements", json!({}));
+    assert_eq!(result["aborted"], false, "{:?}", lines(&result));
+    assert_eq!(
+        lines(&result),
+        vec![
+            "Start: Applying script \"Elements\"",
+            "name=GMST - Game Setting [00000802] <fThird>",
+            "path=GMST",
+            // `FullPath` of the port has no `[position]` where upstream
+            // writes one; the difference is owed to the step-10 comparison.
+            "full=Master.esm \\ GRUP Top \"GMST\" \\ GMST - Game Setting [00000802] <fThird>",
+            // `GetShortNameInternal` with `wbDisplayShorterNames` off, and
+            // `GetDisplayName`'s fallback to the summary for a\ GMST without a
+            // `FULL` subrecord.
+            "short=GMST - Game Setting [00000802] <fThird>",
+            "display=3.5",
+            "base=GMST - Game Setting [00000802] <fThird>",
+            // `TwbMainRecord.GetValue` is empty; `GetEditValue` is the FormID
+            // and `DefType` of a record is its record definition.
+            "value=",
+            "edit=00000802",
+            // The native value of the `Float` member of the `DATA` union: the
+            // port reports the single as a double without Delphi's `Single`
+            // rounding (a step-10 comparison item).
+            "native=3.49999999116335",
+            "datanative=3.49999999116335",
+            "type=etMainRecord",
+            "deftype=dtRecord",
+            "sig=GMST",
+            "edid=fThird",
+            // A Cardinal concatenated as its decimal text, as in Delphi.
+            "formid=2050",
+            // The port's main record has the `Record Header` among its
+            // elements (the path `Record Header\...` the corpus scripts use);
+            // upstream keeps the header outside `Elements`.
+            "count=3",
+            "byindex=Record Header",
+            // `ElementByName` is a name or display name lookup upstream too:
+            // the subrecord's name is `DATA - Value`, so `DATA` finds none.
+            "byname=",
+            "bysig=EDID - Editor ID",
+            "bypath=DATA - Value",
+            "exists=True",
+            "editvals=fThird",
+            "count2=3",
+            "file=Master.esm",
+            "name=GMST - Game Setting [00000801] <fOther>",
+            "path=GMST",
+            "full=Master.esm \\ GRUP Top \"GMST\" \\ GMST - Game Setting [00000801] <fOther>",
+            "short=GMST - Game Setting [00000801] <fOther>",
+            "display=2.5",
+            "base=GMST - Game Setting [00000801] <fOther>",
+            "value=",
+            "edit=00000801",
+            "native=2.49999999368811",
+            "datanative=2.49999999368811",
+            "type=etMainRecord",
+            "deftype=dtRecord",
+            "sig=GMST",
+            "edid=fOther",
+            "formid=2049",
+            "count=3",
+            "byindex=Record Header",
+            "byname=",
+            "bysig=EDID - Editor ID",
+            "bypath=DATA - Value",
+            "exists=True",
+            "editvals=fOther",
+            "count2=3",
+            "file=Master.esm",
+            "name=GMST - Game Setting [00000800] <fMaster>",
+            "path=GMST",
+            "full=Master.esm \\ GRUP Top \"GMST\" \\ GMST - Game Setting [00000800] <fMaster>",
+            "short=GMST - Game Setting [00000800] <fMaster>",
+            "display=1.5",
+            "base=GMST - Game Setting [00000800] <fMaster>",
+            "value=",
+            "edit=00000800",
+            "native=1.49999999621286",
+            "datanative=1.49999999621286",
+            "type=etMainRecord",
+            "deftype=dtRecord",
+            "sig=GMST",
+            "edid=fMaster",
+            "formid=2048",
+            "count=3",
+            "byindex=Record Header",
+            "byname=",
+            "bysig=EDID - Editor ID",
+            "bypath=DATA - Value",
+            "exists=True",
+            "editvals=fMaster",
+            "count2=3",
+            "file=Master.esm",
+            "name=GMST - Game Setting [01000802] <fPlugin>",
+            "path=GMST",
+            "full=Plugin.esp \\ GRUP Top \"GMST\" \\ GMST - Game Setting [01000802] <fPlugin>",
+            "short=GMST - Game Setting [01000802] <fPlugin>",
+            "display=5.5",
+            "base=GMST - Game Setting [01000802] <fPlugin>",
+            "value=",
+            "edit=01000802",
+            "native=5.49999998611383",
+            "datanative=5.49999998611383",
+            "type=etMainRecord",
+            "deftype=dtRecord",
+            "sig=GMST",
+            "edid=fPlugin",
+            "formid=16779266",
+            "count=3",
+            "byindex=Record Header",
+            "byname=",
+            "bysig=EDID - Editor ID",
+            "bypath=DATA - Value",
+            "exists=True",
+            "editvals=fPlugin",
+            "count2=3",
+            "file=Plugin.esp",
+            "name=GMST - Game Setting [00000800] <fOverride>",
+            "path=GMST",
+            "full=Plugin.esp \\ GRUP Top \"GMST\" \\ GMST - Game Setting [00000800] <fOverride>",
+            "short=GMST - Game Setting [00000800] <fOverride>",
+            "display=4.5",
+            "base=GMST - Game Setting [00000800] <fOverride>",
+            "value=",
+            "edit=00000800",
+            "native=4.49999998863859",
+            "datanative=4.49999998863859",
+            "type=etMainRecord",
+            "deftype=dtRecord",
+            "sig=GMST",
+            "edid=fOverride",
+            "formid=2048",
+            "count=3",
+            "byindex=Record Header",
+            "byname=",
+            "bysig=EDID - Editor ID",
+            "bypath=DATA - Value",
+            "exists=True",
+            "editvals=fOverride",
+            "count2=3",
+            "file=Plugin.esp",
+            "Done: Applying script \"Elements\", Processed Records: 7, Elapsed Time: 00:00",
+            "You can close this application now.",
+        ]
+    );
+    let _ = std::fs::remove_dir_all(&folder);
+}
+
+const CONTAINER_SCRIPT: &str = "\
+unit Containers;
+function Process(e: IInterface): Integer;
+var
+  c: IInterface;
+begin
+  Result := 0;
+  if Signature(e) <> 'GMST' then Exit;
+  c := GetContainer(ElementBySignature(e, 'EDID'));
+  AddMessage('container=' + Name(c));
+  AddMessage('last=' + Name(LastElement(e)));
+  AddMessage('indexof=' + IntToStr(IndexOf(e, ElementBySignature(e, 'DATA'))));
+  AddMessage('equals=' + BoolToStr(Equals(e, e)));
+  AddMessage('containing=' + Name(ContainingMainRecord(ElementBySignature(e, 'EDID'))));
+end;
+end.
+";
+
+#[test]
+fn the_container_functions_walk_an_element() {
+    let _guard = test_lock();
+    let folder = script_folder("Containers", CONTAINER_SCRIPT);
+    let mut session = open_session();
+    let result = run(&mut session, &folder, "Containers", json!({}));
+    // `IntToStr`/`BoolToStr` are the `SysUtils` unit of phase 6 step 8, which
+    // the port does not register yet: the script stops on its first call and
+    // the element functions before it are what the assertions read.
+    let lines = lines(&result);
+    assert_eq!(lines[1], "container=GMST - Game Setting [00000802] <fThird>");
+    assert_eq!(lines[2], "last=DATA - Value");
+    assert!(lines[3].contains("Undeclared Identifier 'IntToStr'"), "{:?}", lines);
+    let _ = std::fs::remove_dir_all(&folder);
+}
+
+//=== IwbElement: the edits, and what they save ==============================
+
+const EDIT_SCRIPT: &str = "\
+unit Edits;
+function Process(e: IInterface): Integer;
+begin
+  Result := 0;
+  if Signature(e) <> 'GMST' then Exit;
+  if EditorID(e) <> 'fPlugin' then Exit;
+  SetEditValue(ElementBySignature(e, 'EDID'), 'fRenamed');
+  SetElementEditValues(e, 'EDID', 'fRenamed');
+  SetElementNativeValues(e, 'DATA\\Float', 9.5);
+  AddMessage('renamed=' + EditorID(e) + ' value=' + GetElementEditValues(e, 'DATA\\Float'));
+end;
+end.
+";
+
+#[test]
+fn the_element_setters_change_the_record() {
+    let _guard = test_lock();
+    let folder = script_folder("Edits", EDIT_SCRIPT);
+    let mut session = open_session();
+    let plugin = plugin_file(&session);
+    let result = run(&mut session, &folder, "Edits", json!({}));
+    let lines = lines(&result);
+    assert!(
+        lines.iter().any(|line| line == "renamed=fRenamed value=9.500000"),
+        "{lines:?}"
+    );
+    // The change is on the file, which the next save writes.
+    let saved = plugin
+        .write_to_bytes(xedit_core::implementation::ResetModified::rmSetInternal)
+        .unwrap();
+    let edid = sub_record_at(&saved, b"fRenamed").unwrap();
+    assert_eq!(&saved[edid..edid + 8], b"fRenamed");
+    assert_eq!(sub_record_at(&saved, b"fPlugin"), None, "the old editor ID is gone");
+    let _ = std::fs::remove_dir_all(&folder);
+}
+
+//=== IwbMainRecord ==========================================================
+
+const RECORD_SCRIPT: &str = "\
+unit Records;
+function Process(e: IInterface): Integer;
+var
+  m: IInterface;
+begin
+  Result := 0;
+  if Signature(e) <> 'GMST' then Exit;
+  if EditorID(e) <> 'fMaster' then Exit;
+  m := MasterOrSelf(e);
+  AddMessage('self=' + Name(m));
+  AddMessage('overrides=' + IntToStr(OverrideCount(m)));
+  AddMessage('override0=' + Name(OverrideByIndex(m, 0)));
+  AddMessage('winning=' + Name(WinningOverride(m)));
+  AddMessage('highest=' + Name(HighestOverrideOrSelf(m, 1)));
+  AddMessage('ismaster=' + BoolToStr(IsMaster(m)));
+  AddMessage('iswinning=' + BoolToStr(IsWinningOverride(m)));
+  AddMessage('version=' + IntToStr(GetFormVersion(m)));
+  AddMessage('childgroup=' + Name(ChildGroup(m)));
+  AddMessage('deleted=' + BoolToStr(GetIsDeleted(m)));
+  AddMessage('persistent=' + BoolToStr(GetIsPersistent(m)));
+  AddMessage('refcount=' + IntToStr(ReferencedByCount(m)));
+end;
+end.
+";
+
+#[test]
+fn the_record_functions_walk_the_overrides() {
+    let _guard = test_lock();
+    let folder = script_folder("Records", RECORD_SCRIPT);
+    let mut session = open_session();
+    let result = run(&mut session, &folder, "Records", json!({}));
+    let lines = lines(&result);
+    let text = lines.join("\n");
+    // The record functions resolve (no `Undeclared Identifier`); the `IntToStr`
+    // of the `SysUtils` unit of step 8 stops the script at the second call.
+    assert_eq!(lines[1], "self=GMST - Game Setting [00000800] <fMaster>");
+    assert!(text.contains("Undeclared Identifier 'IntToStr'"), "{lines:?}");
+    let _ = std::fs::remove_dir_all(&folder);
+}
+
+const RECORD_VALUES_SCRIPT: &str = "\
+unit RecordValues;
+function Process(e: IInterface): Integer;
+var
+  m: IInterface;
+begin
+  Result := 0;
+  if Signature(e) <> 'GMST' then Exit;
+  if EditorID(e) <> 'fMaster' then Exit;
+  m := MasterOrSelf(e);
+  AddMessage('override0=' + Name(OverrideByIndex(m, 0)));
+  AddMessage('winning=' + Name(WinningOverride(m)));
+  AddMessage('highest=' + Name(HighestOverrideOrSelf(m, 1)));
+  AddMessage('iswinning=' + BoolToStr(IsWinningOverride(m)));
+  AddMessage('childgroup=' + Name(ChildGroup(m)));
+  AddMessage('deleted=' + BoolToStr(GetIsDeleted(m)));
+  AddMessage('persistent=' + BoolToStr(GetIsPersistent(m)));
+  m := OverrideByIndex(m, 0);
+  AddMessage('override master=[' + Name(Master(m)) + ']');
+  AddMessage('override masterorself=[' + Name(MasterOrSelf(m)) + ']');
+end;
+end.
+";
+
+#[test]
+fn the_record_functions_follow_master_and_override() {
+    let _guard = test_lock();
+    let folder = script_folder("RecordValues", RECORD_VALUES_SCRIPT);
+    let mut session = open_session();
+    // `BoolToStr` is step 8's; replace it with the `Assigned`-free equivalent
+    // the port can run: compare with `True`.
+    let folder_b = script_folder(
+        "RecordValuesB",
+        &RECORD_VALUES_SCRIPT
+            .replace("BoolToStr(GetIsDeleted(m))", "GetIsDeleted(m)")
+            .replace("BoolToStr(GetIsPersistent(m))", "GetIsPersistent(m)")
+            .replace("BoolToStr(IsWinningOverride(m))", "IsWinningOverride(m)")
+            .replace("BoolToStr(IsMaster(m))", "IsMaster(m)"),
+    );
+    let result = run(&mut session, &folder_b, "RecordValuesB", json!({}));
+    let lines = lines(&result);
+    assert_eq!(lines[1], "override0=GMST - Game Setting [00000800] <fOverride>");
+    assert_eq!(lines[2], "winning=GMST - Game Setting [00000800] <fOverride>");
+    assert_eq!(lines[3], "highest=GMST - Game Setting [00000800] <fOverride>");
+    assert_eq!(lines[4], "iswinning=False");
+    assert!(lines[5].starts_with("childgroup="), "{lines:?}");
+    assert_eq!(lines[6], "deleted=False");
+    assert_eq!(lines[7], "persistent=False");
+    assert_eq!(lines[8], "override master=[GMST - Game Setting [00000800] <fMaster>]");
+    assert_eq!(
+        lines[9],
+        "override masterorself=[GMST - Game Setting [00000800] <fMaster>]"
+    );
+    let _ = std::fs::remove_dir_all(&folder);
+    let _ = std::fs::remove_dir_all(&folder_b);
+}
+
+//=== IwbFile ================================================================
+
+const FILE_SCRIPT: &str = "\
+unit Files;
+function Process(e: IInterface): Integer;
+var
+  f, r: IInterface;
+  sl: TStringList;
+begin
+  Result := 0;
+  if Signature(e) <> 'GMST' then Exit;
+  if EditorID(e) <> 'fPlugin' then Exit;
+  AddMessage('files=' + IntToStr(FileCount));
+  f := FileByIndex(1);
+  AddMessage('byname=' + Name(FileByName('[01] Plugin.esp')));
+  AddMessage('name=' + GetFileName(f));
+  AddMessage('masters=' + IntToStr(MasterCount(f)));
+  AddMessage('master0=' + Name(MasterByIndex(f, 0)));
+  AddMessage('records=' + IntToStr(RecordCount(f)));
+  AddMessage('byindex=' + Name(RecordByIndex(f, 0)));
+  r := RecordByFormID(f, $01000802, True);
+  AddMessage('byformid=' + Name(r));
+  r := RecordByEditorID(f, 'fPlugin');
+  AddMessage('byeditorid=' + Name(r));
+  AddMessage('group=' + DisplayName(GroupBySignature(f, 'GMST')));
+  AddMessage('hasgroup=' + HasGroup(f, 'GMST'));
+  AddMessage('hasmaster=' + HasMaster(f, 'Master.esm'));
+  AddMessage('loadorder=' + IntToStr(GetLoadOrder(f)));
+  AddMessage('esm=' + BoolToStr(GetIsESM(f)));
+  AddMessage('canbelight=' + BoolToStr(CanBeLight(f)));
+  sl := TStringList.Create;
+  GetMasters(f, sl);
+  AddMessage('slcount=' + IntToStr(sl.Count) + ' sl0=' + sl.Strings[0]);
+end;
+end.
+";
+
+const FILE_SCRIPT_NO_SYSUTILS: &str = "\
+unit FilesB;
+function Process(e: IInterface): Integer;
+var
+  f, r: IInterface;
+  sl: TStringList;
+begin
+  Result := 0;
+  if Signature(e) <> 'GMST' then Exit;
+  if EditorID(e) <> 'fPlugin' then Exit;
+  f := FileByIndex(1);
+  AddMessage('byname=' + Name(FileByName('[01] Plugin.esp')));
+  AddMessage('name=' + GetFileName(f));
+  AddMessage('master0=' + Name(MasterByIndex(f, 0)));
+  AddMessage('byindex=' + Name(RecordByIndex(f, 0)));
+  r := RecordByFormID(f, $01000802, True);
+  AddMessage('byformid=' + Name(r));
+  r := RecordByEditorID(f, 'fPlugin');
+  AddMessage('byeditorid=' + Name(r));
+  AddMessage('group=' + DisplayName(GroupBySignature(f, 'GMST')));
+  AddMessage('hasgroup=' + HasGroup(f, 'GMST'));
+  AddMessage('hasmaster=' + HasMaster(f, 'Master.esm'));
+  AddMessage('loadorder=' + GetLoadOrder(f));
+  AddMessage('esm=' + GetIsESM(f));
+  AddMessage('canbelight=' + CanBeLight(f));
+  AddMessage('loadorderid=' + GetLoadOrderFileID(f));
+  sl := TStringList.Create;
+  GetMasters(f, sl);
+  AddMessage('slcount=' + sl.Count);
+  // An indexed property read (`sl.Strings[0]`) is not dispatched by the
+  // interpreter yet (see the PLAN notes); the call form is.
+  AddMessage('sl0=' + sl.Strings(0));
+  sl.Free;
+end;
+end.
+";
+
+#[test]
+fn the_file_functions_read_the_load_order() {
+    let _guard = test_lock();
+    let folder = script_folder("FilesB", FILE_SCRIPT_NO_SYSUTILS);
+    let mut session = open_session();
+    let result = run(&mut session, &folder, "FilesB", json!({}));
+    assert_eq!(result["aborted"], false, "{:?}", lines(&result));
+    assert_eq!(
+        lines(&result),
+        vec![
+            "Start: Applying script \"FilesB\"",
+            "byname=[01] Plugin.esp",
+            "name=Plugin.esp",
+            "master0=[00] Master.esm",
+            "byindex=GMST - Game Setting [00000800] <fOverride>",
+            "byformid=GMST - Game Setting [01000802] <fPlugin>",
+            "byeditorid=GMST - Game Setting [01000802] <fPlugin>",
+            "group=GRUP Top \"GMST\"",
+            "hasgroup=True",
+            "hasmaster=True",
+            "loadorder=1",
+            "esm=False",
+            "canbelight=False",
+            "loadorderid=01",
+            "slcount=1",
+            "sl0=Master.esm",
+            "Done: Applying script \"FilesB\", Processed Records: 7, Elapsed Time: 00:00",
+            "You can close this application now.",
+        ]
+    );
+    let _ = std::fs::remove_dir_all(&folder);
+    let _ = &FILE_SCRIPT;
+}
+
+//=== xejviScriptAdapterResource =============================================
+
+const RESOURCE_SCRIPT: &str = "\
+unit Resources;
+function Process(e: IInterface): Integer;
+var
+  cell: TwbGridCell;
+  v: TwbVector;
+  sl: TStringList;
+begin
+  Result := 0;
+  if Signature(e) <> 'GMST' then Exit;
+  if EditorID(e) <> 'fPlugin' then Exit;
+  AddMessage('crc=' + IntToHex(bscrc32('meshes\\test.nif'), 8));
+  cell.x := 5;
+  cell.y := -3;
+  AddMessage('label=' + IntToHex(wbGridCellToGroupLabel(cell), 8));
+  AddMessage('assettype=' + AssetTypeByExtension('meshes\\test.nif'));
+  AddMessage('assetfolder=' + AssetTypeByFolder('textures\\a.dds'));
+  sl := TStringList.Create;
+  sl.Add('meshes');
+  sl.Add('textures');
+  AddMessage('instring=' + IntToStr(wbStringListInString(sl, 'x\\meshes\\y.dds')));
+end;
+end.
+";
+
+const RESOURCE_SCRIPT_NO_SYSUTILS: &str = "\
+unit ResourcesB;
+function Process(e: IInterface): Integer;
+var
+  cell: TwbGridCell;
+  v: TwbVector;
+  sl: TStringList;
+begin
+  Result := 0;
+  if Signature(e) <> 'GMST' then Exit;
+  if EditorID(e) <> 'fPlugin' then Exit;
+  cell.x := 5;
+  cell.y := -3;
+  AddMessage('label=' + wbGridCellToGroupLabel(cell));
+  AddMessage('assetext=' + AssetTypeByExtension('meshes\\test.nif'));
+  AddMessage('assetfolder=' + AssetTypeByFolder('textures\\a.dds'));
+  v.x := 100.0;
+  v.y := -100.0;
+  v.z := 0.0;
+  cell.x := wbPositionToGridCell(v).x;
+  cell.y := wbPositionToGridCell(v).y;
+  AddMessage('cell=' + cell.x + ',' + cell.y);
+  sl := TStringList.Create;
+  sl.Add('meshes');
+  sl.Add('textures');
+  AddMessage('instring=' + wbStringListInString(sl, 'x\\meshes\\y.dds'));
+  AddMessage('notfound=' + wbStringListInString(sl, 'x\\nope\\y.dds'));
+  AddMessage('exists=' + ResourceExists('meshes\\nope.nif'));
+  sl.Free;
+end;
+end.
+";
+
+#[test]
+fn the_resource_functions_hash_and_map() {
+    let _guard = test_lock();
+    let folder = script_folder("ResourcesB", RESOURCE_SCRIPT_NO_SYSUTILS);
+    let mut session = open_session();
+    let result = run(&mut session, &folder, "ResourcesB", json!({}));
+    assert_eq!(result["aborted"], false, "{:?}", lines(&result));
+    let lines = lines(&result);
+    // `wbGridCellToGroupLabel(5,-3)`: the label the port's `grid_cell_to_group_label`
+    // gives (the oracle comparison is phase 6 step 10's).
+    assert_eq!(lines[1], "label=393213");
+    assert_eq!(lines[2], "assetext=1"); // atMesh
+    assert_eq!(lines[3], "assetfolder=2");
+    assert_eq!(lines[4], "cell=0,-1");
+    assert_eq!(lines[5], "instring=0");
+    assert_eq!(lines[6], "notfound=-1");
+    assert_eq!(lines[7], "exists=False");
+    let _ = std::fs::remove_dir_all(&folder);
+    let _ = RESOURCE_SCRIPT;
+}
+
+//=== the corpus scripts these units need ====================================
+
+#[test]
+fn the_corpus_scripts_that_need_these_units_run() {
+    let _guard = test_lock();
+    let Some(folder) = corpus_folder() else {
+        return;
+    };
+    // A plugin with a record whose FormID index is zero (`List null
+    // FormID.pas`) and a game setting of its own.
+    let mut session = {
+        xedit_core::implementation::clear_files_map();
+        xedit_core::implementation::reset_load_order_slots();
+        xedit_core::interface::clear_files();
+        xedit_session::dump::setup_game("sse").unwrap();
+        xedit_session::save::apply_edit_settings(GameMode::gmSSE);
+        let mut master = header(1, 2, 0x802, &[]);
+        master.extend(group(
+            group_label(b"GMST"),
+            0,
+            &[gmst(0x800, b"fMaster\0", 1.5), gmst(0x801, b"fOther\0", 2.5)].concat(),
+        ));
+        let mut plugin = header(0, 1, 0x802, &["Master.esm"]);
+        plugin.extend(group(group_label(b"GMST"), 0, &gmst(0x0100_0000, b"fNullId\0", 3.5)));
+        let master = open("Master.esm", master);
+        let plugin = open("Plugin.esp", plugin);
+        let mut session = Session::with_files(GameMode::gmSSE, vec![master, plugin]);
+        session.allow_edit(true);
+        session
+    };
+
+    // `List null FormID.pas`: the walk, `Signature`, `FormID` and `FullPath`.
+    let result = run(&mut session, &folder, "List null FormID", json!({}));
+    assert_eq!(result["aborted"], false, "{:?}", lines(&result));
+    assert_eq!(
+        lines(&result),
+        vec![
+            "Start: Applying script \"List null FormID\"",
+            "Plugin.esp \\ GRUP Top \"GMST\" \\ GMST - Game Setting [00000000] <fNullId>",
+            "Done: Applying script \"List null FormID\", Processed Records: 5, Elapsed Time: 00:00",
+            "You can close this application now.",
+        ]
+    );
+
+    // `Check for invalid alternate textures.pas`: the element walk over every
+    // record with the resource functions of the corpus script it reaches.
+    let result = run(&mut session, &folder, "Check for invalid alternate textures", json!({}));
+    assert_eq!(result["aborted"], false, "{:?}", lines(&result));
+    assert_eq!(
+        lines(&result),
+        vec![
+            "Start: Applying script \"Check for invalid alternate textures\"",
+            "Done: Applying script \"Check for invalid alternate textures\", Processed Records: 5, Elapsed Time: 00:00",
+            "You can close this application now.",
+        ]
+    );
+}
+
+#[test]
+fn the_corpus_script_that_edits_a_record() {
+    let _guard = test_lock();
+    let Some(folder) = corpus_folder() else {
+        return;
+    };
+    // A master light, a plugin cell and a been placed reference of the light:
+    // `Skyrim - Add shadow bias to lights.pas` adds the `XLIG` subrecord to
+    // the reference and writes 23.76 into its shadow depth bias.
+    let dir = std::env::temp_dir().join(format!("xedit-adapter-light-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let mut session = {
+        xedit_core::implementation::clear_files_map();
+        xedit_core::implementation::reset_load_order_slots();
+        xedit_core::interface::clear_files();
+        xedit_session::dump::setup_game("sse").unwrap();
+        xedit_session::save::apply_edit_settings(GameMode::gmSSE);
+        let light = {
+            let mut data = sub_record(b"EDID", b"TestLight\0");
+            data.extend(sub_record(b"DATA", &[0u8; 16]));
+            main_record(b"LIGH", 0, 0x800, &data)
+        };
+        let mut master = header(1, 2, 0x802, &[]);
+        master.extend(group(group_label(b"LIGH"), 0, &light));
+        let cell = {
+            let data = sub_record(b"EDID", b"PluginCell\0");
+            main_record(b"CELL", 0, 0x0100_0800, &data)
+        };
+        let reference = {
+            let mut data = sub_record(b"NAME", &0x0000_0800u32.to_le_bytes());
+            let mut position = Vec::new();
+            for value in [0.0f32, 0.0, 0.0, 0.0, 0.0, 0.0] {
+                position.extend_from_slice(&value.to_le_bytes());
+            }
+            data.extend(sub_record(b"DATA", &position));
+            main_record(b"REFR", 0, 0x0100_0801, &data)
+        };
+        // The `REFR` is a temporary child of the cell.
+        let children = group(0x0100_0800, 9, &reference);
+        let mut plugin = header(0, 2, 0x802, &["Master.esm"]);
+        plugin.extend(group(group_label(b"CELL"), 0, &[cell, children].concat()));
+        let master = open("Master.esm", master);
+        let plugin = open("Plugin.esp", plugin);
+        let mut session = Session::with_files(GameMode::gmSSE, vec![master, plugin]);
+        session.allow_edit(true);
+        session
+    };
+    let result = run(&mut session, &folder, "Skyrim - Add shadow bias to lights", json!({}));
+    assert_eq!(result["aborted"], false, "{:?}", lines(&result));
+    // The script prints nothing; the change is the `XLIG` subrecord of the
+    // saved plugin, its 20 bytes with 23.76 as the fourth float (the shadow
+    // depth bias of the structure).
+    let plugin = plugin_file(&session);
+    let saved = plugin
+        .write_to_bytes(xedit_core::implementation::ResetModified::rmSetInternal)
+        .unwrap();
+    let xlig = sub_record_at(&saved, b"XLIG").expect("the script added XLIG");
+    assert_eq!(&saved[xlig..xlig + 4], b"XLIG");
+    assert_eq!(u16::from_le_bytes([saved[xlig + 4], saved[xlig + 5]]), 20);
+    let bias = 23.76f32.to_le_bytes();
+    assert!(
+        saved[xlig..xlig + 28].windows(4).any(|window| window == bias),
+        "the shadow depth bias 23.76 is in the record: {:02X?}",
+        &saved[xlig..xlig + 28]
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}

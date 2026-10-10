@@ -795,23 +795,23 @@ impl ScriptRunState {
     }
 
     /// `Length(frmMain.Files)`.
-    fn file_count(&self) -> usize {
+    pub(crate) fn file_count(&self) -> usize {
         self.files.len()
     }
 
-    fn file_at(&self, index: i64) -> Option<ElementRef> {
+    pub(crate) fn file_at(&self, index: i64) -> Option<ElementRef> {
         usize::try_from(index)
             .ok()
             .and_then(|index| self.files.get(index).cloned())
     }
 
     /// `_File.MasterCount[True]` (`IwbFile_MasterCount`).
-    fn master_count(&self, file: &ElementRef) -> Option<i32> {
+    pub(crate) fn master_count(&self, file: &ElementRef) -> Option<i32> {
         Some(file.get_file()?.get_master_count(true))
     }
 
     /// `_File.Masters[j, True]` (`IwbFile_MasterByIndex`).
-    fn master_at(&self, file: &ElementRef, index: i64) -> Option<ElementRef> {
+    pub(crate) fn master_at(&self, file: &ElementRef, index: i64) -> Option<ElementRef> {
         let file = file.get_file()?;
         let index = i32::try_from(index).ok()?;
         if index >= file.get_master_count(true) {
@@ -823,7 +823,7 @@ impl ScriptRunState {
 }
 
 /// `TwbSignature` as a string: four characters.
-fn signature_text(signature: Signature) -> String {
+pub(crate) fn signature_text(signature: Signature) -> String {
     String::from_utf8_lossy(&signature.0).into_owned()
 }
 
@@ -1494,6 +1494,7 @@ pub fn run_script(
     let element_class = interpreter.adapter.add_class(C_UNIT, "IwbElement", None);
     let state = Rc::new(RefCell::new(ScriptRunState::new(files, element_class)));
     register_functions(&mut interpreter.adapter, &state);
+    crate::script_units::register_units(&mut interpreter.adapter, &state);
     {
         let state = state.clone();
         interpreter.on_set_value = Some(Box::new(move |identifier, value, _args| {

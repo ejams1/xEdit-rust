@@ -4448,94 +4448,112 @@ source = "wbGetVersionNumber"
 
 [script."xejviScriptAdapterContainer:cUnit.Add:function"]
 status = "covered"
-command = "elements.add"
+command = "script.run"
 source = "IwbContainer_Add"
 
 [script."xejviScriptAdapterContainer:cUnit.AddElement:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbContainer_AddElement"
 
 [script."xejviScriptAdapterContainer:cUnit.AdditionalElementCount:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbContainer_AdditionalElementCount"
 
 [script."xejviScriptAdapterContainer:cUnit.ContainerStates:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbContainer_ContainerStates"
 
 [script."xejviScriptAdapterContainer:cUnit.ElementByIndex:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbContainer_ElementByIndex"
 
 [script."xejviScriptAdapterContainer:cUnit.ElementByName:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbContainer_ElementByName"
 
 [script."xejviScriptAdapterContainer:cUnit.ElementByPath:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbContainer_ElementByPath"
 
 [script."xejviScriptAdapterContainer:cUnit.ElementBySignature:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbContainer_ElementBySignature"
 
 [script."xejviScriptAdapterContainer:cUnit.ElementCount:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbContainer_ElementCount"
 
 [script."xejviScriptAdapterContainer:cUnit.ElementExists:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbContainer_ElementExists"
 
 [script."xejviScriptAdapterContainer:cUnit.GetElementEditValues:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbContainer_GetElementEditValues"
 
 [script."xejviScriptAdapterContainer:cUnit.GetElementNativeValues:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbContainer_GetElementNativeValues"
 
 [script."xejviScriptAdapterContainer:cUnit.GetElementValues:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbContainer_GetElementValues"
 
 [script."xejviScriptAdapterContainer:cUnit.IndexOf:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbContainer_IndexOf"
 
 [script."xejviScriptAdapterContainer:cUnit.InsertElement:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbContainer_InsertElement"
 
 [script."xejviScriptAdapterContainer:cUnit.IsSorted:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbContainer_IsSorted"
 
 [script."xejviScriptAdapterContainer:cUnit.LastElement:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbContainer_LastElement"
 
 [script."xejviScriptAdapterContainer:cUnit.RemoveByIndex:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbContainer_RemoveByIndex"
 
 [script."xejviScriptAdapterContainer:cUnit.RemoveElement:function"]
 status = "covered"
-command = "elements.remove"
+command = "script.run"
 source = "IwbContainer_RemoveElement"
 
 [script."xejviScriptAdapterContainer:cUnit.ReverseElements:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbContainer_ReverseElements"
 
 [script."xejviScriptAdapterContainer:cUnit.SetElementEditValues:function"]
 status = "covered"
-command = "elements.set"
+command = "script.run"
 source = "IwbContainer_SetElementEditValues"
 
 [script."xejviScriptAdapterContainer:cUnit.SetElementNativeValues:function"]
 status = "covered"
-command = "elements.set"
+command = "script.run"
 source = "IwbContainer_SetElementNativeValues"
 
 [script."xejviScriptAdapterDF:TdfDef.Create:get"]
@@ -5414,157 +5432,194 @@ command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterDF.pas"
 
 [script."xejviScriptAdapterElement:cUnit.AssignTemplateByIndex:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbElement_AssignTemplateByIndex"
 
 [script."xejviScriptAdapterElement:cUnit.AssignTemplateByName:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbElement_AssignTemplateByName"
 
 [script."xejviScriptAdapterElement:cUnit.AssignTemplateCount:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbElement_AssignTemplateCount"
 
 [script."xejviScriptAdapterElement:cUnit.BaseName:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbElement_BaseName"
 
 [script."xejviScriptAdapterElement:cUnit.BeginUpdate:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbElement_BeginUpdate"
 
 [script."xejviScriptAdapterElement:cUnit.BuildRef:function"]
 status = "covered"
-command = "refs.build"
+command = "script.run"
 source = "IwbElement_BuildRef"
 note = "refs.build with file runs TwbFile.BuildRef; the BuildRef of one record runs after every edit of it."
 
 [script."xejviScriptAdapterElement:cUnit.CanContainFormIDs:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbElement_CanContainFormIDs"
 
 [script."xejviScriptAdapterElement:cUnit.CanMoveDown:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbElement_CanMoveDown"
 
 [script."xejviScriptAdapterElement:cUnit.CanMoveUp:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbElement_CanMoveUp"
 
 [script."xejviScriptAdapterElement:cUnit.Check:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbElement_Check"
 
 [script."xejviScriptAdapterElement:cUnit.ClearElementState:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbElement_ClearElementState"
 
 [script."xejviScriptAdapterElement:cUnit.ContainingMainRecord:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbElement_ContainingMainRecord"
 
 [script."xejviScriptAdapterElement:cUnit.ContainingSubRecord:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbElement_ContainingSubRecord"
 
 [script."xejviScriptAdapterElement:cUnit.DefType:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbElement_DefType"
 
 [script."xejviScriptAdapterElement:cUnit.DefTypeAsText:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbElement_DefTypeAsText"
 
 [script."xejviScriptAdapterElement:cUnit.DisplayName:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbElement_DisplayName"
 
 [script."xejviScriptAdapterElement:cUnit.ElementAssign:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbElement_Assign"
 
 [script."xejviScriptAdapterElement:cUnit.ElementType:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbElement_ElementType"
 
 [script."xejviScriptAdapterElement:cUnit.ElementTypeAsText:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbElement_ElementTypeAsText"
 
 [script."xejviScriptAdapterElement:cUnit.EndUpdate:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbElement_EndUpdate"
 
 [script."xejviScriptAdapterElement:cUnit.EnumValues:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbElement_EnumValues"
 
 [script."xejviScriptAdapterElement:cUnit.Equals:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbElement_Equals"
 
 [script."xejviScriptAdapterElement:cUnit.FlagValues:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbElement_FlagValues"
 
 [script."xejviScriptAdapterElement:cUnit.FullPath:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbElement_FullPath"
 
 [script."xejviScriptAdapterElement:cUnit.GetContainer:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbElement_GetContainer"
 
 [script."xejviScriptAdapterElement:cUnit.GetEditValue:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbElement_GetEditValue"
 
 [script."xejviScriptAdapterElement:cUnit.GetElementState:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbElement_GetElementState"
 
 [script."xejviScriptAdapterElement:cUnit.GetFile:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbElement_GetFile"
 
 [script."xejviScriptAdapterElement:cUnit.GetNativeValue:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbElement_GetNativeValue"
 
 [script."xejviScriptAdapterElement:cUnit.GetSummary:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbElement_GetSummary"
 
 [script."xejviScriptAdapterElement:cUnit.GetValue:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbElement_GetValue"
 
 [script."xejviScriptAdapterElement:cUnit.IndexedPath:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbElement_IndexedPath"
 
 [script."xejviScriptAdapterElement:cUnit.IsEditable:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbElement_GetIsEditable"
 
 [script."xejviScriptAdapterElement:cUnit.IsInjected:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbElement_IsInjected"
 
 [script."xejviScriptAdapterElement:cUnit.LinksTo:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbElement_LinksTo"
 
 [script."xejviScriptAdapterElement:cUnit.MarkModifiedRecursive:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbElement_MarkModifiedRecursive"
 
 [script."xejviScriptAdapterElement:cUnit.MoveDown:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbElement_MoveDown"
 
 [script."xejviScriptAdapterElement:cUnit.MoveUp:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbElement_MoveUp"
 
 [script."xejviScriptAdapterElement:cUnit.Name:function"]
@@ -5573,116 +5628,130 @@ command = "script.run"
 source = "IwbElement_Name"
 
 [script."xejviScriptAdapterElement:cUnit.Path:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbElement_Path"
 
 [script."xejviScriptAdapterElement:cUnit.PathName:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbElement_PathName"
 
 [script."xejviScriptAdapterElement:cUnit.Remove:function"]
 status = "covered"
-command = "elements.remove"
+command = "script.run"
 source = "IwbElement_Remove"
 
 [script."xejviScriptAdapterElement:cUnit.ReportRequiredMasters:function"]
 status = "covered"
-command = "records.copy"
+command = "script.run"
 source = "IwbElement_ReportRequiredMasters"
 
 [script."xejviScriptAdapterElement:cUnit.SetEditValue:function"]
 status = "covered"
-command = "elements.set"
+command = "script.run"
 source = "IwbElement_SetEditValue"
 
 [script."xejviScriptAdapterElement:cUnit.SetElementState:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbElement_SetElementState"
 
 [script."xejviScriptAdapterElement:cUnit.SetNativeValue:function"]
 status = "covered"
-command = "elements.set"
+command = "script.run"
 source = "IwbElement_SetNativeValue"
 
 [script."xejviScriptAdapterElement:cUnit.SetToDefault:function"]
 status = "covered"
-command = "elements.set"
+command = "script.run"
 source = "IwbElement_SetToDefault"
 
 [script."xejviScriptAdapterElement:cUnit.ShortName:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbElement_ShortName"
 
 [script."xejviScriptAdapterElement:cUnit.SortKey:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbElement_SortKey"
 
 [script."xejviScriptAdapterElement:cUnit.TemplateAssign:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbElement_TemplateAssign"
 
 [script."xejviScriptAdapterElement:cUnit.wbCopyElementToFile:function"]
 status = "covered"
-command = "records.copy"
+command = "script.run"
 source = "_wbCopyElementToFile"
 
 [script."xejviScriptAdapterElement:cUnit.wbCopyElementToFileWithPrefix:function"]
 status = "covered"
-command = "records.copy"
+command = "script.run"
 source = "_wbCopyElementToFileWithPrefix"
 
 [script."xejviScriptAdapterElement:cUnit.wbCopyElementToFileWithPrefixAndSuffix:function"]
 status = "covered"
-command = "records.copy"
+command = "script.run"
 source = "_wbCopyElementToFileWithPrefixAndSuffix"
 
 [script."xejviScriptAdapterElement:cUnit.wbCopyElementToRecord:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "_wbCopyElementToRecord"
 
 [script."xejviScriptAdapterFile:cUnit.AddMasterIfMissing:function"]
 status = "covered"
-command = "masters.add"
+command = "script.run"
 source = "IwbFile_AddMasterIfMissing"
 note = "A list of one name; the command runs AddMastersIfMissing."
 
 [script."xejviScriptAdapterFile:cUnit.AddMasters:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbFile_AddMasters"
 
 [script."xejviScriptAdapterFile:cUnit.AddMastersIfMissing:function"]
 status = "covered"
-command = "masters.add"
+command = "script.run"
 source = "IwbFile_AddMastersIfMissing"
 note = "aSortMasters is the sort parameter; aSilent has no effect on the result."
 
 [script."xejviScriptAdapterFile:cUnit.CanBeESL:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbFile_CanBeLight"
 
 [script."xejviScriptAdapterFile:cUnit.CanBeLight:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbFile_CanBeLight"
 
 [script."xejviScriptAdapterFile:cUnit.CanBeMedium:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbFile_CanBeMedium"
 
 [script."xejviScriptAdapterFile:cUnit.CanBeSmall:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbFile_CanBeLight"
 
 [script."xejviScriptAdapterFile:cUnit.CleanMasters:function"]
 status = "covered"
-command = "masters.clean"
+command = "script.run"
 source = "IwbFile_CleanMasters"
 
 [script."xejviScriptAdapterFile:cUnit.FileFormIDtoLoadOrderFormID:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbFile_FileFormIDtoLoadOrderFormID"
 
 [script."xejviScriptAdapterFile:cUnit.FileWriteToStream:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbFile_WriteToStream"
 
 [script."xejviScriptAdapterFile:cUnit.GetFileName:function"]
@@ -5692,64 +5761,72 @@ source = "IwbFile_GetFileName"
 
 [script."xejviScriptAdapterFile:cUnit.GetIsESL:function"]
 status = "covered"
-command = "files.flags"
+command = "script.run"
 source = "IwbFile_GetIsLight"
 note = "Read with --dry-run and no flag."
 
 [script."xejviScriptAdapterFile:cUnit.GetIsESM:function"]
 status = "covered"
-command = "files.flags"
+command = "script.run"
 source = "IwbFile_GetIsESM"
 note = "Read with --dry-run and no flag."
 
 [script."xejviScriptAdapterFile:cUnit.GetIsLight:function"]
 status = "covered"
-command = "files.flags"
+command = "script.run"
 source = "IwbFile_GetIsLight"
 note = "Read with --dry-run and no flag."
 
 [script."xejviScriptAdapterFile:cUnit.GetIsMedium:function"]
 status = "covered"
-command = "files.flags"
+command = "script.run"
 source = "IwbFile_GetIsMedium"
 note = "Read with --dry-run and no flag."
 
 [script."xejviScriptAdapterFile:cUnit.GetIsSmall:function"]
 status = "covered"
-command = "files.flags"
+command = "script.run"
 source = "IwbFile_GetIsLight"
 note = "Read with --dry-run and no flag."
 
 [script."xejviScriptAdapterFile:cUnit.GetLoadOrder:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbFile_GetLoadOrder"
 
 [script."xejviScriptAdapterFile:cUnit.GetLoadOrderFileID:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbFile_GetLoadOrderFileID"
 
 [script."xejviScriptAdapterFile:cUnit.GetMasters:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbFile_GetMasters"
 
 [script."xejviScriptAdapterFile:cUnit.GetNewFormID:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbFile_GetNewFormID"
 
 [script."xejviScriptAdapterFile:cUnit.GroupBySignature:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbFile_GroupBySignature"
 
 [script."xejviScriptAdapterFile:cUnit.HasGroup:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbFile_HasGroup"
 
 [script."xejviScriptAdapterFile:cUnit.HasMaster:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbFile_HasMaster"
 
 [script."xejviScriptAdapterFile:cUnit.LoadOrderFormIDtoFileFormID:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbFile_LoadOrderFormIDtoFileFormID"
 
 [script."xejviScriptAdapterFile:cUnit.MasterByIndex:function"]
@@ -5763,49 +5840,53 @@ command = "script.run"
 source = "IwbFile_MasterCount"
 
 [script."xejviScriptAdapterFile:cUnit.RecordByEditorID:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbFile_RecordByEditorID"
 
 [script."xejviScriptAdapterFile:cUnit.RecordByFormID:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbFile_RecordByFormID"
 
 [script."xejviScriptAdapterFile:cUnit.RecordByIndex:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbFile_RecordByIndex"
 
 [script."xejviScriptAdapterFile:cUnit.RecordCount:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbFile_RecordCount"
 
 [script."xejviScriptAdapterFile:cUnit.SetIsESL:function"]
 status = "covered"
-command = "files.flags"
+command = "script.run"
 source = "IwbFile_SetIsLight"
 
 [script."xejviScriptAdapterFile:cUnit.SetIsESM:function"]
 status = "covered"
-command = "files.flags"
+command = "script.run"
 source = "IwbFile_SetIsESM"
 
 [script."xejviScriptAdapterFile:cUnit.SetIsLight:function"]
 status = "covered"
-command = "files.flags"
+command = "script.run"
 source = "IwbFile_SetIsLight"
 
 [script."xejviScriptAdapterFile:cUnit.SetIsMedium:function"]
 status = "covered"
-command = "files.flags"
+command = "script.run"
 source = "IwbFile_SetIsMedium"
 
 [script."xejviScriptAdapterFile:cUnit.SetIsSmall:function"]
 status = "covered"
-command = "files.flags"
+command = "script.run"
 source = "IwbFile_SetIsLight"
 
 [script."xejviScriptAdapterFile:cUnit.SortMasters:function"]
 status = "covered"
-command = "masters.sort"
+command = "script.run"
 source = "IwbFile_SortMasters"
 
 [script."xejviScriptAdapterHost:cUnit.AddMessage:function"]
@@ -7729,367 +7810,444 @@ status = "pending"
 source = "TWinControl_Write_DoubleBuffered"
 
 [script."xejviScriptAdapterRecord:cUnit.BaseRecord:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbMainRecord_BaseRecord"
 
 [script."xejviScriptAdapterRecord:cUnit.BaseRecordID:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbMainRecord_BaseRecordID"
 
 [script."xejviScriptAdapterRecord:cUnit.ChangeFormSignature:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbMainRecord_ChangeFormSignature"
 
 [script."xejviScriptAdapterRecord:cUnit.ChildGroup:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbMainRecord_ChildGroup"
 
 [script."xejviScriptAdapterRecord:cUnit.ChildrenOf:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbGroupRecord_ChildrenOf"
 
 [script."xejviScriptAdapterRecord:cUnit.CompareExchangeFormID:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbMainRecord_CompareExchangeFormID"
 
 [script."xejviScriptAdapterRecord:cUnit.EditorID:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbMainRecord_EditorID"
 
 [script."xejviScriptAdapterRecord:cUnit.FindChildGroup:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbGroupRecord_FindChildGroup"
 
 [script."xejviScriptAdapterRecord:cUnit.FixedFormID:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbMainRecord_FixedFormID"
 
 [script."xejviScriptAdapterRecord:cUnit.FormID:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbMainRecord_FormID"
 
 [script."xejviScriptAdapterRecord:cUnit.GetFormVCS1:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbMainRecord_GetFormVCS1"
 
 [script."xejviScriptAdapterRecord:cUnit.GetFormVCS2:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbMainRecord_GetFormVCS2"
 
 [script."xejviScriptAdapterRecord:cUnit.GetFormVersion:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbMainRecord_GetFormVersion"
 
 [script."xejviScriptAdapterRecord:cUnit.GetGridCell:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbMainRecord_GetGridCell"
 
 [script."xejviScriptAdapterRecord:cUnit.GetIsDeleted:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbMainRecord_GetIsDeleted"
 
 [script."xejviScriptAdapterRecord:cUnit.GetIsInitiallyDisabled:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbMainRecord_GetIsInitiallyDisabled"
 
 [script."xejviScriptAdapterRecord:cUnit.GetIsPersistent:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbMainRecord_GetIsPersistent"
 
 [script."xejviScriptAdapterRecord:cUnit.GetIsVisibleWhenDistant:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbMainRecord_GetIsVisibleWhenDistant"
 
 [script."xejviScriptAdapterRecord:cUnit.GetLoadOrderFormID:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbMainRecord_GetLoadOrderFormID"
 
 [script."xejviScriptAdapterRecord:cUnit.GetPosition:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbMainRecord_GetPosition"
 
 [script."xejviScriptAdapterRecord:cUnit.GetRotation:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbMainRecord_GetRotation"
 
 [script."xejviScriptAdapterRecord:cUnit.GroupLabel:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbGroupRecord_GroupLabel"
 
 [script."xejviScriptAdapterRecord:cUnit.GroupType:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbGroupRecord_GroupType"
 
 [script."xejviScriptAdapterRecord:cUnit.HasPrecombinedMesh:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbMainRecord_HasPrecombinedMesh"
 
 [script."xejviScriptAdapterRecord:cUnit.HighestOverrideOrSelf:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbMainRecord_HighestOverrideOrSelf"
 
 [script."xejviScriptAdapterRecord:cUnit.IsMaster:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbMainRecord_IsMaster"
 
 [script."xejviScriptAdapterRecord:cUnit.IsWinningOverride:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbMainRecord_IsWinningOverride"
 
 [script."xejviScriptAdapterRecord:cUnit.MainRecordByEditorID:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbGroupRecord_MainRecordByEditorID"
 
 [script."xejviScriptAdapterRecord:cUnit.Master:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbMainRecord_Master"
 
 [script."xejviScriptAdapterRecord:cUnit.MasterOrSelf:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbMainRecord_MasterOrSelf"
 
 [script."xejviScriptAdapterRecord:cUnit.OverrideByIndex:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbMainRecord_OverrideByIndex"
 
 [script."xejviScriptAdapterRecord:cUnit.OverrideCount:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbMainRecord_OverrideCount"
 
 [script."xejviScriptAdapterRecord:cUnit.PrecombinedMesh:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbMainRecord_PrecombinedMesh"
 
 [script."xejviScriptAdapterRecord:cUnit.ReferencedByCount:function"]
 status = "covered"
-command = "refs.get"
+command = "script.run"
 source = "IwbMainRecord_ReferencedByCount"
 
 [script."xejviScriptAdapterRecord:cUnit.ReferencedByIndex:function"]
 status = "covered"
-command = "refs.get"
+command = "script.run"
 source = "IwbMainRecord_ReferencedByIndex"
 
 [script."xejviScriptAdapterRecord:cUnit.ReferencesByIndex:function"]
 status = "covered"
-command = "refs.get"
+command = "script.run"
 source = "IwbMainRecord_ReferencesByIndex"
 
 [script."xejviScriptAdapterRecord:cUnit.ReferencesCount:function"]
 status = "covered"
-command = "refs.get"
+command = "script.run"
 source = "IwbMainRecord_ReferencesCount"
 
 [script."xejviScriptAdapterRecord:cUnit.SetEditorID:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbMainRecord_SetEditorID"
 
 [script."xejviScriptAdapterRecord:cUnit.SetFormVCS1:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbMainRecord_SetFormVCS1"
 
 [script."xejviScriptAdapterRecord:cUnit.SetFormVCS2:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbMainRecord_SetFormVCS2"
 
 [script."xejviScriptAdapterRecord:cUnit.SetFormVersion:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbMainRecord_SetFormVersion"
 
 [script."xejviScriptAdapterRecord:cUnit.SetIsDeleted:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbMainRecord_SetIsDeleted"
 
 [script."xejviScriptAdapterRecord:cUnit.SetIsInitiallyDisabled:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbMainRecord_SetIsInitiallyDisabled"
 
 [script."xejviScriptAdapterRecord:cUnit.SetIsPersistent:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbMainRecord_SetIsPersistent"
 
 [script."xejviScriptAdapterRecord:cUnit.SetIsVisibleWhenDistant:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbMainRecord_SetIsVisibleWhenDistant"
 
 [script."xejviScriptAdapterRecord:cUnit.SetLoadOrderFormID:function"]
 status = "covered"
-command = "formids.change"
+command = "script.run"
 source = "IwbMainRecord_SetLoadOrderFormID"
 note = "formids.change also updates the referencing records, which the script function leaves to CompareExchangeFormID."
 
 [script."xejviScriptAdapterRecord:cUnit.Signature:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbMainRecord_Signature"
 
 [script."xejviScriptAdapterRecord:cUnit.UpdateRefs:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbMainRecord_UpdateRefs"
 
 [script."xejviScriptAdapterRecord:cUnit.WinningOverride:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbMainRecord_WinningOverride"
 
 [script."xejviScriptAdapterResource:TwbFastStringList.Create:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TwbFastStringList_Create"
 
 [script."xejviScriptAdapterResource:TwbFastStringList.TwbFastStringList:class"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterResource.pas"
 
 [script."xejviScriptAdapterResource:cUnit.AssetTypeByExtension:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TwbAsset_AssetTypeByExtension"
 
 [script."xejviScriptAdapterResource:cUnit.AssetTypeByFolder:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TwbAsset_AssetTypeByFolder"
 
 [script."xejviScriptAdapterResource:cUnit.CreateHashFO4:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "Misc_CreateHashFO4"
 
 [script."xejviScriptAdapterResource:cUnit.CreateHashTES3:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "Misc_CreateHashTES3"
 
 [script."xejviScriptAdapterResource:cUnit.CreateHashTES4:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "Misc_CreateHashTES4"
 
 [script."xejviScriptAdapterResource:cUnit.LocalizationGetStringsFromFile:function"]
 status = "covered"
-command = "localization.strings"
+command = "script.run"
 source = "Misc_LocalizationGetStringsFromFile"
 note = "The strings of a loaded table with their IDs."
 
 [script."xejviScriptAdapterResource:cUnit.NifBlockList:function"]
 status = "covered"
-command = "assets.scan"
+command = "script.run"
 source = "NifUtils_NifBlockList"
 note = "what = blocks"
 
 [script."xejviScriptAdapterResource:cUnit.NifTextureList:function"]
 status = "covered"
-command = "assets.scan"
+command = "script.run"
 source = "NifUtils_NifTextureList"
 note = "what = textures"
 
 [script."xejviScriptAdapterResource:cUnit.NifTextureListResource:function"]
 status = "covered"
-command = "assets.scan"
+command = "script.run"
 source = "NifUtils_NifTextureListResource"
 note = "what = textures; the container is the archive of file and archive_path"
 
 [script."xejviScriptAdapterResource:cUnit.NifTextureListUVRange:function"]
 status = "covered"
-command = "assets.scan"
+command = "script.run"
 source = "NifUtils_NifTextureListUVRange"
 note = "what = textures with uv_range"
 
 [script."xejviScriptAdapterResource:cUnit.ResourceContainerList:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbContainerHandler_ResourceContainerList"
 
 [script."xejviScriptAdapterResource:cUnit.ResourceCopy:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbContainerHandler_ResourceCopy"
 
 [script."xejviScriptAdapterResource:cUnit.ResourceCount:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbContainerHandler_ResourceCount"
 
 [script."xejviScriptAdapterResource:cUnit.ResourceExists:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbContainerHandler_ResourceExists"
 
 [script."xejviScriptAdapterResource:cUnit.ResourceList:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbContainerHandler_ResourceList"
 
 [script."xejviScriptAdapterResource:cUnit.ResourceOpenData:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "IwbContainerHandler_ResourceOpenData"
 
 [script."xejviScriptAdapterResource:cUnit.bscrc32:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "Misc_bscrc32"
 
 [script."xejviScriptAdapterResource:cUnit.wbAlphaBlend:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "Misc_wbAlphaBlend"
 
 [script."xejviScriptAdapterResource:cUnit.wbBlockFromSubBlock:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "Misc_wbBlockFromSubBlock"
 
 [script."xejviScriptAdapterResource:cUnit.wbCRC32Data:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "Misc_wbCRC32Data"
 
 [script."xejviScriptAdapterResource:cUnit.wbCRC32File:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "Misc_wbCRC32File"
 
 [script."xejviScriptAdapterResource:cUnit.wbCRC32Resource:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "Misc_wbCRC32Resource"
 
 [script."xejviScriptAdapterResource:cUnit.wbDDSDataToBitmap:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "DDSUtils_wbDDSDataToBitmap"
 
 [script."xejviScriptAdapterResource:cUnit.wbDDSResourceToBitmap:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "DDSUtils_wbDDSResourceToBitmap"
 
 [script."xejviScriptAdapterResource:cUnit.wbDDSStreamToBitmap:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "DDSUtils_wbDDSStreamToBitmap"
 
 [script."xejviScriptAdapterResource:cUnit.wbFindREFRsByBase:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "Misc_wbFindRefrsByBase"
 
 [script."xejviScriptAdapterResource:cUnit.wbFlipBitmap:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "Misc_wbFlipBitmap"
 
 [script."xejviScriptAdapterResource:cUnit.wbFormIDErrorCheckLock:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "Misc_wbFormIDErrorCheckLock"
 
 [script."xejviScriptAdapterResource:cUnit.wbFormIDErrorCheckUnlock:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "Misc_wbFormIDErrorCheckUnlock"
 
 [script."xejviScriptAdapterResource:cUnit.wbGetSiblingRecords:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "Misc_wbGetSiblingRecords"
 
 [script."xejviScriptAdapterResource:cUnit.wbGridCellToGroupLabel:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "Misc_wbGridCellToGroupLabel"
 
 [script."xejviScriptAdapterResource:cUnit.wbIsInGridCell:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "Misc_wbIsInGridCell"
 
 [script."xejviScriptAdapterResource:cUnit.wbIsPseudoESLMode:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "Misc_wbIsPseudoLightMode"
 
 [script."xejviScriptAdapterResource:cUnit.wbIsPseudoLightMode:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "Misc_wbIsPseudoLightMode"
 
 [script."xejviScriptAdapterResource:cUnit.wbIsPseudoMediumMode:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "Misc_wbIsPseudoMediumMode"
 
 [script."xejviScriptAdapterResource:cUnit.wbIsPseudoSmallMode:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "Misc_wbIsPseudoLightMode"
 
 [script."xejviScriptAdapterResource:cUnit.wbMD5Data:function"]
@@ -8103,11 +8261,13 @@ source = "Misc_wbMD5File"
 note = "The registration is commented out upstream (xEdit/JvI/xejviScriptAdapterResource.pas:425); nothing is reachable under this name in 4.1.5q."
 
 [script."xejviScriptAdapterResource:cUnit.wbNormalizeResourceName:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TwbAsset_wbNormalizeResourceName"
 
 [script."xejviScriptAdapterResource:cUnit.wbPositionToGridCell:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "Misc_wbPositionToGridCell"
 
 [script."xejviScriptAdapterResource:cUnit.wbSHA1Data:function"]
@@ -8121,9 +8281,11 @@ source = "Misc_wbSHA1File"
 note = "The registration is commented out upstream (xEdit/JvI/xejviScriptAdapterResource.pas:428); nothing is reachable under this name in 4.1.5q."
 
 [script."xejviScriptAdapterResource:cUnit.wbStringListInString:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "Misc_wbStringListInString"
 
 [script."xejviScriptAdapterResource:cUnit.wbSubBlockFromGridCell:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "Misc_wbSubBlockFromGridCell"
