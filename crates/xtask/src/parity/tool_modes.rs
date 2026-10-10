@@ -85,7 +85,7 @@ const MODES: &[Mode] = &[
         // the mode selection of  matches (
         // compares the whole name), so the release refuses that switch and
         // shows its "select mode" message;  is the switch
-        // that selects the mode (as the 
+        // that selects the mode (as the
         // executable name does).
         // UPSTREAM-QUIRK: the release refuses the switch
         // `-sortandcleanmasters` (the mode selection of `_DoInit` compares
@@ -218,10 +218,19 @@ fn corpus(game: &Game, data: &Path, options: &Options) -> Result<Vec<String>> {
     // only stub would check nothing). `--file` names the plugins to run
     // instead, all of them.
     names.sort_by_key(|name| std::cmp::Reverse(fs::metadata(data.join(name)).map(|meta| meta.len()).unwrap_or(0)));
-    // The game master has no masters of its own and is not a case.
+    // The game master has no masters of its own and is not a case, and a
+    // plugin larger than 16 MiB is left out: the modes save every file they
+    // changed, and the release queues the rename of a large save to the
+    // shutdown of its GUI, which its hidden desktop does not reach (the
+    // `-onamupdate` of a 64 MiB plugin waits there for its own rename).
+    const LARGEST: u64 = 16 * 1024 * 1024;
+    let named = !options.files.is_empty();
     names.retain(|name| {
-        fs::metadata(data.join(name)).map(|meta| meta.len()).unwrap_or(0) > 1024
-            && load_list(game, data, &[name]).map(|plugins| plugins.len() > 1).unwrap_or(false)
+        let size = fs::metadata(data.join(name)).map(|meta| meta.len()).unwrap_or(0);
+        (named || (1024..=LARGEST).contains(&size))
+            && load_list(game, data, &[name])
+                .map(|plugins| plugins.len() > 1)
+                .unwrap_or(false)
     });
     if options.files.is_empty() {
         names.truncate(1);
@@ -570,7 +579,11 @@ fn check(runner: &Runner, game: &'static Game, data: &Path, name: &str, mode: &M
             script: String::new(),
             build_refs: false,
             work: work.clone(),
-            timeout: runner.oracle_timeout.unwrap_or(Duration::from_secs(120 * 60)),
+            // A GUI that spins at a little CPU never trips the hang
+            // timeout, so the mode's run has a deadline of its own: the
+            // biggest case (the master update of a big Skyrim load order)
+            // saves a few hundred megabytes.
+            timeout: runner.oracle_timeout.unwrap_or(Duration::from_secs(20 * 60)),
             hang_timeout: Duration::from_secs(600),
             budget: &runner.budget,
             expected_peak,
@@ -945,8 +958,17 @@ fn check_export(runner: &Runner, game: &'static Game, outcome: &mut ToolModeOutc
                 .map(|line| String::from_utf8_lossy(line).into_owned())
                 .unwrap_or_default()
         };
-        lines.push(format!("  oracle profile line {oracle_at}: {}", profile_line(&oracle_profile, oracle_at)));
-        lines.push(format!("  port   profile line {port_at}: {}", profile_line(&port_profile_bytes, port_at)));
+        // A profile line is a whole definition path and can be hundreds of
+        // kilobytes long: only its start is shown.
+        let shown = |line: String| -> String { line.chars().take(300).collect() };
+        lines.push(format!(
+            "  oracle profile line {oracle_at}: {}",
+            shown(profile_line(&oracle_profile, oracle_at))
+        ));
+        lines.push(format!(
+            "  port   profile line {port_at}: {}",
+            shown(profile_line(&port_profile_bytes, port_at))
+        ));
     }
     if lines.is_empty() {
         outcome.status = "equal";
