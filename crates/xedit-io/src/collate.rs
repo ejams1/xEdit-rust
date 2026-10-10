@@ -16,6 +16,13 @@ pub fn ansi_compare_text(a: &str, b: &str) -> Ordering {
     platform::compare(a, b)
 }
 
+/// Delphi `AnsiCompareStr`: the same locale comparison as
+/// [`ansi_compare_text`] with case significant. `TStringList.CompareStrings`
+/// takes it for a list with `CaseSensitive` set.
+pub fn ansi_compare_str(a: &str, b: &str) -> Ordering {
+    platform::compare_str(a, b)
+}
+
 #[cfg(windows)]
 mod platform {
     use std::cmp::Ordering;
@@ -49,11 +56,31 @@ mod platform {
             _ => Ordering::Greater,
         }
     }
+
+    pub fn compare_str(a: &str, b: &str) -> Ordering {
+        let a: Vec<u16> = a.encode_utf16().collect();
+        let b: Vec<u16> = b.encode_utf16().collect();
+        let (Ok(a_len), Ok(b_len)) = (i32::try_from(a.len()), i32::try_from(b.len())) else {
+            return super::fallback(&String::from_utf16_lossy(&a), &String::from_utf16_lossy(&b));
+        };
+        // SAFETY: both buffers are valid for the lengths given.
+        let result = unsafe { CompareStringW(LOCALE_USER_DEFAULT, 0, a.as_ptr(), a_len, b.as_ptr(), b_len) };
+        match result {
+            CSTR_LESS_THAN => Ordering::Less,
+            CSTR_EQUAL => Ordering::Equal,
+            0 => super::fallback(&String::from_utf16_lossy(&a), &String::from_utf16_lossy(&b)),
+            _ => Ordering::Greater,
+        }
+    }
 }
 
 #[cfg(not(windows))]
 mod platform {
     pub fn compare(a: &str, b: &str) -> std::cmp::Ordering {
+        super::fallback(a, b)
+    }
+
+    pub fn compare_str(a: &str, b: &str) -> std::cmp::Ordering {
         super::fallback(a, b)
     }
 }

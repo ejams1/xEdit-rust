@@ -856,7 +856,7 @@ fn element_name(element: &ElementRef) -> String {
 /// of `xejviScriptAdapter*.pas`, `'Dummy'` upstream): a name with no file,
 /// which `uses` never resolves, so the functions are callable from any
 /// script.
-const C_UNIT: &str = "";
+pub(crate) const C_UNIT: &str = "";
 
 /// Registers the session side of the script API: the `xejviScriptAdapterHost.pas`
 /// functions that need no form (the `TfrmMain` fields they read are the
@@ -1188,6 +1188,15 @@ fn register_functions(adapter: &mut Adapter, state: &Rc<RefCell<ScriptRunState>>
     //=== The data format adapter (xejviScriptAdapterDF.pas, step 6) ==========
 
     crate::script_df::register(adapter, state);
+
+    //=== The classes and the misc family (phase 6 step 7) ====================
+
+    let classes = crate::script_classes::ScriptClasses::register(adapter);
+    crate::script_strings::register_base(adapter, &classes);
+    crate::script_adapter::register(adapter, &classes);
+    crate::script_misc::register(adapter, &classes);
+    crate::script_misc_regex::register(adapter, &classes);
+    crate::script_misc_json::register(adapter, &classes);
 }
 
 /// The `OnSetValue` hook (`xejviScriptHost.pas:60`): the identifiers a script

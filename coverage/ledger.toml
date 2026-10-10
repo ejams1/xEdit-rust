@@ -3886,163 +3886,203 @@ command = "tool.run"
 source = "Core/wbInterface.pas"
 
 [script."xejviScriptAdapter:cInterface.cTwbGridCell:rec"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cInterface.cTwbVector:rec"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cInterface.wbGridCell:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "JvInterpreter_wbGridCell"
 
 [script."xejviScriptAdapter:cInterface.wbVector:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "JvInterpreter_wbVector"
 
 [script."xejviScriptAdapter:cInterface:extunit"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.Assigned:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "_Assigned"
 
 [script."xejviScriptAdapter:cUnit.EnableSkyrimSaveFormat:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "EnableSkyrimSaveFormat"
 
 [script."xejviScriptAdapter:cUnit.FullPathToFilename:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "_FullPathToFilename"
 
 [script."xejviScriptAdapter:cUnit.GetRecordDefNames:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "GetRecordDefNames"
 
 [script."xejviScriptAdapter:cUnit.ObjectToElement:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "ObjectToElement"
 
 [script."xejviScriptAdapter:cUnit.atBookArt:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.atDialogueViews:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.atDistantLOD:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.atFacegen:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.atFont:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.atGeometry:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.atGrass:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.atIcon:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.atInterface:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.atLODSettings:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.atLSData:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.atMaterial:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.atMenus:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.atMesh:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.atMusic:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.atNone:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.atPrevis:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.atProgram:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.atScript:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.atSeq:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.atShaders:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.atSound:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.atSource:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.atSourceSSE:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.atSpeedTree:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.atSplash:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.atStrings:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.atTexture:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.atVideo:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.atVoice:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.caConflict:const"]
@@ -4081,27 +4121,33 @@ command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.csAsCreatedEmpty:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.csInit:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.csInitDone:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.csInitOnce:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.csInitializing:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.csRefsBuild:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.ctConflictBenign:const"]
@@ -4165,127 +4211,158 @@ command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.dtArray:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.dtByteArray:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.dtEmpty:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.dtFloat:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.dtInteger:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.dtIntegerFormater:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.dtLString:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.dtLenString:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.dtRecord:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.dtString:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.dtStruct:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.dtStructChapter:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.dtSubRecord:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.dtSubRecordArray:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.dtSubRecordStruct:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.dtSubRecordUnion:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.dtUnion:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.esDeciding:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.esExtendedSortKeyValid:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.esHidden:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.esInternalModified:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.esModified:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.esNotReachable:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.esNotSuitableToAddTo:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.esParentHidden:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.esParentHiddenChecked:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.esReachable:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.esResolving:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.esSortKeyValid:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.esTagged:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.esUnsaved:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.etArray:const"]
@@ -4359,91 +4436,113 @@ command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.gmEnderal:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.gmEnderalSE:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.gmFNV:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.gmFO3:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.gmFO4:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.gmFO4VR:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.gmFO76:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.gmSF1:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.gmSSE:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.gmTES3:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.gmTES4:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.gmTES4R:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.gmTES5:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.gmTES5VR:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.resMaterial:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.resMesh:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.resMusic:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.resSound:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.resTexture:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapter.pas"
 
 [script."xejviScriptAdapter:cUnit.wbFilterStrings:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "wbFilterStrings"
 
 [script."xejviScriptAdapter:cUnit.wbRemoveDuplicateStrings:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "wbRemoveDuplicateStrings"
 
 [script."xejviScriptAdapter:cUnit.wbVersionNumber:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "wbGetVersionNumber"
 
 [script."xejviScriptAdapterContainer:cUnit.Add:function"]
@@ -6142,1259 +6241,1573 @@ status = "pending"
 source = "_wbTrackAllEditorID"
 
 [script."xejviScriptAdapterMisc:Controls.akBottom:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
 
 [script."xejviScriptAdapterMisc:Controls.akLeft:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
 
 [script."xejviScriptAdapterMisc:Controls.akRight:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
 
 [script."xejviScriptAdapterMisc:Controls.akTop:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
 
 [script."xejviScriptAdapterMisc:ExtCtrls.lpAbove:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
 
 [script."xejviScriptAdapterMisc:ExtCtrls.lpBelow:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
 
 [script."xejviScriptAdapterMisc:ExtCtrls.lpLeft:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
 
 [script."xejviScriptAdapterMisc:ExtCtrls.lpRight:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
 
 [script."xejviScriptAdapterMisc:FileCtrl.SelectDirectory:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "JvInterpreter_SelectDirectory"
 
 [script."xejviScriptAdapterMisc:Forms.pmAuto:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
 
 [script."xejviScriptAdapterMisc:Forms.pmExplicit:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
 
 [script."xejviScriptAdapterMisc:Forms.pmNone:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
 
 [script."xejviScriptAdapterMisc:Forms.poMainFormCenter:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
 
 [script."xejviScriptAdapterMisc:Math.CompareValue:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "JvInterpreter_CompareValue"
 
 [script."xejviScriptAdapterMisc:Math.EnsureRange:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "JvInterpreter_EnsureRange"
 
 [script."xejviScriptAdapterMisc:Math.FMod:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "JvInterpreter_FMod"
 
 [script."xejviScriptAdapterMisc:Math.GetPrecisionMode:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "JvInterpreter_GetPrecisionMode"
 
 [script."xejviScriptAdapterMisc:Math.GetRoundMode:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "JvInterpreter_GetRoundMode"
 
 [script."xejviScriptAdapterMisc:Math.InRange:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "JvInterpreter_InRange"
 
 [script."xejviScriptAdapterMisc:Math.InverseLerp:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "JvInterpreter_LerpInverse"
 
 [script."xejviScriptAdapterMisc:Math.IsZero:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "JvInterpreter_IsZero"
 
 [script."xejviScriptAdapterMisc:Math.Lerp:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "JvInterpreter_Lerp"
 
 [script."xejviScriptAdapterMisc:Math.LerpUnclamped:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "JvInterpreter_LerpUnclamped"
 
 [script."xejviScriptAdapterMisc:Math.NegativeValue:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
 
 [script."xejviScriptAdapterMisc:Math.PositiveValue:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
 
 [script."xejviScriptAdapterMisc:Math.RoundTo:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "JvInterpreter_RoundTo"
 
 [script."xejviScriptAdapterMisc:Math.SetPrecisionMode:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "JvInterpreter_SetPrecisionMode"
 
 [script."xejviScriptAdapterMisc:Math.SetRoundMode:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "JvInterpreter_SetRoundMode"
 
 [script."xejviScriptAdapterMisc:Math.Sign:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "JvInterpreter_Sign"
 
 [script."xejviScriptAdapterMisc:Math.SimpleRoundTo:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "JvInterpreter_SimpleRoundTo"
 
 [script."xejviScriptAdapterMisc:Math.ZeroValue:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
 
 [script."xejviScriptAdapterMisc:Math.pmDouble:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
 
 [script."xejviScriptAdapterMisc:Math.pmExtended:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
 
 [script."xejviScriptAdapterMisc:Math.pmReserved:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
 
 [script."xejviScriptAdapterMisc:Math.pmSingle:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
 
 [script."xejviScriptAdapterMisc:Math.rmDown:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
 
 [script."xejviScriptAdapterMisc:Math.rmNearest:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
 
 [script."xejviScriptAdapterMisc:Math.rmTruncate:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
 
 [script."xejviScriptAdapterMisc:Math.rmUp:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
 
 [script."xejviScriptAdapterMisc:Menus.maAutomatic:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
 
 [script."xejviScriptAdapterMisc:Menus.maManual:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
 
 [script."xejviScriptAdapterMisc:ShellApi.ShellExecute:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "JvInterpreter_ShellExecute"
 
 [script."xejviScriptAdapterMisc:ShellApi.ShellExecuteWait:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "JvInterpreter_ShellExecuteWait"
 
 [script."xejviScriptAdapterMisc:StdCtrls.cbChecked:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
 
 [script."xejviScriptAdapterMisc:StdCtrls.cbGrayed:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
 
 [script."xejviScriptAdapterMisc:StdCtrls.cbUnchecked:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
 
 [script."xejviScriptAdapterMisc:StrUtils.ContainsStr:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "JvInterpreter_ContainsStr"
 
 [script."xejviScriptAdapterMisc:StrUtils.ContainsText:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "JvInterpreter_ContainsText"
 
 [script."xejviScriptAdapterMisc:StrUtils.DupeString:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "JvInterpreter_DupeString"
 
 [script."xejviScriptAdapterMisc:StrUtils.EndsStr:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "JvInterpreter_EndsStr"
 
 [script."xejviScriptAdapterMisc:StrUtils.EndsText:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "JvInterpreter_EndsText"
 
 [script."xejviScriptAdapterMisc:StrUtils.IfThen:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "JvInterpreter_IfThen"
 
 [script."xejviScriptAdapterMisc:StrUtils.IndexStr:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "JvInterpreter_IndexStr"
 
 [script."xejviScriptAdapterMisc:StrUtils.IndexText:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "JvInterpreter_IndexText"
 
 [script."xejviScriptAdapterMisc:StrUtils.LeftStr:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "JvInterpreter_LeftStr"
 
 [script."xejviScriptAdapterMisc:StrUtils.MatchStr:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "JvInterpreter_MatchStr"
 
 [script."xejviScriptAdapterMisc:StrUtils.MatchText:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "JvInterpreter_MatchText"
 
 [script."xejviScriptAdapterMisc:StrUtils.MidStr:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "JvInterpreter_MidStr"
 
 [script."xejviScriptAdapterMisc:StrUtils.ReverseString:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "JvInterpreter_ReverseString"
 
 [script."xejviScriptAdapterMisc:StrUtils.RightStr:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "JvInterpreter_RightStr"
 
 [script."xejviScriptAdapterMisc:StrUtils.SplitString:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "JvInterpreter_SplitString"
 
 [script."xejviScriptAdapterMisc:StrUtils.StartsStr:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "JvInterpreter_StartsStr"
 
 [script."xejviScriptAdapterMisc:StrUtils.StartsText:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "JvInterpreter_StartsText"
 
 [script."xejviScriptAdapterMisc:StrUtils.StuffString:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "JvInterpreter_StuffString"
 
 [script."xejviScriptAdapterMisc:SysUtils.Dec:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "JvInterpreter_Dec"
 
 [script."xejviScriptAdapterMisc:SysUtils.DirectoryExists:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "JvInterpreter_DirectoryExists"
 
 [script."xejviScriptAdapterMisc:SysUtils.ExcludeTrailingBackslash:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "JvInterpreter_ExcludeTrailingBackslash"
 
 [script."xejviScriptAdapterMisc:SysUtils.FileExists:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "JvInterpreter_FileExists"
 
 [script."xejviScriptAdapterMisc:SysUtils.ForceDirectories:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "JvInterpreter_ForceDirectories"
 
 [script."xejviScriptAdapterMisc:SysUtils.Frac:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "JvInterpreter_Frac"
 
 [script."xejviScriptAdapterMisc:SysUtils.HighInteger:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
 
 [script."xejviScriptAdapterMisc:SysUtils.Inc:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "JvInterpreter_Inc"
 
 [script."xejviScriptAdapterMisc:SysUtils.IncludeTrailingBackslash:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "JvInterpreter_IncludeTrailingBackslash"
 
 [script."xejviScriptAdapterMisc:SysUtils.Int:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "JvInterpreter_Int"
 
 [script."xejviScriptAdapterMisc:SysUtils.IntToHex64:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "JvInterpreter_IntToHex64"
 
 [script."xejviScriptAdapterMisc:SysUtils.LowInteger:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
 
 [script."xejviScriptAdapterMisc:SysUtils.Pred:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "JvInterpreter_Pred"
 
 [script."xejviScriptAdapterMisc:SysUtils.SameText:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "JvInterpreter_SameText"
 
 [script."xejviScriptAdapterMisc:SysUtils.SameValue:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "JvInterpreter_SameValue"
 
 [script."xejviScriptAdapterMisc:SysUtils.StrToFloatDef:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "JvInterpreter_StrToFloatDef"
 
 [script."xejviScriptAdapterMisc:SysUtils.StrToInt64:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "JvInterpreter_StrToInt64"
 
 [script."xejviScriptAdapterMisc:SysUtils.StrToInt64Def:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "JvInterpreter_StrToInt64Def"
 
 [script."xejviScriptAdapterMisc:SysUtils.StringReplace:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "JvInterpreter_StringReplace"
 
 [script."xejviScriptAdapterMisc:SysUtils.Succ:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "JvInterpreter_Succ"
 
 [script."xejviScriptAdapterMisc:SysUtils.TEncoding:class"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
 
 [script."xejviScriptAdapterMisc:SysUtils.fmCreate:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
 
 [script."xejviScriptAdapterMisc:SysUtils.rfIgnoreCase:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
 
 [script."xejviScriptAdapterMisc:SysUtils.rfReplaceAll:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
 
 [script."xejviScriptAdapterMisc:System.MaxInt:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
 
 [script."xejviScriptAdapterMisc:System.MinInt:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
 
 [script."xejviScriptAdapterMisc:System.StringOfChar:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "JvInterpreter_StringOfChar"
 
 [script."xejviScriptAdapterMisc:System.varAny:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
 
 [script."xejviScriptAdapterMisc:System.varBoolean:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
 
 [script."xejviScriptAdapterMisc:System.varByRef:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
 
 [script."xejviScriptAdapterMisc:System.varByte:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
 
 [script."xejviScriptAdapterMisc:System.varCurrency:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
 
 [script."xejviScriptAdapterMisc:System.varDate:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
 
 [script."xejviScriptAdapterMisc:System.varDispatch:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
 
 [script."xejviScriptAdapterMisc:System.varDouble:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
 
 [script."xejviScriptAdapterMisc:System.varEmpty:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
 
 [script."xejviScriptAdapterMisc:System.varError:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
 
 [script."xejviScriptAdapterMisc:System.varInt64:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
 
 [script."xejviScriptAdapterMisc:System.varInteger:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
 
 [script."xejviScriptAdapterMisc:System.varLongWord:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
 
 [script."xejviScriptAdapterMisc:System.varNull:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
 
 [script."xejviScriptAdapterMisc:System.varOleStr:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
 
 [script."xejviScriptAdapterMisc:System.varShortInt:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
 
 [script."xejviScriptAdapterMisc:System.varSingle:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
 
 [script."xejviScriptAdapterMisc:System.varSmallInt:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
 
 [script."xejviScriptAdapterMisc:System.varStrArg:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
 
 [script."xejviScriptAdapterMisc:System.varString:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
 
 [script."xejviScriptAdapterMisc:System.varTypeMask:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
 
 [script."xejviScriptAdapterMisc:System.varUInt64:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
 
 [script."xejviScriptAdapterMisc:System.varUString:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
 
 [script."xejviScriptAdapterMisc:System.varUnknown:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
 
 [script."xejviScriptAdapterMisc:System.varVariant:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
 
 [script."xejviScriptAdapterMisc:System.varWord:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
 
 [script."xejviScriptAdapterMisc:TEncoding.ASCII:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TEncoding_ASCII"
 
 [script."xejviScriptAdapterMisc:TEncoding.Default:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TEncoding_Default"
 
 [script."xejviScriptAdapterMisc:TEncoding.UTF8:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TEncoding_UTF8"
 
 [script."xejviScriptAdapterMisc:TEncoding.Unicode:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TEncoding_Unicode"
 
 [script."xejviScriptAdapterMisc:TStrings.AddPair:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TStrings_AddPair"
 
 [script."xejviScriptAdapterMisc:TStrings.CaseSensitive:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TStringList_Read_CaseSensitive"
 
 [script."xejviScriptAdapterMisc:TStrings.CaseSensitive:set"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TStringList_Write_CaseSensitive"
 
 [script."xejviScriptAdapterMisc:TStrings.Contains:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TStrings_Contains"
 
 [script."xejviScriptAdapterMisc:TStrings.ContainsName:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TStrings_ContainsName"
 
 [script."xejviScriptAdapterMisc:TStrings.ContainsObject:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TStrings_ContainsObject"
 
 [script."xejviScriptAdapterMisc:TStrings.DelimitedText:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TStrings_Read_DelimitedText"
 
 [script."xejviScriptAdapterMisc:TStrings.DelimitedText:set"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TStrings_Write_DelimitedText"
 
 [script."xejviScriptAdapterMisc:TStrings.Delimiter:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TStrings_Read_Delimiter"
 
 [script."xejviScriptAdapterMisc:TStrings.Delimiter:set"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TStrings_Write_Delimiter"
 
 [script."xejviScriptAdapterMisc:TStrings.Difference:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TStringList_Difference"
 
 [script."xejviScriptAdapterMisc:TStrings.InsertObject:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TStrings_InsertObject"
 
 [script."xejviScriptAdapterMisc:TStrings.Intersection:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TStringList_Intersection"
 
 [script."xejviScriptAdapterMisc:TStrings.LoadFromFile:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TStrings_LoadFromFile"
 
 [script."xejviScriptAdapterMisc:TStrings.NameValueSeparator:set"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TStrings_Write_NameValueSeparator"
 
 [script."xejviScriptAdapterMisc:TStrings.SaveToFile:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TStrings_SaveToFile"
 
 [script."xejviScriptAdapterMisc:TStrings.SetStrings:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TStrings_SetStrings"
 
 [script."xejviScriptAdapterMisc:TStrings.StrictDelimiter:set"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TStrings_Write_StrictDelimiter"
 
 [script."xejviScriptAdapterMisc:TStrings.SymmetricDifference:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TStringList_SymmetricDifference"
 
 [script."xejviScriptAdapterMisc:TStrings.Union:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TStringList_Union"
 
 [script."xejviScriptAdapterMisc:TStrings.ValueFromIndex:iget"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TStrings_Read_ValueFromIndex"
 
 [script."xejviScriptAdapterMisc:TStrings.ValueFromIndex:iset"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TStrings_Write_ValueFromIndex"
 
 [script."xejviScriptAdapterMisc:Types.EqualsValue:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
 
 [script."xejviScriptAdapterMisc:Types.GreaterThanValue:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
 
 [script."xejviScriptAdapterMisc:Types.LessThanValue:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
 
 [script."xejviScriptAdapterMisc:Variants.VarType:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "JvInterpreter_VarType"
 
 [script."xejviScriptAdapterMisc:Variants.VarTypeAsText:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "JvInterpreter_VarTypeAsText"
 
 [script."xejviScriptAdapterMisc:Vcl.Clipbrd.GetClipboardText:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "JvInterpreter_Clipboard_GetAsText"
 
 [script."xejviScriptAdapterMisc:Vcl.Clipbrd.SetClipboardText:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "JvInterpreter_Clipboard_SetAsText"
 
 [script."xejviScriptAdapterMisc:Windows.CopyFile:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "JvInterpreter_CopyFile"
 
 [script."xejviScriptAdapterMisc:Windows.CreateProcessWait:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "JvInterpreter_CreateProcessWait"
 
 [script."xejviScriptAdapterMisc:Windows.GetKeyState:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "JvInterpreter_GetKeyState"
 
 [script."xejviScriptAdapterMisc:Windows.SW_HIDE:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
 
 [script."xejviScriptAdapterMisc:Windows.SW_MAXIMIZE:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
 
 [script."xejviScriptAdapterMisc:Windows.SW_MINIMIZE:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
 
 [script."xejviScriptAdapterMisc:Windows.SW_RESTORE:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
 
 [script."xejviScriptAdapterMisc:Windows.SW_SHOW:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
 
 [script."xejviScriptAdapterMisc:Windows.SW_SHOWDEFAULT:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
 
 [script."xejviScriptAdapterMisc:Windows.SW_SHOWMAXIMIZED:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
 
 [script."xejviScriptAdapterMisc:Windows.SW_SHOWMINIMIZED:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
 
 [script."xejviScriptAdapterMisc:Windows.SW_SHOWMINNOACTIVE:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
 
 [script."xejviScriptAdapterMisc:Windows.SW_SHOWNA:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
 
 [script."xejviScriptAdapterMisc:Windows.SW_SHOWNOACTIVATE:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
 
 [script."xejviScriptAdapterMisc:Windows.SW_SHOWNORMAL:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMisc.pas"
 
 [script."xejviScriptAdapterMisc:Windows.Sleep:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "JvInterpreter_Sleep"
 
 [script."xejviScriptAdapterMiscJson:JsonDataObjects.SetJDOIndentChar:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "JsonDataObjects_Write_IndentChar"
 
 [script."xejviScriptAdapterMiscJson:JsonDataObjects.SetJDOLineBreak:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "JsonDataObjects_Write_LineBreak"
 
 [script."xejviScriptAdapterMiscJson:JsonDataObjects.SetJDONullConvertsToValueTypes:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "JsonDataObjects_Write_NullConvertsToValueTypes"
 
 [script."xejviScriptAdapterMiscJson:JsonDataObjects.SetJDOUseUtcTime:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "JsonDataObjects_Write_UseUtcTime"
 
 [script."xejviScriptAdapterMiscJson:JsonDataObjects.TJsonArray:class"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMiscJson.pas"
 
 [script."xejviScriptAdapterMiscJson:JsonDataObjects.TJsonBaseObject:class"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMiscJson.pas"
 
 [script."xejviScriptAdapterMiscJson:JsonDataObjects.TJsonObject:class"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMiscJson.pas"
 
 [script."xejviScriptAdapterMiscJson:JsonDataObjects.jdtArray:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMiscJson.pas"
 
 [script."xejviScriptAdapterMiscJson:JsonDataObjects.jdtBool:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMiscJson.pas"
 
 [script."xejviScriptAdapterMiscJson:JsonDataObjects.jdtDateTime:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMiscJson.pas"
 
 [script."xejviScriptAdapterMiscJson:JsonDataObjects.jdtFloat:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMiscJson.pas"
 
 [script."xejviScriptAdapterMiscJson:JsonDataObjects.jdtInt:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMiscJson.pas"
 
 [script."xejviScriptAdapterMiscJson:JsonDataObjects.jdtLong:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMiscJson.pas"
 
 [script."xejviScriptAdapterMiscJson:JsonDataObjects.jdtNone:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMiscJson.pas"
 
 [script."xejviScriptAdapterMiscJson:JsonDataObjects.jdtObject:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMiscJson.pas"
 
 [script."xejviScriptAdapterMiscJson:JsonDataObjects.jdtString:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMiscJson.pas"
 
 [script."xejviScriptAdapterMiscJson:JsonDataObjects.jdtULong:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMiscJson.pas"
 
 [script."xejviScriptAdapterMiscJson:TJsonArray.A:iget"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TJsonArray_Read_A"
 
 [script."xejviScriptAdapterMiscJson:TJsonArray.A:iset"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TJsonArray_Write_A"
 
 [script."xejviScriptAdapterMiscJson:TJsonArray.Add:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TJsonArray_Add_V"
 
 [script."xejviScriptAdapterMiscJson:TJsonArray.AddArray:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TJsonArray_Add_Array"
 
 [script."xejviScriptAdapterMiscJson:TJsonArray.AddObject:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TJsonArray_Add_Object"
 
 [script."xejviScriptAdapterMiscJson:TJsonArray.Assign:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TJsonArray_Assign"
 
 [script."xejviScriptAdapterMiscJson:TJsonArray.B:iget"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TJsonArray_Read_B"
 
 [script."xejviScriptAdapterMiscJson:TJsonArray.B:iset"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TJsonArray_Write_B"
 
 [script."xejviScriptAdapterMiscJson:TJsonArray.Clear:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TJsonArray_Clear"
 
 [script."xejviScriptAdapterMiscJson:TJsonArray.Count:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TJsonArray_Read_Count"
 
 [script."xejviScriptAdapterMiscJson:TJsonArray.Count:set"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TJsonArray_Write_Count"
 
 [script."xejviScriptAdapterMiscJson:TJsonArray.Create:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TJsonArray_Create"
 
 [script."xejviScriptAdapterMiscJson:TJsonArray.D:iget"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TJsonArray_Read_D"
 
 [script."xejviScriptAdapterMiscJson:TJsonArray.D:iset"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TJsonArray_Write_D"
 
 [script."xejviScriptAdapterMiscJson:TJsonArray.Delete:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TJsonArray_Delete"
 
 [script."xejviScriptAdapterMiscJson:TJsonArray.Extract:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TJsonArray_Extract"
 
 [script."xejviScriptAdapterMiscJson:TJsonArray.ExtractArray:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TJsonArray_ExtractArray"
 
 [script."xejviScriptAdapterMiscJson:TJsonArray.ExtractObject:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TJsonArray_ExtractObject"
 
 [script."xejviScriptAdapterMiscJson:TJsonArray.F:iget"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TJsonArray_Read_F"
 
 [script."xejviScriptAdapterMiscJson:TJsonArray.F:iset"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TJsonArray_Write_F"
 
 [script."xejviScriptAdapterMiscJson:TJsonArray.I:iget"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TJsonArray_Read_I"
 
 [script."xejviScriptAdapterMiscJson:TJsonArray.I:iset"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TJsonArray_Write_I"
 
 [script."xejviScriptAdapterMiscJson:TJsonArray.Insert:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TJsonArray_Insert_V"
 
 [script."xejviScriptAdapterMiscJson:TJsonArray.InsertArray:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TJsonArray_Insert_Array"
 
 [script."xejviScriptAdapterMiscJson:TJsonArray.InsertObject:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TJsonArray_Insert_Object"
 
 [script."xejviScriptAdapterMiscJson:TJsonArray.IsNull:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TJsonArray_IsNull"
 
 [script."xejviScriptAdapterMiscJson:TJsonArray.L:iget"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TJsonArray_Read_L"
 
 [script."xejviScriptAdapterMiscJson:TJsonArray.L:iset"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TJsonArray_Write_L"
 
 [script."xejviScriptAdapterMiscJson:TJsonArray.O:iget"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TJsonArray_Read_O"
 
 [script."xejviScriptAdapterMiscJson:TJsonArray.O:iset"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TJsonArray_Write_O"
 
 [script."xejviScriptAdapterMiscJson:TJsonArray.Parse:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TJsonArray_Parse"
 
 [script."xejviScriptAdapterMiscJson:TJsonArray.S:iget"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TJsonArray_Read_S"
 
 [script."xejviScriptAdapterMiscJson:TJsonArray.S:iset"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TJsonArray_Write_S"
 
 [script."xejviScriptAdapterMiscJson:TJsonArray.TJsonArray_Read_V:idget"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TJsonArray_Read_V"
 
 [script."xejviScriptAdapterMiscJson:TJsonArray.TJsonArray_Write_V:idset"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TJsonArray_Write_V"
 
 [script."xejviScriptAdapterMiscJson:TJsonArray.Types:iget"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TJsonArray_Read_Types"
 
 [script."xejviScriptAdapterMiscJson:TJsonArray.U:iget"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TJsonArray_Read_U"
 
 [script."xejviScriptAdapterMiscJson:TJsonArray.U:iset"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TJsonArray_Write_U"
 
 [script."xejviScriptAdapterMiscJson:TJsonBaseObject.FromJSON:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TJsonBaseObject_FromJSON"
 
 [script."xejviScriptAdapterMiscJson:TJsonBaseObject.LoadFromFile:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TJsonBaseObject_LoadFromFile"
 
 [script."xejviScriptAdapterMiscJson:TJsonBaseObject.LoadFromResource:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TJsonBaseObject_LoadFromResource"
 
 [script."xejviScriptAdapterMiscJson:TJsonBaseObject.LoadFromStream:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TJsonBaseObject_LoadFromStream"
 
 [script."xejviScriptAdapterMiscJson:TJsonBaseObject.Parse:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TJsonBaseObject_Parse"
 
 [script."xejviScriptAdapterMiscJson:TJsonBaseObject.SaveToFile:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TJsonBaseObject_SaveToFile"
 
 [script."xejviScriptAdapterMiscJson:TJsonBaseObject.SaveToLines:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TJsonBaseObject_SaveToLines"
 
 [script."xejviScriptAdapterMiscJson:TJsonBaseObject.SaveToStream:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TJsonBaseObject_SaveToStream"
 
 [script."xejviScriptAdapterMiscJson:TJsonBaseObject.ToJSON:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TJsonBaseObject_ToJSON"
 
 [script."xejviScriptAdapterMiscJson:TJsonBaseObject.ToString:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TJsonBaseObject_ToString"
 
 [script."xejviScriptAdapterMiscJson:TJsonObject.A:iget"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TJsonObject_Read_A"
 
 [script."xejviScriptAdapterMiscJson:TJsonObject.A:iset"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TJsonObject_Write_A"
 
 [script."xejviScriptAdapterMiscJson:TJsonObject.Assign:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TJsonObject_Assign"
 
 [script."xejviScriptAdapterMiscJson:TJsonObject.B:iget"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TJsonObject_Read_B"
 
 [script."xejviScriptAdapterMiscJson:TJsonObject.B:iset"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TJsonObject_Write_B"
 
 [script."xejviScriptAdapterMiscJson:TJsonObject.Clear:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TJsonObject_Clear"
 
 [script."xejviScriptAdapterMiscJson:TJsonObject.Contains:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TJsonObject_Contains"
 
 [script."xejviScriptAdapterMiscJson:TJsonObject.Count:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TJsonObject_Read_Count"
 
 [script."xejviScriptAdapterMiscJson:TJsonObject.Create:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TJsonObject_Create"
 
 [script."xejviScriptAdapterMiscJson:TJsonObject.D:iget"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TJsonObject_Read_D"
 
 [script."xejviScriptAdapterMiscJson:TJsonObject.D:iset"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TJsonObject_Write_D"
 
 [script."xejviScriptAdapterMiscJson:TJsonObject.Delete:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TJsonObject_Delete"
 
 [script."xejviScriptAdapterMiscJson:TJsonObject.Extract:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TJsonObject_Extract"
 
 [script."xejviScriptAdapterMiscJson:TJsonObject.ExtractArray:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TJsonObject_ExtractArray"
 
 [script."xejviScriptAdapterMiscJson:TJsonObject.ExtractObject:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TJsonObject_ExtractObject"
 
 [script."xejviScriptAdapterMiscJson:TJsonObject.F:iget"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TJsonObject_Read_F"
 
 [script."xejviScriptAdapterMiscJson:TJsonObject.F:iset"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TJsonObject_Write_F"
 
 [script."xejviScriptAdapterMiscJson:TJsonObject.I:iget"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TJsonObject_Read_I"
 
 [script."xejviScriptAdapterMiscJson:TJsonObject.I:iset"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TJsonObject_Write_I"
 
 [script."xejviScriptAdapterMiscJson:TJsonObject.IndexOf:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TJsonObject_IndexOf"
 
 [script."xejviScriptAdapterMiscJson:TJsonObject.IsNull:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TJsonObject_IsNull"
 
 [script."xejviScriptAdapterMiscJson:TJsonObject.L:iget"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TJsonObject_Read_L"
 
 [script."xejviScriptAdapterMiscJson:TJsonObject.L:iset"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TJsonObject_Write_L"
 
 [script."xejviScriptAdapterMiscJson:TJsonObject.Names:iget"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TJsonObject_Read_Names"
 
 [script."xejviScriptAdapterMiscJson:TJsonObject.O:iget"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TJsonObject_Read_O"
 
 [script."xejviScriptAdapterMiscJson:TJsonObject.O:iset"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TJsonObject_Write_O"
 
 [script."xejviScriptAdapterMiscJson:TJsonObject.Parse:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TJsonObject_Parse"
 
 [script."xejviScriptAdapterMiscJson:TJsonObject.Remove:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TJsonObject_Remove"
 
 [script."xejviScriptAdapterMiscJson:TJsonObject.S:iget"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TJsonObject_Read_S"
 
 [script."xejviScriptAdapterMiscJson:TJsonObject.S:iset"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TJsonObject_Write_S"
 
 [script."xejviScriptAdapterMiscJson:TJsonObject.TJsonObject_Read_V:idget"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TJsonObject_Read_V"
 
 [script."xejviScriptAdapterMiscJson:TJsonObject.TJsonObject_Write_V:idset"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TJsonObject_Write_V"
 
 [script."xejviScriptAdapterMiscJson:TJsonObject.Types:iget"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TJsonObject_Read_Types"
 
 [script."xejviScriptAdapterMiscJson:TJsonObject.U:iget"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TJsonObject_Read_U"
 
 [script."xejviScriptAdapterMiscJson:TJsonObject.U:iset"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TJsonObject_Write_U"
 
 [script."xejviScriptAdapterMiscRegEx:RegularExpressionsCore.TPerlRegEx:class"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMiscRegEx.pas"
 
 [script."xejviScriptAdapterMiscRegEx:RegularExpressionsCore.preAnchored:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMiscRegEx.pas"
 
 [script."xejviScriptAdapterMiscRegEx:RegularExpressionsCore.preCaseLess:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMiscRegEx.pas"
 
 [script."xejviScriptAdapterMiscRegEx:RegularExpressionsCore.preExtended:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMiscRegEx.pas"
 
 [script."xejviScriptAdapterMiscRegEx:RegularExpressionsCore.preMultiLine:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMiscRegEx.pas"
 
 [script."xejviScriptAdapterMiscRegEx:RegularExpressionsCore.preNoAutoCapture:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMiscRegEx.pas"
 
 [script."xejviScriptAdapterMiscRegEx:RegularExpressionsCore.preNotBOL:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMiscRegEx.pas"
 
 [script."xejviScriptAdapterMiscRegEx:RegularExpressionsCore.preNotEOL:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMiscRegEx.pas"
 
 [script."xejviScriptAdapterMiscRegEx:RegularExpressionsCore.preNotEmpty:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMiscRegEx.pas"
 
 [script."xejviScriptAdapterMiscRegEx:RegularExpressionsCore.preSingleLine:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMiscRegEx.pas"
 
 [script."xejviScriptAdapterMiscRegEx:RegularExpressionsCore.preUnGreedy:const"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMiscRegEx.pas"
 
 [script."xejviScriptAdapterMiscRegEx:TPerlRegEx.Compile:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TPerlRegEx_Compile"
 
 [script."xejviScriptAdapterMiscRegEx:TPerlRegEx.Compiled:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TPerlRegEx_Read_Compiled"
 
 [script."xejviScriptAdapterMiscRegEx:TPerlRegEx.ComputeReplacement:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TPerlRegEx_ComputeReplacement"
 
 [script."xejviScriptAdapterMiscRegEx:TPerlRegEx.Create:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TPerlRegEx_Create"
 
 [script."xejviScriptAdapterMiscRegEx:TPerlRegEx.EscapeRegExChars:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TPerlRegEx_EscapeRegExChars"
 
 [script."xejviScriptAdapterMiscRegEx:TPerlRegEx.FoundMatch:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TPerlRegEx_FoundMatch"
 
 [script."xejviScriptAdapterMiscRegEx:TPerlRegEx.GroupCount:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TPerlRegEx_GroupCount"
 
 [script."xejviScriptAdapterMiscRegEx:TPerlRegEx.GroupLengths:iget"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TPerlRegEx_Read_GroupLengths"
 
 [script."xejviScriptAdapterMiscRegEx:TPerlRegEx.GroupOffsets:iget"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TPerlRegEx_Read_GroupOffsets"
 
 [script."xejviScriptAdapterMiscRegEx:TPerlRegEx.Groups:iget"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TPerlRegEx_Read_Groups"
 
 [script."xejviScriptAdapterMiscRegEx:TPerlRegEx.Match:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TPerlRegEx_Match"
 
 [script."xejviScriptAdapterMiscRegEx:TPerlRegEx.MatchAgain:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TPerlRegEx_MatchAgain"
 
 [script."xejviScriptAdapterMiscRegEx:TPerlRegEx.MatchedLength:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TPerlRegEx_MatchedLength"
 
 [script."xejviScriptAdapterMiscRegEx:TPerlRegEx.MatchedOffset:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TPerlRegEx_MatchedOffset"
 
 [script."xejviScriptAdapterMiscRegEx:TPerlRegEx.MatchedText:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TPerlRegEx_MatchedText"
 
 [script."xejviScriptAdapterMiscRegEx:TPerlRegEx.NamedGroup:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TPerlRegEx_NamedGroup"
 
 [script."xejviScriptAdapterMiscRegEx:TPerlRegEx.Options:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TPerlRegEx_Read_Options"
 
 [script."xejviScriptAdapterMiscRegEx:TPerlRegEx.Options:set"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TPerlRegEx_Write_Options"
 
 [script."xejviScriptAdapterMiscRegEx:TPerlRegEx.RegEx:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TPerlRegEx_Read_RegEx"
 
 [script."xejviScriptAdapterMiscRegEx:TPerlRegEx.RegEx:set"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TPerlRegEx_Write_RegEx"
 
 [script."xejviScriptAdapterMiscRegEx:TPerlRegEx.Replace:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TPerlRegEx_Replace"
 
 [script."xejviScriptAdapterMiscRegEx:TPerlRegEx.ReplaceAll:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TPerlRegEx_ReplaceAll"
 
 [script."xejviScriptAdapterMiscRegEx:TPerlRegEx.Replacement:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TPerlRegEx_Read_Replacement"
 
 [script."xejviScriptAdapterMiscRegEx:TPerlRegEx.Replacement:set"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TPerlRegEx_Write_Replacement"
 
 [script."xejviScriptAdapterMiscRegEx:TPerlRegEx.Split:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TPerlRegEx_Split"
 
 [script."xejviScriptAdapterMiscRegEx:TPerlRegEx.SplitCapture:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TPerlRegEx_SplitCapture"
 
 [script."xejviScriptAdapterMiscRegEx:TPerlRegEx.Start:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TPerlRegEx_Read_Start"
 
 [script."xejviScriptAdapterMiscRegEx:TPerlRegEx.Start:set"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TPerlRegEx_Write_Start"
 
 [script."xejviScriptAdapterMiscRegEx:TPerlRegEx.Stop:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TPerlRegEx_Read_Stop"
 
 [script."xejviScriptAdapterMiscRegEx:TPerlRegEx.Stop:set"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TPerlRegEx_Write_Stop"
 
 [script."xejviScriptAdapterMiscRegEx:TPerlRegEx.StoreGroups:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TPerlRegEx_StoreGroups"
 
 [script."xejviScriptAdapterMiscRegEx:TPerlRegEx.Studied:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TPerlRegEx_Read_Studied"
 
 [script."xejviScriptAdapterMiscRegEx:TPerlRegEx.Study:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TPerlRegEx_Study"
 
 [script."xejviScriptAdapterMiscRegEx:TPerlRegEx.Subject:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TPerlRegEx_Read_Subject"
 
 [script."xejviScriptAdapterMiscRegEx:TPerlRegEx.Subject:set"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TPerlRegEx_Write_Subject"
 
 [script."xejviScriptAdapterMiscRegEx:TPerlRegEx.SubjectLeft:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TPerlRegEx_SubjectLeft"
 
 [script."xejviScriptAdapterMiscRegEx:TPerlRegEx.SubjectRight:get"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "TPerlRegEx_SubjectRight"
 
 [script."xejviScriptAdapterMiscVcl:CheckLst.TCheckListBox:class"]

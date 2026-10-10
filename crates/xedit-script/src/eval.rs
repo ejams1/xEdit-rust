@@ -2266,6 +2266,12 @@ impl Interpreter {
                 exec.pos = Some(pos as i64);
                 exec
             }
+            ValueError::ExternalClass { class, message } => {
+                let mut exec = ExecError::external(&message);
+                exec.class_name = Some(class.to_owned());
+                exec.pos = Some(pos as i64);
+                exec
+            }
             ValueError::Interp { code, name1, name2 } => ExecError::new(code, Some(pos as i64), &name1, &name2),
         }
     }
