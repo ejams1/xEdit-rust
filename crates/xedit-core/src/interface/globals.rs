@@ -344,6 +344,17 @@ string_globals! {
     game_steam_id, set_game_steam_id, wbGameSteamID;
     program_path, set_program_path, wbProgramPath;
     data_path, set_data_path, wbDataPath;
+    /// The folder the scripts and the units a script uses are read from
+    /// (`wbScriptsPath`), with a trailing separator, or the folder of the
+    /// script a `-script:` run reads (`xeMainForm.pas:5075`).
+    scripts_path, set_scripts_path, wbScriptsPath;
+    /// The folder scripts write their temporary files to (`wbTempPath`),
+    /// with a trailing separator.
+    temp_path, set_temp_path, wbTempPath;
+    /// Where a script writes its output (`wbOutputPath`), with a trailing
+    /// separator; the data folder unless `-O:` names another
+    /// (`xeInit.pas:478`).
+    output_path, set_output_path, wbOutputPath;
     /// The folder of the reference cache files, with a trailing separator;
     /// empty for none.
     cache_path, set_cache_path, wbCachePath;

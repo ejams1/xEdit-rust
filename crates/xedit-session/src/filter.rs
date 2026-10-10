@@ -344,7 +344,10 @@ fn tree_files(tree: &NavTree) -> Vec<(String, i32, i64)> {
         .collect()
 }
 
-fn filter_apply(session: &mut Session, request: FilterApplyRequest) -> Result<FilterApplyResponse, CommandError> {
+pub(crate) fn filter_apply(
+    session: &mut Session,
+    request: FilterApplyRequest,
+) -> Result<FilterApplyResponse, CommandError> {
     session.mode()?;
     let files = request_files(session, &request.files)?;
     // `FilterPreset`: the dialog does not open, the options are the request's
@@ -466,7 +469,10 @@ pub struct FilterRemoveResponse {
 /// Port of `mniNavFilterRemoveClick`: `ReInitTree(False, nil)` and no
 /// filter. The port's tree is built on demand, so what is left is the list
 /// of the loaded files, which is what the GUI's tree shows after the call.
-fn filter_remove(session: &mut Session, _: FilterRemoveRequest) -> Result<FilterRemoveResponse, CommandError> {
+pub(crate) fn filter_remove(
+    session: &mut Session,
+    _: FilterRemoveRequest,
+) -> Result<FilterRemoveResponse, CommandError> {
     session.mode()?;
     let files = crate::conflicts::session_files(session)?;
     let tree = NavTree::new(&files);

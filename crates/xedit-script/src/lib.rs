@@ -36,6 +36,10 @@
 //!   `JvResources.pas` and the `GetLineByPos` line counting.
 //! * [`check`]: checking a script with the units it uses resolved from the
 //!   scripts folder, and the `uses` namespace stripping of the script host.
+//! * [`host`]: the script host -- one compiled script (`IxeScript`,
+//!   `TxejviScript`) with `FunctionExists`/`FunctionIsEmpty`/`CallFunction`,
+//!   the unit source resolution with the built-in stubs, and
+//!   `TxeScriptHost`'s name registry.
 //!
 //! The crate has no dependency on the session layer: it parses text into
 //! trees and executes them against adapters; identifiers, units and types
@@ -46,10 +50,12 @@ pub mod ast;
 pub mod check;
 pub mod error;
 pub mod eval;
+pub mod host;
 pub mod interpreter;
 pub mod interpreter_parser;
 pub mod values;
 
 pub use error::Error;
 pub use eval::{ExecError, Interpreter};
+pub use host::Script;
 pub use interpreter::parse;

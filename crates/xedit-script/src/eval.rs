@@ -109,6 +109,22 @@ pub struct ExecError {
     /// Whether this is a non-interpreter exception reported through the
     /// `ieExternal` text (`:5390`).
     pub external: bool,
+    /// `E.ClassName` of the exception the host's `except on E: Exception`
+    /// catches (`xeMainForm.pas:8852`): the class of the raised script
+    /// object, or `None` for an interpreter error, whose class is
+    /// `EJvInterpreterError`.
+    pub class_name: Option<String>,
+}
+
+/// `TfrmMain.ApplyScript`'s `E.ClassName` for an interpreter error.
+pub const INTERPRETER_ERROR_CLASS: &str = "EJvInterpreterError";
+
+impl ExecError {
+    /// The class name the `Exception in unit ...: [class] message` line of
+    /// the run loop prints.
+    pub fn class_name(&self) -> &str {
+        self.class_name.as_deref().unwrap_or(INTERPRETER_ERROR_CLASS)
+    }
 }
 
 impl ExecError {
@@ -127,6 +143,7 @@ impl ExecError {
             line: -1,
             exception_pos: false,
             external: false,
+            class_name: None,
         }
     }
 
@@ -145,6 +162,7 @@ impl ExecError {
             line: -1,
             exception_pos: false,
             external: true,
+            class_name: None,
         }
     }
 
@@ -163,6 +181,7 @@ impl ExecError {
             line: -1,
             exception_pos: false,
             external: false,
+            class_name: None,
         }
     }
 
@@ -180,6 +199,7 @@ impl ExecError {
             line: -1,
             exception_pos: false,
             external: false,
+            class_name: None,
         }
     }
 
@@ -728,6 +748,7 @@ impl Interpreter {
             FlowError::ReRaise => ExecError::new(IE_RAISE, Some(self.cur_pos as i64), "", ""),
             FlowError::Raise(raised) => {
                 let mut exec = ExecError::external(&raised.message);
+                exec.class_name = Some(raised.class.name.clone());
                 exec.pos = Some(self.cur_pos as i64);
                 exec
             }

@@ -21,6 +21,9 @@ use std::fmt;
 
 /// `ieInternal` (`JvInterpreter.pas:1229`).
 pub const IE_INTERNAL: i32 = 2;
+/// `ieUserBreak` -- what `wbTick`'s `Abort` surfaces as when a run is
+/// terminated from outside (`wbForceTerminate`).
+pub const IE_USER_BREAK: i32 = 3;
 /// `ieErrorPos` -- the `Error in unit '%0:s' on line %1:d : %2:s` format.
 pub const IE_ERROR_POS: i32 = 5;
 /// `ieUnitNotFound`.
@@ -80,6 +83,11 @@ pub const IE_TOO_MANY_PARAMS: i32 = 181;
 pub const IE_NOT_ENOUGH_PARAMS: i32 = 182;
 /// `ieIncompatibleTypes` -- declared upstream, never raised.
 pub const IE_INCOMPATIBLE_TYPES: i32 = 183;
+/// `ieDirectInvalidArgument` (`ieFunctionBase + 8`, `JvInterpreter.pas:1283`):
+/// the code an adapter raises for an argument of the wrong type, whose text
+/// the `%s` of the message carries, as `_AddMessage` and the
+/// `ScriptProcessSignatures` check do.
+pub const IE_DIRECT_INVALID_ARGUMENT: i32 = 188;
 
 /// `RsENotImplemented` (`JvResources.pas:98`): concatenated to a message by
 /// `NotImplemented` (`JvInterpreter.pas:1620`) without a separating space.
