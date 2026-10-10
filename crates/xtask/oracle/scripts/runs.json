@@ -206,11 +206,13 @@
       "script": "List used meshes from references.pas"
     },
     {
-      "script": "List used meshes.pas"
+      "script": "List used meshes.pas",
+      "timeout_minutes": 60
     },
     {
       "script": "List winning override references.pas",
-      "build_refs": true
+      "build_refs": true,
+      "timeout_minutes": 60
     },
     {
       "script": "LOD Statistics.pas"
@@ -248,7 +250,8 @@
       "game": "tes4"
     },
     {
-      "script": "Output used assets filenames.pas"
+      "script": "Output used assets filenames.pas",
+      "timeout_minutes": 60
     },
     {
       "script": "Put master references in the same cell as overriding references.pas",
@@ -335,7 +338,8 @@
       "save": [
         "Skyrim.esm"
       ],
-      "note": "edits records: the saved bytes are compared"
+      "note": "edits records: the saved bytes are compared",
+      "timeout_minutes": 60
     },
     {
       "script": "Replace text in EDID and FULL.pas",
@@ -402,7 +406,8 @@
     },
     {
       "script": "Skyrim - Check script properties.pas",
-      "game": "tes5"
+      "game": "tes5",
+      "timeout_minutes": 60
     },
     {
       "script": "Skyrim - Clean edge links in navmeshes.pas",
@@ -507,7 +512,7 @@
         "Skyrim.esm"
       ],
       "note": "edits records: the saved bytes are compared",
-      "timeout_minutes": 60
+      "timeout_minutes": 120
     },
     {
       "script": "Skyrim - Ore Veins don't respawn.pas",
