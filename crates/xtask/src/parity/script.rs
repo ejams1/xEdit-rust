@@ -14,10 +14,15 @@
 //!   `TxeScriptHost.CreateScript`, which is where `JvInterpreter` compiles)
 //!   and the port checks it (`xedit script check`). "The same outcome" is
 //!   whether the script compiled: the oracle's run reaches
-//!   [`SCRIPT_END_LINE`] (posted after the script ran) or at least the
+//!   [`SCRIPT_END_LINE`] (posted after the script ran), or shows the
 //!   `Applying script` line (`PerformLongAction` begins after the compile
-//!   and before any statement runs, so its absence with a dialog means the
-//!   compile failed); the port exits 0 for the file.
+//!   and before any statement runs), or stops on a dialog of the script's
+//!   own (`Compile` runs the main block first: `Bookmark.pas` shows its
+//!   bookmark list before that line exists). Only the application's own
+//!   exception dialog -- caption [`APP_DIALOG_VERSION`], `Error in unit
+//!   'X' on line N : ...` for a compile error or an access violation when
+//!   the compiler faults -- means the script did not compile; the port
+//!   exits 0 for a file it parses.
 //! - **run**: the form-free corpus (`crates/xtask/oracle/scripts/runs.json`),
 //!   each case naming the game and the plugins to load. The oracle runs the
 //!   script on the hidden GUI with a private data folder and the script's
