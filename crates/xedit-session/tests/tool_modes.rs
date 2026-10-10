@@ -191,6 +191,36 @@ fn espify_clears_the_esm_flag_and_saves() {
 }
 
 #[test]
+fn the_quick_clean_switches_differ_in_their_save() {
+    let _guard = test_lock();
+    // `-quickautoclean` (`-qac`) sets `xeQuickCleanAutoSave`: the pass saves
+    // the plugin. `-quickclean` (`-qc`) leaves the flag off: one pass in
+    // memory, no save, no backup. The legacy command line hands `tool.run`
+    // the sub mode name of the edit mode (`quick_auto_clean`, which
+    // `parse_legacy` gives the run), the CLI its own mode name
+    // (`quickautoclean`), so both spellings are checked.
+    for (mode, saves) in [
+        ("quickautoclean", true),
+        ("quickclean", false),
+        ("quick_auto_clean", true),
+        ("quick_clean", false),
+    ] {
+        let dir = scratch(&format!("qc-{mode}"));
+        let output = dir.join("Plugin.esp");
+        let mut session = open_session(plugin(0, 1));
+        session.allow_edit(true);
+        let result = call(
+            &mut session,
+            json!({ "mode": mode, "output": output.to_string_lossy() }),
+        );
+        assert_eq!(result["changed"], true, "{mode}: {result}");
+        assert_eq!(result["files"][0]["saved"], saves, "{mode}: {result}");
+        assert_eq!(output.exists(), saves, "{mode}: the save writes the plugin or nothing");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+}
+
+#[test]
 fn onamupdate_marks_the_header_of_a_plugin_with_masters() {
     let _guard = test_lock();
     let dir = scratch("onam");

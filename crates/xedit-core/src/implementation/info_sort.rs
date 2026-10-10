@@ -186,7 +186,12 @@ impl EntryList {
 
 /// The exception that ends a sort: a cycle of `PNAM` links (`Abort`) or a
 /// list that does not hold the responses of the group (an assertion).
-struct SortAborted;
+/// `class_name` and `message` are the `E.ClassName` and `E.Message` the
+/// error line of `ProcessDIAL` prints.
+struct SortAborted {
+    class_name: &'static str,
+    message: &'static str,
+}
 
 /// Port of `DoInsertRecord`: the response goes after the response its
 /// `PNAM` links to, which goes into the list first; a response with an
@@ -223,7 +228,11 @@ fn do_insert_record(
                         break;
                     }
                 }
-                return Err(SortAborted);
+                return Err(SortAborted {
+                    // `Abort` raises an `EAbort` with an empty message.
+                    class_name: "EAbort",
+                    message: "",
+                });
             }
             stack.push(insert.clone());
             let result = do_insert_record(list, &target, stack);
@@ -375,21 +384,51 @@ impl GroupRecordImpl {
         if result.is_ok() {
             result = self.process_dial(&children_of, true);
         }
-        if result.is_err() {
-            progress(&format!(
-                "<Warning: could not sort INFO for [\"{}\" in \"{}\"] because of previous error>",
-                self.get_name(),
-                self.file.upgrade().map(|file| file.get_name()).unwrap_or_default()
-            ));
-        }
-        self.gr_sorted.store(true, Ordering::Relaxed);
         self.gr_sorting.store(false, Ordering::Relaxed);
-        // The outer sort of a group ends too, as the exception reaches it.
-        if nested { result } else { Ok(()) }
+        match result {
+            Ok(()) => {
+                self.gr_sorted.store(true, Ordering::Relaxed);
+                Ok(())
+            }
+            Err(error) => {
+                progress(&format!(
+                    "<Warning: could not sort INFO for [\"{}\" in \"{}\"] because of previous error>",
+                    self.get_name(),
+                    self.file.upgrade().map(|file| file.get_name()).unwrap_or_default()
+                ));
+                // The re-raise skips `Include(grStates, gsSorted)`; upstream
+                // re-raises while an outer sort is on the stack
+                // (`ElementRefsCount > 0`), which is the nested sort. The
+                // outermost sort swallows the exception after the warning
+                // and marks the group sorted, as the release does.
+                if nested {
+                    return Err(error);
+                }
+                self.gr_sorted.store(true, Ordering::Relaxed);
+                Ok(())
+            }
+        }
     }
 
     /// Port of `ProcessDIAL`.
     fn process_dial(&self, children_of: &Arc<MainRecordImpl>, only_masters: bool) -> Result<(), SortAborted> {
+        let result = self.process_dial_inner(children_of, only_masters);
+        if let Err(error) = &result {
+            // The exception handler of `ProcessDIAL`: the line names the
+            // group and the exception, then it re-raises.
+            progress(&format!(
+                "<Error sorting INFO for [\"{}\" in \"{}\"]: [{}] {}>",
+                self.get_name(),
+                self.file.upgrade().map(|file| file.get_name()).unwrap_or_default(),
+                error.class_name,
+                error.message
+            ));
+        }
+        result
+    }
+
+    /// The body of `ProcessDIAL`, which its exception handler wraps.
+    fn process_dial_inner(&self, children_of: &Arc<MainRecordImpl>, only_masters: bool) -> Result<(), SortAborted> {
         let records = if only_masters {
             master_records_from_master_files_and_self(children_of)
         } else {
@@ -455,8 +494,14 @@ impl GroupRecordImpl {
         let mut new_elements: Vec<ElementRef> = Vec::new();
         if only_masters {
             if list.nodes.len() != self.container.element_count() {
-                // `Assert(mreHeader.mrehCount = Length(cntElements))`.
-                return Err(SortAborted);
+                // `Assert(mreHeader.mrehCount = Length(cntElements),
+                // '[TwbGroupRecord.Sort] mreHeader.mrehCount <>
+                // Length(cntElements)')`, whose `EAssertionFailed` message is
+                // the one the assertion passes.
+                return Err(SortAborted {
+                    class_name: "EAssertionFailed",
+                    message: "Assertion failed: [TwbGroupRecord.Sort] mreHeader.mrehCount <> Length(cntElements)",
+                });
             }
             let mut order = Vec::with_capacity(list.nodes.len());
             let mut current = list.tail;

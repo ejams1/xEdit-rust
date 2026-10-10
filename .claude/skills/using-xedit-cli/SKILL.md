@@ -5,7 +5,7 @@ description: Use when inspecting, editing or saving Bethesda plugins and save ga
 
 # Using the xedit CLI
 
-`xedit` is the command-line interface of the Rust port. Build it with `cargo build --release -p xedit-cli`; the binary is `target/release/xedit.exe`. Every subcommand except `dump`, `saves dump`, `batch`, `serve` and `mcp` is a command of the session registry, so `xedit schema` prints the full list with the JSON Schema of each request and response, and `xedit call <name> --params '<json>'` runs any of them by name. The schema is the authority on parameters; this skill says how to use them safely.
+`xedit` is the command-line interface of the Rust port. Build it with `cargo build --release -p xedit-cli`; the binary is `target/release/xedit.exe`. Every subcommand except `dump`, `saves dump`, `refs dump`, `batch`, `serve` and `mcp` is a command of the session registry, so `xedit schema` prints the full list with the JSON Schema of each request and response, and `xedit call <name> --params '<json>'` runs any of them by name. The schema is the authority on parameters; this skill says how to use them safely.
 
 ## Mutation rules
 
@@ -231,8 +231,8 @@ xedit --game fo4 --load "<Data>\DLCRobot.esm" compare 000BB1F9 --hide-no-conflic
 ```
 xedit --game sse --load "<Data>\Skyrim.esm" --load "<Data>\Update.esm" filter apply --conflict-this ctConflictLoses,ctConflictWins --conflict-only
 xedit --game sse --load "<Data>\Skyrim.esm" filter apply --preset "my preset" --settings "%LOCALAPPDATA%\Skyrim Special Edition\Plugins.sseviewsettings"
-xedit --game sse --load "<Data>\Skyrim.esm" filter apply --by-editor-id "^DLC01" --regex-comparison --signature WEAP,ARMO --list-records
-xedit --game sse --load "<Data>\Skyrim.esm" filter apply --by-persistent --persistent=false --by-signature REFR
+xedit --game sse --load "<Data>\Skyrim.esm" filter apply --editor-id "^DLC01" --regex-comparison --signature WEAP,ARMO --list-records
+xedit --game sse --load "<Data>\Skyrim.esm" filter apply --by-persistent --persistent=false --signature REFR
 xedit --game sse --load "<Data>\Skyrim.esm" refs build-reachable
 xedit --game sse --load "<Data>\Skyrim.esm" filter apply --by-not-reachable-status=true
 ```
@@ -432,7 +432,7 @@ xEdit is started in a tool mode: the executable name (`SSEEditQuickAutoClean.exe
 | `export` | xDump's `-export RAW`: the profile of the game's record definitions. `--format UESPWIKI` writes the wiki tables instead; the profile file goes to `--output` (default `<AppName>ExportPlugins.txt` next to the program, as xDump writes it) and the structure of the definitions comes back as the response's `text`. |
 | `edit`, `view`, `translate` | Loading modes: `edit` is the default, `view` loads read-only and `translate` is `--translate`. They report what they are. |
 
-- The modes reachable as their own commands are not run twice: `dump` points at `xedit dump`, `lodgen` (phase 5) and `script` (phase 6) are accepted and leave the work to those phases, and `quickclean`/`quickautoclean` are `xedit clean --quick`.
+- The modes reachable as their own commands are not run twice: `dump` points at `xedit dump`, `lodgen` (phase 5) and `script` (phase 6) are accepted and leave the work to those phases, and `quickclean`/`quickautoclean` are the edit mode's quick clean switches: `-quickclean` cleans in memory only and `-quickautoclean` saves, as `xedit clean --quick` (the quick auto clean mode) does.
 - `--dry-run` reports what the mode would change without changing anything; for `export` that means it writes nothing and still returns the text.
 - The modes take (and the modes of the GUI take) the switches of `xeInit.pas` too: `-filteronam`, `-FixPersistence`, `-alwayssaveonam`, `-IKnowWhatImDoing` and the switches it unlocks, `-FillPNAM`, `-sortinfo`, `-nobuildrefs`, `-fixup`/`-nofixup`. The ones the port reads and does not act on are named in the result.
 

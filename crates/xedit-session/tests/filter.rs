@@ -217,6 +217,49 @@ fn filters_by_signature_and_editor_id() {
 }
 
 #[test]
+fn signature_names_are_matched_without_case() {
+    let _guard = test_lock();
+    let dir = data_dir("case");
+    let files = load(&dir);
+    let (registry, mut session) = session(&files);
+    let apply = |session: &mut Session, options: Value| {
+        registry
+            .call(
+                session,
+                "filter.apply",
+                json!({ "options": options, "list_records": true }),
+            )
+            .unwrap()
+    };
+    // Upstream fills `TStringList`s with `CaseSensitive = False`, whose
+    // `Find` and `IndexOf` compare with `AnsiCompareText`: lower case input
+    // matches the upper case signatures of the records.
+    for (upper, lower) in [("CELL", "cell"), ("GMST", "gmst")] {
+        let wanted = apply(&mut session, json!({ "by_signature": upper }));
+        let typed = apply(&mut session, json!({ "by_signature": lower }));
+        assert!(wanted["pass1"].as_u64().unwrap() > 0, "{upper}");
+        assert_eq!(typed["pass1"], wanted["pass1"], "{lower}");
+        assert_eq!(typed["pass2"], wanted["pass2"], "{lower}");
+        assert_eq!(typed["unfiltered"], wanted["unfiltered"], "{lower}");
+        assert_eq!(records_of(&typed), records_of(&wanted), "{lower}");
+    }
+    // The cell of the master is what the lower case filter keeps.
+    let kept = records_of(&apply(&mut session, json!({ "by_signature": "cell" })));
+    assert_eq!(kept.len(), 1, "{kept:?}");
+    assert_eq!(is_form_id(&kept, "00000801").len(), 1, "{kept:?}");
+    // A base signature derives the signatures of the references that can
+    // have it as their base through its definition, which the case must not
+    // hide: an empty derivation clears the tree (pass 1 counts nothing).
+    let wanted = apply(&mut session, json!({ "by_base_signature": "MISC" }));
+    let typed = apply(&mut session, json!({ "by_base_signature": "misc" }));
+    assert!(wanted["pass1"].as_u64().unwrap() > 0, "{wanted}");
+    assert_eq!(typed["pass1"], wanted["pass1"]);
+    assert_eq!(typed["pass2"], wanted["pass2"]);
+    assert_eq!(typed["unfiltered"], wanted["unfiltered"]);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn the_default_options_keep_everything() {
     let _guard = test_lock();
     let dir = data_dir("empty");

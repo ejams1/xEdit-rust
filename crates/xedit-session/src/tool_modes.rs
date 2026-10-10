@@ -758,8 +758,10 @@ pub struct ToolRunRequest {
     /// The tool mode: the switch of `xeInit.pas` without the dash (`setesm`,
     /// `clearesm`, `masterupdate`, `onamupdate`, `sortandcleanmasters`,
     /// `generateseq`, `checkforerrors`, `checkforitm`, `checkfordr`,
-    /// `export`, `edit`), or the name of the mode (`esmify`, `espify`,
-    /// `masterrestore`, `quickclean`, `quickautoclean`, `dump`, `view`).
+    /// `export`, `edit`), the name of the mode (`esmify`, `espify`,
+    /// `masterrestore`, `quickclean`, `quickautoclean`, `dump`, `view`), or
+    /// the sub mode name of the edit mode the legacy command line passes
+    /// (`quick_clean`, `quick_auto_clean`).
     pub mode: String,
     /// The modules the mode works on, by plugin name, as the modules of
     /// `xeModulesToUse`; every loaded plugin when omitted.
@@ -1099,7 +1101,18 @@ pub fn mode_of_name(name: &str) -> Option<ToolMode> {
     let name = name.trim_start_matches(['-', '/']).to_ascii_lowercase();
     let alias = match name.as_str() {
         // The executable names of the modes (`SSEEditQuickAutoClean.exe`)
-        "quickclean" | "qc" | "quickautoclean" | "qac" => Some(ToolMode::tmEdit),
+        // and the sub mode names of the edit mode, which the legacy command
+        // line passes to `tool.run` (`parse_legacy`).
+        "quickclean"
+        | "qc"
+        | "quickautoclean"
+        | "qac"
+        | "quick_clean"
+        | "quick_auto_clean"
+        | "quick_show_conflicts"
+        | "very_quick_show_conflicts"
+        | "auto_load"
+        | "auto_game_link" => Some(ToolMode::tmEdit),
         "sortandclean" => Some(ToolMode::tmSortAndCleanMasters),
         "seq" | "generateseq" => Some(ToolMode::tmGenerateSEQ),
         "esmify" => Some(ToolMode::tmESMify),
@@ -1233,6 +1246,7 @@ fn tool_run(session: &mut Session, request: ToolRunRequest) -> Result<ToolRunRes
                 itm,
                 udr: !itm,
                 quick: false,
+                quick_auto_save: false,
                 dry_run: true,
                 output: None,
                 backup: request.backup,
@@ -1267,18 +1281,26 @@ fn tool_run(session: &mut Session, request: ToolRunRequest) -> Result<ToolRunRes
             // does.
             let sub = EDIT_SUB_MODES
                 .iter()
-                .find(|(names, _)| names.iter().any(|name| request.mode.eq_ignore_ascii_case(name)))
+                .find(|(names, sub)| {
+                    request.mode.eq_ignore_ascii_case(sub)
+                        || names.iter().any(|name| request.mode.eq_ignore_ascii_case(name))
+                })
                 .map(|(_, sub)| *sub);
             if sub == Some("quick_clean") || sub == Some("quick_auto_clean") {
                 let output = request.output.clone();
+                // `xeInit.pas` sets `xeQuickCleanAutoSave` for
+                // `-quickautoclean` (`-qac`) only: `-quickclean` (`-qc`)
+                // cleans in memory and writes nothing.
+                let auto_save = sub == Some("quick_auto_clean");
                 let clean = crate::clean::CleanRequest {
                     file: loaded.last().map(|file| file.get_name()),
                     itm: true,
                     udr: true,
                     quick: true,
+                    quick_auto_save: auto_save,
                     dry_run: request.dry_run,
                     output: output.clone(),
-                    backup: request.backup,
+                    backup: auto_save && request.backup,
                 };
                 let cleaned = crate::clean::files_clean(session, clean)?;
                 messages.extend(cleaned.messages.iter().cloned());

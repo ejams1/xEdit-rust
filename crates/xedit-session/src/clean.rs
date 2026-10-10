@@ -16,8 +16,10 @@
 //! the ITM removal) and saves the plugin when the pass changed it; then it
 //! runs a second pass and saves again when that changed it, and a third
 //! pass, whose changes upstream does not save (`tmrGeneratorTimer`). The
-//! mode loads the plugins with its own settings (`xeInit.pas`: the full
-//! record definitions, the PNAM fill), which the CLI applies for
+//! plain quick clean mode (`-quickclean`) leaves `xeQuickCleanAutoSave` off:
+//! one pass, no save (`CleanRequest::quick_auto_save`). The mode loads the
+//! plugins with its own settings (`xeInit.pas`: the full record
+//! definitions, the PNAM fill), which the CLI applies for
 //! `xedit clean --quick` (`commands::set_quick_clean_on_load`); see
 //! [`quick_auto_clean`].
 
@@ -51,13 +53,20 @@ pub struct CleanRequest {
     /// Disable References").
     #[serde(default)]
     pub udr: bool,
-    /// The quick auto clean mode (`-quickautoclean`): UDR and ITM, saved,
-    /// and again while a pass changes the plugin. xEdit loads the plugins
-    /// for it with the full record definitions and the PNAM fill;
-    /// `xedit clean --quick` does too, and a session loaded otherwise gets a
-    /// warning in `messages` (its comparisons can differ).
+    /// The quick clean mode (`-quickclean`, `-quickautoclean`): UDR and ITM
+    /// in one pass. xEdit loads the plugins for it with the full record
+    /// definitions and the PNAM fill; `xedit clean --quick` does too, and a
+    /// session loaded otherwise gets a warning in `messages` (its
+    /// comparisons can differ).
     #[serde(default)]
     pub quick: bool,
+    /// Whether the quick mode saves, as `-quickautoclean` (`-qac`) does
+    /// through `xeQuickCleanAutoSave`: the save after the pass and again
+    /// while a pass changes the plugin. `-quickclean` (`-qc`) leaves the
+    /// flag off and cleans in memory only. Defaults to true, as the quick
+    /// mode of the CLI (`xedit clean --quick`) is the quick auto clean mode.
+    #[serde(default = "default_true")]
+    pub quick_auto_save: bool,
     /// Count what would be cleaned (one pass, as `-checkforitm` and
     /// `-checkfordr` count), but change and save nothing.
     #[serde(default)]
@@ -216,7 +225,15 @@ pub fn clean_file(
                 .to_owned(),
         );
     }
-    let passes = if request.quick && !request.dry_run { 3 } else { 1 };
+    // `xeQuickCleanAutoSave` is set by `-quickautoclean` only: the release
+    // runs one pass and no save for `-quickclean`, up to three passes with a
+    // save after the first two otherwise (`if WasUnsaved then [next pass]`
+    // is inside `if xeQuickCleanAutoSave`).
+    let passes = if request.quick && request.quick_auto_save && !request.dry_run {
+        3
+    } else {
+        1
+    };
     for pass_index in 0..passes {
         let pass = if request.quick {
             cleaning::quick_clean_pass(target, files, request.dry_run, &settings).map_err(edit_failed)?
@@ -246,9 +263,10 @@ pub fn clean_file(
             itm: do_itm.then(|| CleanStep::from(&pass.itm)),
             saved: None,
         };
-        // `SaveChanged(True)` after the first two passes; the third pass is
-        // not saved (UPSTREAM-QUIRK).
-        let save = request.quick && !request.dry_run && pass_index < 2;
+        // `SaveChanged(True)` after the first two passes, which
+        // `-quickautoclean` gates on `xeQuickCleanAutoSave`; the third pass
+        // is not saved (UPSTREAM-QUIRK).
+        let save = request.quick && request.quick_auto_save && !request.dry_run && pass_index < 2;
         if save && was_unsaved {
             let saved = save_file(target, request.output.clone(), false, request.backup)?;
             response.messages.push(format!("Saving: {}", target.get_name()));
@@ -309,6 +327,7 @@ pub fn quick_auto_clean(
         itm: false,
         udr: false,
         quick: true,
+        quick_auto_save: true,
         dry_run: false,
         output,
         backup: true,
