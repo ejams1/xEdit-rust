@@ -93,19 +93,50 @@ pub const DELPHI_VAR_CLASS: i32 = 0x0105;
 pub const DELPHI_VAR_POINTER: i32 = 0x0106;
 pub const DELPHI_VAR_SET: i32 = 0x0107;
 pub const DELPHI_VAR_ARRAY: i32 = 0x0108;
-/// `varString` -- the Delphi code of the interpreter's `Str` value
-/// (`varUString` in a Unicode Delphi; `varString` is the ANSI string code
-/// the JVCL `System` unit registers).
+/// `varString` -- the ANSI string code, the value of the `varString`
+/// constant of the JVCL `System` unit.
 pub const DELPHI_VAR_STRING: i32 = 0x0100;
+/// `varUString` -- the code the *interpreter's* own string values carry on a
+/// Unicode Delphi (`system.rs`'s `VarType`, the oracle's answer for
+/// `VarType('x')`), and the value of the `varUString` constant.
+pub const DELPHI_VAR_USTRING: i32 = 0x0102;
 /// `varAny`.
 pub const DELPHI_VAR_ANY: i32 = 0x0101;
 /// `varTypeMask`.
 pub const DELPHI_VAR_TYPE_MASK: i32 = 0x0FFF;
 
-/// The VCL seam: what the non-VCL units of this step cannot do without the
-/// form shim of phase 6 step 9. The four functions are `JvInterpreterFm.pas`'s
-/// own registrations; step 9 implements them (and extends the trait with the
-/// surface its own units need).
+/// Which registration of a class member a call is (the members of the ten
+/// VCL-backed units phase 6 step 9 registers).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum MemberKind {
+    /// `AddGet`: a property reader or a method.
+    Get,
+    /// `AddSet`: a property writer.
+    Set,
+    /// `AddIGet`: an indexed property reader (the index is in the call's
+    /// arguments).
+    IndexedGet,
+    /// `AddISet`: an indexed property writer.
+    IndexedSet,
+}
+
+/// The VCL seam: everything the script dialect can do that needs a window, a
+/// canvas, a dialog or a live control.
+///
+/// The four form functions are the whole VCL surface of `JvInterpreterFm.pas`
+/// (the rest of that unit is RTL). [`Vcl::member`] and [`Vcl::function`] are
+/// the surface of the ten VCL-backed JVCL units and of
+/// `xejviScriptAdapterMiscVcl.pas`, phase 6 step 9.
+///
+/// A GUI-phase implementation keeps the objects of the VCL classes a script
+/// creates (a `TForm.Create` member call builds one and returns it as the
+/// value) and answers the reads and writes against them; the port's script
+/// values are its only bridge to the interpreter, so no pointer types cross
+/// the seam.
+///
+/// The borrow is `RefCell`-shaped because a registered handler is called with
+/// the shim already borrowed: a handler the shim itself invokes (an event a
+/// form fires) must release the borrow first, or the call panics.
 pub trait Vcl {
     /// `JvInterpreterMakeForm`: build a form from a DFM file.
     fn make_form(&mut self, file_name: &str) -> Result<Value, ValueError>;
@@ -116,35 +147,100 @@ pub trait Vcl {
     /// `JvInterpreterRunUnit`: run a unit's main block in a fresh
     /// interpreter.
     fn run_unit(&mut self, file_name: &str) -> Result<Value, ValueError>;
+
+    /// One member of a registered VCL class: a property read or write, a
+    /// method, or a constructor (a `Get` named `Create`, whose receiver is
+    /// nil and whose value is the new object). `value` is the result for a
+    /// read and the assigned value for a write; a method without a result
+    /// leaves it untouched. `args` carries the call's arguments (the index
+    /// first for an indexed property).
+    fn member(
+        &mut self,
+        class: &str,
+        member: &str,
+        kind: MemberKind,
+        value: &mut Value,
+        args: &mut Args,
+    ) -> Result<(), ValueError>;
+
+    /// One unit-level function of a VCL unit (`InputQuery`, `MessageDlg`,
+    /// `Screen`, `NewItem`, ...).
+    fn function(&mut self, unit: &str, function: &str, value: &mut Value, args: &mut Args) -> Result<(), ValueError>;
 }
 
-/// The headless default of the [`Vcl`] seam: every call fails with the same
-/// clear error, naming the function a script called. Phase 6 step 9 replaces
-/// it with the form shim (the GUI phase passes the real one).
-#[derive(Default)]
-pub struct NoVcl;
+/// The headless default of the [`Vcl`] seam: every call refuses with one
+/// clear error, naming the VCL surface and the script that touched it, so a
+/// script that builds or shows a form fails immediately -- with the class
+/// name in the message, which is the surface step 10's corpus classification
+/// greps for (`TForm`/`ShowModal` class a script as `form`,
+/// `InputQuery`/`InputBox` as `interactive`). The GUI phase passes the
+/// implementation backed by the real window layer.
+pub struct NoVcl {
+    /// The script being run (`DoRunScript`'s name), for the error text.
+    script: String,
+}
+
+/// The Delphi class of the exception the headless shim raises. A distinct
+/// name so a run log reads unambiguously as "the port had no GUI for this".
+pub const VCL_ERROR_CLASS: &str = "EVclUnavailable";
 
 impl NoVcl {
-    fn unavailable(function: &str) -> ValueError {
-        ValueError::External(format!("{function}: forms are not available in this build"))
+    pub fn new(script: impl Into<String>) -> NoVcl {
+        NoVcl { script: script.into() }
+    }
+
+    /// The refusal: `[EVclUnavailable] <symbol> is not available without a
+    /// GUI (script "<name>")`.
+    fn unavailable(symbol: &str, script: &str) -> ValueError {
+        ValueError::external_class(
+            VCL_ERROR_CLASS,
+            format!("{symbol} is not available without a GUI (script \"{script}\")"),
+        )
+    }
+}
+
+impl Default for NoVcl {
+    fn default() -> NoVcl {
+        NoVcl::new(String::new())
     }
 }
 
 impl Vcl for NoVcl {
     fn make_form(&mut self, _file_name: &str) -> Result<Value, ValueError> {
-        Err(NoVcl::unavailable("JvInterpreterMakeForm"))
+        Err(NoVcl::unavailable("JvInterpreterMakeForm", &self.script))
     }
 
     fn run_form(&mut self, _file_name: &str) -> Result<Value, ValueError> {
-        Err(NoVcl::unavailable("JvInterpreterRunForm"))
+        Err(NoVcl::unavailable("JvInterpreterRunForm", &self.script))
     }
 
     fn run_form_modal(&mut self, _file_name: &str) -> Result<i64, ValueError> {
-        Err(NoVcl::unavailable("JvInterpreterRunFormModal"))
+        Err(NoVcl::unavailable("JvInterpreterRunFormModal", &self.script))
     }
 
     fn run_unit(&mut self, _file_name: &str) -> Result<Value, ValueError> {
-        Err(NoVcl::unavailable("JvInterpreterRunUnit"))
+        Err(NoVcl::unavailable("JvInterpreterRunUnit", &self.script))
+    }
+
+    fn member(
+        &mut self,
+        class: &str,
+        member: &str,
+        _kind: MemberKind,
+        _value: &mut Value,
+        _args: &mut Args,
+    ) -> Result<(), ValueError> {
+        Err(NoVcl::unavailable(&format!("{class}.{member}"), &self.script))
+    }
+
+    fn function(
+        &mut self,
+        _unit: &str,
+        function: &str,
+        _value: &mut Value,
+        _args: &mut Args,
+    ) -> Result<(), ValueError> {
+        Err(NoVcl::unavailable(function, &self.script))
     }
 }
 
@@ -412,7 +508,7 @@ mod tests {
         let mut interpreter = Interpreter::new();
         let element = interpreter.adapter.add_class("", "IwbElement", None);
         let state = Rc::new(RefCell::new(ScriptRunState::new(Vec::new(), element)));
-        let vcl: Rc<RefCell<dyn Vcl>> = Rc::new(RefCell::new(NoVcl));
+        let vcl: Rc<RefCell<dyn Vcl>> = Rc::new(RefCell::new(NoVcl::new("test")));
         register(&mut interpreter.adapter, &state, vcl);
         interpreter
     }

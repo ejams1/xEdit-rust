@@ -4,7 +4,7 @@
 [upstream]
 repository = "https://github.com/TES5Edit/TES5Edit"
 tag = "xedit-4.1.5q"
-commit = "xedit-4.1.5q"
+commit = "dba248a2"
 
 [units."BSArch.dpr"]
 status = "ported"
@@ -264,7 +264,9 @@ rust = "crates/xedit-script/src/interpreter_parser.rs"
 note = "Phase 6 step 2: the tokenizer as-is -- TTokenKind, the PaTokenizeTag hash tables (verbatim, duplicate entries and all), TokenTyp, Prior, TypToken and TJvInterpreterParser.Token with its quirks (the #nnn quoted form, the unterminated-string swallow, the doubled-quote cleanup, PrevPoint before whitespace). A bad remark raises ieBadRemark at the remark's position. The port works byte for byte on the ANSI string the interpreter builds; the corpus is ASCII."
 
 [units."External/jvcl/jvcl/run/JvInterpreter_Buttons.pas"]
-status = "pending"
+status = "ported"
+rust = "crates/xedit-session/src/script_vcl/tables.rs"
+note = "Phase 6 step 9 (the VCL form shim), landed 2026-10-10: 41 ledger entries -- the three classes (`TSpeedButtonActionLink`, `TSpeedButton`, `TBitBtn` -- the last a `TButton` of the `StdCtrls` unit) and their 38 members. The registrations are the generated tables of `crates/xedit-session/src/script_vcl/tables.rs` (transcribed from the unit's `RegisterJvInterpreterAdapter` and registered there in the unit's own order), the helpers and records are in the modules named above, and the constant values are captured from the 4.1.5q oracle. Every member the shim does not answer refuses through the `Vcl` seam with `[EVclUnavailable] <class>.<member> is not available without a GUI (the script being run)`; those entries are `excluded` in the ledger with that note, the helpers, classes, constants, records and handlers are `covered`."
 
 [units."External/jvcl/jvcl/run/JvInterpreter_Classes.pas"]
 status = "ported"
@@ -272,22 +274,34 @@ rust = "crates/xedit-session/src/script_rtl/classes.rs"
 note = "Phase 6 step 8, landed 2026-10-10: the whole unit (`crates/xedit-session/src/script_rtl/classes.rs`), 191 live registrations -- the eighteen constants (`TAlignment`, `TShiftState`, `dup*`, `cs*`), the classes (`TList`, `TPersistent`, `TCollectionItem`, `TCollection`, `TStrings`, `TStringList`, `TStream`, `TFileStream`, `TMemoryStream`, `TStringStream`, `TComponent` with the Delphi parent chains, so `TStringList.Create` is a `TStrings`) and their members. The list objects are the ones phases 5 to 7 share (`xedit_script::lists::ScriptList`, `xedit_script::strings::ScriptStringList`, extended in this step with the member set the Classes unit needs), so a `TList` or `TStringList` a host function fills is the same value the script reads, and `TwbFastStringList` is the resource adapter's subclass of the same class. Items and lines keep *values* where upstream stores raw pointers. `AddHandler(TNotifyEvent/THelpEvent)` registers the two event types. `TList.Sort`, `TStrings.StringsAdapter` (write), the `TStream` component-streaming members and `TComponent.ComponentState`/`ComponentStyle` raise upstream's own `NotImplemented` texts. The unit is tracked because `cargo xtask sync` scans the JVCL interpreter units `xejviScriptAdapter.pas` registers in its `Init` (`xEdit/JvI/xejviScriptAdapter.pas:356-371`) under `External/jvcl/jvcl/run/`; the submodule is outside the map's unit directories, so the sync reads the files by name (`crates/xtask/src/main.rs`: JVCL_UNITS)."
 
 [units."External/jvcl/jvcl/run/JvInterpreter_ComCtrls.pas"]
-status = "pending"
+status = "ported"
+rust = "crates/xedit-session/src/script_vcl/tables.rs"
+note = "Phase 6 step 9 (the VCL form shim), landed 2026-10-10: 471 ledger entries -- the 31 classes (tab control, status bar, header, tree view, track bar, progress bar, rich edit, up-down, hot key, list view and their collection items), 119 constants and 290 members. The registrations are the generated tables of `crates/xedit-session/src/script_vcl/tables.rs` (transcribed from the unit's `RegisterJvInterpreterAdapter` and registered there in the unit's own order), the helpers and records are in the modules named above, and the constant values are captured from the 4.1.5q oracle. Every member the shim does not answer refuses through the `Vcl` seam with `[EVclUnavailable] <class>.<member> is not available without a GUI (the script being run)`; those entries are `excluded` in the ledger with that note, the helpers, classes, constants, records and handlers are `covered`."
 
 [units."External/jvcl/jvcl/run/JvInterpreter_Controls.pas"]
-status = "pending"
+status = "ported"
+rust = "crates/xedit-session/src/script_vcl/tables.rs"
+note = "Phase 6 step 9 (the VCL form shim), landed 2026-10-10: 305 ledger entries -- the seven classes (`TControl`, `TWinControl`, `TGraphicControl`, `TCustomControl`, the `IH_Controls` hack class, the image list), the `dm*`/`al*`/`cs*`/`mr*` constants and the members plus the sixteen unit functions, six of which (`GetShortHint`, `GetLongHint`, the cursor trio, `StringToCursor`) answer headless in `script_vcl/helpers.rs`. The registrations are the generated tables of `crates/xedit-session/src/script_vcl/tables.rs` (transcribed from the unit's `RegisterJvInterpreterAdapter` and registered there in the unit's own order), the helpers and records are in the modules named above, and the constant values are captured from the 4.1.5q oracle. Every member the shim does not answer refuses through the `Vcl` seam with `[EVclUnavailable] <class>.<member> is not available without a GUI (the script being run)`; those entries are `excluded` in the ledger with that note, the helpers, classes, constants, records and handlers are `covered`."
 
 [units."External/jvcl/jvcl/run/JvInterpreter_Dialogs.pas"]
-status = "pending"
+status = "ported"
+rust = "crates/xedit-session/src/script_vcl/tables.rs"
+note = "Phase 6 step 9 (the VCL form shim), landed 2026-10-10: 197 ledger entries -- the nine dialog classes, 93 constants (`of*`, `fs*`, `mr*`) and the members; the nine unit functions (`MessageDlg`, `InputQuery`, ...) are dialogs and refuse through the `Vcl` seam. The registrations are the generated tables of `crates/xedit-session/src/script_vcl/tables.rs` (transcribed from the unit's `RegisterJvInterpreterAdapter` and registered there in the unit's own order), the helpers and records are in the modules named above, and the constant values are captured from the 4.1.5q oracle. Every member the shim does not answer refuses through the `Vcl` seam with `[EVclUnavailable] <class>.<member> is not available without a GUI (the script being run)`; those entries are `excluded` in the ledger with that note, the helpers, classes, constants, records and handlers are `covered`."
 
 [units."External/jvcl/jvcl/run/JvInterpreter_ExtCtrls.pas"]
-status = "pending"
+status = "ported"
+rust = "crates/xedit-session/src/script_vcl/tables.rs"
+note = "Phase 6 step 9 (the VCL form shim), landed 2026-10-10: 87 ledger entries -- the 13 classes (shape, paint box, image, bevel, timer, panel, page, notebook, header, radio group, splitter), 17 constants and 55 members. The registrations are the generated tables of `crates/xedit-session/src/script_vcl/tables.rs` (transcribed from the unit's `RegisterJvInterpreterAdapter` and registered there in the unit's own order), the helpers and records are in the modules named above, and the constant values are captured from the 4.1.5q oracle. Every member the shim does not answer refuses through the `Vcl` seam with `[EVclUnavailable] <class>.<member> is not available without a GUI (the script being run)`; those entries are `excluded` in the ledger with that note, the helpers, classes, constants, records and handlers are `covered`."
 
 [units."External/jvcl/jvcl/run/JvInterpreter_Forms.pas"]
-status = "pending"
+status = "ported"
+rust = "crates/xedit-session/src/script_vcl/tables.rs"
+note = "Phase 6 step 9 (the VCL form shim), landed 2026-10-10: 212 ledger entries -- the eight classes (`TCustomForm`, `TForm`, `TScreen`, `TApplication`, `TDataModule`, the scroll bars), 45 constants and 143 members plus the ten unit functions, three of which (`IsAccel`, `KeysToShiftState`, `KeyDataToShiftState`) answer headless in `script_vcl/helpers.rs`. The registrations are the generated tables of `crates/xedit-session/src/script_vcl/tables.rs` (transcribed from the unit's `RegisterJvInterpreterAdapter` and registered there in the unit's own order), the helpers and records are in the modules named above, and the constant values are captured from the 4.1.5q oracle. Every member the shim does not answer refuses through the `Vcl` seam with `[EVclUnavailable] <class>.<member> is not available without a GUI (the script being run)`; those entries are `excluded` in the ledger with that note, the helpers, classes, constants, records and handlers are `covered`."
 
 [units."External/jvcl/jvcl/run/JvInterpreter_Graphics.pas"]
-status = "pending"
+status = "ported"
+rust = "crates/xedit-session/src/script_vcl/tables.rs"
+note = "Phase 6 step 9 (the VCL form shim), landed 2026-10-10: 446 ledger entries -- the nine classes (font, pen, brush, canvas, graphic, picture, metafile, bitmap, icon), the 256 constants (the `cl*` colours and the `fs*`/`ps*`/`pm*`/`fp*` enums) and 181 members. The registrations are the generated tables of `crates/xedit-session/src/script_vcl/tables.rs` (transcribed from the unit's `RegisterJvInterpreterAdapter` and registered there in the unit's own order), the helpers and records are in the modules named above, and the constant values are captured from the 4.1.5q oracle. Every member the shim does not answer refuses through the `Vcl` seam with `[EVclUnavailable] <class>.<member> is not available without a GUI (the script being run)`; those entries are `excluded` in the ledger with that note, the helpers, classes, constants, records and handlers are `covered`."
 
 [units."External/jvcl/jvcl/run/JvInterpreter_Math.pas"]
 status = "ported"
@@ -295,10 +309,14 @@ rust = "crates/xedit-session/src/script_rtl/math.rs"
 note = "Phase 6 step 8, landed 2026-10-10: the whole unit (`crates/xedit-session/src/script_rtl/math.rs`), 67 live registrations -- the eleven constants (`PI`, `Infinity`/`NegInfinity`, `Max*`/`Min*` with Delphi's `Math.pas` values, including `MinDouble` = 5.0e-324 and `MinExtended` = `MinDouble` on the 64-bit build) and the 56 functions, with Delphi's formula semantics where they show (`Hypot`'s scaling, `Power` through `IntPower` for an integer exponent, `Log10`/`Log2`/`LogN` as `Ln` quotients, the degree helpers) and `nif_math` for the FPU-accurate transcendentals. Two upstream quirks are kept: `ArcCotH` binds `ArcCot`'s handler, and `MaxExtended`'s registration is commented out (`excluded` in the ledger). `ClearExceptions` does nothing (no FPU exception state in the port); `RandG` is the polar method over `System.Random` with the cached second value. The unit is tracked because `cargo xtask sync` scans the JVCL interpreter units `xejviScriptAdapter.pas` registers in its `Init` (`xEdit/JvI/xejviScriptAdapter.pas:356-371`) under `External/jvcl/jvcl/run/`; the submodule is outside the map's unit directories, so the sync reads the files by name (`crates/xtask/src/main.rs`: JVCL_UNITS)."
 
 [units."External/jvcl/jvcl/run/JvInterpreter_Menus.pas"]
-status = "pending"
+status = "ported"
+rust = "crates/xedit-session/src/script_vcl/tables.rs"
+note = "Phase 6 step 9 (the VCL form shim), landed 2026-10-10: 70 ledger entries -- the five classes (`TMenuItem`, `TMenu`, `TMainMenu`, `TPopupMenu`, `EMenuError`) and 59 members, plus the six unit functions, four of which (`ShortCut`, `ShortCutToKey`, `ShortCutToText`, `TextToShortCut`, with the oracle-captured key-name table) answer headless; `NewItem`/`NewLine` refuse through the seam. The registrations are the generated tables of `crates/xedit-session/src/script_vcl/tables.rs` (transcribed from the unit's `RegisterJvInterpreterAdapter` and registered there in the unit's own order), the helpers and records are in the modules named above, and the constant values are captured from the 4.1.5q oracle. Every member the shim does not answer refuses through the `Vcl` seam with `[EVclUnavailable] <class>.<member> is not available without a GUI (the script being run)`; those entries are `excluded` in the ledger with that note, the helpers, classes, constants, records and handlers are `covered`."
 
 [units."External/jvcl/jvcl/run/JvInterpreter_StdCtrls.pas"]
-status = "pending"
+status = "ported"
+rust = "crates/xedit-session/src/script_vcl/tables.rs"
+note = "Phase 6 step 9 (the VCL form shim), landed 2026-10-10: 126 ledger entries -- the 18 classes (group box, label, edit, memo, combo box, button, check box, radio button, list box, scroll bar, static text), 38 constants and 67 members. The registrations are the generated tables of `crates/xedit-session/src/script_vcl/tables.rs` (transcribed from the unit's `RegisterJvInterpreterAdapter` and registered there in the unit's own order), the helpers and records are in the modules named above, and the constant values are captured from the 4.1.5q oracle. Every member the shim does not answer refuses through the `Vcl` seam with `[EVclUnavailable] <class>.<member> is not available without a GUI (the script being run)`; those entries are `excluded` in the ledger with that note, the helpers, classes, constants, records and handlers are `covered`."
 
 [units."External/jvcl/jvcl/run/JvInterpreter_SysUtils.pas"]
 status = "ported"
@@ -311,7 +329,9 @@ rust = "crates/xedit-session/src/script_rtl/system.rs"
 note = "Phase 6 step 8, landed 2026-10-10: the whole unit (`crates/xedit-session/src/script_rtl/system.rs`), 76 live registrations -- the `TObject`/`TInterfacedObject` methods, `Move` (upstream's own `NotImplemented`), `ParamCount`/`ParamStr`/`Randomize`/`Random` (the RTL's `$08088405` LCG), `UpCase`, the `Var*` helpers (`VarType` with the Delphi codes incl. the six custom-type codes the RTL allocates at startup, `VarAsType`, `VarArrayCreate`/`Of`/bounds, `VarFromDateTime`), `ord`, `Chr`, `Abs`, `Length`, `Copy` (the clamp of a zero index), `Round`/`Trunc` (banker's rounding through `xedit_core::delphi`), `Pos`, `Delete`/`Insert` (through the `var` write-back), the math functions (`Sin`/`Cos`/`Tan`/`ArcTan` through `nif_math`, the FPU port), `SetLength` (strings and interpreter arrays; the array write-back raises `Array to array assignment` as upstream's does), `High`/`Low` (with the upstream `High`-returns-the-low-bound copy-paste for a native variant array), `DeleteFromArray`/`InsertIntoArray`, and the twenty-four variant type constants (`varEmpty`..`varInt64` with the Delphi ordinals, `varArray` being the custom-type value). Eleven commented-out registrations are `excluded` in the ledger with their lines (`GetInterface`, the eight WideChar/OleStr, the three VarArrayLock/Unlock/Ref). What the port answers differently: `Move` raises (the value model has no raw memory), `ClassInfo` is the nil pointer and `InstanceSize` 0 (no RTTI), `RefCount` 0. The unit is tracked because `cargo xtask sync` scans the JVCL interpreter units `xejviScriptAdapter.pas` registers in its `Init` (`xEdit/JvI/xejviScriptAdapter.pas:356-371`) under `External/jvcl/jvcl/run/`; the submodule is outside the map's unit directories, so the sync reads the files by name (`crates/xtask/src/main.rs`: JVCL_UNITS)."
 
 [units."External/jvcl/jvcl/run/JvInterpreter_Windows.pas"]
-status = "pending"
+status = "ported"
+rust = "crates/xedit-session/src/script_vcl/windows.rs"
+note = "Phase 6 step 9 (the VCL form shim), landed 2026-10-10: 148 ledger entries -- the whole unit: the `TPoint`/`TRect` records with their `TopLeft`/`BottomRight` accessors, `Point`/`Rect`/`Bounds` and the 137 `MB_*`/`VK_*` constants (values captured from the oracle) answer headless; `AddExtUnit(Windows)` is registered and `MessageBox` (`AddExtFun` of user32) refuses through the seam. The registrations are the generated tables of `crates/xedit-session/src/script_vcl/tables.rs` (transcribed from the unit's `RegisterJvInterpreterAdapter` and registered there in the unit's own order), the helpers and records are in the modules named above, and the constant values are captured from the 4.1.5q oracle. Every member the shim does not answer refuses through the `Vcl` seam with `[EVclUnavailable] <class>.<member> is not available without a GUI (the script being run)`; those entries are `excluded` in the ledger with that note, the helpers, classes, constants, records and handlers are `covered`."
 
 [units."Sniff.dpr"]
 status = "ported"
@@ -651,8 +671,9 @@ rust = "crates/xedit-session/src/script_misc_regex.rs"
 note = '''Phase 6 (scripting), step 7 (landed 2026-10-10): all 48 ledger entries are covered by script.run. crates/xedit-session/src/script_misc_regex.rs is TPerlRegEx over the `regex` crate: the class, the 10 constants, the 28 gets (Compile/Study/Compiled/Studied, Match/MatchAgain/FoundMatch, the group accessors, MatchedOffset/Length/Text, Subject/SubjectLeft/SubjectRight, RegEx/Replacement/Start/Stop/Options, EscapeRegExChars, StoreGroups, ComputeReplacement, Replace/ReplaceAll, Split/SplitCapture) and the 6 sets and 3 igets. The upstream call shape and the RTL's error texts (ERegularExpressionError) are kept. UPSTREAM-QUIRK documented in the module: `regex` has no lookaround, no in-pattern backreferences and no possessive quantifiers; `\d`/`\w`/`\s` are Unicode where PCRE was ASCII; `preNotBOL`/`preNotEOL` have no equivalent and `preNoAutoCapture` none (empty matches are skipped for `preNotEmpty`, and `preAnchored` is emulated by requiring the match at the search position); offsets count characters where upstream counts UTF-8 bytes (equal for ASCII subjects). The two commented-out `AddHandler` lines upstream stay unregistered.'''
 
 [units."xEdit/JvI/xejviScriptAdapterMiscVcl.pas"]
-status = "pending"
-note = "Phase 6 (scripting): step 7 for the functions and gets, step 9 for the 12 AddClass (and step 4 for the AddRec and AddRecGet of the IOUtils classes). The 103 registrations are the VCL and RTL classes scripts use: TBinaryReader and TBinaryWriter, TIniFile, TMemIniFile, TRegistryIniFile, THashedStringList, the check list box and list view events (3 AddHandler) and the IOUtils TDirectory and TFile records."
+status = "ported"
+rust = "crates/xedit-session/src/script_vcl/misc_vcl.rs"
+note = "Phase 6 step 9 (the VCL form shim), landed 2026-10-10: the 103 ledger entries -- the twelve classes (`TBinaryReader`/`TBinaryWriter`/`TBytesStream`, `TIniFile`/`TMemIniFile`/`TRegistryIniFile`/`TCustomIniFile`/`THashedStringList`, `TBoundLabel`/`TCustomLabeledEdit`/`TLabeledEdit`, `TCheckListBox`), the five constants (`se*`, `so*`, captured from the oracle), the `IOUtils` `TDirectory`/`TFile` records with their four recgets, the three event handlers and the members. What answers headless: the `IniFiles` classes over an in-memory model (`IniFileState`/`IniFileRef`: the parse rules of `System.IniFiles`, `Read*`/`Write*`/`SectionExists`/`ReadSections` with the `Strings.Clear` the RTL does, `TMemIniFile.GetStrings`/`SetStrings`, `UpdateFile` writing the section-per-block CRLF text; a `TIniFile` writes through on every change), `THashedStringList.Create` (a `TStringList` of the `Classes` unit's model) and `TDirectory.GetDirectories`/`GetFiles` (full paths, the `System.Masks` wildcards) with `TFile.ReadAllText`/`WriteAllText`. Everything else -- the stream-backed readers and writers (the `Classes` unit's stream objects, phase 6 step 8), the check list box, combo box, labeled edits, list view items, menus, `TWinControl` members and `TRegistryIniFile` -- refuses through the `Vcl` seam; those entries are `excluded` in the ledger with the shim's note."
 
 [units."xEdit/JvI/xejviScriptAdapterRecord.pas"]
 status = "ported"

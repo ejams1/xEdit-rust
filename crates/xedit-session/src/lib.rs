@@ -38,6 +38,7 @@ pub mod script_misc_regex;
 pub mod script_rtl;
 pub mod script_strings;
 pub(crate) mod script_units;
+pub mod script_vcl;
 pub mod sniff;
 pub mod tool_modes;
 

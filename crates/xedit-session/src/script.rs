@@ -876,9 +876,10 @@ pub(crate) const C_UNIT: &str = "";
 /// element API of the later steps downcasts them with
 /// [`ScriptRunState::element_of`].
 ///
-/// `vcl` is the VCL seam of phase 6 step 9 (the form shim): the four
-/// `JvInterpreterFm.pas` registrations and, later, the ten VCL units route
-/// through it. Headless, [`crate::script_rtl::NoVcl`] is passed.
+/// `vcl` is the VCL seam (the form shim of phase 6 step 9): the four
+/// `JvInterpreterFm.pas` registrations, the members of the ten VCL-backed
+/// JVCL units and `xejviScriptAdapterMiscVcl.pas` route through it. Headless,
+/// [`crate::script_rtl::NoVcl`] is passed.
 fn register_functions(
     adapter: &mut Adapter,
     state: &Rc<RefCell<ScriptRunState>>,
@@ -1211,7 +1212,13 @@ fn register_functions(
     // registers the rest of (the members both units carry are registered
     // once, by the unit that comes first).
 
-    crate::script_rtl::register(adapter, state, vcl);
+    crate::script_rtl::register(adapter, state, vcl.clone());
+
+    //=== The VCL surface and the form shim (phase 6 step 9) ==================
+    // After the RTL units: the classes of the ten VCL-backed units attach to
+    // the `Classes` unit's `TComponent`/`TStringList`.
+
+    crate::script_vcl::register(adapter, state, &vcl);
 }
 
 /// The `OnSetValue` hook (`xejviScriptHost.pas:60`): the identifiers a script
@@ -1517,9 +1524,12 @@ pub fn run_script(
     let mut interpreter = Interpreter::new();
     let element_class = interpreter.adapter.add_class(C_UNIT, "IwbElement", None);
     let state = Rc::new(RefCell::new(ScriptRunState::new(files, element_class)));
-    // The VCL seam: `NoVcl` headless (phase 6 step 9 replaces it with the
-    // form shim when one exists).
-    let vcl: Rc<RefCell<dyn crate::script_rtl::Vcl>> = Rc::new(RefCell::new(crate::script_rtl::NoVcl));
+    // The VCL seam: headless (`NoVcl`) every form, dialog and control call
+    // refuses with `EVclUnavailable`, naming the surface and the script
+    // (phase 6 step 9). The GUI phase passes the implementation backed by the
+    // real window layer.
+    let vcl: Rc<RefCell<dyn crate::script_rtl::Vcl>> =
+        Rc::new(RefCell::new(crate::script_rtl::NoVcl::new(name.clone())));
     register_functions(&mut interpreter.adapter, &state, vcl);
     crate::script_units::register_units(&mut interpreter.adapter, &state);
     {
@@ -1552,10 +1562,14 @@ pub fn run_script(
     {
         let mut state = state.borrow_mut();
         state.show_start_time += 1;
-        state.progress(&format!("Start: {action}"), false);
+        // The lock of a `Mode: Silent` script is on before the first line:
+        // the oracle's log of `Bookmark1.pas` holds the closing line alone
+        // (parity run of 2026-10-10), neither the `Start:` nor the `Done:`
+        // line, which are both dropped while it is on.
         if silent {
             state.progress_lock += 1;
         }
+        state.progress(&format!("Start: {action}"), false);
     }
 
     let mut last_error: Option<ExecError> = None;
