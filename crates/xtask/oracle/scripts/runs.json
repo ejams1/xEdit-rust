@@ -95,7 +95,8 @@
       "script": "Check for circular previous INFOs.pas"
     },
     {
-      "script": "Check for errors.pas"
+      "script": "Check for errors.pas",
+      "timeout_minutes": 60
     },
     {
       "script": "Check for invalid alternate textures.pas"
