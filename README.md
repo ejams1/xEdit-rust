@@ -19,7 +19,7 @@ Overall: 6 of 10 phases merged.
 | 3 | Write path and daemon | `[##########]` | Merged (PR #12) |
 | 4 | Analysis and tool modes | `[##########]` 10 of 10 steps | Merged (PR #13) |
 | 5 | Archives, assets and LOD | `[##########]` | Merged (PR #14) |
-| 6 | Scripting | `[..........]` | Not started |
+| 6 | Scripting | `[..........]` | In progress, draft PR #20 |
 | 7 | GUI | `[..........]` | Not started |
 | 8 | Performance | `[..........]` | Not started |
 | 9 | Release and cutover | `[..........]` | Not started |
