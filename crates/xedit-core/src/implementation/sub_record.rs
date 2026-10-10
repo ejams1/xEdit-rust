@@ -7,7 +7,7 @@
 //! `TwbSubRecord`, `TwbSubRecordArray` and `TwbSubRecordStruct`: the
 //! subrecords of a main record and the groups the definition makes of them.
 
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI32, AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock, Weak};
 
 use crate::interface::def::{NamedDef, ValueDef};
@@ -791,6 +791,11 @@ pub struct SubRecordArrayImpl {
     /// Port of `arcSortInvalid`: the members are to be sorted on the next
     /// `DoInit(True)`.
     arc_sort_invalid: AtomicBool,
+    /// Port of `eGeneration`, for the name suffixes alone: the counter
+    /// `arcNameGen` is compared with.
+    e_generation: AtomicI32,
+    /// Port of `arcNameGen`: the generation the members were numbered at.
+    arc_name_gen: AtomicI32,
 }
 
 /// Port of `TwbSubRecordStruct`: the subrecords of one structure member.
@@ -819,6 +824,10 @@ pub(super) fn create_sub_record_array(
         arc_def: def,
         arc_sorted: AtomicBool::new(false),
         arc_sort_invalid: AtomicBool::new(false),
+        // `TwbElement.Create`: the generation starts at one, the numbering
+        // at none, so the first name numbers the members.
+        e_generation: AtomicI32::new(1),
+        arc_name_gen: AtomicI32::new(0),
     });
     let array_ref: ElementRef = array.clone();
     array.do_process(&array_ref, owner_base, pos);
@@ -826,7 +835,6 @@ pub(super) fn create_sub_record_array(
 }
 
 impl SubRecordArrayImpl {
-    /// Port of `DoProcess`.
     /// Port of the `wbAssignAdd` branch of `TwbSubRecordArray.AssignInternal`
     /// without a source: one member added from the element definition.
     fn member_assign_add(&self) -> Result<Option<ElementRef>, EditError> {
@@ -852,17 +860,39 @@ impl SubRecordArrayImpl {
             }
             other => return Err(format!("unexpected member type {other:?} in {}", self.get_name())),
         };
-        // Port of `UpdateNameSuffixes`.
-        for (index, element) in self.container.elements().iter().enumerate() {
-            if let Some(element) = element.as_element_impl() {
-                element.element_base().set_name_suffix(&format!("#{index}"));
-            }
-        }
+        self.sort_members();
         Ok(Some(element))
     }
 
-    /// Port of `UpdateNameSuffixes`: the elements are numbered.
-    fn update_name_suffixes(&self) {
+    /// The tail of `TwbSubRecordArray.AssignInternal`: the definition of the
+    /// members is sorted after every assignment, under `wbSortSubRecords`
+    /// only.
+    fn sort_members(&self) {
+        let sorted = sort_sub_records()
+            && self
+                .arc_def
+                .as_sub_record_array_def()
+                .is_some_and(|array_def| array_def.get_sorted(self.base.container().as_ref()));
+        if sorted {
+            edit::sort_by_sort_keys(&self.container);
+        }
+        self.arc_sorted.store(sorted, Ordering::Relaxed);
+    }
+
+    /// Port of `TwbSubRecordArray.UpdateNameSuffixes`: the members are
+    /// numbered in the order of the container, once per generation. A
+    /// sorted array is left alone: upstream sets no suffix for it, so its
+    /// members keep the names they have (none, for a loaded or copied
+    /// array).
+    fn update_name_suffixes_impl(&self) {
+        if self.arc_sorted.load(Ordering::Relaxed) {
+            return;
+        }
+        let generation = self.e_generation.load(Ordering::Relaxed);
+        if self.arc_name_gen.load(Ordering::Relaxed) >= generation {
+            return;
+        }
+        self.arc_name_gen.store(generation, Ordering::Relaxed);
         for (index, element) in self.container.elements().iter().enumerate() {
             if let Some(element) = element.as_element_impl() {
                 element.element_base().set_name_suffix(&format!("#{index}"));
@@ -932,15 +962,9 @@ impl SubRecordArrayImpl {
                 element.assign(ASSIGN_THIS, Some(source), only_sk);
                 self.container.cnt_as_created_empty.store(false, Ordering::Relaxed);
             }
-            self.update_name_suffixes();
             result = element;
         }
-        // The members are sorted after every assignment.
-        let sorted = sort_sub_records() && array_def.get_sorted(self.base.container().as_ref());
-        if sorted {
-            edit::sort_by_sort_keys(&self.container);
-        }
-        self.arc_sorted.store(sorted, Ordering::Relaxed);
+        self.sort_members();
         Ok(result)
     }
 
@@ -1012,7 +1036,6 @@ impl SubRecordArrayImpl {
         if let Some(result) = &result {
             result.assign(ASSIGN_THIS, Some(source), !args.deep_copy);
         }
-        self.update_name_suffixes();
         Ok(result)
     }
 
@@ -1069,12 +1092,7 @@ impl SubRecordArrayImpl {
         let sorted = sort_sub_records() && array_def.get_sorted(self.base.container().as_ref());
         self.arc_sorted.store(sorted, Ordering::Relaxed);
         self.arc_sort_invalid.store(sorted, Ordering::Relaxed);
-        // Port of `UpdateNameSuffixes`: the elements are numbered.
-        for (index, element) in self.container.elements().iter().enumerate() {
-            if let Some(element) = element.as_element_impl() {
-                element.element_base().set_name_suffix(&format!("#{index}"));
-            }
-        }
+        // The names are numbered lazily (`UpdateNameSuffixes`), not here.
     }
 }
 
@@ -1111,6 +1129,10 @@ pub(super) fn create_sub_record_array_new(
         arc_def: def,
         arc_sorted: AtomicBool::new(false),
         arc_sort_invalid: AtomicBool::new(false),
+        // `TwbElement.Create`: the generation starts at one, the numbering
+        // at none, so the first name numbers the members.
+        e_generation: AtomicI32::new(1),
+        arc_name_gen: AtomicI32::new(0),
     });
     let array_ref: ElementRef = array.clone();
     if let Some(array_def) = array.arc_def.as_sub_record_array_def() {
@@ -2496,9 +2518,19 @@ impl ElementImpl for SubRecordArrayImpl {
     /// Port of `TwbSubRecordArray.SetModified`.
     fn set_modified(&self, value: bool) {
         super::write::element_set_modified(self, value);
-        if value && self.arc_sorted.load(Ordering::Relaxed) {
-            self.arc_sort_invalid.store(true, Ordering::Relaxed);
+        if value {
+            // `Inc(eGeneration)`: the numbering of the names is to be made
+            // again on the next request.
+            self.e_generation.fetch_add(1, Ordering::Relaxed);
+            if self.arc_sorted.load(Ordering::Relaxed) {
+                self.arc_sort_invalid.store(true, Ordering::Relaxed);
+            }
         }
+    }
+
+    /// Port of `TwbSubRecordArray.UpdateNameSuffixes`.
+    fn update_name_suffixes(&self) {
+        self.update_name_suffixes_impl();
     }
 
     fn element_base(&self) -> &ElementBase {

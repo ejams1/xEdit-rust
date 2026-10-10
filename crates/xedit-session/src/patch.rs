@@ -25,7 +25,7 @@ use serde::{Deserialize, Serialize};
 use xedit_analysis::merged_patch::{self, MergedPatchReport};
 use xedit_core::implementation::FileImpl;
 use xedit_core::interface::Element;
-use xedit_core::interface::globals::game_name2;
+use xedit_core::interface::globals::{display_shorter_names, game_name2, set_display_shorter_names};
 
 use crate::commands::refuse_in_translate_mode;
 use crate::conflicts::session_files;
@@ -117,13 +117,13 @@ fn patch_merged(session: &mut Session, request: PatchMergedRequest) -> Result<Pa
     let name = new_file_name(&request.file, false)?;
     let warning = merged_patch::unsupported_warning(mode, &game_name2());
     if request.dry_run {
-        let report = merged_patch::merge_into(&files, None);
+        let report = merge_with_gui_names(&files, None);
         return Ok(response(name, true, warning, report, Vec::new(), false, None));
     }
 
     let target = create_patch_file(&name, &files)?;
     session.files.push(target.clone());
-    let report = merged_patch::merge_into(&files, Some(&target));
+    let report = merge_with_gui_names(&files, Some(&target));
     target
         .clean_masters()
         .map_err(|message| CommandError::new("edit_failed", message))?;
@@ -135,6 +135,18 @@ fn patch_merged(session: &mut Session, request: PatchMergedRequest) -> Result<Pa
     };
     let unsaved = saved.is_none();
     Ok(response(name, false, warning, report, masters, unsaved, saved))
+}
+
+/// `merge_into` with the naming of the GUI: the main form sets
+/// `wbDisplayShorterNames` at its creation, and the messages of the handler
+/// (`Error: Can't merge faulty ordered list ...`) carry the record names as
+/// the GUI writes them.
+fn merge_with_gui_names(files: &[Arc<FileImpl>], target: Option<&Arc<FileImpl>>) -> MergedPatchReport {
+    let shorter_names = display_shorter_names();
+    set_display_shorter_names(true);
+    let report = merged_patch::merge_into(files, target);
+    set_display_shorter_names(shorter_names);
+    report
 }
 
 /// The new file of the handler: `AddNewFile(TargetFile, False, False)`

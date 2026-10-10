@@ -1,0 +1,34 @@
+{
+  "description": "Skyrim SE with its DLCs and three plugins the port makes first: two form lists copied as new records whose editor IDs get the OrderedList suffix (the AfterSet callback of the definition drops the entries the copy brought along when the suffix changes whether the list is ordered, so the entries are added again afterwards; PatchTestA loads sixth, after the five masters, so the two new records are 05000800 and 05000801). PatchTestB and PatchTestC each append an entry to the first list, which the patch merges in order (A, B, C); PatchTestB changes an entry of the second list instead of appending, which the handler reports as a faulty ordered list and leaves out of the patch.",
+  "game": "sse",
+  "load": ["Skyrim.esm", "Update.esm", "Dawnguard.esm", "HearthFires.esm", "Dragonborn.esm"],
+  "make": [
+    {"command": "files.new", "params": {"file": "PatchTestA"}},
+    {"command": "records.copy", "params": {"form_id": "00000D6F", "to": "PatchTestA.esp", "from": "Skyrim.esm", "as_new": true, "suffix": "OrderedList"}},
+    {"command": "elements.add", "params": {"form_id": "05000800", "file": "PatchTestA.esp", "path": "", "name": "FormIDs"}},
+    {"command": "elements.set", "params": {"form_id": "05000800", "file": "PatchTestA.esp", "path": "FormIDs\\[0]", "value": "00000D67"}},
+    {"command": "elements.add", "params": {"form_id": "05000800", "file": "PatchTestA.esp", "path": "FormIDs", "name": "FormID"}},
+    {"command": "elements.set", "params": {"form_id": "05000800", "file": "PatchTestA.esp", "path": "FormIDs\\[1]", "value": "00000D6E"}},
+    {"command": "records.copy", "params": {"form_id": "00000D14", "to": "PatchTestA.esp", "from": "Skyrim.esm", "as_new": true, "suffix": "OrderedList"}},
+    {"command": "elements.add", "params": {"form_id": "05000801", "file": "PatchTestA.esp", "path": "", "name": "FormIDs"}},
+    {"command": "elements.set", "params": {"form_id": "05000801", "file": "PatchTestA.esp", "path": "FormIDs\\[0]", "value": "00000D67"}},
+    {"command": "elements.add", "params": {"form_id": "05000801", "file": "PatchTestA.esp", "path": "FormIDs", "name": "FormID"}},
+    {"command": "elements.set", "params": {"form_id": "05000801", "file": "PatchTestA.esp", "path": "FormIDs\\[1]", "value": "00000D6E"}},
+    {"command": "files.new", "params": {"file": "PatchTestB"}},
+    {"command": "records.copy", "params": {"form_id": "05000800", "to": "PatchTestB.esp", "from": "PatchTestA.esp"}},
+    {"command": "elements.add", "params": {"form_id": "05000800", "file": "PatchTestB.esp", "path": "FormIDs", "name": "FormID"}},
+    {"command": "elements.set", "params": {"form_id": "05000800", "file": "PatchTestB.esp", "path": "FormIDs\\[2]", "value": "00000D6C"}},
+    {"command": "records.copy", "params": {"form_id": "05000801", "to": "PatchTestB.esp", "from": "PatchTestA.esp"}},
+    {"command": "elements.set", "params": {"form_id": "05000801", "file": "PatchTestB.esp", "path": "FormIDs\\[0]", "value": "00000D6C"}},
+    {"command": "files.new", "params": {"file": "PatchTestC"}},
+    {"command": "records.copy", "params": {"form_id": "05000800", "to": "PatchTestC.esp", "from": "PatchTestA.esp"}},
+    {"command": "elements.add", "params": {"form_id": "05000800", "file": "PatchTestC.esp", "path": "FormIDs", "name": "FormID"}},
+    {"command": "elements.set", "params": {"form_id": "05000800", "file": "PatchTestC.esp", "path": "FormIDs\\[2]", "value": "00012EB7"}},
+    {"command": "records.copy", "params": {"form_id": "05000801", "to": "PatchTestC.esp", "from": "PatchTestA.esp"}}
+  ],
+  "patch": "Merged Patch",
+  "answers": [
+    {"class": "#32770", "title": "Warning", "button": "&Yes"},
+    {"class": "TInputQueryForm", "title": "New Module File", "text": "Merged Patch", "button": "OK"}
+  ]
+}
