@@ -9,7 +9,10 @@
   },
   "cases": [
     {
-      "script": "Add Prefix Plus Name To EDID.pas",
+      "script": "_newscript_.pas"
+    },
+    {
+      "script": "Add enable parent to the refs of specific base object.pas",
       "close_after": true,
       "save": [
         "Skyrim.esm"
@@ -17,7 +20,11 @@
       "note": "edits records: the saved bytes are compared"
     },
     {
-      "script": "Add enable parent to the refs of specific base object.pas",
+      "script": "Add prefix or suffix to Editor ID.pas",
+      "note": "asks for input even without a form (InputQuery/InputBox): deferred unless named with --script"
+    },
+    {
+      "script": "Add Prefix Plus Name To EDID.pas",
       "close_after": true,
       "save": [
         "Skyrim.esm"
@@ -34,6 +41,11 @@
     {
       "script": "Apply filter for deleted navmeshes.pas",
       "timeout_minutes": 60
+    },
+    {
+      "script": "Base object variations.pas",
+      "build_refs": true,
+      "note": "asks for input even without a form (InputQuery/InputBox): deferred unless named with --script"
     },
     {
       "script": "BASH tags autodetection.pas"
@@ -72,6 +84,11 @@
       "script": "Bookmark5Go.pas"
     },
     {
+      "script": "Change load order of FormID.pas",
+      "build_refs": true,
+      "note": "asks for input even without a form (InputQuery/InputBox): deferred unless named with --script"
+    },
+    {
       "script": "Change persistent flag.pas"
     },
     {
@@ -98,20 +115,6 @@
     },
     {
       "script": "Export list of cells.pas"
-    },
-    {
-      "script": "FNV - Export dialogues.pas",
-      "game": "fnv",
-      "build_refs": true
-    },
-    {
-      "script": "FO3 and FNV - Translator.pas",
-      "game": "fnv",
-      "close_after": true,
-      "save": [
-        "FalloutNV.esm"
-      ],
-      "note": "edits records: the saved bytes are compared"
     },
     {
       "script": "Fallout4 - Convert ALCH to SPEL.pas",
@@ -154,22 +157,33 @@
       "script": "Find ESP plugins which could be turned into ESL.pas"
     },
     {
+      "script": "FNV - Export dialogues.pas",
+      "game": "fnv",
+      "build_refs": true
+    },
+    {
+      "script": "FO3 and FNV - Translator.pas",
+      "game": "fnv",
+      "close_after": true,
+      "save": [
+        "FalloutNV.esm"
+      ],
+      "note": "edits records: the saved bytes are compared"
+    },
+    {
       "script": "JSON - Demo.pas"
     },
     {
-      "script": "LOD Statistics.pas"
-    },
-    {
       "script": "List FormIDs from specific space.pas"
-    },
-    {
-      "script": "List LOD objects and meshes.pas"
     },
     {
       "script": "List hardcoded forms from references.pas"
     },
     {
       "script": "List loaded plugins and their masters.pas"
+    },
+    {
+      "script": "List LOD objects and meshes.pas"
     },
     {
       "script": "List master references.pas"
@@ -179,6 +193,10 @@
     },
     {
       "script": "List perk entry points usage.pas"
+    },
+    {
+      "script": "List records referencing specific plugin.pas",
+      "note": "asks for input even without a form (InputQuery/InputBox): deferred unless named with --script"
     },
     {
       "script": "List used baseforms and statistics.pas"
@@ -194,15 +212,10 @@
       "build_refs": true
     },
     {
-      "script": "Make new records from overrides.pas",
-      "close_after": true,
-      "save": [
-        "Skyrim.esm"
-      ],
-      "note": "edits records: the saved bytes are compared"
+      "script": "LOD Statistics.pas"
     },
     {
-      "script": "NIF - Convert OBJ to NIF.pas",
+      "script": "Make new records from overrides.pas",
       "close_after": true,
       "save": [
         "Skyrim.esm"
@@ -213,11 +226,11 @@
       "script": "NIF - List blocks references.pas"
     },
     {
-      "script": "Oblivion - Export Dialogues.pas",
+      "script": "Oblivion - Export all scripts in xml format.pas",
       "game": "tes4"
     },
     {
-      "script": "Oblivion - Export all scripts in xml format.pas",
+      "script": "Oblivion - Export Dialogues.pas",
       "game": "tes4"
     },
     {
@@ -253,6 +266,11 @@
       "note": "edits records: the saved bytes are compared"
     },
     {
+      "script": "Redirect references.pas",
+      "build_refs": true,
+      "note": "asks for input even without a form (InputQuery/InputBox): deferred unless named with --script"
+    },
+    {
       "script": "Remove duplicate references.pas",
       "build_refs": true
     },
@@ -280,6 +298,11 @@
         "Skyrim.esm"
       ],
       "note": "edits records: the saved bytes are compared"
+    },
+    {
+      "script": "Renumber FormID.pas",
+      "build_refs": true,
+      "note": "asks for input even without a form (InputQuery/InputBox): deferred unless named with --script"
     },
     {
       "script": "Replace landscape texture.pas",
@@ -428,6 +451,11 @@
       "note": "edits records: the saved bytes are compared"
     },
     {
+      "script": "Skyrim - Copy VMAD subrecord.pas",
+      "game": "tes5",
+      "note": "asks for input even without a form (InputQuery/InputBox): deferred unless named with --script"
+    },
+    {
       "script": "Skyrim - Create patch for ClimatesOfTamriel and SoundsOfSkyrim-TheWilds.pas",
       "game": "tes5",
       "close_after": true,
@@ -444,6 +472,11 @@
         "Skyrim.esm"
       ],
       "note": "edits records: the saved bytes are compared"
+    },
+    {
+      "script": "Skyrim - Filter by script.pas",
+      "game": "tes5",
+      "note": "asks for input even without a form (InputQuery/InputBox): deferred unless named with --script"
     },
     {
       "script": "Skyrim - Find uncompressed records.pas",
@@ -521,6 +554,15 @@
       "note": "edits records: the saved bytes are compared"
     },
     {
+      "script": "Skyrim - Set first person flags on armors affected by specific plugin.pas",
+      "game": "tes5",
+      "close_after": true,
+      "save": [
+        "Skyrim.esm"
+      ],
+      "note": "edits records: the saved bytes are compared"
+    },
+    {
       "script": "Skyrim - Set HavokDontSettle flag on BOOK references.pas",
       "game": "tes5",
       "close_after": true,
@@ -531,15 +573,6 @@
     },
     {
       "script": "Skyrim - Set HavokDontSettle flag on refs using models from list.pas",
-      "game": "tes5",
-      "close_after": true,
-      "save": [
-        "Skyrim.esm"
-      ],
-      "note": "edits records: the saved bytes are compared"
-    },
-    {
-      "script": "Skyrim - Set first person flags on armors affected by specific plugin.pas",
       "game": "tes5",
       "close_after": true,
       "save": [
@@ -579,6 +612,14 @@
       "timeout_minutes": 60
     },
     {
+      "script": "Update records form version.pas",
+      "close_after": true,
+      "save": [
+        "Skyrim.esm"
+      ],
+      "note": "edits records: the saved bytes are compared"
+    },
+    {
       "script": "Worldspace change height.pas",
       "close_after": true,
       "save": [
@@ -604,47 +645,6 @@
         "Skyrim.esm"
       ],
       "note": "edits records: the saved bytes are compared"
-    },
-    {
-      "script": "_newscript_.pas"
-    },
-    {
-      "script": "Add prefix or suffix to Editor ID.pas",
-      "note": "asks for input even without a form (InputQuery/InputBox): deferred unless named with --script"
-    },
-    {
-      "script": "Base object variations.pas",
-      "build_refs": true,
-      "note": "asks for input even without a form (InputQuery/InputBox): deferred unless named with --script"
-    },
-    {
-      "script": "Change load order of FormID.pas",
-      "build_refs": true,
-      "note": "asks for input even without a form (InputQuery/InputBox): deferred unless named with --script"
-    },
-    {
-      "script": "List records referencing specific plugin.pas",
-      "note": "asks for input even without a form (InputQuery/InputBox): deferred unless named with --script"
-    },
-    {
-      "script": "Redirect references.pas",
-      "build_refs": true,
-      "note": "asks for input even without a form (InputQuery/InputBox): deferred unless named with --script"
-    },
-    {
-      "script": "Renumber FormID.pas",
-      "build_refs": true,
-      "note": "asks for input even without a form (InputQuery/InputBox): deferred unless named with --script"
-    },
-    {
-      "script": "Skyrim - Copy VMAD subrecord.pas",
-      "game": "tes5",
-      "note": "asks for input even without a form (InputQuery/InputBox): deferred unless named with --script"
-    },
-    {
-      "script": "Skyrim - Filter by script.pas",
-      "game": "tes5",
-      "note": "asks for input even without a form (InputQuery/InputBox): deferred unless named with --script"
     }
   ]
 }
