@@ -65,11 +65,23 @@ pub enum ValueError {
     /// `ERangeError`, `EJVCLException`): reported through the `ieExternal`
     /// path (`UpdateExceptionPos`, `:5390`).
     External(String),
+    /// A non-interpreter exception whose Delphi class the host knows, so the
+    /// `Exception in unit ...: [<class>] <message>` line names it
+    /// (`ERegularExpressionError` of the script-callable `TPerlRegEx`, the
+    /// `EJsonCastException`/`EJsonParserException` of `JsonDataObjects`).
+    /// [`ValueError::External`] leaves the class to the host's default of
+    /// `Exception`.
+    ExternalClass { class: &'static str, message: String },
     /// A raised `EJvInterpreterError`.
     Interp { code: i32, name1: String, name2: String },
 }
 
 impl ValueError {
+    /// A host exception with a Delphi class name.
+    pub fn external_class(class: &'static str, message: String) -> Self {
+        ValueError::ExternalClass { class, message }
+    }
+
     pub fn interp(code: i32) -> Self {
         ValueError::Interp {
             code,
