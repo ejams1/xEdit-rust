@@ -134,7 +134,9 @@ pub(crate) fn end_update(element: &dyn ElementImpl) {
     }
 }
 
-pub(crate) fn update_count(element: &dyn ElementImpl) -> i32 {
+/// The element's update count (`eUpdateCount`), public for the element
+/// adapter's `BeginUpdate`/`EndUpdate` return values.
+pub fn update_count(element: &dyn ElementImpl) -> i32 {
     element.element_base().e_update_count.load(Ordering::Acquire)
 }
 

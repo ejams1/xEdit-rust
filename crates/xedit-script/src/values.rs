@@ -271,6 +271,26 @@ pub trait ScriptObject {
     /// freed through a shared handle; this is the adapter's signal to mark
     /// itself released. Upstream frees the Delphi object here.
     fn free(&mut self) {}
+    /// The object as its `TStrings` lines, when it is one
+    /// ([`crate::strings::StringList`]): what a host function that takes a
+    /// `TStrings` parameter reads, whatever class registered the value.
+    fn string_list(&self) -> Option<&dyn crate::strings::StringList> {
+        None
+    }
+    /// The object as its `TStrings` lines, for the functions that fill one.
+    fn string_list_mut(&mut self) -> Option<&mut dyn crate::strings::StringList> {
+        None
+    }
+    /// The object as its `TList` entries, when it is one
+    /// ([`crate::lists::List`]): what a host function that fills a `TList`
+    /// appends to.
+    fn list(&self) -> Option<&dyn crate::lists::List> {
+        None
+    }
+    /// The object as its `TList` entries, for the functions that fill one.
+    fn list_mut(&mut self) -> Option<&mut dyn crate::lists::List> {
+        None
+    }
 }
 
 /// A class as `AddClass` registers it (`FClassList`): the name, the unit and

@@ -129,6 +129,27 @@ impl MainRecordImpl {
         Some((axis(0)?, axis(1)?, axis(2)?))
     }
 
+    /// Port of `TwbMainRecord.GetRotation`: `DATA`'s second element, read
+    /// as `StrToFloatDef(Value, 0)` like upstream.
+    pub fn get_rotation(self: &Arc<Self>) -> Option<(f64, f64, f64)> {
+        let signature = self.get_signature();
+        if !POSITIONED.iter().any(|expected| signature == Signature::new(expected)) {
+            return None;
+        }
+        self.do_init();
+        let data = self.get_record_by_signature(Signature::new(b"DATA"))?;
+        let data = data.as_container().filter(|data| data.get_element_count() == 2)?;
+        let rotation = data.get_element(1)?;
+        let values = rotation
+            .as_container()
+            .filter(|values| values.get_element_count() == 3)?;
+        let axis = |index: i32| {
+            let text = values.get_element(index)?.get_value();
+            Some(crate::delphi::str_to_float(&text).unwrap_or(0.0))
+        };
+        Some((axis(0)?, axis(1)?, axis(2)?))
+    }
+
     /// Port of `TwbMainRecord.SetPosition`.
     pub fn set_record_position(self: &Arc<Self>, position: (f64, f64, f64)) -> bool {
         self.do_init();

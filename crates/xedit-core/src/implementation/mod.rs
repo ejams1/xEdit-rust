@@ -1975,6 +1975,23 @@ impl GroupRecordImpl {
         self.base.container()?.as_element_impl()?.group_record_impl()
     }
 
+    /// Port of `TwbGroupRecord.GetMainRecordByEditorID`: the first record of
+    /// the group whose editor ID matches, case-insensitively.
+    pub fn main_record_by_editor_id(&self, editor_id: &str) -> Option<Arc<MainRecordImpl>> {
+        let self_ref: ElementRef = self.self_element_ref()?;
+        for index in 0..self_ref.as_container()?.get_element_count() {
+            let Some(element) = self_ref.as_container()?.get_element(index) else {
+                continue;
+            };
+            if let Some(record) = element.into_main_record()
+                && record.get_editor_id().eq_ignore_ascii_case(editor_id)
+            {
+                return record.as_element_impl().and_then(|element| element.main_record_impl());
+            }
+        }
+        None
+    }
+
     /// Port of `TwbGroupRecord.Sort` without `aForce`, for the groups that
     /// sort by `CompareGroupContents`. A topic group (type 7) of a game that
     /// sorts its responses (`wbCanSortINFO`) sorts them by their links
@@ -4523,8 +4540,77 @@ impl MainRecord for MainRecordImpl {
         u32::from(self.mr_struct().version)
     }
 
+    /// Port of `TwbMainRecord.SetVersion`.
+    fn set_version(&self, value: u32) {
+        self.self_arc()
+            .make_header_writeable(|header| header.version = value as u16);
+    }
+
+    /// Port of `TwbMainRecord.GetFormVCS1`.
+    fn get_vcs1(&self) -> u32 {
+        self.mr_struct().vcs1
+    }
+
+    /// Port of `TwbMainRecord.SetFormVCS1`.
+    fn set_vcs1(&self, value: u32) {
+        self.self_arc().make_header_writeable(|header| header.vcs1 = value);
+    }
+
+    /// Port of `TwbMainRecord.GetFormVCS2`: the field exists from Fallout 3
+    /// on.
+    fn get_vcs2(&self) -> u32 {
+        if matches!(game_mode(), GameMode::gmTES3 | GameMode::gmTES4) {
+            return 0;
+        }
+        u32::from(self.mr_struct().vcs2)
+    }
+
+    /// Port of `TwbMainRecord.SetFormVCS2`.
+    fn set_vcs2(&self, value: u32) {
+        if !matches!(game_mode(), GameMode::gmTES3 | GameMode::gmTES4) {
+            self.self_arc()
+                .make_header_writeable(|header| header.vcs2 = value as u16);
+        }
+    }
+
+    /// Port of `TwbMainRecord.ChangeFormSignature`.
+    fn change_form_signature(&self, signature: Signature) {
+        self.self_arc()
+            .make_header_writeable(|header| header.signature = signature);
+    }
+
+    /// Port of `TwbMainRecord.GetIsInjected`: the record's fixed FormID is
+    /// not a new record of its file, while its load order FormID says the
+    /// file it names.
+    fn get_is_injected(&self) -> bool {
+        let Some(file) = self.get_file() else {
+            return false;
+        };
+        let Some(file_impl) = file.as_element_impl().and_then(|element| element.file_impl()) else {
+            return false;
+        };
+        let form_id = self.get_fixed_form_id();
+        self.master().is_none()
+            && !form_id.is_null()
+            && !file_impl.is_new_record(form_id.file_id())
+            && !file
+                .get_file_states()
+                .contains(crate::interface::types::FileState::fsIsHardcoded)
+            && (game_mode() > GameMode::gmTES3 || form_id.file_id().full_slot() > 0)
+    }
+
     fn get_is_deleted(&self) -> bool {
         self.mr_struct().flags.is_deleted()
+    }
+
+    /// Port of `TwbMainRecord.GetIsInitiallyDisabled`.
+    fn get_is_initially_disabled(&self) -> bool {
+        MainRecordImpl::get_is_initially_disabled(self)
+    }
+
+    /// Port of `TwbMainRecord.SetIsInitiallyDisabled`.
+    fn set_is_initially_disabled(&self, value: bool) {
+        self.self_arc().set_is_initially_disabled(value);
     }
 
     /// Port of `GetMasterOrSelf`.

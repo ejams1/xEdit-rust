@@ -885,7 +885,16 @@ impl Adapter {
     }
 
     /// `AddRec` (`JvInterpreter.pas:3615`).
+    ///
+    /// A name already registered is returned as it stands: several units
+    /// register the same record type (`TwbVector` and `TwbGridCell` are read
+    /// by the record, resource and misc adapters), upstream registers each
+    /// one once, and `GetRec` (`:3878`) would only ever find the first of
+    /// two entries anyway.
     pub fn add_rec(&mut self, unit_name: &str, identifier: &str, size: i64, fields: Vec<RecordField>) -> Rc<RecordDef> {
+        if let Some(existing) = self.get_rec(identifier.as_bytes()) {
+            return existing;
+        }
         let def = Rc::new(RecordDef {
             unit: unit_name.to_owned(),
             name: identifier.to_owned(),

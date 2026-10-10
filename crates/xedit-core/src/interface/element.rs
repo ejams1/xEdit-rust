@@ -160,8 +160,28 @@ pub trait Element: Send + Sync {
     /// Upstream `BeginUpdate`: change notifications wait for `end_update`.
     fn begin_update(&self) {}
 
+    /// Upstream `BeginUpdate: Integer` (`wbImplementation.pas:19064`, the
+    /// `IwbElement.BeginUpdate` the element adapter registers): begins the
+    /// update and gives the count it reached (`Succ(eUpdateCount)`; 0 for an
+    /// element the port keeps no counter for).
+    fn begin_update_value(&self) -> i32 {
+        self.begin_update();
+        self.as_element_impl()
+            .map(crate::implementation::edit::update_count)
+            .unwrap_or(0)
+    }
+
     /// Upstream `EndUpdate`.
     fn end_update(&self) {}
+
+    /// Upstream `EndUpdate: Integer` (`wbImplementation.pas:19370`): ends
+    /// the update and gives the count it dropped to (`Pred(eUpdateCount)`).
+    fn end_update_value(&self) -> i32 {
+        self.end_update();
+        self.as_element_impl()
+            .map(crate::implementation::edit::update_count)
+            .unwrap_or(0)
+    }
 
     /// Upstream `DataSize := aValue` (`SetDataSize`): the data of the
     /// element is resized, and its elements are built again over it.
@@ -492,7 +512,45 @@ pub trait MainRecord: Container {
     /// Upstream `Version`: the form version in the record header.
     fn get_version(&self) -> u32;
 
+    /// Upstream `SetVersion`: writes the form version into the record
+    /// header (a no-op for a record that cannot be edited).
+    fn set_version(&self, _value: u32) {}
+
+    /// Upstream `GetFormVCS1`: the VCS1 field of the record header.
+    fn get_vcs1(&self) -> u32;
+    /// Upstream `SetFormVCS1`.
+    fn set_vcs1(&self, _value: u32) {}
+    /// Upstream `GetFormVCS2`: the VCS2 field, on games from Fallout 3 on.
+    fn get_vcs2(&self) -> u32;
+    /// Upstream `SetFormVCS2`.
+    fn set_vcs2(&self, _value: u32) {}
+
+    /// Upstream `ChangeFormSignature`: the record takes another signature,
+    /// in the header and in its child group.
+    fn change_form_signature(&self, _signature: Signature) {}
+
+    /// Upstream `GetIsDeleted`.
     fn get_is_deleted(&self) -> bool;
+
+    /// Upstream `IsInitiallyDisabled`: the `InitiallyDisabled` record flag.
+    fn get_is_initially_disabled(&self) -> bool {
+        false
+    }
+
+    /// Upstream `SetIsInitiallyDisabled`.
+    fn set_is_initially_disabled(&self, _value: bool) {}
+
+    /// Upstream `IsVisibleWhenDistant`: the `VisibleWhenDistant` record
+    /// flag.
+    fn get_is_visible_when_distant(&self) -> bool {
+        self.get_flags().is_visible_when_distant()
+    }
+
+    /// Upstream `IsInjected`: the record lives in the FormID space of a
+    /// master of its file without the master holding it.
+    fn get_is_injected(&self) -> bool {
+        false
+    }
 
     /// Upstream `MasterOrSelf`: the record this one overrides, or itself.
     fn get_master_or_self(&self) -> MainRecordRef;
@@ -741,6 +799,28 @@ pub trait Container: Element {
     /// Upstream `ElementExists[aPath]`.
     fn get_element_exists(&self, path: &str) -> bool {
         self.get_element_by_path(path).is_some()
+    }
+
+    /// Upstream `LastElement`: the last element of the container.
+    fn get_last_element(&self) -> Option<ElementRef> {
+        self.get_element(self.get_element_count() - 1)
+    }
+
+    /// The position of the child with this element id, `-1` when the
+    /// container does not hold it (`ElementID` is the identity
+    /// `TwbElement.Equals` and `TwbContainer.IndexOf` compare).
+    fn index_of_id(&self, id: usize) -> i32 {
+        (0..self.get_element_count())
+            .filter_map(|index| self.get_element(index))
+            .position(|child| child.get_element_id() == id)
+            .map(|index| index as i32)
+            .unwrap_or(-1)
+    }
+
+    /// Upstream `IndexOf(aElement)`: the position of the element, `-1` when
+    /// the container does not hold it.
+    fn get_index_of(&self, element: &ElementRef) -> i32 {
+        self.index_of_id(element.get_element_id())
     }
 
     /// Upstream `ElementBySignature[aSignature]`: the first element with the

@@ -40,6 +40,9 @@
 //!   `TxejviScript`) with `FunctionExists`/`FunctionIsEmpty`/`CallFunction`,
 //!   the unit source resolution with the built-in stubs, and
 //!   `TxeScriptHost`'s name registry.
+//! * [`strings`]: the `TStrings`/`TStringList` value the adapter functions
+//!   that take or fill a string list share, and [`lists`] the `TList` value
+//!   they fill with elements.
 //!
 //! The crate has no dependency on the session layer: it parses text into
 //! trees and executes them against adapters; identifiers, units and types
@@ -53,6 +56,8 @@ pub mod eval;
 pub mod host;
 pub mod interpreter;
 pub mod interpreter_parser;
+pub mod lists;
+pub mod strings;
 pub mod values;
 
 pub use error::Error;

@@ -12,10 +12,12 @@
 use std::path::Path;
 
 use crate::container_handler::container_exists;
+use crate::interface::element::Element;
 use crate::interface::globals::{
     GameMode, game_mode, is_fallout3, is_fallout4, is_fallout76, is_oblivion, is_skyrim, is_starfield,
 };
 use crate::interface::misc::progress;
+use crate::interface::{ElementRef, MainRecordRef, Signature};
 
 /// `MakeDataFileName`: a name below the data folder, or the name itself
 /// when it is a path; nothing for names under three characters (the
@@ -337,6 +339,100 @@ fn command_from_line(command_line: &str) -> std::process::Command {
     let mut command = std::process::Command::new(program);
     command.args(rest.split_whitespace().map(|arg| arg.trim_matches('"')));
     command
+}
+
+/// `wbStringToSignatures`: the four-character signatures of a string, split
+/// on `,` when it holds one and on spaces otherwise (a `TStringList` with
+/// `StrictDelimiter`), each entry trimmed; an entry shorter than four
+/// characters is skipped.
+pub fn wb_string_to_signatures(signatures: &str) -> Vec<Signature> {
+    let delimiter = if signatures.contains(',') { ',' } else { ' ' };
+    signatures
+        .split(delimiter)
+        .filter_map(|entry| {
+            let entry = entry.trim();
+            let bytes = entry.as_bytes();
+            if bytes.len() < 4 {
+                return None;
+            }
+            Some(Signature::new(&[bytes[0], bytes[1], bytes[2], bytes[3]]))
+        })
+        .collect()
+}
+
+/// Port of `wbGetSiblingRecords`: the records of a signature below the
+/// element — for a main record the records of its child group, every
+/// container walked depth first — and, with `overrides`, those of the child
+/// groups of the overrides in files that load later, without duplicates.
+pub fn wb_get_sibling_records(element: &ElementRef, signatures: &[Signature], overrides: bool) -> Vec<MainRecordRef> {
+    let mut records = Vec::new();
+    match element.as_main_record() {
+        Some(record) => {
+            let self_ref = element.clone();
+            if let Some(group) = record
+                .as_element_impl()
+                .and_then(|element| element.main_record_impl())
+                .and_then(|record| record.child_group())
+            {
+                find_records(&(group as ElementRef), signatures, &mut records);
+            }
+            if overrides {
+                if let Some(record) = self_ref.into_main_record() {
+                    let master = record.get_master_or_self();
+                    let main_load_order = element.get_file().map(|file| file.get_load_order()).unwrap_or(i32::MAX);
+                    if let Some(master) = master.as_element_impl().and_then(|element| element.main_record_impl()) {
+                        for override_record in master.overrides() {
+                            let later = override_record
+                                .get_file()
+                                .map(|file| file.get_load_order() > main_load_order)
+                                .unwrap_or(false);
+                            if later && let Some(group) = override_record.child_group() {
+                                find_records(&(group as ElementRef), signatures, &mut records);
+                            }
+                        }
+                    }
+                }
+                // Removing duplicates (overridden records): ordered by
+                // `CompareElementsFormIDAndLoadOrder`, the first record of a
+                // load order FormID stays.
+                records.sort_by_key(|record| {
+                    let load_order = record.get_file().map(|file| file.get_load_order()).unwrap_or(i32::MAX);
+                    (record.get_load_order_form_id().to_cardinal(), load_order)
+                });
+                let mut kept: Vec<MainRecordRef> = Vec::new();
+                for record in records {
+                    if kept
+                        .last()
+                        .is_some_and(|last| last.get_load_order_form_id() == record.get_load_order_form_id())
+                    {
+                        continue;
+                    }
+                    kept.push(record);
+                }
+                return kept;
+            }
+        }
+        None => find_records(element, signatures, &mut records),
+    }
+    records
+}
+
+/// `FindRecords`: the element itself when its signature is one of the list,
+/// every element of a container otherwise.
+fn find_records(element: &ElementRef, signatures: &[Signature], records: &mut Vec<MainRecordRef>) {
+    if let Some(record) = element.clone().into_main_record() {
+        if signatures.contains(&record.get_signature()) {
+            records.push(record);
+        }
+        return;
+    }
+    if let Some(container) = element.as_container() {
+        for index in 0..container.get_element_count() {
+            if let Some(child) = container.get_element(index) {
+                find_records(&child, signatures, records);
+            }
+        }
+    }
 }
 
 #[cfg(test)]

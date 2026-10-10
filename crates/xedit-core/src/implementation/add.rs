@@ -179,7 +179,7 @@ impl GroupRecordImpl {
     }
 
     /// Port of `FindChildGroup(aType, aLabel)`.
-    pub(crate) fn find_child_group(&self, group_type: i32, label: u32) -> Option<Arc<GroupRecordImpl>> {
+    pub fn find_child_group(&self, group_type: i32, label: u32) -> Option<Arc<GroupRecordImpl>> {
         self.container.elements().iter().find_map(|element| {
             let group = element.as_element_impl()?.group_record_impl()?;
             (group.group_type() == group_type && group.get_group_label() == label).then_some(group)
