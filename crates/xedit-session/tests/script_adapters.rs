@@ -796,7 +796,10 @@ fn the_corpus_scripts_that_need_these_units_run() {
         lines(&result),
         vec![
             "Start: Applying script \"List null FormID\"",
-            "Plugin.esp \\ GRUP Top \"GMST\" \\ GMST - Game Setting [00000000] <fNullId>",
+            // The step 5b `FullPath` fixup added the upstream ` \ [id] `
+            // prefixes (oracle-verified shape; see the `full=` expectations of
+            // the synthetic tests above).
+            " \\ [01] Plugin.esp \\ [1] GRUP Top \"GMST\" \\ [0] GMST - Game Setting [00000000] <fNullId>",
             "Done: Applying script \"List null FormID\", Processed Records: 5, Elapsed Time: 00:00",
             "You can close this application now.",
         ]
