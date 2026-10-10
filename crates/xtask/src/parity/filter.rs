@@ -578,6 +578,7 @@ fn check(
             budget: &runner.budget,
             expected_peak,
             max_memory: runner.max_memory,
+            extra_args: Vec::new(),
         };
         let started = std::time::Instant::now();
         let result = run.run_with(&Default::default());

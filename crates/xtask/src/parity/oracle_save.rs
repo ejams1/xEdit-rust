@@ -312,7 +312,7 @@ pub(super) fn compare(
 
 /// The expected peak of a GUI run: its last peak, or an estimate from the
 /// size of the plugins it loads.
-fn expected_peak(peak_file: &Path, plugins: &[PathBuf]) -> u64 {
+pub(super) fn expected_peak(peak_file: &Path, plugins: &[PathBuf]) -> u64 {
     if let Some(peak) = fs::read_to_string(peak_file)
         .ok()
         .and_then(|text| text.trim().parse().ok())
@@ -378,6 +378,7 @@ pub(super) fn run_gui_with(
         budget: &runner.budget,
         expected_peak,
         max_memory: runner.max_memory,
+        extra_args: Vec::new(),
     };
     let result = run.run_with(extras);
     if let Ok(result) = &result

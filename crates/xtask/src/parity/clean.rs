@@ -342,6 +342,7 @@ fn check(runner: &Runner, game: &'static Game, data: &Path, name: &str) -> Resul
             budget: &runner.budget,
             expected_peak,
             max_memory: runner.max_memory,
+            extra_args: Vec::new(),
         };
         let started = std::time::Instant::now();
         let result = run.run_quick_clean(name);
