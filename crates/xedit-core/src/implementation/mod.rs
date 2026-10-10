@@ -499,9 +499,20 @@ impl ElementBase {
     }
 
     /// Port of `TwbElement.GetDisplayName`: the name with the suffix.
+    /// `TwbElement.GetNameSuffix` asks the container to number its
+    /// elements first (lazily).
     pub(crate) fn display_name(&self, name: String, use_suffix: bool) -> String {
-        let suffix = self.name_suffix();
-        if use_suffix && !suffix.is_empty() {
+        let suffix = if use_suffix {
+            if let Some(container) = self.container()
+                && let Some(container) = container.as_element_impl()
+            {
+                container.update_name_suffixes();
+            }
+            self.name_suffix()
+        } else {
+            String::new()
+        };
+        if !suffix.is_empty() {
             if name.is_empty() {
                 suffix
             } else {
@@ -3333,6 +3344,13 @@ pub trait ElementImpl: Element {
     fn element_changed(&self, _child: &ElementRef) {
         self.notify_changed();
     }
+
+    /// Port of `IwbContainerInternal.UpdateNameSuffixes` as
+    /// `TwbElement.GetNameSuffix` calls it: the `#n` of the names of the
+    /// elements of a container, set when a name asks for it. The default
+    /// (`TwbContainer.UpdateNameSuffixes`) does nothing; a sub-record array
+    /// numbers its members, unless it is sorted.
+    fn update_name_suffixes(&self) {}
 
     fn do_after_set(&self, old: &Variant, new: &Variant) {
         edit::do_after_set(self.as_this(), old, new)

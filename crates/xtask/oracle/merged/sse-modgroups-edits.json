@@ -1,0 +1,49 @@
+{
+  "description": "Skyrim SE with its DLCs, the two plugins of sse-edits that change the same leveled list, container, NPC factions and weapon keywords, and an active mod group in which Dawnguard hides Update: the handler reads the overrides of each master, which the mod groups do not change, so the patch made with them is the patch made without (sse-edits).",
+  "game": "sse",
+  "load": ["Skyrim.esm", "Update.esm", "Dawnguard.esm", "HearthFires.esm", "Dragonborn.esm"],
+  "make": [
+    {"command": "files.new", "params": {"file": "PatchTestA"}},
+    {"command": "records.copy", "params": {"form_id": "00000E88", "to": "PatchTestA.esp"}},
+    {"command": "elements.set", "params": {"form_id": "00000E88", "file": "PatchTestA.esp", "path": "Leveled List Entries\\[1]\\LVLO\\Count", "value": "3"}},
+    {"command": "elements.add", "params": {"form_id": "00000E88", "file": "PatchTestA.esp", "path": "Leveled List Entries", "name": "Leveled List Entry"}},
+    {"command": "elements.set", "params": {"form_id": "00000E88", "file": "PatchTestA.esp", "path": "Leveled List Entries\\[0]\\LVLO\\Item", "value": "00000E60"}},
+    {"command": "elements.set", "params": {"form_id": "00000E88", "file": "PatchTestA.esp", "path": "Leveled List Entries\\[0]\\LVLO\\Level", "value": "2"}},
+    {"command": "records.copy", "params": {"form_id": "00015BAB", "to": "PatchTestA.esp"}},
+    {"command": "elements.set", "params": {"form_id": "00015BAB", "file": "PatchTestA.esp", "path": "Items\\[0]\\CNTO\\Count", "value": "5"}},
+    {"command": "records.copy", "params": {"form_id": "00000EB3", "to": "PatchTestA.esp"}},
+    {"command": "elements.remove", "params": {"form_id": "00000EB3", "file": "PatchTestA.esp", "path": "Factions\\[0]"}},
+    {"command": "records.copy", "params": {"form_id": "00012EB7", "to": "PatchTestA.esp"}},
+    {"command": "elements.remove", "params": {"form_id": "00012EB7", "file": "PatchTestA.esp", "path": "Keywords\\KWDA - Keywords\\[0]"}},
+    {"command": "files.new", "params": {"file": "PatchTestB"}},
+    {"command": "records.copy", "params": {"form_id": "00000E88", "to": "PatchTestB.esp", "from": "Dragonborn.esm"}},
+    {"command": "elements.remove", "params": {"form_id": "00000E88", "file": "PatchTestB.esp", "path": "Leveled List Entries\\[0]"}},
+    {"command": "records.copy", "params": {"form_id": "00015BAB", "to": "PatchTestB.esp", "from": "Dragonborn.esm"}},
+    {"command": "elements.remove", "params": {"form_id": "00015BAB", "file": "PatchTestB.esp", "path": "Items\\[3]"}},
+    {"command": "records.copy", "params": {"form_id": "00000EB3", "to": "PatchTestB.esp", "from": "Dragonborn.esm"}},
+    {"command": "elements.set", "params": {"form_id": "00000EB3", "file": "PatchTestB.esp", "path": "Factions\\[2]\\Rank", "value": "1"}},
+    {"command": "records.copy", "params": {"form_id": "00012EB7", "to": "PatchTestB.esp", "from": "Dragonborn.esm"}},
+    {"command": "elements.set", "params": {"form_id": "00012EB7", "file": "PatchTestB.esp", "path": "Keywords\\KWDA - Keywords\\[2]", "value": "0001E712"}}
+  ],
+  "patch": "Merged Patch",
+  "files": {
+    "Dawnguard.modgroups": [
+      "[Update hidden by Dawnguard]",
+      "Update.esm",
+      "Dawnguard.esm"
+    ]
+  },
+  "settings": [
+    "[ModGroups]",
+    "Selection=\"Update hidden by Dawnguard\"",
+    "[Init]",
+    "FirstStart=1"
+  ],
+  "menu": ["mniViewModGroupsReload"],
+  "answers": [
+    {"class": "TfrmModGroupSelect", "title": "Reloading", "button": "OK"},
+    {"class": "#32770", "title": "Warning", "button": "&Yes"},
+    {"class": "TInputQueryForm", "title": "New Module File", "text": "Merged Patch", "button": "OK"}
+  ],
+  "port": [{"command": "modgroups.select", "params": {"saved": true}}]
+}

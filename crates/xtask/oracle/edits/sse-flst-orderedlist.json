@@ -1,0 +1,18 @@
+{
+  "description": "The OrderedList form lists: an FLST of Skyrim.esm copied as a new record into Update.esm with the OrderedList suffix (the suffix changes whether the editor ID marks an ordered list, and the AfterSet callback of the definition drops the FormIDs the copy brought along, in the oracle and in the port alike), the list built again afterwards, a second copy with the suffix that is saved with nothing but its editor ID, a copy without the suffix that keeps its entries, and the editor ID of that copy changed afterwards, which drops the entries once more.",
+  "game": "sse",
+  "load": ["Skyrim.esm", "Update.esm"],
+  "commands": [
+    {"command": "records.copy", "params": {"form_id": "00000D6F", "from": "Skyrim.esm", "to": "Update.esm", "as_new": true, "suffix": "OrderedList"}},
+    {"command": "elements.add", "params": {"form_id": "01003289", "file": "Update.esm", "path": "", "name": "FormIDs"}},
+    {"command": "elements.set", "params": {"form_id": "01003289", "file": "Update.esm", "path": "FormIDs\\[0]", "value": "00000D67"}},
+    {"command": "elements.add", "params": {"form_id": "01003289", "file": "Update.esm", "path": "FormIDs", "name": "FormID"}},
+    {"command": "elements.set", "params": {"form_id": "01003289", "file": "Update.esm", "path": "FormIDs\\[1]", "value": "00000D6E"}},
+    {"command": "records.copy", "params": {"form_id": "00000D6F", "from": "Skyrim.esm", "to": "Update.esm", "as_new": true, "suffix": "OrderedList"}},
+    {"command": "records.copy", "params": {"form_id": "00000D6F", "from": "Skyrim.esm", "to": "Update.esm", "as_new": true}},
+    {"command": "elements.set", "params": {"form_id": "0100328B", "file": "Update.esm", "path": "EDID", "value": "NakedListOrderedList"}},
+    {"command": "elements.add", "params": {"form_id": "0100328B", "file": "Update.esm", "path": "", "name": "FormIDs"}},
+    {"command": "elements.set", "params": {"form_id": "0100328B", "file": "Update.esm", "path": "FormIDs\\[0]", "value": "00000D6C"}}
+  ],
+  "save": ["Update.esm"]
+}
