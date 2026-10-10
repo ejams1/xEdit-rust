@@ -490,6 +490,7 @@ impl MainRecordImpl {
             mr_fixed_form_id: std::sync::atomic::AtomicU64::new(super::UNSET_FIXED_FORM_ID),
             mr_display_name: RwLock::new(None),
             mr_precombined: std::sync::OnceLock::new(),
+            mr_has_vwd_mesh: std::sync::OnceLock::new(),
             mr_ofst_removed: std::sync::atomic::AtomicBool::new(false),
             mr_storage_invalid: std::sync::atomic::AtomicBool::new(true),
             mr_collapsed: std::sync::Mutex::new(None),

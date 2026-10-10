@@ -343,6 +343,14 @@ impl MemIniFile {
         default.to_owned()
     }
 
+    /// Port of `TMemIniFile.ReadBool` (`ReadInteger(Section, Ident,
+    /// Ord(Default)) <> 0`, which reads `1`, `0` and every other integer).
+    pub fn read_bool(&self, section: &str, ident: &str, default: bool) -> bool {
+        let value =
+            xedit_core::interface::misc::str_to_int_def(&self.read_string(section, ident, ""), i32::from(default));
+        value != 0
+    }
+
     /// `WriteString`: replaces the line of the key or adds it, adding the
     /// section at the end when it is missing.
     pub fn write_string(&mut self, section: &str, ident: &str, value: &str) {

@@ -18,6 +18,7 @@ pub mod conflicts;
 pub mod dump;
 pub mod edit;
 pub mod export;
+pub mod filter;
 pub mod formids;
 pub mod localization;
 pub mod lodgen;
@@ -146,6 +147,7 @@ impl Registry {
         new_file::register(&mut registry);
         patch::register(&mut registry);
         tool_modes::register(&mut registry);
+        filter::register(&mut registry);
         archive::register(&mut registry);
         assets::register(&mut registry);
         sniff::register(&mut registry);

@@ -59,6 +59,7 @@ use crate::memory::{self, Budget, GIB, Limit};
 mod check;
 mod clean;
 mod conflicts;
+mod filter;
 mod bsarch;
 mod gui;
 mod hidden;
@@ -251,6 +252,8 @@ struct Options {
     merged: bool,
     /// `parity tool-modes`: the tool modes that work over the loaded files.
     tool_modes: bool,
+    /// `parity filter`: the navigation tree filter scenarios.
+    filter: bool,
     games: Vec<&'static Game>,
     /// Lower-case file names. Empty selects the whole corpus.
     files: Vec<String>,
@@ -394,6 +397,8 @@ pub fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
     }
     if options.tool_modes {
         return tool_modes::run_tool_modes(root, tag, &options, cache, scratch, oracle_dir);
+    if options.filter {
+        return filter::run_filter(root, tag, &options, cache, scratch, oracle_dir);
     }
 
     let mut cases = Vec::new();
@@ -1224,6 +1229,7 @@ fn parse(args: &[&str]) -> Result<Options> {
     let (mode, rest) = args.split_first().context(USAGE)?;
     let (saves, roundtrip, oracle_save, oracle_edit) = match *mode {
         "dump" | "conflicts" | "refs" | "clean" | "check" | "modgroups" | "merged" | "tool-modes" => {
+        "dump" | "conflicts" | "refs" | "clean" | "check" | "modgroups" | "merged" | "filter" => {
             (false, false, false, false)
         }
         "check-dump" => {
@@ -1249,6 +1255,7 @@ fn parse(args: &[&str]) -> Result<Options> {
         modgroups: *mode == "modgroups",
         merged: *mode == "merged",
         tool_modes: *mode == "tool-modes",
+        filter: *mode == "filter",
         games: Vec::new(),
         files: Vec::new(),
         modes: Vec::new(),

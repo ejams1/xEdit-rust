@@ -55,6 +55,11 @@ pub enum ElementState {
     esLocalized = 32,
     /// Port of `esNotLocalized`: the element holds its text.
     esNotLocalized = 64,
+    /// Port of `esReachable`: "Build Reachable Info" reached the element.
+    esReachable = 128,
+    /// Port of `esNotReachable`: the element is not reached (the state every
+    /// element starts in after `ResetReachable`).
+    esNotReachable = 256,
 }
 
 /// Port of `TwbResetModified`: what a save does to the modified states.

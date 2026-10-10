@@ -25,6 +25,7 @@ pub mod injected;
 pub mod masters;
 pub mod new_file;
 pub mod new_form_id;
+pub mod reachable;
 pub mod refcache;
 pub mod refs;
 mod scan;
@@ -126,6 +127,26 @@ macro_rules! element_common {
 
         fn get_dont_show(&self) -> bool {
             $crate::implementation::element_dont_show(self)
+        }
+
+        fn get_no_reach(&self) -> bool {
+            $crate::implementation::reachable::no_reach(self)
+        }
+
+        fn links_to_parent(&self) -> bool {
+            $crate::implementation::reachable::element_links_to_parent(self)
+        }
+
+        fn get_is_reachable(&self) -> bool {
+            $crate::implementation::reachable::element_is_reachable(self)
+        }
+
+        fn get_is_not_reachable(&self) -> bool {
+            $crate::implementation::reachable::element_is_not_reachable(self)
+        }
+
+        fn reset_reachable(&self) {
+            $crate::implementation::reachable::reset_reachable(self)
         }
 
         fn as_element_impl(&self) -> Option<&dyn ElementImpl> {
@@ -527,8 +548,12 @@ impl ElementBase {
         self.e_container.read().unwrap().as_ref().and_then(Weak::upgrade)
     }
 
-    /// Port of `SetContainer`.
+    /// Port of `SetContainer`, which hands `esNotReachable` on: a new child
+    /// of a container that is not reachable is not reachable either.
     pub(crate) fn set_container(&self, container: &ElementRef) {
+        if let Some(base) = container.as_element_impl().map(ElementImpl::element_base) {
+            reachable::set_container(base, self);
+        }
         *self.e_container.write().unwrap() = Some(Arc::downgrade(container));
     }
 }
@@ -2119,6 +2144,10 @@ pub struct MainRecordImpl {
     /// `mrsHasPrecombinedMesh` state: the cell and mesh of a precombined
     /// reference, checked once.
     mr_precombined: OnceLock<Option<(u32, u32)>>,
+    /// Port of `mrsHasVWDMeshChecked` with `mrsHasVWDMesh`: whether the
+    /// billboard (`TREE`) or the `_far.nif` of the model is in a loaded
+    /// container, checked once.
+    mr_has_vwd_mesh: OnceLock<bool>,
     /// Port of `mrsOFSTRemoved` in `mrStates`: the init dropped the offsets
     /// of a worldspace, and `PrepareSave` marks its children modified.
     mr_ofst_removed: AtomicBool,
@@ -2198,6 +2227,7 @@ impl MainRecordImpl {
             mr_fixed_form_id: std::sync::atomic::AtomicU64::new(UNSET_FIXED_FORM_ID),
             mr_display_name: RwLock::new(None),
             mr_precombined: OnceLock::new(),
+            mr_has_vwd_mesh: OnceLock::new(),
             mr_ofst_removed: AtomicBool::new(false),
             mr_storage_invalid: AtomicBool::new(false),
             mr_collapsed: std::sync::Mutex::new(None),
@@ -4373,6 +4403,40 @@ impl MainRecord for MainRecordImpl {
             }
         }
         format!("Precombined\\{master_folder}{cell_id:08X}_{mesh_id:08X}_OC.nif")
+    }
+
+    /// Port of `GetHasVisibleWhenDistantMesh` with its `mrsHasVWDMesh`
+    /// state: a `TREE` looks for the billboard of its model
+    /// (`textures\trees\billboards\<model>.dds`), every other record for
+    /// `meshes\<model>_far.nif`, both in the containers of the data folder.
+    fn get_has_visible_when_distant_mesh(&self) -> bool {
+        *self.mr_has_vwd_mesh.get_or_init(|| {
+            if !crate::container_handler::has_containers() {
+                return false;
+            }
+            let Some(model) = self.get_element_by_name("Model") else {
+                return false;
+            };
+            let Some(model) = model
+                .as_container()
+                .and_then(|container| container.get_record_by_signature(Signature::new(b"MODL")))
+            else {
+                return false;
+            };
+            let path = model.get_edit_value().replace('/', "\\");
+            let path = path.trim();
+            if path.is_empty() {
+                return false;
+            }
+            let path = if self.mr_struct().signature.0 == *b"TREE" {
+                let path = crate::delphi::change_file_ext(path, ".dds");
+                format!("textures\\trees\\billboards{path}")
+            } else {
+                let stem = crate::delphi::change_file_ext(path, "");
+                format!("meshes\\{stem}_far.nif")
+            };
+            !crate::container_handler::open_resource(&path).is_empty()
+        })
     }
 
     fn get_fixed_form_id(&self) -> FormID {

@@ -127,10 +127,15 @@ enum Action {
         #[command(subcommand)]
         action: LocalizationAction,
     },
-    /// The reference index: the records that refer to a record, and the reference cache.
+    /// The reference index: the records that refer to a record, the reference cache, and the reachable information the "not reachable" filter option reads.
     Refs {
         #[command(subcommand)]
         action: RefsAction,
+    },
+    /// The navigation tree filter and the presets of its options dialog (filter.apply, filter.remove, filter.presets, filter.preset.save|delete).
+    Filter {
+        #[command(subcommand)]
+        action: FilterAction,
     },
     /// FormIDs of records.
     Formids {
@@ -270,6 +275,24 @@ enum Action {
         /// Activate the valid mod groups of the selection saved in xEdit's settings file.
         #[arg(long)]
         saved_modgroups: bool,
+        /// The view filter of the view tab (edViewFilterName): keep the rows whose name contains this text.
+        #[arg(long)]
+        view_filter_name: Option<String>,
+        /// edViewFilterValue: keep the rows with this text in one of their cells.
+        #[arg(long)]
+        view_filter_value: Option<String>,
+        /// A "cobViewFilter" set to Or: a row matches when the name or a value matches, instead of both.
+        #[arg(long)]
+        view_filter_or: bool,
+        /// cbViewFilterKeepChildren: also keep the rows below a matching one.
+        #[arg(long)]
+        keep_children: bool,
+        /// cbViewFilterKeepSiblings: also keep the rows beside a matching one.
+        #[arg(long)]
+        keep_siblings: bool,
+        /// cbViewFilterKeepParentsSiblings: also keep the rows beside the parent of a matching one.
+        #[arg(long)]
+        keep_parents_siblings: bool,
     },
     /// Write the element tree of a plugin as xDump prints it.
     Dump {
@@ -674,6 +697,18 @@ enum RefsAction {
         /// Entries of the referenced-by list to return at most.
         #[arg(long)]
         limit: Option<usize>,
+        /// edReferencedByFilterName: keep the entries whose name contains this text.
+        #[arg(long)]
+        filter_name: Option<String>,
+        /// edReferencedByFilterSignature: keep the entries with this signature.
+        #[arg(long)]
+        filter_signature: Option<String>,
+        /// edReferencedByFilterFileName: keep the entries of a file whose name contains this text.
+        #[arg(long)]
+        filter_file: Option<String>,
+        /// A "cobReferencedByFilter" set to Or: the name or the signature may match instead of both.
+        #[arg(long)]
+        filter_or: bool,
     },
     /// Write the referenced-by lists of every loaded file as text (the parity check's format, see refs.pas of the harness).
     Dump,
@@ -748,6 +783,155 @@ enum ArchiveAction {
         #[arg(long)]
         file_flags: Option<String>,
         /// Add the sources and report the files that would be packed, but write nothing.
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Build the reachable information of the loaded files (refs.build_reachable, mniNavBuildReachableClick): the references first when they are missing, then ResetReachable and BuildReachable for every file. Sets the state the --by-not-reachable-status option of `filter apply` reads.
+    BuildReachable {
+        /// Skip the reference build of the files that have none.
+        #[arg(long)]
+        no_build_refs: bool,
+    },
+}
+
+#[derive(Subcommand)]
+#[allow(clippy::large_enum_variant)]
+enum FilterAction {
+    /// Apply a filter to the navigation tree of the loaded files (filter.apply, mniNavFilterApplyClick with the options of TfrmFilterOptions) and report the nodes it left: the two passes, the nodes left and the records taken out of each file. Without any option flag the options are all off but "conflict status inherited by parent" (the dialog's defaults), unless --preset names one.
+    Apply {
+        /// Plugin of the tree; repeat for several, in load order. Every loaded plugin when omitted (the "* Selected" menu items).
+        #[arg(long)]
+        file: Vec<String>,
+        /// The name of a `[Filter <name>]` preset of xEdit's settings file to read the options from (FilterLoadPreset); any option flag below replaces the whole preset.
+        #[arg(long)]
+        preset: Option<String>,
+        /// Keep the records whose ConflictAll is one of these: caUnknown, caOnlyOne, caNoConflict, caConflictBenign, caOverride, caConflict or caConflictCritical. Comma separated or repeated.
+        #[arg(long, value_delimiter = ',')]
+        conflict_all: Vec<String>,
+        /// Keep the records whose own status (ConflictThis) is one of these: ctUnknown, ctIgnored, ctNotDefined, ctIdenticalToMaster, ctOnlyOne, ctHiddenByModGroup, ctMaster, ctConflictBenign, ctOverride, ctIdenticalToMasterWinsConflict, ctConflictWins or ctConflictLoses.
+        #[arg(long, value_delimiter = ',')]
+        conflict_this: Vec<String>,
+        /// Keep the records that are (or with false are not) injected.
+        #[arg(long, num_args = 0..=1, default_missing_value = "true")]
+        by_inject_status: Option<bool>,
+        /// Keep the records that are (or are not) not reachable; needs `xedit refs build-reachable` first.
+        #[arg(long, num_args = 0..=1, default_missing_value = "true")]
+        by_not_reachable_status: Option<bool>,
+        /// Keep the records whose references (or, with false, whose records themselves) are injected.
+        #[arg(long, num_args = 0..=1, default_missing_value = "true")]
+        by_references_injected_status: Option<bool>,
+        /// Keep the records whose editor ID contains this text.
+        #[arg(long)]
+        editor_id: Option<String>,
+        /// Keep the records with this text in the value of any of their elements.
+        #[arg(long)]
+        element_value: Option<String>,
+        /// Keep the records whose display name contains this text.
+        #[arg(long)]
+        name: Option<String>,
+        /// Keep the records whose base record's editor ID contains this text; eight or nine characters are the FormID of the base record.
+        #[arg(long)]
+        base_editor_id: Option<String>,
+        /// Keep the records whose base record's display name contains this text.
+        #[arg(long)]
+        base_name: Option<String>,
+        /// Keep the references (ACHR, ACRE) whose scale (XSCL) is missing or 1.
+        #[arg(long)]
+        scaled_actors: bool,
+        /// Keep the records with these signatures, such as WEAP,NPC_.
+        #[arg(long, value_delimiter = ',')]
+        signature: Vec<String>,
+        /// Keep the records whose base record has one of these signatures.
+        #[arg(long, value_delimiter = ',')]
+        base_signature: Vec<String>,
+        /// Keep the records that are (or with --persistent=false are not) persistent.
+        #[arg(long)]
+        by_persistent: bool,
+        /// The value of --by-persistent: keep the persistent records (the default), or the temporary ones with --persistent=false.
+        #[arg(long, num_args = 0..=1, default_missing_value = "true")]
+        persistent: Option<bool>,
+        /// Also keep only the records whose persistent reference is unnecessary (IsUnnecessaryPersistent).
+        #[arg(long)]
+        unnecessary_persistent: bool,
+        /// With --unnecessary-persistent: only the references whose master is temporary, and with --is-master the records that are masters.
+        #[arg(long)]
+        master_is_temporary: bool,
+        #[arg(long)]
+        is_master: bool,
+        /// Also keep only the records whose position changed from the one of their master (IsPositionChanged).
+        #[arg(long)]
+        persistent_pos_changed: bool,
+        /// Keep the deleted records.
+        #[arg(long)]
+        deleted: bool,
+        /// Keep the records that are (or are not) visible when distant.
+        #[arg(long, num_args = 0..=1, default_missing_value = "true")]
+        by_vwd: Option<bool>,
+        /// Keep the records whose base record has (or has not) a visible-when-distant mesh (the _far.nif in a loaded archive).
+        #[arg(long, num_args = 0..=1, default_missing_value = "true")]
+        by_has_vwd_mesh: Option<bool>,
+        /// Keep the records that are (or are not) part of a precombined mesh of their cell (Fallout 4 and 76).
+        #[arg(long, num_args = 0..=1, default_missing_value = "true")]
+        by_has_precombined_mesh: Option<bool>,
+        /// Read the texts of --editor-id, --name, --base-editor-id, --base-name and --element-value as regular expressions (case insensitive, multi-line).
+        #[arg(long)]
+        regex_comparison: bool,
+        /// Take the block and sub-block groups out of the tree, their records take their place.
+        #[arg(long)]
+        flatten_blocks: bool,
+        /// Take the cell children groups out of the tree.
+        #[arg(long)]
+        flatten_cell_childs: bool,
+        /// Move the persistent references of a worldspace into the cell they stand in.
+        #[arg(long)]
+        assign_pers_wrld_child: bool,
+        /// Give every node with children the highest conflict status of its children ("conflict status inherited by parent").
+        #[arg(long, num_args = 0..=1, default_missing_value = "true")]
+        inherit_conflict_by_parent: Option<bool>,
+        /// A record without overrides leaves the tree without a comparison (the xeVeryQuickShowConflicts mode of Filter Conflicts).
+        #[arg(long)]
+        conflict_only: bool,
+        /// A record that is the only version of its FormID leaves the tree ("Filter for only one").
+        #[arg(long)]
+        only_one: bool,
+        /// Leave the game master out of the tree (FilterNoGameMaster).
+        #[arg(long)]
+        no_game_master: bool,
+        /// Activate the valid mod group of this name, so the records it hides are left out; repeat for several.
+        #[arg(long = "modgroups")]
+        modgroups: Vec<String>,
+        /// Activate every valid mod group.
+        #[arg(long)]
+        all_modgroups: bool,
+        /// Activate the valid mod groups of the selection saved in xEdit's settings file.
+        #[arg(long)]
+        saved_modgroups: bool,
+        /// List the records the tree keeps, in the order of the tree, instead of the counts alone.
+        #[arg(long)]
+        list_records: bool,
+    },
+    /// Remove the filter from the navigation tree (filter.remove, mniNavFilterRemoveClick): the tree holds the loaded files again.
+    Remove,
+    /// List the filter presets of xEdit's settings file and the last one used (filter.presets, FilterListPresets).
+    Presets,
+    /// Write the options as a filter preset of xEdit's settings file (filter.preset.save, FilterSavePreset).
+    Save {
+        /// The name of the preset; empty for the defaults.
+        #[arg(long, default_value = "")]
+        name: String,
+        /// The options to write as JSON, as `filter apply` takes them.
+        #[arg(long)]
+        options: Option<String>,
+        /// Report the preset and whether it changes the stored one, write nothing.
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Remove a filter preset from xEdit's settings file (filter.preset.delete, btnFilterDelClick).
+    Delete {
+        /// The name of the preset; empty for the defaults.
+        #[arg(long, default_value = "")]
+        name: String,
+        /// Report whether the preset is there, write nothing.
         #[arg(long)]
         dry_run: bool,
     },
@@ -1132,6 +1316,151 @@ enum MastersAction {
 }
 
 /// The command name and parameters of a subcommand.
+/// `xedit filter ...`: the request of `filter.*`. The option flags of
+/// `filter apply` build the whole options object (the dialog's checkboxes);
+/// without one the request names the preset instead, and without either the
+/// options are the dialog's defaults.
+#[allow(clippy::too_many_arguments)]
+fn filter_command(action: FilterAction) -> Result<(String, Value), CommandError> {
+    match action {
+        FilterAction::Presets => Ok(("filter.presets".to_owned(), json!({}))),
+        FilterAction::Remove => Ok(("filter.remove".to_owned(), json!({}))),
+        FilterAction::Save { name, options, dry_run } => {
+            let options: Option<Value> = match options {
+                Some(text) => Some(
+                    serde_json::from_str(&text)
+                        .map_err(|error| CommandError::new("invalid_params", error.to_string()))?,
+                ),
+                None => None,
+            };
+            Ok((
+                "filter.preset.save".to_owned(),
+                json!({ "name": name, "options": options, "dry_run": dry_run }),
+            ))
+        }
+        FilterAction::Delete { name, dry_run } => Ok((
+            "filter.preset.delete".to_owned(),
+            json!({ "name": name, "dry_run": dry_run }),
+        )),
+        FilterAction::Apply {
+            file,
+            preset,
+            conflict_all,
+            conflict_this,
+            by_inject_status,
+            by_not_reachable_status,
+            by_references_injected_status,
+            editor_id,
+            element_value,
+            name,
+            base_editor_id,
+            base_name,
+            scaled_actors,
+            signature,
+            base_signature,
+            by_persistent,
+            persistent,
+            unnecessary_persistent,
+            master_is_temporary,
+            is_master,
+            persistent_pos_changed,
+            deleted,
+            by_vwd,
+            by_has_vwd_mesh,
+            by_has_precombined_mesh,
+            regex_comparison,
+            flatten_blocks,
+            flatten_cell_childs,
+            assign_pers_wrld_child,
+            inherit_conflict_by_parent,
+            conflict_only,
+            only_one,
+            no_game_master,
+            modgroups,
+            all_modgroups,
+            saved_modgroups,
+            list_records,
+        } => {
+            let any_option = !conflict_all.is_empty()
+                || !conflict_this.is_empty()
+                || by_inject_status.is_some()
+                || by_not_reachable_status.is_some()
+                || by_references_injected_status.is_some()
+                || editor_id.is_some()
+                || element_value.is_some()
+                || name.is_some()
+                || base_editor_id.is_some()
+                || base_name.is_some()
+                || scaled_actors
+                || !signature.is_empty()
+                || !base_signature.is_empty()
+                || by_persistent
+                || persistent.is_some()
+                || unnecessary_persistent
+                || master_is_temporary
+                || is_master
+                || persistent_pos_changed
+                || deleted
+                || by_vwd.is_some()
+                || by_has_vwd_mesh.is_some()
+                || by_has_precombined_mesh.is_some()
+                || regex_comparison
+                || flatten_blocks
+                || flatten_cell_childs
+                || assign_pers_wrld_child
+                || inherit_conflict_by_parent.is_some();
+            let options = any_option.then(|| {
+                json!({
+                    "conflict_all": (!conflict_all.is_empty()).then(|| conflict_all.clone()),
+                    "conflict_this": (!conflict_this.is_empty()).then(|| conflict_this.clone()),
+                    "by_inject_status": by_inject_status,
+                    "by_not_reachable_status": by_not_reachable_status,
+                    "by_references_injected_status": by_references_injected_status,
+                    "by_editor_id": editor_id,
+                    "by_element_value": element_value,
+                    "by_name": name,
+                    "by_base_editor_id": base_editor_id,
+                    "by_base_name": base_name,
+                    "scaled_actors": scaled_actors,
+                    "by_signature": (!signature.is_empty()).then(|| signature.join(",")),
+                    "by_base_signature": (!base_signature.is_empty()).then(|| base_signature.join(",")),
+                    "by_persistent": by_persistent || persistent.is_some(),
+                    "persistent": persistent.unwrap_or(false),
+                    "unnecessary_persistent": unnecessary_persistent,
+                    "master_is_temporary": master_is_temporary,
+                    "is_master": is_master,
+                    "persistent_pos_changed": persistent_pos_changed,
+                    "deleted": deleted,
+                    "by_vwd": by_vwd,
+                    "by_has_vwd_mesh": by_has_vwd_mesh,
+                    "by_has_precombined_mesh": by_has_precombined_mesh,
+                    "regex_comparison": regex_comparison,
+                    "flatten_blocks": flatten_blocks,
+                    "flatten_cell_childs": flatten_cell_childs,
+                    "assign_pers_wrld_child": assign_pers_wrld_child,
+                    "inherit_conflict_by_parent": inherit_conflict_by_parent.unwrap_or(true),
+                })
+            });
+            Ok((
+                "filter.apply".to_owned(),
+                json!({
+                    "files": file,
+                    "options": options,
+                    "preset": preset,
+                    "mod_groups": modgroups,
+                    "all_mod_groups": all_modgroups,
+                    "saved_mod_groups": saved_modgroups,
+                    "list_records": list_records,
+                    // The flags the dialog has no checkbox for.
+                    "conflict_only": conflict_only,
+                    "only_one": only_one,
+                    "no_game_master": no_game_master,
+                }),
+            ))
+        }
+    }
+}
+
 fn command_of(action: Action) -> Result<(String, Value), CommandError> {
     Ok(match action {
         Action::Dump { .. }
@@ -1245,14 +1574,25 @@ fn command_of(action: Action) -> Result<(String, Value), CommandError> {
                 file,
                 offset,
                 limit,
+                filter_name,
+                filter_signature,
+                filter_file,
+                filter_or,
             } => (
                 "refs.get".to_owned(),
-                json!({ "form_id": form_id, "file": file, "offset": offset, "limit": limit }),
+                json!({
+                    "form_id": form_id, "file": file, "offset": offset, "limit": limit,
+                    "filter_name": filter_name, "filter_signature": filter_signature,
+                    "filter_file": filter_file, "filter_or": filter_or
+                }),
             ),
             RefsAction::Dump => unreachable!("handled before"),
             RefsAction::Build { file, only_load } => {
                 ("refs.build".to_owned(), json!({ "file": file, "only_load": only_load }))
             }
+            RefsAction::BuildReachable { no_build_refs } => (
+                "refs.build_reachable".to_owned(),
+                json!({ "build_refs": !no_build_refs }),
         Action::Archive { action } => match action {
             ArchiveAction::List {
                 archive,
@@ -1294,6 +1634,7 @@ fn command_of(action: Action) -> Result<(String, Value), CommandError> {
                 }),
             ),
         },
+        Action::Filter { action } => filter_command(action)?,
         Action::Modgroups { action } => match action {
             ModgroupsAction::List { all } => ("modgroups.list".to_owned(), json!({ "all": all })),
             ModgroupsAction::Show { name, file } => {
@@ -1609,12 +1950,21 @@ fn command_of(action: Action) -> Result<(String, Value), CommandError> {
             modgroups,
             all_modgroups,
             saved_modgroups,
+            view_filter_name,
+            view_filter_value,
+            view_filter_or,
+            keep_children,
+            keep_siblings,
+            keep_parents_siblings,
         } => (
             "records.compare".to_owned(),
             json!({
                 "form_id": form_id, "file": file, "master_and_leafs": master_and_leafs,
                 "hide_no_conflict": hide_no_conflict, "include_hidden": include_hidden,
-                "mod_groups": modgroups, "all_mod_groups": all_modgroups, "saved_mod_groups": saved_modgroups
+                "mod_groups": modgroups, "all_mod_groups": all_modgroups, "saved_mod_groups": saved_modgroups,
+                "view_filter_name": view_filter_name, "view_filter_value": view_filter_value,
+                "view_filter_or": view_filter_or, "keep_children": keep_children,
+                "keep_siblings": keep_siblings, "keep_parents_siblings": keep_parents_siblings
             }),
         ),
         Action::Assets { action } => match action {

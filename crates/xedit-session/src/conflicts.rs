@@ -360,6 +360,26 @@ pub struct CompareRequest {
     /// settings file.
     #[serde(default)]
     pub saved_mod_groups: bool,
+    /// `edViewFilterName`: keep the rows whose name (column 0) contains this
+    /// text, without regard to case.
+    pub view_filter_name: Option<String>,
+    /// `edViewFilterValue`: keep the rows with this text in one of their
+    /// cells.
+    pub view_filter_value: Option<String>,
+    /// `cobViewFilter` at 1: a row matches when the name or a value matches,
+    /// instead of both.
+    #[serde(default)]
+    pub view_filter_or: bool,
+    /// `cbViewFilterKeepChildren`: also keep the rows below a matching one.
+    #[serde(default)]
+    pub keep_children: bool,
+    /// `cbViewFilterKeepSiblings`: also keep the rows beside a matching one.
+    #[serde(default)]
+    pub keep_siblings: bool,
+    /// `cbViewFilterKeepParentsSiblings`: also keep the rows beside the
+    /// parent of a matching one.
+    #[serde(default)]
+    pub keep_parents_siblings: bool,
 }
 
 /// One record compared: a column of the view.
@@ -372,7 +392,7 @@ pub struct CompareColumn {
 }
 
 /// One cell of the view: the element of one record in a row.
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, JsonSchema, Clone)]
 pub struct CompareCell {
     /// The value as the view shows it (the summary of an element without a
     /// value); `null` when this record has no element in the row.
@@ -381,7 +401,7 @@ pub struct CompareCell {
 }
 
 /// One row of the view: the same element in each record.
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, JsonSchema, Clone)]
 pub struct CompareRow {
     /// The name the view shows for the row, with " (sorted)" or
     /// " (aligned)" when the entries of arrays were matched by their sort
@@ -392,6 +412,10 @@ pub struct CompareRow {
     /// rows are listed.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub hidden: bool,
+    /// Whether the row filter hides the row (`IsViewNodeFiltered`); the row
+    /// is left out unless `include_hidden` lists it.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub filtered: bool,
     /// One cell per column.
     pub cells: Vec<CompareCell>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -408,8 +432,23 @@ pub struct CompareResponse {
     /// The compared records in load order.
     pub columns: Vec<CompareColumn>,
     pub rows: Vec<CompareRow>,
+    /// The view filter of the request and what it did, when one was asked
+    /// for (`ApplyViewFilter`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub view_filter: Option<ViewFilterReport>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub messages: Vec<String>,
+}
+
+/// `ApplyViewFilter`: the rows of the view tab that the filter hides.
+#[derive(Serialize, JsonSchema)]
+pub struct ViewFilterReport {
+    /// `IsFiltered` of every row of the view.
+    pub rows: usize,
+    /// The rows it hides.
+    pub filtered: usize,
+    /// The rows left.
+    pub shown: usize,
 }
 
 fn records_compare(session: &mut Session, request: CompareRequest) -> Result<CompareResponse, CommandError> {
@@ -444,11 +483,12 @@ fn records_compare(session: &mut Session, request: CompareRequest) -> Result<Com
             conflict_this: data.conflict_this.into(),
         })
         .collect();
-    let rows = view
+    let mut rows: Vec<CompareRow> = view
         .children
         .iter()
         .filter_map(|child| compare_row(child, &view, request.include_hidden))
         .collect();
+    let view_filter = apply_view_filter(&mut rows, &request);
     let conflict_all = view
         .datas
         .first()
@@ -460,6 +500,7 @@ fn records_compare(session: &mut Session, request: CompareRequest) -> Result<Com
         conflict_all,
         columns,
         rows,
+        view_filter,
         messages,
     })
 }
@@ -475,6 +516,7 @@ fn compare_row(node: &ViewNode, parent: &ViewNode, include_hidden: bool) -> Opti
             .first()
             .map_or(ConflictAllName::caUnknown, |data| data.conflict_all.into()),
         hidden: !node.visible,
+        filtered: false,
         cells: node
             .datas
             .iter()
@@ -490,6 +532,157 @@ fn compare_row(node: &ViewNode, parent: &ViewNode, include_hidden: bool) -> Opti
             .filter_map(|child| compare_row(child, node, include_hidden))
             .collect(),
     })
+}
+
+/// One row of the view with its place in the tree, for the filter of
+/// `ApplyViewFilter` (the GUI marks the nodes of its whole tree, which the
+/// rows here are; the rows the view hides keep their subtrees with them, so
+/// the rows are the tree closed under parents).
+struct FlatRow {
+    /// The parent row, `None` for a root row.
+    parent: Option<usize>,
+    /// The rows of this subtree as a range of the flat list (pre-order, the
+    /// row first).
+    subtree: (usize, usize),
+    /// The ancestors of the row, from the root down.
+    ancestors: Vec<usize>,
+}
+
+/// Flattens the rows in the order the filter walks them.
+fn flatten_rows(rows: &[CompareRow], parent: Option<usize>, ancestors: &mut Vec<usize>, flat: &mut Vec<FlatRow>) {
+    for row in rows {
+        let index = flat.len();
+        flat.push(FlatRow {
+            parent,
+            subtree: (index, index),
+            ancestors: ancestors.clone(),
+        });
+        ancestors.push(index);
+        flatten_rows(&row.children, Some(index), ancestors, flat);
+        ancestors.pop();
+        flat[index].subtree.1 = flat.len();
+    }
+}
+
+/// Port of `IsViewNodeFiltered`: the name filter against the name of the row
+/// (column 0) and the value filter against the cells of the columns after
+/// the first. UPSTREAM-QUIRK: the loop over the columns starts at 1, so a
+/// view of one record has no cell to search and no name match either, and
+/// the name loop reads column 0 every time.
+fn is_view_node_filtered(row: &CompareRow, name_filter: &str, value_filter: &str, use_or: bool) -> bool {
+    let found_name = !name_filter.is_empty() && row.cells.len() > 1 && row.name.to_lowercase().contains(name_filter);
+    let found_value = !value_filter.is_empty()
+        && row.cells.iter().skip(1).any(|cell| {
+            cell.value
+                .as_deref()
+                .unwrap_or_default()
+                .to_lowercase()
+                .contains(value_filter)
+        });
+    match (!name_filter.is_empty(), !value_filter.is_empty()) {
+        (true, true) => {
+            if use_or {
+                !(found_name || found_value)
+            } else {
+                !(found_name && found_value)
+            }
+        }
+        (true, false) => !found_name,
+        (false, true) => !found_value,
+        (false, false) => false,
+    }
+}
+
+/// Port of `ApplyViewFilter`: every row is marked by `IsViewNodeFiltered`,
+/// and the rows a matching row keeps are marked too: its parents, its
+/// children (`cbViewFilterKeepChildren`), the rows beside it
+/// (`cbViewFilterKeepSiblings`) and the rows beside its parent
+/// (`cbViewFilterKeepParentsSiblings`). The marked rows are left out of the
+/// response unless `include_hidden` lists them.
+fn apply_view_filter(rows: &mut Vec<CompareRow>, request: &CompareRequest) -> Option<ViewFilterReport> {
+    let name_filter = request
+        .view_filter_name
+        .as_deref()
+        .map(str::to_lowercase)
+        .unwrap_or_default();
+    let value_filter = request
+        .view_filter_value
+        .as_deref()
+        .map(str::to_lowercase)
+        .unwrap_or_default();
+    if name_filter.is_empty() && value_filter.is_empty() {
+        return None;
+    }
+    let mut flat = Vec::new();
+    flatten_rows(rows, None, &mut Vec::new(), &mut flat);
+    let mut filtered: Vec<bool> = Vec::with_capacity(flat.len());
+    mark_rows(rows, &name_filter, &value_filter, request.view_filter_or, &mut filtered);
+    let total = flat.len();
+    let unfiltered: Vec<usize> = (0..flat.len()).filter(|index| !filtered[*index]).collect();
+    for index in &unfiltered {
+        for ancestor in &flat[*index].ancestors {
+            filtered[*ancestor] = false;
+        }
+        if request.keep_children {
+            let subtree = flat[*index].subtree.0..flat[*index].subtree.1;
+            filtered[subtree].fill(false);
+        }
+        if request.keep_siblings
+            && let Some(parent) = flat[*index].parent
+        {
+            for node in flat[parent].subtree.0..flat[parent].subtree.1 {
+                if flat[node].parent == Some(parent) {
+                    filtered[node] = false;
+                }
+            }
+        }
+        if request.keep_parents_siblings
+            && let Some(parent) = flat[*index].parent
+            && let Some(grandparent) = flat[parent].parent
+        {
+            for node in flat[grandparent].subtree.0..flat[grandparent].subtree.1 {
+                if flat[node].parent == Some(grandparent) {
+                    filtered[node] = false;
+                }
+            }
+        }
+    }
+    let filtered_count = filtered.iter().filter(|value| **value).count();
+    let include_hidden = request.include_hidden;
+    let mut cursor = 0;
+    *rows = rebuild_rows(rows, &filtered, &mut cursor, include_hidden);
+    Some(ViewFilterReport {
+        rows: total,
+        filtered: filtered_count,
+        shown: total - filtered_count,
+    })
+}
+
+/// Marks the rows in the order the filter walks them.
+fn mark_rows(rows: &[CompareRow], name_filter: &str, value_filter: &str, use_or: bool, marked: &mut Vec<bool>) {
+    for row in rows {
+        marked.push(is_view_node_filtered(row, name_filter, value_filter, use_or));
+        mark_rows(&row.children, name_filter, value_filter, use_or, marked);
+    }
+}
+
+/// The rows left after the filter, in the same order.
+fn rebuild_rows(rows: &[CompareRow], filtered: &[bool], cursor: &mut usize, keep_filtered: bool) -> Vec<CompareRow> {
+    let mut result = Vec::new();
+    for row in rows {
+        let index = *cursor;
+        *cursor += 1;
+        let children = rebuild_rows(&row.children, filtered, cursor, keep_filtered);
+        if filtered[index] && !keep_filtered {
+            continue;
+        }
+        result.push(CompareRow {
+            filtered: filtered[index],
+            children,
+            ..(*row).clone()
+        });
+    }
+    result
 }
 
 pub fn register(registry: &mut Registry) {

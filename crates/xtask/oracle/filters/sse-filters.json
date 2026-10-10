@@ -1,0 +1,179 @@
+{
+  "description": "The options of the filter dialog on the Skyrim master and its update: the cleaning and conflicts presets, every text option with and without regular expressions, the status and persistence options, the signatures with their derived references, and the flattening.",
+  "game": "sse",
+  "load": ["Skyrim.esm", "Update.esm"],
+  "configs": [
+    {
+      "name": "cleaning",
+      "inherit_conflict_by_parent": true
+    },
+    {
+      "name": "conflicts",
+      "conflict_this": ["ctIdenticalToMasterWinsConflict", "ctConflictWins", "ctConflictLoses"],
+      "flatten_blocks": true,
+      "flatten_cell_childs": true,
+      "assign_pers_wrld_child": true,
+      "inherit_conflict_by_parent": true
+    },
+    {
+      "name": "conflict-all",
+      "conflict_all": ["caConflict", "caConflictCritical"],
+      "conflict_this": ["ctConflictWins", "ctConflictLoses", "ctOverride", "ctMaster"],
+      "inherit_conflict_by_parent": true
+    },
+    {
+      "name": "flatten-blocks-only",
+      "flatten_blocks": true,
+      "inherit_conflict_by_parent": false
+    },
+    {
+      "name": "flatten-cell-only",
+      "flatten_cell_childs": true,
+      "inherit_conflict_by_parent": false
+    },
+    {
+      "name": "assign-persistent-cells",
+      "flatten_blocks": true,
+      "flatten_cell_childs": true,
+      "assign_pers_wrld_child": true,
+      "inherit_conflict_by_parent": false
+    },
+    {
+      "name": "signature-weap-armo",
+      "by_signature": "WEAP,ARMO"
+    },
+    {
+      "name": "signature-refr",
+      "by_signature": "REFR"
+    },
+    {
+      "name": "signature-info",
+      "by_signature": "INFO"
+    },
+    {
+      "name": "signature-npc-land",
+      "by_signature": "NPC_,LAND,CELL"
+    },
+    {
+      "name": "base-signature-weap",
+      "by_base_signature": "WEAP"
+    },
+    {
+      "name": "base-signature-cont-refr",
+      "by_base_signature": "CONT,REFR"
+    },
+    {
+      "name": "editor-id-dragon",
+      "by_editor_id": "dragon"
+    },
+    {
+      "name": "editor-id-regex",
+      "by_editor_id": "^(Iron|Steel)",
+      "regex_comparison": true
+    },
+    {
+      "name": "name-sword",
+      "by_name": "sword"
+    },
+    {
+      "name": "element-value-skyrim",
+      "by_element_value": "Skyrim"
+    },
+    {
+      "name": "element-value-regex",
+      "by_element_value": "0{6}13",
+      "regex_comparison": true
+    },
+    {
+      "name": "base-editor-id-text",
+      "by_base_editor_id": "IronSword"
+    },
+    {
+      "name": "base-editor-id-formid",
+      "by_base_editor_id": "00013986"
+    },
+    {
+      "name": "base-name-dagger",
+      "by_base_name": "dagger"
+    },
+    {
+      "name": "injected",
+      "by_inject_status": true
+    },
+    {
+      "name": "not-injected",
+      "by_inject_status": false
+    },
+    {
+      "name": "references-injected",
+      "by_references_injected_status": true
+    },
+    {
+      "name": "persistent",
+      "by_persistent": true,
+      "persistent": true
+    },
+    {
+      "name": "temporary",
+      "by_persistent": true,
+      "persistent": false
+    },
+    {
+      "name": "unnecessary-persistent",
+      "by_persistent": true,
+      "persistent": true,
+      "unnecessary_persistent": true
+    },
+    {
+      "name": "unnecessary-persistent-master-temporary",
+      "by_persistent": true,
+      "persistent": true,
+      "unnecessary_persistent": true,
+      "master_is_temporary": true
+    },
+    {
+      "name": "persistent-pos-changed",
+      "by_persistent": true,
+      "persistent": true,
+      "persistent_pos_changed": true
+    },
+    {
+      "name": "vwd",
+      "by_vwd": true
+    },
+    {
+      "name": "no-vwd",
+      "by_vwd": false,
+      "by_base_signature": "REFR"
+    },
+    {
+      "name": "vwd-mesh",
+      "by_has_vwd_mesh": true
+    },
+    {
+      "name": "no-vwd-mesh",
+      "by_has_vwd_mesh": false
+    },
+    {
+      "name": "precombined-mesh",
+      "by_has_precombined_mesh": true
+    },
+    {
+      "name": "deleted",
+      "deleted": true
+    },
+    {
+      "name": "scaled-actors",
+      "scaled_actors": true
+    },
+    {
+      "name": "empty-signatures",
+      "by_signature": ""
+    },
+    {
+      "name": "empty-conflicts",
+      "conflict_this": [],
+      "inherit_conflict_by_parent": true
+    }
+  ]
+}

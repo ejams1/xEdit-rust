@@ -285,6 +285,48 @@ pub trait Element: Send + Sync {
 
     fn get_dont_show(&self) -> bool;
 
+    /// Port of `IwbElementInternal.Reached`: whether the element was not
+    /// reached yet; it marks the element and its links reached either way.
+    fn reached(self: Arc<Self>) -> bool
+    where
+        Self: Sized,
+    {
+        match self.as_element_impl() {
+            Some(element) => crate::implementation::reachable::reached_impl(element),
+            None => false,
+        }
+    }
+
+    /// Port of `ResetReachable`: the element and its contents are not
+    /// reached.
+    fn reset_reachable(&self) {
+        if let Some(element) = self.as_element_impl() {
+            crate::implementation::reachable::reset_reachable(element);
+        }
+    }
+
+    /// Port of `IsReachable`.
+    fn get_is_reachable(&self) -> bool {
+        false
+    }
+
+    /// Port of `IsNotReachable`.
+    fn get_is_not_reachable(&self) -> bool {
+        false
+    }
+
+    /// Port of `GetNoReach`: the reference of the element does not reach
+    /// its target (`wbFormIDNoReach` and the like).
+    fn get_no_reach(&self) -> bool {
+        false
+    }
+
+    /// Port of `LinksToParent`: the element is reached when its container
+    /// is.
+    fn links_to_parent(&self) -> bool {
+        false
+    }
+
     /// `Supports(element, IwbDataContainer)`.
     fn as_data_container(&self) -> Option<&dyn DataContainer> {
         None
@@ -467,6 +509,12 @@ pub trait MainRecord: Container {
     /// Upstream `HasPrecombinedMesh`: whether a placed record of Fallout 4
     /// is part of a precombined mesh of its cell.
     fn get_has_precombined_mesh(&self) -> bool;
+
+    /// Upstream `HasVisibleWhenDistantMesh`: whether the `_far.nif` (or, for
+    /// a `TREE`, the billboard) of the model is in a loaded container.
+    fn get_has_visible_when_distant_mesh(&self) -> bool {
+        false
+    }
 
     /// Upstream `PrecombinedMesh`: the file of that mesh.
     fn get_precombined_mesh(&self) -> String;
