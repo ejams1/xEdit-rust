@@ -5,10 +5,10 @@ The build plan is in [docs/PLAN.md](docs/PLAN.md).
 
 ## Progress
 
-Overall: 6 of 10 phases merged.
+Overall: 7 of 10 phases merged.
 
 ```text
-[############........] 60%   phases 0-5 of 0-9 merged into main
+[##############......] 70%   phases 0-6 of 0-9 merged into main
 ```
 
 | Phase | Scope | Progress | State |
@@ -19,7 +19,7 @@ Overall: 6 of 10 phases merged.
 | 3 | Write path and daemon | `[##########]` | Merged (PR #12) |
 | 4 | Analysis and tool modes | `[##########]` 10 of 10 steps | Merged (PR #13) |
 | 5 | Archives, assets and LOD | `[##########]` | Merged (PR #14) |
-| 6 | Scripting | `[..........]` | In progress, draft PR #20 |
+| 6 | Scripting | `[##########]` 11 of 11 steps | Merged (PR #20) |
 | 7 | GUI | `[..........]` | Not started |
 | 8 | Performance | `[..........]` | Not started |
 | 9 | Release and cutover | `[..........]` | Not started |
