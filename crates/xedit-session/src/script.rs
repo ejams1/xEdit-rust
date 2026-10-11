@@ -1872,12 +1872,12 @@ pub fn run_script(
             // rename is applied here at once, because the process ends after
             // the run, so the file holds the new bytes as it does after the
             // GUI's shutdown rename.
-            let saved = crate::save::save_file(&file, None, false, false)?;
+            let saved = crate::save::save_file(file, None, false, false)?;
             state.borrow_mut().progress(
                 &format!("Queued renaming of save \"{data_path}{queued}\" to \"{data_path}{name}\" on shutdown."),
                 false,
             );
-            response.files.push(ScriptRunFile::from_save(&file, &saved));
+            response.files.push(ScriptRunFile::from_save(file, &saved));
         }
         state.borrow_mut().progress("Done saving.", false);
     } else {
