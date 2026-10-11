@@ -1354,3 +1354,43 @@ fn the_zero_argument_rtl_functions_run() {
     assert!(lines(&result).iter().any(|line| line == "ok"), "{:?}", lines(&result));
     let _ = std::fs::remove_dir_all(&folder);
 }
+
+/// `Skyrim - Convert BOOK to SCRL.pas` line 16: `if not
+/// Assigned(baserecord) then` with `baserecord` a unit-level `IInterface`
+/// variable. Upstream layers two adapters (`TJvInterpreterExpression.GetValue`:
+/// the program's own adapter holds the script's variables and units, the
+/// shared registrations answer after it), so the variable wins over the
+/// `BaseRecord` registration, whose name matches only case-insensitively.
+/// (The corpus case aborted with `Not enough parameters` while the oracle
+/// resolved the variable and ran; the fixed lookup reaches the script's own
+/// handling of a missing record.)
+#[test]
+fn a_script_variable_wins_over_a_case_matching_function() {
+    let _guard = test_lock();
+    let folder = script_folder(
+        "not-assigned",
+        "NotAssigned.pas",
+        "unit NotAssigned;\n\
+         var\n\
+           baserecord: IInterface;\n\
+         function Initialize: Integer;\n\
+         begin\n\
+           baserecord := RecordByFormID(FileByIndex(0), $000A44B5, True);\n\
+           if not Assigned(baserecord) then begin\n\
+             AddMessage('can not find base record');\n\
+             Result := 1;\n\
+             Exit;\n\
+           end;\n\
+           AddMessage('found');\n\
+         end;\n\
+         end.\n",
+    );
+    let mut session = open_session();
+    let result = run(&mut session, &folder, "NotAssigned.pas", json!({}));
+    assert_eq!(result["aborted"], false, "{:?}", lines(&result));
+    assert_eq!(result["self_terminated"], 1, "{:?}", lines(&result));
+    let lines = lines(&result);
+    assert!(lines.iter().any(|line| line == "can not find base record"), "{lines:?}");
+    assert!(!lines.iter().any(|line| line == "found"), "{lines:?}");
+    let _ = std::fs::remove_dir_all(&folder);
+}

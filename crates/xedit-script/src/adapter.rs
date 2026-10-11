@@ -1323,6 +1323,19 @@ impl Adapter {
     /// `TJvInterpreterAdapter.GetValue` (`JvInterpreter.pas:3939`).
     pub fn get_value(&mut self, identifier: &[u8], value: &mut Value, args: &mut Args) -> Result<bool, ValueError> {
         self.ensure_sorted();
+        // Upstream layers two adapters (`TJvInterpreterExpression.GetValue`:
+        // the program's own adapter first, the shared registrations after),
+        // and the script's variables and units live in the program's adapter
+        // -- so a variable wins over a registration whose name matches only
+        // case-insensitively: `baserecord` against the `BaseRecord` function
+        // of `Skyrim - Convert BOOK to SCRL.pas` line 16, which the oracle
+        // resolves to the variable.
+        if self.src_var_list.get_value(identifier, value, args) {
+            return Ok(true);
+        }
+        if !matches!(args.obj_type(), VarType::Object | VarType::Class) && self.get_src_unit(identifier, value, args)? {
+            return Ok(true);
+        }
 
         if args.indexed {
             if let Some(obj) = args.obj.clone() {
@@ -1379,13 +1392,7 @@ impl Adapter {
             }
         }
 
-        // Source variables, then source units, then the OnGet chain.
-        if self.src_var_list.get_value(identifier, value, args) {
-            return Ok(true);
-        }
-        if !matches!(args.obj_type(), VarType::Object | VarType::Class) && self.get_src_unit(identifier, value, args)? {
-            return Ok(true);
-        }
+        // The OnGet chain.
         for handler in &self.on_get_list {
             let handler = handler.clone();
             if handler(&String::from_utf8_lossy(identifier), value, args)? {
