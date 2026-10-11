@@ -818,8 +818,20 @@ pub trait Container: Element {
     /// container does not hold it (`ElementID` is the identity
     /// `TwbElement.Equals` and `TwbContainer.IndexOf` compare).
     fn index_of_id(&self, id: usize) -> i32 {
-        (0..self.get_element_count())
-            .filter_map(|index| self.get_element(index))
+        let Some(base) = self
+            .as_element_impl()
+            .and_then(crate::implementation::ElementImpl::container_base)
+        else {
+            return -1;
+        };
+        // `TwbContainer.IndexOf` walks `cntElements`, the storage order;
+        // `get_element` applies the definition's element map for the callers
+        // of `TwbContainer.GetElement`, so indexing through it would
+        // renumber the elements of `GetFullPath` (the `Object v2` struct of
+        // `Remove invalid entries from from lists.pas` reads `[2] FormID`,
+        // not the mapped `[0]`).
+        (0..base.element_count())
+            .filter_map(|index| base.element_at(index))
             .position(|child| child.get_element_id() == id)
             .map(|index| index as i32)
             .unwrap_or(-1)

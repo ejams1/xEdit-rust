@@ -157,6 +157,11 @@ pub(crate) struct Cursor {
     pub(crate) block: DataBlock,
     pub pos: usize,
     pub end: usize,
+    /// A child's definition wanted more bytes than the data ahead of it
+    /// holds: upstream's advancing `var aBasePtr` passes the end of the
+    /// subrecord (`Inc(PByte(aBasePtr), Size)` in `ValueDoInit`'s tail, and
+    /// the element constructors), where this cursor clamps to `end`.
+    pub over: bool,
 }
 
 impl Cursor {
@@ -280,6 +285,9 @@ pub(super) fn create_value_element(
         let self_ref = element.element_ref();
         let size = element.vb.vb_value_def.get_size(element.data(), Some(&self_ref));
         if (0..i32::MAX).contains(&size) {
+            if start + size as usize > cursor.end {
+                cursor.over = true;
+            }
             end = (start + size as usize).min(cursor.end);
             *element.vb.range.write().unwrap() = Some((start, end));
         }
@@ -312,7 +320,12 @@ impl ValueImpl {
         name_suffix: &str,
     ) -> Result<Arc<ValueImpl>, EditError> {
         let block = DataBlock::Buffer(Arc::new(Vec::new()));
-        let mut cursor = Cursor { block, pos: 0, end: 0 };
+        let mut cursor = Cursor {
+            block,
+            pos: 0,
+            end: 0,
+            over: false,
+        };
         let element = create_value_element(container, file, &mut cursor, value_def, name_suffix);
         element.vb.storage.detach();
         element.set_modified(true);
@@ -340,7 +353,12 @@ impl ValueImpl {
             return ValueImpl::create_new(container, file, value_def, name_suffix);
         };
         let block = DataBlock::Buffer(Arc::new(Vec::new()));
-        let mut cursor = Cursor { block, pos: 0, end: 0 };
+        let mut cursor = Cursor {
+            block,
+            pos: 0,
+            end: 0,
+            over: false,
+        };
         let element = create_value_element(container, file, &mut cursor, value_def, name_suffix);
         element.vb.storage.detach();
         let result = (|| {
@@ -629,7 +647,12 @@ impl ValueImpl {
                 return;
             };
             let self_ref = self.element_ref();
-            let mut cursor = Cursor { block, pos: start, end };
+            let mut cursor = Cursor {
+                block,
+                pos: start,
+                end,
+                over: false,
+            };
             if self.kind == ValueKind::Struct
                 && let Some(block) = self.decompress_if_needed(&self_ref)
             {
@@ -637,6 +660,7 @@ impl ValueImpl {
                     pos: 0,
                     end: block.as_slice().len(),
                     block,
+                    over: false,
                 };
             }
             match self.kind {
@@ -1075,7 +1099,22 @@ pub(super) fn union_do_init(
             let element = create_value_element(container, file, cursor, resolved.clone(), "");
             element.set_sort_and_memory_order(0);
         }
-        _ => {}
+        _ => {
+            // A member that is a plain value (`DLVW`'s `Topic Type` union):
+            // its value lives in the subrecord itself, and the creation
+            // advances the pointer by its size (`ValueDoInit`'s tail; the
+            // advance the unused-data check of `SubRecordImpl::init` reads).
+            let self_ref = container.clone();
+            let size = resolved.get_size(cursor.data(), Some(&self_ref));
+            if size == i32::MAX {
+                cursor.pos = cursor.end;
+            } else if (0..i32::MAX).contains(&size) {
+                if cursor.pos + size as usize > cursor.end {
+                    cursor.over = true;
+                }
+                cursor.pos += size as usize;
+            }
+        }
     }
     Some(resolved)
 }

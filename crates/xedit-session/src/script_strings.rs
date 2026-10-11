@@ -353,8 +353,10 @@ impl StringListObject {
     }
 
     /// `TStrings.Text` (`SetTextStr`): split on `#13`, `#10` and `#13#10`;
-    /// a trailing line break adds no empty line.
-    pub fn set_text(&mut self, text: &str) {
+    /// a trailing line break adds no empty line. Each line goes through
+    /// `Add`, so a sorted list inserts in order and `Duplicates` applies
+    /// (`System.Classes.TStrings.SetTextStr` calls `Add`).
+    pub fn set_text(&mut self, text: &str) -> Result<(), ValueError> {
         self.strings.clear();
         self.objects.clear();
         let bytes = text.as_bytes();
@@ -364,8 +366,7 @@ impl StringListObject {
             while index < bytes.len() && bytes[index] != b'\r' && bytes[index] != b'\n' {
                 index += 1;
             }
-            self.strings.push(text.as_bytes()[start..index].to_vec());
-            self.objects.push(Value::Empty);
+            self.add_bytes(text.as_bytes()[start..index].to_vec())?;
             if index < bytes.len() && bytes[index] == b'\r' {
                 index += 1;
             }
@@ -373,6 +374,7 @@ impl StringListObject {
                 index += 1;
             }
         }
+        Ok(())
     }
 
     /// `TStrings.SetStrings`/`Assign`: the other list's lines and objects.
@@ -549,7 +551,7 @@ impl StringListObject {
             )
         })?;
         let text = decode_file(&bytes, encoding);
-        self.set_text(&text);
+        self.set_text(&text)?;
         Ok(())
     }
 
@@ -1176,7 +1178,7 @@ pub fn register_base(adapter: &mut Adapter, classes: &ScriptClasses) {
         Rc::new(|value: &Value, args: &mut Args| {
             let text = text_arg(value);
             let object = receiver(args)?;
-            borrow_list_mut(&object).set_text(&text);
+            borrow_list_mut(&object).set_text(&text)?;
             Ok(())
         }),
         0,

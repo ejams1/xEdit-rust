@@ -744,6 +744,11 @@ pub struct ScriptRunState {
     /// The script list objects the adapter steps append to (`TList`,
     /// `TStrings`); none until the JVCL `Classes` unit registers them.
     pub lists: ScriptLists,
+    /// The relay of the process-wide progress callback: everything a run
+    /// logs belongs in the one memo (`mmoMessages`), and that callback
+    /// cannot hold this state, so [`run_script`] installs a relay whose
+    /// lines [`ScriptRunState::add_message`] drains in order.
+    relayed: std::sync::Arc<std::sync::Mutex<Vec<String>>>,
 }
 
 /// One `ApplyFilter`/`RemoveFilter` a script called. The adapter function
@@ -770,6 +775,7 @@ impl ScriptRunState {
             pending_filter: None,
             started: std::time::Instant::now(),
             lists: ScriptLists::default(),
+            relayed: std::sync::Arc::new(std::sync::Mutex::new(Vec::new())),
         }
     }
 
@@ -792,6 +798,16 @@ impl ScriptRunState {
     /// several `CRLF` lines, each its own line of the log, straight to the
     /// log (no `wbProgress`, so no lock and no time).
     pub fn add_message(&mut self, text: &str) {
+        // The lines the progress relay holds first: they were posted before
+        // this one reached the memo (`PostAddMessage`'s order).
+        for line in self.relayed.lock().unwrap().drain(..) {
+            for part in line.split("\r\n") {
+                self.messages.push(part.to_owned());
+            }
+        }
+        if text.is_empty() {
+            return;
+        }
         for line in text.split("\r\n") {
             self.messages.push(line.to_owned());
         }
@@ -1572,6 +1588,26 @@ impl Drop for ShorterNames {
 
 /// `script.run`: the port of `ApplyScript` driven by `DoRunScript`.
 ///
+/// Restores the process-wide progress callback
+/// (`xedit_core::interface::misc`) when it drops, so a run leaves the
+/// callback as it was whichever path it exits by.
+struct ProgressRelay(Option<xedit_core::interface::misc::ProgressCallback>);
+
+impl ProgressRelay {
+    /// Installs `relay` as the process-wide progress callback.
+    fn install(relay: impl Fn(&str) + Send + Sync + 'static) -> ProgressRelay {
+        let previous = xedit_core::interface::misc::progress_callback();
+        xedit_core::interface::misc::set_progress_callback(Some(std::sync::Arc::new(relay)));
+        ProgressRelay(previous)
+    }
+}
+
+impl Drop for ProgressRelay {
+    fn drop(&mut self) {
+        xedit_core::interface::misc::set_progress_callback(self.0.take());
+    }
+}
+
 /// The loop: `Initialize` (a non-zero result stops the run with
 /// `Script terminated itself, Result=<n>`), `Process` for every selected
 /// element [`ScriptRunState::can_process`] accepts (each call's result
@@ -1593,7 +1629,12 @@ pub fn run_script(
     session.mode()?;
     // The GUI's script mode builds the reference information at load
     // (`wbBuildRefs`; `-nobuildrefs` turns it off): the scripts that read
-    // `ReferencedBy` get it on request, as the filter builds it.
+    // `ReferencedBy` get it on request, as the filter builds it. The switch
+    // is also the flag a session ON: the definitions gate on it
+    // (`wbQUSTEventToStr` warns only with `wbBuildRefs` on), so a run
+    // without `--build-refs` behaves like the oracle's `-nobuildrefs`
+    // session even when the load built the index anyway.
+    globals::set_build_refs(request.build_refs);
     if request.build_refs {
         session.ensure_refs()?;
     }
@@ -1690,6 +1731,15 @@ pub fn run_script(
             return Ok(response);
         }
     };
+    // The process-wide progress callback (`wbProgressCallback`) is one memo
+    // upstream, the script section of this run here: the definitions reach
+    // it while the run initialises elements lazily (the `<Warning: Unused
+    // data in: ...>` of `Add Prefix Plus Name To EDID.pas`), so the run
+    // relays it into its own messages.
+    let relay = state.borrow().relayed.clone();
+    let _progress_relay = ProgressRelay::install(move |text| {
+        relay.lock().unwrap().push(text.to_owned());
+    });
 
     let silent = is_silent(&text);
     {
@@ -1890,6 +1940,9 @@ pub fn run_script(
     {
         let mut state = state.borrow_mut();
         state.show_start_time -= 1;
+        // Anything the relay still holds after the last state line (the
+        // save's own messages go through the state already).
+        state.add_message("");
         response.messages = state.messages.clone();
     }
     Ok(response)

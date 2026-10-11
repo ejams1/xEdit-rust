@@ -16,7 +16,7 @@ use crate::interface::element::{
 };
 use crate::interface::form_id::FormID;
 use crate::interface::globals::{
-    always_fast_assign, compare_raw_data, edit_allowed, ignore_records, is_internal_edit, sort_sub_records,
+    always_fast_assign, compare_raw_data, edit_allowed, ignore_records, is_internal_edit, report_mode, sort_sub_records,
 };
 use crate::interface::misc::{EditError, Variant, progress};
 use crate::interface::sub_record::RecordMemberDef;
@@ -290,10 +290,21 @@ impl SubRecordImpl {
             let self_ref = self.element_ref();
             // A subrecord without data (made from its definition) builds its
             // elements without data too, as upstream does with `nil`.
-            let (block, pos, end) = self
-                .data_source()
+            let data_source = self.data_source();
+            let (block, pos, end) = data_source
+                .clone()
                 .unwrap_or_else(|| (DataBlock::Buffer(Arc::new(Vec::new())), 0, 0));
-            let mut cursor = Cursor { block, pos, end };
+            let mut cursor = Cursor {
+                block,
+                pos,
+                end,
+                over: false,
+            };
+            // The end the finished init compares against: the over handling
+            // of `struct_do_init` truncates `cursor.end` locally, as
+            // upstream's `aEndPtr` does, but the unused-data check uses the
+            // subrecord's own `dcDataEndPtr`.
+            let data_end = end;
             self.sr_array_size_prefix.store(0, Ordering::Relaxed);
             self.sr_is_array.store(false, Ordering::Relaxed);
             let value_def = resolve(value.clone(), cursor.data(), Some(&self_ref));
@@ -316,10 +327,50 @@ impl SubRecordImpl {
                             *self.sr_value_def.write().unwrap() = Some(resolved);
                         }
                     }
-                    _ => {}
+                    _ => {
+                        // The tail of `ValueDoInit` (`wbImplementation.pas:23061-23068`):
+                        // a definition with a size advances the pointer past
+                        // the value; a definition without one consumes the
+                        // rest of the data.
+                        let size = value_def.get_size(cursor.data(), Some(&self_ref));
+                        if size == i32::MAX {
+                            cursor.pos = cursor.end;
+                        } else if (0..i32::MAX).contains(&size) {
+                            if cursor.pos + size as usize > cursor.end {
+                                cursor.over = true;
+                            }
+                            cursor.pos += size as usize;
+                        }
+                    }
                 }
             } else {
-                create_value_element(&self_ref, &self.file, &mut cursor, value_def, "");
+                create_value_element(&self_ref, &self.file, &mut cursor, value_def.clone(), "");
+            }
+            // The unused-data check of `TwbSubRecord.Init`
+            // (`wbImplementation.pas:15799`): the value's creation advanced
+            // the pointer by the definition's sizes, so a position other
+            // than the end of the data means the definition did not consume
+            // the subrecord exactly -- bytes left over, or wanted past the
+            // end of a short subrecord. A subrecord without data has none to
+            // leave (upstream's `Assigned(BasePtr)` guard: the pointer of a
+            // definition-made subrecord is nil).
+            if data_source.is_some() && (cursor.pos != data_end || cursor.over) {
+                let mut has_unused = value_def.get_name() != "Unused";
+                if has_unused && value_def.get_def_type() == DefType::dtString {
+                    // A string value: only non-zero bytes past it are unused
+                    // data (`wbImplementation.pas:15801-15810`).
+                    has_unused = cursor
+                        .block
+                        .as_slice()
+                        .get(cursor.pos..data_end)
+                        .is_some_and(|bytes| bytes.iter().any(|byte| *byte != 0));
+                }
+                if has_unused {
+                    if report_mode() {
+                        sub_record_def.has_unused_data();
+                    }
+                    progress(&format!("<Warning: Unused data in: {}>", self.get_full_path()));
+                }
             }
             // `srsSorted` and `srsSortInvalid` of a sorted array value (the
             // flags are built in their order already).
@@ -675,6 +726,7 @@ impl SubRecordImpl {
             block: other.block.clone(),
             pos: other.dc_data_base,
             end: other.dc_data_end,
+            over: false,
         };
         array_do_init(&value_def, &self_ref, &self.file, &mut cursor);
         true
