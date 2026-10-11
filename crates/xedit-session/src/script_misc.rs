@@ -920,7 +920,11 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         "StringReplace",
         4,
         Rc::new(|value, args| {
-            let flags = xedit_script::values::to_i32(&args.values[3])?;
+            // `f := V2S(Args.Values[3])` (`xejviScriptAdapterMisc.pas:593`):
+            // a set literal in an argument position arrives as an array of
+            // ordinals (`1 shl` each, `V2S`'s variant-array branch), and a
+            // set value or an integer passes through.
+            let flags = xedit_script::values::v2s(&args.values[3])?;
             *value = Value::Str(
                 string_replace(
                     &text_arg(&args.values[0]),

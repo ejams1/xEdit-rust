@@ -319,6 +319,22 @@ fn register_ini_creates(adapter: &mut Adapter, t_ini_file: &Rc<ClassDef>, t_mem_
     );
 }
 
+/// The path of the exception's message: `IOUtils` normalizes it, so a run
+/// of separators collapses to one (`M:\...\Data\\Textures\` prints as
+/// `M:\...\Data\Textures\` in the oracle's log).
+fn collapsed_path(path: &str) -> String {
+    let mut out = String::with_capacity(path.len());
+    let mut last = '\0';
+    for c in path.chars() {
+        if c == '\\' && last == '\\' {
+            continue;
+        }
+        last = c;
+        out.push(c);
+    }
+    out
+}
+
 /// `IOUtils`: `TDirectory.GetDirectories`/`GetFiles` and
 /// `TFile.ReadAllText`/`WriteAllText`.
 fn register_io_members(
@@ -337,10 +353,11 @@ fn register_io_members(
                 // `TDirectory.GetDirectories` of IOUtils raises for a path
                 // that is not there (`EDirectoryNotFoundException` of
                 // `Directory.Exists`; the message is the system text of
-                // `ERROR_PATH_NOT_FOUND`).
+                // `ERROR_PATH_NOT_FOUND`, and the path in brackets on the
+                // next line of the message).
                 return Err(ValueError::external_class(
                     "EDirectoryNotFoundException",
-                    "The specified path was not found".to_owned(),
+                    format!("The specified path was not found\n[{}]", collapsed_path(&path)),
                 ));
             }
             *value = string_array(directories(&path, &pattern, all));
@@ -362,10 +379,12 @@ fn register_io_members(
                 // oracle aborts on its private data folder without `Textures`
                 // (`Exception in unit DDSFindTexturesNoMipMaps line 16:
                 // [EDirectoryNotFoundException] The specified path was not
-                // found`).
+                // found`), and the message carries the path in brackets on
+                // its second line (the oracle log's next line is
+                // `[<path>]`).
                 return Err(ValueError::external_class(
                     "EDirectoryNotFoundException",
-                    "The specified path was not found".to_owned(),
+                    format!("The specified path was not found\n[{}]", collapsed_path(&path)),
                 ));
             }
             *value = string_array(files(&path, &pattern, all));

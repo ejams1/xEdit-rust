@@ -1175,6 +1175,7 @@ impl FileImpl {
             block: DataBlock::File(self.fl_bytes.clone()),
             pos: 0,
             end: self.fl_bytes.as_slice().len(),
+            over: false,
         };
         let header = value::create_value_element(&container, &file, &mut cursor, header_def, "");
         let header: ElementRef = header;
@@ -1217,6 +1218,7 @@ impl FileImpl {
                     block: DataBlock::File(self.fl_bytes.clone()),
                     pos: offset.min(self.fl_bytes.as_slice().len()),
                     end: self.fl_bytes.as_slice().len(),
+                    over: false,
                 };
                 let modules: ElementRef =
                     value::create_value_element(&container, &file, &mut cursor, modules as Arc<dyn ValueDef>, "");
@@ -2840,6 +2842,7 @@ impl MainRecordImpl {
             block: DataBlock::Buffer(Arc::new(bytes)),
             pos: 0,
             end: header_size,
+            over: false,
         };
         let element =
             value::create_value_element(&self_ref, &self.file, &mut cursor, header_def as Arc<dyn ValueDef>, "");
