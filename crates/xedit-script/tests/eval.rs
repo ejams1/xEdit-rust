@@ -607,8 +607,11 @@ end.\r\n";
     // the name: the `;`.
     let semicolon = (source.find("Undeclared;").unwrap() + "Undeclared".len()) as i64;
     assert_eq!(error.pos, Some(semicolon));
-    assert_eq!(interpreter.last_error().line, 4);
-    assert_eq!(interpreter.last_error_location(), "unit positions line 4");
+    // The message of the propagating error carries the unit and the line;
+    // `FLastError.Assign` does not copy them, so the recorded location is the
+    // cleared `unit  line -1` (`JvInterpreter.pas:1491-1503`).
+    assert_eq!(interpreter.last_error().line, -1);
+    assert_eq!(interpreter.last_error_location(), "unit  line -1");
 }
 
 #[test]
@@ -719,8 +722,15 @@ fn division_by_zero_is_the_external_error() {
     interpreter.compile(source.as_bytes()).unwrap();
     let error = interpreter.call_function("Initialize", &[]).unwrap_err();
     assert_eq!(error.code, 6);
-    assert_eq!(error.message, "External error in unit 'u' on line 4 : Division by zero");
+    // The propagating exception keeps its raw message; the unit, the line
+    // and the `External error in unit ...` text live on the recorded
+    // `FLastError` (`UpdateExceptionPos`'s `else` arm, `:5390`).
+    assert_eq!(error.message, "Division by zero");
     assert_eq!(interpreter.last_error().line, 4);
+    assert_eq!(
+        interpreter.last_error().message,
+        "External error in unit 'u' on line 4 : Division by zero"
+    );
 }
 
 //=== Adapter-written var parameters =========================================

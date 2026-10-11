@@ -236,18 +236,18 @@ fn the_element_functions_read_the_tree() {
         lines(&result),
         vec![
             "Start: Applying script \"Elements\"",
-            "name=GMST - Game Setting [00000802] <fThird>",
+            "name=fThird [GMST:00000802]",
             "path=GMST",
             // `TwbElement.GetFullPath` (`wbImplementation.pas:19641-19652`):
             // the container chain with the index of every level and the
             // prefixed file name; verified against the oracle.
-            "full= \\ [00] Master.esm \\ [1] GRUP Top \"GMST\" \\ [2] GMST - Game Setting [00000802] <fThird>",
+            "full= \\ [00] Master.esm \\ [1] GRUP Top \"GMST\" \\ [2] fThird [GMST:00000802]",
             // `GetShortNameInternal` with `wbDisplayShorterNames` off, and
             // `GetDisplayName`'s fallback to the summary for a\ GMST without a
             // `FULL` subrecord.
-            "short=GMST - Game Setting [00000802] <fThird>",
+            "short=fThird [GMST:00000802]",
             "display=3.5",
-            "base=GMST - Game Setting [00000802] <fThird>",
+            "base=fThird [GMST:00000802]",
             // `TwbMainRecord.GetValue` is empty; `GetEditValue` is the FormID
             // and `DefType` of a record is its record definition.
             "value=",
@@ -284,12 +284,12 @@ fn the_element_functions_read_the_tree() {
             "editvals=fThird",
             "count2=3",
             "file=Master.esm",
-            "name=GMST - Game Setting [00000801] <fOther>",
+            "name=fOther [GMST:00000801]",
             "path=GMST",
-            "full= \\ [00] Master.esm \\ [1] GRUP Top \"GMST\" \\ [1] GMST - Game Setting [00000801] <fOther>",
-            "short=GMST - Game Setting [00000801] <fOther>",
+            "full= \\ [00] Master.esm \\ [1] GRUP Top \"GMST\" \\ [1] fOther [GMST:00000801]",
+            "short=fOther [GMST:00000801]",
             "display=2.5",
-            "base=GMST - Game Setting [00000801] <fOther>",
+            "base=fOther [GMST:00000801]",
             "value=",
             "edit=00000801",
             "native=2.49999999368811",
@@ -308,12 +308,12 @@ fn the_element_functions_read_the_tree() {
             "editvals=fOther",
             "count2=3",
             "file=Master.esm",
-            "name=GMST - Game Setting [00000800] <fMaster>",
+            "name=fMaster [GMST:00000800]",
             "path=GMST",
-            "full= \\ [00] Master.esm \\ [1] GRUP Top \"GMST\" \\ [0] GMST - Game Setting [00000800] <fMaster>",
-            "short=GMST - Game Setting [00000800] <fMaster>",
+            "full= \\ [00] Master.esm \\ [1] GRUP Top \"GMST\" \\ [0] fMaster [GMST:00000800]",
+            "short=fMaster [GMST:00000800]",
             "display=1.5",
-            "base=GMST - Game Setting [00000800] <fMaster>",
+            "base=fMaster [GMST:00000800]",
             "value=",
             "edit=00000800",
             "native=1.49999999621286",
@@ -332,12 +332,12 @@ fn the_element_functions_read_the_tree() {
             "editvals=fMaster",
             "count2=3",
             "file=Master.esm",
-            "name=GMST - Game Setting [01000802] <fPlugin>",
+            "name=fPlugin [GMST:01000802]",
             "path=GMST",
-            "full= \\ [01] Plugin.esp \\ [1] GRUP Top \"GMST\" \\ [1] GMST - Game Setting [01000802] <fPlugin>",
-            "short=GMST - Game Setting [01000802] <fPlugin>",
+            "full= \\ [01] Plugin.esp \\ [1] GRUP Top \"GMST\" \\ [1] fPlugin [GMST:01000802]",
+            "short=fPlugin [GMST:01000802]",
             "display=5.5",
-            "base=GMST - Game Setting [01000802] <fPlugin>",
+            "base=fPlugin [GMST:01000802]",
             "value=",
             "edit=01000802",
             "native=5.49999998611383",
@@ -356,12 +356,12 @@ fn the_element_functions_read_the_tree() {
             "editvals=fPlugin",
             "count2=3",
             "file=Plugin.esp",
-            "name=GMST - Game Setting [00000800] <fOverride>",
+            "name=fOverride [GMST:00000800]",
             "path=GMST",
-            "full= \\ [01] Plugin.esp \\ [1] GRUP Top \"GMST\" \\ [0] GMST - Game Setting [00000800] <fOverride>",
-            "short=GMST - Game Setting [00000800] <fOverride>",
+            "full= \\ [01] Plugin.esp \\ [1] GRUP Top \"GMST\" \\ [0] fOverride [GMST:00000800]",
+            "short=fOverride [GMST:00000800]",
             "display=4.5",
-            "base=GMST - Game Setting [00000800] <fOverride>",
+            "base=fOverride [GMST:00000800]",
             "value=",
             "edit=00000800",
             "native=4.49999998863859",
@@ -415,11 +415,11 @@ fn the_container_functions_walk_an_element() {
     // 6 step 8, and the boolean concatenation reads `True`/`False` there.
     assert_eq!(result["aborted"], false, "{:?}", lines(&result));
     let lines = lines(&result);
-    assert_eq!(lines[1], "container=GMST - Game Setting [00000802] <fThird>");
+    assert_eq!(lines[1], "container=fThird [GMST:00000802]");
     assert_eq!(lines[2], "last=DATA - Value");
     assert_eq!(lines[3], "indexof=2");
     assert_eq!(lines[4], "equals=True");
-    assert_eq!(lines[5], "containing=GMST - Game Setting [00000802] <fThird>");
+    assert_eq!(lines[5], "containing=fThird [GMST:00000802]");
     let _ = std::fs::remove_dir_all(&folder);
 }
 
@@ -500,7 +500,7 @@ fn the_record_functions_walk_the_overrides() {
     // 6 step 8, and the boolean concatenation reads `True`/`False` there.
     assert_eq!(result["aborted"], false, "{:?}", lines(&result));
     let lines = lines(&result);
-    assert_eq!(lines[1], "self=GMST - Game Setting [00000800] <fMaster>");
+    assert_eq!(lines[1], "self=fMaster [GMST:00000800]");
     assert_eq!(lines[2], "overrides=1");
     assert_eq!(lines[6], "ismaster=True");
     assert_eq!(lines[7], "iswinning=False");
@@ -548,18 +548,15 @@ fn the_record_functions_follow_master_and_override() {
     );
     let result = run(&mut session, &folder_b, "RecordValuesB", json!({}));
     let lines = lines(&result);
-    assert_eq!(lines[1], "override0=GMST - Game Setting [00000800] <fOverride>");
-    assert_eq!(lines[2], "winning=GMST - Game Setting [00000800] <fOverride>");
-    assert_eq!(lines[3], "highest=GMST - Game Setting [00000800] <fOverride>");
+    assert_eq!(lines[1], "override0=fOverride [GMST:00000800]");
+    assert_eq!(lines[2], "winning=fOverride [GMST:00000800]");
+    assert_eq!(lines[3], "highest=fOverride [GMST:00000800]");
     assert_eq!(lines[4], "iswinning=False");
     assert!(lines[5].starts_with("childgroup="), "{lines:?}");
     assert_eq!(lines[6], "deleted=False");
     assert_eq!(lines[7], "persistent=False");
-    assert_eq!(lines[8], "override master=[GMST - Game Setting [00000800] <fMaster>]");
-    assert_eq!(
-        lines[9],
-        "override masterorself=[GMST - Game Setting [00000800] <fMaster>]"
-    );
+    assert_eq!(lines[8], "override master=[fMaster [GMST:00000800]]");
+    assert_eq!(lines[9], "override masterorself=[fMaster [GMST:00000800]]");
     let _ = std::fs::remove_dir_all(&folder);
     let _ = std::fs::remove_dir_all(&folder_b);
 }
@@ -655,9 +652,9 @@ fn the_file_functions_read_the_load_order() {
             "byname=[01] Plugin.esp",
             "name=Plugin.esp",
             "master0=[00] Master.esm",
-            "byindex=GMST - Game Setting [00000800] <fOverride>",
-            "byformid=GMST - Game Setting [01000802] <fPlugin>",
-            "byeditorid=GMST - Game Setting [01000802] <fPlugin>",
+            "byindex=fOverride [GMST:00000800]",
+            "byformid=fPlugin [GMST:01000802]",
+            "byeditorid=fPlugin [GMST:01000802]",
             "group=GRUP Top \"GMST\"",
             "hasgroup=True",
             "hasmaster=True",
@@ -799,7 +796,7 @@ fn the_corpus_scripts_that_need_these_units_run() {
             // The step 5b `FullPath` fixup added the upstream ` \ [id] `
             // prefixes (oracle-verified shape; see the `full=` expectations of
             // the synthetic tests above).
-            " \\ [01] Plugin.esp \\ [1] GRUP Top \"GMST\" \\ [0] GMST - Game Setting [00000000] <fNullId>",
+            " \\ [01] Plugin.esp \\ [1] GRUP Top \"GMST\" \\ [0] fNullId [GMST:00000000]",
             "Done: Applying script \"List null FormID\", Processed Records: 5, Elapsed Time: 00:00",
             "You can close this application now.",
         ]

@@ -2285,11 +2285,38 @@ impl Interpreter {
         }
     }
 
-    /// `UpdateExceptionPos` (`JvInterpreter.pas:5363`): the position, the
-    /// unit and the line are filled once; the message becomes
-    /// `Error in unit '...' on line n : ...` (the `ieExternal` text for a
-    /// non-interpreter exception); `FLastError` keeps the result.
+    /// `UpdateExceptionPos` (`JvInterpreter.pas:5363`). For an *interpreter*
+    /// error the `NoName` step fills the unit, the line and the
+    /// `Error in unit '...' on line n : ...` message of the propagating
+    /// exception once, from the first catch with a unit;
+    /// `FLastError.Assign` (`:1491-1503`) then copies the message, the code
+    /// and the names but never the unit, the line or `FExceptionPos`, so
+    /// `GetLastErrorLocation` keeps `unit  line -1` for every interpreter
+    /// error (`xeMainForm.pas:8852` prints that as the outer location). A
+    /// non-interpreter exception takes the `else` arm (`:5390`): only the
+    /// *stored* error gains the unit, the line and the
+    /// `External error in unit ...` text -- the propagating exception keeps
+    /// its raw message, which is what the run loop prints.
     fn update_exception_pos(&mut self, exec: &mut ExecError, unit: &str) {
+        if exec.external {
+            if !self.last_error.exception_pos {
+                let mut recorded = exec.clone();
+                if recorded.pos.is_none() {
+                    recorded.pos = Some(self.cur_pos as i64);
+                }
+                if recorded.unit_name.is_empty() {
+                    recorded.unit_name = unit.to_owned();
+                }
+                if !recorded.unit_name.is_empty() {
+                    recorded.line = error::line_of(&self.cur_source, recorded.pos.unwrap_or(0)) + self.base_err_line;
+                    recorded.message =
+                        error::format_external_error_pos(&recorded.unit_name, recorded.line, &recorded.err_message);
+                    recorded.exception_pos = true;
+                }
+                self.last_error = recorded;
+            }
+            return;
+        }
         if !exec.exception_pos {
             if exec.pos.is_none() {
                 exec.pos = Some(self.cur_pos as i64);
@@ -2302,21 +2329,18 @@ impl Interpreter {
                 // (`JvInterpreter.pas:5376`); [`error::line_of`] already
                 // counts the "first line has number 1".
                 exec.line = error::line_of(&self.cur_source, exec.pos.unwrap_or(0)) + self.base_err_line;
-                exec.message = if exec.external {
-                    error::format_external_error_pos(&exec.unit_name, exec.line, &exec.err_message)
-                } else {
-                    error::format_error_pos(&exec.unit_name, exec.line, &exec.err_message)
-                };
+                exec.message = error::format_error_pos(&exec.unit_name, exec.line, &exec.err_message);
                 exec.exception_pos = true;
             }
         }
-        if exec.external {
-            if !self.last_error.exception_pos {
-                self.last_error = exec.clone();
-            }
-        } else {
-            self.last_error = exec.clone();
-        }
+        // `FLastError.Assign` (`JvInterpreter.pas:1491-1503`): the message,
+        // the code, the position and the names, but never the unit, the line
+        // or `FExceptionPos` -- those keep their earlier values.
+        let mut recorded = exec.clone();
+        recorded.unit_name = self.last_error.unit_name.clone();
+        recorded.line = self.last_error.line;
+        recorded.exception_pos = self.last_error.exception_pos;
+        self.last_error = recorded;
     }
 
     /// The `except on E` arms of `ExecFunction`/`InFunction`

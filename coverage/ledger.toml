@@ -19499,7 +19499,8 @@ command = "script.run"
 source = "_RemoveFilter"
 
 [script."xejviScriptAdapterHost:cUnit.RemoveNode:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "_RemoveNode"
 
 [script."xejviScriptAdapterHost:cUnit.ScriptsPath:function"]

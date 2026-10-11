@@ -153,7 +153,7 @@ pub fn register(adapter: &mut Adapter) {
         *value = text_value(text.into_bytes());
         Ok(())
     });
-    function_(adapter, "Randomize", &[EMPTY], |_value, _args| {
+    function_(adapter, "Randomize", &[], |_value, _args| {
         randomize();
         Ok(())
     });

@@ -395,31 +395,54 @@ impl ScriptSelection for NavigationSelection {
     }
 }
 
-/// The flat (pre-order) element tree of `root`, as the navigation tree builds
-/// it: the element, then its children -- the child group of a main record
-/// (`vstNavInitNode`: `NodeData.Container := GroupRecord`), every container
-/// element otherwise.
+/// The flat (pre-order) nav-tree sequence of `root`, as
+/// `vstNavInitChildren`/`vstNavInitNode` build the GUI's tree: a node per
+/// container element, and for a main record the child group that *follows*
+/// it (`NodeData.Container := GroupRecord`, `xeMainForm.pas:20228-20237`;
+/// the `ChildGroup` fallback of `:20249` runs only on a node re-init, so a
+/// record whose group is not its next sibling has no children here). A
+/// parented group whose label is the FormID of the record before it is that
+/// record's hidden node (`:20299-20347`): it contributes no element, and
+/// its records are reached through the record -- exactly once.
 fn flatten(root: &ElementRef, out: &mut Vec<ElementRef>) {
     out.push(root.clone());
-    if root.get_element_type() == ElementType::etMainRecord {
-        let group = root
-            .as_element_impl()
-            .and_then(ElementImpl::main_record_impl)
-            .and_then(|record| record.child_group())
-            .and_then(|group| group.self_element_ref());
-        if let Some(group) = group {
-            flatten(&group, out);
-        }
-        return;
-    }
     let Some(container) = root.as_container() else {
         return;
     };
-    for index in 0..container.get_element_count() {
-        if let Some(child) = container.get_element(index) {
-            flatten(&child, out);
+    let count = container.get_element_count();
+    // Set while the loop stands on the group the record before consumed.
+    let mut skip_next = false;
+    for index in 0..count {
+        let Some(child) = container.get_element(index) else {
+            skip_next = false;
+            continue;
+        };
+        if skip_next {
+            skip_next = false;
+            continue;
+        }
+        let mut child_group = None;
+        if child.get_element_type() == ElementType::etMainRecord
+            && let Some(next) = container.get_element(index + 1)
+            && let Some(group) = next.as_element_impl().and_then(ElementImpl::group_record_impl)
+            && is_parented_group(group.group_type())
+            && let Some(record) = child.as_element_impl().and_then(ElementImpl::main_record_impl)
+            && group.get_group_label() == record.mr_struct().form_id.to_cardinal()
+        {
+            child_group = Some(next);
+        }
+        flatten(&child, out);
+        if let Some(group) = child_group {
+            flatten(&group, out);
+            skip_next = true;
         }
     }
+}
+
+/// `ParentedGroupRecordType` (`xeMainForm.pas:5157`): world, cell and topic
+/// children, quest children with `wbVWDAsQuestChildren`.
+fn is_parented_group(group_type: i32) -> bool {
+    matches!(group_type, 1 | 6 | 7) || (group_type == 10 && xedit_core::interface::globals::vwd_as_quest_children())
 }
 
 /// An element as the script sees it: the value of the `IInterface` parameter
@@ -1058,6 +1081,36 @@ fn register_functions(
     );
     host_function(
         adapter,
+        "RemoveNode",
+        1,
+        value_param(),
+        Rc::new(|value: &mut Value, args: &mut Args| {
+            *value = Value::Bool(false);
+            let Some(element) = ScriptRunState::element_of(&args.values[0]) else {
+                return Ok(());
+            };
+            // `_RemoveNode` (`xejviScriptAdapterHost.pas:330`): the nav
+            // node's container -- a main record's child group -- leaves
+            // first, then the element itself, through the same `Remove` as
+            // `elements.remove`. The GUI's active-record, undo-history and
+            // tree work has no headless counterpart; the walk holds its own
+            // order and never re-visits a removed element.
+            if element.get_element_type() == ElementType::etMainRecord
+                && let Some(group) = element
+                    .as_element_impl()
+                    .and_then(ElementImpl::main_record_impl)
+                    .and_then(|record| record.child_group())
+                && let Some(group_ref) = group.self_element_ref()
+            {
+                group_ref.remove();
+            }
+            element.remove();
+            *value = Value::Bool(true);
+            Ok(())
+        }),
+    );
+    host_function(
+        adapter,
         "GetFileName",
         1,
         value_param(),
@@ -1451,6 +1504,23 @@ pub fn script_run_gated(
     outcome
 }
 
+/// Sets `wbDisplayShorterNames` for a script run and restores it on drop.
+struct ShorterNames(bool);
+
+impl ShorterNames {
+    fn set() -> Self {
+        let previous = xedit_core::interface::globals::display_shorter_names();
+        xedit_core::interface::globals::set_display_shorter_names(true);
+        ShorterNames(previous)
+    }
+}
+
+impl Drop for ShorterNames {
+    fn drop(&mut self) {
+        xedit_core::interface::globals::set_display_shorter_names(self.0);
+    }
+}
+
 /// `script.run`: the port of `ApplyScript` driven by `DoRunScript`.
 ///
 /// The loop: `Initialize` (a non-zero result stops the run with
@@ -1472,6 +1542,12 @@ pub fn run_script(
     selection: &mut dyn ScriptSelection,
 ) -> Result<ScriptRunResponse, CommandError> {
     session.mode()?;
+    // The GUI sets `wbDisplayShorterNames := True` at startup
+    // (`xeMainForm.pas:5152`), so every name a script reads -- `Name`,
+    // `ShortName`, `FullPath`, the run's `Processing:`-style messages -- is
+    // the short form `EditorID "Full Name" [SIG:FormID]`. Restored when the
+    // run ends so the other commands keep the `xDump` long names.
+    let _shorter_names = ShorterNames::set();
     // `DoRunScript`: a script that is not rooted resolves against the scripts
     // folder, and one that is not there is `Could not open script: ...`.
     let folder = scripts_folder(request.scripts.as_deref());

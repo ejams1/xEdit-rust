@@ -209,9 +209,11 @@ fn call_function_answers_the_result_and_reports_the_error_location() {
         "{}",
         error.message()
     );
-    // `GetLastErrorLocation`: `unit <name> line <n>`.
-    assert_eq!(script.last_error_location(), format!("unit Result line {}", error.line));
-    assert_eq!(script.last_error().unit_name, "Result");
+    // `GetLastErrorLocation`: `FLastError.Assign` never copies the unit or
+    // the line of an interpreter error (`JvInterpreter.pas:1491-1503`), so
+    // the recorded location stays the cleared `unit  line -1`.
+    assert_eq!(script.last_error_location(), "unit  line -1");
+    assert_eq!(script.last_error().unit_name, "");
     let _ = std::fs::remove_dir_all(&dir);
 }
 

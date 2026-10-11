@@ -261,13 +261,15 @@ fn the_loop_runs_initialize_process_and_finalize() {
     // The walk of one file runs backwards -- `GetLast`, then `GetPrevious` to
     // the file node -- so the last record of a file is processed first, the
     // file header after its records (the header is the first node of the
-    // file), and the files in load order.
-    assert_eq!(lines[2], "process GMST - Game Setting [00000801] <fOther>");
-    assert_eq!(lines[3], "process GMST - Game Setting [00000800] <fMaster>");
-    assert_eq!(lines[4], "process TES4 - Main File Header [00000000]");
-    assert_eq!(lines[5], "process GMST - Game Setting [01000801] <fPlugin>");
-    assert_eq!(lines[6], "process GMST - Game Setting [01000800] <fOverride>");
-    assert_eq!(lines[7], "process TES4 - Main File Header [00000000]");
+    // file), and the files in load order. A run's names are the short form
+    // (`wbDisplayShorterNames`, `xeMainForm.pas:5152`): `EditorID
+    // "Full Name" [SIG:FormID]`.
+    assert_eq!(lines[2], "process fOther [GMST:00000801]");
+    assert_eq!(lines[3], "process fMaster [GMST:00000800]");
+    assert_eq!(lines[4], "process [TES4:00000000]");
+    assert_eq!(lines[5], "process fPlugin [GMST:01000801]");
+    assert_eq!(lines[6], "process fOverride [GMST:01000800]");
+    assert_eq!(lines[7], "process [TES4:00000000]");
     assert_eq!(lines[8], "finalize");
     assert_eq!(
         lines[9],
@@ -362,19 +364,15 @@ fn an_error_aborts_the_script_with_the_upstream_text() {
     assert_eq!(result["aborted"], true);
     let error = result["error"].as_str().unwrap();
     assert!(error.contains("Undeclared Identifier 'NoSuchIdentifier'"), "{error}");
-    assert!(
-        result["error_location"]
-            .as_str()
-            .unwrap()
-            .starts_with("unit Planted line "),
-        "{:?}",
-        result["error_location"]
-    );
+    // `FLastError.Assign` never copies the unit or the line of an interpreter
+    // error (`JvInterpreter.pas:1491-1503`), so `GetLastErrorLocation` keeps
+    // the cleared `unit  line -1` -- the oracle's shape.
+    assert_eq!(result["error_location"].as_str().unwrap(), "unit  line -1");
     let lines = lines(&result);
     assert_eq!(lines[1], "before");
     assert!(
         lines[2].starts_with(
-            "Exception in unit Planted line 1: [EJvInterpreterError] Error in unit 'Planted' on line 1 : Undeclared Identifier"
+            "Exception in unit  line -1: [EJvInterpreterError] Error in unit 'Planted' on line 1 : Undeclared Identifier"
         ),
         "{:?}",
         lines[2]
@@ -1209,4 +1207,150 @@ fn the_corpus_scripts_that_need_the_jvcl_units_run() {
             assert!(lines.iter().any(|entry| entry == line), "{name}: {lines:?}");
         }
     }
+}
+
+//=== The run-parity fixups ==================================================
+
+/// A main record whose child group follows it in the same container: the
+/// GUI's tree hides the group's sibling node and hangs its elements on the
+/// record (`vstNavInitNode`, `xeMainForm.pas:20228-20347`), so every record
+/// of a child group is reached exactly once. The pre-fixup walk descended
+/// the group through both paths and double-counted them (the parity re-run
+/// of `_newscript_.pas` over `Skyrim.esm`: 2,312,470 against the oracle's
+/// 869,712).
+#[test]
+fn a_child_group_is_walked_through_its_record_once() {
+    let _guard = test_lock();
+    let folder = script_folder(
+        "child-group",
+        "Walk.pas",
+        "unit Walk;\n\
+         function Process(e: IInterface): Integer;\n\
+         begin\n\
+           AddMessage('process ' + Name(e));\n\
+         end;\n\
+         end.\n",
+    );
+    xedit_core::implementation::clear_files_map();
+    xedit_core::implementation::reset_load_order_slots();
+    xedit_core::interface::clear_files();
+    xedit_session::dump::setup_game("sse").unwrap();
+    xedit_session::save::apply_edit_settings(GameMode::gmSSE);
+    let mut master = header(1, 3, 0x902, &[]);
+    // A CELL whose child group (type 6, labeled with the cell's FormID)
+    // follows the record in the same top group, as the on-disk structure
+    // nests it.
+    let mut cell = main_record(b"CELL", 0, 0x900, &sub_record(b"EDID", b"CellA\0"));
+    cell.extend(group(
+        0x900,
+        6,
+        &main_record(b"REFR", 0, 0x901, &sub_record(b"EDID", b"RefA\0")),
+    ));
+    master.extend(group(u32::from_le_bytes(*b"CELL"), 0, &cell));
+    master.extend(group(u32::from_le_bytes(*b"GMST"), 0, &gmst(0x800, b"fMaster\0")));
+    let master = open("Master.esm", master);
+    let mut session = Session::with_files(GameMode::gmSSE, vec![master]);
+    session.allow_edit(true);
+    let result = run(&mut session, &folder, "Walk.pas", json!({}));
+    assert_eq!(result["aborted"], false, "{:?}", lines(&result));
+    assert_eq!(
+        lines(&result),
+        vec![
+            "Start: Applying script \"Walk\"",
+            // The reverse flat tree: the GMST group, then the cell, its
+            // child record (once), and the file header. The REFR carries
+            // its `AdditionalInfoFor` suffix (`(Places ...)`), as the
+            // oracle's names do.
+            "process fMaster [GMST:00000800]",
+            "process RefA [REFR:00000901] (Places NULL - Null Reference [00000000] in CellA [CELL:00000900])",
+            "process CellA [CELL:00000900]",
+            "process [TES4:00000000]",
+            "Done: Applying script \"Walk\", Processed Records: 4, Elapsed Time: 00:00",
+            "You can close this application now."
+        ]
+    );
+    let _ = std::fs::remove_dir_all(&folder);
+}
+
+/// `RemoveNode` (`xejviScriptAdapterHost.pas:330`): the element -- a main
+/// record's child group ahead of it -- leaves its container, and the records
+/// the walk has not reached yet are unaffected.
+#[test]
+fn remove_node_takes_the_element_out_of_its_container() {
+    let _guard = test_lock();
+    let remove_folder = script_folder(
+        "remove-node",
+        "Remove.pas",
+        "unit Remove;\n\
+         function Process(e: IInterface): Integer;\n\
+         begin\n\
+           if EditorID(e) = 'fOther' then\n\
+             if RemoveNode(e) then\n\
+               AddMessage('removed')\n\
+             else\n\
+               AddMessage('not removed');\n\
+         end;\n\
+         end.\n",
+    );
+    let mut session = open_session();
+    let result = run(&mut session, &remove_folder, "Remove.pas", json!({}));
+    assert_eq!(result["aborted"], false, "{:?}", lines(&result));
+    assert!(
+        lines(&result).iter().any(|line| line == "removed"),
+        "{:?}",
+        lines(&result)
+    );
+    // The record is gone for the next run over the same session.
+    let remaining_folder = script_folder(
+        "remove-node-remaining",
+        "Remaining.pas",
+        "unit Remaining;\n\
+         function Process(e: IInterface): Integer;\n\
+         begin\n\
+           AddMessage('still ' + Name(e));\n\
+         end;\n\
+         end.\n",
+    );
+    let result = run(&mut session, &remaining_folder, "Remaining.pas", json!({}));
+    assert_eq!(
+        lines(&result),
+        vec![
+            "Start: Applying script \"Remaining\"",
+            "still fMaster [GMST:00000800]",
+            "still [TES4:00000000]",
+            "still fPlugin [GMST:01000801]",
+            "still fOverride [GMST:01000800]",
+            "still [TES4:00000000]",
+            "Done: Applying script \"Remaining\", Processed Records: 5, Elapsed Time: 00:00",
+            "You can close this application now."
+        ]
+    );
+    let _ = std::fs::remove_dir_all(&remove_folder);
+    let _ = std::fs::remove_dir_all(&remaining_folder);
+}
+
+/// `Randomize` and `Beep` take no parameters (upstream registers them
+/// `0, []`); calling them with none must not raise `Not enough parameters`
+/// (what the parity re-run of `Remove excess references.pas` and
+/// `Remove percentage of references of specific object.pas` hit).
+#[test]
+fn the_zero_argument_rtl_functions_run() {
+    let _guard = test_lock();
+    let folder = script_folder(
+        "zero-args",
+        "ZeroArgs.pas",
+        "unit ZeroArgs;\n\
+         function Initialize: Integer;\n\
+         begin\n\
+           Randomize;\n\
+           Beep;\n\
+           AddMessage('ok');\n\
+         end;\n\
+         end.\n",
+    );
+    let mut session = open_session();
+    let result = run(&mut session, &folder, "ZeroArgs.pas", json!({}));
+    assert_eq!(result["aborted"], false, "{:?}", lines(&result));
+    assert!(lines(&result).iter().any(|line| line == "ok"), "{:?}", lines(&result));
+    let _ = std::fs::remove_dir_all(&folder);
 }

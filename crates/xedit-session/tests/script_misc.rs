@@ -583,11 +583,10 @@ fn the_misc_errors_name_their_delphi_class() {
     assert_eq!(result["aborted"], true);
     let text = script_fixture::abort_text(&result);
     assert!(
-        // `UpdateExceptionPos`'s `ieExternal` text, then the run loop's
-        // `[<class>]` prefix -- the oracle's line shape.
-        text.contains(
-            "[ERegularExpressionError] External error in unit 'Errors' on line 1 : Successful match required"
-        ),
+        // The propagating exception keeps its raw message; the unit and the
+        // line live on the recorded `FLastError` and come out as the run
+        // loop's outer location -- the oracle's line shape.
+        text.contains("Exception in unit Errors line 1: [ERegularExpressionError] Successful match required"),
         "{text}"
     );
     assert!(text.contains("Aborted: Applying script \"Errors\""), "{text}");
@@ -613,9 +612,7 @@ fn the_misc_errors_name_their_delphi_class() {
     assert_eq!(result["aborted"], true);
     let text = script_fixture::abort_text(&result);
     assert!(
-        text.contains(
-            "[EJsonCastException] External error in unit 'ErrorsJson' on line 1 : Cannot cast String into Object"
-        ),
+        text.contains("Exception in unit ErrorsJson line 1: [EJsonCastException] Cannot cast String into Object"),
         "{text}"
     );
     let _ = std::fs::remove_dir_all(&folder);
