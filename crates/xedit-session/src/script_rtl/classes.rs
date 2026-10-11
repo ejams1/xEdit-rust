@@ -1493,7 +1493,12 @@ fn lines_of(object: &Rc<RefCell<dyn ScriptObject>>) -> Result<Vec<(Vec<u8>, Valu
 
 /// The `Cannot open file "<path>". <os error>` text of a failed file call.
 fn file_error(path: &str) -> impl Fn(std::io::Error) -> ValueError + '_ {
-    move |error| ValueError::External(format!("Cannot open file \"{path}\". {error}"))
+    move |error| {
+        ValueError::External(format!(
+            "Cannot open file \"{path}\". {}",
+            crate::script_strings::os_error_text(&error)
+        ))
+    }
 }
 
 //=== TStream =================================================================
@@ -1781,9 +1786,12 @@ fn register_stream(adapter: &mut Adapter, classes: &Classes) {
                 }
                 #[cfg(not(windows))]
                 let _ = &mode;
-                let file = options
-                    .open(&path)
-                    .map_err(|error| ValueError::External(format!("Cannot open file \"{path}\". {error}")))?;
+                let file = options.open(&path).map_err(|error| {
+                    ValueError::External(format!(
+                        "Cannot open file \"{path}\". {}",
+                        crate::script_strings::os_error_text(&error)
+                    ))
+                })?;
                 *value = Value::Object(Rc::new(RefCell::new(StreamObject {
                     class: class.clone(),
                     state: Rc::new(RefCell::new(StreamState {
@@ -1818,8 +1826,12 @@ fn register_stream(adapter: &mut Adapter, classes: &Classes) {
         |_value, args| {
             let stream = stream_arg(args)?;
             let path = arg_text(args, 0)?;
-            let bytes = std::fs::read(&path)
-                .map_err(|error| ValueError::External(format!("Cannot open file \"{path}\". {error}")))?;
+            let bytes = std::fs::read(&path).map_err(|error| {
+                ValueError::External(format!(
+                    "Cannot open file \"{path}\". {}",
+                    crate::script_strings::os_error_text(&error)
+                ))
+            })?;
             let mut stream = stream.borrow_mut();
             stream.kind = StreamKind::Memory(bytes);
             stream.pos = 0;
@@ -1853,8 +1865,12 @@ fn register_stream(adapter: &mut Adapter, classes: &Classes) {
                 StreamKind::Memory(memory) | StreamKind::Text(memory) => memory.clone(),
                 StreamKind::File(_) => Vec::new(),
             };
-            std::fs::write(&path, bytes)
-                .map_err(|error| ValueError::External(format!("Cannot open file \"{path}\". {error}")))?;
+            std::fs::write(&path, bytes).map_err(|error| {
+                ValueError::External(format!(
+                    "Cannot open file \"{path}\". {}",
+                    crate::script_strings::os_error_text(&error)
+                ))
+            })?;
             Ok(())
         },
     );

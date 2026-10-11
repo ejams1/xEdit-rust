@@ -333,6 +333,16 @@ fn register_io_members(
             let path = arg_string(args, 0)?;
             let pattern = arg_string(args, 1)?;
             let all = to_i32(&args.values[2])? != 0;
+            if !std::path::Path::new(&path).is_dir() {
+                // `TDirectory.GetDirectories` of IOUtils raises for a path
+                // that is not there (`EDirectoryNotFoundException` of
+                // `Directory.Exists`; the message is the system text of
+                // `ERROR_PATH_NOT_FOUND`).
+                return Err(ValueError::external_class(
+                    "EDirectoryNotFoundException",
+                    "The specified path was not found".to_owned(),
+                ));
+            }
             *value = string_array(directories(&path, &pattern, all));
             Ok(())
         }),
@@ -347,6 +357,17 @@ fn register_io_members(
             let path = arg_string(args, 0)?;
             let pattern = arg_string(args, 1)?;
             let all = to_i32(&args.values[2])? != 0;
+            if !std::path::Path::new(&path).is_dir() {
+                // `DDS - Find textures without mipmaps.pas` relies on it: the
+                // oracle aborts on its private data folder without `Textures`
+                // (`Exception in unit DDSFindTexturesNoMipMaps line 16:
+                // [EDirectoryNotFoundException] The specified path was not
+                // found`).
+                return Err(ValueError::external_class(
+                    "EDirectoryNotFoundException",
+                    "The specified path was not found".to_owned(),
+                ));
+            }
             *value = string_array(files(&path, &pattern, all));
             Ok(())
         }),
@@ -370,7 +391,10 @@ fn register_io_members(
                 }
                 Err(error) => Err(ValueError::external_class(
                     "EFOpenError",
-                    format!("Cannot open file \"{path}\". {error}"),
+                    format!(
+                        "Cannot open file \"{path}\". {}",
+                        crate::script_strings::os_error_text(&error)
+                    ),
                 )),
             }
         }),
@@ -385,7 +409,13 @@ fn register_io_members(
             let path = arg_string(args, 0)?;
             let text = to_str(&args.values[1])?;
             std::fs::write(&path, &text).map_err(|error| {
-                ValueError::external_class("EFCreateError", format!("Cannot create file \"{path}\". {error}"))
+                ValueError::external_class(
+                    "EFCreateError",
+                    format!(
+                        "Cannot create file \"{path}\". {}",
+                        crate::script_strings::os_error_text(&error)
+                    ),
+                )
             })
         }),
         2,
@@ -861,7 +891,11 @@ impl IniFileState {
         std::fs::write(&self.file_name, text).map_err(|error| {
             ValueError::external_class(
                 "EFCreateError",
-                format!("Cannot create file \"{}\". {error}", self.file_name),
+                format!(
+                    "Cannot create file \"{}\". {}",
+                    self.file_name,
+                    crate::script_strings::os_error_text(&error)
+                ),
             )
         })
     }

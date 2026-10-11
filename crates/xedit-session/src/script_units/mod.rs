@@ -492,13 +492,18 @@ pub(crate) fn string_list_class(adapter: &mut Adapter) -> Rc<ClassDef> {
 
 /// `TwbFastStringList_Create` (`xejviScriptAdapterResource.pas:119`):
 /// `AddGet(TwbFastStringList, 'Create', ..., 0, [varEmpty], varEmpty)`.
+/// The object is the `Classes` unit's `StringListObject`, so a fast list
+/// answers the same surface as `TStringList.Create` (a script's `sl.Clear`
+/// etc.; the two models became one with the `Classes` step).
 fn register_string_list_create(adapter: &mut Adapter, class: &Rc<ClassDef>) {
     let class = class.clone();
     adapter.add_get(
         class.clone(),
         "Create",
         Rc::new(move |value: &mut Value, _args: &mut Args| {
-            *value = xedit_script::strings::string_list_value(class.clone());
+            *value = Value::Object(Rc::new(std::cell::RefCell::new(
+                crate::script_strings::StringListObject::new(class.clone()),
+            )));
             Ok(())
         }),
         0,

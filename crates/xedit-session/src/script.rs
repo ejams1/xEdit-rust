@@ -294,6 +294,12 @@ pub struct ScriptRunRequest {
     /// fails where it would without `--edit`.
     #[serde(default)]
     pub dry_run: bool,
+    /// Build the reference information before the script runs, as the GUI's
+    /// script mode does at its load (`wbBuildRefs`, off with xEdit's
+    /// `-nobuildrefs`): the scripts that read `ReferencedBy` need it. Off by
+    /// default; the other commands build it on demand.
+    #[serde(default)]
+    pub build_refs: bool,
 }
 
 fn default_true() -> bool {
@@ -839,13 +845,25 @@ impl ScriptRunState {
     }
 
     /// `_File.MasterCount[True]` (`IwbFile_MasterCount`).
+    ///
+    /// The hardcoded file's records resolve into the game master, so upstream
+    /// counts the game master as its single master (`MasterByIndex(exe, 0)`
+    /// answers it; `List loaded plugins and their masters.pas` reads both for
+    /// the executable).
     pub(crate) fn master_count(&self, file: &ElementRef) -> Option<i32> {
-        Some(file.get_file()?.get_master_count(true))
+        let file = file.get_file()?;
+        if file.get_file_states().contains(FileState::fsIsHardcoded) {
+            return Some(i32::from(game_master_element().is_some()));
+        }
+        Some(file.get_master_count(true))
     }
 
     /// `_File.Masters[j, True]` (`IwbFile_MasterByIndex`).
     pub(crate) fn master_at(&self, file: &ElementRef, index: i64) -> Option<ElementRef> {
         let file = file.get_file()?;
+        if file.get_file_states().contains(FileState::fsIsHardcoded) {
+            return if index == 0 { game_master_element() } else { None };
+        }
         let index = i32::try_from(index).ok()?;
         if index >= file.get_master_count(true) {
             return None;
@@ -869,9 +887,17 @@ fn elapsed_text(elapsed: std::time::Duration) -> String {
     if hours > 0 { format!("{hours}:{text}") } else { text }
 }
 
-/// `TwbFile.GetName` (`wbImplementation.pas:4853`): `[<LoadOrderFileID>]
-/// <FileName>`, or the executable name for the hardcoded file; every other
-/// element keeps its own `Name`.
+/// The loaded game master's element, the master the hardcoded file's
+/// records resolve into.
+pub(crate) fn game_master_element() -> Option<ElementRef> {
+    xedit_core::implementation::game_master_file()
+        .and_then(|file| file.as_element_impl().and_then(ElementImpl::self_element_ref))
+}
+
+/// `TwbFile.GetName` (`wbImplementation.pas:4853-4859`): the load order
+/// prefix (`[00] `) in front of the file name, the executable's name for the
+/// hardcoded file (`[00] SkyrimSE.exe`); every other element keeps its own
+/// `Name`.
 fn element_name(element: &ElementRef) -> String {
     if element.get_element_type() != ElementType::etFile {
         return element.get_name();
@@ -879,10 +905,12 @@ fn element_name(element: &ElementRef) -> String {
     let Some(file) = element.get_file() else {
         return element.get_name();
     };
-    if file.get_file_states().contains(FileState::fsIsHardcoded) {
-        return xedit_core::interface::globals::game_exe_name();
-    }
-    format!("[{}] {}", file.get_load_order_file_id(), file.get_name())
+    let name = if file.get_file_states().contains(FileState::fsIsHardcoded) {
+        xedit_core::interface::globals::game_exe_name()
+    } else {
+        file.get_name()
+    };
+    format!("[{}] {}", file.get_load_order_file_id(), name)
 }
 
 /// The unit the adapter units register the shared functions under (`cUnit`
@@ -1463,6 +1491,13 @@ fn result_as_integer(value: &Value) -> i64 {
 
 /// Runs the filter calls the script asked for, as the call returns
 /// (`ApplyFilter`/`RemoveFilter`), and folds their log lines into the run's.
+///
+/// `_ApplyFilter` is `FilterPreset := True; mniNavFilterApplyClick(nil)`,
+/// whose `ApplyFilter` wraps the filter in
+/// `PerformLongAction('Applying Filter', '[Pass 1] Processed Records: 0',
+/// ...)`: a `Start: Applying Filter` line, the filter's own lines, then
+/// `Done: Applying Filter, <wbCurrentProgress>` with the counts of the two
+/// passes.
 fn apply_pending_filters(session: &mut Session, state: &Rc<RefCell<ScriptRunState>>) -> Result<(), CommandError> {
     loop {
         // The `borrow_mut()` of a `while let` condition would live for the
@@ -1470,21 +1505,27 @@ fn apply_pending_filters(session: &mut Session, state: &Rc<RefCell<ScriptRunStat
         let Some(pending) = state.borrow_mut().pending_filter.take() else {
             break;
         };
-        let messages = match pending {
+        match pending {
             PendingFilter::Apply(request) => {
+                state.borrow_mut().progress("Start: Applying Filter", false);
                 let response = crate::filter::filter_apply(session, *request)?;
-                state.borrow_mut().filter_applied = true;
-                response.messages
+                let mut state = state.borrow_mut();
+                state.filter_applied = true;
+                for line in &response.messages {
+                    state.add_message(line);
+                }
+                state.progress(
+                    &format!(
+                        "Done: Applying Filter, [Pass 1] Processed Records: {}, [Pass 2] Processed Records: {}, Remaining unfiltered nodes: {}",
+                        response.pass1, response.pass2, response.unfiltered
+                    ),
+                    false,
+                );
             }
             PendingFilter::Remove => {
                 let _ = crate::filter::filter_remove(session, crate::filter::FilterRemoveRequest {})?;
                 state.borrow_mut().filter_applied = false;
-                Vec::new()
             }
-        };
-        let mut state = state.borrow_mut();
-        for line in messages {
-            state.add_message(&line);
         }
     }
     Ok(())
@@ -1550,6 +1591,12 @@ pub fn run_script(
     selection: &mut dyn ScriptSelection,
 ) -> Result<ScriptRunResponse, CommandError> {
     session.mode()?;
+    // The GUI's script mode builds the reference information at load
+    // (`wbBuildRefs`; `-nobuildrefs` turns it off): the scripts that read
+    // `ReferencedBy` get it on request, as the filter builds it.
+    if request.build_refs {
+        session.ensure_refs()?;
+    }
     // The GUI sets `wbDisplayShorterNames := True` at startup
     // (`xeMainForm.pas:5152`), so every name a script reads -- `Name`,
     // `ShortName`, `FullPath`, the run's `Processing:`-style messages -- is
@@ -1793,25 +1840,49 @@ pub fn run_script(
     }
 
     // The plugins the script changed: saved as the GUI does at the end of an
-    // auto mode, unless the run was a dry run or saving is off. `SaveChanged`
-    // logs a `Saving: <name>` line per file, after the closing line of the
-    // run.
-    for file in crate::conflicts::session_files(session)? {
-        let changed = file.get_is_editable() && file.element_base().has_state(ElementState::esUnsaved);
-        if !changed {
-            continue;
+    // auto mode (`SaveChanged` of the close), unless the run was a dry run or
+    // saving is off. Upstream writes `<name>.save.<yyyy_mm_dd_hh_nn_ss>` next
+    // to the file, logs `Saving: <name>.save.<time>`, queues the rename over
+    // the file for its shutdown (`Queued renaming of save ... on shutdown.`)
+    // and closes with `Done saving.`; a completed run's lines come after
+    // `You can close this application now.` (outside the compared section), an
+    // aborted run's are its last lines.
+    let changed_files: Vec<std::sync::Arc<xedit_core::implementation::FileImpl>> = {
+        let mut changed = Vec::new();
+        for file in crate::conflicts::session_files(session)? {
+            if file.get_is_editable() && file.element_base().has_state(ElementState::esUnsaved) {
+                changed.push(file);
+            }
         }
-        if request.save && !request.dry_run {
-            let saved = crate::save::save_file(&file, None, false, true)?;
-            // Upstream logs the name it writes below `wbDataPath` (with the
-            // queued-rename timestamp); the port writes the loaded path, so
-            // the line names the file.
-            state
-                .borrow_mut()
-                .progress(&format!("Saving: {}", file.get_name()), false);
+        changed
+    };
+    if !changed_files.is_empty() && request.save && !request.dry_run {
+        // `t := '.save.' + FormatDateTime('yyyy_mm_dd_hh_nn_ss', Now)`.
+        let suffix = format!(".save.{}", save_timestamp());
+        let data_path = globals::data_path();
+        for file in &changed_files {
+            let name = file.get_name();
+            // `NeedsRename := FileExists(wbDataPath + name)`: the loaded
+            // file is the copy below the data path, so it exists.
+            let queued = format!("{name}{suffix}");
+            state.borrow_mut().progress(&format!("Saving: {queued}"), false);
+            // The port writes the file itself, without the GUI's backup
+            // folder (which lives below `wbBackupPath`, outside the private
+            // data folder, and is not part of what a run leaves); the queued
+            // rename is applied here at once, because the process ends after
+            // the run, so the file holds the new bytes as it does after the
+            // GUI's shutdown rename.
+            let saved = crate::save::save_file(&file, None, false, false)?;
+            state.borrow_mut().progress(
+                &format!("Queued renaming of save \"{data_path}{queued}\" to \"{data_path}{name}\" on shutdown."),
+                false,
+            );
             response.files.push(ScriptRunFile::from_save(&file, &saved));
-        } else {
-            let mut entry = ScriptRunFile::new(&file);
+        }
+        state.borrow_mut().progress("Done saving.", false);
+    } else {
+        for file in &changed_files {
+            let mut entry = ScriptRunFile::new(file);
             entry.changed = true;
             response.files.push(entry);
         }
@@ -1850,6 +1921,36 @@ fn trailing_separator(path: &Path) -> String {
     } else {
         format!("{text}\\")
     }
+}
+
+/// `FormatDateTime('yyyy_mm_dd_hh_nn_ss', Now)` of the save suffix. Delphi's
+/// `Now` is local time; without a time zone database the port uses UTC (the
+/// parity comparison normalizes the digits of the suffix, so the two runs of
+/// a case match whatever the clock says).
+fn save_timestamp() -> String {
+    let seconds = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |duration| duration.as_secs() as i64);
+    let (hour, minute, second) = {
+        let day = seconds.rem_euclid(86_400);
+        (day / 3_600, (day / 60) % 60, day % 60)
+    };
+    // The civil date of the days since the epoch (Howard Hinnant's
+    // `civil_from_days`).
+    let z = seconds.div_euclid(86_400) + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z.rem_euclid(146_097);
+    let yoe = (doe - doe / 1_460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let day = doy - (153 * mp + 2) / 5 + 1;
+    let month = if mp < 10 { mp + 3 } else { mp - 9 };
+    let year = if month <= 2 {
+        yoe + era * 400 + 1
+    } else {
+        yoe + era * 400
+    };
+    format!("{year:04}_{month:02}_{day:02}_{hour:02}_{minute:02}_{second:02}")
 }
 
 /// `script.run`: the command handler, over the GUI's selection.

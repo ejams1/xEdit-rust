@@ -821,28 +821,32 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
     //=== SysUtils ============================================================
 
     // `Inc(Args.Values[0])`/`Dec`: the by-reference argument's value moves
-    // by one (Delphi's variant `Inc`).
-    function(
-        adapter,
+    // by one (Delphi's variant `Inc`; `xejviScriptAdapterMisc.pas:854`
+    // registers them with `varByRef`, so the change lands in the caller's
+    // variable and not in a copy of it).
+    adapter.add_function(
         "SysUtils",
         "Inc",
-        1,
         Rc::new(|_value, args| {
             let current = xedit_script::values::to_i64(&args.values[0])?;
             args.values[0] = Value::Integer(i32::try_from(current + 1).map_err(|_| ValueError::Variant)?);
             Ok(())
         }),
+        1,
+        vec![ParamType::by_ref(VarType::Empty)],
+        VarType::Empty,
     );
-    function(
-        adapter,
+    adapter.add_function(
         "SysUtils",
         "Dec",
-        1,
         Rc::new(|_value, args| {
             let current = xedit_script::values::to_i64(&args.values[0])?;
             args.values[0] = Value::Integer(i32::try_from(current - 1).map_err(|_| ValueError::Variant)?);
             Ok(())
         }),
+        1,
+        vec![ParamType::by_ref(VarType::Empty)],
+        VarType::Empty,
     );
     function(
         adapter,

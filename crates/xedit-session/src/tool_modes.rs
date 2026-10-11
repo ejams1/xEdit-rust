@@ -1397,6 +1397,9 @@ fn tool_run(session: &mut Session, request: ToolRunRequest) -> Result<ToolRunRes
                     scripts: request.scripts.clone(),
                     save: true,
                     dry_run: request.dry_run,
+                    // The mode builds no references; a script that reads
+                    // `ReferencedBy` needs `script run --build-refs`.
+                    build_refs: false,
                 },
                 &mut crate::script::NavigationSelection,
             )?;
