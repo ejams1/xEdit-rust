@@ -54,6 +54,15 @@
 //! variant error of `1 + 'a';` at the byte after the `;` (`Expression1`'s
 //! handler uses `CurPos`, `:5884`).
 //!
+//! Divergence, call depth: upstream recurses on the native stack and, once it
+//! is exhausted, the RTL raises `EStackOverflow`, which `ApplyScript` catches
+//! and prints as `Exception in unit ...: [EStackOverflow] Stack overflow`
+//! (`xeMainForm.pas:8847-8855`). The port caps the nesting at
+//! [`MAX_CALL_DEPTH`] and raises the same shape through the normal error
+//! path, so a runaway script aborts where the oracle depends on the machine's
+//! stack size. The threshold is synthetic; no legitimate script comes anywhere
+//! near it.
+//!
 //! Not ported here (host seams of the later steps): the RTTI property and
 //! event surface (`GetValueRTTI`/`SetMethodProp`, VCL forms), the
 //! `-script:`-driven run loop of `xeMainForm.pas`, and the OLE automation
@@ -126,6 +135,20 @@ impl ExecError {
         self.class_name.as_deref().unwrap_or(INTERPRETER_ERROR_CLASS)
     }
 }
+
+/// The interpreter's call-depth guard (see the module doc's divergence note):
+/// a script that recurses deeper than this aborts with the
+/// `[EStackOverflow] Stack overflow` shape the oracle prints when its native
+/// stack overflows (`xeMainForm.pas:8847-8855`). Upstream has no guard of its
+/// own -- [`error::message_text`]'s `ieStackOverFlow` (52) is declared and
+/// never raised -- so the port's threshold stands in for the machine's stack.
+/// Sized against the smallest stack the interpreter runs on, the test
+/// harness's 2 MiB threads in debug builds (measured 2026-10-10: the
+/// `runaway_recursion_raises_the_oracle_stack_overflow` probe overflows its
+/// thread between 72 and 80 frames, ≈26 KB of native stack per interpreted
+/// call; the CLI's main thread reserves 16 MiB, and release frames are
+/// smaller). No legitimate script recurses 48 calls deep.
+pub const MAX_CALL_DEPTH: usize = 48;
 
 impl ExecError {
     /// `EJvInterpreterError.Create` (`JvInterpreter.pas:1478`):
@@ -328,6 +351,9 @@ pub struct Interpreter {
     /// the fallback position of errors raised without one.
     cur_pos: usize,
     interp_error_class: Option<Rc<ClassDef>>,
+    /// The interpreter's own call depth (`ExecFunction` nesting): the
+    /// [`MAX_CALL_DEPTH`] guard (upstream's limit is the native stack).
+    call_depth: usize,
 }
 
 impl Default for Interpreter {
@@ -358,6 +384,7 @@ impl Interpreter {
             base_err_line: 0,
             cur_pos: 0,
             interp_error_class: None,
+            call_depth: 0,
         }
     }
 
@@ -757,8 +784,23 @@ impl Interpreter {
 
     /// `ExecFunction` (`JvInterpreter.pas:8397`): switch the current unit,
     /// run the body, and report every error with the routine's unit
-    /// (`UpdateExceptionPos(E, FCurUnitName)`, `:8419`).
+    /// (`UpdateExceptionPos(E, FCurUnitName)`, `:8419`). The [`MAX_CALL_DEPTH`]
+    /// guard wraps the body: upstream's recursion limit is the native stack.
     fn exec_function(&mut self, desc: &Rc<FunctionDesc>, args: &mut Args) -> Result<Value, FlowError> {
+        if self.call_depth >= MAX_CALL_DEPTH {
+            let mut exec = ExecError::external(error::RS_STACK_OVERFLOW);
+            exec.class_name = Some("EStackOverflow".to_owned());
+            return Err(FlowError::Error(exec));
+        }
+        self.call_depth += 1;
+        let result = self.exec_function_body(desc, args);
+        self.call_depth -= 1;
+        result
+    }
+
+    /// The body of [`exec_function`](Interpreter::exec_function), split out
+    /// so the call-depth guard wraps every return path.
+    fn exec_function_body(&mut self, desc: &Rc<FunctionDesc>, args: &mut Args) -> Result<Value, FlowError> {
         let mut switched = false;
         let mut old_unit = String::new();
         let mut old_source = self.cur_source.clone();

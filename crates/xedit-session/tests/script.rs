@@ -307,10 +307,10 @@ fn a_routine_of_only_result_zero_is_empty_and_skipped() {
     assert_eq!(result["aborted"], false);
     let lines = lines(&result);
     assert_eq!(lines.len(), 3, "{lines:?}");
-    assert_eq!(
-        lines[1],
-        "Done: Applying script \"Empty\", Processed Records: 0, Elapsed Time: 00:00"
-    );
+    // No `Process` fired (`FunctionIsEmpty` skips the walk), so
+    // `wbCurrentProgress` was never set and the closing line carries no
+    // `Processed Records` segment (`xeMainForm.pas:15298-15300`).
+    assert_eq!(lines[1], "Done: Applying script \"Empty\", Elapsed Time: 00:00");
     let _ = std::fs::remove_dir_all(&folder);
 }
 
@@ -382,6 +382,109 @@ fn an_error_aborts_the_script_with_the_upstream_text() {
     let _ = std::fs::remove_dir_all(&folder);
 }
 
+/// The review's runaway-recursion probe: the interpreter's call-depth guard
+/// reports the overflow the way the oracle's `ApplyScript` does when the
+/// native stack runs out (`Exception in unit ...: [EStackOverflow] Stack
+/// overflow`, `xeMainForm.pas:8847-8855`), and the session survives it.
+#[test]
+fn a_runaway_recursion_aborts_with_the_oracle_stack_overflow() {
+    let _guard = test_lock();
+    let folder = script_folder(
+        "recurse",
+        "Rec.pas",
+        "unit Rec;\r\n\
+         function R: Integer;\r\n\
+         begin\r\n\
+           Result := R;\r\n\
+         end;\r\n\
+         function Initialize: Integer;\r\n\
+         begin\r\n\
+           Result := R;\r\n\
+         end;\r\n\
+         end.\r\n",
+    );
+    let mut session = open_session();
+    let result = run(&mut session, &folder, "Rec.pas", json!({}));
+    assert_eq!(result["aborted"], true);
+    assert_eq!(result["error"].as_str().unwrap(), "Stack overflow");
+    let location = result["error_location"].as_str().unwrap();
+    assert_eq!(location, "unit Rec line 4");
+    let lines = lines(&result);
+    assert_eq!(lines[0], "Start: Applying script \"Rec\"");
+    assert_eq!(
+        lines[1],
+        "Exception in unit Rec line 4: [EStackOverflow] Stack overflow"
+    );
+    assert_eq!(lines[2], "Aborted: Applying script \"Rec\"");
+    assert_eq!(lines.len(), 3, "an aborted run never reaches the closing line");
+    // The session survives the abort, as the oracle's GUI does.
+    let result = run(&mut session, &folder, "Rec.pas", json!({}));
+    assert_eq!(result["aborted"], true);
+    let _ = std::fs::remove_dir_all(&folder);
+}
+
+/// A refused edit aborts, as upstream's `ElementEditValues[...] := value`
+/// (`TwbSubRecord.SetEditValue`, `wbImplementation.pas:16444-16468`) does;
+/// the discarded setter error made it a silent no-op.
+#[test]
+fn a_refused_edit_aborts_with_the_upstream_message() {
+    let _guard = test_lock();
+    let folder = script_folder(
+        "refused",
+        "Refuse.pas",
+        "unit Refuse;\n\
+         function Process(e: IInterface): Integer;\n\
+         begin\n\
+           if EditorID(e) = 'fMaster' then\n\
+             SetElementEditValues(e, 'DATA', '2.5');\n\
+         end;\n\
+         end.\n",
+    );
+    let mut session = open_session();
+    let result = run(&mut session, &folder, "Refuse.pas", json!({}));
+    assert_eq!(result["aborted"], true, "{:?}", lines(&result));
+    assert_eq!(result["error"].as_str().unwrap(), "DATA - Value can not be edited");
+    let lines = lines(&result);
+    // The refusal is upstream's `Exception.Create(GetName + ' can not be
+    // edited')` (`wbImplementation.pas:16444-16468`); the LF-only script
+    // reports line 1, as `GetLineByPos` counts `#13` (`JvJCLUtils.pas:1358`).
+    assert_eq!(
+        lines[1],
+        "Exception in unit Refuse line 1: [Exception] DATA - Value can not be edited"
+    );
+    assert_eq!(lines[2], "Aborted: Applying script \"Refuse\"");
+    let _ = std::fs::remove_dir_all(&folder);
+}
+
+/// The legitimate set still writes: the same surface over the plugin's own
+/// record reads its value back.
+#[test]
+fn a_legitimate_set_writes() {
+    let _guard = test_lock();
+    let folder = script_folder(
+        "legit-set",
+        "Set.pas",
+        "unit Set;\n\
+         function Process(e: IInterface): Integer;\n\
+         begin\n\
+           if EditorID(e) = 'fPlugin' then begin\n\
+             SetElementEditValues(e, 'EDID', 'fRenamed');\n\
+             AddMessage('read ' + GetElementEditValues(e, 'EDID'));\n\
+           end;\n\
+         end;\n\
+         end.\n",
+    );
+    let mut session = open_session();
+    let result = run(&mut session, &folder, "Set.pas", json!({}));
+    assert_eq!(result["aborted"], false, "{:?}", lines(&result));
+    assert!(
+        lines(&result).iter().any(|line| line == "read fRenamed"),
+        "{:?}",
+        lines(&result)
+    );
+    let _ = std::fs::remove_dir_all(&folder);
+}
+
 #[test]
 fn the_script_process_elements_hook_selects_the_files() {
     let _guard = test_lock();
@@ -449,6 +552,47 @@ fn the_script_process_signatures_hook_filters_the_records() {
     let mut session = open_session();
     let result = run(&mut session, &folder, "Signatures.pas", json!({}));
     assert_eq!(result["processed"], 0, "no record has that signature");
+    let _ = std::fs::remove_dir_all(&folder);
+}
+
+/// A main record's node children are its child group alone, never its own
+/// element container (`NodeData.Container := GroupRecord`,
+/// `xeMainForm.pas:20285-20288`): a selection of `etSubRecord` has no node
+/// to fire on -- the GUI tree holds no subrecords -- where the pre-fix walk
+/// descended each record's elements and delivered them (the review probe
+/// over SSE `Update.esm`: 4,373,854 processed against the oracle's 0).
+#[test]
+fn a_subrecord_selection_processes_nothing() {
+    let _guard = test_lock();
+    let folder = script_folder(
+        "subrecord",
+        "Subrecords.pas",
+        "unit Subrecords;\n\
+         var\n\
+           count: Integer;\n\
+         function Process(e: IInterface): Integer;\n\
+         begin\n\
+           count := count + 1;\n\
+         end;\n\
+         function Initialize: Integer;\n\
+         begin\n\
+           ScriptProcessElements := [etSubRecord];\n\
+           count := 0;\n\
+         end;\n\
+         function Finalize: Integer;\n\
+         begin\n\
+           AddMessage('subrecords=' + IntToStr(count));\n\
+         end;\n\
+         end.\n",
+    );
+    let mut session = open_session();
+    let result = run(&mut session, &folder, "Subrecords.pas", json!({}));
+    assert_eq!(result["aborted"], false, "{:?}", lines(&result));
+    assert_eq!(result["processed"], 0);
+    let lines = lines(&result);
+    assert_eq!(lines[1], "subrecords=0");
+    // `Process` never fired: the closing line has no `Processed Records`.
+    assert_eq!(lines[2], "Done: Applying script \"Subrecords\", Elapsed Time: 00:00");
     let _ = std::fs::remove_dir_all(&folder);
 }
 

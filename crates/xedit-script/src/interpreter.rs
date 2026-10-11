@@ -40,7 +40,7 @@
 use crate::ast::*;
 use crate::error::{
     Error, IE_ARRAY_BAD_RANGE, IE_CLASS_REQUIRED, IE_EXPECTED, IE_INTEGER_REQUIRED, IE_INTERNAL, IE_MISSING_OPERATOR,
-    IE_TYPE_MISMATCH,
+    IE_STACK_OVERFLOW, IE_TYPE_MISMATCH,
 };
 use crate::interpreter_parser::{
     PRIOR_AND, PRIOR_DIV, PRIOR_EQU, PRIOR_EQU_GREATER, PRIOR_EQU_LESS, PRIOR_GREATER, PRIOR_INT_DIV, PRIOR_LESS,
@@ -58,6 +58,18 @@ use crate::interpreter_parser::{
 // The `ir*` texts of JvResources.pas:301-309 (`ReadContext`), with upstream's
 // stray quote in `irIntegerConstant` (`RsEInterpreter306 = 'Integer Constant''';`).
 const IR_EXPRESSION: &str = "Expression";
+
+/// The parser's recursion guard: `Expression`, `InterpretStatement` and the
+/// `SkipToEnd`/`SkipStatement` scanners are self-recursive upstream too, so a
+/// pathologically nested script exhausts the native stack and the process
+/// dies there (a compile happens outside `ApplyScript`'s `except`, so the
+/// oracle has no catchable shape for it). The port refuses a nesting deeper
+/// than this with the interpreter's `Stack overflow` (`RsEInterpreter52`,
+/// code 52). Sized against the test harness's 2 MiB debug threads (measured
+/// 2026-10-10: `a_pathologically_nested_expression_is_refused` passes at 128
+/// nesting levels, overflows at 188; ≈14 KB of native stack per level). No
+/// legitimate script nests anywhere near it.
+const MAX_NESTING_DEPTH: u32 = 128;
 const IR_IDENTIFIER: &str = "Identifier";
 const IR_DECLARATION: &str = "Declaration";
 const IR_END_OF_FILE: &str = "End of File";
@@ -156,6 +168,9 @@ struct Parser<'a> {
     /// `true` for [`parse_compile`]: routine bodies are scanned for their
     /// balanced `end` (`InterpretFunction`'s `SkipToEnd`), not parsed.
     compile: bool,
+    /// The current recursion depth of the self-recursive productions, the
+    /// [`MAX_NESTING_DEPTH`] guard counts.
+    depth: u32,
 }
 
 impl<'a> Parser<'a> {
@@ -174,7 +189,19 @@ impl<'a> Parser<'a> {
             allow_assignment: true,
             section: Section::None,
             compile: false,
+            depth: 0,
         }
+    }
+
+    /// The recursion guard of the four self-recursive productions
+    /// ([`MAX_NESTING_DEPTH`]); a failed check does not increment, so the
+    /// caller's matching decrement below is exact.
+    fn enter_nesting(&mut self) -> Result<(), Error> {
+        if self.depth >= MAX_NESTING_DEPTH {
+            return Err(Error::new(IE_STACK_OVERFLOW, self.tok.start as i64, "", ""));
+        }
+        self.depth += 1;
+        Ok(())
     }
 
     fn text_string(&self) -> String {
@@ -267,6 +294,15 @@ impl<'a> Parser<'a> {
     /// `SkipToEnd` (`JvInterpreter.pas:6763`): on exit the current token is
     /// the one after the `end` that balances the open block.
     fn skip_to_end(&mut self) -> Result<(), Error> {
+        self.enter_nesting()?;
+        let result = self.skip_to_end_body();
+        self.depth -= 1;
+        result
+    }
+
+    /// The body of [`skip_to_end`](Parser::skip_to_end), split out for the
+    /// recursion guard.
+    fn skip_to_end_body(&mut self) -> Result<(), Error> {
         loop {
             self.next_token()?;
             if self.tok.kind == TT_END {
@@ -342,6 +378,15 @@ impl<'a> Parser<'a> {
     /// `SkipStatement` (`JvInterpreter.pas:6694`): the interpreter's separate,
     /// looser grammar for the branches a parse-time evaluation does not walk.
     fn skip_statement(&mut self) -> Result<(), Error> {
+        self.enter_nesting()?;
+        let result = self.skip_statement_body();
+        self.depth -= 1;
+        result
+    }
+
+    /// The body of [`skip_statement`](Parser::skip_statement), split out for
+    /// the recursion guard.
+    fn skip_statement_body(&mut self) -> Result<(), Error> {
         match self.tok.kind {
             TT_EMPTY => return Err(self.expected("'end'")),
             TT_IDENTIFIER => self.skip_identifier()?,
@@ -454,6 +499,15 @@ impl<'a> Parser<'a> {
     /// `Expression` (`JvInterpreter.pas:5649`): `None` is the interpreter's
     /// `Unassigned` result.
     fn expression(&mut self, op_kind: TTokenKind, stack: &mut Vec<Expr>) -> Result<Option<Expr>, Error> {
+        self.enter_nesting()?;
+        let result = self.expression_body(op_kind, stack);
+        self.depth -= 1;
+        result
+    }
+
+    /// The body of [`expression`](Parser::expression), split out for the
+    /// recursion guard.
+    fn expression_body(&mut self, op_kind: TTokenKind, stack: &mut Vec<Expr>) -> Result<Option<Expr>, Error> {
         let mut result: Option<Expr> = None;
         if op_kind != TT_UNKNOWN {
             self.next_token()?;
@@ -882,6 +936,15 @@ impl<'a> Parser<'a> {
     /// `InterpretStatement` (`JvInterpreter.pas:6646`) with the statement
     /// terminators its identifier case checks.
     fn parse_statement(&mut self) -> Result<Stmt, Error> {
+        self.enter_nesting()?;
+        let result = self.parse_statement_body();
+        self.depth -= 1;
+        result
+    }
+
+    /// The body of [`parse_statement`](Parser::parse_statement), split out
+    /// for the recursion guard.
+    fn parse_statement_body(&mut self) -> Result<Stmt, Error> {
         let start = self.tok.start;
         let node = match self.tok.kind {
             TT_IDENTIFIER => {

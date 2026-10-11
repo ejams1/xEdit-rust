@@ -23,7 +23,7 @@ use xedit_core::implementation::write::ElementState;
 use xedit_core::interface::types::PascalEnum;
 use xedit_core::interface::{Element, ElementType};
 use xedit_script::adapter::{Adapter, Args};
-use xedit_script::values::{ClassDef, Value, VarType, to_bool};
+use xedit_script::values::{ClassDef, Value, ValueError, VarType, to_bool};
 
 use super::{add, boolean_at, element_at, integer_at, params, string_at, value_param};
 use crate::script::ScriptRunState;
@@ -511,7 +511,12 @@ pub(crate) fn register(adapter: &mut Adapter, state: &Rc<RefCell<ScriptRunState>
         |_result, args| {
             if let Some(element) = element_at(args, 0) {
                 let value = string_at(args, 1);
-                let _ = element.set_edit_value(&value);
+                // Upstream `Element.EditValue := value` raises a bare
+                // `Exception` on a refusal, which the run line prints as
+                // `[Exception]`.
+                if let Err(message) = element.set_edit_value(&value) {
+                    return Err(ValueError::external_class("Exception", message));
+                }
             }
             Ok(())
         },
@@ -524,7 +529,11 @@ pub(crate) fn register(adapter: &mut Adapter, state: &Rc<RefCell<ScriptRunState>
         |_result, args| {
             if let Some(element) = element_at(args, 0) {
                 let value = super::value_to_native(args.values.get(1).unwrap_or(&Value::Empty))?;
-                let _ = element.set_native_value(value);
+                // Upstream `Element.NativeValue := value` raises a bare
+                // `Exception` on a refusal.
+                if let Err(message) = element.set_native_value(value) {
+                    return Err(ValueError::external_class("Exception", message));
+                }
             }
             Ok(())
         },

@@ -404,6 +404,15 @@ impl ScriptSelection for NavigationSelection {
 /// parented group whose label is the FormID of the record before it is that
 /// record's hidden node (`:20299-20347`): it contributes no element, and
 /// its records are reached through the record -- exactly once.
+///
+/// A main record's node children are that group *alone* (`:20285-20288`
+/// assigns `NodeData.Container := GroupRecord` for an `etMainRecord`); its
+/// own element container holds no tree nodes, so it is never descended --
+/// `MainRecordImpl::as_container` answers with it, and descending it fired
+/// `Process` for subrecord-level elements the GUI tree does not hold (the
+/// review probe: `ScriptProcessElements := [etSubRecord]` over SSE
+/// `Update.esm` processed 4,373,854 elements where the oracle processes
+/// none).
 fn flatten(root: &ElementRef, out: &mut Vec<ElementRef>) {
     out.push(root.clone());
     let Some(container) = root.as_container() else {
@@ -421,21 +430,20 @@ fn flatten(root: &ElementRef, out: &mut Vec<ElementRef>) {
             skip_next = false;
             continue;
         }
-        let mut child_group = None;
-        if child.get_element_type() == ElementType::etMainRecord
-            && let Some(next) = container.get_element(index + 1)
-            && let Some(group) = next.as_element_impl().and_then(ElementImpl::group_record_impl)
-            && is_parented_group(group.group_type())
-            && let Some(record) = child.as_element_impl().and_then(ElementImpl::main_record_impl)
-            && group.get_group_label() == record.mr_struct().form_id.to_cardinal()
-        {
-            child_group = Some(next);
+        if child.get_element_type() == ElementType::etMainRecord {
+            out.push(child.clone());
+            if let Some(next) = container.get_element(index + 1)
+                && let Some(group) = next.as_element_impl().and_then(ElementImpl::group_record_impl)
+                && is_parented_group(group.group_type())
+                && let Some(record) = child.as_element_impl().and_then(ElementImpl::main_record_impl)
+                && group.get_group_label() == record.mr_struct().form_id.to_cardinal()
+            {
+                flatten(&next, out);
+                skip_next = true;
+            }
+            continue;
         }
         flatten(&child, out);
-        if let Some(group) = child_group {
-            flatten(&group, out);
-            skip_next = true;
-        }
     }
 }
 
@@ -1652,6 +1660,10 @@ pub fn run_script(
 
     let mut last_error: Option<ExecError> = None;
     let mut self_terminated: Option<i64> = None;
+    // `wbCurrentProgress` of the selection walk (`xeMainForm.pas:8704-8705`):
+    // the count of processed elements, which the closing line repeats while
+    // it is set.
+    let mut processed_progress: Option<u64> = None;
     'run: {
         if script.function_exists("Initialize") && !script.function_is_empty("Initialize") {
             match call_script(&mut script, &state, "Initialize", &[]) {
@@ -1708,6 +1720,7 @@ pub fn run_script(
                     }
                 }
                 response.processed += 1;
+                processed_progress = Some(response.processed);
             }
         }
         if script.function_exists("Finalize") && !script.function_is_empty("Finalize") {
@@ -1751,13 +1764,19 @@ pub fn run_script(
             }
             None => {
                 let elapsed = elapsed_text(state.started.elapsed());
-                state.progress(
-                    &format!(
-                        "Done: {action}, Processed Records: {}, Elapsed Time: {elapsed}",
-                        response.processed
-                    ),
-                    false,
-                );
+                // `PerformLongAction`'s closing line: the `Processed Records`
+                // segment appears only while `wbCurrentProgress` was set,
+                // which `ScriptProcessSingleElement` does after every
+                // processed element (`xeMainForm.pas:8704-8705`,
+                // `:15296-15301`) -- a run whose `Process` never fired has
+                // none.
+                let done = match processed_progress {
+                    Some(processed) => {
+                        format!("Done: {action}, Processed Records: {processed}, Elapsed Time: {elapsed}")
+                    }
+                    None => format!("Done: {action}, Elapsed Time: {elapsed}"),
+                };
+                state.progress(&done, false);
                 // `DoRunScript`'s last line; an aborted run never reaches it.
                 state.add_message("You can close this application now.");
             }
@@ -1805,15 +1824,21 @@ pub fn run_script(
     Ok(response)
 }
 
-/// `ApplyScript`'s `Mode: Silent` keyword: the text from the first `Mode:`
-/// (case-sensitive `Pos`) to the next `#10`, without case, holds `Silent`.
+/// `ApplyScript`'s `Mode: Silent` keyword: `ContainsText(Copy(aScript, p,
+/// PosEx(#10, aScript, p) - p), 'Silent')` (`xeMainForm.pas:8777-8778`) with
+/// `p := Pos('Mode:', aScript)` (case-sensitive). A `Mode:` on the final
+/// line without a trailing `#10` gives `PosEx` = 0 and a negative `Copy`
+/// count -- the empty window, so not silent.
 fn is_silent(source: &[u8]) -> bool {
     let Some(at) = source.windows(5).position(|window| window == b"Mode:") else {
         return false;
     };
-    let rest = &source[at..];
-    let end = rest.iter().position(|byte| *byte == b'\n').unwrap_or(rest.len());
-    let line = String::from_utf8_lossy(&rest[..end]);
+    // `PosEx(#10, aScript, p)` is 0 when no newline follows: `Copy` with a
+    // negative count is ''.
+    let Some(end) = source[at..].iter().position(|byte| *byte == b'\n') else {
+        return false;
+    };
+    let line = String::from_utf8_lossy(&source[at..at + end]);
     line.to_ascii_lowercase().contains("silent")
 }
 
@@ -1830,4 +1855,25 @@ fn trailing_separator(path: &Path) -> String {
 /// `script.run`: the command handler, over the GUI's selection.
 fn script_run(session: &mut Session, request: ScriptRunRequest) -> Result<ScriptRunResponse, CommandError> {
     script_run_gated(session, request, &mut NavigationSelection)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_silent;
+
+    /// `Copy(aScript, p, PosEx(#10, aScript, p) - p)` (`xeMainForm.pas:8778`)
+    /// is the window from `Mode:` to the next `#10`; without a newline
+    /// `PosEx` is 0 and `Copy` with the negative count is the empty string,
+    /// which `ContainsText` never matches.
+    #[test]
+    fn the_silent_keyword_is_the_window_of_the_mode_line() {
+        assert!(is_silent(b"unit u;\n// Mode: Silent\nbegin\nend.\n"));
+        assert!(is_silent(b"Mode: silent\n"));
+        // No newline after the keyword: the empty window.
+        assert!(!is_silent(b"unit u;\nbegin\nend.\n// Mode: Silent"));
+        assert!(!is_silent(b"Mode: Silent"));
+        // No `Mode:` at all; a window that does not say Silent.
+        assert!(!is_silent(b"unit u;\nend.\n"));
+        assert!(!is_silent(b"Mode: Verbose\n"));
+    }
 }
