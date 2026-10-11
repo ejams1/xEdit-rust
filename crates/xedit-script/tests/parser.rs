@@ -19,6 +19,34 @@ fn fail(source: &str) -> xedit_script::Error {
     parse(source.as_bytes()).expect_err("parse should fail")
 }
 
+/// The recursion guard of the four self-recursive productions
+/// (`interpreter::MAX_NESTING_DEPTH`): upstream's parser recurses on the
+/// native stack, where a pathologically nested script kills the process
+/// (a compile runs outside `ApplyScript`'s catch); the port reports the
+/// interpreter's `Stack overflow` (code 52) instead.
+#[test]
+fn a_pathologically_nested_expression_is_refused() {
+    let mut source = String::from("unit u;\nfunction Initialize: integer;\nbegin\n  Result := ");
+    source.push_str(&"(".repeat(5_000));
+    source.push('1');
+    source.push_str(&")".repeat(5_000));
+    source.push_str(";\nend;\nend.\n");
+    let error = fail(&source);
+    assert_eq!(error.message, "Stack overflow");
+    assert_eq!(error.code, 52, "{}", error.message);
+}
+
+#[test]
+fn a_pathologically_nested_block_is_refused() {
+    let mut source = String::from("unit u;\nfunction Initialize: integer;\nbegin\n");
+    source.push_str(&"begin ".repeat(5_000));
+    source.push_str(&"end ".repeat(5_000));
+    source.push_str("\nend.\n");
+    let error = fail(&source);
+    assert_eq!(error.message, "Stack overflow");
+    assert_eq!(error.code, 52, "{}", error.message);
+}
+
 fn first_routine(module: &Module) -> &RoutineDecl {
     module
         .items

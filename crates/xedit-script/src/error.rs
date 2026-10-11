@@ -92,6 +92,13 @@ pub const IE_DIRECT_INVALID_ARGUMENT: i32 = 188;
 /// `RsENotImplemented` (`JvResources.pas:98`): concatenated to a message by
 /// `NotImplemented` (`JvInterpreter.pas:1620`) without a separating space.
 pub const RS_NOT_IMPLEMENTED: &str = "not implemented";
+/// The RTL's `SStackOverflow`, the message of the `EStackOverflow` the
+/// oracle's `ApplyScript` prints when a script recurses past the native
+/// stack (`RaiseStackOverflow`; the JVCL's own texts agree:
+/// `JvResources.pas:1328` `RsEInterpreter52` and `:2125` `RsStackOverflow`
+/// are both `'Stack overflow'`). The port raises its own guard with this
+/// text and the `EStackOverflow` class.
+pub const RS_STACK_OVERFLOW: &str = "Stack overflow";
 /// `RsArrayToArrayAssignment` (`JvResources.pas:1305`).
 pub const RS_ARRAY_TO_ARRAY_ASSIGNMENT: &str = "Array to array assignment";
 /// `RsOleAutomationCall` (`JvResources.pas:1300`).

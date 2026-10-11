@@ -291,6 +291,32 @@ end.
     assert_eq!(run_initialize(&mut interpreter, source).unwrap(), Value::Integer(55));
 }
 
+/// A runaway recursion aborts with the oracle's stack-overflow shape: the
+/// call-depth guard (`eval::MAX_CALL_DEPTH`) raises the RTL's
+/// `EStackOverflow`/`Stack overflow` -- what `ApplyScript` catches and prints
+/// (`xeMainForm.pas:8847-8855`) when upstream's *native* stack overflows --
+/// instead of killing the process.
+#[test]
+fn runaway_recursion_raises_the_oracle_stack_overflow() {
+    let mut interpreter = Interpreter::new();
+    let source = "\
+unit u;
+function R: Integer;
+begin
+  Result := R;
+end;
+function Initialize: integer;
+begin
+  Result := R;
+end;
+end.
+";
+    let error = run_initialize(&mut interpreter, source).unwrap_err();
+    assert_eq!(error.class_name(), "EStackOverflow");
+    assert_eq!(error.message, "Stack overflow");
+    assert!(error.external);
+}
+
 #[test]
 fn with_is_not_part_of_the_dialect() {
     // `JvInterpreterParser.pas` has no `ttWith`: `with x do ...` lexes as a

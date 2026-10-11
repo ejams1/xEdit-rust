@@ -15,7 +15,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use xedit_script::adapter::{Adapter, Args};
-use xedit_script::values::{ParamType, Value, VarType, to_bool};
+use xedit_script::values::{ParamType, Value, ValueError, VarType, to_bool};
 
 use super::{element_at, integer_at, signature_at, string_at};
 use crate::script::ScriptRunState;
@@ -438,7 +438,13 @@ pub(crate) fn register(adapter: &mut Adapter, state: &Rc<RefCell<ScriptRunState>
             {
                 let path = string_at(args, 1);
                 let value = string_at(args, 2);
-                let _ = container.set_element_edit_value(&path, &value);
+                // Upstream `Container.ElementEditValues[path] := value`
+                // raises `Exception.Create(GetName + ' can not be edited')`
+                // (`wbImplementation.pas:16444-16468`) and aborts the run;
+                // the discarded error made a refused edit a silent no-op.
+                if let Err(message) = container.set_element_edit_value(&path, &value) {
+                    return Err(ValueError::external_class("Exception", message));
+                }
             }
             Ok(())
         }),
@@ -459,8 +465,10 @@ pub(crate) fn register(adapter: &mut Adapter, state: &Rc<RefCell<ScriptRunState>
             {
                 let path = string_at(args, 1);
                 let value = super::value_to_native(args.values.get(2).unwrap_or(&Value::Empty));
-                if let Ok(value) = value {
-                    let _ = container.set_element_native_value(&path, value);
+                if let Ok(value) = value
+                    && let Err(message) = container.set_element_native_value(&path, value)
+                {
+                    return Err(ValueError::external_class("Exception", message));
                 }
             }
             Ok(())

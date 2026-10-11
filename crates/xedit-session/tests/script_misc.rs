@@ -97,7 +97,7 @@ fn the_string_list_surface_works() {
             "delta",
             "",
             "Script terminated itself, Result=1",
-            "Done: Applying script \"Strings\", Processed Records: 0, Elapsed Time: 00:00",
+            "Done: Applying script \"Strings\", Elapsed Time: 00:00",
             "You can close this application now.",
         ],
         "{}",
@@ -390,7 +390,7 @@ fn the_perl_regex_surface_works() {
             "c",
             "",
             "Script terminated itself, Result=1",
-            "Done: Applying script \"Regex\", Processed Records: 0, Elapsed Time: 00:00",
+            "Done: Applying script \"Regex\", Elapsed Time: 00:00",
             "You can close this application now.",
         ],
         "{}",
@@ -511,13 +511,18 @@ fn the_json_surface_works() {
     let _ = std::fs::remove_dir_all(&folder);
 }
 
-/// The corpus's `JSON - Demo.pas`: the part that needs only `AddMessage`,
-/// `wbGameMode` and the `JsonDataObjects` surface runs, and the script stops
-/// at its first `IntToStr` -- a JVCL `SysUtils` function, phase 6 step 8.
-/// Once step 8 lands, the whole demo runs and the full log is the one
-/// recorded by `the_json_surface_works` plus the demo's own text.
+/// The corpus's `JSON - Demo.pas`, the whole run against the oracle's log:
+/// Demo1..Demo3 print (the pretty JSON of `ToJSON(False)` on separate log
+/// lines, closed by the blank line of its trailing `#10`), the FO4-only demo
+/// is skipped, the script terminates itself with `Result=1`, and the closing
+/// line has no `Processed Records` segment (`wbCurrentProgress` is only set
+/// by the selection walk, `xeMainForm.pas:15298-15300`). The expected lines
+/// are the script section of the oracle's run of the parity case
+/// (`cargo xtask parity script --phase run --script "JSON - Demo"`, the
+/// cached `log.txt` of `run-JSON - Demo.pas.213e4092c0271760`, the `[mm:ss]`
+/// prefixes stripped).
 #[test]
-fn the_json_demo_corpus_script_runs_to_the_misc_surface() {
+fn the_json_demo_corpus_script_runs_the_whole_demo() {
     let _guard = session_lock();
     let scripts = std::env::var_os("XEDIT_SCRIPTS").map(PathBuf::from);
     let scripts = match scripts {
@@ -532,26 +537,57 @@ fn the_json_demo_corpus_script_runs_to_the_misc_surface() {
     }
     let mut session = open_session();
     let result = run(&mut session, &folder, "JSON - Demo.pas", json!({}));
-    let lines = lines(&result);
-    // `Demo1`: `TJsonBaseObject.Parse`, `S[]`, `A[]`, `Count`, `I[]`.
-    assert_eq!(lines[0], "Start: Applying script \"JSON - Demo\"", "{lines:?}");
-    assert_eq!(lines[1], "---------- Demo1 ----------", "{lines:?}");
-    assert_eq!(lines[2], "bar", "{lines:?}");
-    if result["aborted"] == false {
-        // Step 8's `IntToStr` is in: the whole demo runs.
-        assert_eq!(
-            lines[3], "2",
-            "the demo's Demo1 continues with IntToStr, so the whole log should \
-             be the full demo run"
-        );
-        return;
-    }
-    let text = script_fixture::abort_text(&result);
-    assert!(
-        text.contains("Undeclared Identifier 'IntToStr'"),
-        "the demo should stop at its first JVCL SysUtils call, not elsewhere: {text}"
+    assert_eq!(result["aborted"], false, "{}", script_fixture::abort_text(&result));
+    assert_eq!(result["self_terminated"], 1);
+    assert_eq!(
+        lines(&result),
+        [
+            "Start: Applying script \"JSON - Demo\"",
+            "---------- Demo1 ----------",
+            "bar",
+            "2",
+            "10",
+            "20",
+            "---------- Demo2 ----------",
+            "{",
+            "\t\"foo\": \"bar\",",
+            "\t\"bar\": \"foo\",",
+            "\t\"array\": [",
+            "\t\t10,",
+            "\t\t20,",
+            "\t\t{",
+            "\t\t\t\"value\": 12.3,",
+            "\t\t\t\"subarray\": [",
+            "\t\t\t\t100,",
+            "\t\t\t\t200",
+            "\t\t\t]",
+            "\t\t}",
+            "\t]",
+            "}",
+            "",
+            "---------- Demo3 ----------",
+            "{",
+            "\t\"foo\": [",
+            "\t\t\"bar\",",
+            "\t\t{},",
+            "\t\tnull,",
+            "\t\ttrue,",
+            "\t\tfalse,",
+            "\t\t{",
+            "\t\t\t\"key\": \"value\"",
+            "\t\t}",
+            "\t]",
+            "}",
+            "",
+            "---------- Demo FO4 ----------",
+            "Demo is available in FO4Edit only.",
+            "Script terminated itself, Result=1",
+            "Done: Applying script \"JSON - Demo\", Elapsed Time: 00:00",
+            "You can close this application now.",
+        ],
+        "{}",
+        script_fixture::abort_text(&result)
     );
-    assert!(text.contains("Aborted: Applying script \"JSON - Demo\""), "{text}");
 }
 
 /// An adapter error carries its Delphi class name into the run's
