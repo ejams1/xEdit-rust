@@ -21,7 +21,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use xedit_core::interface::{ElementRef, FileRef, FormID};
+use xedit_core::interface::{ElementRef, FileRef, FileState, FormID};
 use xedit_script::adapter::{Adapter, Args};
 use xedit_script::values::{ClassDef, Value, VarType};
 
@@ -392,6 +392,18 @@ pub(crate) fn register(adapter: &mut Adapter, state: &Rc<RefCell<ScriptRunState>
             move |result, args| {
                 if let Some(file) = file_at(args, 0) {
                     let index = integer_at(args, 1)? as i32;
+                    // The hardcoded file's records resolve into the game
+                    // master, its single master (mirrors
+                    // `ScriptRunState::master_at`, whichever of the two
+                    // registrations the dispatch picks).
+                    if file.get_file_states().contains(FileState::fsIsHardcoded) {
+                        if index == 0
+                            && let Some(master) = crate::script::game_master_element()
+                        {
+                            *result = state.borrow().element_value(&master);
+                        }
+                        return Ok(());
+                    }
                     // `if Args.Values[1] < _File.MasterCount[True]`.
                     if index < file.get_master_count(true)
                         && let Some(master) = file.get_master(index, true)
@@ -406,7 +418,12 @@ pub(crate) fn register(adapter: &mut Adapter, state: &Rc<RefCell<ScriptRunState>
     add(adapter, "MasterCount", 1, value_param(), |result, args| {
         *result = Value::Integer(0);
         if let Some(file) = file_at(args, 0) {
-            *result = Value::Integer(file.get_master_count(true));
+            if file.get_file_states().contains(FileState::fsIsHardcoded) {
+                // The game master, as `ScriptRunState::master_count`.
+                *result = Value::Integer(i32::from(crate::script::game_master_element().is_some()));
+            } else {
+                *result = Value::Integer(file.get_master_count(true));
+            }
         }
         Ok(())
     });

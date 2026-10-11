@@ -79,6 +79,14 @@ struct Cli {
     #[arg(long, global = true)]
     translate: bool,
 
+    /// The program folder scripts read as `ProgramPath` (upstream: the folder of the program, `ExtractFilePath(ParamStr(0))`). Default: empty, as before this switch existed; the parity harness passes the folder that stands in for the GUI's `bin` folder.
+    #[arg(long, global = true)]
+    program_path: Option<String>,
+
+    /// Let the loaded game master be edited and saved, as xEdit's -IKnowIllBreakMyGameWithThis does (`TwbFile.GetIsEditable`): a script of the parity corpus edits the private copy of the master.
+    #[arg(long, global = true)]
+    allow_edit_game_master: bool,
+
     #[command(subcommand)]
     action: Action,
 }
@@ -409,6 +417,9 @@ enum ScriptAction {
         /// Run the script with editing disabled and save nothing.
         #[arg(long)]
         dry_run: bool,
+        /// Build the reference information before the script runs, as the GUI's script mode does at load (xEdit's `-nobuildrefs` turns it off there); the parity harness passes it for the scripts that read `ReferencedBy`.
+        #[arg(long)]
+        build_refs: bool,
     },
 }
 
@@ -2139,9 +2150,10 @@ fn command_of(action: Action) -> Result<(String, Value), CommandError> {
                 scripts,
                 no_save,
                 dry_run,
+                build_refs,
             } => (
                 "script.run".to_owned(),
-                json!({ "file": file, "scripts": scripts, "save": !no_save, "dry_run": dry_run }),
+                json!({ "file": file, "scripts": scripts, "save": !no_save, "dry_run": dry_run, "build_refs": build_refs }),
             ),
         },
         Action::Conflicts {
@@ -2399,6 +2411,15 @@ fn main() -> ExitCode {
     xedit_session::commands::set_fill_pnam_on_load(cli.fill_pnam);
     xedit_session::commands::set_language_on_load(cli.language.as_deref());
     xedit_session::commands::set_translate_on_load(cli.translate);
+    // The two globals the script API reads (`ProgramPath`, and the
+    // `GetIsEditable` gate of the game master): set before any load, and not
+    // touched by it (the data path is derived from the loaded plugins).
+    if let Some(path) = &cli.program_path {
+        xedit_core::interface::globals::set_program_path(path);
+    }
+    if cli.allow_edit_game_master {
+        xedit_core::interface::globals::set_allow_edit_game_master(true);
+    }
     xedit_session::commands::set_quick_clean_on_load(matches!(cli.action, Action::Clean { quick: true, .. }));
     // The settings `-CheckForErrors` gives the load.
     let check = matches!(cli.action, Action::Check { .. });

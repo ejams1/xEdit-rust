@@ -1088,7 +1088,13 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
             let utf8_without_bom = args.values.get(1).map_or(Ok(true), xedit_script::values::to_bool)?;
             let _ = utf8_without_bom;
             let bytes = std::fs::read(&file_name).map_err(|error| {
-                ValueError::external_class("EFOpenError", format!("Cannot open file \"{file_name}\". {error}"))
+                ValueError::external_class(
+                    "EFOpenError",
+                    format!(
+                        "Cannot open file \"{file_name}\". {}",
+                        crate::script_strings::os_error_text(&error)
+                    ),
+                )
             })?;
             let text = decode_stream_bytes(&bytes, None);
             let parsed = parse_json(&text)?;
@@ -1169,7 +1175,13 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
             let text = to_json(&node_of(&object), compact);
             let bytes = encode_stream_bytes(&text, encoding, utf8_without_bom);
             std::fs::write(&file_name, bytes).map_err(|error| {
-                ValueError::external_class("EFCreateError", format!("Cannot create file \"{file_name}\". {error}"))
+                ValueError::external_class(
+                    "EFCreateError",
+                    format!(
+                        "Cannot create file \"{file_name}\". {}",
+                        crate::script_strings::os_error_text(&error)
+                    ),
+                )
             })
         }),
     );

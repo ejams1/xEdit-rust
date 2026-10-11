@@ -74,12 +74,21 @@
 //! - parse: `xedit script check <file>` (exit 0 = parsed, else the
 //!   `file:line: message` lines), with `XEDIT_SCRIPTS` set to the scripts
 //!   folder so the units a script `uses` resolve there.
-//! - run: `xedit --json --edit --game <MODE> --load <plugin>... script run
-//!   <scripts>\<name> --scripts <scripts dir> --output <out dir>`, with the
-//!   same scripts folder (the script and its units copied in, as the
-//!   oracle's run folder has them), the plugins of the case (a private copy
-//!   when the case saves), the output folder standing in for
-//!   `wbOutputPath`, and `result.messages` standing in for the message log.
+//! - run: `xedit --json --edit --game <MODE> --allow-edit-game-master
+//!   --program-path <run>\bin\ --load <run>\Data\\<plugin>... script run
+//!   <run>\<name> --scripts <run> [--build-refs]`, from the run folder as
+//!   the working directory: the script and its units sit in the run folder
+//!   itself (the oracle's `-script:<work>\<name>.pas`), the plugins are
+//!   private copies below its `Data` (the oracle's `-D:` folder, from which
+//!   the port derives its data path, so the string tables and `DataPath`
+//!   messages see the same folder the oracle does), `bin` stands in for the
+//!   oracle's program folder (`ProgramPath`), `--allow-edit-game-master` is
+//!   the oracle's `-IKnowIllBreakMyGameWithThis`, `--build-refs` its load's
+//!   `wbBuildRefs` for the cases that read `ReferencedBy`, and
+//!   `result.messages` stands in for the message log. The comparison maps
+//!   each side's run folder to `<root>` and the wall clock of a save suffix
+//!   to `<time>` (see [`normalize_lines`]), because the two runs' absolute
+//!   paths and clock digits differ by construction.
 
 use std::collections::BTreeSet;
 use std::fs;
@@ -564,11 +573,13 @@ struct ScriptOutcome {
     /// The parse phase: `equal` (the oracle compiled it and the port parsed
     /// it), `equal-error` (both refused it), `different`, `oracle-failed`,
     /// `port-failed` or `port-pending`. The run phase: `equal`,
-    /// `different`, `known-difference` (the oracle refused a script
-    /// `parse.json` accepts, with the reason), `oracle-interactive` (a
-    /// dialog; deferred, the port can not run it headless either), `form`
-    /// (not run, see `class_of`), `oracle-failed`, `port-failed` or
-    /// `port-pending`.
+    /// `equal-log-loss` (the oracle's memo lost log lines; the port's log is
+    /// the superset in order with the first, last and `Done:` lines equal,
+    /// see [`memo_loss`]), `different`, `known-difference` (the oracle
+    /// refused a script `parse.json` accepts, with the reason),
+    /// `oracle-interactive` (a dialog; deferred, the port can not run it
+    /// headless either), `form` (not run, see `class_of`), `oracle-failed`,
+    /// `port-failed` or `port-pending`.
     status: &'static str,
     #[serde(skip_serializing_if = "Option::is_none")]
     detail: Option<String>,
@@ -830,7 +841,12 @@ pub(super) fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
 
     let equal = outcomes
         .iter()
-        .filter(|o| matches!(o.status, "equal" | "equal-error" | "known-difference"))
+        .filter(|o| {
+            matches!(
+                o.status,
+                "equal" | "equal-log-loss" | "equal-error" | "known-difference"
+            )
+        })
         .count();
     let report = ScriptReport {
         tag,
@@ -1563,53 +1579,76 @@ fn port_run(
     mut outcome: ScriptOutcome,
 ) -> Result<ScriptOutcome> {
     let dir = runner.scratch.join(format!("{}-port", task.game.mode)).join(&task.stem);
+    // A folder kept from an earlier run of a different recipe must not leak
+    // files into this run's capture.
+    if dir.exists() {
+        fs::remove_dir_all(&dir)?;
+    }
     fs::create_dir_all(&dir)?;
     let out = dir.join("out");
-    let script_dir = dir.join("scripts");
+    let data = dir.join("Data");
+    let bin = dir.join("bin");
     fs::create_dir_all(&out)?;
-    fs::create_dir_all(&script_dir)?;
+    fs::create_dir_all(&data)?;
+    fs::create_dir_all(&bin)?;
     let (text, units) = script_and_units(scripts, &task.script)?;
-    fs::write(script_dir.join(&task.script), &text)?;
+    // The script and the units it `uses` live in the run folder itself, as
+    // the oracle's do (`-script:<work>\<name>.pas`), so `ScriptsPath()` is
+    // the run folder on both sides.
+    fs::write(dir.join(&task.script), &text)?;
     for (name, text) in &units {
-        fs::write(script_dir.join(format!("{name}.pas")), text)?;
+        fs::write(dir.join(format!("{name}.pas")), text)?;
     }
-    // The plugins: a private copy when the case compares saved bytes (the
-    // port saves in place), the game's files otherwise. Masters load with
-    // the plugins, as they do on the oracle's side.
+    // The plugins load from a private data folder, as the oracle's copies
+    // do: the port derives its data path from the loaded plugin's folder, so
+    // string tables, `DataPath` messages, the DDS scan and the save paths all
+    // see a folder without the game's `Strings` files, exactly as the
+    // oracle's private Data does.
     let names: Vec<&str> = task.load.iter().map(String::as_str).collect();
     let loaded = load_list(task.game, &task.data, &names)?;
-    let plugins = if task.save.is_empty() {
-        loaded
-    } else {
-        let data = dir.join("data");
-        fs::create_dir_all(&data)?;
-        let mut copied = Vec::new();
-        for source in loaded {
-            let target = data.join(source.file_name().unwrap());
-            fs::copy(&source, &target)?;
-            copied.push(target);
-        }
-        copied
-    };
+    let mut plugins = Vec::new();
+    for source in loaded {
+        let name = source.file_name().context("plugin without a name")?;
+        fs::copy(&source, data.join(name))?;
+        // The oracle's `-D:` value ends `Data\\` and its log paths repeat
+        // the separator (`<work>\Data\\Skyrim.esm`); the port takes its data
+        // path from the loaded plugin's folder, so the mode names the copies
+        // with the same doubled separator and the printed paths compare.
+        plugins.push(PathBuf::from(format!(
+            "{}\\\\{}",
+            data.display(),
+            name.to_string_lossy()
+        )));
+    }
     let mut command = std::process::Command::new(port);
     command
         .args(["--json", "--edit", "--game", task.game.mode])
         .arg("--dont-cache")
-        .env("XEDIT_SCRIPTS", scripts);
+        // `-IKnowIllBreakMyGameWithThis` on the oracle's side: without it the
+        // private copy's game master is not editable and the mutating cases
+        // do not save.
+        .arg("--allow-edit-game-master")
+        // The folder standing in for the oracle's `bin` (`ProgramPath()`,
+        // where a script's `ProgramPath + 'Edit Scripts\...'` lands, and
+        // fails to, as on the oracle).
+        .arg("--program-path")
+        .arg(format!("{}\\", bin.display()))
+        .env("XEDIT_SCRIPTS", &dir);
     for plugin in &plugins {
         command.arg("--load").arg(plugin);
     }
     command
         .arg("script")
         .arg("run")
-        .arg(script_dir.join(&task.script))
+        .arg(dir.join(&task.script))
         .arg("--scripts")
-        .arg(&script_dir);
-    // The port's `script run` saves the plugins it changed at its end (the
-    // GUI's `SaveChanged` on close), and resolves `wbOutputPath` against
-    // the working directory when nothing set it (the oracle's `-O:` writes
-    // to `out/`, the port's CWD is that folder).
-    command.current_dir(&out).stdin(std::process::Stdio::null());
+        .arg(&dir);
+    if task.build_refs {
+        // The oracle's script mode builds the references at its load unless
+        // `-nobuildrefs` was passed; the cases that read them say so.
+        command.arg("--build-refs");
+    }
+    command.current_dir(&dir).stdin(std::process::Stdio::null());
     let started = std::time::Instant::now();
     let output = command.output()?;
     outcome.port_seconds = Some(started.elapsed().as_secs_f64());
@@ -1640,8 +1679,13 @@ fn port_run(
         })
         .unwrap_or_default();
     let oracle_log = fs::read_to_string(oracle_dir.join("log.txt"))?;
-    let oracle_lines = script_lines(&oracle_log);
-    let port_lines = script_lines(&messages);
+    // Paths of two different runs stand for each other: the oracle's work
+    // folder and the port's run folder become `<root>`, and the wall clock
+    // of a save suffix becomes `<time>`.
+    let oracle_root = work_root_of(&oracle_log);
+    let port_root = dir.display().to_string();
+    let oracle_lines = normalize_lines(script_lines(&oracle_log), oracle_root.as_deref());
+    let port_lines = normalize_lines(script_lines(&messages), Some(&port_root));
     let mut differences: Vec<String> = Vec::new();
     if oracle_lines != port_lines {
         let first = oracle_lines
@@ -1668,6 +1712,13 @@ fn port_run(
     outcome.log_lines = oracle_lines.len();
     if differences.is_empty() {
         outcome.status = "equal";
+    } else if let Some(lost) = memo_loss(&oracle_lines, &port_lines) {
+        outcome.status = "equal-log-loss";
+        outcome.detail = Some(format!(
+            "  the oracle's memo of the run lost {} lines in {} runs; every line it kept is the port's, in order, and the first, last and Done lines are equal",
+            port_lines.len() - oracle_lines.len(),
+            lost
+        ));
     } else {
         outcome.status = "different";
         let extra = differences.len().saturating_sub(LISTED_DIFFERENCES);
@@ -1686,8 +1737,9 @@ fn port_run(
     Ok(outcome)
 }
 
-/// The files a port run left: its output and scripts folders, and its data
-/// folder less the plugins that went in.
+/// The files a port run left: its output folder, the run folder itself (the
+/// script folder), the private data folder less the plugins that went in,
+/// and its `bin` (the program folder).
 fn capture_port(
     dir: &Path,
     skip: &BTreeSet<String>,
@@ -1697,40 +1749,52 @@ fn capture_port(
     let mut saved = Vec::new();
     let roots = [
         (dir.join("out"), "out"),
-        (dir.join("scripts"), "script"),
-        (dir.join("data"), "data"),
+        (dir.to_path_buf(), "script"),
+        (dir.join("Data"), "data"),
+        (dir.join("bin"), "program"),
     ];
     for (root, prefix) in &roots {
         if !root.is_dir() {
             continue;
         }
         let mut stack = vec![root.clone()];
-        while let Some(dir) = stack.pop() {
-            for entry in fs::read_dir(&dir)? {
+        while let Some(folder) = stack.pop() {
+            for entry in fs::read_dir(&folder)? {
                 let path = entry?.path();
                 if path.is_dir() {
+                    // The private folders of the run are walked of their own,
+                    // not as part of the run folder.
+                    let name = path.file_name().unwrap_or_default().to_string_lossy().to_lowercase();
+                    if *prefix == "script" && RUN_FOLDERS.contains(&name.as_str()) {
+                        continue;
+                    }
                     stack.push(path);
                     continue;
                 }
                 let name = path.file_name().unwrap_or_default().to_string_lossy().into_owned();
                 let lower = name.to_lowercase();
-                let relative = path.strip_prefix(root).unwrap_or(&path);
-                let mapped = format!("{prefix}/{}", relative.to_string_lossy().replace('\\', "/"));
-                let machinery = match *prefix {
-                    "out" => false,
-                    "script" => lower.ends_with(".pas") || skip.contains(&lower),
-                    _ => skip.contains(&lower),
-                };
-                if machinery {
-                    continue;
-                }
-                // A plugin the case saves is compared under the name of
-                // the case, as the oracle's capture maps it; the port
-                // saves in place.
+                // A plugin the case saves is compared under the name of the
+                // case, as the oracle's capture maps it; the port's copies
+                // live in the private data folder and the check comes before
+                // the machinery of the load, which every plugin is part of.
                 if *prefix == "data"
                     && let Some(plugin) = save.iter().find(|plugin| saved_matches(plugin, &lower))
                 {
                     saved.push(capture(&path, &format!("saved/{plugin}"))?);
+                    continue;
+                }
+                let relative = path.strip_prefix(root).unwrap_or(&path);
+                let mapped = format!("{prefix}/{}", relative.to_string_lossy().replace('\\', "/"));
+                // The machinery of the run, not output of the script: the
+                // port's report, the script and its units, the plugins that
+                // went in, and the same program artifacts the oracle drops.
+                let machinery = match *prefix {
+                    "out" => false,
+                    "script" => lower == "port.json" || lower.ends_with(".pas") || skip.contains(&lower),
+                    "program" => is_gui_artifact(&lower) || skip.contains(&lower) || is_windows_executable(&path),
+                    _ => skip.contains(&lower),
+                };
+                if machinery {
                     continue;
                 }
                 files.push(capture(&path, &mapped)?);
@@ -1805,6 +1869,130 @@ fn strip_time(line: &str) -> &str {
     line
 }
 
+/// The work folder of an oracle log (`Using Backup Path: <work>\backup\`),
+/// the absolute path whose occurrences a comparison maps to `<root>`. The
+/// recorded path may carry a doubled trailing separator (`xeInit` appends
+/// one to the `-B:` value), so the root is what precedes `\backup`.
+fn work_root_of(log: &str) -> Option<String> {
+    for line in log.lines() {
+        let line = strip_time(line.trim_end_matches(['\r', '\n']));
+        if let Some(rest) = line.strip_prefix("Using Backup Path: ")
+            && let Some(at) = rest.find("\\backup")
+        {
+            return Some(rest[..at].to_owned());
+        }
+    }
+    None
+}
+
+/// Normalizes a log section for the comparison: the run's own absolute path
+/// becomes `<root>` (the oracle's lines carry its work folder, the port's its
+/// run folder), and the digits of a `.save.<timestamp>` suffix become
+/// `<time>` (the two runs saved at different moments of the clock).
+fn normalize_lines(lines: Vec<String>, root: Option<&str>) -> Vec<String> {
+    let mut out = Vec::with_capacity(lines.len());
+    for line in lines {
+        let line = match root {
+            Some(root) if !root.is_empty() => replace_ci(&line, root, "<root>"),
+            _ => line,
+        };
+        out.push(normalize_save_time(line));
+    }
+    out
+}
+
+/// `text.replace(needle, replacement)` without regard to case: the two runs
+/// print the same base folder, but a side could differ in the case of a path
+/// component.
+fn replace_ci(text: &str, needle: &str, replacement: &str) -> String {
+    // ASCII case folding keeps the byte lengths equal, so the found offsets
+    // in the folded copy are the offsets in the text.
+    let folded = fold_ascii(text);
+    let folded_needle = fold_ascii(needle);
+    let mut out = String::with_capacity(text.len());
+    let mut at = 0;
+    while let Some(found) = folded[at..].find(&folded_needle) {
+        out.push_str(&text[at..at + found]);
+        out.push_str(replacement);
+        at += found + needle.len();
+    }
+    out.push_str(&text[at..]);
+    out
+}
+
+/// A copy of `text` with ASCII letters lower-cased; byte lengths are
+/// preserved.
+fn fold_ascii(text: &str) -> String {
+    text.chars().map(|c| c.to_ascii_lowercase()).collect()
+}
+
+/// The digits of every `.save.<yyyy_mm_dd_hh_nn_ss>` suffix become
+/// `<time>`, so the `Saving:` and `Queued renaming of save` lines of a
+/// cached oracle log and of a port run compare.
+fn normalize_save_time(mut line: String) -> String {
+    let mut from = 0;
+    while let Some(found) = line[from..].find(".save.") {
+        let start = from + found + ".save.".len();
+        let mut end = start;
+        while let Some(c) = line[end..].chars().next() {
+            if !(c.is_ascii_digit() || c == '_') {
+                break;
+            }
+            end += c.len_utf8();
+        }
+        if end > start {
+            line.replace_range(start..end, "<time>");
+            from = start + "<time>".len();
+        } else {
+            from = start;
+        }
+    }
+    line
+}
+
+/// Whether the oracle's lines are the port's with runs left out, under the
+/// memo-loss rule: the port is the superset in order, and the first, last and
+/// `Done:` lines are equal. `Some(runs)` is the class `parity check` calls
+/// `equal-log-loss`; the oracle's log is the GUI memo, which loses `AddMessage`
+/// lines to its `PostAddMessage` queue. The rule cannot tell a lost line from
+/// a port line the oracle never had -- the class says so by its name -- so the
+/// guards are the lines that must match.
+fn memo_loss(oracle: &[String], port: &[String]) -> Option<usize> {
+    if oracle.len() >= port.len() || oracle.first() != port.first() || oracle.last() != port.last() {
+        return None;
+    }
+    let done = |lines: &[String]| {
+        lines
+            .iter()
+            .find(|line| line.starts_with("Done: Applying script"))
+            .cloned()
+    };
+    if done(oracle) != done(port) {
+        return None;
+    }
+    lost_blocks(oracle, port)
+}
+
+/// Whether `oracle` is `port` with runs of lines left out, and how many
+/// runs: the lines a log lost (`parity check`'s helper, the same rule).
+fn lost_blocks(oracle: &[String], port: &[String]) -> Option<usize> {
+    let mut blocks = 0;
+    let mut in_gap = false;
+    let mut next = oracle.iter().peekable();
+    for line in port {
+        if next.peek().is_some_and(|expected| *expected == line) {
+            next.next();
+            in_gap = false;
+        } else {
+            if !in_gap {
+                blocks += 1;
+            }
+            in_gap = true;
+        }
+    }
+    (next.peek().is_none() && blocks > 0).then_some(blocks)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1858,6 +2046,72 @@ Setting a bookmark
 ";
         assert_eq!(script_lines(silent), vec!["You can close this application now."]);
         assert_eq!(script_lines("[00:00] Loading files...\n"), Vec::<String>::new());
+    }
+
+    #[test]
+    fn the_two_runs_paths_and_clock_normalize() {
+        let oracle = concat!(
+            "Using Backup Path: M:\\cache\\oracle-work\\run-x.abc.123\\backup\\\r\n",
+            "[00:06] Start: Applying script \"q\"\r\n",
+            "[00:07] Queued renaming of save \"M:\\cache\\oracle-work\\run-x.abc.123\\Data\\\\Skyrim.esm.save.2026_10_10_16_57_47\" to \"M:\\cache\\oracle-work\\run-x.abc.123\\Data\\\\Skyrim.esm\" on shutdown.\r\n",
+            "[00:08] Exception in unit UserScript line 27: [EFCreateError] Cannot create file \"M:\\cache\\oracle-work\\run-x.abc.123\\bin\\Edit Scripts\\cells.txt\". The system cannot find the path specified\r\n",
+            "You can close this application now.\r\n",
+        );
+        let root = work_root_of(oracle).unwrap();
+        assert_eq!(root, "M:\\cache\\oracle-work\\run-x.abc.123");
+        // The `-B:` value's doubled trailing separator does not confuse it.
+        assert_eq!(
+            work_root_of("Using Backup Path: M:\\cache\\w\\backup\\\\\r\n").unwrap(),
+            "M:\\cache\\w"
+        );
+        let oracle_lines = normalize_lines(script_lines(oracle), Some(&root));
+        assert_eq!(
+            oracle_lines,
+            vec![
+                "Start: Applying script \"q\"".to_owned(),
+                "Queued renaming of save \"<root>\\Data\\\\Skyrim.esm.save.<time>\" to \"<root>\\Data\\\\Skyrim.esm\" on shutdown."
+                    .to_owned(),
+                "Exception in unit UserScript line 27: [EFCreateError] Cannot create file \"<root>\\bin\\Edit Scripts\\cells.txt\". The system cannot find the path specified"
+                    .to_owned(),
+                "You can close this application now.".to_owned(),
+            ]
+        );
+        let port = "[00:06] Start: Applying script \"q\"\n\
+                    [00:07] Queued renaming of save \"M:\\scratch\\SSE-port\\run-x\\Data\\\\Skyrim.esm.save.2026_10_10_21_02_08\" to \"M:\\scratch\\SSE-port\\run-x\\Data\\\\Skyrim.esm\" on shutdown.\n\
+                    [00:08] Exception in unit UserScript line 27: [EFCreateError] Cannot create file \"M:\\scratch\\SSE-port\\run-x\\bin\\Edit Scripts\\cells.txt\". The system cannot find the path specified\n\
+                    You can close this application now.\n";
+        let port_lines = normalize_lines(script_lines(port), Some("M:\\scratch\\SSE-port\\run-x"));
+        assert_eq!(oracle_lines, port_lines);
+        // A path outside either root is left alone; a `.save.` without
+        // digits is too.
+        assert_eq!(
+            normalize_save_time("Saving: x.save.txt".to_owned()),
+            "Saving: x.save.txt"
+        );
+        assert_eq!(
+            normalize_save_time("Saving: Skyrim.esm.save.2026_10_10_16_57_47".to_owned()),
+            "Saving: Skyrim.esm.save.<time>"
+        );
+        assert_eq!(replace_ci("A:\\B\\C", "a:\\b", "<root>"), "<root>\\C");
+    }
+
+    #[test]
+    fn a_memo_truncated_log_only_passes_the_superset_rule_with_equal_guards() {
+        let mut port: Vec<String> = (0..50).map(|i| format!("body {i}")).collect();
+        port.insert(0, "Start: Applying script \"x\"".to_owned());
+        port.push("Done: Applying script \"x\", Processed Records: 50".to_owned());
+        port.push("You can close this application now.".to_owned());
+        let mut oracle = port.clone();
+        oracle.drain(30..40);
+        assert_eq!(memo_loss(&oracle, &port), Some(1));
+        let mut other_done = port.clone();
+        let at = other_done.len() - 2;
+        other_done[at] = "Done: Applying script \"x\", Processed Records: 51".to_owned();
+        assert_eq!(memo_loss(&other_done, &port), None);
+        let mut other_start = port.clone();
+        other_start[0] = "Start: Applying script \"y\"".to_owned();
+        assert_eq!(memo_loss(&other_start, &port), None);
+        assert_eq!(memo_loss(&port, &port), None);
     }
 
     #[test]

@@ -543,7 +543,10 @@ impl StringListObject {
     /// `TEncoding` for the two-argument one.
     pub fn load_from_file(&mut self, file_name: &str, encoding: Option<EncodingKind>) -> Result<(), ValueError> {
         let bytes = std::fs::read(file_name).map_err(|error| {
-            ValueError::external_class("EFOpenError", format!("Cannot open file \"{file_name}\". {error}"))
+            ValueError::external_class(
+                "EFOpenError",
+                format!("Cannot open file \"{file_name}\". {}", os_error_text(&error)),
+            )
         })?;
         let text = decode_file(&bytes, encoding);
         self.set_text(&text);
@@ -556,8 +559,28 @@ impl StringListObject {
     pub fn save_to_file(&mut self, file_name: &str, encoding: Option<EncodingKind>) -> Result<(), ValueError> {
         let bytes = encode_file(&self.text(), encoding);
         std::fs::write(file_name, bytes).map_err(|error| {
-            ValueError::external_class("EFCreateError", format!("Cannot create file \"{file_name}\". {error}"))
+            ValueError::external_class(
+                "EFCreateError",
+                format!("Cannot create file \"{file_name}\". {}", os_error_text(&error)),
+            )
         })
+    }
+}
+
+/// The text of an OS error as Delphi raises it: the system text without
+/// Rust's ` (os error N)` suffix and without the trailing period
+/// (`SysErrorMessage`'s shape, which is what the oracle's `EFOpenError`/
+/// `EFCreateError` lines carry: `The system cannot find the path
+/// specified`).
+pub(crate) fn os_error_text(error: &std::io::Error) -> String {
+    let text = error.to_string();
+    let text = match text.rfind(" (os error ") {
+        Some(at) => text[..at].to_owned(),
+        None => text,
+    };
+    match text.strip_suffix('.') {
+        Some(stripped) => stripped.to_owned(),
+        None => text,
     }
 }
 
