@@ -1371,7 +1371,7 @@ fn register_functions(adapter: &mut Adapter) {
         *value = text_value(text.into_bytes().into_iter().take(1).collect::<Vec<u8>>());
         Ok(())
     });
-    f(adapter, "GetFormatSettings", &[EMPTY], |_value, _args| {
+    f(adapter, "GetFormatSettings", &[], |_value, _args| {
         // The port's format settings are fixed at the RTL defaults; there is
         // nothing to reload from the OS.
         Ok(())
@@ -1417,11 +1417,11 @@ fn register_functions(adapter: &mut Adapter) {
         // call has nothing it can do.
         Ok(())
     });
-    f(adapter, "Abort", &[EMPTY], |_value, _args| Err(external(S_ABORT_ERROR)));
-    f(adapter, "OutOfMemoryError", &[EMPTY], |_value, _args| {
+    f(adapter, "Abort", &[], |_value, _args| Err(external(S_ABORT_ERROR)));
+    f(adapter, "OutOfMemoryError", &[], |_value, _args| {
         Err(external(S_OUT_OF_MEMORY))
     });
-    f(adapter, "Beep", &[EMPTY], |_value, _args| {
+    f(adapter, "Beep", &[], |_value, _args| {
         // `MessageBeep(0)`; a hidden run must stay silent.
         Ok(())
     });
@@ -1546,7 +1546,7 @@ fn register_functions(adapter: &mut Adapter) {
     f(adapter, "UnloadPackage", &[EMPTY], |_value, _args| {
         Err(ValueError::not_implemented("UnloadPackage"))
     });
-    f(adapter, "RaiseLastWin32Error", &[EMPTY], |_value, _args| {
+    f(adapter, "RaiseLastWin32Error", &[], |_value, _args| {
         Err(external(os_error_message()))
     });
     f(adapter, "Win32Check", &[EMPTY], |value, args| {

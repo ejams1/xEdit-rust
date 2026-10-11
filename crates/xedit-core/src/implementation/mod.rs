@@ -2596,11 +2596,18 @@ impl MainRecordImpl {
     }
 
     /// Port of `GetShortNameInternal`; the GUI's `wbDisplayShorterNames`
-    /// gives `EditorID "Full Name" [SIG:FormID]`.
-    fn short_name_internal(&self) -> String {
+    /// gives `EditorID "Full Name" [SIG:FormID]`. The full name shows only
+    /// for `aForName` (`Name`/`GetName`), because `wbNoFullInShortName` is
+    /// `True` and never changed (`wbInterface.pas:279`): `ShortName` of a
+    /// record is `EditorID [SIG:FormID]`.
+    fn short_name_internal(&self, a_for_name: bool) -> String {
         if crate::interface::globals::display_shorter_names() {
             let mut result = self.get_editor_id();
-            let full_name = self.get_full_name();
+            let full_name = if a_for_name {
+                self.get_full_name()
+            } else {
+                String::new()
+            };
             if !full_name.is_empty() {
                 if !result.is_empty() {
                     result.push(' ');
@@ -4025,7 +4032,7 @@ impl Element for MainRecordImpl {
 
     /// Port of `TwbMainRecord.GetName`.
     fn get_name(&self) -> String {
-        let mut result = self.short_name_internal();
+        let mut result = self.short_name_internal(true);
         if let Some(def) = &self.mr_def
             && let Some(main_record) = self.self_ref.upgrade().map(|record| record as MainRecordRef)
         {
@@ -4499,7 +4506,7 @@ impl MainRecord for MainRecordImpl {
     }
 
     fn get_short_name(&self) -> String {
-        self.short_name_internal()
+        self.short_name_internal(false)
     }
 
     /// Port of `TwbMainRecord.GetIsPartialForm`: only a record whose
