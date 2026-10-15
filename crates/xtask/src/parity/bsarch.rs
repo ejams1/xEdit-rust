@@ -835,8 +835,23 @@ fn read_full(file: &mut File, buffer: &mut [u8]) -> Result<usize> {
 /// The lines of a run's text that do not depend on the run: without the
 /// banner, the progress, the timings and the thread wording, with the output
 /// folder replaced.
+///
+/// The folder is replaced in both separators: `BSArch.exe` echoes a folder it
+/// was given with forward slashes back in backslashes (the `Cannot create
+/// file` message of an unpack it stops), and the port echoes it as given, so
+/// with a `XEDIT_PARITY_SCRATCH` spelled `M:/...` the oracle's own folder
+/// would stay in the text and read as a difference.
 fn normalize_log(text: &[u8], folder: &str) -> String {
-    let text = String::from_utf8_lossy(text).replace(folder, "<out>");
+    let mut text = String::from_utf8_lossy(text).into_owned();
+    text = text.replace(folder, "<out>");
+    let other = if folder.contains('/') {
+        folder.replace('/', "\\")
+    } else {
+        folder.replace('\\', "/")
+    };
+    if other != folder {
+        text = text.replace(&other, "<out>");
+    }
     text.split("\r\n")
         .filter(|line| !line.starts_with("Done in"))
         .map(|line| {
@@ -1576,4 +1591,23 @@ fn synthetic(runner: &Runner, only: Option<&str>) -> Result<Vec<Outcome>> {
         });
     }
     Ok(outcomes)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_output_folder_is_replaced_in_both_separators() {
+        let message = r"Error processing 'meshes\wide\?.nif': Cannot create file 'M:\work\unpack-oracle\meshes\wide\?.nif'. The filename, directory name, or volume label syntax is incorrect";
+        let normalized = normalize_log(message.as_bytes(), "M:/work/unpack-oracle");
+        assert!(
+            normalized.contains(r"<out>\meshes\wide\?.nif"),
+            "the folder was not replaced: {normalized}"
+        );
+        assert!(!normalized.contains(r"M:\work"), "the folder stayed in: {normalized}");
+        // And a folder spelled with backslashes for a text that echoes forward.
+        let normalized = normalize_log(b"out M:/work/port/x.nif", r"M:\work\port");
+        assert_eq!(normalized, "out <out>/x.nif");
+    }
 }
