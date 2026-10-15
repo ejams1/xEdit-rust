@@ -362,6 +362,32 @@ pub(super) fn run_gui_with(
     peak_file: &Path,
     extras: &gui::GuiExtras,
 ) -> Result<gui::GuiResult> {
+    run_gui_with_args(
+        runner,
+        game,
+        plugins,
+        script,
+        build_refs,
+        work,
+        peak_file,
+        extras,
+        Vec::new(),
+    )
+}
+
+/// [`run_gui_with`] with switches of the GUI added to its command line.
+#[allow(clippy::too_many_arguments)]
+pub(super) fn run_gui_with_args(
+    runner: &Runner,
+    game: &Game,
+    plugins: Vec<PathBuf>,
+    script: String,
+    build_refs: bool,
+    work: PathBuf,
+    peak_file: &Path,
+    extras: &gui::GuiExtras,
+    extra_args: Vec<String>,
+) -> Result<gui::GuiResult> {
     let exe = runner.oracle_dir.join(gui::exe_name(game.mode));
     ensure!(exe.exists(), "{} does not exist", exe.display());
     let expected_peak = expected_peak(peak_file, &plugins);
@@ -378,7 +404,7 @@ pub(super) fn run_gui_with(
         budget: &runner.budget,
         expected_peak,
         max_memory: runner.max_memory,
-        extra_args: Vec::new(),
+        extra_args,
     };
     let result = run.run_with(extras);
     if let Ok(result) = &result
@@ -562,6 +588,30 @@ struct EditSequence {
     /// so an official module that is not editable can be edited.
     #[serde(default)]
     rename: std::collections::BTreeMap<String, String>,
+    /// The dialogs the GUI's handlers show during the steps, in the order
+    /// they come, and how to answer them (a copy with overwriting asks which
+    /// files to copy into and whether to overwrite; "Create New File" which
+    /// template and the name).
+    #[serde(default)]
+    answers: Vec<SequenceAnswer>,
+    /// The GUI runs with `-AllowMakePartial` and the port with
+    /// `--allow-make-partial`: a cell or worldspace copied into a file that
+    /// lacks it becomes a partial form.
+    #[serde(default)]
+    allow_make_partial: bool,
+}
+
+/// A dialog an edit sequence answers (see [`gui::Answer`]).
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SequenceAnswer {
+    class: String,
+    #[serde(default)]
+    title: String,
+    #[serde(default)]
+    keys: Vec<u16>,
+    button: Option<String>,
+    text: Option<String>,
 }
 
 impl EditSequence {
@@ -598,6 +648,35 @@ fn check_params(params: &Value, known: &[&str]) -> Result<()> {
 
 fn pascal_bool(value: bool) -> &'static str {
     if value { "True" } else { "False" }
+}
+
+/// The name `files.new` gives a plugin: without a plugin extension, then
+/// `.esl` for a light module or the template's extension, else `.esp`.
+fn new_file_name(params: &Value) -> Result<String> {
+    let requested = text_param(params, "file")?.trim();
+    let lower = requested.to_ascii_lowercase();
+    let base = if [".esp", ".esm", ".esl"].iter().any(|ext| lower.ends_with(ext)) {
+        &requested[..requested.len() - 4]
+    } else {
+        requested
+    };
+    let extension = match params["template"].as_str() {
+        Some(template) if template.starts_with("esm") => ".esm",
+        Some(_) => ".esp",
+        None if bool_param(params, "light") => ".esl",
+        None => ".esp",
+    };
+    Ok(format!("{base}{extension}"))
+}
+
+/// The plugins the `files.new` steps of a sequence make.
+fn made_files(sequence: &EditSequence) -> Vec<String> {
+    sequence
+        .commands
+        .iter()
+        .filter(|command| command["command"] == "files.new")
+        .filter_map(|command| new_file_name(&command["params"]).ok())
+        .collect()
 }
 
 /// One command of an edit sequence as statements of the script API, which
@@ -650,6 +729,31 @@ fn edit_step(index: usize, command: &Value) -> Result<String> {
                 q(text_param(params, "path")?)
             )
         }
+        "records.copy" if bool_param(params, "overwrite") => {
+            // The GUI's own path: the record selected in the navigation
+            // tree (`JumpTo`), then "Copy as override (with overwriting)
+            // into..." or its deep variant; the sequence's `answers` pick the
+            // target file in the module selection and answer the overwrite
+            // and deleted-record questions.
+            check_params(
+                params,
+                &["form_id", "from", "to", "deep", "overwrite", "remove_deleted"],
+            )?;
+            let item = if bool_param(params, "deep") {
+                "mniNavDeepCopyAsOverrideWithOverwriting"
+            } else {
+                "mniNavCopyAsOverrideWithOverwrite"
+            };
+            format!(
+                "r := RecordIn({from}, {id});
+      FileNamed({to});
+      JumpTo(r, False);
+      frmMain.FindComponent('{item}').Click;",
+                from = q(text_param(params, "from")?),
+                id = form_id()?,
+                to = q(text_param(params, "to")?),
+            )
+        }
         "records.copy" => {
             check_params(
                 params,
@@ -674,7 +778,7 @@ fn edit_step(index: usize, command: &Value) -> Result<String> {
             format!(
                 "r := RecordIn({from}, {id});
       f := FileNamed({to});
-      AddRequiredElementMasters(r, f, {as_new}, True);
+      AddCopyMasters(r, f, {as_new}, {deep});
       if {deep} and Assigned(ChildGroup(r)) then
         el := wbCopyElementToFileWithPrefixAndSuffix(ChildGroup(r), f, {as_new}, True, {pr}, {sr}, {p}, {s})
       else
@@ -688,6 +792,36 @@ fn edit_step(index: usize, command: &Value) -> Result<String> {
                 p = affix("prefix"),
                 s = affix("suffix"),
             )
+        }
+        "files.new" if params.get("template").is_some_and(|template| !template.is_null()) => {
+            // "Create New File": the sequence's `answers` pick the template
+            // in the module selection and give the name to `InputQuery`.
+            check_params(params, &["file", "template"])?;
+            "frmMain.FindComponent('mniCreateNewFile').Click;".to_owned()
+        }
+        "files.new" => {
+            // `AddNewFile(aFile, aIsLight, aIsMedium)` after its
+            // `InputQuery`: `AddNewFileName` and the game master as master
+            // (`wbAlwaysLoadGameMaster`).
+            check_params(params, &["file", "light", "medium"])?;
+            let name = new_file_name(params)?;
+            format!(
+                "f := AddNewFileName({}, {}, {});
+      if not Assigned(f) then raise Exception.Create('can not make ' + {});
+      AddMasterIfMissing(f, GetFileName(FileByIndex(0)));",
+                q(&name),
+                pascal_bool(bool_param(params, "light")),
+                pascal_bool(bool_param(params, "medium")),
+                q(&name),
+            )
+        }
+        "records.compare" => {
+            // The record shown in the view: `JumpTo` selects it in the
+            // navigation tree and shows it with its overrides, which reads
+            // every element of every version (sorting the sorted arrays, as
+            // `records.compare` does on the port) before the steps after it.
+            check_params(params, &["form_id", "file"])?;
+            format!("JumpTo(RecordIn({}, {}), False);", file()?, form_id()?)
         }
         "records.delete" => {
             check_params(params, &["form_id", "file"])?;
@@ -770,6 +904,20 @@ fn edit_script(sequence: &EditSequence) -> Result<String> {
     let mut steps = String::new();
     for (index, command) in sequence.commands.iter().enumerate() {
         let name = command["command"].as_str().unwrap_or("");
+        // The GUI path of a copy with overwriting shows the record in the
+        // view first (`JumpTo`); the port does the same only after a
+        // `records.compare` of it.
+        if name == "records.copy" && bool_param(&command["params"], "overwrite") {
+            let form_id = &command["params"]["form_id"];
+            ensure!(
+                sequence.commands[..index]
+                    .iter()
+                    .any(|earlier| earlier["command"] == "records.compare"
+                        && earlier["params"]["form_id"] == *form_id
+                        && earlier["params"]["file"] == command["params"]["from"]),
+                "step {index}: a copy with overwriting needs a records.compare of the record (with the copy's from as its file) before it, as the GUI shows the record before its copy"
+            );
+        }
         ensure!(
             sequence.build_refs || !name.starts_with("formids."),
             "step {index}: {name} needs the reference information (\"build_refs\": true)"
@@ -936,6 +1084,17 @@ fn check_edit(
         // The string tables go into the private data folder.
         let mut extras = gui::GuiExtras {
             close_after: sequence.strings,
+            answers: sequence
+                .answers
+                .iter()
+                .map(|answer| gui::Answer {
+                    class: answer.class.clone(),
+                    title: answer.title.clone(),
+                    keys: answer.keys.clone(),
+                    button: answer.button.clone(),
+                    text: answer.text.clone(),
+                })
+                .collect(),
             ..Default::default()
         };
         for (path, relative) in &prepared.tables {
@@ -943,7 +1102,12 @@ fn check_edit(
                 .files
                 .push((PathBuf::from("Data").join(relative.replace('\\', "/")), fs::read(path)?));
         }
-        let result = run_gui_with(
+        let extra_args = if sequence.allow_make_partial {
+            vec!["-AllowMakePartial".to_owned()]
+        } else {
+            Vec::new()
+        };
+        let result = run_gui_with_args(
             runner,
             game,
             prepared.plugins,
@@ -952,6 +1116,7 @@ fn check_edit(
             work.clone(),
             &peak_file,
             &extras,
+            extra_args,
         )?;
         oracle_peak = result.peak;
         if result.status.last().is_some_and(|last| last == "done") {
@@ -1032,6 +1197,9 @@ fn check_edit(
     let port_log = port_dir.join(format!("{stem}.port.log"));
     let mut command = std::process::Command::new(port);
     command.args(["--json", "--edit", "--game", game.mode]);
+    if sequence.allow_make_partial {
+        command.arg("--allow-make-partial");
+    }
     for plugin in &prepared.load {
         command.arg("--load").arg(plugin);
     }
@@ -1063,11 +1231,14 @@ fn check_edit(
         let oracle = dir.join(format!("{oracle_stem}.{name}.saved.zst"));
         outcome.oracle_bytes = fs::metadata(&oracle)?.len();
         outcome.port_bytes = fs::metadata(path)?.len();
+        // A plugin a `files.new` step made has no input: the saved file
+        // stands in for it.
         let input = match prepared.load.iter().find(|path| {
             path.file_name()
                 .is_some_and(|n| n.to_string_lossy().eq_ignore_ascii_case(name))
         }) {
             Some(path) => path.clone(),
+            None if made_files(sequence).iter().any(|made| made.eq_ignore_ascii_case(name)) => path.clone(),
             None => find_in(&data, name)?,
         };
         let case = Case {

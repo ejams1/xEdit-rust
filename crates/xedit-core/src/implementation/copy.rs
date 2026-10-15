@@ -10,12 +10,13 @@
 //! `AddIfMissingInternal` of the file, the group records and the main
 //! records (the copy of a main record as an override or as a new record).
 //! The `AddIfMissingInternal` of the subrecords and values are next to them.
-//!
-//! State: `aAllowOverwrite` with a deep copy (`wbCanOverwrite`) and the
-//! copy of a partial form (`MakePartialForm`) are not ported.
+//! A copy over a record the target has already (`aAllowOverwrite`) asks
+//! `wbCanOverwrite`, whose answer the caller sets with
+//! [`set_can_overwrite_callback`] (the GUI's `CopyInto` sets it from its
+//! dialogs, `wbInterface.pas:5254`).
 
-use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::{Arc, Mutex};
 
 use crate::interface::element::{CopyArgs, Element, ElementRef, File, FileRef, MainRecord};
 use crate::interface::globals::{
@@ -27,6 +28,41 @@ use crate::interface::types::{ASSIGN_THIS, DefFlag, ElementType, FileState, Know
 
 use super::assign::{contains_reflection, contains_unmapped_form_id};
 use super::{ElementImpl, FileImpl, GroupRecordImpl, MainRecordImpl};
+
+/// Upstream `TwbCanOverwriteAction`: what a copy does with a record the
+/// target has already.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CanOverwriteAction {
+    /// `coCopy`: the record is copied over (made again when it sits in
+    /// another group).
+    Copy,
+    /// `coDelete`: the record of the target is removed.
+    Delete,
+    /// `coSkip`: the record is left as it is.
+    Skip,
+}
+
+/// Upstream `TwbCanOverwriteCallback`: called with the record of the target
+/// and the source.
+pub type CanOverwriteCallback = Arc<dyn Fn(&ElementRef, &ElementRef) -> CanOverwriteAction + Send + Sync>;
+
+/// Upstream `_wbCanOverwriteCallback`.
+static CAN_OVERWRITE_CALLBACK: Mutex<Option<CanOverwriteCallback>> = Mutex::new(None);
+
+/// Sets `_wbCanOverwriteCallback` (`None` clears it, as `CopyInto` does
+/// when it is done).
+pub fn set_can_overwrite_callback(callback: Option<CanOverwriteCallback>) {
+    *CAN_OVERWRITE_CALLBACK.lock().unwrap() = callback;
+}
+
+/// Port of `wbCanOverwrite`: the callback's answer, `coCopy` without one.
+pub fn can_overwrite(target: &ElementRef, source: &ElementRef) -> CanOverwriteAction {
+    let callback = CAN_OVERWRITE_CALLBACK.lock().unwrap().clone();
+    match callback {
+        Some(callback) => callback(target, source),
+        None => CanOverwriteAction::Copy,
+    }
+}
 
 /// The generations of `TwbFilesSet`: an element that reported its masters
 /// to a set does not report them again.
@@ -230,7 +266,12 @@ pub fn missing_masters(masters: &[Arc<FileImpl>], target: &Arc<FileImpl>) -> Res
 /// Port of `AddRequiredMasters`: the masters the copy needs that the target
 /// file lacks are added, in load order; they must all load before it.
 pub fn add_required_masters(masters: &FilesSet, target: &Arc<FileImpl>) -> Result<(), EditError> {
-    let missing = missing_masters(masters.files(), target)?;
+    add_required_masters_of(masters.files(), target)
+}
+
+/// [`add_required_masters`] over a list of files.
+pub fn add_required_masters_of(masters: &[Arc<FileImpl>], target: &Arc<FileImpl>) -> Result<(), EditError> {
+    let missing = missing_masters(masters, target)?;
     if missing.is_empty() {
         return Ok(());
     }
@@ -274,6 +315,69 @@ pub(crate) fn copy_into(
         .self_element_ref()
         .ok_or_else(|| "the element is being created".to_owned())?;
     copy_element_to_file(&this, &target, &copy_args)
+}
+
+/// The masters the GUI's `TfrmMain.CopyInto` reports for an element it
+/// copies into `target` (`xeMainForm.pas:3150-3178`): those of the element,
+/// with `deep_copy` those of the child group of a record, and those of the
+/// record each group around the element holds the children of, as `target`
+/// sees it (`HighestOverrideVisibleForFile`).
+pub fn copy_into_masters(
+    element: &ElementRef,
+    target: &Arc<FileImpl>,
+    as_new: bool,
+    deep_copy: bool,
+) -> Vec<Arc<FileImpl>> {
+    let mut masters = FilesSet::new();
+    let Some(element_impl) = element.as_element_impl() else {
+        return Vec::new();
+    };
+    element_impl.report_required_masters(&mut masters, as_new, true, false);
+    if deep_copy
+        && let Some(record) = element_impl.main_record_impl()
+        && let Some(group) = record.child_group()
+    {
+        group.report_required_masters(&mut masters, as_new, true, false);
+    }
+    let mut container = element.get_container();
+    while let Some(current) = container {
+        if let Some(current_impl) = current.as_element_impl() {
+            current_impl.report_required_masters(&mut masters, as_new, false, true);
+            if let Some(group) = current_impl.group_record_impl()
+                && let Some(record) = group.children_of()
+            {
+                let record = record.highest_override_visible_for_file(target);
+                record.report_required_masters(&mut masters, as_new, true, false);
+            }
+        }
+        container = current.get_container();
+    }
+    masters.files
+}
+
+/// The copy of the GUI's `TfrmMain.CopyInto` for one element and one target
+/// file, after its masters were added: with `deep_copy` the child group of a
+/// record (and the record that holds it is the result), else the element,
+/// both with the contents (`aDeepCopy` of `wbCopyElementToFile` is True).
+/// `allow_overwrite` is dropped for a copy as new, as `CopyInto` does.
+pub fn copy_into_file(
+    element: &ElementRef,
+    target: &Arc<FileImpl>,
+    args: &CopyArgs,
+) -> Result<Option<ElementRef>, EditError> {
+    let copy_args = CopyArgs {
+        deep_copy: true,
+        allow_overwrite: args.allow_overwrite && !args.as_new,
+        ..args.clone()
+    };
+    if args.deep_copy
+        && let Some(record) = element.as_element_impl().and_then(ElementImpl::main_record_impl)
+        && let Some(group) = record.child_group()
+    {
+        let group: ElementRef = group;
+        return copy_element_to_file(&group, target, &copy_args);
+    }
+    copy_element_to_file(element, target, &copy_args)
 }
 
 /// Port of `wbCopyElementToFile`: the containers of the element are copied
@@ -759,24 +863,52 @@ impl GroupRecordImpl {
             }
         };
         let (result, is_new) = match existing {
+            None => (MainRecordImpl::create_new(self, source.get_signature(), form_id)?, true),
             Some(existing) => {
+                // Without `aAllowOverwrite`, or without a deep copy, the
+                // record of the target is the result, unchanged (`Exit` with
+                // the result set).
                 if !args.allow_overwrite || !args.deep_copy {
                     return Ok(Some(existing as ElementRef));
                 }
-                return Err(format!(
-                    "overwriting {} in {} (wbCanOverwrite) is not ported yet",
-                    existing.get_name(),
-                    file.get_name()
-                ));
+                let existing_ref: ElementRef = existing.clone();
+                match can_overwrite(&existing_ref, source_element) {
+                    CanOverwriteAction::Copy => {
+                        let in_this_group = existing
+                            .base
+                            .container()
+                            .is_some_and(|container| container.get_element_id() == self.get_element_id());
+                        if in_this_group {
+                            (existing, false)
+                        } else {
+                            // UPSTREAM-QUIRK: the record made again in this
+                            // group does not count as new (`lIsNew` stays
+                            // False), so `wbAllowMakePartial` does not make
+                            // it a partial form.
+                            existing_ref.remove();
+                            (
+                                MainRecordImpl::create_new(self, source.get_signature(), form_id)?,
+                                false,
+                            )
+                        }
+                    }
+                    // `Result.Remove; Exit`: the result is the removed record.
+                    CanOverwriteAction::Delete => {
+                        existing_ref.remove();
+                        return Ok(Some(existing_ref));
+                    }
+                    CanOverwriteAction::Skip => return Ok(Some(existing_ref)),
+                }
             }
-            None => (MainRecordImpl::create_new(self, source.get_signature(), form_id)?, true),
         };
         if args.deep_copy {
-            if source.get_is_partial_form() || (is_new && allow_make_partial() && result.get_can_be_partial()) {
-                return Err(format!(
-                    "copying {} as a partial form (MakePartialForm) is not ported yet",
-                    source.get_name()
-                ));
+            if !source.get_is_deleted() {
+                result.set_is_deleted(false)?;
+            }
+            if !source.get_is_partial_form() {
+                result.set_is_partial_form(is_new && allow_make_partial() && result.get_can_be_partial())?;
+            } else {
+                result.set_is_partial_form(true)?;
             }
             if !(result.get_is_partial_form() || result.get_is_deleted()) {
                 result.assign(ASSIGN_THIS, Some(source_element), false);

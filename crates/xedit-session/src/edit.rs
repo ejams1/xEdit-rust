@@ -12,9 +12,11 @@ use std::sync::Arc;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use xedit_core::implementation::FileImpl;
-use xedit_core::implementation::copy::{missing_masters, required_masters};
+use xedit_core::implementation::copy::{
+    CanOverwriteAction, copy_into_file, copy_into_masters, missing_masters, set_can_overwrite_callback,
+};
 use xedit_core::interface::globals::{edit_allowed, set_edit_allowed};
-use xedit_core::interface::{CopyArgs, Element, ElementRef, FileRef, MainRecordRef};
+use xedit_core::interface::{CopyArgs, Element, ElementRef, MainRecordRef};
 
 use crate::commands::{ElementNode, RecordSummary, node_of, parse_form_id, summary_of};
 use crate::{CommandError, Registry, Session};
@@ -195,6 +197,19 @@ pub struct RecordsCopyRequest {
     /// cell, the responses of a topic, the cells of a worldspace).
     #[serde(default)]
     pub deep: bool,
+    /// Copy over a record the target has already, as xEdit's "Copy as
+    /// override (with overwriting) into..." and "Deep copy as override
+    /// (with overwriting) into..." do (`aAllowOverwrite`), answering "Yes
+    /// to All" to the question whether to overwrite each one. Ignored with
+    /// `as_new`, as upstream ignores it.
+    #[serde(default)]
+    pub overwrite: bool,
+    /// With `overwrite`: answer "Yes to All" to xEdit's question whether to
+    /// remove the record of the target instead of copying a source that is
+    /// flagged as deleted (`coDelete`); without it the deleted record is
+    /// copied over, the default answer of the dialog.
+    #[serde(default)]
+    pub remove_deleted: bool,
     /// Text removed from the start of the editor ID of the copy.
     #[serde(default)]
     pub prefix_remove: String,
@@ -218,11 +233,17 @@ pub struct RecordsCopyResponse {
     /// The record copied.
     pub source: RecordSummary,
     /// The copy in the target plugin; for a dry run the override that
-    /// exists already, if any.
+    /// exists already, if any. None when the copy removed the record of the
+    /// target (`remove_deleted`).
     pub copy: Option<RecordSummary>,
-    /// Whether the target had the record already (an override is not
-    /// copied over).
+    /// Whether the target had the record already (copied over only with
+    /// `overwrite`).
     pub existed: bool,
+    /// What the copy over existing records did, as xEdit logs it:
+    /// `Overwriting "<target>" with "<source>"`, `Removing "<target>"` and
+    /// `Skipping "<source>"`, for the record and, with `deep`, every record
+    /// of its child group the target had.
+    pub overwrites: Vec<String>,
     /// The masters the copy needs.
     pub required_masters: Vec<String>,
     /// The required masters the target lacks, which the copy adds.
@@ -235,12 +256,22 @@ fn names(files: &[Arc<FileImpl>]) -> Vec<String> {
     files.iter().map(|file| file.get_name()).collect()
 }
 
+/// Clears `_wbCanOverwriteCallback` when the copy is done, as the
+/// `finally` of `CopyInto` does.
+struct OverwriteCallbackGuard;
+
+impl Drop for OverwriteCallbackGuard {
+    fn drop(&mut self) {
+        set_can_overwrite_callback(None);
+    }
+}
+
 fn records_copy(session: &mut Session, request: RecordsCopyRequest) -> Result<RecordsCopyResponse, CommandError> {
     crate::commands::refuse_in_translate_mode("records.copy")?;
     let source = session.record(&request.form_id, request.from.as_deref())?;
     let target = session.file(Some(&request.to))?;
     let source_ref: ElementRef = source.clone();
-    let required = required_masters(&source_ref, request.as_new);
+    let required = copy_into_masters(&source_ref, &target, request.as_new, request.deep);
     let missing = missing_masters(&required, &target).map_err(edit_failed)?;
     let existing = if request.as_new {
         None
@@ -251,6 +282,7 @@ fn records_copy(session: &mut Session, request: RecordsCopyRequest) -> Result<Re
         source: summary_of(&source),
         copy: existing.clone().map(|record| summary_of(&(record as MainRecordRef))),
         existed: existing.is_some(),
+        overwrites: Vec::new(),
         required_masters: names(&required),
         missing_masters: names(&missing),
         file: target.get_name(),
@@ -264,6 +296,39 @@ fn records_copy(session: &mut Session, request: RecordsCopyRequest) -> Result<Re
     if request.dry_run {
         return Ok(response);
     }
+    xedit_core::implementation::copy::add_required_masters_of(&required, &target).map_err(edit_failed)?;
+    let overwrite = request.overwrite && !request.as_new;
+    let log = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let _guard = OverwriteCallbackGuard;
+    if overwrite {
+        // The answers of `CopyInto`'s dialogs: "Yes to All" to the
+        // overwrite, and to the removal of a deleted source's target when
+        // `remove_deleted` (else "No to All"), with its log lines.
+        let remove_deleted = request.remove_deleted;
+        let log = log.clone();
+        set_can_overwrite_callback(Some(Arc::new(move |target: &ElementRef, source: &ElementRef| {
+            let deleted = source.as_main_record().is_some_and(|record| record.get_is_deleted());
+            let action = if deleted && remove_deleted {
+                CanOverwriteAction::Delete
+            } else {
+                CanOverwriteAction::Copy
+            };
+            let line = match action {
+                CanOverwriteAction::Copy => {
+                    format!(
+                        "Overwriting \"{}\" with \"{}\"",
+                        target.get_full_path(),
+                        source.get_full_path()
+                    )
+                }
+                CanOverwriteAction::Delete => format!("Removing \"{}\"", target.get_full_path()),
+                CanOverwriteAction::Skip => format!("Skipping \"{}\"", source.get_full_path()),
+            };
+            xedit_core::interface::misc::progress(&line);
+            log.lock().unwrap().push(line);
+            action
+        })));
+    }
     let args = CopyArgs {
         as_new: request.as_new,
         deep_copy: request.deep,
@@ -271,17 +336,40 @@ fn records_copy(session: &mut Session, request: RecordsCopyRequest) -> Result<Re
         suffix_remove: request.suffix_remove,
         prefix: request.prefix,
         suffix: request.suffix,
-        allow_overwrite: false,
+        allow_overwrite: overwrite,
     };
-    let target_ref: FileRef = target.clone();
-    let copy = source_ref.copy_into(&target_ref, &args).map_err(edit_failed)?;
-    let copy = copy.and_then(|copy| copy.into_main_record()).ok_or_else(|| {
-        edit_failed(format!(
-            "{} was not copied into {}",
-            source.get_name(),
-            target.get_name()
-        ))
-    })?;
+    let copy = copy_into_file(&source_ref, &target, &args).map_err(edit_failed)?;
+    response.overwrites = std::mem::take(&mut *log.lock().unwrap());
+    // With `deep` the result is the child group, whose record is the copy.
+    let copy = copy.and_then(|copy| {
+        let group_owner = copy
+            .as_element_impl()
+            .and_then(|element| element.group_record_impl())
+            .and_then(|group| group.children_of());
+        match group_owner {
+            Some(record) => Some(record as MainRecordRef),
+            None => copy.into_main_record(),
+        }
+    });
+    let removed = copy.as_ref().is_some_and(|record| record.get_container().is_none());
+    let copy = match copy {
+        Some(copy) if !removed => copy,
+        Some(_) => {
+            response.copy = None;
+            return Ok(response);
+        }
+        None if overwrite => {
+            response.copy = None;
+            return Ok(response);
+        }
+        None => {
+            return Err(edit_failed(format!(
+                "{} was not copied into {}",
+                source.get_name(),
+                target.get_name()
+            )));
+        }
+    };
     response.copy = Some(summary_of(&copy));
     Ok(response)
 }

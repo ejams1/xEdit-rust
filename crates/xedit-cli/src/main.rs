@@ -87,6 +87,10 @@ struct Cli {
     #[arg(long, global = true)]
     allow_edit_game_master: bool,
 
+    /// A cell or worldspace (where the game has partial forms) copied into a file that lacks it becomes a partial form (only its header and editor ID), as with xEdit's -AllowMakePartial (`wbAllowMakePartial`).
+    #[arg(long, global = true)]
+    allow_make_partial: bool,
+
     #[command(subcommand)]
     action: Action,
 }
@@ -627,6 +631,9 @@ enum FilesAction {
         /// A medium module (Starfield).
         #[arg(long)]
         medium: bool,
+        /// The module template of xEdit's "Create New File" dialog, in place of --light and --medium: esp, esp-esm, esp-light, esp-esm-light, esp-medium, esp-esm-medium, esp-update, esp-esm-update, esm, esm-light, esm-medium, esm-update (the ones the game offers).
+        #[arg(long)]
+        template: Option<String>,
         /// Check the name, make nothing.
         #[arg(long)]
         dry_run: bool,
@@ -1245,6 +1252,12 @@ enum RecordsAction {
         /// Copy the records of the child group too (the references of a cell, the responses of a topic).
         #[arg(long)]
         deep: bool,
+        /// Copy over a record the target has already (xEdit's "... (with overwriting) into...").
+        #[arg(long)]
+        overwrite: bool,
+        /// With --overwrite: remove the target's record where the source is flagged as deleted, instead of copying it.
+        #[arg(long)]
+        remove_deleted: bool,
         /// Text put before the editor ID of the copy.
         #[arg(long, default_value = "")]
         prefix: String,
@@ -1578,11 +1591,12 @@ fn command_of(action: Action) -> Result<(String, Value), CommandError> {
                     file,
                     light,
                     medium,
+                    template,
                     dry_run,
                 },
         } => (
             "files.new".to_owned(),
-            json!({ "file": file, "light": light, "medium": medium, "dry_run": dry_run }),
+            json!({ "file": file, "light": light, "medium": medium, "template": template, "dry_run": dry_run }),
         ),
         Action::Files {
             action:
@@ -1855,6 +1869,8 @@ fn command_of(action: Action) -> Result<(String, Value), CommandError> {
                 from,
                 as_new,
                 deep,
+                overwrite,
+                remove_deleted,
                 prefix,
                 suffix,
                 prefix_remove,
@@ -1863,6 +1879,7 @@ fn command_of(action: Action) -> Result<(String, Value), CommandError> {
             } => (
                 "records.copy".to_owned(),
                 json!({ "form_id": form_id, "to": to, "from": from, "as_new": as_new, "deep": deep,
+                        "overwrite": overwrite, "remove_deleted": remove_deleted,
                         "prefix": prefix, "suffix": suffix, "prefix_remove": prefix_remove,
                         "suffix_remove": suffix_remove, "dry_run": dry_run }),
             ),
@@ -2416,6 +2433,9 @@ fn main() -> ExitCode {
     // touched by it (the data path is derived from the loaded plugins).
     if let Some(path) = &cli.program_path {
         xedit_core::interface::globals::set_program_path(path);
+    }
+    if cli.allow_make_partial {
+        xedit_core::interface::globals::set_allow_make_partial(true);
     }
     if cli.allow_edit_game_master {
         xedit_core::interface::globals::set_allow_edit_game_master(true);

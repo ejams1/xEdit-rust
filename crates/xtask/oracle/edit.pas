@@ -55,6 +55,28 @@ begin
     raise Exception.Create(Name(aRecord) + ' has no element at ' + aPath);
 end;
 
+// The masters the GUI's CopyInto adds for a copy (xeMainForm.pas
+// 3150-3178): those of the element, with a deep copy those of its child
+// group, and those of the record each group around it holds the children
+// of.
+procedure AddCopyMasters(e, f: IInterface; asNew, deep: Boolean);
+var
+  c, m: IInterface;
+begin
+  AddRequiredElementMasters(e, f, asNew, True);
+  if deep and Assigned(ChildGroup(e)) then
+    AddRequiredElementMasters(ChildGroup(e), f, asNew, True);
+  c := GetContainer(e);
+  while Assigned(c) do begin
+    if ElementType(c) = etGroupRecord then begin
+      m := ChildrenOf(c);
+      if Assigned(m) then
+        AddRequiredElementMasters(m, f, asNew, True);
+    end;
+    c := GetContainer(c);
+  end;
+end;
+
 // The referencing records of a record's master, collected before the
 // change as mniNavChangeFormIDClick collects them.
 function ReferencingRecords(r: IInterface): TList;
