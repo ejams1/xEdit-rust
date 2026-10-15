@@ -1,0 +1,19 @@
+{
+  "description": "Copies over records Update.esm overrides already, as the GUI's \"Copy as override (with overwriting) into...\" and \"Deep copy as override (with overwriting) into...\" do (records.copy with overwrite; the oracle selects the record with JumpTo, which shows it in the view as records.compare does on the port, and clicks the menu item; the answers pick Update.esm and say Yes to All): the SteelDagger weapon back to its Skyrim.esm version (its keywords, a sorted array read sorted by the view, are copied in their sorted order), and the exterior cell WhiterunPLainsDistrict03 with its child group, whose placed records Update.esm overrides in part (they are copied over) and in part lacks (they are added). The string tables are staged, so the localized names are assigned as text on both sides.",
+  "game": "sse",
+  "load": ["Skyrim.esm", "Update.esm"],
+  "strings": true,
+  "commands": [
+    {"command": "records.compare", "params": {"form_id": "00013986", "file": "Skyrim.esm"}},
+    {"command": "records.copy", "params": {"form_id": "00013986", "from": "Skyrim.esm", "to": "Update.esm", "overwrite": true}},
+    {"command": "records.compare", "params": {"form_id": "0001A27A", "file": "Skyrim.esm"}},
+    {"command": "records.copy", "params": {"form_id": "0001A27A", "from": "Skyrim.esm", "to": "Update.esm", "deep": true, "overwrite": true}}
+  ],
+  "answers": [
+    {"class": "TfrmModuleSelect", "title": "Which files", "keys": [13]},
+    {"class": "#32770", "title": "Confirm", "button": "Yes to &All"},
+    {"class": "TfrmModuleSelect", "title": "Which files", "keys": [13]},
+    {"class": "#32770", "title": "Confirm", "button": "Yes to &All"}
+  ],
+  "save": ["Update.esm"]
+}

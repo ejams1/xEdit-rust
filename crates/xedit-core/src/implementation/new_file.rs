@@ -4,9 +4,11 @@
 
 // Ported from xEdit: Core/wbImplementation.pas
 
-//! Port of `wbNewFile` and `TwbFile.CreateNew(aFileName, aLoadOrder,
-//! aIsLight, aIsMedium)`: an empty plugin that exists only in memory until
-//! it is saved, with a file header made from the definitions.
+//! Port of `wbNewFile` and both `TwbFile.CreateNew`: an empty plugin that
+//! exists only in memory until it is saved, with a file header made from
+//! the definitions, flagged light or medium (`aIsLight`, `aIsMedium`) or as
+//! a module template of "Create New File" says (`aTemplate`, the template
+//! modules of `wbLoadModules`, see [`ModuleTemplate`]).
 //!
 //! State: the module information of upstream (`flModule`, `wbModuleByName`,
 //! `TwbModuleInfo.AddNewModule`) does not exist in the port; the slot of
@@ -45,10 +47,129 @@ pub fn wb_new_file(file_name: &str, load_order: i32, light: bool, medium: bool) 
     Ok(file)
 }
 
+/// A module template of "Create New File" (`TwbModuleInfo.AddNewModule`
+/// with `aTemplate`, `wbLoadOrder.pas:561-619`): the extension of the file
+/// and the flags of its header.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct ModuleTemplate {
+    /// `meESM` (`<new file>.esm`), else `.esp`.
+    pub esm_extension: bool,
+    /// `mfHasESMFlag`.
+    pub esm: bool,
+    /// `mfHasLightFlag`.
+    pub light: bool,
+    /// `mfHasMediumFlag`.
+    pub medium: bool,
+    /// `mfHasUpdateFlag`.
+    pub update: bool,
+}
+
+impl ModuleTemplate {
+    /// The extension of a file made from the template
+    /// (`aTemplate.miExtension.ToString`).
+    pub fn extension(&self) -> &'static str {
+        if self.esm_extension { ".esm" } else { ".esp" }
+    }
+}
+
+/// The template modules of the game, in the order `wbLoadModules` adds
+/// them (the order "Create New File" lists them).
+pub fn module_templates() -> Vec<ModuleTemplate> {
+    let esp = |esm: bool, light: bool, medium: bool, update: bool| ModuleTemplate {
+        esm_extension: false,
+        esm,
+        light,
+        medium,
+        update,
+    };
+    let esm = |light: bool, medium: bool, update: bool| ModuleTemplate {
+        esm_extension: true,
+        esm: true,
+        light,
+        medium,
+        update,
+    };
+    let starfield = is_starfield();
+    let mut templates = vec![esp(false, false, false, false)];
+    if !starfield {
+        templates.push(esp(true, false, false, false));
+    }
+    if is_light_supported() && !starfield {
+        templates.push(esp(false, true, false, false));
+        templates.push(esp(true, true, false, false));
+    }
+    if is_medium_supported() && !starfield {
+        templates.push(esp(false, false, true, false));
+        templates.push(esp(true, false, true, false));
+    }
+    if is_update_supported() && !starfield {
+        templates.push(esp(false, false, false, true));
+        templates.push(esp(true, false, false, true));
+    }
+    templates.push(esm(false, false, false));
+    if is_light_supported() {
+        templates.push(esm(true, false, false));
+    }
+    if is_medium_supported() {
+        templates.push(esm(false, true, false));
+    }
+    if is_update_supported() && !starfield {
+        templates.push(esm(false, false, true));
+    }
+    templates
+}
+
+/// Port of `wbNewFile(aFileName, aLoadOrder, aTemplate)`.
+pub fn wb_new_file_from_template(
+    file_name: &str,
+    load_order: i32,
+    template: &ModuleTemplate,
+) -> Result<Arc<FileImpl>, EditError> {
+    if find_in_files_map(file_name).is_some() {
+        return Err(format!("{file_name} exists already"));
+    }
+    let file = FileImpl::create_new_with(file_name, load_order, |flags| {
+        // `TwbFile.CreateNew(..., aTemplate)`: the update, light and medium
+        // flags where the game has them, then the ESM flag. The template
+        // modules carry no blueprint flag and no masters.
+        if template.update && is_update_supported() {
+            flags.set_update(true);
+        }
+        if template.light && is_light_supported() {
+            flags.set_light(true);
+        }
+        if template.medium && is_medium_supported() {
+            flags.set_medium(true);
+        }
+        if template.esm {
+            flags.set_esm(true);
+        }
+    })?;
+    crate::interface::element::add_file(file.clone());
+    Ok(file)
+}
+
 impl FileImpl {
     /// Port of `TwbFile.CreateNew(aFileName, aLoadOrder, aIsLight,
     /// aIsMedium)`.
     fn create_new(file_name: &str, load_order: i32, light: bool, medium: bool) -> Result<Arc<FileImpl>, EditError> {
+        Self::create_new_with(file_name, load_order, |flags| {
+            if light {
+                flags.set_light(true);
+            }
+            if medium {
+                flags.set_medium(true);
+            }
+        })
+    }
+
+    /// The body both `CreateNew` share; `set_flags` sets the flags of the
+    /// file header.
+    fn create_new_with(
+        file_name: &str,
+        load_order: i32,
+        set_flags: impl FnOnce(&mut super::structs::MainRecordStructFlags),
+    ) -> Result<Arc<FileImpl>, EditError> {
         let mut states = FileStates::empty();
         for state in [
             FileState::fsIsNew,
@@ -99,12 +220,7 @@ impl FileImpl {
         {
             next_object_id.set_native_value(Variant::Int(i64::from(hedr_next_object_id())))?;
         }
-        if light {
-            header.mr_struct.write().unwrap().flags.set_light(true);
-        }
-        if medium {
-            header.mr_struct.write().unwrap().flags.set_medium(true);
-        }
+        set_flags(&mut header.mr_struct.write().unwrap().flags);
 
         file.fl_load_finished.set(()).ok();
         file.fl_form_ids_sorted.store(true, Ordering::Relaxed);

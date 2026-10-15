@@ -3,13 +3,15 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 // Ported from xEdit: Core/wbImplementation.pas (TwbMainRecord.SetIsDeleted,
-// SetIsInitiallyDisabled, GetIsInitiallyDisabled, GetPosition,
-// SetPosition)
+// SetIsPartialForm, MakePartialForm, SetIsInitiallyDisabled,
+// GetIsInitiallyDisabled, GetPosition, SetPosition)
 
-//! The record edits of the cleaning functions of the main form: a deleted
-//! record undeleted (`SetIsDeleted(False)`, which rebuilds it from the
-//! version of a master), the initially disabled flag, and the position of a
-//! placed record.
+//! The record edits of the cleaning functions of the main form and of the
+//! copy: a deleted record undeleted (`SetIsDeleted(False)`, which rebuilds
+//! it from the version of a master), a partial form made
+//! (`MakePartialForm`) or made whole again (`SetIsPartialForm(False)`, the
+//! same rebuild), the initially disabled flag, and the position of a placed
+//! record.
 //!
 //! Not ported: `SetIsDeleted(True)` (`TwbMainRecord.Delete`), which no
 //! command needs yet.
@@ -59,11 +61,74 @@ impl MainRecordImpl {
         if value {
             return Err("deleting a record (TwbMainRecord.Delete) is not ported".to_owned());
         }
+        self.rebuild_from_masters(|header| header.flags.set_deleted(false));
+        Ok(())
+    }
+
+    /// Port of `TwbMainRecord.SetIsPartialForm`: a record that can not be
+    /// partial is made whole; a partial form is made with `MakePartialForm`,
+    /// and a whole record is rebuilt from its masters as the undelete does.
+    pub fn set_is_partial_form(self: &Arc<Self>, value: bool) -> Result<(), EditError> {
+        let value = value && self.get_can_be_partial();
+        if value == self.get_is_partial_form() {
+            return Ok(());
+        }
+        self.set_is_deleted(false)?;
+        if value {
+            self.make_partial_form();
+        } else {
+            self.rebuild_from_masters(|header| header.flags.set_partial_form(false));
+        }
+        Ok(())
+    }
+
+    /// Port of `TwbMainRecord.MakePartialForm`: the record keeps its header
+    /// (not deleted, partial, not compressed) and its editor ID, nothing
+    /// else.
+    pub fn make_partial_form(self: &Arc<Self>) {
+        if !self.get_can_be_partial() {
+            return;
+        }
+        self.do_init();
+        self.begin_update();
+        let editor_id = self.get_editor_id();
+        self.set_modified(true);
+        self.invalidate_storage();
+        self.container.release_elements();
+        self.make_header_writeable(|header| {
+            header.flags.set_deleted(false);
+            header.flags.set_partial_form(true);
+            header.flags.set_compressed(false);
+        });
+        self.create_contained_in();
+        self.create_record_header();
+        if !editor_id.is_empty()
+            && let Some(def) = &self.mr_def
+        {
+            let index = def.get_known_sub_record_member_index(crate::interface::types::KnownSubRecord::ksrEditorID);
+            if index >= 0
+                && let Some(element) = self.assign(index, None, false)
+            {
+                // `lBaseRecordElement.EditValue := lEditorID`: upstream
+                // raises out of `MakePartialForm`; the editor ID of a record
+                // that had one is a valid value.
+                let _ = element.set_edit_value(&editor_id);
+            }
+        }
+        self.end_update();
+    }
+
+    /// The common part of the undelete and of `SetIsPartialForm(False)`:
+    /// the elements released, the header flag changed by `change`, the
+    /// required members added, and the contents of the last version before
+    /// the record in a master of its file that is neither deleted nor a
+    /// partial form, else of its master when that is neither.
+    fn rebuild_from_masters(self: &Arc<Self>, change: impl FnOnce(&mut super::structs::MainRecordStruct)) {
         self.do_init();
         self.set_modified(true);
         self.invalidate_storage();
         self.container.release_elements();
-        self.make_header_writeable(|header| header.flags.set_deleted(false));
+        self.make_header_writeable(change);
         self.create_contained_in();
         self.create_record_header();
 
@@ -105,7 +170,6 @@ impl MainRecordImpl {
             }
         }
         self.end_update();
-        Ok(())
     }
 
     /// Port of `TwbMainRecord.GetPosition`: `DATA\Position` of a placed
