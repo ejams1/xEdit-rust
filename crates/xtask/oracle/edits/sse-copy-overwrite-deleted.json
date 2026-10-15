@@ -1,0 +1,18 @@
+{
+  "description": "A placed record Update.esm flags as deleted (REFR 000695FD) copied with overwriting over the whole version of Skyrim.esm that a new plugin got first (the GUI path, as in sse-copy-overwrite): the GUI asks whether to overwrite (Yes) and, as the source is deleted, answers No to the question whether to remove the target instead (remove_deleted false), so the deleted record is copied over the whole one: the target takes the deleted flag and the source's data, its editor ID is not set again.",
+  "game": "sse",
+  "load": ["Skyrim.esm", "Update.esm"],
+  "strings": true,
+  "commands": [
+    {"command": "files.new", "params": {"file": "OverwriteDeleted"}},
+    {"command": "records.copy", "params": {"form_id": "000695FD", "from": "Skyrim.esm", "to": "OverwriteDeleted.esp"}},
+    {"command": "records.compare", "params": {"form_id": "000695FD", "file": "Update.esm"}},
+    {"command": "records.copy", "params": {"form_id": "000695FD", "from": "Update.esm", "to": "OverwriteDeleted.esp", "overwrite": true, "remove_deleted": false}}
+  ],
+  "answers": [
+    {"class": "TfrmModuleSelect", "title": "Which files", "keys": [13]},
+    {"class": "#32770", "title": "Confirm", "button": "&Yes"},
+    {"class": "#32770", "title": "Confirm", "button": "&No"}
+  ],
+  "save": ["OverwriteDeleted.esp"]
+}

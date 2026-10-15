@@ -492,6 +492,7 @@ fn run_oracle(
                 keys: answer.keys.clone(),
                 button: answer.button.clone(),
                 text: answer.text.clone(),
+                control: None,
             })
             .collect(),
         close_after: false,
