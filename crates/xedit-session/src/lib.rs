@@ -28,6 +28,7 @@ pub mod modgroups;
 pub mod new_file;
 pub mod patch;
 pub mod refs;
+pub mod resources;
 pub mod save;
 pub mod script;
 pub mod script_adapter;

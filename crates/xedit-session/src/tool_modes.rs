@@ -487,10 +487,14 @@ pub fn apply_on_load() {
             globals::set_i_know_what_im_doing(true);
             globals::set_allow_internal_edit(false);
             globals::set_show_internal_edit(false);
+            globals::set_load_bsas(true);
             globals::set_build_refs(false);
         }
         ToolMode::tmScript => {
             globals::set_i_know_what_im_doing(true);
+            // UPSTREAM-QUIRK: after `-skipbsa`, so the script mode always
+            // loads the archives.
+            globals::set_load_bsas(true);
             globals::set_build_refs(true);
         }
         ToolMode::tmOnamUpdate | ToolMode::tmMasterUpdate | ToolMode::tmESMify => {
@@ -498,6 +502,7 @@ pub fn apply_on_load() {
             globals::set_allow_internal_edit(false);
             globals::set_show_internal_edit(false);
             globals::set_build_refs(false);
+            globals::set_load_bsas(false);
             globals::set_master_update_filter_onam(mode == ToolMode::tmESMify);
             if mode == ToolMode::tmOnamUpdate {
                 globals::set_always_save_onam(true);
@@ -512,9 +517,14 @@ pub fn apply_on_load() {
             globals::set_i_know_what_im_doing(true);
             globals::set_allow_internal_edit(false);
             globals::set_show_internal_edit(false);
+            globals::set_load_bsas(false);
             globals::set_build_refs(false);
         }
         ToolMode::tmTranslate => {
+            if globals::game_mode() >= xedit_core::interface::globals::GameMode::gmTES5 {
+                // needed for localization
+                globals::set_load_bsas(true);
+            }
             globals::set_translation_mode(true);
             globals::set_hide_unused(true);
             globals::set_hide_ignored(true);
@@ -1450,6 +1460,9 @@ pub struct LegacyRun {
     pub auto_load: bool,
     /// `-autoexit` (`xeAutoExit`): accepted; the CLI has no window to close.
     pub auto_exit: bool,
+    /// The archive switches and the inis of `DoInitPath`: `-skipbsa`,
+    /// `-forcebsa`, `-M:`, `-I:` and `-CustomIni:`.
+    pub resources: crate::resources::ResourceOptions,
     /// The switches that were read and that the port does not act on.
     pub ignored_switches: Vec<String>,
 }
@@ -1743,8 +1756,6 @@ pub fn parse_legacy(params: &[String], exe_name: &str) -> Result<Option<LegacyRu
         "fixuppgrd",
         "moprofile",
         "AllowDirectSaves",
-        "skipbsa",
-        "forcebsa",
         "bsa",
         "allbsa",
     ] {
@@ -1788,6 +1799,19 @@ pub fn parse_legacy(params: &[String], exe_name: &str) -> Result<Option<LegacyRu
         scripts_folder: find_cmd_line_param_switch(params, "S"),
         auto_load: has_cmd_line_switch(params, "autoload"),
         auto_exit: has_cmd_line_switch(params, "autoexit"),
+        resources: crate::resources::ResourceOptions {
+            // `-skipbsa` wins over `-forcebsa`.
+            load_bsas: if xedit_core::command_line::find_cmd_line_switch(params, "skipbsa") {
+                Some(false)
+            } else if xedit_core::command_line::find_cmd_line_switch(params, "forcebsa") {
+                Some(true)
+            } else {
+                None
+            },
+            my_games: find_cmd_line_param_switch(params, "M"),
+            game_ini: find_cmd_line_param_switch(params, "I"),
+            custom_ini: find_cmd_line_param_switch(params, "CustomIni"),
+        },
         ignored_switches: ignored,
     }))
 }

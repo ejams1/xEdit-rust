@@ -2,8 +2,8 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-// Ported from xEdit: Core/wbHelpers.pas (MakeDataFileName, FindBSAs,
-// HasBSAs, ExecuteCaptureConsoleOutput)
+// Ported from xEdit: Core/wbHelpers.pas (MakeDataFileName,
+// CheckAddFilesToString, FindBSAs, HasBSAs, ExecuteCaptureConsoleOutput)
 
 //! The archive helpers by which the GUI's loader finds the archives of the
 //! game ini and of the plugins, and the run of a console program whose
@@ -42,40 +42,101 @@ pub fn archive_extension() -> &'static str {
     }
 }
 
+/// The lines of a section of an ini as `GetPrivateProfileString` reads
+/// them (the section without case, the first section of the name): the
+/// `name=value` pairs, the name and the value trimmed.
+fn ini_section<'a>(text: &'a str, section: &str) -> Vec<(&'a str, &'a str)> {
+    let mut lines = Vec::new();
+    let mut in_section = false;
+    let mut seen = false;
+    for line in text.lines() {
+        let line = line.trim();
+        if line.starts_with('[') {
+            if in_section {
+                break;
+            }
+            in_section = !seen
+                && line
+                    .trim_start_matches('[')
+                    .split(']')
+                    .next()
+                    .is_some_and(|name| name.trim().eq_ignore_ascii_case(section));
+            seen |= in_section;
+            continue;
+        }
+        if !in_section || line.starts_with(';') {
+            continue;
+        }
+        if let Some((name, value)) = line.split_once('=') {
+            lines.push((name.trim(), value.trim()));
+        }
+    }
+    lines
+}
+
+/// `TIniFile.ReadString` reads into a buffer of 2048 characters, so a value
+/// keeps at most 2047 of them.
+const INI_READ_STRING_BUFFER: usize = 2048;
+
 /// A value of an ini as `TIniFile.ReadString` reads it
 /// (`GetPrivateProfileString`): the section and the name without case, the
 /// value trimmed and without a pair of enclosing quotes.
 fn ini_read_string(text: &str, section: &str, ident: &str) -> Option<String> {
-    let mut in_section = false;
-    for line in text.lines() {
-        let line = line.trim();
-        if line.starts_with('[') {
-            in_section = line
-                .trim_start_matches('[')
-                .split(']')
-                .next()
-                .is_some_and(|name| name.trim().eq_ignore_ascii_case(section));
+    let (_, value) = ini_section(text, section)
+        .into_iter()
+        .find(|(name, _)| name.eq_ignore_ascii_case(ident))?;
+    let value = if value.len() >= 2
+        && ((value.starts_with('"') && value.ends_with('"')) || (value.starts_with('\'') && value.ends_with('\'')))
+    {
+        &value[1..value.len() - 1]
+    } else {
+        value
+    };
+    // UPSTREAM-QUIRK: the buffer of `TIniFile.ReadString` cuts a longer
+    // archive list.
+    Some(value.chars().take(INI_READ_STRING_BUFFER - 1).collect())
+}
+
+/// `TIniFile.SectionExists`: the section has a key (`ReadSection` lists one).
+fn ini_section_exists(text: &str, section: &str) -> bool {
+    !ini_section(text, section).is_empty()
+}
+
+/// `TIniFile.ValueExists`: the section has the key.
+fn ini_value_exists(text: &str, section: &str, ident: &str) -> bool {
+    ini_section(text, section)
+        .iter()
+        .any(|(name, _)| name.eq_ignore_ascii_case(ident))
+}
+
+/// The text of an ini as `GetPrivateProfileString` reads it: in the ANSI
+/// code page; nothing for a file that can not be read.
+fn ini_text(path: &Path) -> String {
+    std::fs::read(path)
+        .map(|bytes| xedit_io::encoding::ansi_string(&bytes))
+        .unwrap_or_default()
+}
+
+/// The part of `FindBSAs` both overloads share: the lines of an archive
+/// list (`TStrings.Text`), each trimmed, the ones that exist below the data
+/// folder and are not loaded yet into `names` as the ini spells them, the
+/// others into `missing`.
+fn add_archive_names(list: &str, data_path: &str, names: &mut Vec<String>, missing: &mut Vec<String>) {
+    for entry in list.split('\n') {
+        let s = entry.trim_matches(|c: char| c <= ' ');
+        let t = make_data_file_name(s, data_path);
+        if t.is_empty() {
             continue;
         }
-        if !in_section {
-            continue;
-        }
-        if let Some((name, value)) = line.split_once('=')
-            && name.trim().eq_ignore_ascii_case(ident)
-        {
-            let value = value.trim();
-            let value = if value.len() >= 2
-                && ((value.starts_with('"') && value.ends_with('"'))
-                    || (value.starts_with('\'') && value.ends_with('\'')))
-            {
-                &value[1..value.len() - 1]
-            } else {
-                value
-            };
-            return Some(value.to_owned());
+        if Path::new(&t).is_file() {
+            if container_exists(&t) {
+                continue;
+            }
+            names.push(s.to_owned());
+        } else {
+            missing.push(s.to_owned());
         }
     }
-    None
 }
 
 /// `FindBSAs` of one ini: the archives its archive lists name that exist
@@ -83,9 +144,7 @@ fn ini_read_string(text: &str, section: &str, ident: &str) -> Option<String> {
 /// do not exist (`missing`).
 pub fn find_bsas(ini_name: &Path, data_path: &str, names: &mut Vec<String>, missing: &mut Vec<String>) -> usize {
     let before = names.len() + missing.len();
-    let text = std::fs::read(ini_name)
-        .map(|bytes| xedit_io::encoding::ansi_string(&bytes))
-        .unwrap_or_default();
+    let text = ini_text(ini_name);
     let read = |ident: &str| ini_read_string(&text, "Archive", ident).unwrap_or_default();
     let list = if is_oblivion() || is_fallout3() {
         let mut s = read("sArchiveList").replace(',', "\n");
@@ -111,22 +170,70 @@ pub fn find_bsas(ini_name: &Path, data_path: &str, names: &mut Vec<String>, miss
     } else {
         String::new()
     };
-    // `TStrings.Text`: the lines of the list.
-    for entry in list.split('\n') {
-        let s = entry.trim_matches(|c: char| c <= ' ');
-        let t = make_data_file_name(s, data_path);
-        if t.is_empty() {
-            continue;
-        }
-        if Path::new(&t).is_file() {
-            if container_exists(&t) {
-                continue;
-            }
-            names.push(s.to_owned());
-        } else {
-            missing.push(s.to_owned());
-        }
+    add_archive_names(&list, data_path, names, missing);
+    names.len() + missing.len() - before
+}
+
+/// `FindBSAs` of the game ini and the custom ini: without an `[Archive]`
+/// section in the custom ini the game ini's alone; else each archive list
+/// from the custom ini where it has the key (`CheckAddFilesToString`) and
+/// from the game ini where it does not, the lists joined by line breaks.
+pub fn find_bsas_custom(
+    ini_name: &Path,
+    custom_ini_name: &Path,
+    data_path: &str,
+    names: &mut Vec<String>,
+    missing: &mut Vec<String>,
+) -> usize {
+    let custom = ini_text(custom_ini_name);
+    if !ini_section_exists(&custom, "Archive") {
+        return find_bsas(ini_name, data_path, names, missing);
     }
+    let before = names.len() + missing.len();
+    let main = ini_text(ini_name);
+    let check = |ident: &str| -> String {
+        let text = if ini_value_exists(&custom, "Archive", ident) {
+            &custom
+        } else {
+            &main
+        };
+        ini_read_string(text, "Archive", ident)
+            .unwrap_or_default()
+            .replace(',', "\n")
+    };
+    let join = |idents: &[&str]| -> String {
+        let mut s = String::new();
+        for (index, ident) in idents.iter().enumerate() {
+            if index > 0 && !s.is_empty() {
+                s.push('\n');
+            }
+            s.push_str(&check(ident));
+        }
+        s
+    };
+    let list = if is_oblivion() || is_fallout3() {
+        let mut s = check("sArchiveList");
+        // Update.bsa is hardcoded to load in FNV
+        if game_mode() == GameMode::gmFNV {
+            if !s.is_empty() {
+                s.push('\n');
+            }
+            s.push_str("Update.bsa");
+        }
+        s
+    } else if is_skyrim() {
+        join(&["sResourceArchiveList", "sResourceArchiveList2"])
+    } else if is_fallout4() || is_fallout76() || is_starfield() {
+        join(&[
+            "sResourceIndexFileList",
+            "sResourceStartUpArchiveList",
+            "sResourceArchiveList",
+            "sResourceArchiveList2",
+        ])
+    } else {
+        String::new()
+    };
+    add_archive_names(&list, data_path, names, missing);
     names.len() + missing.len() - before
 }
 

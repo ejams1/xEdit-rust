@@ -91,6 +91,26 @@ struct Cli {
     #[arg(long, global = true)]
     allow_make_partial: bool,
 
+    /// Do not load the archives the game inis and the plugins name, only list them as skipped (xEdit's -skipbsa, wbLoadBSAs off). The string tables of localized plugins are then read from the loose Strings folder only. The script, LOD and translate tool modes load the archives regardless, as xEdit's do.
+    #[arg(long, global = true, conflicts_with = "force_bsa")]
+    skip_bsa: bool,
+
+    /// Load the archives also where the game or the settings file turn it off (xEdit's -forcebsa, wbLoadBSAs on), as for Fallout 3 and New Vegas, whose default is off.
+    #[arg(long, global = true)]
+    force_bsa: bool,
+
+    /// The folder of the game's ini files below My Games (xEdit's -M:). Default: Documents\My Games\<game>\, as xEdit.
+    #[arg(long, global = true)]
+    my_games: Option<String>,
+
+    /// The game ini whose archive lists (sResourceArchiveList and the rest) load first and whose sLanguage picks the language (xEdit's -I:). Default: <game>.ini in the My Games folder (Fallout.ini for Fallout 3 and New Vegas).
+    #[arg(long, global = true)]
+    game_ini: Option<String>,
+
+    /// The custom ini whose [Archive] lists replace the game ini's (xEdit's -CustomIni:). Default: <game>Custom.ini in the My Games folder.
+    #[arg(long, global = true)]
+    custom_ini: Option<String>,
+
     #[command(subcommand)]
     action: Action,
 }
@@ -316,6 +336,15 @@ enum Action {
         /// Write the errors of the elements instead, as xDump -check does ("Check for Errors" of xDump).
         #[arg(long)]
         check: bool,
+        /// Load the plugin's own, interface, localization and Wwise archives of every module, also when no string table is missing (xDump's -bsa).
+        #[arg(long)]
+        bsa: bool,
+        /// Load every <plugin>*.bsa or .ba2 archive of every module (xDump's -allbsa), useful when the strings are in another archive, as the Fallout 4 DLC keep theirs in <plugin> - Main.ba2.
+        #[arg(long)]
+        all_bsa: bool,
+        /// Load no archives for a localized plugin whose loose string tables are missing (xDump's -nobsa).
+        #[arg(long)]
+        no_bsa: bool,
     },
     /// NIF and KF meshes, BGSM and BGEM materials, LOD, FUZ and DDS files, loose or in an archive.
     Assets {
@@ -350,9 +379,6 @@ enum Action {
         /// The data folder (-D:); the folder of the plugins by default.
         #[arg(long)]
         data: Option<String>,
-        /// The game ini whose archive lists load (-I:).
-        #[arg(long)]
-        game_ini: Option<String>,
         /// The RandSeed of the tree rotations; from the clock by default.
         #[arg(long)]
         seed: Option<u32>,
@@ -2254,7 +2280,6 @@ fn command_of(action: Action) -> Result<(String, Value), CommandError> {
             scripts,
             temp,
             data,
-            game_ini,
             seed,
             split_trees,
             dry_run,
@@ -2270,7 +2295,7 @@ fn command_of(action: Action) -> Result<(String, Value), CommandError> {
                 "lodgen.generate".to_owned(),
                 json!({
                     "worldspaces": worldspaces, "options": options, "settings": settings, "output": output,
-                    "scripts": scripts, "temp": temp, "data": data, "game_ini": game_ini, "seed": seed, "split_trees": split_trees,
+                    "scripts": scripts, "temp": temp, "data": data, "seed": seed, "split_trees": split_trees,
                     "dry_run": dry_run
                 }),
             )
@@ -2468,6 +2493,7 @@ fn run_legacy(run: xedit_session::tool_modes::LegacyRun) -> ExitCode {
         return ExitCode::FAILURE;
     };
     xedit_session::tool_modes::set_on_load(run.switches);
+    xedit_session::resources::set_options(run.resources.clone());
     // `xeInit.pas` gives the quick clean modes their load settings (the full
     // record definitions, the PNAM fill) for `-quickclean` and
     // `-quickautoclean` alike; `xedit clean --quick` applies them too.
@@ -2573,6 +2599,19 @@ fn main() -> ExitCode {
         });
     }
     xedit_session::modgroups::set_file_options(cli.modgroups_file.as_deref(), cli.settings.as_deref());
+    // `-skipbsa`, `-forcebsa` and the inis of `DoInitPath`.
+    xedit_session::resources::set_options(xedit_session::resources::ResourceOptions {
+        load_bsas: if cli.skip_bsa {
+            Some(false)
+        } else if cli.force_bsa {
+            Some(true)
+        } else {
+            None
+        },
+        my_games: cli.my_games.clone(),
+        game_ini: cli.game_ini.clone(),
+        custom_ini: cli.custom_ini.clone(),
+    });
     if matches!(cli.action, Action::Serve { .. } | Action::Mcp) {
         // stdout carries the protocol; the progress of a load goes to stderr.
         xedit_session::dump::log_progress_to_stderr();
@@ -2588,7 +2627,20 @@ fn main() -> ExitCode {
             }
         };
     }
-    if let Action::Dump { game, file, check } = cli.action {
+    if let Action::Dump {
+        game,
+        file,
+        check,
+        bsa,
+        all_bsa,
+        no_bsa,
+    } = cli.action
+    {
+        xedit_session::resources::set_dump_switches(xedit_session::resources::DumpArchiveSwitches {
+            bsa,
+            all_bsa,
+            no_bsa,
+        });
         return run_dump(move |out| {
             let mode = xedit_session::dump::setup_game(&game)?;
             if check {

@@ -27,8 +27,6 @@ use xedit_assets::lod::{
     split_tree_lod, worldspaces_for_lod,
 };
 use xedit_assets::sniff::processor::MemIniFile;
-use xedit_core::container_handler::{add_archive, add_folder, clear_containers};
-use xedit_core::helpers::{archive_extension, find_bsas, has_bsas, make_data_file_name};
 use xedit_core::implementation::FileImpl;
 use xedit_core::interface::element::MainRecordRef;
 use xedit_core::interface::globals::{
@@ -140,47 +138,20 @@ fn folder(path: &str) -> String {
     }
 }
 
-/// `TLoaderThread.Execute`: the archives of the game ini, then those of
-/// each plugin in load order, then the data folder.
-fn load_resources(data: &str, game_ini: Option<&str>, plugins: &[String]) -> Vec<String> {
-    clear_containers();
-    let add = |name: &str| {
-        let path = make_data_file_name(name, data);
-        progress(&format!("[{name}] Loading Resources."));
-        if let Err(error) = add_archive(Path::new(&path)) {
-            progress(&format!("[{name}] Could not be loaded. <Error: {error}>"));
-        }
-    };
-    if let Some(ini) = game_ini
-        && Path::new(ini).is_file()
-    {
-        let (mut found, mut missing) = (Vec::new(), Vec::new());
-        if find_bsas(Path::new(ini), data, &mut found, &mut missing) > 0 {
-            for name in &found {
-                add(name);
-            }
-            for name in &missing {
-                progress(&format!("Warning: <Can't find {name}>"));
-            }
-        }
-    }
-    let exact = matches!(game_mode(), GameMode::gmTES5 | GameMode::gmEnderal);
-    for plugin in plugins {
-        let (mut found, mut missing) = (Vec::new(), Vec::new());
-        let stem = xedit_core::delphi::change_file_ext(plugin, "");
-        if has_bsas(&stem, data, exact, is_skyrim(), &mut found, &mut missing) > 0 {
-            for name in &found {
-                add(name);
-            }
-            for name in &missing {
-                progress(&format!("Warning: <Can't find {name}>"));
-            }
-        }
-    }
-    progress(&format!("[{data}] Setting Resource Path."));
-    add_folder(Path::new(data));
-    let _ = archive_extension;
-    xedit_core::container_handler::container_list()
+/// `TLoaderThread.Execute` of the LOD mode: the archives of the game inis
+/// (`game_ini`, else the session's `wbTheGameIniFileName`, with its custom
+/// ini), then those of each plugin in load order, then the data folder; the
+/// LOD mode loads the archives whatever `wbLoadBSAs` says (`tmLODgen`).
+fn load_resources(data: &str, game_ini: Option<&str>, plugins: &[String]) -> Result<Vec<String>, CommandError> {
+    let game_ini = game_ini.map_or_else(xedit_core::interface::globals::the_game_ini_file_name, str::to_owned);
+    crate::resources::load_gui_resources(
+        data,
+        plugins,
+        &game_ini,
+        &xedit_core::interface::globals::custom_ini_file_name(),
+        true,
+    )
+    .map_err(|message| CommandError::new("edit_failed", message))
 }
 
 /// A combo box of the form: its items and how a setting finds one
@@ -523,7 +494,7 @@ fn lodgen_generate(session: &mut Session, request: LodgenRequest) -> Result<Lodg
             .filter(|file| !file.get_file_states().contains(FileState::fsIsHardcoded))
             .map(|file| file.get_name())
             .collect();
-        let resources = load_resources(&data, request.game_ini.as_deref(), &plugins);
+        let resources = load_resources(&data, request.game_ini.as_deref(), &plugins)?;
         let mut list: Vec<MainRecordRef> = worldspaces_for_lod(&files);
         let oblivion = game_mode() == GameMode::gmTES4;
         let mut checked: Vec<bool> = vec![false; list.len()];
