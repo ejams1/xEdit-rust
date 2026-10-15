@@ -113,6 +113,34 @@ const RECIPE: &str = "script v6";
 /// mutating cases need on both sides.
 const EXTRA_ARGS: &[&str] = &["-IKnowIllBreakMyGameWithThis"];
 
+/// The no-op script of the reference cache run of a `refcache` case: the
+/// load builds the references and writes the cache; the script does
+/// nothing.
+const PREP_SCRIPT: &str = "refcache-prep.pas";
+const PREP_SCRIPT_TEXT: &str =
+    "unit RefCachePrep;\n\nfunction Initialize: integer;\nbegin\n  Result := 0;\nend;\n\nend.\n";
+
+/// The reference cache files of a folder, by name.
+fn cache_files_of(folder: &Path) -> Result<Vec<(String, Vec<u8>)>> {
+    let mut files = Vec::new();
+    if !folder.is_dir() {
+        return Ok(files);
+    }
+    for entry in fs::read_dir(folder)? {
+        let path = entry?.path();
+        if path.is_file() {
+            let name = path
+                .file_name()
+                .context("a cache file without a name")?
+                .to_string_lossy()
+                .into_owned();
+            files.push((name, fs::read(&path)?));
+        }
+    }
+    files.sort();
+    Ok(files)
+}
+
 /// The API declarations of the corpus: it parses but never runs.
 const API_SCRIPT: &str = "xEditAPI.pas";
 
@@ -329,6 +357,28 @@ fn synthetic_master(runner: &Runner, game: &Game) -> Result<PathBuf> {
     Ok(path)
 }
 
+/// The plugins a task loads, masters first: the empty master of a parse
+/// case, the fixture master of a probe case (copied under the game
+/// master's name by the staging of each side), or the case's plugins of the
+/// game's data folder with their masters.
+fn task_plugins(runner: &Runner, task: &Task) -> Result<Vec<PathBuf>> {
+    if task.synthetic_master {
+        return Ok(vec![synthetic_master(runner, task.game)?]);
+    }
+    if let Some(master) = &task.master {
+        let dir = runner.scratch.join("fixtures").join(&task.stem);
+        fs::create_dir_all(&dir)?;
+        let path = dir.join(game_master(task.game.mode));
+        let bytes = fs::read(master).with_context(|| format!("reading {}", master.display()))?;
+        if fs::read(&path).ok().as_deref() != Some(bytes.as_slice()) {
+            fs::write(&path, &bytes)?;
+        }
+        return Ok(vec![path]);
+    }
+    let names: Vec<&str> = task.load.iter().map(String::as_str).collect();
+    load_list(task.game, &task.data, &names)
+}
+
 /// The class of a script: what it needs to run.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Class {
@@ -510,6 +560,20 @@ struct RunCase {
     /// A script that is slow over the loaded plugins.
     #[serde(default)]
     timeout_minutes: Option<f64>,
+    /// A synthetic game master of the repository (`tests/fixtures/...`)
+    /// loaded in place of the game's, under the game master's name, by both
+    /// sides: a fixture case needs no game data. `load` then names the game
+    /// master alone.
+    #[serde(default)]
+    master: Option<String>,
+    /// The references come from the reference cache: each side first loads
+    /// the plugins with a no-op script and the reference build (which
+    /// writes its cache files, for a file above `wbCacheRecordsThreshold`
+    /// records), then runs the case with those files in its cache folder,
+    /// so the records' references are read from the cache. Needs
+    /// `build_refs`.
+    #[serde(default)]
+    refcache: bool,
     /// What the case is for, when it is not obvious.
     #[serde(default)]
     #[allow(dead_code, reason = "documentation in the file")]
@@ -520,7 +584,12 @@ struct RunCase {
 struct Task {
     /// `parse` or `run`.
     phase: &'static str,
+    /// The file name of the script.
     script: String,
+    /// The folder the script and its units are read from: the corpus
+    /// folder, or `crates/xtask/oracle/scripts/probes` for a probe of the
+    /// repository (a case whose `script` is `probes/<name>.pas`).
+    scripts_dir: PathBuf,
     class: Class,
     game: &'static Game,
     data: PathBuf,
@@ -533,6 +602,10 @@ struct Task {
     /// Parse cases load the empty game master instead of the case's
     /// plugins.
     synthetic_master: bool,
+    /// The fixture master of a probe case, loaded as the game master.
+    master: Option<PathBuf>,
+    /// The references are loaded from a cache a first run wrote.
+    refcache: bool,
     /// The reason `parse.json` accepts a script the oracle refuses.
     accepted: Option<String>,
     #[allow(dead_code, reason = "read where a case loads the game's plugins")]
@@ -703,6 +776,7 @@ pub(super) fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
             tasks.push(Task {
                 phase: "parse",
                 script: name.clone(),
+                scripts_dir: scripts.clone(),
                 class,
                 game,
                 data: data.clone(),
@@ -712,6 +786,8 @@ pub(super) fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
                 save: Vec::new(),
                 timeout: Duration::from_secs(10 * 60),
                 synthetic_master: true,
+                master: None,
+                refcache: false,
                 accepted: parse_case.accept.get(name.as_str()).cloned(),
                 stem: format!("parse-{name}"),
             });
@@ -728,44 +804,81 @@ pub(super) fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
             if !game_selected(game) {
                 continue;
             }
-            let Some(data) = game_data_or_none(game) else {
-                println!("skipped       {}: {} is not set", case.script, game.data_var);
-                continue;
+            // A fixture case loads its own master and needs no game data;
+            // the game's data folder only matters for the executable of
+            // Fallout 3 and New Vegas.
+            let master = case.master.as_ref().map(|master| root.join(master));
+            let data = match (game_data_or_none(game), &master) {
+                (Some(data), _) => data,
+                (None, Some(_)) => PathBuf::new(),
+                (None, None) => {
+                    println!("skipped       {}: {} is not set", case.script, game.data_var);
+                    continue;
+                }
             };
             // A machine may have the variable set to a folder that no longer
             // holds the game (an emptied install): the case is skipped and
             // named, as a mode skips a game whose variable is unset.
             let load = match &case.load {
                 Some(load) => load.clone(),
+                None if master.is_some() => vec![game_master(game.mode).to_owned()],
                 None if game.name == runs.defaults.game => runs.defaults.load.clone(),
                 None => vec![game_master(game.mode).to_owned()],
             };
-            let missing = load
-                .iter()
-                .find(|name| super::oracle_save::find_in(&data, name).is_err());
-            if let Some(name) = missing {
-                println!("skipped       {}: {name} is not in {}", case.script, data.display());
-                continue;
+            if let Some(master) = &master {
+                ensure!(
+                    load.len() == 1 && load[0].eq_ignore_ascii_case(game_master(game.mode)),
+                    "{}: a case with a fixture master loads the game master alone",
+                    case.script
+                );
+                ensure!(master.is_file(), "{}: {} is not a file", case.script, master.display());
+            } else {
+                let missing = load
+                    .iter()
+                    .find(|name| super::oracle_save::find_in(&data, name).is_err());
+                if let Some(name) = missing {
+                    println!("skipped       {}: {name} is not in {}", case.script, data.display());
+                    continue;
+                }
             }
-            let text = fs::read_to_string(scripts.join(&case.script)).unwrap_or_default();
-            let class = class_from(&classes, &case.script, &text);
+            // A probe of the repository (`probes/<name>.pas`) is read from
+            // the cases folder, the corpus scripts from the scripts folder.
+            let (scripts_dir, script) = match case.script.strip_prefix("probes/") {
+                Some(name) => (cases_dir.join("probes"), name.to_owned()),
+                None => (scripts.clone(), case.script.clone()),
+            };
+            let text = fs::read_to_string(scripts_dir.join(&script)).unwrap_or_default();
+            let class = class_from(&classes, &script, &text);
             let close_after = case.close_after || !case.save.is_empty();
+            let build_refs = case.build_refs.unwrap_or(runs.defaults.build_refs);
+            ensure!(
+                build_refs || !case.refcache,
+                "{}: a case with refcache needs build_refs",
+                case.script
+            );
             tasks.push(Task {
                 phase: "run",
-                script: case.script.clone(),
+                stem: if case.refcache {
+                    format!("run-{script}-refcache")
+                } else {
+                    format!("run-{script}")
+                },
+                script,
+                scripts_dir,
                 class,
                 game,
                 data,
                 load,
-                build_refs: case.build_refs.unwrap_or(runs.defaults.build_refs),
+                build_refs,
+                refcache: case.refcache,
                 close_after,
                 save: case.save.clone(),
                 timeout: case.timeout_minutes.map_or(Duration::from_secs(10 * 60), |minutes| {
                     Duration::from_secs_f64(minutes * 60.0)
                 }),
                 synthetic_master: false,
+                master,
                 accepted: None,
-                stem: format!("run-{}", case.script),
             });
         }
     }
@@ -802,24 +915,25 @@ pub(super) fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
             let done = &done;
             let runner = &runner;
             let options = &options;
-            let scripts = &scripts;
             let port_parses = &port_parses;
             scope.spawn(move || {
                 loop {
                     let next = queue.lock().unwrap().next();
                     let Some((index, task)) = next else { break };
-                    let outcome = check(runner, options, scripts, has_check, has_run, port_parses, &task)
-                        .unwrap_or_else(|error| ScriptOutcome {
-                            phase: task.phase,
-                            script: task.script.clone(),
-                            class: task.class.name(),
-                            game: task.game.name,
-                            status: "oracle-failed",
-                            detail: Some(format!("  {error:#}")),
-                            files: 0,
-                            log_lines: 0,
-                            oracle_seconds: None,
-                            port_seconds: None,
+                    let outcome =
+                        check(runner, options, has_check, has_run, port_parses, &task).unwrap_or_else(|error| {
+                            ScriptOutcome {
+                                phase: task.phase,
+                                script: task.script.clone(),
+                                class: task.class.name(),
+                                game: task.game.name,
+                                status: "oracle-failed",
+                                detail: Some(format!("  {error:#}")),
+                                files: 0,
+                                log_lines: 0,
+                                oracle_seconds: None,
+                                port_seconds: None,
+                            }
                         });
                     let mut text = format!(
                         "{:14} {} {} {} ({} files, {} log lines)",
@@ -901,7 +1015,6 @@ fn class_from(classes: &std::collections::HashMap<String, String>, name: &str, t
 fn check(
     runner: &Runner,
     options: &Options,
-    scripts: &Path,
     has_check: bool,
     has_run: bool,
     port_parses: &Option<std::collections::HashMap<String, String>>,
@@ -933,7 +1046,7 @@ fn check(
         ));
         return Ok(outcome);
     }
-    let (oracle, oracle_dir) = oracle_run(runner, options, scripts, task, &mut outcome)?;
+    let (oracle, oracle_dir) = oracle_run(runner, options, task, &mut outcome)?;
     if task.phase == "parse" {
         return parse_outcome(has_check, port_parses, task, &oracle, outcome);
     }
@@ -972,7 +1085,7 @@ fn check(
         outcome.status = "oracle-only";
         return Ok(outcome);
     };
-    port_run(runner, port, options, scripts, task, &oracle, &oracle_dir, outcome)
+    port_run(runner, port, options, task, &oracle, &oracle_dir, outcome)
 }
 
 /// The oracle's run of a case: from the cache, or the GUI. Returns the
@@ -980,17 +1093,11 @@ fn check(
 fn oracle_run(
     runner: &Runner,
     options: &Options,
-    scripts: &Path,
     task: &Task,
     outcome: &mut ScriptOutcome,
 ) -> Result<(OracleResult, PathBuf)> {
-    let plugins = if task.synthetic_master {
-        vec![synthetic_master(runner, task.game)?]
-    } else {
-        let names: Vec<&str> = task.load.iter().map(String::as_str).collect();
-        load_list(task.game, &task.data, &names)?
-    };
-    let (script_text, units) = script_and_units(scripts, &task.script)?;
+    let plugins = task_plugins(runner, task)?;
+    let (script_text, units) = script_and_units(&task.scripts_dir, &task.script)?;
     let mut recipe = format!(
         "{RECIPE}\n{}\n{}\n{}\n{}",
         task.phase,
@@ -1004,6 +1111,9 @@ fn oracle_run(
         recipe.push_str(&task.save.join(","));
         // Bumped when what a run captures for the saved plugins changes.
         recipe.push_str("\nsave v2");
+    }
+    if task.refcache {
+        recipe.push_str("\nrefcache");
     }
     recipe.push_str(&script_text);
     for (name, text) in &units {
@@ -1063,6 +1173,42 @@ fn oracle_run(
         extra_args: EXTRA_ARGS.iter().map(|arg| (*arg).to_owned()).collect(),
     };
     let started = std::time::Instant::now();
+    if task.refcache {
+        // The cache files a first load with the reference build writes
+        // (`-C:` is the run folder's `cache`), put into the cache folder of
+        // the case's run.
+        let prep_work = runner
+            .scratch
+            .join("oracle-work")
+            .join(format!("{}.{}.prep", stem, std::process::id()));
+        let prep = GuiRun {
+            work: prep_work.clone(),
+            extra_args: EXTRA_ARGS.iter().map(|arg| (*arg).to_owned()).collect(),
+            build_refs: true,
+            plugins: plugins.clone(),
+            script: String::new(),
+            ..run
+        };
+        let prep_extras = GuiExtras {
+            files: vec![(PathBuf::from(PREP_SCRIPT), PREP_SCRIPT_TEXT.as_bytes().to_vec())],
+            ..GuiExtras::default()
+        };
+        let prepared = prep.run_script(PREP_SCRIPT, &prep_extras, Some(&prep_work.join("out")));
+        let cache_files = prepared.and_then(|result| {
+            ensure!(
+                result.ended,
+                "the reference build run did not reach its end: {}",
+                gui::tail(&result.log, 5)
+            );
+            cache_files_of(&prep_work.join("cache"))
+        });
+        gui::remove_work(&prep_work);
+        let cache_files = cache_files.context("the reference cache of the oracle")?;
+        ensure!(!cache_files.is_empty(), "the oracle wrote no reference cache file");
+        for (name, bytes) in cache_files {
+            extras.files.push((PathBuf::from("cache").join(name), bytes));
+        }
+    }
     let result = run.run_script(&task.script, &extras, Some(&out));
     let result = match result {
         Ok(result) => result,
@@ -1572,7 +1718,6 @@ fn port_run(
     runner: &Runner,
     port: &Path,
     options: &Options,
-    scripts: &Path,
     task: &Task,
     oracle: &OracleResult,
     oracle_dir: &Path,
@@ -1591,7 +1736,7 @@ fn port_run(
     fs::create_dir_all(&out)?;
     fs::create_dir_all(&data)?;
     fs::create_dir_all(&bin)?;
-    let (text, units) = script_and_units(scripts, &task.script)?;
+    let (text, units) = script_and_units(&task.scripts_dir, &task.script)?;
     // The script and the units it `uses` live in the run folder itself, as
     // the oracle's do (`-script:<work>\<name>.pas`), so `ScriptsPath()` is
     // the run folder on both sides.
@@ -1604,8 +1749,7 @@ fn port_run(
     // string tables, `DataPath` messages, the DDS scan and the save paths all
     // see a folder without the game's `Strings` files, exactly as the
     // oracle's private Data does.
-    let names: Vec<&str> = task.load.iter().map(String::as_str).collect();
-    let loaded = load_list(task.game, &task.data, &names)?;
+    let loaded = task_plugins(runner, task)?;
     let mut plugins = Vec::new();
     for source in loaded {
         let name = source.file_name().context("plugin without a name")?;
@@ -1620,35 +1764,66 @@ fn port_run(
             name.to_string_lossy()
         )));
     }
-    let mut command = std::process::Command::new(port);
-    command
-        .args(["--json", "--edit", "--game", task.game.mode])
-        .arg("--dont-cache")
-        // `-IKnowIllBreakMyGameWithThis` on the oracle's side: without it the
-        // private copy's game master is not editable and the mutating cases
-        // do not save.
-        .arg("--allow-edit-game-master")
-        // The folder standing in for the oracle's `bin` (`ProgramPath()`,
-        // where a script's `ProgramPath + 'Edit Scripts\...'` lands, and
-        // fails to, as on the oracle).
-        .arg("--program-path")
-        .arg(format!("{}\\", bin.display()))
-        .env("XEDIT_SCRIPTS", &dir);
-    for plugin in &plugins {
-        command.arg("--load").arg(plugin);
+    let cache = dir.join("cache");
+    let port_command = |script: &str| {
+        let mut command = std::process::Command::new(port);
+        command.args(["--json", "--edit", "--game", task.game.mode]);
+        if task.refcache {
+            // The cache folder a first run fills (the oracle's `-C:`).
+            command.arg("--cache-path").arg(format!("{}\\", cache.display()));
+        } else {
+            command.arg("--dont-cache");
+        }
+        command
+            // `-IKnowIllBreakMyGameWithThis` on the oracle's side: without it
+            // the private copy's game master is not editable and the mutating
+            // cases do not save.
+            .arg("--allow-edit-game-master")
+            // The folder standing in for the oracle's `bin` (`ProgramPath()`,
+            // where a script's `ProgramPath + 'Edit Scripts\...'` lands,
+            // and fails to, as on the oracle).
+            .arg("--program-path")
+            .arg(format!("{}\\", bin.display()))
+            .env("XEDIT_SCRIPTS", &dir);
+        for plugin in &plugins {
+            command.arg("--load").arg(plugin);
+        }
+        command
+            .arg("script")
+            .arg("run")
+            .arg(dir.join(script))
+            .arg("--scripts")
+            .arg(&dir);
+        if task.build_refs {
+            // The oracle's script mode builds the references at its load
+            // unless `-nobuildrefs` was passed; the cases that read them say
+            // so.
+            command.arg("--build-refs");
+        }
+        command.current_dir(&dir).stdin(std::process::Stdio::null());
+        command
+    };
+    if task.refcache {
+        // The first run writes the cache files the case's run then reads.
+        fs::create_dir_all(&cache)?;
+        fs::write(dir.join(PREP_SCRIPT), PREP_SCRIPT_TEXT)?;
+        let output = port_command(PREP_SCRIPT).output()?;
+        let envelope: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap_or(serde_json::Value::Null);
+        ensure!(
+            envelope["ok"] == serde_json::Value::Bool(true),
+            "the port's reference build run failed: {}",
+            String::from_utf8_lossy(&output.stdout)
+                .chars()
+                .take(400)
+                .collect::<String>()
+        );
+        ensure!(
+            !cache_files_of(&cache)?.is_empty(),
+            "the port wrote no reference cache file into {}",
+            cache.display()
+        );
     }
-    command
-        .arg("script")
-        .arg("run")
-        .arg(dir.join(&task.script))
-        .arg("--scripts")
-        .arg(&dir);
-    if task.build_refs {
-        // The oracle's script mode builds the references at its load unless
-        // `-nobuildrefs` was passed; the cases that read them say so.
-        command.arg("--build-refs");
-    }
-    command.current_dir(&dir).stdin(std::process::Stdio::null());
+    let mut command = port_command(&task.script);
     let started = std::time::Instant::now();
     let output = command.output()?;
     outcome.port_seconds = Some(started.elapsed().as_secs_f64());

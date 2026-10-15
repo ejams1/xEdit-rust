@@ -95,6 +95,9 @@ impl ExceptionObject {
     }
 
     /// The message of the exception a value carries (`E.Message`).
+    /// The message of an exception object: a raised one's, or the message
+    /// a host or interpreter error carries into an `on E` handler (the
+    /// interpreter's object, which reports it through `ScriptObject::message`).
     pub fn message_of(value: &Value) -> Option<String> {
         let object = value.as_object()?;
         let borrowed = object.borrow();
@@ -102,6 +105,7 @@ impl ExceptionObject {
             .as_any()
             .downcast_ref::<ExceptionObject>()
             .map(|object| object.message.clone())
+            .or_else(|| borrowed.message().map(str::to_owned))
     }
 }
 
@@ -347,7 +351,11 @@ fn open_shared(path: &Path, read: bool, write: bool, create: bool, mode: i32) ->
 
 /// Registers the unit.
 pub fn register(adapter: &mut Adapter) {
-    let exception = adapter.add_class(UNIT, "Exception", None);
+    // `Exception` descends from `TObject` (registered by `System` first), so
+    // `E.ClassName`, `ClassType` and `ClassNameIs` reach it as Delphi's RTTI
+    // does for every object.
+    let t_object = adapter.find_class(b"TObject");
+    let exception = adapter.add_class(UNIT, "Exception", t_object);
     // The constructor family, in the registration order of the unit.
     {
         let class = exception.clone();

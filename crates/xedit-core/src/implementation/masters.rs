@@ -873,7 +873,7 @@ fn main_record_masters_updated(record: &Arc<MainRecordImpl>, update: &MastersUpd
         })
         .is_ok()
         {
-            *record.mr_collapsed.lock().unwrap() = Some(Arc::new(data));
+            record.mr_collapsed.set(data);
             record
                 .mr_storage_invalid
                 .store(false, std::sync::atomic::Ordering::Relaxed);

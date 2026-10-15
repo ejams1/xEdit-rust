@@ -489,34 +489,46 @@ impl StringListObject {
     }
 
     /// `TStrings.SetDelimitedText` (`System.Classes`): the parser of
-    /// `DelimitedText`. A run of characters up to and including a space is
-    /// skipped before each field, a quoted field (unless `StrictDelimiter`)
-    /// goes through `AnsiExtractQuotedStr`, and two adjacent delimiters make
-    /// an empty field.
+    /// `DelimitedText`. Unless `StrictDelimiter` is set, a run of
+    /// characters up to and including a space is skipped before each field
+    /// and a field ends at the first such character; with it, only the
+    /// delimiter ends a field. A quoted field goes through
+    /// `AnsiExtractQuotedStr`, and two adjacent delimiters make an empty
+    /// field.
     pub fn set_delimited_text(&mut self, text: &str) -> Result<(), ValueError> {
         let chars: Vec<char> = text.chars().collect();
         let mut index = 0usize;
+        let strict = self.strict_delimiter;
         self.strings.clear();
         self.objects.clear();
-        skip_leading(&chars, &mut index);
+        if !strict {
+            skip_leading(&chars, &mut index);
+        }
         while index < chars.len() {
-            let value: String = if !self.strict_delimiter && chars[index] == '"' {
+            let value: String = if chars[index] == '"' {
                 extract_quoted_str(&chars, &mut index)?
             } else {
                 let start = index;
-                while index < chars.len() && (chars[index] as u32) > b' ' as u32 && chars[index] != self.delimiter {
+                while index < chars.len()
+                    && (strict || (chars[index] as u32) > b' ' as u32)
+                    && chars[index] != self.delimiter
+                {
                     index += 1;
                 }
                 chars[start..index].iter().collect()
             };
             self.add(value)?;
-            skip_leading(&chars, &mut index);
+            if !strict {
+                skip_leading(&chars, &mut index);
+            }
             if index < chars.len() && chars[index] == self.delimiter {
                 if index + 1 >= chars.len() {
                     self.add(String::new())?;
                 }
                 index += 1;
-                skip_leading(&chars, &mut index);
+                if !strict {
+                    skip_leading(&chars, &mut index);
+                }
             }
         }
         Ok(())

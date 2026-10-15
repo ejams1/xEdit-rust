@@ -1270,8 +1270,9 @@ fn the_jvcl_rtl_units_run_a_script() {
         "sqrt=4",
         "sqr=2.25",
         "pos=3",
-        // `Copy` clamps a zero index and drops a character of the count.
-        "copy=bcd,a",
+        // `Copy` clamps a zero index to 1 and keeps the count (the oracle's
+        // `Copy('abcdef', 0, 3)` is `abc`; the parity-23 probe).
+        "copy=bcd,ab",
         "delete=adef",
         "insert=XYadef",
         // `VarToStr(12)` is `12`, `VarIsEmpty(1)` False, `VarIsNull(Null)` True.
@@ -1385,11 +1386,14 @@ fn a_child_group_is_walked_through_its_record_once() {
     // follows the record in the same top group, as the on-disk structure
     // nests it.
     let mut cell = main_record(b"CELL", 0, 0x900, &sub_record(b"EDID", b"CellA\0"));
-    cell.extend(group(
-        0x900,
-        6,
-        &main_record(b"REFR", 0, 0x901, &sub_record(b"EDID", b"RefA\0")),
-    ));
+    // The reference carries its required `NAME` and `DATA`: a record whose
+    // subrecords all precede `QuickInitLimit` loses them when its name is
+    // read first (the quick init collapse, parity #23), which is not what
+    // this test is about.
+    let mut refr = sub_record(b"EDID", b"RefA\0");
+    refr.extend(sub_record(b"NAME", &0u32.to_le_bytes()));
+    refr.extend(sub_record(b"DATA", &[0u8; 24]));
+    cell.extend(group(0x900, 6, &main_record(b"REFR", 0, 0x901, &refr)));
     master.extend(group(u32::from_le_bytes(*b"CELL"), 0, &cell));
     master.extend(group(u32::from_le_bytes(*b"GMST"), 0, &gmst(0x800, b"fMaster\0")));
     let master = open("Master.esm", master);
@@ -1537,4 +1541,207 @@ fn a_script_variable_wins_over_a_case_matching_function() {
     assert!(lines.iter().any(|line| line == "can not find base record"), "{lines:?}");
     assert!(!lines.iter().any(|line| line == "found"), "{lines:?}");
     let _ = std::fs::remove_dir_all(&folder);
+}
+
+/// A probe script of the parity-23 fixtures
+/// (`crates/xtask/oracle/scripts/probes`) run over its synthetic master
+/// (`tests/fixtures/parity`): the lines of the run between the `Start:` and
+/// the `Done:` line.
+fn fixture_lines(probe: &str, fixture: &str, build_refs: bool) -> Vec<String> {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..").join("..");
+    let text = std::fs::read_to_string(root.join("crates/xtask/oracle/scripts/probes").join(probe)).unwrap();
+    let bytes = std::fs::read(root.join("tests/fixtures/parity").join(fixture)).unwrap();
+    xedit_core::implementation::clear_files_map();
+    xedit_core::implementation::reset_load_order_slots();
+    xedit_core::interface::clear_files();
+    xedit_session::dump::setup_game("sse").unwrap();
+    xedit_session::save::apply_edit_settings(GameMode::gmSSE);
+    // The fixture stands in for the game master, which the parity run edits
+    // with `--allow-edit-game-master`.
+    xedit_core::interface::globals::set_allow_edit_game_master(true);
+    let master = open("Skyrim.esm", bytes);
+    let mut session = Session::with_files(GameMode::gmSSE, vec![master]);
+    session.allow_edit(true);
+    let folder = script_folder(probe.trim_end_matches(".pas"), probe, &text);
+    let result = run(&mut session, &folder, probe, json!({"build_refs": build_refs}));
+    xedit_core::interface::globals::set_allow_edit_game_master(false);
+    assert_eq!(result["aborted"], false, "{:?}", lines(&result));
+    let all = lines(&result);
+    let start = all
+        .iter()
+        .position(|line| line.starts_with("Start: Applying script"))
+        .unwrap();
+    let end = all
+        .iter()
+        .position(|line| line.starts_with("Done: Applying script"))
+        .unwrap();
+    all[start + 1..end].to_vec()
+}
+
+/// The lines the oracle wrote for the probe (`cargo xtask parity script
+/// --script edid-quick-init`, 2026-10-15, equal): the record read by its
+/// name first loses its subrecords (0 elements, the added EDID alone), the
+/// one read through `ElementByName` first keeps them and gains its required
+/// colour, the AVIF category above 3 becomes 0, `Copy` clamps the index to
+/// 1 and keeps the count, and `StrictDelimiter` splits on the delimiter
+/// alone.
+#[test]
+fn the_edid_quick_init_probe_gives_the_oracle_lines() {
+    let _guard = test_lock();
+    let expected: Vec<&str> = vec![
+        "Processing: KwdNoColorNamed [KYWD:00000800]",
+        "EDID missing",
+        "before: 0 []",
+        "after: 1 [EDID - Editor ID]",
+        "EDID=KwdNoColorNamed2 CNAM=",
+        "Processing: 00000801",
+        "EDID present",
+        "before: 3 [Record Header, EDID - Editor ID, CNAM - Color]",
+        "after: 3 [Record Header, EDID - Editor ID, CNAM - Color]",
+        "EDID=KwdNoColorPath2 CNAM=",
+        "Processing: KwdColor [KYWD:00000802]",
+        "EDID present",
+        "before: 3 [Record Header, EDID - Editor ID, CNAM - Color]",
+        "after: 3 [Record Header, EDID - Editor ID, CNAM - Color]",
+        "EDID=KwdColor2 CNAM=",
+        "Processing: ActiBounds [ACTI:00000803]",
+        "EDID missing",
+        "before: 0 []",
+        "after: 1 [EDID - Editor ID]",
+        "EDID=ActiBounds2 CNAM=",
+        "Processing: ActiFull \"Full Activator\" [ACTI:00000804]",
+        "EDID present",
+        "before: 6 [Record Header, EDID - Editor ID, OBND - Object Bounds, FULL - Name, PNAM - Marker Color, FNAM - Flags]",
+        "after: 6 [Record Header, EDID - Editor ID, OBND - Object Bounds, FULL - Name, PNAM - Marker Color, FNAM - Flags]",
+        "EDID=ActiFull2 CNAM=",
+        "Processing: AvifBig [AVIF:00000805]",
+        "EDID present",
+        "before: 4 [Record Header, EDID - Editor ID, DESC - Description, CNAM - Skill Category]",
+        "after: 4 [Record Header, EDID - Editor ID, DESC - Description, CNAM - Skill Category]",
+        "EDID=AvifBig2 CNAM=None",
+        "Processing: AvifSmall [AVIF:00000806]",
+        "EDID present",
+        "before: 4 [Record Header, EDID - Editor ID, DESC - Description, CNAM - Skill Category]",
+        "after: 4 [Record Header, EDID - Editor ID, DESC - Description, CNAM - Skill Category]",
+        "EDID=AvifSmall2 CNAM=Magic",
+        "Copy0=abc",
+        "Copy-1=abc",
+        "Copy1=abc",
+        "Copy0big=abcdef",
+        "Copy7=",
+        "Copy6=f",
+        "strict=6 [Model\\MODL",
+        "Male World Model",
+        " \"a",
+        "b\" ",
+        "",
+        "last",
+        "]",
+        "loose=7 [Model\\MODL",
+        "Male",
+        "World",
+        "Model",
+        "a,b",
+        "",
+        "last",
+        "]",
+    ];
+    assert_eq!(
+        fixture_lines("edid-quick-init.pas", "edid-quick-init.esm", false),
+        expected
+    );
+}
+
+/// The lines the oracle wrote for the probe (`cargo xtask parity script
+/// --script refs-edit`, 2026-10-15, equal with and without the reference
+/// cache): the referenced-by lists follow a replaced, an added and a removed
+/// keyword, and the EditorID index follows the renames (a record renamed
+/// onto a taken name is reported and not indexed; the name it leaves is
+/// not re-taken by the other record), a removed EDID and a record added and
+/// removed. The group lookups search the current names.
+#[test]
+fn the_refs_edit_probe_gives_the_oracle_lines() {
+    let _guard = test_lock();
+    let expected: Vec<&str> = vec![
+        "initial: Kwd000 [KYWD:00000800] referenced by 1 [ActiOne \"One\" [ACTI:00001000]]",
+        "initial: Kwd001 [KYWD:00000801] referenced by 2 [ActiOne \"One\" [ACTI:00001000], ActiTwo \"Two\" [ACTI:00001001]]",
+        "initial: Kwd002 [KYWD:00000802] referenced by 0 []",
+        "initial: Kwd003 [KYWD:00000803] referenced by 0 []",
+        "KWDA of ActiOne \"One\" [ACTI:00001000]: ",
+        "KWDA after set: ",
+        "after set: Kwd001 [KYWD:00000801] referenced by 1 [ActiTwo \"Two\" [ACTI:00001001]]",
+        "after set: Kwd002 [KYWD:00000802] referenced by 1 [ActiOne \"One\" [ACTI:00001000]]",
+        "KWDA after add: ",
+        "after add: Kwd003 [KYWD:00000803] referenced by 1 [ActiOne \"One\" [ACTI:00001000]]",
+        "KWDA after remove: ",
+        "after remove: Kwd000 [KYWD:00000800] referenced by 0 []",
+        "after remove: Kwd002 [KYWD:00000802] referenced by 1 [ActiOne \"One\" [ACTI:00001000]]",
+        "group lookup iParityOne -> iParityOne [GMST:00001800]",
+        "index lookup iParityOne -> iParityOne [GMST:00001800]",
+        "group lookup iparityone -> iParityOne [GMST:00001800]",
+        "index lookup iparityone -> iParityOne [GMST:00001800]",
+        "group lookup iParityTwo -> iParityTwo [GMST:00001801]",
+        "index lookup iParityTwo -> iParityTwo [GMST:00001801]",
+        "group lookup iParityTwo -> nil",
+        "index lookup iParityTwo -> nil",
+        "group lookup iParityRenamed -> iParityRenamed [GMST:00001801]",
+        "index lookup iParityRenamed -> iParityRenamed [GMST:00001801]",
+        "[Skyrim.esm] Duplicate Key in Index \"EditorID\": \"iParityRenamed\" Existing Record: iParityRenamed [GMST:00001801] New Record: iParityRenamed [GMST:00001802]",
+        "group lookup iParityRenamed -> iParityRenamed [GMST:00001801]",
+        "index lookup iParityRenamed -> iParityRenamed [GMST:00001801]",
+        "group lookup iParityOne -> iParityOne [GMST:00001800]",
+        "index lookup iParityOne -> iParityOne [GMST:00001800]",
+        "group lookup iParityRenamed -> iParityRenamed [GMST:00001802]",
+        "index lookup iParityRenamed -> nil",
+        "group lookup iParityTwo -> iParityTwo [GMST:00001801]",
+        "index lookup iParityTwo -> iParityTwo [GMST:00001801]",
+        "[Skyrim.esm] Duplicate Key in Index \"EditorID\": \"iParityOne\" Existing Record: iParityOne [GMST:00001800] New Record: iParityOne [GMST:00001802]",
+        "group lookup iParityOne -> iParityOne [GMST:00001800]",
+        "index lookup iParityOne -> iParityOne [GMST:00001800]",
+        "group lookup iParityFour -> nil",
+        "index lookup iParityFour -> nil",
+        "added [GMST:00002000]",
+        "group lookup iParityNew -> iParityNew [GMST:00002000]",
+        "index lookup iParityNew -> iParityNew [GMST:00002000]",
+        "[Skyrim.esm] Duplicate Key in Index \"EditorID\": \"iParityTwo\" Existing Record: iParityTwo [GMST:00001801] New Record: iParityTwo [GMST:00002000]",
+        "group lookup iParityTwo -> iParityTwo [GMST:00001801]",
+        "index lookup iParityTwo -> iParityTwo [GMST:00001801]",
+        "group lookup iParityNew -> nil",
+        "index lookup iParityNew -> nil",
+        "group lookup iParityTwo -> iParityTwo [GMST:00001801]",
+        "index lookup iParityTwo -> iParityTwo [GMST:00001801]",
+        "group lookup KwdOne -> KwdOne [KYWD:00000805]",
+        "index lookup KwdOne -> nil",
+        "group lookup kwdone -> KwdOne [KYWD:00000805]",
+        "index lookup kwdone -> nil",
+        "group lookup KwdTwo -> KwdTwo [KYWD:00000806]",
+        "index lookup KwdTwo -> nil",
+        "group lookup KwdTwo -> nil",
+        "index lookup KwdTwo -> nil",
+        "group lookup KwdRenamed -> KwdRenamed [KYWD:00000806]",
+        "index lookup KwdRenamed -> nil",
+        "group lookup KwdRenamed -> KwdRenamed [KYWD:00000806]",
+        "index lookup KwdRenamed -> nil",
+        "group lookup KwdOne -> KwdOne [KYWD:00000805]",
+        "index lookup KwdOne -> nil",
+        "group lookup KwdRenamed -> KwdRenamed [KYWD:00000807]",
+        "index lookup KwdRenamed -> nil",
+        "group lookup KwdTwo -> KwdTwo [KYWD:00000806]",
+        "index lookup KwdTwo -> nil",
+        "group lookup KwdOne -> KwdOne [KYWD:00000805]",
+        "index lookup KwdOne -> nil",
+        "group lookup KwdFour -> nil",
+        "index lookup KwdFour -> nil",
+        "added [KYWD:00002001]",
+        "group lookup KwdNew -> KwdNew [KYWD:00002001]",
+        "index lookup KwdNew -> nil",
+        "group lookup KwdTwo -> KwdTwo [KYWD:00000806]",
+        "index lookup KwdTwo -> nil",
+        "group lookup KwdNew -> nil",
+        "index lookup KwdNew -> nil",
+        "group lookup KwdTwo -> KwdTwo [KYWD:00000806]",
+        "index lookup KwdTwo -> nil",
+        "done",
+    ];
+    assert_eq!(fixture_lines("refs-edit.pas", "refs-edit.esm", true), expected);
 }

@@ -1394,6 +1394,14 @@ impl FileImpl {
         self.sort_records();
 
         self.activate_indices();
+        // The player reference group of the hardcoded file: upstream's
+        // `TwbFile.Add('PLYR')` sorts the top level groups by their group
+        // order after creating it, so the group sits among the others by
+        // its place in the order (between `NPC_` and `LVLN` in Skyrim),
+        // where the port appended it to the file's bytes.
+        if self.get_file_states().contains(FileState::fsIsHardcoded) && game_mode() > GameMode::gmTES3 {
+            self.sort_groups();
+        }
         // Port of the top level group check of `TwbFile.Scan` for the games
         // from Skyrim on: an empty top level group is removed, and a group
         // whose label appears again later in the file is merged into that
@@ -1517,8 +1525,8 @@ impl FileImpl {
             if position >= indices.len() {
                 indices.resize_with(position + 1, HashMap::new);
             }
-            let key = named_index_key(*index, key);
-            if let Some(existing) = indices[position].get(&key) {
+            let index_key = named_index_key(*index, key);
+            if let Some(existing) = indices[position].get(&index_key) {
                 progress(&format!(
                     "[{}] Duplicate Key in Index \"{}\": \"{}\" Existing: {} New: {}",
                     self.get_name(),
@@ -1529,7 +1537,55 @@ impl FileImpl {
                 ));
                 continue;
             }
-            indices[position].insert(key, record.clone());
+            indices[position].insert(index_key, record.clone());
+        }
+    }
+
+    /// Port of `UpdateIndexKeys` with `flUpdateChangedKeysInIndices`: a
+    /// record whose keys changed leaves the indices under its old keys
+    /// (where they name it) and enters them under the new ones; a new key
+    /// another record holds is reported (`Duplicate Key in Index`) and
+    /// left to that record.
+    pub(crate) fn update_index_keys(&self, record: &Arc<MainRecordImpl>, changed: &[(i32, String, String)]) {
+        if !self.fl_indices_active.load(Ordering::Acquire) {
+            return;
+        }
+        let mut indices = self.fl_records_indices.write().unwrap();
+        for (index, old_key, new_key) in changed {
+            let Ok(position) = usize::try_from(*index) else {
+                continue;
+            };
+            if position >= indices.len() {
+                if new_key.is_empty() {
+                    continue;
+                }
+                indices.resize_with(position + 1, HashMap::new);
+            }
+            let records = &mut indices[position];
+            if !old_key.is_empty() {
+                let index_key = named_index_key(*index, old_key);
+                if records
+                    .get(&index_key)
+                    .is_some_and(|existing| Arc::ptr_eq(existing, record))
+                {
+                    records.remove(&index_key);
+                }
+            }
+            if !new_key.is_empty() {
+                let index_key = named_index_key(*index, new_key);
+                if let Some(existing) = records.get(&index_key) {
+                    progress(&format!(
+                        "[{}] Duplicate Key in Index \"{}\": \"{}\" Existing Record: {} New Record: {}",
+                        self.get_name(),
+                        named_index_name(*index),
+                        new_key,
+                        existing.get_short_name(),
+                        record.get_short_name()
+                    ));
+                } else {
+                    records.insert(index_key, record.clone());
+                }
+            }
         }
     }
 
@@ -1641,8 +1697,11 @@ fn contained_in_def(group_type: i32, name: &str, signature: Signature) -> Arc<dy
 
 /// The bytes of a `PLYR` group with the player reference `[00000014]
 /// <PlayerRef>` that `TwbFile.Scan` adds to the hardcoded file: a new record
-/// with the form version of the game and only the editor ID. The record and
-/// group headers have the size of the game: Oblivion's have no form version.
+/// with the form version of the game, the editor ID and the required
+/// members the definition gives a new record (the `PLYR` FormID with its
+/// default 7 from New Vegas on, and Fallout 76's `NAME`; Oblivion's and
+/// Fallout 3's definitions require none). The record and group headers have
+/// the size of the game: Oblivion's have no form version.
 fn player_reference_group() -> Vec<u8> {
     let header_size = size_of_main_record_struct() as usize;
     let version: u16 = match game_mode() {
@@ -1658,6 +1717,16 @@ fn player_reference_group() -> Vec<u8> {
     record.extend_from_slice(b"EDID");
     record.extend_from_slice(&(editor_id.len() as u16).to_le_bytes());
     record.extend_from_slice(editor_id);
+    if !matches!(game_mode(), GameMode::gmTES4 | GameMode::gmFO3) {
+        record.extend_from_slice(b"PLYR");
+        record.extend_from_slice(&4u16.to_le_bytes());
+        record.extend_from_slice(&7u32.to_le_bytes());
+    }
+    if game_mode() == GameMode::gmFO76 {
+        record.extend_from_slice(b"NAME");
+        record.extend_from_slice(&4u16.to_le_bytes());
+        record.extend_from_slice(&0u32.to_le_bytes());
+    }
     let mut header = Vec::new();
     header.extend_from_slice(b"PLYR");
     header.extend_from_slice(&(record.len() as u32).to_le_bytes());
@@ -2169,6 +2238,38 @@ enum DataStorage {
 const UNSET_FIXED_FORM_ID: u64 = u64::MAX;
 
 /// Port of `TwbMainRecord`, as far as the structure of the record goes.
+/// Port of the storage a main record owns after `CollapseStorage`
+/// (`dcBasePtr` allocated with `mrsBasePtrAllocated`): the bytes its
+/// elements wrote. Every collapse makes a new buffer; the old ones stay for
+/// the life of the record, because `data` hands out slices of the current
+/// one and nothing tracks those borrows.
+#[derive(Default)]
+pub(crate) struct CollapsedData {
+    generations: std::sync::Mutex<Vec<Arc<Vec<u8>>>>,
+}
+
+impl CollapsedData {
+    /// The current collapsed data, when the record was collapsed.
+    pub(crate) fn current(&self) -> Option<&[u8]> {
+        let generations = self.generations.lock().unwrap();
+        let last = generations.last()?;
+        let (ptr, len) = (last.as_ptr(), last.len());
+        // SAFETY: a buffer pushed into `generations` is never removed,
+        // replaced or mutated for the life of this `CollapsedData`, and the
+        // heap allocation of a `Vec<u8>` does not move when the outer vector
+        // grows, so the slice stays valid for as long as `self` does.
+        Some(unsafe { std::slice::from_raw_parts(ptr, len) })
+    }
+
+    pub(crate) fn current_arc(&self) -> Option<Arc<Vec<u8>>> {
+        self.generations.lock().unwrap().last().cloned()
+    }
+
+    pub(crate) fn set(&self, data: Vec<u8>) {
+        self.generations.lock().unwrap().push(Arc::new(data));
+    }
+}
+
 pub struct MainRecordImpl {
     self_ref: Weak<MainRecordImpl>,
     base: ElementBase,
@@ -2227,12 +2328,17 @@ pub struct MainRecordImpl {
     /// cleared: the port keeps the loaded data after a save, where upstream
     /// takes the written bytes as the new data.
     pub(crate) mr_storage_invalid: AtomicBool,
-    /// The data `CollapseStorage` merged from the elements (a master
-    /// update), which a save writes while the storage stays valid.
-    pub(crate) mr_collapsed: std::sync::Mutex<Option<Arc<Vec<u8>>>>,
+    /// Port of the storage `CollapseStorage` leaves: the data the elements
+    /// wrote, which the record reads instead of its loaded data from then on
+    /// (its next init parses it, a save writes it while the storage stays
+    /// valid).
+    pub(crate) mr_collapsed: CollapsedData,
     /// A record that repeats the FormID of the record before it, which
     /// upstream skips on load.
     mr_duplicate: AtomicBool,
+    /// Port of `mrIndexKeys` with `mrsIndexKeysActive`: the keys the record
+    /// has in the named indices of its file, `Some` once they are active.
+    mr_index_keys: std::sync::Mutex<Option<IndexKeys>>,
     /// Port of `mrReferences` with `csRefsBuild`, `cntRefsBuildAt` and
     /// `mrsBuildingRef`: the FormIDs the record refers to.
     pub(crate) mr_refs: std::sync::Mutex<refs::RecordRefs>,
@@ -2299,8 +2405,9 @@ impl MainRecordImpl {
             mr_has_vwd_mesh: OnceLock::new(),
             mr_ofst_removed: AtomicBool::new(false),
             mr_storage_invalid: AtomicBool::new(false),
-            mr_collapsed: std::sync::Mutex::new(None),
+            mr_collapsed: CollapsedData::default(),
             mr_duplicate: AtomicBool::new(duplicate),
+            mr_index_keys: std::sync::Mutex::new(None),
             mr_refs: Default::default(),
             mr_referenced_by: Default::default(),
             mr_grid_cell: Default::default(),
@@ -2351,10 +2458,15 @@ impl MainRecordImpl {
         *self.mr_full_name.write().unwrap() = full_name;
     }
 
-    /// Port of `GetFullName`, read while the subrecords are built.
+    /// Port of `GetFullName`, read while the subrecords are built. While
+    /// the quick init of the record runs, the name is not available yet
+    /// (see `get_editor_id`).
     pub fn get_full_name(&self) -> String {
         self.check_l_generation();
         if self.can_have(KnownSubRecord::ksrFullName) {
+            if !self.mr_names_known.load(Ordering::Acquire) && self.in_quick_init() {
+                return "<FullName not yet available: init still running>".to_owned();
+            }
             self.self_arc().quick_init();
         }
         self.mr_full_name.read().unwrap().clone()
@@ -2395,14 +2507,25 @@ impl MainRecordImpl {
 
     /// Port of the quick init of `GetEditorID` and `GetFullName`: a record
     /// whose subrecords were never built builds them to read its names and
-    /// resets at once (`DoReset(True)`), so that a record read only for its
-    /// name does not keep its subrecords. The names stay cached
+    /// resets at once (`DoReset(True)`, forced: a record the quick init
+    /// changed gives its elements up too), so that a record read only for
+    /// its name does not keep its subrecords. The names stay cached
     /// (`mrsQuickInitDone`, `csInitOnce`).
-    /// UPSTREAM-QUIRK: upstream builds only the subrecords up to
-    /// `QuickInitLimit`; the port builds all of them, which reads the same
-    /// names. While the record's own init runs, upstream returns `<EditorID
-    /// not yet available: init still running>`; the port returns the names
-    /// read so far, as it did before the quick init was ported.
+    ///
+    /// `Init` under `mrsQuickInit` creates no record header and no
+    /// contained-in element and leaves as soon as a subrecord past
+    /// `QuickInitLimit` is reached; the port builds every subrecord (the
+    /// values are read lazily, so only the names are read) and stops at the
+    /// same point. UPSTREAM-QUIRK (reproduced): a record whose subrecords
+    /// all lie before the limit runs the whole tail of `Init` in the quick
+    /// init, so its `AfterLoad` and its missing required members change it
+    /// as an internal edit, which invalidates its storage; the elements are
+    /// then released, and the next init collapses the invalidated storage
+    /// from the elements it has (none) before it reads the data, so the
+    /// record is left with no subrecords at all (see `build`). A keyword
+    /// without its colour or an activator with bounds alone loses its
+    /// subrecords that way in the GUI when its name is read before anything
+    /// else, which `Add Prefix Plus Name To EDID.pas` does to every record.
     ///
     /// The subrecords are released before the build counts as done
     /// (`InitOnce::run_then`), so no other thread sees them: a thread that
@@ -2419,8 +2542,19 @@ impl MainRecordImpl {
                 self.build();
                 QUICK_INIT.with(|quick| quick.set(outer));
             },
-            || self.release_elements_and_data(),
+            || {
+                // `DoReset(True)`: forced, whatever the quick init changed.
+                self.container.release_elements();
+                self.release_data();
+                true
+            },
         );
+    }
+
+    /// Whether the quick init of this record runs on this thread
+    /// (`mrsQuickInit in mrStates` with `csInit` and without `csInitOnce`).
+    fn in_quick_init(&self) -> bool {
+        QUICK_INIT.with(std::cell::Cell::get) == std::ptr::from_ref::<Self>(self) as usize
     }
 
     /// Port of `FixedFormID`. The hardcoded range of the game master is
@@ -2467,13 +2601,11 @@ impl MainRecordImpl {
         self.mr_fixed_form_id.store(UNSET_FIXED_FORM_ID, Ordering::Release);
     }
 
-    /// Port of `ActivateIndexKeys` and `BuildIndexKeys`: the keys of the
-    /// record in the named indices, from the editor ID when the definition
-    /// indexes it and from the callback of the definition.
-    fn activate_index_keys(self: &Arc<Self>) -> Vec<(i32, String)> {
-        let Some(def) = &self.mr_def else {
-            return Vec::new();
-        };
+    /// Port of `BuildIndexKeys`: the keys of the record in the named
+    /// indices, from the editor ID when the definition indexes it and from
+    /// the callback of the definition; `None` when the record has none.
+    fn build_index_keys(self: &Arc<Self>) -> Option<IndexKeys> {
+        let def = self.mr_def.as_ref()?;
         let mut keys = IndexKeys::default();
         let mut result = false;
         if (def.get_contains_known_sub_record(KnownSubRecord::ksrEditorID) && track_all_editor_id())
@@ -2486,7 +2618,48 @@ impl MainRecordImpl {
         if def.build_index_keys(&main_record, &mut keys) {
             result = true;
         }
-        if result { keys.defined_keys() } else { Vec::new() }
+        result.then_some(keys)
+    }
+
+    /// Port of `ActivateIndexKeys`: the keys of the record are built and
+    /// kept (`mrsIndexKeysActive`), and the defined ones returned for the
+    /// indices of the file.
+    fn activate_index_keys(self: &Arc<Self>) -> Vec<(i32, String)> {
+        let keys = self.build_index_keys();
+        let defined = keys.as_ref().map(IndexKeys::defined_keys).unwrap_or_default();
+        *self.mr_index_keys.lock().unwrap() = keys;
+        defined
+    }
+
+    /// Port of `DeactivateIndexKeys`: the keys the record had in the
+    /// indices, which are no longer active.
+    pub(crate) fn deactivate_index_keys(&self) -> Vec<(i32, String)> {
+        self.mr_index_keys
+            .lock()
+            .unwrap()
+            .take()
+            .map(|keys| keys.defined_keys())
+            .unwrap_or_default()
+    }
+
+    /// Port of `UpdateKeys`: a record whose keys are active builds them
+    /// again after a change, and the file moves it in the indices whose
+    /// key changed (`Duplicate Key in Index` when the new key is taken).
+    pub(crate) fn update_keys(self: &Arc<Self>) {
+        let old = {
+            let keys = self.mr_index_keys.lock().unwrap();
+            let Some(old) = keys.as_ref() else { return };
+            old.clone()
+        };
+        let new = self.build_index_keys().unwrap_or_default();
+        let changed = new.changed_keys(&old);
+        if changed.is_empty() {
+            return;
+        }
+        *self.mr_index_keys.lock().unwrap() = Some(new);
+        if let Some(file) = self.file_impl() {
+            file.update_index_keys(self, &changed);
+        }
     }
 
     /// Port of `GetPrecombinedMesh` up to the cache check: the cell FormID
@@ -2723,16 +2896,34 @@ impl MainRecordImpl {
                 .unwrap()
                 .push_back((Arc::downgrade(self), build));
             INITIALIZED_COUNT.fetch_add(1, Ordering::Relaxed);
-            self.create_contained_in();
-            self.create_record_header();
-            sub_record::init_main_record(self);
+            let quick = self.in_quick_init();
+            // `if not (mrsQuickInit in mrStates)`: the quick init creates
+            // neither the contained-in element nor the record header.
+            if !quick {
+                self.create_contained_in();
+                self.create_record_header();
+            }
+            // `CurrentPtr := GetDataBasePtr`: a storage a released init left
+            // invalid collapses first (`UpdateStorageFromElements`, which is
+            // `CollapseStorage(nil, True)` for a main record), from the
+            // elements the record has at this point: none that is written.
+            if self.mr_storage_invalid.load(Ordering::Relaxed) {
+                self.collapse_storage_in_init();
+            }
+            let passed_limit = sub_record::init_main_record(self);
             self.mr_names_known.store(true, Ordering::Release);
-            // `mrsQuickInit`: upstream leaves `Init` once the subrecords up
-            // to `QuickInitLimit` are read, before the offsets of a
-            // worldspace are dropped, the `AfterLoad` of the record and the
-            // required members; a build for the names alone stops here too,
-            // so it leaves the record unchanged.
-            if QUICK_INIT.with(std::cell::Cell::get) == std::ptr::from_ref::<Self>(self) as usize {
+            // `if not Assigned(cntElements) then Exit`: a record left without
+            // any element (collapsed to nothing, or a quick init of a record
+            // without subrecords) skips the tail of `Init`.
+            if self.container.elements().is_empty() {
+                return;
+            }
+            // `mrsQuickInit`: upstream leaves `Init` once a subrecord past
+            // `QuickInitLimit` is reached, before the offsets of a worldspace
+            // are dropped, the `AfterLoad` of the record and the required
+            // members; a quick init that ran out of subrecords first runs
+            // the tail as a full init does (see `quick_init`).
+            if quick && passed_limit {
                 return;
             }
             // Port of the `wbRemoveOffsetData` step of `TwbMainRecord.Init`:
@@ -2798,15 +2989,41 @@ impl MainRecordImpl {
         self.release_data();
     }
 
-    /// The release of the quick init: the elements are given up before the
-    /// build counts as done. False for a modified record, which keeps them.
-    fn release_elements_and_data(&self) -> bool {
-        if self.base.has_state(ElementState::esModified) {
-            return false;
+    /// Port of `CollapseStorage(nil, True)` as `GetDataBasePtr` runs it at
+    /// the start of `Init` for a record whose storage a released init left
+    /// invalid (`UpdateStorageFromElements`): the keys and references are
+    /// updated, the elements are written (the record header is not saved,
+    /// and a released init left nothing else), released, and their bytes
+    /// become the data of the record, which stays modified as it was
+    /// (internally when the change was internal). `PrepareSave` of the
+    /// record, which upstream runs between the updates, checks the record's
+    /// place in its group and has nothing to do for a record without
+    /// elements.
+    fn collapse_storage_in_init(self: &Arc<Self>) {
+        if !self.base.has_state(ElementState::esModified) {
+            return;
         }
+        let was_internal = self.base.has_state(ElementState::esInternalModified);
+        self.update_keys();
+        self.update_refs();
+        let mut data = Vec::new();
+        if write::container_write_to_stream(&**self, &mut data, ResetModified::rmNo).is_err() {
+            return;
+        }
+        self.update_refs();
+        self.update_keys();
         self.container.release_elements();
         self.release_data();
-        true
+        self.mr_collapsed.set(data);
+        self.mr_storage_invalid.store(false, Ordering::Relaxed);
+        // `SetModified(True)` under `wbBeginInternalEdit(True)` when the
+        // record was internally modified, then `InvalidateParentStorage`.
+        let internal = was_internal && crate::interface::globals::begin_internal_edit(true);
+        self.set_modified(true);
+        if internal {
+            crate::interface::globals::end_internal_edit();
+        }
+        edit::invalidate_parent_storage(&**self);
     }
 
     /// Port of the release of `mrDataStorage`.
@@ -3163,6 +3380,12 @@ impl MainRecordImpl {
         self.bytes.as_slice().get(self.dc_data_base..self.dc_data_end)
     }
 
+    /// The collapsed data of the record (`CollapseStorage`), uncompressed,
+    /// which replaces the loaded data once the record was collapsed.
+    pub(crate) fn collapsed_data(&self) -> Option<&[u8]> {
+        self.mr_collapsed.current()
+    }
+
     /// Port of `DecompressIfNeeded` for a compressed record: the
     /// decompressed data, `None` when the decompression fails. A failure
     /// is reported once and stays.
@@ -3204,6 +3427,9 @@ impl MainRecordImpl {
     /// decompressed data of a borrow stays for the life of the record; the
     /// element tree reads it through `data_block`, which `reset` releases.
     pub fn data(&self) -> DataPtr<'_> {
+        if let Some(collapsed) = self.collapsed_data() {
+            return Some(collapsed);
+        }
         let raw = self.raw_data()?;
         if !self.mr_struct().flags.is_compressed() {
             return Some(raw);
@@ -3217,6 +3443,9 @@ impl MainRecordImpl {
     /// The size of the record data, decompressed when the record is
     /// compressed.
     fn data_len(&self) -> Option<usize> {
+        if let Some(collapsed) = self.collapsed_data() {
+            return Some(collapsed.len());
+        }
         if self.mr_struct().flags.is_compressed() {
             self.decompressed().map(|data| data.len())
         } else {
@@ -3226,6 +3455,10 @@ impl MainRecordImpl {
 
     /// The block the data of the record lives in, with the data range.
     pub(crate) fn data_block(&self) -> Option<(DataBlock, usize, usize)> {
+        if let Some(collapsed) = self.mr_collapsed.current_arc() {
+            let len = collapsed.len();
+            return Some((DataBlock::Buffer(collapsed), 0, len));
+        }
         if self.mr_struct().flags.is_compressed() {
             let storage = self.decompressed()?;
             let len = storage.len();
@@ -4295,12 +4528,14 @@ impl ElementImpl for MainRecordImpl {
             }
         }
         self.notify_changed();
+        self.self_arc().update_keys();
         // `if not (mrsNoUpdateRefs in mrStates) then UpdateRefs`.
         self.self_arc().update_refs();
     }
 
     /// Port of `TwbMainRecord.SetParentModified`: the group is marked
-    /// modified, and the references are built again.
+    /// modified, the references are built again and the index keys
+    /// updated.
     fn set_parent_modified(&self) {
         if let Some(container) = self.base.container()
             && let Some(container) = container.as_element_impl()
@@ -4308,6 +4543,7 @@ impl ElementImpl for MainRecordImpl {
             container.set_modified(true);
         }
         self.self_arc().update_refs();
+        self.self_arc().update_keys();
     }
 
     /// Port of `TwbMainRecord.DoAfterSet` without the cell child group
@@ -4561,8 +4797,15 @@ impl MainRecord for MainRecordImpl {
         self.mr_struct().signature
     }
 
+    /// Port of `GetEditorID`: the editor ID read by the quick init. While
+    /// the quick init of the record runs (`csInit` without `csInitOnce`),
+    /// the name is not available yet; a full init (`DoInit`, which sets
+    /// `csInitOnce` first) gives the editor ID read so far.
     fn get_editor_id(&self) -> String {
         if self.can_have(KnownSubRecord::ksrEditorID) {
+            if !self.mr_names_known.load(Ordering::Acquire) && self.in_quick_init() {
+                return "<EditorID not yet available: init still running>".to_owned();
+            }
             self.self_arc().quick_init();
         }
         self.mr_editor_id.read().unwrap().clone()

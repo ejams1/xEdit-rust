@@ -655,6 +655,33 @@
         "Skyrim.esm"
       ],
       "note": "edits records: the saved bytes are compared"
+    },
+    {
+      "script": "probes/edid-quick-init.pas",
+      "master": "tests/fixtures/parity/edid-quick-init.esm",
+      "save": [
+        "Skyrim.esm"
+      ],
+      "note": "parity #23 fixture: the editor ID edit after a quick init (GetEditorID) of a record whose subrecords all precede QuickInitLimit collapses the record to the EDID the script adds; the AVIF CNAM AfterLoad; the Copy index clamping; the StrictDelimiter parsing. The element lists and the saved bytes are compared"
+    },
+    {
+      "script": "probes/refs-edit.pas",
+      "master": "tests/fixtures/parity/refs-edit.esm",
+      "build_refs": true,
+      "save": [
+        "Skyrim.esm"
+      ],
+      "note": "parity #23 fixture: the referenced-by lists before and after a keyword is replaced, added and removed, and the editor ID index after renames (a duplicate key), a removed EDID and a new record. The lists, the lookups and the saved bytes are compared"
+    },
+    {
+      "script": "probes/refs-edit.pas",
+      "master": "tests/fixtures/parity/refs-edit.esm",
+      "build_refs": true,
+      "refcache": true,
+      "save": [
+        "Skyrim.esm"
+      ],
+      "note": "the same with the references loaded from the reference cache a first run wrote (the master holds 603 records, above wbCacheRecordsThreshold)"
     }
   ]
 }
