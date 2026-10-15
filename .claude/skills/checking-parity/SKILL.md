@@ -99,6 +99,14 @@ A sequence with `"strings": true` runs on a staging folder of its own (`<scratch
 
 Results 2026-10-08: 30 of 31 saved files over the 14 sequences; the 10 string sequences 26 of 27 (17 of 17 tables), the one difference the trim above.
 
+`"archives": ["Fallout4 - Interface.ba2", "DLCworkshop01*"]` (names, or the start of names with `*`) links those archives of the game's data folder next to the staged plugins on both sides (`GuiExtras::links` for the GUI) and puts no table loose: the tables are then read from the archives, as the loader finds them (issue #32). `"switches": ["-skipbsa"]` adds switches to the oracle's command line and their flags to the port's (`--skip-bsa`, `--force-bsa`); `inputs_from` also carries the tables the other sequence's oracle saved, loose in `Strings` (a reload). The port gets a My Games folder of its own with an empty game ini (`--my-games`, `--game-ini`), as the GUI gets `-M:` and `-I:`. Results 2026-10-15 (issue #32): `fo4-strings-archive-edit`, `-reload`, `-unloaded` and `-dlcrobot` 13 of 13 saved plugins and tables equal; `-unloaded` is the oracle's own replacement of unloaded tables (a new description first: a `.DLSTRINGS` of 1 string and empty `.STRINGS`/`.ILSTRINGS`).
+
+### Resources
+
+`cargo xtask parity resources [--game G]... [--file <stem>]...` runs the scenarios of `crates/xtask/oracle/resources/*.json` (issue #32): a game, the plugins to load, the archives of the game's data folder to link into the private data folder (`*` patterns), loose files, the game ini and custom ini, switches (`-skipbsa`, `-forcebsa`), a generated `hash_plugin` (Fallout 3 and New Vegas: one `STAT` whose `MODT` holds the TES4 hashes of given texture paths) and probes. The GUI runs `crates/xtask/oracle/resources.pas` in its script mode with the probes filled in; the port runs the same script through the same legacy command line (`xedit -FO4 -D: -P: -M: -I: -S: -script:`), so both load in the script tool mode. A scenario with `"mode": "check-for-errors"` or `"quick-auto-clean"` runs that tool mode instead (no probes) — the modes where `wbLoadBSAs` is off or `-skipbsa` acts, since the script mode always loads the archives. Compared: the probe's output (`containers`; `resource` with the containers that hold it and the CRC32 of the winning data; `listing` of a container below a folder, count and the first and last names; `value` of a localized element; `key`, the sort key of a file or folder hash) and the loader's resource lines (`Loading Resources.`, `Version:`, `Skipped.`, `Can't find`, `Setting Resource Path.`, the cache lines), each side's data folder written `<data>\`. Report `target/parity/resources.json`; oracle results cached in `<cache>/<tag>/<MODE>-oracle-resources/<scenario>.<key>/`.
+
+Results 2026-10-15: RESULTS_PLACEHOLDER
+
 ### Scripts
 
 ```
@@ -247,6 +255,7 @@ The `xEdit-llm` automation build is a secondary oracle for conflict, reference a
 | Saved bytes | plugin written by a `-script:` of the GUI (`oracle/save.pas`, `oracle/edit.pas`) | `xedit save`, `xedit batch` |
 | Scripts | compile outcome of every script, and the files, log lines and saved plugins of the form-free corpus, by a `-script:` run of the GUI (`parity script`) | `xedit script check`, `xedit script run` |
 | Archives | `BSArch.exe pack -mt:no`, `unpack` and `-dump` output | `bsarch`, `xedit archive pack` (`parity bsarch`) |
+| Resources | the container list, resource lookups and loader lines of a `-script:` run of the GUI (`oracle/resources.pas`) or of a tool mode | the same command line of `xedit` (`parity resources`) |
 | NIF and material dumps and saves | `Sniff.exe` JSON converter and universal tweaker; the GUI's script adapter for text dumps | `cargo xtask parity nif` (in process) |
 | Sniff operations | `Sniff.exe` automation mode, outputs and log | `cargo xtask parity sniff` (in process) |
 | LOD generation | the GUI's `-lodgen` mode: output files, export files and log | `xedit lodgen` (`parity lodgen`) |

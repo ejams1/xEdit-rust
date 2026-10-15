@@ -8,7 +8,7 @@
 //! and the compression of record data and archive files for the write path:
 //! zlib (libdeflate, and zlib itself beyond 8 MiB), LZ4 (HC) and LZ4F.
 
-use std::io::Read;
+use std::io::{Read, Write};
 
 use libdeflater::{CompressionLvl, Compressor, DecompressionError, Decompressor};
 use lz4_flex::frame::FrameDecoder;
@@ -79,6 +79,69 @@ impl CompressionType {
         }
     }
 
+    /// Port of `TwbCompression.Compress(aType, aSrc, aSrcSize, aDst: TStream)`:
+    /// [`CompressionType::compress`] written to the stream.
+    pub fn compress_to(self, src: &[u8], dst: &mut dyn Write) -> Result<(), CompressionError> {
+        let data = self.compress(src)?;
+        dst.write_all(&data).map_err(stream_error)
+    }
+
+    /// Port of `TwbCompression.Compress(aType, aSrc, aDst: TStream,
+    /// aBuffered)`. Without `buffered`, or for LZ4 (`todo: not implemented
+    /// for LZ4` upstream) and none, the whole source is read and compressed
+    /// as [`CompressionType::compress`] does. With `buffered`, zlib goes
+    /// through zlib's own stream (`System.ZLib.ZCompressStream`), so a
+    /// source up to 8 MiB is not compressed by libdeflate as the buffer
+    /// routes do, and LZ4F block by block (`LZ4FCompressStream`: 4 MiB
+    /// independent blocks, auto flush, the source read 4 MiB at a time), which
+    /// gives the frame [`CompressionType::compress`] gives.
+    ///
+    /// UPSTREAM-QUIRK: the buffered zlib route passes the level as
+    /// `TZCompressionLevel(9)`, an ordinal beyond that enumeration
+    /// (`zcNone`..`zcMax`), and `ZCompressStream` indexes its table of
+    /// zlib levels with it, so the level upstream compresses at is whatever
+    /// integer follows that table in the binary. The 4.1.5q release has no
+    /// caller of this route; the port compresses at `Z_BEST_COMPRESSION`, the
+    /// level the call means.
+    pub fn compress_stream(
+        self,
+        src: &mut dyn Read,
+        dst: &mut dyn Write,
+        buffered: bool,
+    ) -> Result<(), CompressionError> {
+        match self {
+            CompressionType::ZLib if buffered => {
+                let mut encoder =
+                    flate2::write::ZlibEncoder::new(dst, flate2::Compression::new(ZLIB_COMPRESSION_LEVEL as u32));
+                std::io::copy(src, &mut encoder).map_err(stream_error)?;
+                encoder.finish().map_err(stream_error)?;
+                Ok(())
+            }
+            CompressionType::LZ4F if buffered => lz4f_compress_stream(src, dst, LZ4_COMPRESSION_LEVEL),
+            _ => {
+                // no buffering with full loading into memory
+                let mut data = Vec::new();
+                src.read_to_end(&mut data).map_err(stream_error)?;
+                self.compress_to(&data, dst)
+            }
+        }
+    }
+
+    /// Port of `TwbCompression.Decompress(aType, aSrc, aDst: TStream)`: an
+    /// LZ4 frame decoded from the source to its end (`TLZ4.Stream_Decode`);
+    /// the other types are `Not implemented` upstream.
+    pub fn decompress_stream(self, src: &mut dyn Read, dst: &mut dyn Write) -> Result<(), CompressionError> {
+        match self {
+            CompressionType::LZ4F => {
+                let mut decoder = FrameDecoder::new(src);
+                std::io::copy(&mut decoder, dst)
+                    .map(|_| ())
+                    .map_err(|error| CompressionError(format!("LZ4F decompression error: {error}")))
+            }
+            _ => Err(CompressionError("Not implemented".to_owned())),
+        }
+    }
+
     /// Decompresses `src` into `dst`. The decompressed data must fill `dst` exactly.
     pub fn decompress(self, src: &[u8], dst: &mut [u8]) -> Result<(), CompressionError> {
         match self {
@@ -88,6 +151,118 @@ impl CompressionType {
             CompressionType::None => Err(CompressionError("Undefined decompression type".to_owned())),
         }
     }
+}
+
+/// The message of a stream that could not be read or written.
+fn stream_error(error: std::io::Error) -> CompressionError {
+    CompressionError(error.to_string())
+}
+
+/// Port of `LZ4FCompressStream`: the frame header (`LZ4F_compressBegin`),
+/// each block of up to 4 MiB of the source (`LZ4F_compressUpdate` with auto
+/// flush) and the end mark (`LZ4F_compressEnd`), with the preferences of
+/// `LZ4FCompress`.
+fn lz4f_compress_stream(src: &mut dyn Read, dst: &mut dyn Write, level: i32) -> Result<(), CompressionError> {
+    use lz4_sys::{
+        BlockChecksum, BlockMode, BlockSize, ContentChecksum, FrameType, LZ4F_VERSION, LZ4FCompressionContext,
+        LZ4FFrameInfo, LZ4FPreferences,
+    };
+    let check = |message: &str, code: usize| -> Result<usize, CompressionError> {
+        // SAFETY: `LZ4F_isError` only reads its argument.
+        if unsafe { lz4_sys::LZ4F_isError(code) } != 0 {
+            // SAFETY: the error name is a static C string.
+            let name = unsafe { std::ffi::CStr::from_ptr(lz4_sys::LZ4F_getErrorName(code)) };
+            return Err(CompressionError(message.replace("%s", &name.to_string_lossy())));
+        }
+        Ok(code)
+    };
+    let preferences = LZ4FPreferences {
+        frame_info: LZ4FFrameInfo {
+            block_size_id: BlockSize::Max4MB,
+            block_mode: BlockMode::Independent,
+            content_checksum_flag: ContentChecksum::NoChecksum,
+            frame_type: FrameType::Frame,
+            content_size: 0,
+            dict_id: 0,
+            block_checksum_flag: BlockChecksum::NoBlockChecksum,
+        },
+        compression_level: level as u32,
+        auto_flush: 1,
+        favor_dec_speed: 0,
+        reserved: [0; 3],
+    };
+    let mut context = LZ4FCompressionContext(std::ptr::null_mut());
+    // SAFETY: the context is written by the call.
+    check("LZ4F compression context error: %s", unsafe {
+        lz4_sys::LZ4F_createCompressionContext(&mut context, LZ4F_VERSION)
+    })?;
+    struct Free(LZ4FCompressionContext);
+    impl Drop for Free {
+        fn drop(&mut self) {
+            // SAFETY: the context was created by `LZ4F_createCompressionContext`.
+            unsafe {
+                lz4_sys::LZ4F_freeCompressionContext(LZ4FCompressionContext(self.0.0));
+            }
+        }
+    }
+    let _free = Free(LZ4FCompressionContext(context.0));
+    let block_size = 1usize << (8 + 2 * 7);
+    let mut input = vec![0u8; block_size];
+    // SAFETY: `preferences` is a valid LZ4F_preferences_t.
+    let bound = unsafe { lz4_sys::LZ4F_compressBound(block_size, &preferences) };
+    let mut output = vec![0u8; bound];
+    // Write Archive Header
+    // SAFETY: `output` is valid for `bound` bytes.
+    let size = check("LZ4F file header generation failed: %s", unsafe {
+        lz4_sys::LZ4F_compressBegin(
+            LZ4FCompressionContext(context.0),
+            output.as_mut_ptr(),
+            bound,
+            &preferences,
+        )
+    })?;
+    dst.write_all(&output[..size]).map_err(stream_error)?;
+    loop {
+        // `TStream.Read`: up to a block, fewer at the end of the source.
+        let mut read = 0;
+        while read < block_size {
+            match src.read(&mut input[read..]) {
+                Ok(0) => break,
+                Ok(count) => read += count,
+                Err(error) if error.kind() == std::io::ErrorKind::Interrupted => {}
+                Err(error) => return Err(stream_error(error)),
+            }
+        }
+        if read == 0 {
+            break;
+        }
+        // SAFETY: `input` is valid for `read` bytes, `output` for `bound`.
+        let size = check("LZ4F compression error: %s", unsafe {
+            lz4_sys::LZ4F_compressUpdate(
+                LZ4FCompressionContext(context.0),
+                output.as_mut_ptr(),
+                bound,
+                input.as_ptr(),
+                read,
+                std::ptr::null(),
+            )
+        })?;
+        dst.write_all(&output[..size]).map_err(stream_error)?;
+        if read < block_size {
+            break;
+        }
+    }
+    // End of Stream mark
+    // SAFETY: `output` is valid for `bound` bytes.
+    let size = check("LZ4F end of file generation failed: %s", unsafe {
+        lz4_sys::LZ4F_compressEnd(
+            LZ4FCompressionContext(context.0),
+            output.as_mut_ptr(),
+            bound,
+            std::ptr::null(),
+        )
+    })?;
+    dst.write_all(&output[..size]).map_err(stream_error)
 }
 
 /// Port of `LibDeflateCompress`.
@@ -283,6 +458,64 @@ mod tests {
         let mut out = vec![0u8; data.len()];
         CompressionType::ZLib.decompress(&packed, &mut out).unwrap();
         assert_eq!(out, data);
+    }
+
+    #[test]
+    fn the_stream_overloads_compress_as_upstream_routes_them() {
+        for length in [0, 100, 70_000, (4 << 20) + 5000] {
+            let data = sample(length);
+            for kind in [CompressionType::ZLib, CompressionType::LZ4, CompressionType::LZ4F] {
+                // Unbuffered, and LZ4 buffered: the buffer route's bytes.
+                let mut expected = Vec::new();
+                kind.compress_to(&data, &mut expected).unwrap();
+                assert_eq!(expected, kind.compress(&data).unwrap());
+                let mut unbuffered = Vec::new();
+                kind.compress_stream(&mut data.as_slice(), &mut unbuffered, false)
+                    .unwrap();
+                assert_eq!(unbuffered, expected, "{} of {length} bytes", kind.name());
+                let mut buffered = Vec::new();
+                kind.compress_stream(&mut data.as_slice(), &mut buffered, true).unwrap();
+                let mut out = vec![0u8; data.len()];
+                kind.decompress(&buffered, &mut out).unwrap();
+                assert_eq!(out, data, "{} buffered of {length} bytes", kind.name());
+                match kind {
+                    CompressionType::LZ4 => assert_eq!(buffered, expected),
+                    // zlib's own stream at level 9, also where the buffer
+                    // route takes libdeflate.
+                    CompressionType::ZLib => {
+                        assert_eq!(buffered, zlib_compress(&data, ZLIB_COMPRESSION_LEVEL).unwrap())
+                    }
+                    _ => {}
+                }
+            }
+            // The stream decoder of LZ4F reads both frames.
+            for frame in [CompressionType::LZ4F.compress(&data).unwrap(), {
+                let mut out = Vec::new();
+                CompressionType::LZ4F
+                    .compress_stream(&mut data.as_slice(), &mut out, true)
+                    .unwrap();
+                out
+            }] {
+                let mut out = Vec::new();
+                CompressionType::LZ4F
+                    .decompress_stream(&mut frame.as_slice(), &mut out)
+                    .unwrap();
+                assert_eq!(out, data);
+            }
+        }
+        let mut sink = Vec::new();
+        assert_eq!(
+            CompressionType::ZLib
+                .decompress_stream(&mut TEXT.as_ref(), &mut sink)
+                .unwrap_err()
+                .0,
+            "Not implemented"
+        );
+        assert!(
+            CompressionType::None
+                .compress_stream(&mut TEXT.as_ref(), &mut sink, true)
+                .is_err()
+        );
     }
 
     #[test]

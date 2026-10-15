@@ -1,0 +1,12 @@
+{
+  "description": "New Vegas without a switch: wbLoadBSAs is off for the game, so in the edit mode (here its quick auto clean) the archives found are Skipped.",
+  "game": "fnv",
+  "mode": "quick-auto-clean",
+  "load": ["CaravanPack.esm"],
+  "archives": ["Fallout - Misc.bsa", "CaravanPack*"],
+  "game_ini": [
+    "[Archive]",
+    "sArchiveList=Fallout - Misc.bsa"
+  ],
+  "probes": []
+}

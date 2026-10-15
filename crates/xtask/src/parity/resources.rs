@@ -81,6 +81,109 @@ struct Scenario {
     /// `{"listing": [index, folder, shown]}`, `{"value": [file, FormID,
     /// path]}`, `{"key": [file, FormID, path]}`.
     probes: Vec<Value>,
+    /// A plugin the harness writes and loads after `load`: one `STAT`
+    /// (`[01000800]`) whose model information names these textures by the
+    /// hashes of Fallout 3 and New Vegas (`TwbHash.TES4` of the file name and
+    /// of the folder), for the probes of `ResolveFileHash` and
+    /// `ResolveFolderHash` (`key`).
+    #[serde(default)]
+    hash_plugin: Option<HashPlugin>,
+    /// Instead of the script mode, a tool mode of the GUI that loads and
+    /// exits on its own, on the last plugin of `load`: `check-for-errors`
+    /// (`-CheckForErrors`, whose `wbLoadBSAs := False` comes after the
+    /// switches) or `quick-auto-clean` (`-quickautoclean -autoexit
+    /// -autoload`, the edit mode, where `-skipbsa` and `-forcebsa` act).
+    /// Only the loader's resource lines are compared; `probes` stays empty.
+    #[serde(default)]
+    mode: Option<String>,
+}
+
+/// The switches of a [`Scenario::mode`] after the common ones.
+fn mode_args(mode: &str, target: &str) -> Result<Vec<String>> {
+    Ok(match mode {
+        "check-for-errors" => vec!["-CheckForErrors".to_owned(), target.to_owned()],
+        "quick-auto-clean" => vec![
+            "-quickautoclean".to_owned(),
+            "-autoexit".to_owned(),
+            "-autoload".to_owned(),
+            target.to_owned(),
+        ],
+        other => bail!("unknown mode {other}"),
+    })
+}
+
+/// The plugin of [`Scenario::hash_plugin`].
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct HashPlugin {
+    /// The file name, such as `HashProbe.esp`.
+    name: String,
+    /// Its master, the game master.
+    master: String,
+    /// The texture paths below the data folder whose hashes the record holds.
+    textures: Vec<String>,
+}
+
+/// A subrecord: signature, size and data.
+fn sub_record(signature: &[u8; 4], data: &[u8]) -> Vec<u8> {
+    let mut out = signature.to_vec();
+    out.extend_from_slice(&(data.len() as u16).to_le_bytes());
+    out.extend_from_slice(data);
+    out
+}
+
+/// A record of the Fallout 3 and New Vegas layout (24-byte header).
+fn record(signature: &[u8; 4], form_id: u32, data: &[u8]) -> Vec<u8> {
+    let mut out = signature.to_vec();
+    out.extend_from_slice(&(data.len() as u32).to_le_bytes());
+    out.extend_from_slice(&0u32.to_le_bytes());
+    out.extend_from_slice(&form_id.to_le_bytes());
+    out.extend_from_slice(&[0u8; 8]);
+    out.extend_from_slice(data);
+    out
+}
+
+fn z_string(text: &str) -> Vec<u8> {
+    let mut bytes = text.as_bytes().to_vec();
+    bytes.push(0);
+    bytes
+}
+
+/// The bytes of a [`HashPlugin`]: a `TES4` header with the master and a top
+/// group with the `STAT`, whose `MODT` holds for each texture its file hash
+/// (PC and console) and folder hash, as `wbModelInfo` before Skyrim reads it.
+fn hash_plugin_bytes(plugin: &HashPlugin, hedr_version: f32) -> Vec<u8> {
+    let mut header = Vec::new();
+    let mut hedr = hedr_version.to_le_bytes().to_vec();
+    hedr.extend_from_slice(&1u32.to_le_bytes());
+    hedr.extend_from_slice(&0x801u32.to_le_bytes());
+    header.extend(sub_record(b"HEDR", &hedr));
+    header.extend(sub_record(b"CNAM", &z_string("xEdit-rust parity")));
+    header.extend(sub_record(b"MAST", &z_string(&plugin.master)));
+    header.extend(sub_record(b"DATA", &[0u8; 8]));
+    let mut bytes = record(b"TES4", 0, &header);
+    let mut modt = Vec::new();
+    for texture in &plugin.textures {
+        let path = texture.to_lowercase();
+        let (folder, file) = path.rsplit_once('\\').unwrap_or(("", path.as_str()));
+        let file_hash = xedit_io::hash::tes4(file, true);
+        modt.extend_from_slice(&file_hash.to_le_bytes());
+        modt.extend_from_slice(&file_hash.to_le_bytes());
+        modt.extend_from_slice(&xedit_io::hash::tes4(folder, true).to_le_bytes());
+    }
+    let mut stat = Vec::new();
+    stat.extend(sub_record(b"EDID", &z_string("HashProbe")));
+    stat.extend(sub_record(b"OBND", &[0u8; 12]));
+    stat.extend(sub_record(b"MODL", &z_string("probe\\hashprobe.nif")));
+    stat.extend(sub_record(b"MODT", &modt));
+    let stat = record(b"STAT", 0x0100_0800, &stat);
+    let mut group = b"GRUP".to_vec();
+    group.extend_from_slice(&((24 + stat.len()) as u32).to_le_bytes());
+    group.extend_from_slice(b"STAT");
+    group.extend_from_slice(&[0u8; 12]);
+    group.extend(stat);
+    bytes.extend(group);
+    bytes
 }
 
 #[derive(Serialize)]
@@ -405,7 +508,25 @@ fn check(
     text: &str,
 ) -> Result<ResourcesOutcome> {
     let names: Vec<&str> = scenario.load.iter().map(String::as_str).collect();
-    let plugins = load_list(game, data, &names)?;
+    let mut plugins = load_list(game, data, &names)?;
+    if let Some(plugin) = &scenario.hash_plugin {
+        let version = match game.mode {
+            "FO3" => 0.94,
+            "FNV" => 1.34,
+            other => bail!("{stem}: a hash plugin is for Fallout 3 and New Vegas, not {other}"),
+        };
+        let dir = runner
+            .scratch
+            .join(format!("{}-resources", game.mode))
+            .join(format!("{stem}-plugin"));
+        fs::create_dir_all(&dir)?;
+        let path = dir.join(&plugin.name);
+        let bytes = hash_plugin_bytes(plugin, version);
+        if fs::read(&path).ok().as_deref() != Some(bytes.as_slice()) {
+            fs::write(&path, bytes)?;
+        }
+        plugins.push(path);
+    }
     let archives = scenario_archives(scenario, data)?;
     let script = RESOURCES_SCRIPT.replace("{{PROBES}}", &probe_calls(&scenario.probes)?);
     let mut archive_text = String::new();
@@ -430,17 +551,20 @@ fn check(
         .join(format!("{stem}.{key:016x}"));
     let (files, links) = run_files(scenario, game, &archives);
     if !cache_dir.join("status").exists() {
-        run_oracle(
-            runner,
-            game,
-            &plugins,
-            script.clone(),
-            scenario,
-            &files,
-            &links,
-            &cache_dir,
-            stem,
-        )?;
+        match &scenario.mode {
+            Some(mode) => run_oracle_mode(runner, game, &plugins, mode, scenario, &files, &links, &cache_dir, stem)?,
+            None => run_oracle(
+                runner,
+                game,
+                &plugins,
+                script.clone(),
+                scenario,
+                &files,
+                &links,
+                &cache_dir,
+                stem,
+            )?,
+        }
     }
     let oracle = read_cached(&cache_dir)?;
     let mut outcome = ResourcesOutcome {
@@ -565,6 +689,83 @@ fn run_oracle(
     Ok(())
 }
 
+/// The oracle's run of a scenario with a [`Scenario::mode`]: the GUI in that
+/// tool mode, its loader lines from the log it writes on exit.
+#[allow(clippy::too_many_arguments)]
+fn run_oracle_mode(
+    runner: &Runner,
+    game: &Game,
+    plugins: &[PathBuf],
+    mode: &str,
+    scenario: &Scenario,
+    files: &[(PathBuf, Vec<u8>)],
+    links: &[(PathBuf, PathBuf)],
+    cache_dir: &Path,
+    stem: &str,
+) -> Result<()> {
+    let exe = runner.oracle_dir.join(gui::exe_name(game.mode));
+    ensure!(exe.exists(), "{} does not exist", exe.display());
+    let work =
+        runner
+            .scratch
+            .join("oracle-work")
+            .join(format!("{}-resources-{stem}.{}", game.mode, std::process::id()));
+    let target = plugins
+        .last()
+        .and_then(|plugin| plugin.file_name())
+        .context("no plugin")?
+        .to_string_lossy()
+        .into_owned();
+    let run = gui::GuiRun {
+        exe: &exe,
+        mode: game.mode,
+        star_plugins_txt: !gui::simple_plugins_txt(game.mode),
+        plugins: plugins.to_vec(),
+        script: String::new(),
+        build_refs: false,
+        work: work.clone(),
+        timeout: runner.oracle_timeout.unwrap_or(std::time::Duration::from_secs(60 * 60)),
+        hang_timeout: std::time::Duration::from_secs(600),
+        budget: &runner.budget,
+        expected_peak: 2 * GIB,
+        max_memory: runner.max_memory,
+        extra_args: Vec::new(),
+    };
+    let extras = GuiExtras {
+        files: files.to_vec(),
+        links: links.to_vec(),
+        args: scenario.switches.clone(),
+        ..Default::default()
+    };
+    let args = mode_args(mode, &target)?;
+    let arg_refs: Vec<&str> = args.iter().map(String::as_str).collect();
+    let result = run.run_auto_mode_with(&arg_refs, &extras);
+    let partial = cache_dir.with_extension(format!("partial{}", std::process::id()));
+    if partial.exists() {
+        fs::remove_dir_all(&partial)?;
+    }
+    fs::create_dir_all(&partial)?;
+    let status = match result {
+        Ok(result) => {
+            fs::write(
+                partial.join("loader.txt"),
+                loader_lines(&result.log, &work.join("Data")).join("\n"),
+            )?;
+            fs::write(partial.join("probe.txt"), "")?;
+            "done".to_owned()
+        }
+        Err(error) => format!("{error:#}"),
+    };
+    fs::write(partial.join("status"), status)?;
+    gui::remove_work(&work);
+    if cache_dir.exists() {
+        fs::remove_dir_all(&partial)?;
+    } else {
+        fs::rename(&partial, cache_dir)?;
+    }
+    Ok(())
+}
+
 fn read_cached(cache_dir: &Path) -> Result<SideOutput> {
     let lines = |name: &str| -> Vec<String> {
         fs::read_to_string(cache_dir.join(name))
@@ -618,6 +819,19 @@ fn run_port(
         plugins_txt.push_str("\r\n");
     }
     fs::write(work.join("plugins.txt"), plugins_txt)?;
+    // The game executable the GUI's private data folder gets (Fallout 3 and
+    // New Vegas), which the data folder container then lists.
+    if let Some(exe_name) = gui::hardcoded_exe(game.mode)
+        && let Some(game_dir) = plugins
+            .first()
+            .and_then(|plugin| plugin.parent())
+            .and_then(Path::parent)
+    {
+        let game_exe = game_dir.join(exe_name);
+        if game_exe.is_file() {
+            fs::copy(&game_exe, data.join(exe_name))?;
+        }
+    }
     for (path, source) in links {
         let target = work.join(path);
         if fs::hard_link(source, &target).is_err() {
@@ -632,7 +846,9 @@ fn run_port(
         fs::write(target, bytes)?;
     }
     let work_text = format!("{}\\", gui::windows_path(&work));
-    fs::write(work.join("resources.pas"), script.replace("{{WORK}}", &work_text))?;
+    if scenario.mode.is_none() {
+        fs::write(work.join("resources.pas"), script.replace("{{WORK}}", &work_text))?;
+    }
     fs::create_dir_all(work.join("bin"))?;
     let log = work.join("port.log");
     let mut command = std::process::Command::new(port);
@@ -643,17 +859,39 @@ fn run_port(
         .arg(format!("-M:{work_text}mygames\\"))
         .arg(format!("-I:{work_text}mygames\\game.ini"))
         .arg(format!("-S:{work_text}"))
-        .arg(format!("-script:{work_text}resources.pas"))
-        .arg("-IKnowWhatImDoing")
-        .arg("-nobuildrefs");
+        .arg("-IKnowWhatImDoing");
     for switch in &scenario.switches {
         command.arg(switch);
+    }
+    match &scenario.mode {
+        Some(mode) => {
+            let target = plugins
+                .last()
+                .and_then(|plugin| plugin.file_name())
+                .context("no plugin")?
+                .to_string_lossy()
+                .into_owned();
+            command.args(mode_args(mode, &target)?);
+        }
+        None => {
+            command
+                .arg(format!("-script:{work_text}resources.pas"))
+                .arg("-nobuildrefs");
+        }
     }
     let output = command
         .current_dir(&work)
         .stdin(std::process::Stdio::null())
         .stderr(File::create(&log)?)
         .output()?;
+    if scenario.mode.is_some() {
+        let stderr = fs::read(&log).map(|bytes| String::from_utf8_lossy(&bytes).into_owned())?;
+        return Ok(SideOutput {
+            status: "done".to_owned(),
+            probe: Vec::new(),
+            loader: loader_lines(&stderr, &data),
+        });
+    }
     let status = fs::read_to_string(work.join("status.txt"))
         .map(|text| text.lines().last().unwrap_or_default().to_owned())
         .unwrap_or_else(|_| {

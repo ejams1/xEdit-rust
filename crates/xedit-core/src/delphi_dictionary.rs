@@ -11,90 +11,35 @@
 //! gives.
 //!
 //! The model is the RTL's (`System.Generics.Collections`): an open
-//! addressing table whose length is a power of two (`SetCapacity` rounds the
-//! capacity of the constructor up from 4), a key's bucket the low bits of
+//! addressing table whose length is a power of two (`SetCapacity` takes the
+//! smallest one from 4 whose three quarters hold the capacity of the
+//! constructor), a key's bucket the low bits of
 //! `GetHashCode and $7FFFFFFF`, linear probing to the next free bucket,
 //! growth to twice the length before an add once the count reaches three
 //! quarters of it (`Rehash`, which moves the items in their old bucket order),
 //! and enumeration in bucket order. The hash of a string is the default
-//! comparer's, Bob Jenkins' `hashlittle` of the UTF-16 code units
-//! (`THashBobJenkins.GetHashValue(Value[1], Length(Value) * 2, 0)`).
+//! comparer's, FNV-1a of the UTF-16 code units ([`string_hash_code`]).
 
-/// Bob Jenkins' `hashlittle` (lookup3), as `THashBobJenkins.HashLittle`:
-/// the bytes read as little-endian words, no final mix for an empty tail.
-pub fn hash_little(data: &[u8], init_val: u32) -> u32 {
-    fn mix(a: &mut u32, b: &mut u32, c: &mut u32) {
-        *a = a.wrapping_sub(*c);
-        *a ^= c.rotate_left(4);
-        *c = c.wrapping_add(*b);
-        *b = b.wrapping_sub(*a);
-        *b ^= a.rotate_left(6);
-        *a = a.wrapping_add(*c);
-        *c = c.wrapping_sub(*b);
-        *c ^= b.rotate_left(8);
-        *b = b.wrapping_add(*a);
-        *a = a.wrapping_sub(*c);
-        *a ^= c.rotate_left(16);
-        *c = c.wrapping_add(*b);
-        *b = b.wrapping_sub(*a);
-        *b ^= a.rotate_left(19);
-        *a = a.wrapping_add(*c);
-        *c = c.wrapping_sub(*b);
-        *c ^= b.rotate_left(4);
-        *b = b.wrapping_add(*a);
-    }
-    fn finish(a: &mut u32, b: &mut u32, c: &mut u32) {
-        *c ^= *b;
-        *c = c.wrapping_sub(b.rotate_left(14));
-        *a ^= *c;
-        *a = a.wrapping_sub(c.rotate_left(11));
-        *b ^= *a;
-        *b = b.wrapping_sub(a.rotate_left(25));
-        *c ^= *b;
-        *c = c.wrapping_sub(b.rotate_left(16));
-        *a ^= *c;
-        *a = a.wrapping_sub(c.rotate_left(4));
-        *b ^= *a;
-        *b = b.wrapping_sub(a.rotate_left(14));
-        *c ^= *b;
-        *c = c.wrapping_sub(b.rotate_left(24));
-    }
-    let word = |bytes: &[u8]| -> u32 {
-        let mut value = 0u32;
-        for (index, byte) in bytes.iter().enumerate() {
-            value |= u32::from(*byte) << (8 * index);
-        }
-        value
-    };
-    let start = 0xDEAD_BEEFu32.wrapping_add(data.len() as u32).wrapping_add(init_val);
-    let (mut a, mut b, mut c) = (start, start, start);
-    let mut rest = data;
-    while rest.len() > 12 {
-        a = a.wrapping_add(word(&rest[0..4]));
-        b = b.wrapping_add(word(&rest[4..8]));
-        c = c.wrapping_add(word(&rest[8..12]));
-        mix(&mut a, &mut b, &mut c);
-        rest = &rest[12..];
-    }
-    if rest.is_empty() {
-        return c;
-    }
-    a = a.wrapping_add(word(&rest[..rest.len().min(4)]));
-    if rest.len() > 4 {
-        b = b.wrapping_add(word(&rest[4..rest.len().min(8)]));
-    }
-    if rest.len() > 8 {
-        c = c.wrapping_add(word(&rest[8..]));
-    }
-    finish(&mut a, &mut b, &mut c);
-    c
+/// `THashFNV1a32.GetHashValue`: the 32-bit FNV-1a hash of the bytes
+/// (offset basis `$811C9DC5`, prime `$01000193`).
+pub fn fnv1a32(data: &[u8]) -> u32 {
+    data.iter().fold(0x811C_9DC5u32, |hash, byte| {
+        (hash ^ u32::from(*byte)).wrapping_mul(0x0100_0193)
+    })
 }
 
-/// The default `IEqualityComparer<string>.GetHashCode` of the RTL: the hash
-/// of the UTF-16 code units of the string.
+/// The default `IEqualityComparer<string>.GetHashCode` of the RTL the
+/// oracle was built with: [`fnv1a32`] of the UTF-16 code units of the string.
+///
+/// Measured, not read: the RTL source is not part of the upstream checkout.
+/// `parity resources` (`fnv-hashes`) puts ten pairs of names with one TES4
+/// hash in the data folder and reads which name of each pair the oracle
+/// resolves the hash to; of Bob Jenkins' `hashlittle` and FNV-1 and FNV-1a
+/// over the UTF-16 or the ANSI bytes, with tables of 2^4 to 2^31 buckets,
+/// only FNV-1a of the UTF-16 bytes with 2^21 buckets gives all ten.
 pub fn string_hash_code(key: &str) -> i32 {
     let bytes: Vec<u8> = key.encode_utf16().flat_map(u16::to_le_bytes).collect();
-    hash_little(&bytes, 0) as i32
+    fnv1a32(&bytes) as i32
 }
 
 /// A `TDictionary<string, TwbNothing>` (upstream `TwbResourceDict`) that
@@ -117,10 +62,14 @@ impl StringDictionary {
             count: 0,
             grow_threshold: 0,
         };
-        // `SetCapacity`: the smallest power of two from 4 that holds it.
+        // `SetCapacity`: the smallest power of two from 4 whose growth
+        // threshold (three quarters of it) holds that many items. Measured on
+        // the 4.1.5q oracle (`parity resources`, `fnv-hashes`): the
+        // `TDictionary.Create(1000000)` of `BuildCache` has 2^21 buckets, not
+        // the 2^20 the plain power of two above the capacity would give.
         if capacity > 0 {
             let mut length = 4usize;
-            while length < capacity {
+            while (length >> 1) + (length >> 2) < capacity {
                 length <<= 1;
             }
             dictionary.rehash(length);
@@ -205,13 +154,37 @@ mod tests {
     use super::*;
 
     #[test]
-    fn hash_little_matches_lookup3() {
-        // The test vectors of lookup3.c's driver5: hashlittle("", 0) and
-        // the "Four score and seven years ago" lines.
-        assert_eq!(hash_little(b"", 0), 0xDEAD_BEEF);
-        assert_eq!(hash_little(b"", 0xDEAD_BEEF), 0xBD5B_7DDE);
-        assert_eq!(hash_little(b"Four score and seven years ago", 0), 0x1777_0551);
-        assert_eq!(hash_little(b"Four score and seven years ago", 1), 0xCD62_8161);
+    fn fnv1a_matches_the_reference_values() {
+        // The test vectors of the FNV reference: "" and "a" and "foobar".
+        assert_eq!(fnv1a32(b""), 0x811C_9DC5);
+        assert_eq!(fnv1a32(b"a"), 0xE40C_292C);
+        assert_eq!(fnv1a32(b"foobar"), 0xBF9C_F968);
+        // The UTF-16 code units of the string.
+        assert_eq!(string_hash_code("a"), fnv1a32(&[0x61, 0]) as i32);
+    }
+
+    #[test]
+    fn the_oracle_resolves_hash_pairs_in_this_order() {
+        // Four of the pairs of `fnv-hashes` and the name the oracle resolved
+        // the hash to: the one earlier in the bucket order of
+        // `TDictionary.Create(1000000)` (2^21 buckets).
+        let mut dictionary = StringDictionary::with_capacity(1_000_000);
+        let pairs = [
+            ("q090ynp5wzz", "qdmeof78jzz", "qdmeof78jzz"),
+            ("qhovs53ymzz", "qk2uo11tizz", "qhovs53ymzz"),
+            ("qo387f11rzz", "qscye1afizz", "qscye1afizz"),
+            ("q7ormo6mmzz", "qxthlady0zz", "q7ormo6mmzz"),
+        ];
+        for (a, b, _) in pairs {
+            dictionary.try_add(&format!("textures\\probe\\{a}.dds"));
+            dictionary.try_add(&format!("textures\\probe\\{b}.dds"));
+        }
+        let keys: Vec<&str> = dictionary.keys().collect();
+        for (a, b, winner) in pairs {
+            let position = |name: &str| keys.iter().position(|key| key.contains(name)).unwrap();
+            let first = if position(a) < position(b) { a } else { b };
+            assert_eq!(first, winner);
+        }
     }
 
     #[test]
@@ -225,6 +198,10 @@ mod tests {
         assert_eq!(dictionary.len(), 100);
         // 100 items grow the table to 256 buckets (the threshold of 128 is 96).
         assert_eq!(dictionary.items.len(), 256);
+        // A capacity is a number of items: a million take 2^21 buckets.
+        assert_eq!(StringDictionary::with_capacity(1_000_000).items.len(), 1 << 21);
+        assert_eq!(StringDictionary::with_capacity(3).items.len(), 4);
+        assert_eq!(StringDictionary::with_capacity(4).items.len(), 8);
         let keys: Vec<&str> = dictionary.keys().collect();
         assert_eq!(keys.len(), 100);
         // Bucket order, not the order of the adds.

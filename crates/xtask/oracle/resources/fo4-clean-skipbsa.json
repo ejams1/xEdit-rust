@@ -1,0 +1,13 @@
+{
+  "description": "-skipbsa in the edit mode (here its quick auto clean, which loads and exits on its own): wbLoadBSAs is off, so the archives of the game ini and of the plugins are Skipped, and a missing one is still warned of.",
+  "game": "fo4",
+  "mode": "quick-auto-clean",
+  "load": ["DLCworkshop01.esm"],
+  "archives": ["Fallout4 - Interface.ba2", "Fallout4 - Misc.ba2", "DLCworkshop01*"],
+  "game_ini": [
+    "[Archive]",
+    "sResourceArchiveList=Fallout4 - Misc.ba2, Missing - One.ba2"
+  ],
+  "switches": ["-skipbsa"],
+  "probes": []
+}
