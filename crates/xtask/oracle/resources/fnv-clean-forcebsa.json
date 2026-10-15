@@ -1,0 +1,13 @@
+{
+  "description": "New Vegas turns wbLoadBSAs off for the game (xeInit.pas) and -forcebsa turns it on again in the edit mode (here its quick auto clean): the archive of the game ini's sArchiveList and the plugin's own archives (partial name match) are loaded, and the Update.bsa New Vegas adds to the list is warned of as missing.",
+  "game": "fnv",
+  "mode": "quick-auto-clean",
+  "load": ["CaravanPack.esm"],
+  "archives": ["Fallout - Misc.bsa", "CaravanPack*"],
+  "game_ini": [
+    "[Archive]",
+    "sArchiveList=Fallout - Misc.bsa"
+  ],
+  "switches": ["-forcebsa"],
+  "probes": []
+}

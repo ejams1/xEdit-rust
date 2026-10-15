@@ -626,6 +626,82 @@ fn check_archive(case: &Case, runner: &Runner) -> Result<Vec<Outcome>> {
     Ok(outcomes)
 }
 
+/// The `-dump` of an archive by both tools, and its unpack by both: the
+/// texts byte for byte, the trees file for file, or, where the oracle stops
+/// with an error, the same exit code and last line.
+fn list_and_unpack(
+    runner: &Runner,
+    work: &Path,
+    archive: &Path,
+) -> Result<Vec<(String, &'static str, Option<String>, u64)>> {
+    let archive_text = archive.display().to_string();
+    let mut checks = Vec::new();
+    let oracle = run_tool(&runner.oracle, &[archive_text.clone(), "-dump".to_owned()])?;
+    let port = run_tool(&runner.port, &[archive_text.clone(), "-dump".to_owned()])?;
+    if oracle.stdout == port.stdout {
+        checks.push(("list".to_owned(), "equal", None, oracle.stdout.len() as u64));
+    } else {
+        fs::write(work.join("list.oracle.txt"), &oracle.stdout)?;
+        fs::write(work.join("list.port.txt"), &port.stdout)?;
+        checks.push((
+            "list".to_owned(),
+            "different",
+            Some(first_text_difference(&oracle.stdout, &port.stdout)),
+            oracle.stdout.len() as u64,
+        ));
+    }
+    let oracle_tree = work.join("unpack-oracle");
+    let port_tree = work.join("unpack-port");
+    fs::create_dir_all(&oracle_tree)?;
+    fs::create_dir_all(&port_tree)?;
+    let unpack = |exe: &Path, folder: &Path| {
+        run_tool(
+            exe,
+            &["unpack".to_owned(), archive_text.clone(), folder.display().to_string()],
+        )
+    };
+    let oracle = unpack(&runner.oracle, &oracle_tree)?;
+    let port = unpack(&runner.port, &port_tree)?;
+    let last = |run: &Run| {
+        String::from_utf8_lossy(&run.stdout)
+            .split(['\r', '\n'])
+            .rfind(|line| !line.is_empty())
+            .unwrap_or("")
+            .to_owned()
+    };
+    if oracle.code != Some(0) || port.code != Some(0) {
+        let (expected, got) = (last(&oracle), last(&port));
+        let (expected, got) = (
+            normalize_log(expected.as_bytes(), &oracle_tree.display().to_string()),
+            normalize_log(got.as_bytes(), &port_tree.display().to_string()),
+        );
+        if port.code == oracle.code && expected == got {
+            checks.push((
+                "unpack".to_owned(),
+                "equal",
+                Some(format!("  both stop with: {expected}")),
+                0,
+            ));
+        } else {
+            checks.push((
+                "unpack".to_owned(),
+                "different",
+                Some(format!(
+                    "  the oracle stopped with {:?}: {expected}\n  the port with {:?}: {got}",
+                    oracle.code, port.code
+                )),
+                0,
+            ));
+        }
+    } else {
+        match compare_trees(&oracle_tree, &port_tree)? {
+            (None, bytes) => checks.push(("unpack".to_owned(), "equal", None, bytes)),
+            (Some(detail), bytes) => checks.push(("unpack".to_owned(), "different", Some(detail), bytes)),
+        }
+    }
+    Ok(checks)
+}
+
 /// Removes the folder of a case that is equal throughout; names the folder
 /// in the detail of a check that is not.
 fn finish(work: &Path, outcomes: &mut [Outcome], keep: bool) -> Result<()> {
@@ -931,6 +1007,64 @@ fn synthetic(runner: &Runner, only: Option<&str>) -> Result<Vec<Outcome>> {
     let dup = fs::read(mixed.join("textures/t/dup.dds"))?;
     write(mixed.join("textures/t/dup2.dds"), &dup)?;
     write(mixed.join("textures/t/dup3.dds"), &dup)?;
+    // The edge names of issue #32. Pairs of names with one hash: the TES4
+    // hash of the Oblivion to Skyrim SE archives (same length, first and
+    // last two characters, extension and hash of the middle, found by a
+    // birthday search over random middles), so the order that sorting the
+    // file records by hash gives equal hashes shows (`TList.Sort`), and the
+    // CRC-32 of BA2 names (`TwbHash.FO4`, found the same way). Names that
+    // sort differently by ordinal, by the locale and ignoring case. And
+    // names outside ASCII in the ANSI code page (1252 here), with an upper
+    // case letter outside ASCII (`LowerCase` against a Unicode lower case);
+    // the names outside the code page are the folder `edge-wide`.
+    let edge = root.join("edge");
+    for (index, name) in [
+        "meshes/coll/q0t7d18kizz.nif",
+        "meshes/coll/qko6k5n15zz.nif",
+        "meshes/coll/qlhgges7wzz.nif",
+        "meshes/coll/qw7pxic0xzz.nif",
+        "meshes/coll/qg1ssr57qzz.nif",
+        "meshes/coll/qm2ft6lz8zz.nif",
+        "meshes/coll/qbc433u9zzz.nif",
+        "meshes/coll/qjzpkshgjzz.nif",
+        "meshes/crc/rtprc8ya.nif",
+        "meshes/crc/rmzluunr.nif",
+        "meshes/crc/robm7nwv.nif",
+        "meshes/crc/rufd15vz.nif",
+        "meshes/sort/a-b.nif",
+        "meshes/sort/a_b.nif",
+        "meshes/sort/ab.nif",
+        "meshes/sort/a'c.nif",
+        "meshes/sort/A~.nif",
+        "meshes/sort/a.b.nif",
+        "meshes/sort/aB2.nif",
+        "meshes/sort/[x].nif",
+        "meshes/Ansi/\u{20ac}uro.nif",
+        "meshes/Ansi/\u{c6}ble.nif",
+        "meshes/Ansi/\u{e6}ble2.nif",
+        "meshes/Ansi/na\u{ef}ve fa\u{e7}ade.nif",
+        "meshes/Ansi/\u{c9}COLE.nif",
+        "meshes/\u{c9}T\u{c9}/\u{f8}.nif",
+        "textures/Ansi/\u{dc}ber.dds",
+    ]
+    .iter()
+    .enumerate()
+    {
+        write(edge.join(name), &text(200 + index * 37))?;
+    }
+    let edge_wide = root.join("edge-wide");
+    for (index, name) in [
+        "meshes/wide/plain.nif",
+        "meshes/wide/\u{151}.nif",
+        "meshes/wide/\u{436}.nif",
+        "meshes/wide/\u{65e5}\u{672c}.nif",
+    ]
+    .iter()
+    .enumerate()
+    {
+        write(edge_wide.join(name), &text(300 + index * 41))?;
+    }
+
     // A second folder that overrides a file and adds one, and a skipped file.
     let over = root.join("over");
     write(over.join("meshes/b.nif"), &text(123))?;
@@ -1344,6 +1478,69 @@ fn synthetic(runner: &Runner, only: Option<&str>) -> Result<Vec<Outcome>> {
     }
     // A source that is an archive of the oracle's: merged with the folder.
     let mut outcomes = Vec::new();
+    // The edge folders: packed by both in every format, then the oracle's
+    // archive listed and unpacked by both.
+    for (folder, dir) in [("edge", &edge), ("edge-wide", &edge_wide)] {
+        for (format, switch, extension) in [
+            ("tes3", "-tes3", "bsa"),
+            ("tes4", "-tes4", "bsa"),
+            ("fnv", "-fnv", "bsa"),
+            ("sse", "-sse", "bsa"),
+            ("fo4", "-fo4", "ba2"),
+            ("sf1", "-sf1", "ba2"),
+        ] {
+            let label = format!("{format} {folder}");
+            if only.is_some_and(|only| !label.contains(only)) {
+                continue;
+            }
+            let variant = PackVariant {
+                label: label.clone(),
+                switches: vec![switch, "-z"],
+                extension,
+            };
+            let work = root.join(sanitize(&label));
+            fs::create_dir_all(&work)?;
+            let input = dir.display().to_string();
+            let (status, detail, bytes) = pack_and_compare(runner, &work, &input, &variant)?;
+            let mut checks = vec![(format!("pack {label}"), status, detail, bytes)];
+            // The oracle's archive of the same pack, for the list and the unpack.
+            let oracle_out = work.join("oracle-archive");
+            fs::create_dir_all(&oracle_out)?;
+            let archive = oracle_out.join(format!("out.{extension}"));
+            let mut args = vec![
+                "pack".to_owned(),
+                input.clone(),
+                archive.display().to_string(),
+                switch.to_owned(),
+                "-z".to_owned(),
+                "-mt:no".to_owned(),
+            ];
+            if extension == "bsa" {
+                args.push("-split:0".to_owned());
+            }
+            let packed = run_tool(&runner.oracle, &args)?;
+            if packed.code == Some(0) && archive.is_file() {
+                for (check, status, detail, bytes) in list_and_unpack(runner, &work, &archive)? {
+                    checks.push((format!("{check} {label}"), status, detail, bytes));
+                }
+            }
+            let all_equal = checks.iter().all(|(_, status, _, _)| *status == "equal");
+            if all_equal && !runner.keep {
+                let _ = fs::remove_dir_all(&work);
+            }
+            for (check, status, detail, bytes) in checks {
+                outcomes.push(Outcome {
+                    game: "synthetic".to_owned(),
+                    archive: format!("generated {folder}"),
+                    format: format.to_owned(),
+                    check,
+                    status,
+                    detail,
+                    bytes,
+                });
+            }
+        }
+    }
     for (label, input, switches, extension) in jobs {
         if only.is_some_and(|only| !label.contains(only)) {
             continue;

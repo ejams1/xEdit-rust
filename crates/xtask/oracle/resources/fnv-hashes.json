@@ -1,0 +1,227 @@
+{
+  "description": "ResolveFileHash and ResolveFolderHash once the load is done (wbLoaderDone): the texture hashes of a model resolve to the names the containers hold, an unknown hash stays hexadecimal, a .dds file is also known as .ddx before Skyrim, and of two names with the same hash (ten pairs of TES4 hash collisions in the data folder) the one earlier in the bucket order of BuildCache's TDictionary wins; the pairs are chosen so that the alphabetical order and the bucket orders of tables of 2^20, 2^21, 2^23, 2^25 and 2^26 buckets disagree, and only 2^21 (TDictionary.Create(1000000) with the 4/3 head room) fits all of them. Also the archive list of the game ini, sArchiveList, and the Update.bsa New Vegas adds to it (missing here).",
+  "game": "fnv",
+  "load": [
+    "FalloutNV.esm"
+  ],
+  "archives": [
+    "Fallout - Misc.bsa"
+  ],
+  "game_ini": [
+    "[Archive]",
+    "sArchiveList=Fallout - Misc.bsa, Missing - Archive.bsa"
+  ],
+  "files": [
+    {
+      "path": "textures\\probe\\q090ynp5wzz.dds",
+      "text": "1a"
+    },
+    {
+      "path": "textures\\probe\\qdmeof78jzz.dds",
+      "text": "1b"
+    },
+    {
+      "path": "textures\\probe\\q0t7d18kizz.dds",
+      "text": "2a"
+    },
+    {
+      "path": "textures\\probe\\qko6k5n15zz.dds",
+      "text": "2b"
+    },
+    {
+      "path": "textures\\probe\\qlhgges7wzz.dds",
+      "text": "3a"
+    },
+    {
+      "path": "textures\\probe\\qw7pxic0xzz.dds",
+      "text": "3b"
+    },
+    {
+      "path": "textures\\probe\\qhovs53ymzz.dds",
+      "text": "4a"
+    },
+    {
+      "path": "textures\\probe\\qk2uo11tizz.dds",
+      "text": "4b"
+    },
+    {
+      "path": "textures\\probe\\qg1ssr57qzz.dds",
+      "text": "5a"
+    },
+    {
+      "path": "textures\\probe\\qm2ft6lz8zz.dds",
+      "text": "5b"
+    },
+    {
+      "path": "textures\\probe\\qbc433u9zzz.dds",
+      "text": "6a"
+    },
+    {
+      "path": "textures\\probe\\qjzpkshgjzz.dds",
+      "text": "6b"
+    },
+    {
+      "path": "textures\\probe\\qo387f11rzz.dds",
+      "text": "7a"
+    },
+    {
+      "path": "textures\\probe\\qscye1afizz.dds",
+      "text": "7b"
+    },
+    {
+      "path": "textures\\probe\\qndal4bh0zz.dds",
+      "text": "8a"
+    },
+    {
+      "path": "textures\\probe\\qokvv4tmhzz.dds",
+      "text": "8b"
+    },
+    {
+      "path": "textures\\probe\\q29ijtvcozz.dds",
+      "text": "9a"
+    },
+    {
+      "path": "textures\\probe\\qvi237gwizz.dds",
+      "text": "9b"
+    },
+    {
+      "path": "textures\\probe\\q7ormo6mmzz.dds",
+      "text": "10a"
+    },
+    {
+      "path": "textures\\probe\\qxthlady0zz.dds",
+      "text": "10b"
+    }
+  ],
+  "hash_plugin": {
+    "name": "HashProbe.esp",
+    "master": "FalloutNV.esm",
+    "textures": [
+      "textures\\probe\\q090ynp5wzz.dds",
+      "textures\\probe\\q0t7d18kizz.dds",
+      "textures\\probe\\qlhgges7wzz.dds",
+      "textures\\probe\\qhovs53ymzz.dds",
+      "textures\\probe\\qko6k5n15zz.ddx",
+      "textures\\nowhere\\unknown.dds",
+      "textures\\probe\\qg1ssr57qzz.dds",
+      "textures\\probe\\qbc433u9zzz.dds",
+      "textures\\probe\\qo387f11rzz.dds",
+      "textures\\probe\\qndal4bh0zz.dds",
+      "textures\\probe\\q29ijtvcozz.dds",
+      "textures\\probe\\q7ormo6mmzz.dds"
+    ]
+  },
+  "probes": [
+    {
+      "containers": true
+    },
+    {
+      "resource": "textures\\probe\\q0t7d18kizz.dds"
+    },
+    {
+      "listing": [
+        1,
+        "textures",
+        20
+      ]
+    },
+    {
+      "key": [
+        "HashProbe.esp",
+        "01000800",
+        "Model\\MODT\\[0]\\File Hash (PC)"
+      ]
+    },
+    {
+      "key": [
+        "HashProbe.esp",
+        "01000800",
+        "Model\\MODT\\[1]\\File Hash (PC)"
+      ]
+    },
+    {
+      "key": [
+        "HashProbe.esp",
+        "01000800",
+        "Model\\MODT\\[2]\\File Hash (PC)"
+      ]
+    },
+    {
+      "key": [
+        "HashProbe.esp",
+        "01000800",
+        "Model\\MODT\\[3]\\File Hash (PC)"
+      ]
+    },
+    {
+      "key": [
+        "HashProbe.esp",
+        "01000800",
+        "Model\\MODT\\[4]\\File Hash (PC)"
+      ]
+    },
+    {
+      "key": [
+        "HashProbe.esp",
+        "01000800",
+        "Model\\MODT\\[5]\\File Hash (PC)"
+      ]
+    },
+    {
+      "key": [
+        "HashProbe.esp",
+        "01000800",
+        "Model\\MODT\\[6]\\File Hash (PC)"
+      ]
+    },
+    {
+      "key": [
+        "HashProbe.esp",
+        "01000800",
+        "Model\\MODT\\[7]\\File Hash (PC)"
+      ]
+    },
+    {
+      "key": [
+        "HashProbe.esp",
+        "01000800",
+        "Model\\MODT\\[8]\\File Hash (PC)"
+      ]
+    },
+    {
+      "key": [
+        "HashProbe.esp",
+        "01000800",
+        "Model\\MODT\\[9]\\File Hash (PC)"
+      ]
+    },
+    {
+      "key": [
+        "HashProbe.esp",
+        "01000800",
+        "Model\\MODT\\[10]\\File Hash (PC)"
+      ]
+    },
+    {
+      "key": [
+        "HashProbe.esp",
+        "01000800",
+        "Model\\MODT\\[11]\\File Hash (PC)"
+      ]
+    },
+    {
+      "key": [
+        "HashProbe.esp",
+        "01000800",
+        "Model\\MODT\\[0]\\Folder Hash"
+      ]
+    },
+    {
+      "key": [
+        "HashProbe.esp",
+        "01000800",
+        "Model\\MODT\\[5]\\Folder Hash"
+      ]
+    }
+  ]
+}

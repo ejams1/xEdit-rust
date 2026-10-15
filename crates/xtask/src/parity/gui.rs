@@ -380,11 +380,32 @@ impl GuiRun<'_> {
         self.run_auto_mode_until(args, Until::Exit)
     }
 
+    /// [`GuiRun::run_auto_mode`] with the files, links and switches of
+    /// `extras` (its answers and `close_after` do not apply).
+    pub fn run_auto_mode_with(&self, args: &[&str], extras: &GuiExtras) -> Result<AutoModeResult> {
+        self.run_auto_mode_extras(args, Until::Exit, Some(extras))
+    }
+
     /// [`GuiRun::run_auto_mode`] with the deadline the caller wants: the
     /// exit of the GUI, or the line its message log ends an auto mode with.
     fn run_auto_mode_until(&self, args: &[&str], until: Until<'_>) -> Result<AutoModeResult> {
+        self.run_auto_mode_extras(args, until, None)
+    }
+
+    fn run_auto_mode_extras(
+        &self,
+        args: &[&str],
+        until: Until<'_>,
+        extras: Option<&GuiExtras>,
+    ) -> Result<AutoModeResult> {
         let (mut command, data) = self.prepare()?;
         self.write_viewsettings()?;
+        if let Some(extras) = extras {
+            self.write_extras(extras)?;
+            for arg in &extras.args {
+                command.arg(arg);
+            }
+        }
         for arg in args {
             command.arg(*arg);
         }

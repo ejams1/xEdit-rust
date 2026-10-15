@@ -2973,8 +2973,10 @@ source = "Sniff/frmMain.pas"
 note = "The sniff binary takes -all: as Sniff.exe does; sniff.run takes it as a parameter."
 
 [switch.allbsa]
-status = "pending"
+status = "covered"
+command = "dump"
 source = "xDump.dpr"
+note = "wbLoadAllBSAs: xedit dump --all-bsa (the dump runs outside a session, so the command is the CLI's): every <plugin>* archive of each module, exactly and with the plugin ini in the Skyrim games; xDump has no game ini, so none of its archives (resources.rs, load_dump_resources)."
 
 [switch.allowdirectsaves]
 status = "pending"
@@ -3042,8 +3044,10 @@ status = "pending"
 source = "Tools/TreeLodBillboardCreator/treelod.dpr"
 
 [switch.bsa]
-status = "pending"
+status = "covered"
+command = "dump"
 source = "xDump.dpr"
+note = "wbLoadBSAs of xDump: xedit dump --bsa loads each module's own, interface, localization and Wwise archives also when no string table is missing (resources.rs, load_dump_resources)."
 
 [switch.btd]
 status = "pending"
@@ -3080,9 +3084,10 @@ status = "pending"
 source = "xDump.dpr"
 
 [switch.customini]
-status = "pending"
+status = "covered"
+command = "tool.run"
 source = "xEdit/xeInit.pas"
-note = "Read by parse_legacy of tool_modes.rs and named as not acted on; The custom ini of the game, which the port does not read."
+note = "wbCustomIniFileName: the global --custom-ini and the legacy -CustomIni:, else <My Games>\\<game>Custom.ini (FalloutCustom.ini for Fallout 3 and New Vegas); its [Archive] lists replace the game ini's in FindBSAs and its sLanguage the game ini's (resources.rs). Oracle: parity resources fo4-game-ini."
 
 [switch.d]
 status = "pending"
@@ -3230,9 +3235,10 @@ source = "BSArch.dpr"
 note = "bsarch accepts it with the upstream spelling (-fo4dds); xedit archive pack takes the format fo4dds. Checked against BSArch.exe by cargo xtask parity bsarch."
 
 [switch.forcebsa]
-status = "pending"
+status = "covered"
+command = "tool.run"
 source = "xEdit/xeInit.pas"
-note = "Read by parse_legacy of tool_modes.rs and named as not acted on; wbLoadBSAs; the archives are phase 5."
+note = "wbLoadBSAs on after the game and the settings file: the global --force-bsa and the legacy -forcebsa; the tool modes that set it come after (resources.rs, apply_load_settings). Oracle: parity resources fnv-clean-forcebsa, fo4-check-skip."
 
 [switch.forceinternalediting]
 status = "covered"
@@ -3278,7 +3284,7 @@ note = "As -showfixup."
 status = "covered"
 command = "sniff.run"
 source = "Sniff/frmMain.pas"
-note = "The sniff binary takes -I: as Sniff.exe does; sniff.run takes it as a parameter."
+note = "The sniff binary takes -I: as Sniff.exe does; sniff.run takes it as a parameter. xEdit's -I: (xeInit.pas, wbTheGameIniFileName) is the global --game-ini and the legacy -I: of every session (tool.run, lodgen.generate): the archive lists of FindBSAs and the sLanguage of the language (resources.rs)."
 
 [switch.ignoreesl]
 status = "pending"
@@ -3339,9 +3345,10 @@ source = "Sniff/frmMain.pas"
 note = "The sniff binary takes -LOG: as Sniff.exe does; sniff.run takes it as a parameter."
 
 [switch.m]
-status = "pending"
+status = "covered"
+command = "tool.run"
 source = "xEdit/xeInit.pas"
-note = "Read by parse_legacy of tool_modes.rs and named as not acted on; The My Games folder of the game, which the port does not read."
+note = "wbMyGamesTheGamePath: the global --my-games and the legacy -M:, else <Documents>\\My Games\\<wbGameName2>\\ (the game folder for Morrowind, FalloutNV_Epic for the Epic release), where the game ini and the custom ini are (resources.rs, init_game_paths). The save folder below it is not ported."
 
 [switch.maskdiff]
 status = "pending"
@@ -3382,8 +3389,10 @@ source = "BSArch.dpr"
 note = "bsarch accepts -mt as BSArch does; xedit archive pack takes it as an option of the same meaning."
 
 [switch.nobsa]
-status = "pending"
+status = "covered"
+command = "dump"
 source = "xDump.dpr"
+note = "xedit dump --no-bsa: no archives for a localized plugin whose loose tables are missing (resources.rs, load_dump_resources)."
 
 [switch.nobuildrefs]
 status = "covered"
@@ -3583,9 +3592,10 @@ source = "Sniff/frmMain.pas"
 note = "The sniff binary takes -skip: as Sniff.exe does; sniff.run takes it as a parameter."
 
 [switch.skipbsa]
-status = "pending"
+status = "covered"
+command = "tool.run"
 source = "xEdit/xeInit.pas"
-note = "Read by parse_legacy of tool_modes.rs and named as not acted on; wbLoadBSAs; the archives are phase 5."
+note = "wbLoadBSAs off: the global --skip-bsa and the legacy -skipbsa; the archives found are named Skipped (resources.rs, load_gui_resources); the script, LOD and translate modes turn it on again after the switch, as upstream (UPSTREAM-QUIRK in tool_modes.rs). Oracle: parity resources fo4-clean-skipbsa, fo4-skipbsa."
 
 [switch.skipinternalediting]
 status = "covered"

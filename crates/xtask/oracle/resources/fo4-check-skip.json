@@ -1,0 +1,13 @@
+{
+  "description": "The -CheckForErrors tool mode turns wbLoadBSAs off after the switches (xeInit.pas), so even with -forcebsa every archive the game ini and HasBSAs find is only named, as Skipped, and a missing one still warned of; the data folder is the only container.",
+  "game": "fo4",
+  "mode": "check-for-errors",
+  "load": ["DLCworkshop01.esm"],
+  "archives": ["Fallout4 - Interface.ba2", "Fallout4 - Misc.ba2", "DLCworkshop01*"],
+  "game_ini": [
+    "[Archive]",
+    "sResourceArchiveList=Fallout4 - Misc.ba2, Missing - One.ba2"
+  ],
+  "switches": ["-forcebsa"],
+  "probes": []
+}
