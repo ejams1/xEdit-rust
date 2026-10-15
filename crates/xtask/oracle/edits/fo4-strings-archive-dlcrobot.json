@@ -1,0 +1,17 @@
+{
+  "description": "DLCRobot.esm with its tables only in DLCRobot - Main.ba2 (3650, 680 and 2547 strings, compressed entries of a general BA2): a name of a new record of the DLC and the name of one of its overrides of Fallout4.esm changed, and a book text set; the plugin and the changed tables are saved.",
+  "game": "fo4",
+  "strings": true,
+  "archives": ["Fallout4 - Interface.ba2", "DLCRobot - Main.ba2"],
+  "load": [
+    "Fallout4.esm",
+    "DLCRobot.esm"
+  ],
+  "commands": [
+    {"command": "elements.set", "params": {"form_id": "01000881", "file": "DLCRobot.esm", "path": "FULL", "value": "Oracle Device"}},
+    {"command": "elements.set", "params": {"form_id": "0100417B", "file": "DLCRobot.esm", "path": "DESC", "value": "The mechanist's drawing, as the oracle tells it."}}
+  ],
+  "save": [
+    "DLCRobot.esm"
+  ]
+}

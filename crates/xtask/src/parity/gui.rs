@@ -130,6 +130,12 @@ pub struct GuiExtras {
     /// the modified string tables go to the private data folder, and the
     /// message log to `bin\<name>_log.txt` ([`GuiResult::saved_log`]).
     pub close_after: bool,
+    /// Files linked into the run folder before the GUI starts (paths
+    /// relative to it, and the source): a hard link where the volume
+    /// allows, else a copy. The game archives a run reads go in this way.
+    pub links: Vec<(PathBuf, PathBuf)>,
+    /// Switches added to the command line of the run (`-skipbsa`).
+    pub args: Vec<String>,
 }
 
 /// The GUI executable of a game mode.
@@ -216,6 +222,9 @@ impl GuiRun<'_> {
     pub fn run_with(&self, extras: &GuiExtras) -> Result<GuiResult> {
         let (mut command, data) = self.prepare()?;
         self.write_extras(extras)?;
+        for arg in &extras.args {
+            command.arg(arg);
+        }
         command.arg(format!("-script:{}", windows_path(&self.work.join("oracle.pas"))));
         if !self.build_refs {
             command.arg("-nobuildrefs");
@@ -300,6 +309,15 @@ impl GuiRun<'_> {
     /// Writes the files of `extras` into the run folder before the GUI
     /// starts.
     fn write_extras(&self, extras: &GuiExtras) -> Result<()> {
+        for (path, source) in &extras.links {
+            let target = self.work.join(path);
+            if let Some(parent) = target.parent() {
+                fs::create_dir_all(parent)?;
+            }
+            if fs::hard_link(source, &target).is_err() {
+                fs::copy(source, &target).with_context(|| format!("copying {}", source.display()))?;
+            }
+        }
         for (path, bytes) in &extras.files {
             let target = self.work.join(path);
             if let Some(parent) = target.parent() {

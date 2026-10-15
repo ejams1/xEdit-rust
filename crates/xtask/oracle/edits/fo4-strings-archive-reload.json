@@ -1,0 +1,18 @@
+{
+  "description": "The reload of fo4-strings-archive-edit: the oracle's saved DLCworkshop01.esm and the tables it saved, loose in Strings, next to DLCworkshop01 - Main.ba2 with the original tables; the loose ones win (the data folder is the last container). A name the edit changed and the description it added are set again, and the plugin and the tables saved.",
+  "game": "fo4",
+  "strings": true,
+  "archives": ["Fallout4 - Interface.ba2", "DLCworkshop01 - Main.ba2"],
+  "inputs_from": "fo4-strings-archive-edit",
+  "load": [
+    "Fallout4.esm",
+    "DLCworkshop01.esm"
+  ],
+  "commands": [
+    {"command": "elements.set", "params": {"form_id": "01000805", "file": "DLCworkshop01.esm", "path": "FULL", "value": "Reloaded Cage"}},
+    {"command": "elements.set", "params": {"form_id": "0100080A", "file": "DLCworkshop01.esm", "path": "DESC", "value": "A rating described again."}}
+  ],
+  "save": [
+    "DLCworkshop01.esm"
+  ]
+}

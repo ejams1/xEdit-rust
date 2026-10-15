@@ -1,0 +1,34 @@
+{
+  "description": "The archives of the game ini and the custom ini come first, in the order of the lists (sResourceIndexFileList, sResourceStartUpArchiveList, sResourceArchiveList, sResourceArchiveList2; the custom ini's [Archive] list replaces the game ini's of the same key), a missing one is a warning, an archive the ini loaded is not loaded again by HasBSAs, and a loose file of the data folder wins over the archives (an empty DLSTRINGS table over the one in DLCworkshop01 - Main.ba2).",
+  "game": "fo4",
+  "load": ["DLCworkshop01.esm"],
+  "archives": ["Fallout4 - Interface.ba2", "Fallout4 - Materials.ba2", "Fallout4 - Misc.ba2", "Fallout4 - Shaders.ba2", "DLCworkshop01*"],
+  "game_ini": [
+    "[General]",
+    "sLanguage=en",
+    "[Archive]",
+    "sResourceIndexFileList=Fallout4 - Misc.ba2, Missing - One.ba2",
+    "sResourceStartUpArchiveList=Fallout4 - Shaders.ba2",
+    "sResourceArchiveList=Fallout4 - Materials.ba2",
+    "sResourceArchiveList2=Fallout4 - Interface.ba2"
+  ],
+  "custom_ini": [
+    "[Archive]",
+    "sResourceArchiveList2=DLCworkshop01 - Main.ba2, Fallout4 - Interface.ba2"
+  ],
+  "files": [
+    {"path": "strings\\dlcworkshop01_en.dlstrings", "text": "\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000"},
+    {"path": "Meshes\\Probe\\Loose.nif", "text": "loose"}
+  ],
+  "probes": [
+    {"containers": true},
+    {"resource": "strings\\dlcworkshop01_en.strings"},
+    {"resource": "strings\\dlcworkshop01_en.dlstrings"},
+    {"resource": "meshes\\probe\\loose.nif"},
+    {"listing": [0, "", 2]},
+    {"listing": [6, "", 3]},
+    {"listing": [6, "meshes", 3]},
+    {"value": ["DLCworkshop01.esm", "01000802", "FULL"]},
+    {"value": ["DLCworkshop01.esm", "0100080A", "DESC"]}
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "description": "-skipbsa in the script mode: the tool mode's wbLoadBSAs := True comes after the switch (xeInit.pas), so a script still finds every archive, as without the switch.",
+  "game": "fo4",
+  "load": ["DLCRobot.esm"],
+  "archives": ["Fallout4 - Interface.ba2", "DLCRobot - Main.ba2"],
+  "switches": ["-skipbsa"],
+  "probes": [
+    {"containers": true},
+    {"resource": "strings\\dlcrobot_en.strings"},
+    {"value": ["DLCRobot.esm", "01000881", "FULL"]}
+  ]
+}

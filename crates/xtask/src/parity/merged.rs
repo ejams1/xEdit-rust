@@ -496,6 +496,7 @@ fn run_oracle(
             })
             .collect(),
         close_after: false,
+        ..Default::default()
     };
     let peak_file = runner
         .cache

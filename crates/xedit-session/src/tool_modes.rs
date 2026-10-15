@@ -1606,10 +1606,11 @@ pub fn parse_legacy(params: &[String], exe_name: &str) -> Result<Option<LegacyRu
     }
     let detected = detect_app_mode(params, exe_name);
     let mut ignored = Vec::new();
-    // The parameters the port does not act on: the temporary folder, the
-    // game ini, the save folder and the code pages. `-S:` is the scripts
-    // folder, which the script mode reads.
-    for name in ["T", "M", "I", "G"] {
+    // The parameters the port does not act on: the temporary folder and the
+    // save folder. `-S:` is the scripts folder, which the script mode reads;
+    // `-M:`, `-I:` and `-CustomIni:` name the game's inis, whose archives and
+    // language the load reads.
+    for name in ["T", "G"] {
         if find_cmd_line_param_switch(params, name).is_some() {
             ignored.push(format!("-{name}:"));
         }
