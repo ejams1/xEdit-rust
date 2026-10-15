@@ -278,7 +278,12 @@ pub(crate) fn register(adapter: &mut Adapter, state: &Rc<RefCell<ScriptRunState>
                 };
                 let index = integer_at(args, 1)? as i32;
                 // `if (V2O(Args.Values[2]) = nil) or Supports(...)`.
-                let source_is_nil = matches!(args.values.get(2), Some(Value::Empty | Value::Null) | None);
+                // `nil` is `Value::Pointer(0)` (`GetConst`), `Null` and an
+                // omitted argument count as nil too.
+                let source_is_nil = args
+                    .values
+                    .get(2)
+                    .is_none_or(|value| value.is_nil() || matches!(value, Value::Empty));
                 let source_ok = source_is_nil || element_at(args, 2).is_some();
                 if !source_ok {
                     return Ok(());
@@ -578,7 +583,7 @@ pub(crate) fn register(adapter: &mut Adapter, state: &Rc<RefCell<ScriptRunState>
     );
     add(adapter, "SetToDefault", 1, value_param(), |_result, args| {
         if let Some(element) = element_at(args, 0) {
-            let _ = element.set_to_default();
+            super::refused(element.set_to_default())?;
         }
         Ok(())
     });

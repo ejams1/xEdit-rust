@@ -43,7 +43,7 @@ pub(crate) fn register(adapter: &mut Adapter, state: &Rc<RefCell<ScriptRunState>
                 };
                 let name = string_at(args, 1);
                 let silent = to_bool(args.values.get(2).unwrap_or(&Value::Empty)).unwrap_or(false);
-                if let Ok(Some(added)) = container.add(&name, silent) {
+                if let Some(added) = super::refused(container.add(&name, silent))? {
                     *result = state.borrow().element_value(&added);
                 }
                 Ok(())
@@ -69,7 +69,7 @@ pub(crate) fn register(adapter: &mut Adapter, state: &Rc<RefCell<ScriptRunState>
             };
             if let Some(container) = element.as_container() {
                 let name = source.get_name();
-                let _ = container.add(&name, true);
+                super::refused(container.add(&name, true))?;
             }
             Ok(())
         }),

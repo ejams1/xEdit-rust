@@ -38,6 +38,14 @@ use xedit_script::values::{
 
 use crate::script::{ScriptRunState, signature_text};
 
+/// A refused edit reaches the script as upstream's bare `Exception` with
+/// the refusal's message (`raise Exception.Create(...)` in the setters,
+/// `Add`, the master and module flag routines), which aborts the run
+/// unless the script handles it; a binding never swallows one.
+pub(super) fn refused<T, E: std::fmt::Display>(result: Result<T, E>) -> Result<T, ValueError> {
+    result.map_err(|error| ValueError::external_class("Exception", error.to_string()))
+}
+
 pub(crate) mod container;
 pub(crate) mod element;
 pub(crate) mod file;

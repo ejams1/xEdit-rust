@@ -130,6 +130,39 @@ impl IndexKeys {
     pub fn clear(&mut self) {
         self.keys.clear();
     }
+
+    /// Port of `GetChangedKeys`: the indices whose key differs between
+    /// `old` and these keys (compared as the index compares its keys), as
+    /// (index, old key, new key); an index only one side has gives an empty
+    /// key on the other.
+    pub fn changed_keys(&self, old: &IndexKeys) -> Vec<(i32, String, String)> {
+        let indices = NAMED_INDICES.read().unwrap();
+        let case_sensitive = |index: usize| indices.get(index).is_none_or(|(_, case_sensitive)| *case_sensitive);
+        let mut result = Vec::new();
+        let common = self.keys.len().min(old.keys.len());
+        for index in 0..common {
+            let (new_key, old_key) = (&self.keys[index], &old.keys[index]);
+            let same = if case_sensitive(index) {
+                new_key == old_key
+            } else {
+                new_key.eq_ignore_ascii_case(old_key)
+            };
+            if !same {
+                result.push((index as i32, old_key.clone(), new_key.clone()));
+            }
+        }
+        for (index, key) in self.keys.iter().enumerate().skip(common) {
+            if !key.is_empty() {
+                result.push((index as i32, String::new(), key.clone()));
+            }
+        }
+        for (index, key) in old.keys.iter().enumerate().skip(common) {
+            if !key.is_empty() {
+                result.push((index as i32, key.clone(), String::new()));
+            }
+        }
+        result
+    }
 }
 
 /// Upstream `TwbBuildIndexKeysCallback`.

@@ -651,11 +651,10 @@ fn high_or_low(args: &Args, high: bool) -> Result<i64, ValueError> {
 /// an `Index` below 1 clamping to 1 and reducing `Count` by the difference
 /// (the RTL's `_LStrCopy`), and a range past the end shortening the result.
 fn copy_str(source: &[u8], index: i32, count: i32) -> Vec<u8> {
-    let (index, count) = if index < 1 {
-        (1, count.saturating_add(index - 1))
-    } else {
-        (index, count)
-    };
+    // `Copy(S, 0, N)` is `Copy(S, 1, N)`: the RTL clamps the index to 1 and
+    // keeps the count (the oracle's `Copy('abcdef', 0, 3)` is `abc`, as is
+    // `Copy('abcdef', -1, 3)`; the parity-23 probe `edid-quick-init.pas`).
+    let index = index.max(1);
     if count <= 0 || index as usize > source.len() {
         return Vec::new();
     }

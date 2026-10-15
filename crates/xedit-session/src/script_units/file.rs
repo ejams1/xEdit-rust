@@ -53,7 +53,7 @@ pub(crate) fn register(adapter: &mut Adapter, state: &Rc<RefCell<ScriptRunState>
             let Some(file) = file_impl_of(&file) else {
                 return Ok(());
             };
-            let _ = file.add_master_if_missing(&master, sort_masters, silent);
+            super::refused(file.add_master_if_missing(&master, sort_masters, silent))?;
             Ok(())
         },
     );
@@ -85,7 +85,7 @@ pub(crate) fn register(adapter: &mut Adapter, state: &Rc<RefCell<ScriptRunState>
             let Some(file) = file_impl_of(&file) else {
                 return Ok(());
             };
-            let _ = file.add_masters(&names, false);
+            super::refused(file.add_masters(&names, false))?;
             Ok(())
         },
     );
@@ -117,7 +117,7 @@ pub(crate) fn register(adapter: &mut Adapter, state: &Rc<RefCell<ScriptRunState>
             let Some(file) = file_impl_of(&file) else {
                 return Ok(());
             };
-            let _ = file.add_masters_if_missing(&names, sort_masters, silent);
+            super::refused(file.add_masters_if_missing(&names, sort_masters, silent))?;
             Ok(())
         },
     );
@@ -143,7 +143,7 @@ pub(crate) fn register(adapter: &mut Adapter, state: &Rc<RefCell<ScriptRunState>
         if let Some(file) = file_at(args, 0)
             && let Some(file) = file_impl_of(&file)
         {
-            let _ = file.clean_masters();
+            super::refused(file.clean_masters())?;
         }
         Ok(())
     });
@@ -151,7 +151,7 @@ pub(crate) fn register(adapter: &mut Adapter, state: &Rc<RefCell<ScriptRunState>
         if let Some(file) = file_at(args, 0)
             && let Some(file) = file_impl_of(&file)
         {
-            let _ = file.sort_masters();
+            super::refused(file.sort_masters())?;
         }
         Ok(())
     });
@@ -255,7 +255,9 @@ pub(crate) fn register(adapter: &mut Adapter, state: &Rc<RefCell<ScriptRunState>
                     && let Some(file) = file_impl_of(&file)
                 {
                     let value = boolean_at(args, 1)?;
-                    let _ = file.set_module_flag(xedit_core::implementation::file_flags::ModuleFlag::Light, value);
+                    super::refused(
+                        file.set_module_flag(xedit_core::implementation::file_flags::ModuleFlag::Light, value),
+                    )?;
                 }
                 Ok(())
             },
@@ -271,7 +273,7 @@ pub(crate) fn register(adapter: &mut Adapter, state: &Rc<RefCell<ScriptRunState>
                 && let Some(file) = file_impl_of(&file)
             {
                 let value = boolean_at(args, 1)?;
-                let _ = file.set_module_flag(xedit_core::implementation::file_flags::ModuleFlag::Esm, value);
+                super::refused(file.set_module_flag(xedit_core::implementation::file_flags::ModuleFlag::Esm, value))?;
             }
             Ok(())
         },
@@ -286,7 +288,9 @@ pub(crate) fn register(adapter: &mut Adapter, state: &Rc<RefCell<ScriptRunState>
                 && let Some(file) = file_impl_of(&file)
             {
                 let value = boolean_at(args, 1)?;
-                let _ = file.set_module_flag(xedit_core::implementation::file_flags::ModuleFlag::Medium, value);
+                super::refused(
+                    file.set_module_flag(xedit_core::implementation::file_flags::ModuleFlag::Medium, value),
+                )?;
             }
             Ok(())
         },

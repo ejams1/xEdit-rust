@@ -124,7 +124,10 @@ impl SubRecordImpl {
 
     /// Port of `TwbSubRecord.Create(aContainer, aSubRecordDef)`: a subrecord
     /// made from its definition, with storage of its data size and the
-    /// default value.
+    /// default value. The init runs twice here, as upstream: the
+    /// constructor's `DoInit(True)` over no data, then `SetToDefault`, whose
+    /// `TwbSubRecord.SetToDefaultInternal` resets (`DoReset(True)`) and
+    /// inits again over the storage of the default size.
     pub(super) fn create_new(
         container: &ElementRef,
         container_base: &ContainerBase,
@@ -1770,12 +1773,16 @@ impl SubRecordStructImpl {
 }
 
 /// Port of `TwbMainRecord.Init` for the subrecords: scans them from the
-/// record data and groups them by the record definition.
-pub(super) fn init_main_record(record: &Arc<MainRecordImpl>) {
-    let Some(file) = record.file.upgrade() else { return };
+/// record data and groups them by the record definition. Returns whether a
+/// subrecord past `QuickInitLimit` was reached, where the quick init of
+/// upstream leaves `Init` (`mrsQuickInitDone`).
+pub(super) fn init_main_record(record: &Arc<MainRecordImpl>) -> bool {
+    let Some(file) = record.file.upgrade() else {
+        return false;
+    };
     let self_ref: ElementRef = record.clone();
     let Some((block, data_start, end)) = record.data_block() else {
-        return;
+        return false;
     };
     let data = &block.as_slice()[data_start..end];
     let mut offset = data_start;
@@ -1801,7 +1808,8 @@ pub(super) fn init_main_record(record: &Arc<MainRecordImpl>) {
         }
         sub_records.push(sub_record.get_display_signature());
     }
-    let Some(mr_def) = &record.mr_def else { return };
+    let Some(mr_def) = &record.mr_def else { return false };
+    let mut passed_limit = false;
 
     let member_count = usize::try_from(mr_def.get_member_count()).unwrap_or(0);
     let mut last_element_for_member: Vec<Option<ElementRef>> = vec![None; member_count];
@@ -1871,6 +1879,7 @@ pub(super) fn init_main_record(record: &Arc<MainRecordImpl>) {
         // quick init of upstream stops).
         if current_def_pos as i32 > quick_init_limit {
             record.mr_grid_cell.lock().unwrap().checked = true;
+            passed_limit = true;
         }
         if current_def.get_def_type() == DefType::dtSubRecordUnion {
             current_def = current_def
@@ -1953,6 +1962,7 @@ pub(super) fn init_main_record(record: &Arc<MainRecordImpl>) {
     if sort_sub_records() && (mr_def.allow_unordered() || record.base.has_state(super::ElementState::esModified)) {
         edit::sort_sub_records_of(&**record);
     }
+    passed_limit
 }
 
 /// Port of the tail of `TwbMainRecord.Init` under `wbAllowInternalEdit`:

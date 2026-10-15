@@ -275,7 +275,7 @@ pub(crate) fn register(adapter: &mut Adapter, state: &Rc<RefCell<ScriptRunState>
                 && let Some(implemented) = record.as_element_impl()
                 && let Some(record) = implemented.main_record_impl()
             {
-                let _ = record.set_load_order_form_id(form_id_at(args, 1));
+                super::refused(record.set_load_order_form_id(form_id_at(args, 1)))?;
             }
             Ok(())
         },
@@ -472,7 +472,7 @@ pub(crate) fn register(adapter: &mut Adapter, state: &Rc<RefCell<ScriptRunState>
                 && let Some(record) = implemented.main_record_impl()
             {
                 let value = boolean_at(args, 1)?;
-                let _ = record.set_is_deleted(value);
+                super::refused(record.set_is_deleted(value))?;
             }
             Ok(())
         },

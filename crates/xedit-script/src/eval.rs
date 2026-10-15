@@ -2165,9 +2165,30 @@ impl Interpreter {
     fn exception_matches(&mut self, error: &FlowError, class: &Rc<ClassDef>) -> bool {
         match error {
             FlowError::Raise(raised) => raised.class.is_a(class),
-            FlowError::Error(_) => self.interp_error_class().is_a(class),
+            FlowError::Error(exec) => self.error_class(exec).is_a(class),
             FlowError::ReRaise => false,
         }
+    }
+
+    /// The Delphi class of a propagating error, which `E is ExceptionClass`
+    /// tests and `E.ClassName` prints: an interpreter error is an
+    /// `EJvInterpreterError`; a host exception is of the class the host
+    /// named (`Exception` for a refused edit), registered or parented to
+    /// the registered `Exception`.
+    fn error_class(&mut self, exec: &ExecError) -> Rc<ClassDef> {
+        if !exec.external {
+            return self.interp_error_class();
+        }
+        let name = exec.class_name.clone().unwrap_or_else(|| "Exception".to_owned());
+        if let Some(class) = self.adapter.find_class(name.as_bytes()) {
+            return class;
+        }
+        let parent = self.adapter.find_class(b"Exception");
+        Rc::new(ClassDef {
+            unit: String::new(),
+            name,
+            parent,
+        })
     }
 
     /// The object an `on E` clause binds (`O2V(E)`).
@@ -2175,11 +2196,11 @@ impl Interpreter {
         match error {
             FlowError::Raise(raised) => Value::Object(raised.object.clone()),
             _ => {
-                let class = self.interp_error_class();
                 let exec = match error {
                     FlowError::Error(exec) => exec.clone(),
                     _ => ExecError::cleared(),
                 };
+                let class = self.error_class(&exec);
                 Value::Object(Rc::new(RefCell::new(InterpExceptionObject { error: exec, class })))
             }
         }

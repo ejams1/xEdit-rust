@@ -247,9 +247,9 @@ pub(crate) fn container_counted_record_count(element: &dyn ElementImpl) -> u32 {
 /// data is `data`: a modified element writes its data when it has any
 /// (its storage, rebuilt from the elements when a child changed), else its
 /// elements; an unmodified one copies its data.
-pub(crate) fn data_container_write_to_stream(
-    element: &dyn ElementImpl,
-    data: Option<&[u8]>,
+pub(crate) fn data_container_write_to_stream<'a>(
+    element: &'a dyn ElementImpl,
+    data: impl Fn() -> Option<&'a [u8]>,
     dont_save: bool,
     out: &mut Vec<u8>,
     reset: ResetModified,
@@ -259,7 +259,12 @@ pub(crate) fn data_container_write_to_stream(
         return Ok(());
     }
     let old_len = out.len();
+    // `ExpectedSize := GetDataSize`, which inits the element first: the
+    // `AfterLoad` of a subrecord read for the first time here can change it
+    // (the AVIF `CNAM` category above 3 becomes 0 at the save of a record
+    // whose editor ID changed), so the data is read after it.
     let expected = usize::try_from(element.get_data_size()).unwrap_or(0);
+    let data = data();
     if element.element_base().has_state(ElementState::esModified) {
         match data {
             Some(data) if !data.is_empty() => {
@@ -334,7 +339,7 @@ impl super::sub_record::SubRecordImpl {
             };
             out.extend_from_slice(&header_bytes.to_bytes());
             let start = out.len();
-            data_container_write_to_stream(self, self.data(), false, out, reset)?;
+            data_container_write_to_stream(self, || self.data(), false, out, reset)?;
             let written = out.len() - start;
             if written != big_size as usize {
                 return Err(SaveError::Internal(format!(
@@ -345,7 +350,7 @@ impl super::sub_record::SubRecordImpl {
         } else {
             out.extend_from_slice(self.header_bytes());
             let start = out.len();
-            data_container_write_to_stream(self, self.data(), false, out, reset)?;
+            data_container_write_to_stream(self, || self.data(), false, out, reset)?;
             if out.len() - start != header.data_size as usize {
                 return Err(SaveError::Internal(format!(
                     "{}: wrote {} bytes for a subrecord of {}",
@@ -490,9 +495,8 @@ impl MainRecordImpl {
             // record is written from its elements.
             let loaded = if self.mr_storage_invalid.load(Ordering::Relaxed) {
                 None
-            } else if let Some(collapsed) = self.mr_collapsed.lock().unwrap().clone() {
-                Some(collapsed.to_vec())
             } else {
+                // `data` is the collapsed data once the record was collapsed.
                 self.data().filter(|data| !data.is_empty()).map(<[u8]>::to_vec)
             };
             let start = out.len();

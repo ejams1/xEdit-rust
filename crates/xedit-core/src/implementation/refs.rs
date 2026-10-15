@@ -340,13 +340,14 @@ impl MainRecordImpl {
     }
 
     /// Port of `UpdateRefs`: a record whose references were built builds
-    /// them again after a change.
-    /// UPSTREAM-QUIRK: upstream also runs this while the record's own init
-    /// changes it (the `AfterLoad` fixes of a record whose references came
-    /// from the cache), and walks the elements built so far; the port waits
-    /// for the next change or `BuildRef`, which sees the whole record.
+    /// them again after a change, also while the record's own init changes
+    /// it (the required members and `AfterLoad` fixes of a record whose
+    /// references came from the cache, or the collapse of its storage):
+    /// `TwbContainer.BuildRef` then walks the elements built so far, as
+    /// upstream does (`DoInit` is a no-op inside the init), which at the
+    /// tail of `Init` is every subrecord with its definition.
     pub fn update_refs(self: &Arc<Self>) {
-        if !self.refs_built() || self.mr_init.is_running_here() {
+        if !self.refs_built() {
             return;
         }
         self.build_ref();

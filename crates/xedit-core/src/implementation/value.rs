@@ -1596,7 +1596,7 @@ impl ElementImpl for ValueImpl {
         }
         let dont_save = self.vb.dont_save.load(Ordering::Relaxed)
             || self.vb.vb_value_def.def_base().def_flags.contains(DefFlag::dfDontSave);
-        super::write::data_container_write_to_stream(self, self.data(), dont_save, out, reset)
+        super::write::data_container_write_to_stream(self, || self.data(), dont_save, out, reset)
     }
 }
 

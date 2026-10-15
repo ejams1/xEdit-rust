@@ -493,8 +493,9 @@ impl MainRecordImpl {
             mr_has_vwd_mesh: std::sync::OnceLock::new(),
             mr_ofst_removed: std::sync::atomic::AtomicBool::new(false),
             mr_storage_invalid: std::sync::atomic::AtomicBool::new(true),
-            mr_collapsed: std::sync::Mutex::new(None),
+            mr_collapsed: super::CollapsedData::default(),
             mr_duplicate: std::sync::atomic::AtomicBool::new(false),
+            mr_index_keys: std::sync::Mutex::new(None),
             mr_refs: Default::default(),
             mr_referenced_by: Default::default(),
             mr_grid_cell: Default::default(),
@@ -620,7 +621,7 @@ impl FileImpl {
     /// at the end of `RemoveMainRecord`.
     fn remove_index_keys(&self, record: &Arc<MainRecordImpl>) {
         if self.fl_indices_active.load(Ordering::Acquire) {
-            let keys = record.activate_index_keys();
+            let keys = record.deactivate_index_keys();
             self.remove_keys_from_indices(record, &keys);
         }
     }
