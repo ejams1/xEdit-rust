@@ -588,6 +588,15 @@ struct EditSequence {
     /// so an official module that is not editable can be edited.
     #[serde(default)]
     rename: std::collections::BTreeMap<String, String>,
+    /// Archives of the game's data folder (names, or the start of names
+    /// followed by `*`) linked next to the plugins on both sides; the string
+    /// tables of the localized plugins are then read from them, not put
+    /// loose (issue #32: the Fallout 4 DLC keep theirs in `<plugin> - Main.ba2`).
+    #[serde(default)]
+    archives: Vec<String>,
+    /// Switches added to the oracle's command line (`-skipbsa`).
+    #[serde(default)]
+    switches: Vec<String>,
     /// The dialogs the GUI's handlers show during the steps, in the order
     /// they come, and how to answer them (a copy with overwriting asks which
     /// files to copy into and whether to overwrite; "Create New File" which
@@ -619,7 +628,7 @@ struct SequenceAnswer {
 impl EditSequence {
     /// Whether the sequence runs on a staging folder of its own.
     fn staged(&self) -> bool {
-        self.strings || self.inputs_from.is_some() || !self.rename.is_empty()
+        self.strings || self.inputs_from.is_some() || !self.rename.is_empty() || !self.archives.is_empty()
     }
 }
 
@@ -1200,8 +1209,15 @@ fn check_edit(
                     control: answer.control.clone(),
                 })
                 .collect(),
+            args: sequence.switches.clone(),
             ..Default::default()
         };
+        for archive in &prepared.archives {
+            extras.links.push((
+                PathBuf::from("Data").join(archive.file_name().unwrap()),
+                archive.clone(),
+            ));
+        }
         for (path, relative) in &prepared.tables {
             extras
                 .files
@@ -1304,6 +1320,22 @@ fn check_edit(
     command.args(["--json", "--edit", "--game", game.mode]);
     if sequence.allow_make_partial {
         command.arg("--allow-make-partial");
+    }
+    // The oracle's `-M:` and `-I:`: a My Games folder with an empty game ini.
+    let my_games = port_dir.join("mygames");
+    fs::create_dir_all(&my_games)?;
+    fs::write(my_games.join("game.ini"), "")?;
+    command
+        .arg("--my-games")
+        .arg(format!("{}\\", my_games.display()))
+        .arg("--game-ini")
+        .arg(my_games.join("game.ini"));
+    for switch in &sequence.switches {
+        match switch.to_ascii_lowercase().as_str() {
+            "-skipbsa" => command.arg("--skip-bsa"),
+            "-forcebsa" => command.arg("--force-bsa"),
+            other => bail!("{stem}: the switch {other} has no port flag"),
+        };
     }
     for plugin in &prepared.load {
         command.arg("--load").arg(plugin);
@@ -1411,6 +1443,7 @@ struct PreparedEdit {
     plugins: Vec<PathBuf>,
     load: Vec<PathBuf>,
     tables: Vec<(PathBuf, String)>,
+    archives: Vec<PathBuf>,
     script: String,
     key: u64,
 }
@@ -1425,7 +1458,7 @@ fn prepare_edit(
 ) -> Result<PreparedEdit> {
     let data = PathBuf::from(super::required_var(game.data_var)?);
     let script = edit_script(sequence)?;
-    let (plugins, load, tables) = if sequence.staged() {
+    let (plugins, load, tables, archives) = if sequence.staged() {
         let mut inputs = std::collections::BTreeMap::new();
         if let Some(other) = &sequence.inputs_from {
             let path = edits.join(format!("{other}.json"));
@@ -1444,15 +1477,34 @@ fn prepare_edit(
                 zstd_reader(&cached)?.read_to_end(&mut bytes)?;
                 inputs.insert(name.clone(), bytes);
             }
+            // The string tables that sequence's oracle saved go into the
+            // staging folder's `Strings` (a reload of its plugins needs them).
+            let strings_file = dir.join(format!("{other}.{other_key:016x}.strings.txt"));
+            if let Ok(names) = fs::read_to_string(&strings_file) {
+                for name in names.lines().filter(|name| !name.is_empty()) {
+                    let cached = dir.join(format!("{other}.{other_key:016x}.Strings.{name}.saved.zst"));
+                    let mut bytes = Vec::new();
+                    zstd_reader(&cached)?.read_to_end(&mut bytes)?;
+                    inputs.insert(format!("Strings\\{name}"), bytes);
+                }
+            }
         }
         let dir = runner
             .scratch
             .join(format!("{}-oracle-edit", game.mode))
             .join(stem)
             .join("data");
-        let stage = super::strings::stage(game, &data, &dir, &sequence.load, &sequence.rename, &inputs)?;
+        let stage = super::strings::stage(
+            game,
+            &data,
+            &dir,
+            &sequence.load,
+            &sequence.rename,
+            &inputs,
+            &sequence.archives,
+        )?;
         let tables = if sequence.strings { stage.tables } else { Vec::new() };
-        (stage.plugins, stage.load, tables)
+        (stage.plugins, stage.load, tables, stage.archives)
     } else {
         let names: Vec<&str> = sequence.load.iter().map(String::as_str).collect();
         let load = sequence
@@ -1460,12 +1512,22 @@ fn prepare_edit(
             .iter()
             .map(|name| find_in(&data, name))
             .collect::<Result<Vec<_>>>()?;
-        (load_list(game, &data, &names)?, load, Vec::new())
+        (load_list(game, &data, &names)?, load, Vec::new(), Vec::new())
     };
     // The tables are part of the input, by name and contents.
     let mut table_text = String::new();
     for (path, name) in &tables {
         table_text.push_str(&format!("{name}:{:016x}\n", content_hash(path)?));
+    }
+    // And the archives, by name, size and time.
+    for archive in &archives {
+        let meta = fs::metadata(archive)?;
+        table_text.push_str(&format!(
+            "{}:{}:{:?}\n",
+            archive.file_name().unwrap().to_string_lossy(),
+            meta.len(),
+            meta.modified().ok()
+        ));
     }
     let key = oracle_key(
         runner,
@@ -1477,6 +1539,7 @@ fn prepare_edit(
         plugins,
         load,
         tables,
+        archives,
         script,
         key,
     })

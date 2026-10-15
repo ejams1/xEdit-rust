@@ -1,0 +1,20 @@
+{
+  "description": "Fallout 4 DLC strings from <plugin> - Main.ba2 with no loose tables and no game ini: HasBSAs of Fallout4.esm finds Fallout4 - Interface.ba2 and of DLCRobot.esm its Main, Textures and Voices archives (partial name match, in folder order); the tables and a localized name of each plugin resolve from them, the data folder comes last.",
+  "game": "fo4",
+  "load": ["DLCRobot.esm"],
+  "archives": ["Fallout4 - Interface.ba2", "DLCRobot*"],
+  "probes": [
+    {"containers": true},
+    {"resource": "strings\\dlcrobot_en.strings"},
+    {"resource": "Strings\\DLCRobot_En.ILSTRINGS"},
+    {"resource": "strings\\fallout4_en.dlstrings"},
+    {"resource": "strings\\dlcrobot_de.strings"},
+    {"resource": "DLCRobot.esm"},
+    {"listing": [1, "strings", 3]},
+    {"listing": [2, "", 2]},
+    {"listing": [5, "", 2]},
+    {"value": ["DLCRobot.esm", "01000881", "FULL"]},
+    {"value": ["DLCRobot.esm", "0100417B", "DESC"]},
+    {"value": ["DLCRobot.esm", "0000000A", "FULL"]}
+  ]
+}

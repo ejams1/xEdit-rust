@@ -1764,6 +1764,11 @@ fn port_run(
             name.to_string_lossy()
         )));
     }
+    // The oracle's `-M:` and `-I:`: a My Games folder of the run with an
+    // empty game ini, so no ini of the user's names archives or a language.
+    let my_games = dir.join("mygames");
+    fs::create_dir_all(&my_games)?;
+    fs::write(my_games.join("game.ini"), "")?;
     let cache = dir.join("cache");
     let port_command = |script: &str| {
         let mut command = std::process::Command::new(port);
@@ -1784,6 +1789,10 @@ fn port_run(
             // and fails to, as on the oracle).
             .arg("--program-path")
             .arg(format!("{}\\", bin.display()))
+            .arg("--my-games")
+            .arg(format!("{}\\", my_games.display()))
+            .arg("--game-ini")
+            .arg(my_games.join("game.ini"))
             .env("XEDIT_SCRIPTS", &dir);
         for plugin in &plugins {
             command.arg("--load").arg(plugin);

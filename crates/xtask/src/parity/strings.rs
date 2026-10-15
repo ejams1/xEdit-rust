@@ -44,6 +44,8 @@ pub(super) struct Stage {
     pub load: Vec<PathBuf>,
     /// The string tables, with their path relative to the data folder.
     pub tables: Vec<(PathBuf, String)>,
+    /// The archives linked into the staging folder.
+    pub archives: Vec<PathBuf>,
 }
 
 /// Whether the plugin's file header has the localized flag.
@@ -109,8 +111,17 @@ pub(super) fn stage(
     load: &[String],
     rename: &BTreeMap<String, String>,
     inputs: &BTreeMap<String, Vec<u8>>,
+    archives: &[String],
 ) -> Result<Stage> {
     fs::create_dir_all(dir.join("Strings"))?;
+    // The archives the sequence names go next to the plugins; the tables
+    // are then read from them, not put loose.
+    let mut linked = Vec::new();
+    for source in super::resources::archives_named(archives, data)? {
+        let target = dir.join(source.file_name().unwrap());
+        place(&source, &target)?;
+        linked.push(target);
+    }
     // The plugins under their names in the data folder.
     let source_of = |name: &str| -> String {
         rename
@@ -126,6 +137,7 @@ pub(super) fn stage(
         plugins: Vec::new(),
         load: Vec::new(),
         tables: Vec::new(),
+        archives: linked,
     };
     for source in &sources {
         let source_name = source.file_name().unwrap().to_string_lossy().into_owned();
@@ -138,7 +150,7 @@ pub(super) fn stage(
             Some((_, bytes)) => fs::write(&target, bytes)?,
             None => place(source, &target)?,
         }
-        if is_localized(&target)? {
+        if stage.archives.is_empty() && is_localized(&target)? {
             let source_stem = Path::new(&source_name)
                 .file_stem()
                 .unwrap()
@@ -159,6 +171,18 @@ pub(super) fn stage(
             }
         }
         stage.plugins.push(target);
+    }
+    // The tables of `inputs` (another sequence's oracle saves) loose in
+    // `Strings`, over any taken from the game.
+    for (key, bytes) in inputs {
+        let Some(table) = key.strip_prefix("Strings\\") else {
+            continue;
+        };
+        let path = dir.join("Strings").join(table);
+        fs::write(&path, bytes)?;
+        let relative = format!("Strings\\{table}");
+        stage.tables.retain(|(_, known)| !known.eq_ignore_ascii_case(&relative));
+        stage.tables.push((path, relative));
     }
     for name in load {
         stage.load.push(find_in(dir, name)?);

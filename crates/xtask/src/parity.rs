@@ -69,6 +69,7 @@ mod modgroups;
 mod nif;
 mod oracle_refs;
 mod oracle_save;
+mod resources;
 mod script;
 mod sniff;
 mod strings;
@@ -255,6 +256,8 @@ struct Options {
     tool_modes: bool,
     /// `parity filter`: the navigation tree filter scenarios.
     filter: bool,
+    /// `parity resources`: the archives a load finds and what the containers resolve.
+    resources: bool,
     games: Vec<&'static Game>,
     /// Lower-case file names. Empty selects the whole corpus.
     files: Vec<String>,
@@ -361,7 +364,8 @@ pub fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
         || options.check
         || options.modgroups
         || options.merged
-        || options.tool_modes;
+        || options.tool_modes
+        || options.resources;
     let oracle = if options.roundtrip || gui_oracle {
         PathBuf::new()
     } else {
@@ -404,6 +408,9 @@ pub fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
     }
     if options.filter {
         return filter::run_filter(root, tag, &options, cache, scratch, oracle_dir);
+    }
+    if options.resources {
+        return resources::run_resources(root, tag, &options, cache, scratch, oracle_dir);
     }
 
     let mut cases = Vec::new();
@@ -1228,14 +1235,13 @@ fn first_byte_difference(a: &Path, b: &Path) -> Result<Option<u64>> {
 }
 
 fn parse(args: &[&str]) -> Result<Options> {
-    const USAGE: &str = "usage: cargo xtask parity dump|saves|roundtrip|oracle-save|oracle-edit|bsarch|conflicts|refs|clean|check|check-dump|modgroups|merged|filter|tool-modes|script [--game <game>]... [--file <name>]... [--mode <tool mode>]... \
+    const USAGE: &str = "usage: cargo xtask parity dump|saves|roundtrip|oracle-save|oracle-edit|bsarch|conflicts|refs|clean|check|check-dump|modgroups|merged|filter|tool-modes|resources|script [--game <game>]... [--file <name>]... [--mode <tool mode>]... \
                          [--record <FormID>]... [--oracle-only] [--jobs <n>] [--memory-budget <GiB>] \
                          [--max-memory <GiB>] [--oracle-timeout <minutes>]";
     let (mode, rest) = args.split_first().context(USAGE)?;
     let (saves, roundtrip, oracle_save, oracle_edit) = match *mode {
-        "dump" | "conflicts" | "refs" | "clean" | "check" | "modgroups" | "merged" | "filter" | "tool-modes" => {
-            (false, false, false, false)
-        }
+        "dump" | "conflicts" | "refs" | "clean" | "check" | "modgroups" | "merged" | "filter" | "tool-modes"
+        | "resources" => (false, false, false, false),
         "check-dump" => {
             CHECK_DUMP.store(true, Ordering::Relaxed);
             (false, false, false, false)
@@ -1260,6 +1266,7 @@ fn parse(args: &[&str]) -> Result<Options> {
         merged: *mode == "merged",
         tool_modes: *mode == "tool-modes",
         filter: *mode == "filter",
+        resources: *mode == "resources",
         games: Vec::new(),
         files: Vec::new(),
         modes: Vec::new(),

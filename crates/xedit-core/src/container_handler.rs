@@ -537,14 +537,15 @@ mod tests {
         clear_containers();
         add_folder(&data);
         add_archive(&archive).unwrap();
-        assert_eq!(
-            container_list(),
-            [data.display().to_string(), archive.display().to_string()]
-        );
+        // A folder is named with its trailing separator, and added once.
+        let data_name = include_trailing_path_delimiter(&data.display().to_string());
+        add_folder(&data);
+        add_folder(Path::new(&data_name));
+        assert_eq!(container_list(), [data_name.clone(), archive.display().to_string()]);
+        assert!(container_exists(&data_name.to_uppercase()));
 
         // The loose files are listed lower case and relative to the folder, in
         // the order of a directory listing, the archive's as it names them.
-        let data_name = data.display().to_string();
         assert_eq!(
             container_resource_list(&data_name, ""),
             ["meshes\\b.nif", "meshes\\loose\\a.nif", "textures\\t.dds"]
