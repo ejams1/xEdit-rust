@@ -101,6 +101,15 @@ globals! {
     pretty_form_id, set_pretty_form_id, wbPrettyFormID: bool = false;
     simple_records, set_simple_records, wbSimpleRecords: bool = true;
     decode_texture_hashes, set_decode_texture_hashes, wbDecodeTextureHashes: bool = true;
+    /// Whether the loader adds the archives it finds (`wbLoadBSAs`, line 4848
+    /// of `wbInterface.pas`): off, an archive is only named as `Skipped.`.
+    /// `xeInit.pas` sets it per game and tool mode, the settings file and
+    /// `-skipbsa`/`-forcebsa` in between.
+    load_bsas, set_load_bsas, wbLoadBSAs: bool = true;
+    /// xDump's `-allbsa` (`wbLoadAllBSAs`): every archive of a plugin
+    /// (`<plugin>*.bsa`) instead of the plugin's own, interface,
+    /// localization and Wwise ones.
+    load_all_bsas, set_load_all_bsas, wbLoadAllBSAs: bool = false;
     fixup_pgrd, set_fixup_pgrd, wbFixupPGRD: bool = false;
     i_know_what_im_doing, set_i_know_what_im_doing, wbIKnowWhatImDoing: bool = false;
     hide_unused, set_hide_unused, wbHideUnused: bool = true;
@@ -358,6 +367,9 @@ string_globals! {
     /// The folder of the reference cache files, with a trailing separator;
     /// empty for none.
     cache_path, set_cache_path, wbCachePath;
+    /// The folder of the game's ini files and saves below `My Games`
+    /// (`wbMyGamesTheGamePath`), with a trailing separator.
+    my_games_the_game_path, set_my_games_the_game_path, wbMyGamesTheGamePath;
     the_game_ini_file_name, set_the_game_ini_file_name, wbTheGameIniFileName;
     custom_ini_file_name, set_custom_ini_file_name, wbCustomIniFileName;
 }

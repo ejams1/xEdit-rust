@@ -5,13 +5,35 @@
 // Ported from xEdit: Core/wbBSA.pas
 
 //! The resource containers, upstream `wbContainerHandler`: the archives and
-//! the data folder, searched in the order they were added: `AddFolder`,
-//! `AddBSA`, `ContainerExists`, `OpenResource`, the resource listings of
-//! the containers (`ContainerResourceList`, `ContainerResourceDict`,
-//! `ResourceExists`, `ResourceCount`, `ResourceCopy`, `OpenResourceData`) and
-//! the tables that give a file or folder hash its name (`ResolveFileHash`,
-//! `ResolveFolderHash`). The one texture helper of the unit, the `.ddx` name that
-//! `BuildCache` adds for a `.dds` file before Skyrim, is in `build_cache`.
+//! the data folder, searched in the order they were added.
+//!
+//! This is the one resource handler of the process. Everything that reads a
+//! file "from the game" goes through it, as in upstream: the string tables
+//! of localized plugins (`localization::LocalizationHandlerImpl::load_for_file`),
+//! the script functions of `xejviScriptAdapterResource.pas`
+//! (`ResourceContainerList`, `ResourceExists`, `ResourceOpenData`, ...) and
+//! the `LoadFromResource` of the data format classes, the asset lookups of
+//! LOD generation and of the Starfield definitions, and the names that file
+//! and folder hashes display (`ResolveFileHash`, `ResolveFolderHash`). The
+//! loaders fill it: `xedit_session::resources` ports the archive discovery
+//! of the GUI's `TLoaderThread` (the game ini, `HasBSAs` of each plugin,
+//! `wbLoadBSAs`) and of xDump; a caller that wants other containers calls
+//! [`clear_containers`], [`add_archive`] and [`add_folder`] in the order
+//! upstream would.
+//!
+//! Precedence is upstream's: [`open_resource`] returns the file of every
+//! container that has it in the order they were added, the loaders take the
+//! last one ([`open_resource_last`], [`open_resource_data`] with no
+//! container name), so the data folder, added last, wins over every archive
+//! and a later archive over an earlier one. The listings
+//! ([`container_resource_list`]) enumerate the containers in that order and
+//! each container in its own order: an archive in the order of its file
+//! table, a folder in the order of a directory walk.
+//!
+//! The functions are free functions over one process-wide list, as
+//! `wbContainerHandler` is one global; they are safe to call from several
+//! threads (the list is behind a lock and a container is never changed once
+//! added).
 
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -21,23 +43,32 @@ use std::sync::{Arc, RwLock};
 use xedit_io::archive::{extract_file_ext, extract_file_name, include_trailing_path_delimiter, packer::list_files};
 use xedit_io::{Archive, ArchiveError};
 
+use crate::delphi_dictionary::StringDictionary;
 use crate::interface::globals::{GameMode, game_mode, game_name};
 
 /// Upstream `IwbResourceContainer`: a folder or an archive.
 enum Container {
-    /// `TwbFolder`: the files below a folder.
-    Folder(PathBuf),
+    /// `TwbFolder`: the files below a folder. The text is the path with a
+    /// trailing separator (`IncludeTrailingPathDelimiter` of the constructor),
+    /// which is its name.
+    Folder(String),
     /// `TwbBSAFile`: the files of an archive.
     Archive(Box<Archive>),
 }
 
 impl Container {
-    /// Upstream `Name`: the full path of the folder or archive.
+    /// Upstream `Name`: the full path of the folder (with its trailing
+    /// separator) or archive.
     fn name(&self) -> String {
         match self {
-            Container::Folder(path) => path.display().to_string(),
+            Container::Folder(path) => path.clone(),
             Container::Archive(archive) => archive.path().to_owned(),
         }
+    }
+
+    /// The path of a file of a folder container: `fPath + aFileName`.
+    fn folder_file(folder: &str, path: &str) -> PathBuf {
+        PathBuf::from(format!("{folder}{path}").replace('\\', "/"))
     }
 
     /// Port of `OpenResource` and `GetData` of the resource: the contents of
@@ -45,7 +76,7 @@ impl Container {
     fn open_resource(&self, path: &str) -> Result<Option<Vec<u8>>, ArchiveError> {
         match self {
             Container::Folder(folder) => {
-                let file = folder.join(path.replace('\\', "/"));
+                let file = Self::folder_file(folder, path);
                 if file.is_file() {
                     std::fs::read(&file)
                         .map(Some)
@@ -72,31 +103,44 @@ pub fn container_exists(name: &str) -> bool {
 }
 
 /// Port of `TwbContainerHandler.AddFolder`: the files below `path` as the
-/// last container.
+/// last container, named by the path with a trailing separator. A folder
+/// of that name that was added already is kept where it is.
 pub fn add_folder(path: &Path) {
-    if container_exists(&path.display().to_string()) {
+    let name = include_trailing_path_delimiter(&path.display().to_string());
+    if container_exists(&name) {
         return;
     }
-    CONTAINERS
-        .write()
-        .unwrap()
-        .push(Arc::new(Container::Folder(path.to_path_buf())));
+    CONTAINERS.write().unwrap().push(Arc::new(Container::Folder(name)));
     invalidate_cache();
 }
 
-/// Port of `TwbContainerHandler.AddBSA`: the files of the archive as the
-/// last container.
-pub fn add_archive(path: &Path) -> Result<(), ArchiveError> {
-    if container_exists(&path.display().to_string()) {
-        return Ok(());
+/// Port of `TwbContainerHandler.AddBSA` and `AddBA2`: the files of the
+/// archive as the last container, named by the path as given. An archive of
+/// that name that was added already is kept where it is. The result is the
+/// archive's version (`TwbBA2File.GetVersion`, which the loader prints for a
+/// BA2), or the error of `TwbBSArchive.LoadFromFile`.
+pub fn add_archive(path: &Path) -> Result<u32, ArchiveError> {
+    let name = path.display().to_string();
+    if let Some(version) = CONTAINERS
+        .read()
+        .unwrap()
+        .iter()
+        .find_map(|container| match &**container {
+            Container::Archive(archive) if archive.path().eq_ignore_ascii_case(&name) => Some(archive.version()),
+            _ => None,
+        })
+    {
+        invalidate_cache();
+        return Ok(version);
     }
     let archive = Archive::open(path)?;
+    let version = archive.version();
     CONTAINERS
         .write()
         .unwrap()
         .push(Arc::new(Container::Archive(Box::new(archive))));
     invalidate_cache();
-    Ok(())
+    Ok(version)
 }
 
 /// Forgets every container, for the tests and a new session.
@@ -127,7 +171,7 @@ impl Container {
     /// Port of `ResourceExists`.
     fn resource_exists(&self, path: &str) -> bool {
         match self {
-            Container::Folder(folder) => folder.join(path.replace('\\', "/")).is_file(),
+            Container::Folder(folder) => Self::folder_file(folder, path).is_file(),
             Container::Archive(archive) => archive.file_exists(path),
         }
     }
@@ -139,17 +183,13 @@ impl Container {
         match self {
             Container::Folder(root) => {
                 let folder = folder.replace('/', "\\");
-                let start = root.join(folder.replace('\\', "/"));
+                let start = Self::folder_file(root, &folder);
                 if !start.is_dir() {
                     return Vec::new();
                 }
                 // `TDirectory.GetFiles(fPath + aFolder, '*.*', soAllDirectories)`
                 // names the files with that path in front.
-                let prefix = format!(
-                    "{}{}",
-                    include_trailing_path_delimiter(&root.display().to_string()),
-                    folder
-                );
+                let prefix = format!("{root}{folder}");
                 let start_text = if folder.is_empty() {
                     prefix.clone()
                 } else {
@@ -159,9 +199,7 @@ impl Container {
                 if list_files(&start, &start_text, &mut files).is_err() {
                     return Vec::new();
                 }
-                let root_length = include_trailing_path_delimiter(&root.display().to_string())
-                    .chars()
-                    .count();
+                let root_length = root.chars().count();
                 files
                     .into_iter()
                     .map(|file| {
@@ -340,24 +378,47 @@ fn cache_hash(text: &str) -> i64 {
     }
 }
 
+/// `_AllCount`: the capacity `BuildCache` gives the dictionary of every
+/// name, which decides its bucket order.
+const ALL_COUNT: usize = 1_000_000;
+
 /// Port of `TwbContainerHandler.BuildCache`.
 ///
-/// DEVIATION: upstream writes the seeds it read back to
-/// `<game>.HashSeed.txt2` next to the program, without the names the
-/// containers have already; the port reads the seeds and writes nothing.
+/// The names of every container go into one dictionary (`ccAll`, a
+/// `TDictionary<string, TwbNothing>`: a name in another case is another key),
+/// then the lines of `<game>.HashSeed.txt` next to the program from the last
+/// one up; the hash tables then take the names in the dictionary's bucket
+/// order, the first name of a hash winning (`TryAdd`). That order is
+/// [`StringDictionary`]'s, so two names of one hash resolve as upstream
+/// resolves them.
 fn build_cache() -> ContainerCache {
-    let mut all: ResourceDict = HashSet::new();
-    container_resource_dict("", "", &mut all);
+    let mut all = StringDictionary::with_capacity(ALL_COUNT);
+    for name in container_resource_list("", "") {
+        all.try_add(&name);
+    }
 
     let seed_name = format!(
         "{}{}.HashSeed.txt",
         include_trailing_path_delimiter(&crate::delphi::extract_file_path(&crate::delphi::exe_path())),
         game_name()
     );
-    if let Ok(text) = std::fs::read_to_string(&seed_name) {
-        for line in text.lines() {
-            all.insert(xedit_io::encoding::lower_case(line).replace('/', "\\"));
+    if let Ok(bytes) = std::fs::read(&seed_name) {
+        // `TStringList.LoadFromFile`, then the lines that were added are
+        // written back as `.txt2` (`Delete` of the others, `SaveToFile`).
+        let text = xedit_io::encoding::string_list_text(&bytes);
+        let mut lines: Vec<&str> = text.lines().collect();
+        for index in (0..lines.len()).rev() {
+            let seed = xedit_io::encoding::lower_case(lines[index]).replace('/', "\\");
+            if !all.try_add(&seed) {
+                lines.remove(index);
+            }
         }
+        let mut kept = String::new();
+        for line in lines {
+            kept.push_str(line);
+            kept.push_str("\r\n");
+        }
+        let _ = std::fs::write(format!("{seed_name}2"), xedit_io::encoding::ansi_bytes(&kept));
     }
 
     let mut files: HashSet<String> = HashSet::new();
@@ -366,9 +427,10 @@ fn build_cache() -> ContainerCache {
         file_hashes: HashMap::new(),
         folder_hashes: HashMap::new(),
     };
-    for full_name in &all {
+    for full_name in all.keys() {
         let directory = crate::delphi::extract_file_path(full_name);
-        let folder = xedit_io::encoding::lower_case(directory.trim_end_matches('\\')).replace('/', "\\");
+        let folder =
+            xedit_io::encoding::lower_case(directory.strip_suffix('\\').unwrap_or(&directory)).replace('/', "\\");
         if folders.insert(folder.clone()) {
             cache.folder_hashes.entry(cache_hash(&folder)).or_insert(folder);
         }
@@ -396,6 +458,15 @@ fn build_cache() -> ContainerCache {
         }
     }
     cache
+}
+
+/// Port of `TwbContainerHandler.EnsureCache`: builds the tables of the
+/// names of the file and folder hashes unless they are built. The GUI's
+/// loader calls it after the containers are added when
+/// `wbDecodeTextureHashes` is on; [`resolve_file_hash`] and
+/// [`resolve_folder_hash`] call it too.
+pub fn ensure_cache() {
+    let _ = cache();
 }
 
 fn cache() -> Arc<ContainerCache> {

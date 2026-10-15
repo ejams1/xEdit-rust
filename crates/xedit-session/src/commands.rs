@@ -17,7 +17,7 @@ use xedit_core::interface::{
     Element, ElementRef, FileRef, FileStates, FormID, MainRecordRef, clear_files, record_by_load_order_form_id,
 };
 
-use crate::dump::{game_tag, load_hardcoded, load_resources, setup_game_for_edit};
+use crate::dump::{game_tag, load_hardcoded, setup_game_for_edit};
 use crate::{CommandError, NoParams, Registry, Session};
 
 /// Whether [`Session::load`] turns on the PNAM fill (`wbFillPNAM`).
@@ -118,12 +118,26 @@ impl Session {
         // The editor's settings apply before the plugins load: the load
         // itself edits records under `wbAllowInternalEdit`.
         crate::save::apply_edit_settings(mode);
+        // The data folder of the session: the folder of the plugins.
+        let data = plugins
+            .last()
+            .map(|path| xedit_core::delphi::extract_file_path(path))
+            .unwrap_or_default();
+        // `DoInitPath`: the folder of the game's inis and the inis; then the
+        // `wbLoadBSAs` of the settings file and of `-skipbsa`/`-forcebsa`.
+        if !xdump {
+            crate::resources::init_game_paths(mode, &data);
+            crate::resources::apply_load_settings();
+        }
         // `xeInit.pas`: the tool mode's own settings, which decide what the
         // load does (the internal edits, the reference information, the
-        // translate mode and so on).
+        // translate mode, the archives and so on).
         crate::tool_modes::apply_on_load();
+        // `-l:`, else the language of the game inis.
         if let Some(language) = LANGUAGE_ON_LOAD.lock().unwrap().as_deref() {
             xedit_core::interface::globals::set_language(language);
+        } else if !xdump && let Some(language) = crate::resources::game_ini_language(mode) {
+            xedit_core::interface::globals::set_language(&language);
         }
         let translate = TRANSLATE_ON_LOAD.load(std::sync::atomic::Ordering::Relaxed);
         xedit_core::interface::globals::set_translation_mode(translate);
@@ -132,6 +146,10 @@ impl Session {
             set_hide_unused(true);
             set_hide_ignored(true);
             set_hide_never_show(true);
+            // `tmTranslate`: needed for localization.
+            if mode >= GameMode::gmTES5 {
+                xedit_core::interface::globals::set_load_bsas(true);
+            }
         }
         // `-FillPNAM`: the responses of a topic get a `PNAM` when they are
         // built (`wbFillPNAM`).
@@ -167,6 +185,7 @@ impl Session {
             // edit gate is set again after the load.
             xedit_core::interface::globals::set_allow_internal_edit(false);
             xedit_core::interface::globals::set_edit_allowed(true);
+            xedit_core::interface::globals::set_load_bsas(false);
         }
         clear_files();
         let mut files = Vec::new();
@@ -176,7 +195,13 @@ impl Session {
             files.push(file);
         }
         if let (Some(file), Some(path)) = (files.last(), plugins.last()) {
-            load_resources(file, path, &xedit_core::delphi::extract_file_path(path), mode);
+            if xdump {
+                crate::resources::load_dump_resources(file, path, &data, mode);
+            } else {
+                // `TLoaderThread.Execute`: the archives of the game inis and
+                // of every module, the data folder, `wbLoaderDone`.
+                crate::resources::load_session_resources(&data)?;
+            }
             load_hardcoded()?;
         }
         Ok(Self {

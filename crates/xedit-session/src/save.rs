@@ -47,6 +47,10 @@ pub fn apply_edit_settings(mode: GameMode) {
     // The default of `wbAllowInternalEdit`, which the games below override:
     // the load adds the required subrecords a record lacks.
     set_allow_internal_edit(true);
+    // `wbLoadBSAs` of the game ("localization won't work otherwise" for
+    // the games from Skyrim on); the settings file, `-skipbsa`/`-forcebsa`
+    // and the tool mode change it afterwards.
+    xedit_core::interface::globals::set_load_bsas(crate::resources::game_loads_bsas(mode));
     let app = match mode {
         GameMode::gmTES3 => "TES3",
         GameMode::gmTES4 | GameMode::gmTES4R => "TES4",

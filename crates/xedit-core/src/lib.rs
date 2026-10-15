@@ -7,6 +7,7 @@
 pub mod command_line;
 pub mod container_handler;
 pub mod delphi;
+pub mod delphi_dictionary;
 pub mod half_float;
 pub mod helpers;
 pub mod implementation;

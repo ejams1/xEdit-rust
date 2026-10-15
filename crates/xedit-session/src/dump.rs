@@ -15,24 +15,19 @@ use std::sync::{Arc, LazyLock};
 
 use rayon::prelude::*;
 
-use xedit_core::container_handler::{add_archive, add_folder, clear_containers};
-use xedit_core::delphi::{change_file_ext, extract_file_path};
+use xedit_core::delphi::extract_file_path;
 use xedit_core::implementation::{
     ElementImpl, FileBytes, FileImpl, MainRecordImpl, game_master_file, pin_record, trim_initialized_records, wb_file,
     wb_file_compare,
 };
 use xedit_core::interface::globals::{
-    GameMode, ToolSource, clear_resources_loaded_handlers, game_exe_name, game_master_esm, game_name, language,
+    GameMode, ToolSource, clear_resources_loaded_handlers, game_exe_name, game_master_esm, game_name,
     set_create_contained_in, set_data_path, set_game_exe_name, set_game_master_esm, set_game_mode, set_game_name,
-    set_hide_unused, set_language, set_simple_records, set_tool_source, wb_resources_loaded,
+    set_hide_unused, set_language, set_simple_records, set_tool_source,
 };
-use xedit_core::interface::misc::{progress, set_progress_callback};
-use xedit_core::interface::{
-    Container, Element, ElementRef, File, FileState, FileStates, clear_record_defs, init_records,
-};
-use xedit_core::localization::{
-    add_default_l_encodings_if_missing, add_l_encoding_if_missing, install_localization_handler, set_l_encoding_default,
-};
+use xedit_core::interface::misc::set_progress_callback;
+use xedit_core::interface::{Container, ElementRef, FileState, FileStates, clear_record_defs, init_records};
+use xedit_core::localization::{add_default_l_encodings_if_missing, add_l_encoding_if_missing, set_l_encoding_default};
 use xedit_core::threads::{self, init_cycles};
 use xedit_io::Encoding;
 
@@ -253,77 +248,11 @@ fn setup_language(mode: GameMode) {
     add_default_l_encodings_if_missing(true);
 }
 
-/// Port of the resource loading of `xDump.dpr`: when the plugin or one of
-/// its masters is localized and a loose `.STRINGS` file is missing, the
-/// archives of each master and of the plugin (`<name>`, `<name> - Interface`,
-/// `<name> - Localization`, `<name> - Wwise*`) are added, then the data folder.
-pub(crate) fn load_resources(file: &FileImpl, path: &str, data_path: &str, mode: GameMode) {
-    let data_path = data_path.to_owned();
-    set_data_path(&data_path);
-    // The loose strings files are looked for next to the file, which for a
-    // save is not the data folder.
-    let file_path = extract_file_path(path);
-    clear_containers();
-    let mut names: Vec<String> = file.masters().iter().map(|master| master.get_name()).collect();
-    names.push(file.get_name());
-    let is_localized = file.get_is_localized() || file.masters().iter().any(|master| master.get_is_localized());
-    let load_archives = is_localized
-        && names.iter().any(|name| {
-            let strings = format!(
-                "{file_path}Strings\\{}_{}.STRINGS",
-                change_file_ext(name, ""),
-                language()
-            );
-            !Path::new(&strings).is_file()
-        });
-    if load_archives {
-        let extension = if uses_ba2(mode) { ".ba2" } else { ".bsa" };
-        for name in &names {
-            let stem = change_file_ext(name, "");
-            for suffix in ["", " - Interface", " - Localization"] {
-                let archive = format!("{data_path}{stem}{suffix}{extension}");
-                if Path::new(&archive).is_file() {
-                    add_resource_archive(&archive);
-                }
-            }
-            // The Wwise archives match by prefix.
-            let prefix = format!("{stem} - Wwise").to_ascii_lowercase();
-            let mut wwise: Vec<String> = std::fs::read_dir(&data_path)
-                .into_iter()
-                .flatten()
-                .flatten()
-                .map(|entry| entry.file_name().to_string_lossy().into_owned())
-                .filter(|file_name| {
-                    let lower = file_name.to_ascii_lowercase();
-                    lower.starts_with(&prefix) && lower.ends_with(extension)
-                })
-                .collect();
-            wwise.sort();
-            for file_name in wwise {
-                add_resource_archive(&format!("{data_path}{file_name}"));
-            }
-        }
-    }
-    add_folder(Path::new(&data_path));
-    wb_resources_loaded();
-    install_localization_handler();
-}
-
-fn add_resource_archive(archive: &str) {
-    progress(&format!(
-        "[{}] Loading Resources.",
-        xedit_core::delphi::path_file_name(archive)
-    ));
-    if let Err(error) = add_archive(Path::new(archive)) {
-        progress(&error.to_string());
-    }
-}
-
 /// Loads the plugin with its masters, its resources and the hardcoded
 /// records, as `xDump.dpr` does before it starts the dump.
 pub fn load_file(path: &str, mode: GameMode) -> Result<Arc<FileImpl>, String> {
     let file = wb_file(path, i32::MAX, FileStates::empty()).map_err(|error| error.to_string())?;
-    load_resources(&file, path, &extract_file_path(path), mode);
+    crate::resources::load_dump_resources(&file, path, &extract_file_path(path), mode);
     load_hardcoded()?;
     Ok(file)
 }
@@ -337,7 +266,7 @@ pub fn dump_save(path: &str, data_path: &str, mode: GameMode, out: &mut dyn Writ
     }
     set_data_path(&data_path);
     let file = wb_file(path, i32::MAX, FileStates::empty()).map_err(|error| error.to_string())?;
-    load_resources(&file, path, &data_path, mode);
+    crate::resources::load_dump_resources(&file, path, &data_path, mode);
     load_hardcoded()?;
     // A save has no main records to spread over the workers, and the save
     // definitions keep the tables of the save being read in globals.

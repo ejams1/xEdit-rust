@@ -1149,6 +1149,9 @@ fn log_lines(log: &[u8]) -> Vec<String> {
             || line.ends_with("] Loading Resources.")
             || line.ends_with("] Setting Resource Path.")
             || line.contains("] Version: ")
+            || line.ends_with("] Skipped.")
+            || line == "Start building resources cache..."
+            || line == "...resources cache finished building"
             || line.starts_with("Warning: <Can't find ")
         {
             continue;
@@ -1445,7 +1448,11 @@ fn run_port(
         .arg("--data")
         .arg(format!("{}\\", gui::windows_path(data)))
         .arg("--game-ini")
-        .arg(gui::windows_path(&ini));
+        .arg(gui::windows_path(&ini))
+        // A My Games folder without inis, as the oracle's -M: is: no custom
+        // ini of the user's applies.
+        .arg("--my-games")
+        .arg(format!("{work_text}mygames\\"));
     for worldspace in case.worldspaces {
         command.arg("--worldspace").arg(worldspace);
     }
