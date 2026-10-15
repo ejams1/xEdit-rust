@@ -204,7 +204,8 @@ impl Container {
                     .into_iter()
                     .map(|file| {
                         let relative: String = file.chars().skip(root_length).collect();
-                        xedit_io::encoding::lower_case(&relative)
+                        // `LowerCase`: the ASCII letters only.
+                        xedit_io::encoding::lower_case_ascii(&relative)
                     })
                     .collect()
             }

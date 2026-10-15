@@ -463,13 +463,12 @@ pub(super) fn run_resources(
     Ok(())
 }
 
+/// Files linked into a run folder: the path in it and the source.
+type Links = Vec<(PathBuf, PathBuf)>;
+
 /// The files of a run folder both sides share: the inis below `mygames`,
 /// the loose files below `Data` and the links of the archives.
-fn run_files(
-    scenario: &Scenario,
-    game: &Game,
-    archives: &[PathBuf],
-) -> (Vec<(PathBuf, Vec<u8>)>, Vec<(PathBuf, PathBuf)>) {
+fn run_files(scenario: &Scenario, game: &Game, archives: &[PathBuf]) -> (Vec<(PathBuf, Vec<u8>)>, Links) {
     let mut files = Vec::new();
     files.push((
         PathBuf::from("mygames").join("game.ini"),

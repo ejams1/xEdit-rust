@@ -10,7 +10,7 @@
 //! and Starfield), and the xxHash functions behind the lookup hash that the
 //! archive packer uses to find identical data.
 
-use crate::encoding::{ansi_bytes, lower_case};
+use crate::encoding::{ansi_bytes, lower_case_ascii};
 
 /// Port of `TwbHash.CRC32`: the standard CRC-32 (IEEE 802.3, reflected, as
 /// zlib's `crc32`), which upstream computes with its own table and compares
@@ -175,7 +175,11 @@ pub fn lookup_hash_text(text: &str, ignore_case: bool) -> LookupHash {
     if text.is_empty() {
         return 0;
     }
-    let text = if ignore_case { lower_case(text) } else { text.to_owned() };
+    let text = if ignore_case {
+        lower_case_ascii(text)
+    } else {
+        text.to_owned()
+    };
     let bytes: Vec<u8> = text.encode_utf16().flat_map(u16::to_le_bytes).collect();
     lookup_hash(&bytes)
 }
@@ -187,7 +191,7 @@ fn backslashes(text: &str) -> String {
 
 /// Port of `TwbHash.TES3`: the hash of a Morrowind archive path.
 pub fn tes3(text: &str) -> u64 {
-    let s = ansi_bytes(&backslashes(&lower_case(text)));
+    let s = ansi_bytes(&backslashes(&lower_case_ascii(text)));
     let half = s.len() >> 1;
     let mut sum = 0u32;
     let mut off = 0u32;
@@ -211,7 +215,7 @@ pub fn tes3(text: &str) -> u64 {
 /// Oblivion through Skyrim Special Edition archive. `signed` reads bytes
 /// above 127 as negative, as Oblivion's archives do.
 pub fn tes4_raw(text: &str, has_extension: bool, signed: bool) -> u64 {
-    let lowered = lower_case(text);
+    let lowered = lower_case_ascii(text);
     let (name, extension) = match lowered.rfind('.') {
         Some(at) if has_extension => (&lowered[..at], &lowered[at..]),
         _ => (lowered.as_str(), ""),
@@ -278,7 +282,7 @@ pub fn tes5(text: &str, has_extension: bool) -> u64 {
 
 /// Port of `TwbHash.FO4`: the folder and file name hash of BA2 archives.
 pub fn fo4(text: &str) -> u32 {
-    bscrc32(&backslashes(&lower_case(text)))
+    bscrc32(&backslashes(&lower_case_ascii(text)))
 }
 
 /// The table of `TwbHash.cCRC32Table`: the reflected CRC-32 table.

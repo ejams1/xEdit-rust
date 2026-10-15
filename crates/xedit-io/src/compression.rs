@@ -506,14 +506,14 @@ mod tests {
         let mut sink = Vec::new();
         assert_eq!(
             CompressionType::ZLib
-                .decompress_stream(&mut TEXT.as_ref(), &mut sink)
+                .decompress_stream(&mut { TEXT }, &mut sink)
                 .unwrap_err()
                 .0,
             "Not implemented"
         );
         assert!(
             CompressionType::None
-                .compress_stream(&mut TEXT.as_ref(), &mut sink, true)
+                .compress_stream(&mut { TEXT }, &mut sink, true)
                 .is_err()
         );
     }

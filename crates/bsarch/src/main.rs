@@ -90,16 +90,21 @@ fn output() -> &'static Mutex<BufWriter<Stdout>> {
     OUT.get_or_init(|| Mutex::new(BufWriter::with_capacity(1 << 16, std::io::stdout())))
 }
 
-/// `Write`.
+/// `Write`. The text file `Output` of a Delphi console program writes in
+/// the system ANSI code page (`DefaultSystemCodePage`), not in the console's
+/// code page: `BSArch.exe -dump` prints `ï` of a name as the byte `EF` of
+/// code page 1252 also where the console's is 437 (`parity bsarch
+/// --synthetic`, the `edge` folder), and a character outside the code page
+/// as Windows converts it (best fit, else `?`).
 fn write(text: &str) {
     let mut out = output().lock().expect("output lock");
-    let _ = out.write_all(text.as_bytes());
+    let _ = out.write_all(&xedit_io::encoding::ansi_bytes(text));
 }
 
 /// `WriteLn`.
 fn write_line(text: &str) {
     let mut out = output().lock().expect("output lock");
-    let _ = out.write_all(line_ends(text).as_bytes());
+    let _ = out.write_all(&xedit_io::encoding::ansi_bytes(&line_ends(text)));
     let _ = out.write_all(NEWLINE.as_bytes());
 }
 
