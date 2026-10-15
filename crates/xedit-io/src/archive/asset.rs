@@ -7,7 +7,7 @@
 //! `TwbAsset`: which kind of asset a path is, and how a file path on disk
 //! becomes the asset name stored in an archive.
 
-use crate::encoding::lower_case;
+use crate::encoding::lower_case_ascii;
 
 /// Upstream `TwbAssetType`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -223,7 +223,7 @@ pub fn split(file_name: &str) -> AssetParts {
 
 /// Port of `TwbAsset.AssetTypeByFolder`.
 pub fn asset_type_by_folder(asset_name: &str) -> AssetType {
-    let lowered = lower_case(asset_name);
+    let lowered = lower_case_ascii(asset_name);
     for asset in &BS_ASSETS {
         if lowered == asset.root || lowered.starts_with(&format!("{}\\", asset.root)) {
             return asset.kind;
@@ -235,7 +235,7 @@ pub fn asset_type_by_folder(asset_name: &str) -> AssetType {
 /// Port of `TwbAsset.AssetTypeByExtension`.
 pub fn asset_type_by_extension(asset_name: &str) -> AssetType {
     let (_, _, extension) = split_name_ext(asset_name, false);
-    let extension = lower_case(&extension);
+    let extension = lower_case_ascii(&extension);
     for asset in &BS_ASSETS {
         if asset.ext.contains(&extension.as_str()) {
             return asset.kind;
@@ -255,7 +255,7 @@ pub fn get_asset_name(file_name: &str, root: &str, mut asset_type: AssetType) ->
     }
 
     let path: Vec<char> = std::iter::once('\\')
-        .chain(lower_case(file_name).replace('/', "\\").chars())
+        .chain(lower_case_ascii(file_name).replace('/', "\\").chars())
         .collect();
     // The 1-based position of the first occurrence, 0 for none.
     let find = |needle: &str| -> usize {
@@ -349,14 +349,14 @@ pub fn extract_file_ext(path: &str) -> &str {
 
 /// Port of `TwbAsset.DoNotPack`: files `AddSourceFolder` leaves out.
 pub fn do_not_pack(file_name: &str) -> bool {
-    let extension = lower_case(extract_file_ext(file_name));
+    let extension = lower_case_ascii(extract_file_ext(file_name));
     SKIPPED_EXTENSIONS.contains(&extension.as_str())
 }
 
 /// Port of `TwbAsset.DoNotCompress`: sounds, voices, music and strings are
 /// stored as they are, except `.fuz` and `.hkx` files.
 pub fn do_not_compress(file_name: &str) -> bool {
-    let lowered = lower_case(file_name);
+    let lowered = lower_case_ascii(file_name);
     matches!(
         asset_type_by_folder(file_name),
         AssetType::Sound | AssetType::Voice | AssetType::Music | AssetType::Strings

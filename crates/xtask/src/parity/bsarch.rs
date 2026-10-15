@@ -626,14 +626,13 @@ fn check_archive(case: &Case, runner: &Runner) -> Result<Vec<Outcome>> {
     Ok(outcomes)
 }
 
+/// A check of [`list_and_unpack`]: its name, status, detail and bytes.
+type Check = (String, &'static str, Option<String>, u64);
+
 /// The `-dump` of an archive by both tools, and its unpack by both: the
 /// texts byte for byte, the trees file for file, or, where the oracle stops
 /// with an error, the same exit code and last line.
-fn list_and_unpack(
-    runner: &Runner,
-    work: &Path,
-    archive: &Path,
-) -> Result<Vec<(String, &'static str, Option<String>, u64)>> {
+fn list_and_unpack(runner: &Runner, work: &Path, archive: &Path) -> Result<Vec<Check>> {
     let archive_text = archive.display().to_string();
     let mut checks = Vec::new();
     let oracle = run_tool(&runner.oracle, &[archive_text.clone(), "-dump".to_owned()])?;
@@ -657,7 +656,14 @@ fn list_and_unpack(
     let unpack = |exe: &Path, folder: &Path| {
         run_tool(
             exe,
-            &["unpack".to_owned(), archive_text.clone(), folder.display().to_string()],
+            &[
+                "unpack".to_owned(),
+                archive_text.clone(),
+                folder.display().to_string(),
+                // One thread: the file that stops an unpack is then the first
+                // of the archive on both sides, not the one a thread met first.
+                "-mt:no".to_owned(),
+            ],
         )
     };
     let oracle = unpack(&runner.oracle, &oracle_tree)?;

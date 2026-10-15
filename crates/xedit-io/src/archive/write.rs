@@ -24,7 +24,7 @@ use super::{
     MAGIC_TES3, SIZE_OF_FO4, SIZE_OF_SF_V2, SIZE_OF_SF_V3, SIZE_OF_TES3, SIZE_OF_TES4, Writer, os_error_text, texture,
 };
 use crate::compression::CompressionType;
-use crate::encoding::{ansi_bytes, lower_case};
+use crate::encoding::{ansi_bytes, lower_case_ascii};
 use crate::hash::{self, LookupHash, lookup_hash, lookup_hash_text};
 
 /// One file to create in an archive: the entry of the files list that
@@ -154,7 +154,7 @@ pub fn detect_flags(kind: ArchiveType, files: &[PackFile]) -> (u32, u32) {
         }
 
         // Oblivion only.
-        if kind == ArchiveType::Tes4 && lower_case(&file.name).ends_with(".xml") {
+        if kind == ArchiveType::Tes4 && lower_case_ascii(&file.name).ends_with(".xml") {
             file_flags |= FILE_MENUS;
         }
 
@@ -209,6 +209,76 @@ fn hash_sort_tes3(a: &FileEntry, b: &FileEntry) -> Ordering {
 /// `HashSortTES4`: by the folder hash, then the file name hash.
 fn hash_sort_tes4(a: &FileEntry, b: &FileEntry) -> Ordering {
     a.dir_hash64.cmp(&b.dir_hash64).then(a.name_hash64.cmp(&b.name_hash64))
+}
+
+/// `TList.Sort` of the RTL (`System.Classes.QuickSort`): the quick sort with
+/// the middle element as the pivot, a direct compare of two elements, and
+/// the recursion into the smaller part. It is not stable, so two files of
+/// equal hashes (a TES4 hash collision) end in the order it leaves them,
+/// which `BSArch.exe` writes (`parity bsarch --synthetic`, the `edge` folder:
+/// four pairs of colliding names in one folder). The pivot is the element,
+/// not its slot, as upstream holds a pointer to it.
+fn delphi_list_sort<T>(list: &mut Vec<T>, compare: fn(&T, &T) -> Ordering) {
+    fn sort<T>(items: &[T], order: &mut [usize], mut l: usize, mut r: usize, compare: fn(&T, &T) -> Ordering) {
+        let cmp = |a: usize, b: usize| compare(&items[a], &items[b]);
+        if l >= r {
+            return;
+        }
+        loop {
+            if r - l == 1 {
+                if cmp(order[l], order[r]) == Ordering::Greater {
+                    order.swap(l, r);
+                }
+                break;
+            }
+            let (mut i, mut j) = (l as isize, r as isize);
+            let pivot = order[(l + r) >> 1];
+            loop {
+                while cmp(order[i as usize], pivot) == Ordering::Less {
+                    i += 1;
+                }
+                while cmp(order[j as usize], pivot) == Ordering::Greater {
+                    j -= 1;
+                }
+                if i <= j {
+                    if i != j {
+                        order.swap(i as usize, j as usize);
+                    }
+                    i += 1;
+                    j -= 1;
+                }
+                if i > j {
+                    break;
+                }
+            }
+            if j - l as isize > r as isize - i {
+                if (i as usize) < r {
+                    sort(items, order, i as usize, r, compare);
+                }
+                r = j as usize;
+            } else {
+                if (l as isize) < j {
+                    sort(items, order, l, j as usize, compare);
+                }
+                l = i as usize;
+            }
+            if l >= r {
+                break;
+            }
+        }
+    }
+    if list.len() < 2 {
+        return;
+    }
+    let mut order: Vec<usize> = (0..list.len()).collect();
+    let last = list.len() - 1;
+    sort(list, &mut order, 0, last, compare);
+    let mut slots: Vec<Option<T>> = std::mem::take(list).into_iter().map(Some).collect();
+    list.extend(
+        order
+            .into_iter()
+            .map(|index| slots[index].take().expect("each index once")),
+    );
 }
 
 /// `String2Magic`: the first four characters as bytes.
@@ -303,13 +373,13 @@ impl Archive {
                 let mut names_length = 0usize;
                 // Fill in the file entries and calculate the total names length.
                 for (entry, file) in self.files.iter_mut().zip(files) {
-                    entry.name = lower_case(&file.name);
+                    entry.name = lower_case_ascii(&file.name);
                     entry.file_object = file.file_object;
                     entry.name_hash64 = hash::tes3(&entry.name);
                     names_length += entry.name.chars().count() + 1; // including the terminator
                 }
                 // Sort the files by hashes.
-                self.files.sort_by(hash_sort_tes3);
+                delphi_list_sort(&mut self.files, hash_sort_tes3);
 
                 // The offset to the hash table.
                 self.data_offset = SIZE_OF_TES3
@@ -331,7 +401,7 @@ impl Archive {
                 let tes4 = kind == ArchiveType::Tes4;
                 // Fill in the file entries and calculate the total names length.
                 for (entry, file) in self.files.iter_mut().zip(files) {
-                    entry.name = lower_case(&file.name);
+                    entry.name = lower_case_ascii(&file.name);
                     entry.file_object = file.file_object;
                     entry.compress = file.compress;
                     let (position, directory, name) = split_dir_name(&file.name);
@@ -344,7 +414,7 @@ impl Archive {
                     self.header.file_names_length += name.chars().count() as u32 + 1; // + terminator
                 }
                 // Sort the files by hashes.
-                self.files.sort_by(hash_sort_tes4);
+                delphi_list_sort(&mut self.files, hash_sort_tes4);
 
                 // Create the folders.
                 let mut previous = 0u64;
@@ -433,7 +503,7 @@ impl Archive {
                     entry.compress = file.compress;
                     entry.dir_hash32 = hash::fo4(&parts.folder_no_delimiter);
                     entry.name_hash32 = hash::fo4(&parts.file_name_no_extension);
-                    entry.ext = string_to_magic(&lower_case(&parts.extension_no_dot));
+                    entry.ext = string_to_magic(&lower_case_ascii(&parts.extension_no_dot));
                 }
 
                 // The offset to the files data.

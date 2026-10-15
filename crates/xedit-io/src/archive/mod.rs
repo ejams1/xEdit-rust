@@ -33,7 +33,7 @@ pub use texture::dxgi_format_name;
 pub use write::{PackFile, detect_flags};
 
 use crate::compression::{CompressionError, CompressionType};
-use crate::encoding::{ansi_string, lower_case};
+use crate::encoding::{ansi_string, lower_case_ascii};
 use crate::hash::{LookupHash, lookup_hash_text};
 use crate::mapped_file::MappedFile;
 
@@ -136,7 +136,7 @@ impl ArchiveType {
 
 /// Port of `IsArchive`: whether the file name has an archive extension.
 pub fn is_archive(file_name: &str) -> bool {
-    let extension = lower_case(extract_file_ext(file_name));
+    let extension = lower_case_ascii(extract_file_ext(file_name));
     extension == ".bsa" || extension == ".ba2"
 }
 
@@ -460,13 +460,19 @@ impl<'a> Reader<'a> {
     }
 }
 
-/// The text of an OS error without the Rust suffix.
+/// The text of an OS error as Delphi's `SysErrorMessage` gives it: without
+/// the Rust suffix, and without the trailing blanks and periods of the
+/// system's message (`while ... CharInSet(Buffer[Len - 1], [#0..#32, '.'])
+/// do Dec(Len)`), as `Cannot create file "...". The filename, directory name,
+/// or volume label syntax is incorrect` shows (`parity bsarch --synthetic`,
+/// the `edge-wide` folder).
 pub(crate) fn os_error_text(error: &std::io::Error) -> String {
     let text = error.to_string();
-    match text.rfind(" (os error ") {
-        Some(at) => text[..at].to_owned(),
-        None => text,
-    }
+    let text = match text.rfind(" (os error ") {
+        Some(at) => &text[..at],
+        None => text.as_str(),
+    };
+    text.trim_end_matches(|c: char| c <= ' ' || c == '.').to_owned()
 }
 
 /// The exception text of Delphi's `EFOpenError`.
@@ -920,10 +926,10 @@ impl Archive {
     pub fn files_by_folder(&self, folder: &str) -> Vec<&FileEntry> {
         // `ExcludeTrailingPathDelimiter` takes off one separator.
         let folder = folder.strip_suffix(['\\', '/']).unwrap_or(folder);
-        let folder = lower_case(folder);
+        let folder = lower_case_ascii(folder);
         self.files
             .iter()
-            .filter(|file| folder.is_empty() || lower_case(&file.name).starts_with(&folder))
+            .filter(|file| folder.is_empty() || lower_case_ascii(&file.name).starts_with(&folder))
             .collect()
     }
 
@@ -1124,7 +1130,7 @@ impl Archive {
         // as a cubemap if it contains "_e.dd" in the embedded name. If a texture
         // is not loose and the embedded names are missing then cubemaps are not
         // loaded properly. Seems to crash on anything but textures.
-        let ends_with = |file: &FileEntry, suffix: &str| lower_case(&file.name).ends_with(suffix);
+        let ends_with = |file: &FileEntry, suffix: &str| lower_case_ascii(&file.name).ends_with(suffix);
         if matches!(self.kind, ArchiveType::Tes4 | ArchiveType::Fo3 | ArchiveType::Sse)
             && self.header.flags & ARCHIVE_EMBEDNAME == 0
             && self.files.iter().any(|file| ends_with(file, "_e.dds"))
@@ -1223,7 +1229,7 @@ impl Drop for Archive {
 
 /// The path as the archive table keys it: lower case with backslashes.
 pub fn normalize_path(path: &str) -> String {
-    lower_case(path.replace('/', "\\").trim_start_matches('\\'))
+    lower_case_ascii(path.replace('/', "\\").trim_start_matches('\\'))
 }
 
 /// Port of `FormatSize`: a size as `1.5 MB`, with the units Bytes to YB.

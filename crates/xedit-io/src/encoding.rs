@@ -34,6 +34,16 @@ pub fn lower_case(text: &str) -> String {
         .collect()
 }
 
+/// Delphi `LowerCase(S)` (`System.SysUtils`): only the 26 letters `A` to
+/// `Z` are lowered, every other character stays as it is. The archive code
+/// of upstream (`wbBSArchive`, `wbHash`, `wbAsset`, `TwbFolder` of `wbBSA`)
+/// lowers names with it: `BSArch.exe` stores `meshes\ansi\Æble.nif` with its
+/// upper case `Æ` and hashes that byte (`parity bsarch --synthetic`, the
+/// `edge` folder).
+pub fn lower_case_ascii(text: &str) -> String {
+    text.to_ascii_lowercase()
+}
+
 /// Delphi `AnsiString(text)`: the bytes of the string in the system ANSI code
 /// page (code page 1252 where the system has none), characters without a
 /// mapping converted as the system does.
