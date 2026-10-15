@@ -228,7 +228,7 @@ Steps:
 A review of the 70% claim on 2026-10-11 found that the merged phases left functional gaps, filed as the "Parity:" issues #22-#40 with tracker #41. They close before phase 7 starts. This is not a phase: each issue gets its own branch (`parity-<N>`), worktree (`M:\projects\xEdit-rust-parity-<N>`) and pull request against `main`, so that each can merge as soon as it is reviewed. Shared agent rules live in the coordinator's brief (`M:\projects\xedit-parity-brief.md`).
 
 - **Model:** the coordinator runs on Opus 5.5 and pins each batch agent's model: Fable 5.1 for interpreter and core-semantics work (#23, #24, #26, #28), Sonnet 5.5 for adapter volume (#30, #31, #36), Opus 5.5 for the rest.
-- **Review:** a fresh Fable 5.1 session reviews each pull request against the checks in "How a phase is run" before it merges; findings are fixed in the same pull request and re-reviewed.
+- **Review:** no per-PR review (the user decided on 2026-10-15). Each batch agent leaves its pull request with green gates and oracle evidence; the coordinator marks it ready and merges it.
 - **Concurrency:** up to four batch agents at once, each in its own worktree. Runs that need more than 4 GB or 15 minutes take the heavy-run lock described in the brief. Merges into `main` are serialized; every branch rebases onto `main` before its final push.
 
 Order (a batch starts when its dependencies have merged, or earlier when the overlap is small and a rebase settles it):
