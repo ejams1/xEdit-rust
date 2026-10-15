@@ -39,11 +39,12 @@ use xedit_io::collate::ansi_compare_text;
 use xedit_io::encoding::lower_case;
 
 use xedit_script::adapter::{Adapter, Args};
+use xedit_script::ast::BinOp;
 use xedit_script::values::{ParamType, Value, ValueError, VarType, VariantArray};
 
 use crate::script_classes::ScriptClasses;
 use crate::script_strings::{
-    EncodingKind, borrow_list, borrow_list_mut, encoding_of, list_of_or_error, receiver, text_arg,
+    EncodingKind, borrow_list, borrow_list_mut, encoding_of, list_of_or_error, receiver, text_arg, text_arg_lossy,
 };
 
 /// The class name of a plain Delphi `Exception`.
@@ -152,12 +153,14 @@ const WINDOWS_CONSTS: &[(&str, i32)] = &[
 /// five others): the RTL assigns their codes at run time from `$1000` up, so
 /// no registered constant names them; the port fixes an order for the ones
 /// its own `var*` mapping needs.
-const VAR_RECORD: i32 = 0x1000;
-const VAR_OBJECT: i32 = 0x1001;
-const VAR_CLASS: i32 = 0x1002;
-const VAR_POINTER: i32 = 0x1003;
-const VAR_SET: i32 = 0x1004;
-const VAR_ARRAY: i32 = 0x1005;
+// The oracle's codes of the custom variant types (see
+// `script_rtl::DELPHI_VAR_*`).
+const VAR_RECORD: i32 = crate::script_rtl::DELPHI_VAR_RECORD;
+const VAR_OBJECT: i32 = crate::script_rtl::DELPHI_VAR_OBJECT;
+const VAR_CLASS: i32 = crate::script_rtl::DELPHI_VAR_CLASS;
+const VAR_POINTER: i32 = crate::script_rtl::DELPHI_VAR_POINTER;
+const VAR_SET: i32 = crate::script_rtl::DELPHI_VAR_SET;
+const VAR_ARRAY: i32 = crate::script_rtl::DELPHI_VAR_ARRAY;
 
 /// `VarType(V)`: the Delphi variant-type code of a script value.
 /// `Iterface`-carrying values (the elements of a run) are `varUnknown`, as
@@ -172,6 +175,7 @@ pub fn delphi_var_type(value: &Value) -> i32 {
         Value::Smallint(_) => 0x0002,
         Value::Integer(_) => 0x0003,
         Value::Byte(_) => 0x0011,
+        Value::Word(_) => 0x0012,
         Value::Int64(_) => 0x0014,
         Value::Double(_) => 0x0005,
         Value::Date(_) => 0x0007,
@@ -188,7 +192,8 @@ pub fn delphi_var_type(value: &Value) -> i32 {
         }
         Value::Class(_) => VAR_CLASS,
         Value::Record(_) => VAR_RECORD,
-        Value::Array(_) | Value::VariantArray(_) => VAR_ARRAY,
+        Value::Array(_) => VAR_ARRAY,
+        Value::VariantArray(array) => 0x2000 | array.borrow().element_code,
     }
 }
 
@@ -356,7 +361,14 @@ fn if_then(condition: bool, yes: &Value, no: &Value) -> Value {
     if yes_type == no_type {
         match yes_type {
             0x0100 | 0x0102 => {
-                return Value::Str(if condition { text_arg(yes) } else { text_arg(no) }.into_bytes());
+                return Value::Str(
+                    if condition {
+                        text_arg_lossy(yes)
+                    } else {
+                        text_arg_lossy(no)
+                    }
+                    .into_bytes(),
+                );
             }
             0x0003 | 0x0002 | 0x0011 | 0x0014 => {
                 let value = if condition { yes } else { no };
@@ -396,10 +408,10 @@ fn index_text(text: &str, values: &[String]) -> i32 {
 /// neither (both upstream branches fail and the result stays -1/False).
 fn values_argument(value: &Value) -> Vec<String> {
     if let Value::Array(array) = value {
-        return array.borrow().values.iter().map(text_arg).collect();
+        return array.borrow().values.iter().map(text_arg_lossy).collect();
     }
     if let Value::VariantArray(array) = value {
-        return array.borrow().values.iter().map(text_arg).collect();
+        return array.borrow().values.iter().map(text_arg_lossy).collect();
     }
     if let Some(list) = crate::script_strings::list_of(value) {
         let list = borrow_list(&list);
@@ -572,7 +584,7 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         "ContainsStr",
         2,
         Rc::new(|value, args| {
-            *value = Value::Bool(contains_str(&text_arg(&args.values[0]), &text_arg(&args.values[1])));
+            *value = Value::Bool(contains_str(&text_arg(&args.values[0])?, &text_arg(&args.values[1])?));
             Ok(())
         }),
     );
@@ -582,7 +594,7 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         "ContainsText",
         2,
         Rc::new(|value, args| {
-            *value = Value::Bool(contains_text(&text_arg(&args.values[0]), &text_arg(&args.values[1])));
+            *value = Value::Bool(contains_text(&text_arg(&args.values[0])?, &text_arg(&args.values[1])?));
             Ok(())
         }),
     );
@@ -594,7 +606,7 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         Rc::new(|value, args| {
             *value = Value::Str(
                 dupe_string(
-                    &text_arg(&args.values[0]),
+                    &text_arg(&args.values[0])?,
                     xedit_script::values::to_i32(&args.values[1])?,
                 )
                 .into_bytes(),
@@ -608,7 +620,7 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         "EndsStr",
         2,
         Rc::new(|value, args| {
-            *value = Value::Bool(ends_str(&text_arg(&args.values[0]), &text_arg(&args.values[1])));
+            *value = Value::Bool(ends_str(&text_arg(&args.values[0])?, &text_arg(&args.values[1])?));
             Ok(())
         }),
     );
@@ -619,8 +631,8 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         2,
         Rc::new(|value, args| {
             *value = Value::Bool(ends_str(
-                &lower_case(&text_arg(&args.values[0])),
-                &lower_case(&text_arg(&args.values[1])),
+                &lower_case(&text_arg(&args.values[0])?),
+                &lower_case(&text_arg(&args.values[1])?),
             ));
             Ok(())
         }),
@@ -643,7 +655,7 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         2,
         Rc::new(|value, args| {
             let values = values_argument(&args.values[1]);
-            *value = Value::Integer(index_str(&text_arg(&args.values[0]), &values));
+            *value = Value::Integer(index_str(&text_arg(&args.values[0])?, &values));
             Ok(())
         }),
     );
@@ -654,7 +666,7 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         2,
         Rc::new(|value, args| {
             let values = values_argument(&args.values[1]);
-            *value = Value::Integer(index_text(&text_arg(&args.values[0]), &values));
+            *value = Value::Integer(index_text(&text_arg(&args.values[0])?, &values));
             Ok(())
         }),
     );
@@ -666,7 +678,7 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         Rc::new(|value, args| {
             *value = Value::Str(
                 left_str(
-                    &text_arg(&args.values[0]),
+                    &text_arg(&args.values[0])?,
                     xedit_script::values::to_i32(&args.values[1])?,
                 )
                 .into_bytes(),
@@ -681,7 +693,7 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         2,
         Rc::new(|value, args| {
             let values = values_argument(&args.values[1]);
-            *value = Value::Bool(index_str(&text_arg(&args.values[0]), &values) != -1);
+            *value = Value::Bool(index_str(&text_arg(&args.values[0])?, &values) != -1);
             Ok(())
         }),
     );
@@ -692,7 +704,7 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         2,
         Rc::new(|value, args| {
             let values = values_argument(&args.values[1]);
-            *value = Value::Bool(index_text(&text_arg(&args.values[0]), &values) != -1);
+            *value = Value::Bool(index_text(&text_arg(&args.values[0])?, &values) != -1);
             Ok(())
         }),
     );
@@ -704,7 +716,7 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         Rc::new(|value, args| {
             *value = Value::Str(
                 mid_str(
-                    &text_arg(&args.values[0]),
+                    &text_arg(&args.values[0])?,
                     xedit_script::values::to_i32(&args.values[1])?,
                     xedit_script::values::to_i32(&args.values[2])?,
                 )
@@ -719,7 +731,7 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         "ReverseString",
         1,
         Rc::new(|value, args| {
-            *value = Value::Str(reverse_string(&text_arg(&args.values[0])).into_bytes());
+            *value = Value::Str(reverse_string(&text_arg(&args.values[0])?).into_bytes());
             Ok(())
         }),
     );
@@ -731,7 +743,7 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         Rc::new(|value, args| {
             *value = Value::Str(
                 right_str(
-                    &text_arg(&args.values[0]),
+                    &text_arg(&args.values[0])?,
                     xedit_script::values::to_i32(&args.values[1])?,
                 )
                 .into_bytes(),
@@ -745,7 +757,7 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         "StartsStr",
         2,
         Rc::new(|value, args| {
-            *value = Value::Bool(starts_str(&text_arg(&args.values[0]), &text_arg(&args.values[1])));
+            *value = Value::Bool(starts_str(&text_arg(&args.values[0])?, &text_arg(&args.values[1])?));
             Ok(())
         }),
     );
@@ -756,8 +768,8 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         2,
         Rc::new(|value, args| {
             *value = Value::Bool(starts_str(
-                &lower_case(&text_arg(&args.values[0])),
-                &lower_case(&text_arg(&args.values[1])),
+                &lower_case(&text_arg(&args.values[0])?),
+                &lower_case(&text_arg(&args.values[1])?),
             ));
             Ok(())
         }),
@@ -768,7 +780,7 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         "SplitString",
         2,
         Rc::new(|value, args| {
-            let pieces = split_string(&text_arg(&args.values[0]), &text_arg(&args.values[1]));
+            let pieces = split_string(&text_arg(&args.values[0])?, &text_arg(&args.values[1])?);
             *value = Value::VariantArray(Rc::new(std::cell::RefCell::new(VariantArray::new(
                 pieces.into_iter().map(|piece| Value::Str(piece.into_bytes())).collect(),
             ))));
@@ -783,10 +795,10 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         Rc::new(|value, args| {
             *value = Value::Str(
                 stuff_string(
-                    &text_arg(&args.values[0]),
+                    &text_arg(&args.values[0])?,
                     xedit_script::values::to_i32(&args.values[1])?.max(0) as u32,
                     xedit_script::values::to_i32(&args.values[2])?.max(0) as u32,
-                    &text_arg(&args.values[3]),
+                    &text_arg(&args.values[3])?,
                 )
                 .into_bytes(),
             );
@@ -802,7 +814,7 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         "VarType",
         1,
         Rc::new(|value, args| {
-            *value = Value::Integer(delphi_var_type(&args.values[0]));
+            *value = Value::Word(delphi_var_type(&args.values[0]) as u16);
             Ok(())
         }),
     );
@@ -828,8 +840,11 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         "SysUtils",
         "Inc",
         Rc::new(|_value, args| {
-            let current = xedit_script::values::to_i64(&args.values[0])?;
-            args.values[0] = Value::Integer(i32::try_from(current + 1).map_err(|_| ValueError::Variant)?);
+            // `Args.Values[0] := Args.Values[0] + N`: the variant `+`, so a
+            // string increment reads as a double (`Inc(i, 'x')` is `Could
+            // not convert ... into type (Double)`, probe `x-028`).
+            let step = args.values.get(1).cloned().unwrap_or(Value::Integer(1));
+            args.values[0] = xedit_script::values::binary_op(BinOp::Plus, &args.values[0], &step)?;
             Ok(())
         }),
         1,
@@ -840,8 +855,8 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         "SysUtils",
         "Dec",
         Rc::new(|_value, args| {
-            let current = xedit_script::values::to_i64(&args.values[0])?;
-            args.values[0] = Value::Integer(i32::try_from(current - 1).map_err(|_| ValueError::Variant)?);
+            let step = args.values.get(1).cloned().unwrap_or(Value::Integer(1));
+            args.values[0] = xedit_script::values::binary_op(BinOp::Minus, &args.values[0], &step)?;
             Ok(())
         }),
         1,
@@ -898,7 +913,7 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         "SameText",
         2,
         Rc::new(|value, args| {
-            *value = Value::Bool(same_text(&text_arg(&args.values[0]), &text_arg(&args.values[1])));
+            *value = Value::Bool(same_text(&text_arg(&args.values[0])?, &text_arg(&args.values[1])?));
             Ok(())
         }),
     );
@@ -927,9 +942,9 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
             let flags = xedit_script::values::v2s(&args.values[3])?;
             *value = Value::Str(
                 string_replace(
-                    &text_arg(&args.values[0]),
-                    &text_arg(&args.values[1]),
-                    &text_arg(&args.values[2]),
+                    &text_arg(&args.values[0])?,
+                    &text_arg(&args.values[1])?,
+                    &text_arg(&args.values[2])?,
                     flags,
                 )
                 .into_bytes(),
@@ -959,7 +974,7 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         "StrToInt64",
         1,
         Rc::new(|value, args| {
-            *value = Value::Int64(str_to_int64(&text_arg(&args.values[0]))?);
+            *value = Value::Int64(str_to_int64(&text_arg(&args.values[0])?)?);
             Ok(())
         }),
     );
@@ -970,7 +985,7 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         2,
         Rc::new(|value, args| {
             *value = Value::Int64(str_to_int64_def(
-                &text_arg(&args.values[0]),
+                &text_arg(&args.values[0])?,
                 xedit_script::values::to_i64(&args.values[1])?,
             ));
             Ok(())
@@ -983,7 +998,7 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         2,
         Rc::new(|value, args| {
             *value = Value::Double(str_to_float_def(
-                &text_arg(&args.values[0]),
+                &text_arg(&args.values[0])?,
                 xedit_script::values::to_f64(&args.values[1])?,
             ));
             Ok(())
@@ -995,7 +1010,7 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         "DirectoryExists",
         1,
         Rc::new(|value, args| {
-            *value = Value::Bool(std::path::Path::new(&text_arg(&args.values[0])).is_dir());
+            *value = Value::Bool(std::path::Path::new(&text_arg(&args.values[0])?).is_dir());
             Ok(())
         }),
     );
@@ -1005,7 +1020,7 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         "FileExists",
         1,
         Rc::new(|value, args| {
-            *value = Value::Bool(std::path::Path::new(&text_arg(&args.values[0])).is_file());
+            *value = Value::Bool(std::path::Path::new(&text_arg(&args.values[0])?).is_file());
             Ok(())
         }),
     );
@@ -1015,7 +1030,7 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         "ForceDirectories",
         1,
         Rc::new(|value, args| {
-            *value = Value::Bool(force_directories(&text_arg(&args.values[0])));
+            *value = Value::Bool(force_directories(&text_arg(&args.values[0])?));
             Ok(())
         }),
     );
@@ -1025,7 +1040,7 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         "IncludeTrailingBackslash",
         1,
         Rc::new(|value, args| {
-            *value = Value::Str(include_trailing_backslash(&text_arg(&args.values[0])).into_bytes());
+            *value = Value::Str(include_trailing_backslash(&text_arg(&args.values[0])?).into_bytes());
             Ok(())
         }),
     );
@@ -1035,7 +1050,7 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         "ExcludeTrailingBackslash",
         1,
         Rc::new(|value, args| {
-            *value = Value::Str(exclude_trailing_backslash(&text_arg(&args.values[0])).into_bytes());
+            *value = Value::Str(exclude_trailing_backslash(&text_arg(&args.values[0])?).into_bytes());
             Ok(())
         }),
     );
@@ -1048,7 +1063,7 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         "StringOfChar",
         2,
         Rc::new(|value, args| {
-            let text = text_arg(&args.values[0]);
+            let text = text_arg(&args.values[0])?;
             if text.is_empty() {
                 // The `if Length(...) > 0` leaves the result unassigned.
                 *value = Value::Empty;
@@ -1070,8 +1085,8 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         3,
         Rc::new(|value, args| {
             *value = Value::Bool(copy_file(
-                &text_arg(&args.values[0]),
-                &text_arg(&args.values[1]),
+                &text_arg(&args.values[0])?,
+                &text_arg(&args.values[1])?,
                 xedit_script::values::to_bool(&args.values[2])?,
             ));
             Ok(())
@@ -1105,8 +1120,8 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         "CreateProcessWait",
         4,
         Rc::new(|value, args| {
-            let file = text_arg(&args.values[0]);
-            let parameters = text_arg(&args.values[1]);
+            let file = text_arg(&args.values[0])?;
+            let parameters = text_arg(&args.values[1])?;
             let _show_window = xedit_script::values::to_i32(&args.values[2])?;
             let timeout = xedit_script::values::to_i64(&args.values[3])?.max(0) as u32;
             *value = Value::Integer(create_process_wait(&file, &parameters, timeout)?);
@@ -1119,10 +1134,10 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         "ShellExecute",
         6,
         Rc::new(|value, args| {
-            let verb = text_arg(&args.values[1]);
-            let file = text_arg(&args.values[2]);
-            let parameters = text_arg(&args.values[3]);
-            let directory = text_arg(&args.values[4]);
+            let verb = text_arg(&args.values[1])?;
+            let file = text_arg(&args.values[2])?;
+            let parameters = text_arg(&args.values[3])?;
+            let directory = text_arg(&args.values[4])?;
             let show = xedit_script::values::to_i32(&args.values[5])?;
             *value = Value::Int64(shell_execute(&verb, &file, &parameters, &directory, show));
             Ok(())
@@ -1134,10 +1149,10 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         "ShellExecuteWait",
         6,
         Rc::new(|value, args| {
-            let verb = text_arg(&args.values[1]);
-            let file = text_arg(&args.values[2]);
-            let parameters = text_arg(&args.values[3]);
-            let directory = text_arg(&args.values[4]);
+            let verb = text_arg(&args.values[1])?;
+            let file = text_arg(&args.values[2])?;
+            let parameters = text_arg(&args.values[3])?;
+            let directory = text_arg(&args.values[4])?;
             let show = xedit_script::values::to_i32(&args.values[5])?;
             *value = Value::Integer(shell_execute_wait(&verb, &file, &parameters, &directory, show)?);
             Ok(())
@@ -1175,7 +1190,7 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         "SetClipboardText",
         1,
         Rc::new(|_value, args| {
-            let text = text_arg(&args.values[0]);
+            let text = text_arg(&args.values[0])?;
             set_clipboard_text(&text);
             Ok(())
         }),
@@ -1397,7 +1412,7 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         "Delimiter",
         Rc::new(|value: &Value, args: &mut Args| {
             // `if length(string(Value)) > 0 then ...Delimiter := string(Value)[1]`.
-            let text = text_arg(value);
+            let text = text_arg(value)?;
             if let Some(ch) = text.chars().next() {
                 let list = receiver(args)?;
                 borrow_list_mut(&list).set_delimiter(ch);
@@ -1423,7 +1438,7 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         classes.t_strings.clone(),
         "NameValueSeparator",
         Rc::new(|value: &Value, args: &mut Args| {
-            let text = text_arg(value);
+            let text = text_arg(value)?;
             if let Some(ch) = text.chars().next() {
                 let list = receiver(args)?;
                 borrow_list_mut(&list).set_name_value_separator(ch);
@@ -1449,7 +1464,7 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         classes.t_strings.clone(),
         "DelimitedText",
         Rc::new(|value: &Value, args: &mut Args| {
-            let text = text_arg(value);
+            let text = text_arg(value)?;
             let list = receiver(args)?;
             borrow_list_mut(&list).set_delimited_text(&text)?;
             Ok(())
@@ -1475,7 +1490,7 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         "ValueFromIndex",
         Rc::new(|value: &Value, args: &mut Args| {
             let index = xedit_script::values::to_i32(&args.values[0])?;
-            let text = text_arg(value);
+            let text = text_arg(value)?;
             let list = receiver(args)?;
             borrow_list_mut(&list).set_value_from_index(i64::from(index), &text);
             Ok(())
@@ -1516,8 +1531,8 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         classes.t_strings.clone(),
         "AddPair",
         Rc::new(|value: &mut Value, args: &mut Args| {
-            let name = text_arg(&args.values[0]);
-            let pair = text_arg(&args.values[1]);
+            let name = text_arg(&args.values[0])?;
+            let pair = text_arg(&args.values[1])?;
             let list = receiver(args)?;
             borrow_list_mut(&list).add_pair(&name, &pair)?;
             // `Value := O2V(Strings)` -- the receiver, for chaining.
@@ -1534,7 +1549,7 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         classes.t_strings.clone(),
         "Contains",
         Rc::new(|value: &mut Value, args: &mut Args| {
-            let text = text_arg(&args.values[0]);
+            let text = text_arg(&args.values[0])?;
             let list = receiver(args)?;
             *value = Value::Bool(borrow_list(&list).contains(&text));
             Ok(())
@@ -1547,7 +1562,7 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         classes.t_strings.clone(),
         "ContainsName",
         Rc::new(|value: &mut Value, args: &mut Args| {
-            let text = text_arg(&args.values[0]);
+            let text = text_arg(&args.values[0])?;
             let list = receiver(args)?;
             *value = Value::Bool(borrow_list(&list).contains_name(&text));
             Ok(())
@@ -1576,7 +1591,7 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         "InsertObject",
         Rc::new(|_value: &mut Value, args: &mut Args| {
             let index = xedit_script::values::to_i32(&args.values[0])?;
-            let text = text_arg(&args.values[1]);
+            let text = text_arg(&args.values[1])?;
             let obj = args.values[2].clone();
             let list = receiver(args)?;
             {
@@ -1597,7 +1612,7 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         classes.t_strings.clone(),
         "LoadFromFile",
         Rc::new(|_value: &mut Value, args: &mut Args| {
-            let file_name = text_arg(&args.values[0]);
+            let file_name = text_arg(&args.values[0])?;
             let encoding = args.values.get(1).and_then(encoding_of);
             let list = receiver(args)?;
             borrow_list_mut(&list).load_from_file(&file_name, encoding)
@@ -1610,7 +1625,7 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         classes.t_strings.clone(),
         "SaveToFile",
         Rc::new(|_value: &mut Value, args: &mut Args| {
-            let file_name = text_arg(&args.values[0]);
+            let file_name = text_arg(&args.values[0])?;
             let encoding = args.values.get(1).and_then(encoding_of);
             let list = receiver(args)?;
             borrow_list_mut(&list).save_to_file(&file_name, encoding)

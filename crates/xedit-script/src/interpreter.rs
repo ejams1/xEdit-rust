@@ -65,11 +65,29 @@ const IR_EXPRESSION: &str = "Expression";
 /// dies there (a compile happens outside `ApplyScript`'s `except`, so the
 /// oracle has no catchable shape for it). The port refuses a nesting deeper
 /// than this with the interpreter's `Stack overflow` (`RsEInterpreter52`,
-/// code 52). Sized against the test harness's 2 MiB debug threads (measured
-/// 2026-10-10: `a_pathologically_nested_expression_is_refused` passes at 128
-/// nesting levels, overflows at 188; ≈14 KB of native stack per level). No
+/// code 52). The parser runs on its own thread of [`PARSER_STACK`] bytes
+/// (≈14 KB of native stack per level in a debug build), so the cap sits
+/// above what the oracle's expression stack allows (`((...(1)...))` 199
+/// deep passes and 200 deep overflows that stack, probes `e-nest-*`) and no
 /// legitimate script nests anywhere near it.
-const MAX_NESTING_DEPTH: u32 = 128;
+const MAX_NESTING_DEPTH: u32 = 1024;
+
+/// The stack of the thread a parse runs on: the recursive descent over a
+/// nesting of [`MAX_NESTING_DEPTH`] levels needs more than a test thread's
+/// 2 MiB or the main thread's 1 MiB.
+const PARSER_STACK: usize = 64 << 20;
+
+/// Runs a parse on a thread with [`PARSER_STACK`] bytes of stack, scoped so
+/// the source may be borrowed.
+fn on_parser_stack<T: Send>(parse: impl FnOnce() -> T + Send) -> T {
+    std::thread::scope(|scope| {
+        let handle = std::thread::Builder::new()
+            .stack_size(PARSER_STACK)
+            .spawn_scoped(scope, parse)
+            .expect("the parser thread");
+        handle.join().unwrap_or_else(|panic| std::panic::resume_unwind(panic))
+    })
+}
 const IR_IDENTIFIER: &str = "Identifier";
 const IR_DECLARATION: &str = "Declaration";
 const IR_END_OF_FILE: &str = "End of File";
@@ -84,13 +102,15 @@ const IR_STATEMENT: &str = "Statement";
 /// which the interpreter's `TJvInterpreterProgram.Run` accepts for a
 /// standalone program).
 pub fn parse(source: &[u8]) -> Result<Module, Error> {
-    let mut parser = Parser::new(source);
-    parser.next_token()?;
-    match parser.tok.kind {
-        TT_UNIT => parser.parse_unit(),
-        TT_PROGRAM => parser.parse_program(),
-        _ => Err(parser.expected("'unit'")),
-    }
+    on_parser_stack(|| {
+        let mut parser = Parser::new(source);
+        parser.next_token()?;
+        match parser.tok.kind {
+            TT_UNIT => parser.parse_unit(),
+            TT_PROGRAM => parser.parse_program(),
+            _ => Err(parser.expected("'unit'")),
+        }
+    })
 }
 
 /// Parses one source file the way `TJvInterpreterUnit.Compile`
@@ -101,13 +121,15 @@ pub fn parse(source: &[u8]) -> Result<Module, Error> {
 /// reports -- statement-level errors surface when a script runs, as they do in
 /// the interpreter.
 pub fn parse_compile(source: &[u8]) -> Result<Module, Error> {
-    let mut parser = Parser::new(source);
-    parser.compile = true;
-    parser.next_token()?;
-    match parser.tok.kind {
-        TT_UNIT => parser.parse_unit(),
-        _ => Err(parser.expected("'unit'")),
-    }
+    on_parser_stack(|| {
+        let mut parser = Parser::new(source);
+        parser.compile = true;
+        parser.next_token()?;
+        match parser.tok.kind {
+            TT_UNIT => parser.parse_unit(),
+            _ => Err(parser.expected("'unit'")),
+        }
+    })
 }
 
 /// Parses one routine body the way `ExecFunction` re-parses it at call time
@@ -120,6 +142,10 @@ pub fn parse_compile(source: &[u8]) -> Result<Module, Error> {
 /// statement-level error of a routine surfaces here, when the routine first
 /// runs, as upstream.
 pub fn parse_body(source: &[u8], pos: usize) -> Result<RoutineBody, Error> {
+    on_parser_stack(|| parse_body_here(source, pos))
+}
+
+fn parse_body_here(source: &[u8], pos: usize) -> Result<RoutineBody, Error> {
     let mut parser = Parser::new(source);
     parser.section = Section::Implementation;
     parser.lexer.set_pos(pos);
@@ -695,12 +721,20 @@ impl<'a> Parser<'a> {
                     }
                 }
                 TT_LB => {
+                    let start = self.tok.start;
                     let value = self.expression(TT_LB, stack)?;
-                    result = Some(self.required(value)?);
+                    let inner = self.required(value)?;
                     if self.tok.kind != TT_RB {
                         return Err(self.expected("')'"));
                     }
                     self.next_token()?;
+                    result = Some(Expr {
+                        span: Span::new(start, self.prev_end),
+                        node: ExprNode::Unary {
+                            op: UnOp::Paren,
+                            operand: Box::new(inner),
+                        },
+                    });
                 }
                 TT_LS => {
                     let start = self.tok.start;

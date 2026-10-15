@@ -372,7 +372,7 @@ fn an_error_aborts_the_script_with_the_upstream_text() {
     assert_eq!(lines[1], "before");
     assert!(
         lines[2].starts_with(
-            "Exception in unit  line -1: [EJvInterpreterError] Error in unit 'Planted' on line 1 : Undeclared Identifier"
+            "Exception in unit  line -1: [EJvInterpreterError] Error in unit 'Planted' on line 5 : Undeclared Identifier"
         ),
         "{:?}",
         lines[2]
@@ -389,6 +389,17 @@ fn an_error_aborts_the_script_with_the_upstream_text() {
 #[test]
 fn a_runaway_recursion_aborts_with_the_oracle_stack_overflow() {
     let _guard = test_lock();
+    // 128 interpreted calls of a debug build need more than the test
+    // thread's 2 MiB (the CLI gives its session a large stack too).
+    std::thread::Builder::new()
+        .stack_size(64 << 20)
+        .spawn(runaway_recursion_body)
+        .unwrap()
+        .join()
+        .unwrap();
+}
+
+fn runaway_recursion_body() {
     let folder = script_folder(
         "recurse",
         "Rec.pas",
@@ -446,11 +457,12 @@ fn a_refused_edit_aborts_with_the_upstream_message() {
     assert_eq!(result["error"].as_str().unwrap(), "DATA - Value can not be edited");
     let lines = lines(&result);
     // The refusal is upstream's `Exception.Create(GetName + ' can not be
-    // edited')` (`wbImplementation.pas:16444-16468`); the LF-only script
-    // reports line 1, as `GetLineByPos` counts `#13` (`JvJCLUtils.pas:1358`).
+    // edited')` (`wbImplementation.pas:16444-16468`); the script is read as
+    // `TStringList.LoadFromFile` reads it, so its LF line breaks become the
+    // CRLF ones `GetLineByPos` counts (`JvJCLUtils.pas:1358`): line 5.
     assert_eq!(
         lines[1],
-        "Exception in unit Refuse line 1: [Exception] DATA - Value can not be edited"
+        "Exception in unit Refuse line 5: [Exception] DATA - Value can not be edited"
     );
     assert_eq!(lines[2], "Aborted: Applying script \"Refuse\"");
     let _ = std::fs::remove_dir_all(&folder);
@@ -913,29 +925,29 @@ fn a_script_builds_a_nif_through_the_data_format_adapter() {
            nif := TwbNifFile.Create;\n\
            nif.SetToDefault;\n\
            nif.NifVersion := nfSSE;\n\
-           AddMessage('version: ' + nif.NifVersion);\n\
+           AddMessage('version: ' + IntToStr(nif.NifVersion));\n\
            node := nif.AddBlock('NiNode');\n\
            node.EditValues['Name'] := 'Root';\n\
            child := node.AddChild('NiNode');\n\
            child.EditValues['Name'] := 'Child';\n\
-           AddMessage('blocks: ' + nif.BlocksCount);\n\
+           AddMessage('blocks: ' + IntToStr(nif.BlocksCount));\n\
            child := nif.Blocks[1];\n\
            AddMessage('child: ' + child.EditValues['Name']);\n\
            AddMessage('path: ' + child.Path);\n\
-           AddMessage('refs: ' + node.RefsCount);\n\
-           AddMessage('object: ' + node.IsNiObject('NiNode', True));\n\
+           AddMessage('refs: ' + IntToStr(node.RefsCount));\n\
+           if node.IsNiObject('NiNode', True) then AddMessage('object: True') else AddMessage('object: False');\n\
            nif.SaveToFile('{nif}');\n\
            nif.SaveToJSONFile('{json}', True);\n\
            nif.SetToDefault;\n\
-           AddMessage('cleared: ' + nif.BlocksCount);\n\
+           AddMessage('cleared: ' + IntToStr(nif.BlocksCount));\n\
            nif.LoadFromJSONFile('{json}');\n\
-           AddMessage('rebuilt: ' + nif.BlocksCount);\n\
+           AddMessage('rebuilt: ' + IntToStr(nif.BlocksCount));\n\
            child := nif.Blocks[1];\n\
            AddMessage('rebuilt child: ' + child.EditValues['Name']);\n\
            nif.Free;\n\
            dds := TwbDDSFile.Create;\n\
            dds.SetToDefault;\n\
-           AddMessage('dds mips: ' + dds.NativeValues['HEADER\\dwMipMapCount']);\n\
+           AddMessage('dds mips: ' + IntToStr(dds.NativeValues['HEADER\\dwMipMapCount']));\n\
            dds.SaveToFile('{dds}');\n\
            dds.Free;\n\
            Result := 1;\n\
@@ -1002,7 +1014,7 @@ fn a_script_builds_a_nif_through_the_data_format_adapter() {
          begin\n\
            nif := TwbNifFile.Create;\n\
            nif.LoadFromResource('built.nif');\n\
-           AddMessage('resource blocks: ' + nif.BlocksCount);\n\
+           AddMessage('resource blocks: ' + IntToStr(nif.BlocksCount));\n\
            nif.Free;\n\
            Result := 1;\n\
          end;\n\
@@ -1067,8 +1079,8 @@ fn a_corpus_nif_walks_through_the_data_format_adapter() {
          begin\n\
            nif := TwbNifFile.Create;\n\
            nif.LoadFromFile('{file}');\n\
-           AddMessage('version: ' + nif.NifVersion);\n\
-           AddMessage('blocks: ' + nif.BlocksCount);\n\
+           AddMessage('version: ' + IntToStr(nif.NifVersion));\n\
+           AddMessage('blocks: ' + IntToStr(nif.BlocksCount));\n\
            for i := 0 to nif.BlocksCount - 1 do begin\n\
              block := nif.Blocks[i];\n\
              AddMessage('block: ' + block.BlockType);\n\
@@ -1149,7 +1161,7 @@ begin
   // System
   Show('upcase=' + UpCase('x'));
   Show('chr=' + Chr(65));
-  Show('ord=' + IntToStr(Ord('A')));
+  Show('ord=' + IntToStr(Ord(65)));
   Show('abs=' + IntToStr(Abs(-7)));
   Show('round=' + IntToStr(Round(2.5)) + ',' + IntToStr(Round(3.5)));
   Show('trunc=' + IntToStr(Trunc(-2.7)));
@@ -1162,7 +1174,7 @@ begin
   Show('delete=' + s);
   Insert('XY', s, 1);
   Show('insert=' + s);
-  Show('varto=' + VarToStr(12) + VarIsEmpty(1) + VarIsNull(Null));
+  Show('varto=' + VarToStr(12) + BoolToStr2(VarIsEmpty(1)) + BoolToStr2(VarIsNull(Null)));
   SetLength(s, 3);
   Show('setlength=' + IntToStr(Length(s)));
   arr[0] := 5; arr[1] := 6; arr[2] := 7;
@@ -1232,7 +1244,7 @@ begin
   fs.Write('abc', 3);
   Show('file=' + IntToStr(fs.Size) + ',' + IntToStr(fs.Position));
   fs.Free;
-  Show('filesize=' + IntToStr(FileAge(ScriptsPath + 'rtl-test.bin') <> -1));
+  Show('filesize=' + BoolToStr2(FileAge(ScriptsPath + 'rtl-test.bin') <> -1));
   DeleteFile(ScriptsPath + 'rtl-test.bin');
   // SysUtils: exceptions
   try
@@ -1271,7 +1283,8 @@ fn the_jvcl_rtl_units_run_a_script() {
         "sqr=2.25",
         "pos=3",
         // `Copy` clamps a zero index to 1 and keeps the count (the oracle's
-        // `Copy('abcdef', 0, 3)` is `abc`; the parity-23 probe).
+        // `Copy('abcdef', 0, 3)` is `abc`; probes `x-010`,
+        // `edid-quick-init.pas`).
         "copy=bcd,ab",
         "delete=adef",
         "insert=XYadef",
@@ -1307,7 +1320,7 @@ fn the_jvcl_rtl_units_run_a_script() {
         "list=2,x,1,y",
         "list2=1,y",
         "file=3,3",
-        "filesize=1",
+        "filesize=True",
         "except=boom",
         "formatfloat=1.00",
         "done=10",

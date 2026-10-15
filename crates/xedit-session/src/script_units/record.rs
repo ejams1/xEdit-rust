@@ -128,6 +128,8 @@ pub(crate) fn register(adapter: &mut Adapter, state: &Rc<RefCell<ScriptRunState>
         Ok(())
     });
     add(adapter, "GetFormVersion", 1, value_param(), |result, args| {
+        // Unassigned for anything but a main record (probe `v-slot-62`).
+        *result = Value::Empty;
         if let Some(record) = main_record_at(args, 0) {
             *result = Value::Int64(i64::from(record.get_version()));
         }
@@ -259,7 +261,9 @@ pub(crate) fn register(adapter: &mut Adapter, state: &Rc<RefCell<ScriptRunState>
         Ok(())
     });
     add(adapter, "GetLoadOrderFormID", 1, value_param(), |result, args| {
-        *result = Value::Integer(0);
+        // `Value := 0` (`xejviScriptAdapterRecord.pas:199`): a Delphi
+        // literal in a variant is a `varByte` (probe `v-slot-36`).
+        *result = Value::Byte(0);
         if let Some(record) = main_record_at(args, 0) {
             *result = Value::Int64(i64::from(record.get_load_order_form_id().to_cardinal()));
         }

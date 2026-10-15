@@ -416,7 +416,7 @@ fn register_io_members(
 /// strings (`nil` upstream for a folder that does not exist -- the port
 /// returns the empty array, which `Length` reads as 0).
 fn string_array(paths: Vec<String>) -> Value {
-    Value::VariantArray(Rc::new(RefCell::new(VariantArray::new(
+    Value::VariantArray(Rc::new(RefCell::new(VariantArray::of_strings(
         paths.into_iter().map(|path| Value::Str(path.into_bytes())).collect(),
     ))))
 }

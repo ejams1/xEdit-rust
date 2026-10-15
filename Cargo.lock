@@ -1089,6 +1089,7 @@ dependencies = [
  "serde_json",
  "windows-sys",
  "xedit-core",
+ "xedit-script",
  "xedit-session",
 ]
 
@@ -1139,6 +1140,9 @@ dependencies = [
 [[package]]
 name = "xedit-script"
 version = "0.1.0"
+dependencies = [
+ "xedit-io",
+]
 
 [[package]]
 name = "xedit-session"

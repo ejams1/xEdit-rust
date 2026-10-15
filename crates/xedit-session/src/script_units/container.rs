@@ -253,9 +253,12 @@ pub(crate) fn register(adapter: &mut Adapter, state: &Rc<RefCell<ScriptRunState>
         super::C_UNIT,
         "GetElementNativeValues",
         Rc::new(|result: &mut Value, args: &mut Args| {
-            *result = Value::Null;
+            // A path that resolves to nothing leaves `Value` unassigned
+            // (probe `v-slot-56`).
+            *result = Value::Empty;
             if let Some(element) = element_at(args, 0)
                 && let Some(container) = element.as_container()
+                && container.get_element_by_path(&string_at(args, 1)).is_some()
             {
                 *result = super::native_to_value(container.get_element_native_value(&string_at(args, 1)));
             }

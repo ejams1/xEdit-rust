@@ -340,7 +340,7 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         c_unit,
         "FullPathToFilename",
         Rc::new(|value: &mut Value, args: &mut Args| {
-            *value = Value::Str(full_path_to_filename(&text_arg(&args.values[0])).into_bytes());
+            *value = Value::Str(full_path_to_filename(&text_arg(&args.values[0])?).into_bytes());
             Ok(())
         }),
         1,
@@ -396,7 +396,7 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         Rc::new(|_value: &mut Value, args: &mut Args| {
             let input = list_of_or_error(&args.values[0])?;
             let output = list_of_or_error(&args.values[1])?;
-            let filter = lower_case(&text_arg(&args.values[2]));
+            let filter = lower_case(&text_arg(&args.values[2])?);
             let lines = {
                 let list = crate::script_strings::borrow_list(&input);
                 (0..list.count())
@@ -464,8 +464,18 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
 }
 
 /// `Assigned(V2O(Value))`: whether the value holds an object.
+/// `Assigned(V)` reads the variant's pointer field: anything whose payload
+/// is not zero is assigned -- an object, a non-empty string, a non-zero
+/// number (`Assigned(5)` and `Assigned('x')` are `True`, probes `x-219`,
+/// `x-220`); `nil`, `Null`, `Unassigned`, 0 and `''` are not.
 fn lookup_assigned(value: &Value) -> bool {
-    value.as_object().is_some()
+    match value {
+        Value::Empty | Value::Null | Value::Pointer(0) => false,
+        Value::Str(bytes) => !bytes.is_empty(),
+        Value::Double(v) | Value::Date(v) => v.to_bits() != 0,
+        Value::Bool(v) => *v,
+        other => other.raw().is_some_and(|raw| raw != 0) || other.is_object() || other.is_record() || other.is_array(),
+    }
 }
 
 /// `GetEnumName` of `TwbGameMode` (`gm` + the name), which upstream's

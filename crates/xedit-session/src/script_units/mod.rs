@@ -95,7 +95,22 @@ pub(crate) const C_UNIT: &str = "";
 
 /// `Args.Values[i]` as an element, `None` for another kind of value.
 pub(crate) fn element_at(args: &Args, index: usize) -> Option<ElementRef> {
-    args.values.get(index).and_then(ScriptRunState::element_of)
+    let value = args.values.get(index)?;
+    let element = ScriptRunState::element_of(value);
+    if element.is_none() {
+        // `IInterface(Args.Values[i])`: `nil`, `Unassigned` and another
+        // object read as no element; `Null`, a number, a string or a
+        // boolean do not convert, which upstream raises from inside the
+        // handler (`ElementCount(5)` is `Type mismatch` in an expression,
+        // probe `x-243`; a statement keeps the cast error's class).
+        if !matches!(
+            value,
+            Value::Pointer(0) | Value::Empty | Value::Object(_) | Value::Class(_)
+        ) {
+            xedit_script::values::set_pending_variant_error(xedit_script::values::cast_error(value, "Unknown"));
+        }
+    }
+    element
 }
 
 /// `Supports(IInterface(Args.Values[i]), IwbMainRecord, ...)`.
