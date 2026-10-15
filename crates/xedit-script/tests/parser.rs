@@ -70,21 +70,34 @@ fn assignment(stmt: &Stmt) -> (&Expr, &Expr) {
 }
 
 fn ident(expr: &Expr) -> &str {
-    match &expr.node {
+    match &strip_parens(expr).node {
         ExprNode::Ident { name, .. } => name,
         other => panic!("not an identifier: {other:?}"),
     }
 }
 
 fn int(expr: &Expr) -> &[u8] {
-    match &expr.node {
+    match &strip_parens(expr).node {
         ExprNode::Int(text) => text,
         other => panic!("not an integer: {other:?}"),
     }
 }
 
-fn binary(expr: &Expr) -> (BinOp, &Expr, &Expr) {
+/// The expression inside its parentheses: the parser keeps a `Paren` node
+/// for the expression stack's extra push (parity #28), which these shape
+/// checks look through.
+fn strip_parens(expr: &Expr) -> &Expr {
     match &expr.node {
+        ExprNode::Unary {
+            op: UnOp::Paren,
+            operand,
+        } => strip_parens(operand),
+        _ => expr,
+    }
+}
+
+fn binary(expr: &Expr) -> (BinOp, &Expr, &Expr) {
+    match &strip_parens(expr).node {
         ExprNode::Binary { op, left, right } => (*op, left, right),
         other => panic!("not a binary expression: {other:?}"),
     }

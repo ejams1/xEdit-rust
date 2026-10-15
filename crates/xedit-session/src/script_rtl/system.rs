@@ -70,7 +70,11 @@ pub(crate) fn random_unit() -> f64 {
 
 /// Registers the unit.
 pub fn register(adapter: &mut Adapter) {
-    let object = adapter.add_class(UNIT, "TObject", None);
+    // `TObject` may already exist: the session's `ScriptClasses` parents
+    // `TStrings` under it before this unit registers.
+    let object = adapter
+        .find_class(b"TObject")
+        .unwrap_or_else(|| adapter.add_class(UNIT, "TObject", None));
     method(adapter, &object, "ClassType", &[], |value, args| {
         // `C2V(TObject(Args.Obj).ClassType)`.
         *value = match args.object() {
@@ -80,14 +84,22 @@ pub fn register(adapter: &mut Adapter) {
         Ok(())
     });
     method(adapter, &object, "ClassName", &[], |value, args| {
+        // An exception object answers with its Delphi class even when that
+        // class is no registered script class (probe `x-raise-04`).
         *value = match args.object() {
-            Some(object) => text_value(object.borrow().class().name.clone().into_bytes()),
+            Some(object) => {
+                let object = object.borrow();
+                let name = object
+                    .exception_class_name()
+                    .map_or_else(|| object.class().name.clone(), str::to_owned);
+                text_value(name.into_bytes())
+            }
             None => text_value(Vec::new()),
         };
         Ok(())
     });
     method(adapter, &object, "ClassNameIs", &[EMPTY], |value, args| {
-        let name = arg_str(args, 0);
+        let name = arg_str(args, 0)?;
         *value = Value::Bool(match args.object() {
             Some(object) => object.borrow().class().name.as_bytes().eq_ignore_ascii_case(&name),
             None => false,
@@ -173,7 +185,8 @@ pub fn register(adapter: &mut Adapter) {
         Ok(())
     });
     function_(adapter, "VarType", &[EMPTY], |value, args| {
-        *value = Value::Integer(delphi_var_type(arg(args, 0)));
+        // A `TVarType` is a `Word`: the result is a `varWord` (probe `a-17`).
+        *value = Value::Word(delphi_var_type(arg(args, 0)) as u16);
         Ok(())
     });
     function_(adapter, "VarAsType", &[EMPTY, EMPTY], |value, args| {
@@ -190,7 +203,12 @@ pub fn register(adapter: &mut Adapter) {
         Ok(())
     });
     function_(adapter, "VarToStr", &[EMPTY], |value, args| {
-        *value = Value::Str(to_str(arg(args, 0))?);
+        // `VarToStr` maps `Null` and `Unassigned` to `''`
+        // (`NullAsStringValue`), unlike a conversion.
+        *value = match arg(args, 0) {
+            Value::Null | Value::Empty => Value::Str(Vec::new()),
+            other => Value::Str(to_str(other)?),
+        };
         Ok(())
     });
     function_(adapter, "VarFromDateTime", &[EMPTY], |value, args| {
@@ -236,12 +254,17 @@ pub fn register(adapter: &mut Adapter) {
         Ok(())
     });
     function_(adapter, "ord", &[EMPTY], |value, args| {
-        // `if VarType(V) = varString then Ord(V[1]) else Integer(V)`; the
-        // port removes the parenthesis around `ord` the upstream line has.
-        *value = match arg(args, 0) {
-            Value::Str(bytes) => Value::Integer(i32::from(bytes.first().copied().unwrap_or(0))),
-            other => Value::Integer(to_i32(other)?),
-        };
+        // `if VarType(V) = varString then Ord(V[1]) else Integer(V)`
+        // (`:344`); the port removes the parenthesis around `ord` the
+        // upstream line has. UPSTREAM-QUIRK: the test is for `varString`,
+        // the AnsiString kind, and the interpreter's string values are
+        // `varUString`, so `Ord('a')` goes through `Integer('a')` and is the
+        // variant cast error (`Type mismatch` in an expression, probes
+        // `u-06`, `f-34`); `Ord(True)` is `-1`. A string variable declared
+        // `string` holds a `varString` upstream and takes the first arm
+        // there, which the port's one string kind cannot tell apart (a known
+        // divergence, `docs/PLAN.md`).
+        *value = Value::Integer(to_i32(arg(args, 0))?);
         Ok(())
     });
     function_(adapter, "Chr", &[EMPTY], |value, args| {
@@ -286,7 +309,7 @@ pub fn register(adapter: &mut Adapter) {
         Ok(())
     });
     function_(adapter, "Delete", &[BYREF, EMPTY, EMPTY], |value, args| {
-        let mut text = arg_str(args, 0);
+        let mut text = arg_str(args, 0)?;
         delphi_delete(&mut text, arg_i32(args, 1)?, arg_i32(args, 2)?);
         // The handler writes the changed string back through the `var`
         // parameter *and* the result (both are the same text upstream).
@@ -296,7 +319,7 @@ pub fn register(adapter: &mut Adapter) {
     });
     function_(adapter, "Insert", &[EMPTY, BYREF, EMPTY], |value, args| {
         let source = to_str(arg(args, 0))?;
-        let mut text = arg_str(args, 1);
+        let mut text = arg_str(args, 1)?;
         delphi_insert(&source, &mut text, arg_i32(args, 2)?);
         args.values[1] = Value::Str(text.clone());
         *value = Value::Str(text);
@@ -438,6 +461,7 @@ fn delphi_var_type(value: &Value) -> i32 {
         Value::Smallint(_) => 2,
         Value::Integer(_) => 3,
         Value::Byte(_) => 17,
+        Value::Word(_) => 18,
         Value::Int64(_) => 20,
         Value::Double(_) => 5,
         Value::Date(_) => 7,
@@ -451,13 +475,14 @@ fn delphi_var_type(value: &Value) -> i32 {
         Value::Bool(_) => 11,
         Value::Set(_) => DELPHI_VAR_SET,
         Value::Pointer(_) => DELPHI_VAR_POINTER,
+        // An `IInterface` element is `varUnknown` (probe `x-231`).
+        Value::Object(object) if object.borrow().is_interface() => 13,
         Value::Object(_) => DELPHI_VAR_OBJECT,
         Value::Class(_) => DELPHI_VAR_CLASS,
         Value::Record(_) => DELPHI_VAR_RECORD,
         Value::Array(_) => DELPHI_VAR_ARRAY,
-        // `VarArrayCreate` builds a `varVariant` array: `varArray or
-        // varVariant`.
-        Value::VariantArray(_) => 0x2000 | 12,
+        // `varArray or` the element type `VarArrayCreate` was given.
+        Value::VariantArray(array) => 0x2000 | array.borrow().element_code,
     }
 }
 
@@ -527,7 +552,11 @@ fn var_array_create(args: &Args) -> Result<Value, ValueError> {
         })
         .collect();
     Ok(Value::VariantArray(std::rc::Rc::new(std::cell::RefCell::new(
-        VariantArray { low, values },
+        VariantArray {
+            low,
+            values,
+            element_code: 12,
+        },
     ))))
 }
 
@@ -571,7 +600,11 @@ fn length(value: &Value) -> Result<usize, ValueError> {
             Ok(array.values.len())
         }
         Value::Str(bytes) => Ok(bytes.len()),
-        _ => Err(ValueError::Variant),
+        // `Length(Args.Values[0])` of any other variant reads it as a
+        // string (`Length(5)` is 1, probe `x-020`; an object or `nil` is
+        // 0, probes `x-124`, `x-125`; `Null` is the cast error).
+        Value::Object(_) | Value::Class(_) | Value::Pointer(_) => Ok(0),
+        other => Ok(to_str(other)?.len()),
     }
 }
 
@@ -579,8 +612,21 @@ fn length(value: &Value) -> Result<usize, ValueError> {
 /// the array helpers.
 fn check_one_dimensional(dimensions: usize) -> Result<(), ValueError> {
     if dimensions > 1 {
-        return Err(ValueError::External(
+        return Err(ValueError::external_class(
+            "EJVCLException",
             RS_SORRY_FOR_ONE_DIMENSIONAL_ARRAYS_ONLY.to_owned(),
+        ));
+    }
+    Ok(())
+}
+
+/// `RsESorryDynamicArraysSupportIsMadeForO`, the `EJVCLException` of
+/// `JvInterpreterArraySetLength` on a multi-dimensional array (`:2269`).
+fn check_one_dimensional_for_set_length(dimensions: usize) -> Result<(), ValueError> {
+    if dimensions > 1 {
+        return Err(ValueError::external_class(
+            "EJVCLException",
+            "Sorry. Dynamic arrays support is made for one-dimensional arrays only".to_owned(),
         ));
     }
     Ok(())
@@ -596,7 +642,7 @@ fn set_length(value: Value, size: i32) -> Result<Value, ValueError> {
     match value {
         Value::Array(ref array) => {
             let mut array = array.borrow_mut();
-            check_one_dimensional(array.begin.len())?;
+            check_one_dimensional_for_set_length(array.begin.len())?;
             let old = array.values.len();
             if old > size {
                 array.values.truncate(size);
@@ -643,6 +689,14 @@ fn high_or_low(args: &Args, high: bool) -> Result<i64, ValueError> {
             check_one_dimensional(array.begin.len())?;
             Ok(if high { array.end[0] } else { array.begin[0] })
         }
+        // UPSTREAM-QUIRK: `JvInterpreterArrayHigh/Low` of a string read the
+        // string's pointer as an array record, whose `Dimension` is not 1,
+        // and raise the one-dimensional `EJVCLException` (probe `x-021`);
+        // of a number they fault (probe `x-019`, not reproduced).
+        Value::Str(_) => Err(ValueError::external_class(
+            "EJVCLException",
+            RS_SORRY_FOR_ONE_DIMENSIONAL_ARRAYS_ONLY.to_owned(),
+        )),
         _ => Err(ValueError::Variant),
     }
 }
@@ -653,7 +707,7 @@ fn high_or_low(args: &Args, high: bool) -> Result<i64, ValueError> {
 fn copy_str(source: &[u8], index: i32, count: i32) -> Vec<u8> {
     // `Copy(S, 0, N)` is `Copy(S, 1, N)`: the RTL clamps the index to 1 and
     // keeps the count (the oracle's `Copy('abcdef', 0, 3)` is `abc`, as is
-    // `Copy('abcdef', -1, 3)`; the parity-23 probe `edid-quick-init.pas`).
+    // `Copy('abcdef', -1, 3)`; probes `x-010`, `edid-quick-init.pas`).
     let index = index.max(1);
     if count <= 0 || index as usize > source.len() {
         return Vec::new();

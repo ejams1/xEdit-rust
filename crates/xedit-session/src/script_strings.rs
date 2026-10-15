@@ -209,24 +209,34 @@ impl StringListObject {
                 SORTED_LIST_ERROR.to_owned(),
             ));
         }
-        if index < 0 || index as usize > self.strings.len() {
-            return Err(ValueError::external_class(
-                STRING_LIST_ERROR_CLASS,
-                format!("List index out of bounds ({index})"),
-            ));
-        }
+        // `Insert` accepts `Count` itself as the index.
+        self.check_index(index, self.strings.len() + 1)?;
         self.insert_item(index as usize, text.into_bytes());
         Ok(())
     }
 
+    /// `TStrings.Error(@SListIndexError, Index)`: `List index out of bounds
+    /// (%d).  TStringList range is %d..%d` (the RTL's two spaces), or
+    /// `TStringList is empty` without entries (probes `x-008`, `x-043`,
+    /// `x-044`).
+    pub fn check_index(&self, index: i64, count: usize) -> Result<(), ValueError> {
+        if index >= 0 && (index as usize) < count {
+            return Ok(());
+        }
+        let message = if count == 0 {
+            format!("List index out of bounds ({index}).  TStringList is empty")
+        } else {
+            format!(
+                "List index out of bounds ({index}).  TStringList range is 0..{}",
+                count - 1
+            )
+        };
+        Err(ValueError::external_class(STRING_LIST_ERROR_CLASS, message))
+    }
+
     /// `TStrings.Delete`.
     pub fn delete(&mut self, index: i64) -> Result<(), ValueError> {
-        if index < 0 || index as usize >= self.strings.len() {
-            return Err(ValueError::external_class(
-                STRING_LIST_ERROR_CLASS,
-                format!("List index out of bounds ({index})"),
-            ));
-        }
+        self.check_index(index, self.strings.len())?;
         self.strings.remove(index as usize);
         self.objects.remove(index as usize);
         Ok(())
@@ -234,13 +244,8 @@ impl StringListObject {
 
     /// `TStrings.Exchange`.
     pub fn exchange(&mut self, first: i64, second: i64) -> Result<(), ValueError> {
-        let ok = |index: i64| index >= 0 && (index as usize) < self.strings.len();
-        if !ok(first) || !ok(second) {
-            return Err(ValueError::external_class(
-                STRING_LIST_ERROR_CLASS,
-                "List index out of bounds".to_owned(),
-            ));
-        }
+        self.check_index(first, self.strings.len())?;
+        self.check_index(second, self.strings.len())?;
         self.strings.swap(first as usize, second as usize);
         self.objects.swap(first as usize, second as usize);
         Ok(())
@@ -969,14 +974,24 @@ fn encode_file(text: &str, encoding: Option<EncodingKind>) -> Vec<u8> {
 
 //=== Registration: the slice of the JVCL Classes unit ========================
 
-pub fn text_arg(value: &Value) -> String {
-    xedit_script::values::to_str(value)
-        .map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
-        .unwrap_or_default()
+pub fn text_arg(value: &Value) -> Result<String, ValueError> {
+    // `sl.Add(Null)` and `sl.Add(<element>)` are the variant cast errors
+    // (`(Null) into type (OleStr)`, `(Unknown) into type (OleStr)`, probes
+    // `x-289`, `x-288`); an object reads as `''`.
+    crate::script_rtl::string_of(value).map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
 }
 
-pub fn int_arg(value: &Value) -> i32 {
-    xedit_script::values::to_i32(value).unwrap_or(0)
+/// [`text_arg`] for the readers that cannot raise (a setter's branch, a
+/// list of values): a value the conversion refuses reads as `''`.
+pub fn text_arg_lossy(value: &Value) -> String {
+    text_arg(value).unwrap_or_default()
+}
+
+pub fn int_arg(value: &Value) -> Result<i32, ValueError> {
+    // An index that is no number is the variant cast error (`sl.Delete('x')`
+    // is `Could not convert variant of type (UnicodeString) into type
+    // (Integer)`, probe `x-311`).
+    xedit_script::values::to_i32(value)
 }
 
 fn value_param() -> ParamType {
@@ -1011,7 +1026,7 @@ pub fn register_base(adapter: &mut Adapter, classes: &ScriptClasses) {
         classes.t_strings.clone(),
         "Add",
         Rc::new(|value: &mut Value, args: &mut Args| {
-            let text = text_arg(&args.values[0]);
+            let text = text_arg(&args.values[0])?;
             let object = receiver(args)?;
             let index = borrow_list_mut(&object).add(text)?;
             *value = Value::Integer(index as i32);
@@ -1027,7 +1042,7 @@ pub fn register_base(adapter: &mut Adapter, classes: &ScriptClasses) {
         classes.t_strings.clone(),
         "Append",
         Rc::new(|_value: &mut Value, args: &mut Args| {
-            let text = text_arg(&args.values[0]);
+            let text = text_arg(&args.values[0])?;
             let object = receiver(args)?;
             borrow_list_mut(&object).append(text)
         }),
@@ -1117,7 +1132,7 @@ pub fn register_base(adapter: &mut Adapter, classes: &ScriptClasses) {
         classes.t_strings.clone(),
         "Delete",
         Rc::new(|_value: &mut Value, args: &mut Args| {
-            let index = int_arg(&args.values[0]);
+            let index = int_arg(&args.values[0])?;
             let object = receiver(args)?;
             borrow_list_mut(&object).delete(i64::from(index))
         }),
@@ -1131,8 +1146,8 @@ pub fn register_base(adapter: &mut Adapter, classes: &ScriptClasses) {
         classes.t_strings.clone(),
         "Insert",
         Rc::new(|_value: &mut Value, args: &mut Args| {
-            let index = int_arg(&args.values[0]);
-            let text = text_arg(&args.values[1]);
+            let index = int_arg(&args.values[0])?;
+            let text = text_arg(&args.values[1])?;
             let object = receiver(args)?;
             borrow_list_mut(&object).insert(i64::from(index), text)
         }),
@@ -1146,8 +1161,8 @@ pub fn register_base(adapter: &mut Adapter, classes: &ScriptClasses) {
         classes.t_strings.clone(),
         "Exchange",
         Rc::new(|_value: &mut Value, args: &mut Args| {
-            let first = int_arg(&args.values[0]);
-            let second = int_arg(&args.values[1]);
+            let first = int_arg(&args.values[0])?;
+            let second = int_arg(&args.values[1])?;
             let object = receiver(args)?;
             borrow_list_mut(&object).exchange(i64::from(first), i64::from(second))
         }),
@@ -1161,7 +1176,7 @@ pub fn register_base(adapter: &mut Adapter, classes: &ScriptClasses) {
         classes.t_strings.clone(),
         "IndexOf",
         Rc::new(|value: &mut Value, args: &mut Args| {
-            let text = text_arg(&args.values[0]);
+            let text = text_arg(&args.values[0])?;
             let object = receiver(args)?;
             *value = Value::Integer(borrow_list(&object).index_of(&text) as i32);
             Ok(())
@@ -1188,7 +1203,7 @@ pub fn register_base(adapter: &mut Adapter, classes: &ScriptClasses) {
         classes.t_strings.clone(),
         "Text",
         Rc::new(|value: &Value, args: &mut Args| {
-            let text = text_arg(value);
+            let text = text_arg(value)?;
             let object = receiver(args)?;
             borrow_list_mut(&object).set_text(&text)?;
             Ok(())
@@ -1203,16 +1218,20 @@ pub fn register_base(adapter: &mut Adapter, classes: &ScriptClasses) {
     for named in [true, false] {
         let class = classes.t_strings.clone();
         let read = Rc::new(|value: &mut Value, args: &mut Args| {
-            let index = int_arg(&args.values[0]);
+            let index = int_arg(&args.values[0])?;
             let object = receiver(args)?;
-            *value = Value::Str(borrow_list(&object).string_at(i64::from(index)).into_bytes());
+            let list = borrow_list(&object);
+            list.check_index(i64::from(index), list.strings.len())?;
+            *value = Value::Str(list.string_at(i64::from(index)).into_bytes());
             Ok(())
         });
         let write = Rc::new(|value: &Value, args: &mut Args| {
-            let index = int_arg(&args.values[0]);
-            let text = text_arg(value);
+            let index = int_arg(&args.values[0])?;
+            let text = text_arg(value)?;
             let object = receiver(args)?;
-            borrow_list_mut(&object).set_string(i64::from(index), text);
+            let mut list = borrow_list_mut(&object);
+            list.check_index(i64::from(index), list.strings.len())?;
+            list.set_string(i64::from(index), text);
             Ok(())
         });
         if named {
@@ -1255,7 +1274,7 @@ pub fn register_base(adapter: &mut Adapter, classes: &ScriptClasses) {
         classes.t_string_list.clone(),
         "Find",
         Rc::new(|value: &mut Value, args: &mut Args| {
-            let text = text_arg(&args.values[0]);
+            let text = text_arg(&args.values[0])?;
             let object = receiver(args)?;
             let (found, index) = borrow_list(&object).find(&text);
             if args.values.len() > 1 {
@@ -1312,7 +1331,7 @@ pub fn register_base(adapter: &mut Adapter, classes: &ScriptClasses) {
         classes.t_string_list.clone(),
         "Duplicates",
         Rc::new(|value: &Value, args: &mut Args| {
-            let duplicates = int_arg(value);
+            let duplicates = int_arg(value)?;
             let object = receiver(args)?;
             borrow_list_mut(&object).set_duplicates(duplicates);
             Ok(())

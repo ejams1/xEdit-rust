@@ -87,12 +87,21 @@ use crate::script::ScriptRunState;
 /// comparison. The port assigns fixed codes above the standard range; the
 /// values are otherwise unobservable (`VarIsArray`'s `and varArray` bit test
 /// sees [`DELPHI_VAR_STRING`] and up, none of which carry the `$2000` bit).
-pub const DELPHI_VAR_OBJECT: i32 = 0x0103;
-pub const DELPHI_VAR_RECORD: i32 = 0x0104;
-pub const DELPHI_VAR_CLASS: i32 = 0x0105;
-pub const DELPHI_VAR_POINTER: i32 = 0x0106;
-pub const DELPHI_VAR_SET: i32 = 0x0107;
-pub const DELPHI_VAR_ARRAY: i32 = 0x0108;
+// The custom variant types are allocated by the RTL in the order of their
+// first use (`JvInterpreter.pas:1357-1392` create them lazily), so their
+// codes are the oracle's: `varRecord` 274, `varArray` 275, `varPointer` 277
+// and `varClass` 279 witnessed by the probes `r-08`, `a-27`, `x-201` and
+// `r-09` (2026-10-15), `varSet` 278 by `v-slot-67`. UPSTREAM-QUIRK: the
+// codes depend on what a process touched first, so `sl.ClassType` reads
+// 278 in the probe `x-324` where `VarType(TStringList)` read 279 in `r-09`;
+// the port keeps one fixed code per kind (`x-324` is accepted as a known
+// difference), `varObject` 276 is not witnessed.
+pub const DELPHI_VAR_OBJECT: i32 = 276;
+pub const DELPHI_VAR_RECORD: i32 = 274;
+pub const DELPHI_VAR_CLASS: i32 = 279;
+pub const DELPHI_VAR_POINTER: i32 = 277;
+pub const DELPHI_VAR_SET: i32 = 278;
+pub const DELPHI_VAR_ARRAY: i32 = 275;
 /// `varString` -- the ANSI string code, the value of the `varString`
 /// constant of the JVCL `System` unit.
 pub const DELPHI_VAR_STRING: i32 = 0x0100;
@@ -449,18 +458,35 @@ pub(crate) fn arg_text(args: &Args, index: usize) -> Result<String, ValueError> 
 }
 
 /// The string argument's bytes as they are (no number coercion), for the
-/// functions whose upstream body indexes `string(Args.Values[0])[1]`.
-pub(crate) fn arg_str(args: &Args, index: usize) -> Vec<u8> {
-    match arg(args, index) {
-        Value::Str(bytes) => bytes.clone(),
-        other => xedit_script::values::to_str(other).unwrap_or_default(),
+/// functions whose upstream body indexes `string(Args.Values[0])[1]`: the
+/// implicit variant-to-string conversion of a `string` parameter, which
+/// reads an object as `''` (`UpperCase(sl)` is `''`, probe `x-276`) and
+/// refuses `Null` (`UpperCase(Null)` is the cast error, probe `x-275`) and
+/// an interface (`(Unknown) into type (OleStr)`).
+pub(crate) fn arg_str(args: &Args, index: usize) -> Result<Vec<u8>, ValueError> {
+    string_of(arg(args, index))
+}
+
+/// The variant-to-string conversion of a string parameter (see
+/// [`arg_str`]).
+pub(crate) fn string_of(value: &Value) -> Result<Vec<u8>, ValueError> {
+    match value {
+        Value::Str(bytes) => Ok(bytes.clone()),
+        Value::Object(object) if !object.borrow().is_interface() => Ok(Vec::new()),
+        Value::Class(_) | Value::Pointer(_) | Value::Record(_) | Value::Array(_) | Value::VariantArray(_) => {
+            Ok(Vec::new())
+        }
+        other => xedit_script::values::to_str(other),
     }
 }
 
 /// The first character of the string argument, as upstream's
 /// `string(Args.Values[i])[1]` reads it; empty for an empty string.
 pub(crate) fn arg_char(args: &Args, index: usize) -> u8 {
-    arg_str(args, index).first().copied().unwrap_or(0)
+    arg_str(args, index)
+        .ok()
+        .and_then(|bytes| bytes.first().copied())
+        .unwrap_or(0)
 }
 
 /// `Integer(Args.Values[i])` -- the variant-to-integer cast.

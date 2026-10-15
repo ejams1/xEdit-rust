@@ -77,7 +77,7 @@ use std::rc::Rc;
 
 use crate::adapter::{self, Adapter, Args, FunctionDesc, VarList};
 use crate::ast::{
-    Arg, ArgValue, Block, CaseArm, ConstDecl, Expr, ExprNode, Handler, ItemNode, LocalDecl, Module, OnClause,
+    Arg, ArgValue, BinOp, Block, CaseArm, ConstDecl, Expr, ExprNode, Handler, ItemNode, LocalDecl, Module, OnClause,
     RoutineDecl, Section, Span, Stmt, StmtNode, TypeDef, TypeRef, UsesUnit, VarGroup,
 };
 use crate::error::{
@@ -147,8 +147,28 @@ impl ExecError {
 /// `runaway_recursion_raises_the_oracle_stack_overflow` probe overflows its
 /// thread between 72 and 80 frames, ≈26 KB of native stack per interpreted
 /// call; the CLI's main thread reserves 16 MiB, and release frames are
-/// smaller). No legitimate script recurses 48 calls deep.
-pub const MAX_CALL_DEPTH: usize = 48;
+/// smaller). No legitimate script recurses this deep; the oracle itself
+/// runs 100 interpreted calls deep (probe `e-rec-01`) and dies on its native
+/// stack somewhere below 1000 (`e-rec-02`, the GUI never finishes).
+pub const MAX_CALL_DEPTH: usize = 128;
+
+/// Whether an error is a Delphi `EVariantError` (`EVariantTypeCastError`,
+/// `EVariantOverflowError`, ...) reaching the interpreter from a
+/// conversion: the kind `Expression1` converts to `Type mismatch`.
+fn is_variant_error(error: &ExecError) -> bool {
+    error.external
+        && error
+            .class_name
+            .as_deref()
+            .is_some_and(|class| class.starts_with("EVariant"))
+}
+
+/// `cJvInterpreterStackMax` (`JvInterpreter.pas:204`): `FExpStack` holds the
+/// entries `0..=199`, and `PushExp` raises `ieExpressionStackOverflow`
+/// (`Expression is too complex - overflow`) when the pointer passes it
+/// (`:5633`). The stack is one per interpreter, so the operands a caller's
+/// expression has pending count against a called routine's expressions.
+pub const EXP_STACK_MAX: i32 = 199;
 
 impl ExecError {
     /// `EJvInterpreterError.Create` (`JvInterpreter.pas:1478`):
@@ -253,6 +273,12 @@ pub enum FlowError {
     /// the original; outside one it surfaces as code 4, "Re-raising an
     /// exception only allowed in exception handler").
     ReRaise,
+    /// An interpreter error the `except` handling of a `try` must not
+    /// swallow: the error the enclosing block's statement loop raises
+    /// after `DoFinallyExcept` swallowed one and left the parser inside the
+    /// handler (an `on` clause naming an unknown class: `Statement expected
+    /// but 'do' found`, probe `x-raise-17`).
+    Escaped(ExecError),
 }
 
 impl From<ExecError> for FlowError {
@@ -284,8 +310,16 @@ impl ScriptObject for InterpExceptionObject {
         self
     }
 
+    fn exception_class_name(&self) -> Option<&str> {
+        self.error.class_name.as_deref()
+    }
+
     fn message(&self) -> Option<&str> {
-        Some(&self.error.message)
+        // `E.Message` inside the handler of the raising routine: the bare
+        // text, before `UpdateExceptionPos` prefixes the unit and line at
+        // the routine's exit (`x-raise-06`: `EJvInterpreterError: Type
+        // mismatch`).
+        Some(&self.error.err_message)
     }
 }
 
@@ -354,6 +388,15 @@ pub struct Interpreter {
     /// The interpreter's own call depth (`ExecFunction` nesting): the
     /// [`MAX_CALL_DEPTH`] guard (upstream's limit is the native stack).
     call_depth: usize,
+    /// `PosBeg` of the last bare `raise;` (`InterpretRaise`, `:7663`): the
+    /// position its `ieRaise` error carries when it escapes a handler.
+    reraise_pos: usize,
+    /// `FExpStackPtr` (`:851`): the model of upstream's expression stack
+    /// pointer, `-1` when empty. The port evaluates the AST, so the stack
+    /// holds no values; only its height is followed, push for push, as
+    /// `Expression` pushes (see [`Interpreter::eval_in`]), to raise the
+    /// overflow where upstream raises it.
+    exp_stack_ptr: i32,
 }
 
 impl Default for Interpreter {
@@ -385,6 +428,8 @@ impl Interpreter {
             cur_pos: 0,
             interp_error_class: None,
             call_depth: 0,
+            exp_stack_ptr: -1,
+            reraise_pos: 0,
         }
     }
 
@@ -772,13 +817,29 @@ impl Interpreter {
     fn flow_to_error(&self, flow: FlowError) -> ExecError {
         match flow {
             FlowError::Error(exec) => exec,
-            FlowError::ReRaise => ExecError::new(IE_RAISE, Some(self.cur_pos as i64), "", ""),
+            FlowError::ReRaise => ExecError::new(IE_RAISE, Some(self.reraise_pos as i64), "", ""),
             FlowError::Raise(raised) => {
                 let mut exec = ExecError::external(&raised.message);
                 exec.class_name = Some(raised.class.name.clone());
-                exec.pos = Some(self.cur_pos as i64);
+                exec.pos = self.recorded_external_pos().or(Some(self.cur_pos as i64));
                 exec
             }
+            FlowError::Escaped(exec) => exec,
+        }
+    }
+
+    /// `FLastError.FErrPos` of the external error being raised, when the
+    /// raise recorded one (`InterpretRaise`'s `UpdateExceptionPos(E, '')`,
+    /// `:7669`): the position a later `UpdateExceptionPos` keeps, so a
+    /// `raise` inside a `try ... finally` reports its own line
+    /// (probe `x-raise-16`), and a handler that raises anew reports the
+    /// first raise's line while `FLastError` still holds it
+    /// (probe `x-raise-14`).
+    fn recorded_external_pos(&self) -> Option<i64> {
+        if self.last_error.external && !self.last_error.exception_pos {
+            self.last_error.pos
+        } else {
+            None
         }
     }
 
@@ -824,7 +885,14 @@ impl Interpreter {
         // `CheckNotSupportedFunctionParameters` (`:6543`).
         for value in &args.values {
             if matches!(value, Value::Array(_) | Value::Record(_)) {
-                let pos = self.cur_pos;
+                // Raised after `ExecFunction`'s `NextToken` past the header's
+                // `;`: `CurPos` is the end of the body's first token (probe
+                // `a-26`, the `begin` line).
+                let pos = desc
+                    .decl
+                    .body_pos
+                    .map(|at| self.following_token_end(at))
+                    .unwrap_or(desc.decl.span.start);
                 let error = ValueError::not_implemented(error::message_text(402));
                 return Err(FlowError::Error(self.value_error(error, pos)));
             }
@@ -975,7 +1043,11 @@ impl Interpreter {
                 )
             };
             if let Err(error) = result {
-                let pos = self.cur_pos;
+                // `AddVar`'s `ieIdentifierRedeclared` is raised at `-1`:
+                // `CurPos`, which `InterpretVar` leaves after the type name,
+                // before it reads the `;` (`:7399-7402`; the declaration's
+                // own line, probe `v-slot-79`).
+                let pos = group.span.end;
                 return Err(FlowError::Error(self.value_error(error, pos)));
             }
         }
@@ -1128,9 +1200,158 @@ impl Interpreter {
 
     /// `Expression1` (`JvInterpreter.pas:5626`): a full expression. The
     /// variant-error conversion of its handler happens at the operator sites
-    /// (see [`values::binary_op`]).
+    /// (see [`values::binary_op`]). The expression stack pointer is saved
+    /// and restored around it (`OldExpStackPtr`, `:5875-5880`), so the
+    /// entries an expression leaves behind do not outlive it; the `PopExp`
+    /// of the result is the restore.
     fn expression1(&mut self, expr: &Expr) -> Result<Value, FlowError> {
-        self.eval_expr(expr)
+        let old = self.exp_stack_ptr;
+        let result = self.eval_in(expr, 0, 0);
+        self.exp_stack_ptr = old;
+        match result {
+            // `except on E: EVariantError do JvInterpreterError(ieTypeMistmatch,
+            // CurPos)` (`:5883`): a Delphi variant error raised anywhere
+            // inside the expression -- an operator, a conversion inside a
+            // call -- is the interpreter's `Type mismatch` at the position
+            // the error carries (the `CurPos` of its site).
+            Err(FlowError::Error(error)) if is_variant_error(&error) => Err(FlowError::Error(ExecError::new(
+                IE_TYPE_MISMATCH,
+                error.pos.or(Some(self.cur_pos as i64)),
+                "",
+                "",
+            ))),
+            other => other,
+        }
+    }
+
+    /// A call statement (`InterpretIdentifier`, `JvInterpreter.pas:6085`):
+    /// the identifier and its arguments are read by `InternalGetValue`
+    /// directly, outside any `Expression1`, so a variant error the call
+    /// itself raises (`sl.Delete('x')`) keeps its class -- only the
+    /// arguments' own expressions convert theirs.
+    fn exec_call_statement(&mut self, expr: &Expr) -> Result<(), FlowError> {
+        let old = self.exp_stack_ptr;
+        let result = self.eval_in(expr, 0, 0);
+        self.exp_stack_ptr = old;
+        result.map(|_| ())
+    }
+
+    /// `PushExp` (`:5630`): one more entry on the expression stack, or the
+    /// overflow, raised with `-1` as its position, which `UpdateExceptionPos`
+    /// fills with `CurPos` -- after the token that followed the construct
+    /// just pushed, since `Expression` reads that token before it pushes.
+    fn push_exp(&mut self, pushed: &Expr) -> Result<(), FlowError> {
+        self.exp_stack_ptr += 1;
+        if self.exp_stack_ptr > EXP_STACK_MAX {
+            let pos = self.following_token_end(pushed.span.end);
+            return Err(FlowError::Error(ExecError::new(
+                crate::error::IE_EXPRESSION_STACK_OVERFLOW,
+                Some(pos as i64),
+                "",
+                "",
+            )));
+        }
+        Ok(())
+    }
+
+    /// The priority of a binary operator (`Prior`, `JvInterpreterParser.pas:571`).
+    fn bin_op_prior(op: BinOp) -> i32 {
+        match op {
+            BinOp::Mul | BinOp::Div | BinOp::IntDiv | BinOp::Mod | BinOp::Shl | BinOp::Shr => 6,
+            BinOp::And => 5,
+            BinOp::Plus | BinOp::Minus | BinOp::Or => 4,
+            BinOp::Equ | BinOp::Greater | BinOp::Less | BinOp::NotEqu | BinOp::Xor => 3,
+            BinOp::EquGreater | BinOp::EquLess => 2,
+        }
+    }
+
+    /// `Expression(OpTyp)` (`JvInterpreter.pas:5649`) over the AST node that
+    /// call parsed, with its pushes on the expression stack: `ctx_prior` is
+    /// `Prior(OpTyp)` of the call the node is the running `Result` of, and
+    /// `next_prior` the priority of the token that follows the node (`0` for
+    /// a terminator or a `)`). Per node, as the loop of `Expression` does:
+    ///
+    /// - an operand (a constant, an identifier with its call, a set) is
+    ///   evaluated, then pushed unless the following token's priority is
+    ///   below the context's (`if Prior(TTyp) < Prior(OpTyp) then Exit`,
+    ///   before the `PushExp` at the end of the loop body; a set, `ttLS`,
+    ///   has no such exit and always pushes);
+    /// - `left op right`: `left` is pushed (its following token is `op`, of
+    ///   a priority above the context's), popped by the operator case
+    ///   (`PopExp`), `right` is the nested `Expression(op)` with the node's
+    ///   own following token, and the result is pushed;
+    /// - a parenthesized expression is the nested `Expression(ttLB)` (a
+    ///   context of priority 0, so its last operand is pushed), then its
+    ///   result is pushed again after the `)`;
+    /// - a unary operator is the nested `Expression(ttNot)` (priority 8, so
+    ///   a bare operand is not pushed there, a parenthesized one is), and
+    ///   the result is pushed.
+    ///
+    /// The values the port computes do not live on the stack; the pointer
+    /// does, so `1 + 1 + ... + 1` with 201 operands raises `Expression is
+    /// too complex - overflow` on the 201st, as the oracle does, and fewer
+    /// where a caller's expression left entries behind.
+    fn eval_in(&mut self, expr: &Expr, ctx_prior: i32, next_prior: i32) -> Result<Value, FlowError> {
+        match &expr.node {
+            ExprNode::Binary { op, left, right } => {
+                let op_prior = Self::bin_op_prior(*op);
+                let left_value = self.eval_in(left, ctx_prior, op_prior)?;
+                self.exp_stack_ptr -= 1;
+                let right_value = self.eval_in(right, op_prior, next_prior)?;
+                let value = match values::binary_op(*op, &left_value, &right_value) {
+                    Ok(value) => value,
+                    Err(error) => {
+                        // The `EVariantError` handler of `Expression1`
+                        // reports the failure at `CurPos` (`:5884`), the
+                        // position after the token that followed the
+                        // expression.
+                        let pos = self.following_token_end(expr.span.end);
+                        return Err(FlowError::Error(self.value_error(error, pos)));
+                    }
+                };
+                self.push_exp(expr)?;
+                Ok(value)
+            }
+            ExprNode::Unary {
+                op: crate::ast::UnOp::Paren,
+                operand,
+            } => {
+                let value = self.eval_in(operand, 0, 0)?;
+                self.push_exp(expr)?;
+                Ok(value)
+            }
+            ExprNode::Unary { op, operand } => {
+                let value = self.eval_in(operand, crate::interpreter_parser::PRIOR_NOT, next_prior)?;
+                let result = match op {
+                    // Unary plus is the value itself (`:5720`).
+                    crate::ast::UnOp::Plus => Ok(value),
+                    crate::ast::UnOp::Minus => values::unary_minus(&value),
+                    crate::ast::UnOp::Not => values::unary_not(&value),
+                    crate::ast::UnOp::Paren => unreachable!("matched above"),
+                };
+                let value = match result {
+                    Ok(value) => value,
+                    Err(error) => {
+                        let pos = self.following_token_end(expr.span.end);
+                        return Err(FlowError::Error(self.value_error(error, pos)));
+                    }
+                };
+                self.push_exp(expr)?;
+                Ok(value)
+            }
+            ExprNode::Set { .. } => {
+                let value = self.eval_expr(expr)?;
+                self.push_exp(expr)?;
+                Ok(value)
+            }
+            _ => {
+                let value = self.eval_expr(expr)?;
+                if next_prior >= ctx_prior {
+                    self.push_exp(expr)?;
+                }
+                Ok(value)
+            }
+        }
     }
 
     /// `Expression2` (`JvInterpreter.pas:5888`): the expression with the
@@ -1153,8 +1374,10 @@ impl Interpreter {
                 // `High(Integer)` is a `varInt64` (`ParseToken`:
                 // `Val(FTokenStr, ValueInt64, Stub)`, `:5565`) and is
                 // refused here, with the visible `ieIntegerRequired` message.
-                if matches!(value, Value::Smallint(_) | Value::Byte(_) | Value::Int64(_))
-                    && let Ok(fit) = values::to_i32(&value)
+                if matches!(
+                    value,
+                    Value::Smallint(_) | Value::Byte(_) | Value::Word(_) | Value::Int64(_)
+                ) && let Ok(fit) = values::to_i32(&value)
                 {
                     return Ok(Value::Integer(fit));
                 }
@@ -1186,7 +1409,7 @@ impl Interpreter {
                 let value = self.eval_expr(operand)?;
                 let result = match op {
                     // Unary plus is the value itself (`:5720`).
-                    crate::ast::UnOp::Plus => Ok(value),
+                    crate::ast::UnOp::Plus | crate::ast::UnOp::Paren => Ok(value),
                     crate::ast::UnOp::Minus => values::unary_minus(&value),
                     crate::ast::UnOp::Not => values::unary_not(&value),
                 };
@@ -1325,7 +1548,10 @@ impl Interpreter {
         let call_end = self.following_token_end(span.end);
         let call_start = self.following_token_start(span.end);
         self.cur_pos = call_end;
-        let mut value = Value::Null;
+        // `JvInterpreterVarFree(Result)` before `GetValue` (`:6060`): a host
+        // function that assigns nothing leaves `Unassigned` (`GetFormVersion`
+        // of a file is `VarType` 0, probe `v-slot-62`).
+        let mut value = Value::Empty;
         if !self.get_value(name.as_bytes(), &mut value, &mut args, call_end)? {
             return Err(FlowError::Error(ExecError::new(
                 IE_UNKNOWN_IDENTIFIER,
@@ -1403,6 +1629,14 @@ impl Interpreter {
                     Ok(index) => index,
                     Err(error) => return Err(FlowError::Error(self.value_error(error, err_pos))),
                 };
+                // UPSTREAM-QUIRK: `string(Variable)[Index]` is not range
+                // checked; index 0 reads the character before the text
+                // (the port reads nothing, probe `x-011`) and an index past
+                // the end faults (the port's range check error, `x-012`).
+                if index == 0 {
+                    *value = Value::Str(Vec::new());
+                    return Ok(true);
+                }
                 if index < 1 || index as usize > bytes.len() {
                     return Err(FlowError::Error(
                         ExecError::external(RS_RANGE_CHECK_ERROR).with_pos(err_pos),
@@ -1536,6 +1770,11 @@ impl Interpreter {
                         ExecError::external(RS_RANGE_CHECK_ERROR).with_pos(err_pos),
                     ));
                 };
+                // Index 0 writes the memory before the text upstream (the
+                // port writes nothing, probe `x-013`).
+                if index == 0 {
+                    return Ok(true);
+                }
                 if index < 1 || index as usize > bytes.len() {
                     return Err(FlowError::Error(
                         ExecError::external(RS_RANGE_CHECK_ERROR).with_pos(err_pos),
@@ -1643,10 +1882,7 @@ impl Interpreter {
         self.statement_hook(stmt.span.start)?;
         match &stmt.node {
             StmtNode::Assign { target, value } => self.exec_assign(target, value),
-            StmtNode::Expr(expr) => {
-                self.expression1(expr)?;
-                Ok(())
-            }
+            StmtNode::Expr(expr) => self.exec_call_statement(expr),
             StmtNode::Block(block) => self.exec_block(block),
             StmtNode::If {
                 cond,
@@ -1677,8 +1913,8 @@ impl Interpreter {
                 arms,
                 else_arm,
             } => self.exec_case(selector, arms, else_arm),
-            StmtNode::Try { body, handler } => self.exec_try(body, handler),
-            StmtNode::Raise { value } => self.exec_raise(value),
+            StmtNode::Try { body, handler } => self.exec_try(body, handler, stmt.span.end),
+            StmtNode::Raise { value } => self.exec_raise(value, stmt.span.start),
             StmtNode::Break => {
                 self.break_flag = true;
                 Ok(())
@@ -1790,7 +2026,9 @@ impl Interpreter {
             probe.obj = target_args.obj.clone();
             let mut variable = Value::Null;
             if self.get_value(name.as_bytes(), &mut variable, &mut probe, self.cur_pos)? {
-                if !self.set_element(&mut variable, &value_value, &mut target_args, self.cur_pos)? {
+                // The element write's errors (`ieArrayIndexOutOfBounds` at
+                // `-1`) report `CurPos`, past the assignment (probe `a-01`).
+                if !self.set_element(&mut variable, &value_value, &mut target_args, pos)? {
                     return Err(FlowError::Error(ExecError::new(
                         IE_ARRAY_REQUIRED,
                         Some(pos as i64),
@@ -1988,7 +2226,7 @@ impl Interpreter {
     /// (`:7560`): the `finally` block runs for a normal exit, a flag exit
     /// and an exception (which then re-raises); the `except` handler only
     /// for an exception.
-    fn exec_try(&mut self, body: &Block, handler: &Handler) -> Result<(), FlowError> {
+    fn exec_try(&mut self, body: &Block, handler: &Handler, stmt_end: usize) -> Result<(), FlowError> {
         match self.exec_block(body) {
             Ok(()) => self.do_finally_except(handler, None),
             Err(flow) => match handler {
@@ -1996,7 +2234,17 @@ impl Interpreter {
                     self.run_finally(finally)?;
                     Err(flow)
                 }
-                Handler::Except { .. } => self.exec_except(handler, flow),
+                Handler::Except { .. } => {
+                    let result = self.exec_except(handler, flow);
+                    if result.is_err() {
+                        // The re-raise leaves the `try` with the parser past
+                        // its `end` (`InterpretTry`'s `raise`, `:7641`): the
+                        // position a cleared `FLastError` then records
+                        // (probe `x-raise-11`).
+                        self.cur_pos = self.following_token_end(stmt_end);
+                    }
+                    result
+                }
             },
         }
     }
@@ -2038,6 +2286,7 @@ impl Interpreter {
             }
             Err(FlowError::ReRaise) => Err(error),
             Err(FlowError::Error(_)) => Ok(()),
+            Err(FlowError::Escaped(exec)) => Err(FlowError::Error(exec)),
             Err(other) => Err(other),
         }
     }
@@ -2055,7 +2304,19 @@ impl Interpreter {
             return self.exec_block(plain);
         }
         for on in ons {
-            let class = self.resolve_exception_class(on)?;
+            let class = match self.resolve_exception_class(on) {
+                Ok(class) => class,
+                Err(FlowError::Error(_)) => {
+                    // `On1`'s `ieUnknownIdentifier`/`ieClassRequired` is
+                    // swallowed by `DoFinallyExcept` (`:7586`), which exits
+                    // the `try` with the parser on the `do`; the enclosing
+                    // block's statement loop then fails there (probe
+                    // `x-raise-17`).
+                    let pos = self.exception_class_token_pos(on);
+                    return Err(FlowError::Escaped(self.expected_at(pos, "Statement")));
+                }
+                Err(other) => return Err(other),
+            };
             if self.exception_matches(error, &class) {
                 let object_value = self.exception_object_value(error);
                 let bound = on.var.clone();
@@ -2100,8 +2361,14 @@ impl Interpreter {
         match else_arm {
             Some(arm) => self.exec_statement(arm),
             // No `on` matched and no `else`: `ReRaiseException := True`
-            // (`:7533`).
-            None => Err(FlowError::ReRaise),
+            // (`:7533`); `InterpretExcept` returns normally, so
+            // `FLastError.Clear` runs before the re-raise (`:7585`) and the
+            // error reports the position the next `UpdateExceptionPos`
+            // sees (probe `x-raise-11`).
+            None => {
+                self.last_error = ExecError::cleared();
+                Err(FlowError::ReRaise)
+            }
         }
     }
 
@@ -2165,30 +2432,9 @@ impl Interpreter {
     fn exception_matches(&mut self, error: &FlowError, class: &Rc<ClassDef>) -> bool {
         match error {
             FlowError::Raise(raised) => raised.class.is_a(class),
-            FlowError::Error(exec) => self.error_class(exec).is_a(class),
+            FlowError::Error(exec) | FlowError::Escaped(exec) => self.error_class_of(exec).is_a(class),
             FlowError::ReRaise => false,
         }
-    }
-
-    /// The Delphi class of a propagating error, which `E is ExceptionClass`
-    /// tests and `E.ClassName` prints: an interpreter error is an
-    /// `EJvInterpreterError`; a host exception is of the class the host
-    /// named (`Exception` for a refused edit), registered or parented to
-    /// the registered `Exception`.
-    fn error_class(&mut self, exec: &ExecError) -> Rc<ClassDef> {
-        if !exec.external {
-            return self.interp_error_class();
-        }
-        let name = exec.class_name.clone().unwrap_or_else(|| "Exception".to_owned());
-        if let Some(class) = self.adapter.find_class(name.as_bytes()) {
-            return class;
-        }
-        let parent = self.adapter.find_class(b"Exception");
-        Rc::new(ClassDef {
-            unit: String::new(),
-            name,
-            parent,
-        })
     }
 
     /// The object an `on E` clause binds (`O2V(E)`).
@@ -2197,13 +2443,34 @@ impl Interpreter {
             FlowError::Raise(raised) => Value::Object(raised.object.clone()),
             _ => {
                 let exec = match error {
-                    FlowError::Error(exec) => exec.clone(),
+                    FlowError::Error(exec) | FlowError::Escaped(exec) => exec.clone(),
                     _ => ExecError::cleared(),
                 };
-                let class = self.error_class(&exec);
+                // An external exception keeps its own class (`EDivByZero`,
+                // `EConvertError`, ...; `Exception` when the host named
+                // none), an interpreter error is the `EJvInterpreterError`
+                // (probes `x-raise-04` to `x-raise-10`).
+                let class = self.error_class_of(&exec);
                 Value::Object(Rc::new(RefCell::new(InterpExceptionObject { error: exec, class })))
             }
         }
+    }
+
+    /// The Delphi class of an error as a handler sees it: the registered
+    /// class of its name for an external exception (`Exception` when the
+    /// name is unknown or absent), the built-in `EJvInterpreterError` for
+    /// an interpreter error.
+    fn error_class_of(&mut self, exec: &ExecError) -> Rc<ClassDef> {
+        if exec.external {
+            let name = exec.class_name.as_deref().unwrap_or("Exception");
+            if let Some(class) = self.adapter.find_class(name.as_bytes()) {
+                return class;
+            }
+            if let Some(class) = self.adapter.find_class(b"Exception") {
+                return class;
+            }
+        }
+        self.interp_error_class()
     }
 
     /// The `EJvInterpreterError` class, parented to the registered
@@ -2227,8 +2494,9 @@ impl Interpreter {
     /// internal `ieRaise` error; `raise X` needs an object and records the
     /// external error state (`UpdateExceptionPos(Exception(V2O(V)), '')`,
     /// `:7669`).
-    fn exec_raise(&mut self, value: &Option<Expr>) -> Result<(), FlowError> {
+    fn exec_raise(&mut self, value: &Option<Expr>, stmt_start: usize) -> Result<(), FlowError> {
         let Some(expr) = value else {
+            self.reraise_pos = stmt_start;
             return Err(FlowError::ReRaise);
         };
         let raised = self.expression1(expr)?;
@@ -2344,6 +2612,16 @@ impl Interpreter {
                 exec.pos = Some(pos as i64);
                 exec
             }
+            // The xEdit host raises `ieDirectInvalidArgument` with the
+            // position 0 (`JvInterpreterError(ieDirectInvalidArgument, 0)`,
+            // `xejviScriptAdapterHost.pas:138`), so its line is 1; the
+            // interpreter's own raises of the code name the function and
+            // use `CurPos`.
+            ValueError::Interp { code, name1, name2 }
+                if code == crate::error::IE_DIRECT_INVALID_ARGUMENT && name1.is_empty() =>
+            {
+                ExecError::new(code, Some(0), &name1, &name2)
+            }
             ValueError::Interp { code, name1, name2 } => ExecError::new(code, Some(pos as i64), &name1, &name2),
         }
     }
@@ -2364,6 +2642,12 @@ impl Interpreter {
         if exec.external {
             if !self.last_error.exception_pos {
                 let mut recorded = exec.clone();
+                // `NoName(FLastError)`: `if E.FErrPos = -1 then E.FErrPos :=
+                // CurPos` -- the position `FLastError` already holds from
+                // an earlier raise stays (probe `x-raise-14`).
+                if let Some(kept) = self.recorded_external_pos() {
+                    recorded.pos = Some(kept);
+                }
                 if recorded.pos.is_none() {
                     recorded.pos = Some(self.cur_pos as i64);
                 }
@@ -2419,12 +2703,24 @@ impl Interpreter {
             FlowError::Raise(raised) => {
                 if !self.last_error.exception_pos {
                     let mut exec = ExecError::external(&raised.message);
-                    exec.pos = Some(self.cur_pos as i64);
+                    exec.class_name = Some(raised.class.name.clone());
+                    exec.pos = self.recorded_external_pos().or(Some(self.cur_pos as i64));
                     self.update_exception_pos(&mut exec, unit);
                 }
                 FlowError::Raise(raised)
             }
-            FlowError::ReRaise => FlowError::ReRaise,
+            // A bare `raise;` that left every handler: the `ieRaise` error
+            // with the statement's position, given its unit here as any
+            // interpreter error is (probe `x-raise-22`).
+            FlowError::ReRaise => {
+                let mut exec = ExecError::new(IE_RAISE, Some(self.reraise_pos as i64), "", "");
+                self.update_exception_pos(&mut exec, unit);
+                FlowError::Error(exec)
+            }
+            FlowError::Escaped(mut exec) => {
+                self.update_exception_pos(&mut exec, unit);
+                FlowError::Error(exec)
+            }
         }
     }
 }

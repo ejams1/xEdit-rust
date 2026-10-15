@@ -35,13 +35,28 @@
 //! uses; the port implements the documented rules and keeps the pictures a
 //! script actually ships exact.
 //!
-//! Conversion of an argument whose type does not fit the conversion follows
-//! the variant coercion the interpreter applies before the RTL sees the
-//! `TVarRec` (`%d` of a string parses it, of a boolean gives 0/1, of a float
-//! rounds half to even through `Round`), rather than the EConvertError the
-//! Delphi formatter would raise for a type it refuses.
+//! The arguments reach the RTL as the `TVarRec`s `V2OA` builds from the
+//! open array's variants (`JvInterpreter.pas:2376`): a `varInteger` or
+//! `varSmallint` is `vtInteger`, a `varBoolean` `vtBoolean`, a `varDouble`
+//! or `varCurrency` is cast to a `Currency` and passed as `vtCurrency`, and
+//! everything else -- the strings, `varInt64`, `varByte`, `varDate`, `Null`,
+//! an object -- is `vtVariant`. The RTL's `FormatBuf` then accepts only
+//! `vtInteger` for `%d`/`%u`/`%x`, only `vtCurrency` for `%e`/`%f`/`%g`/
+//! `%n`/`%m` and only `vtVariant` (through `VarToStr`) for `%s`, and raises
+//! `EConvertError` with `Format '<format>' invalid or incompatible with
+//! argument` otherwise, the format string cut to its first 31 characters
+//! (`FormatError`'s buffer). Witnessed on the oracle by the `f-*` probes of
+//! `cargo xtask parity script --phase probe` (2026-10-15): `Format('%d',
+//! [TList.Count])` fails because `TList.Count` is a `NativeInt` (`varInt64`),
+//! `Format('%s', [5])` and `Format('%f', [1])` fail, `Format('%.6f',
+//! [1.23456789])` is `1.234600` (the four decimals of a `Currency`),
+//! `Format('%.0f', [2.5])` is `2` and `[3.5]` is `4` (the currency's digits
+//! round half to even), `Format('%f', [1e15])` is a `Type mismatch` (the
+//! currency cast overflows, an `EVariantError` the expression handler
+//! converts), `Format('%u', [-1])` is `4294967295`, and an unknown
+//! conversion such as `%q` is the same `EConvertError`.
 
-use xedit_script::values::{Value, to_f64, to_i64, to_str};
+use xedit_script::values::{Value, ValueError};
 
 use xedit_core::delphi;
 
@@ -83,13 +98,99 @@ impl FloatFormat {
     }
 }
 
-/// `Format(Format, Args)`.
-///
-/// An invalid format string raises the RTL's `EConvertError` text
-/// (`Invalid format string`? the RTL raises `EConvertError.CreateResFmt`
-/// with `SInvalidFormat`); a conversion character that is not one of the
-/// RTL's is a literal upstream, so the port keeps it as one.
-pub fn format_text(format: &[u8], args: &[Value]) -> Result<Vec<u8>, String> {
+/// The `TVarRec` kind of an argument, as `V2OA` builds it
+/// (`JvInterpreter.pas:2376-2460`).
+enum VarRec<'a> {
+    /// `vtInteger`: a `varInteger` or `varSmallint`.
+    Integer(i32),
+    /// `vtBoolean`.
+    Boolean,
+    /// `vtCurrency`: a `varDouble` cast to `Currency`, kept as the scaled
+    /// integer (four decimals).
+    Currency(i64),
+    /// `vtVariant`: everything else, formatted through `VarToStr`.
+    Variant(&'a Value),
+}
+
+/// `VarCast(V, V, varCurrency)` of a double: the value scaled by 10000 and
+/// rounded to the nearest integer (half to even, the SSE conversion), or
+/// the `EVariantOverflowError` beyond the `Currency` range -- an
+/// `EVariantError`, which `Expression1` reports as `Type mismatch`.
+fn currency_of(value: f64) -> Result<i64, ValueError> {
+    // `MaxCurrency` is 922337203685477.5807 (the i64 range over 10000).
+    const CURRENCY_LIMIT: f64 = i64::MAX as f64 / 10_000.0;
+    if !value.is_finite() || value.abs() >= CURRENCY_LIMIT {
+        return Err(ValueError::Variant);
+    }
+    // The product is formed in the x87's extended precision upstream, so
+    // `0.00005 * 10000` is the exact `0.50000000000000002...` and rounds
+    // up (probe `f-49`): the port scales the double's exact binary value
+    // with 128-bit integers and rounds half to even.
+    let bits = value.to_bits();
+    let negative = (bits >> 63) != 0;
+    let exponent = ((bits >> 52) & 0x7FF) as i32;
+    let fraction = bits & ((1u64 << 52) - 1);
+    let (mantissa, exponent) = if exponent == 0 {
+        (fraction as i128, -1074)
+    } else {
+        ((fraction | (1u64 << 52)) as i128, exponent - 1075)
+    };
+    let scaled = mantissa * 10_000;
+    let rounded: i128 = if exponent >= 0 {
+        scaled << exponent
+    } else {
+        let shift = (-exponent) as u32;
+        if shift >= 120 {
+            0
+        } else {
+            let quotient = scaled >> shift;
+            let remainder = scaled - (quotient << shift);
+            let half = 1i128 << (shift - 1);
+            if remainder > half || (remainder == half && quotient & 1 == 1) {
+                quotient + 1
+            } else {
+                quotient
+            }
+        }
+    };
+    let rounded = if negative { -rounded } else { rounded };
+    i64::try_from(rounded).map_err(|_| ValueError::Variant)
+}
+
+fn var_rec(value: &Value) -> Result<VarRec<'_>, ValueError> {
+    Ok(match value {
+        Value::Integer(v) => VarRec::Integer(*v),
+        Value::Smallint(v) => VarRec::Integer(i32::from(*v)),
+        Value::Bool(_) => VarRec::Boolean,
+        Value::Double(v) => VarRec::Currency(currency_of(*v)?),
+        other => VarRec::Variant(other),
+    })
+}
+
+/// `FormatError` (`System.SysUtils`): the `EConvertError` of a conversion
+/// the argument does not fit, naming the first 31 characters of the whole
+/// format string.
+fn format_error(format: &[u8]) -> ValueError {
+    ValueError::external_class(
+        "EConvertError",
+        format!("Format '{}' invalid or incompatible with argument", excerpt(format)),
+    )
+}
+
+/// `SArgumentMissing`, with the same excerpt.
+fn argument_missing(format: &[u8]) -> ValueError {
+    ValueError::external_class("EConvertError", format!("No argument for format '{}'", excerpt(format)))
+}
+
+fn excerpt(format: &[u8]) -> String {
+    String::from_utf8_lossy(format).chars().take(31).collect()
+}
+
+/// `Format(Format, Args)`: the RTL's `FormatBuf` over the `TVarRec`s of
+/// [`var_rec`]. A conversion the argument does not fit, an unknown
+/// conversion character and a missing argument are the RTL's
+/// `EConvertError`s ([`format_error`], [`argument_missing`]).
+pub fn format_text(format: &[u8], args: &[Value]) -> Result<Vec<u8>, ValueError> {
     let mut out: Vec<u8> = Vec::new();
     let mut next_arg = 0usize;
     let mut i = 0usize;
@@ -102,8 +203,9 @@ pub fn format_text(format: &[u8], args: &[Value]) -> Result<Vec<u8>, String> {
         }
         i += 1;
         if i >= format.len() {
-            // A dangling '%' is invalid; the RTL raises.
-            return Err("Invalid format string".to_owned());
+            // A dangling '%' is the end of the format (the RTL's loop
+            // ends on it, with nothing written).
+            break;
         }
         if format[i] == b'%' {
             out.push(b'%');
@@ -129,15 +231,30 @@ pub fn format_text(format: &[u8], args: &[Value]) -> Result<Vec<u8>, String> {
         } else {
             false
         };
-        let width = read_int(format, &mut i);
+        // `*` takes the width (or the precision) from the next argument,
+        // which must be a `vtInteger` (probe `f-81`).
+        let star = |i: &mut usize, next_arg: &mut usize| -> Result<Option<usize>, ValueError> {
+            if *i < format.len() && format[*i] == b'*' {
+                *i += 1;
+                let index = *next_arg;
+                *next_arg += 1;
+                return match args.get(index).map(var_rec).transpose()? {
+                    Some(VarRec::Integer(v)) => Ok(Some(v.max(0) as usize)),
+                    Some(_) => Err(format_error(format)),
+                    None => Err(argument_missing(format)),
+                };
+            }
+            Ok(read_int(format, i))
+        };
+        let width = star(&mut i, &mut next_arg)?;
         let precision = if i < format.len() && format[i] == b'.' {
             i += 1;
-            Some(read_int(format, &mut i).unwrap_or(0))
+            Some(star(&mut i, &mut next_arg)?.unwrap_or(0))
         } else {
             None
         };
         let Some(&conversion) = format.get(i) else {
-            return Err("Invalid format string".to_owned());
+            break;
         };
         i += 1;
         let arg_index = match index {
@@ -148,8 +265,10 @@ pub fn format_text(format: &[u8], args: &[Value]) -> Result<Vec<u8>, String> {
                 index
             }
         };
-        let argument = args.get(arg_index);
-        let text = convert(conversion, argument, precision)?;
+        let Some(argument) = args.get(arg_index) else {
+            return Err(argument_missing(format));
+        };
+        let text = convert(conversion, var_rec(argument)?, precision).ok_or_else(|| format_error(format))?;
         let padded = pad(&text, width, left_align);
         out.extend_from_slice(padded.as_bytes());
     }
@@ -183,76 +302,171 @@ fn pad(text: &str, width: Option<usize>, left_align: bool) -> String {
     }
 }
 
-fn convert(conversion: u8, argument: Option<&Value>, precision: Option<usize>) -> Result<String, String> {
-    let Some(argument) = argument else {
-        // The RTL raises `EConvertError` for a missing argument
-        // (`SArgumentMissing`).
-        return Err("No argument for format '%'".to_owned());
-    };
-    let value = argument.clone();
-    Ok(match conversion {
-        b'd' => {
-            let mut text = to_i64(&value)
-                .map_err(|_| "Invalid argument for format 'd'".to_owned())?
-                .to_string();
+/// One conversion over its `TVarRec`; `None` is the kind the conversion
+/// refuses. `%d`, `%u` and `%x` take `vtInteger` (`%u` and `%x` as the
+/// 32-bit `Cardinal`), the float conversions take `vtCurrency` (whose
+/// digits are the four decimals of the currency, rounded half to even to
+/// the precision), `%s` takes `vtVariant` (`VarToStr`: a string, an
+/// `Int64` or a `Byte` as text, `Null`, an object and the rest as nothing),
+/// and `%p` nothing the interpreter builds. The conversion characters are
+/// case-insensitive except that `%X` upper-cases the digits.
+fn convert(conversion: u8, rec: VarRec<'_>, precision: Option<usize>) -> Option<String> {
+    Some(match (conversion, rec) {
+        (b'd' | b'D', VarRec::Integer(v)) => {
+            let mut text = v.to_string();
             if let Some(precision) = precision {
                 text = zero_pad(&text, precision);
             }
             text
         }
-        b'u' => {
-            let value = to_i64(&value).map_err(|_| "Invalid argument for format 'u'".to_owned())? as u64;
-            let mut text = value.to_string();
+        (b'u' | b'U', VarRec::Integer(v)) => {
+            let mut text = (v as u32).to_string();
             if let Some(precision) = precision {
                 text = zero_pad(&text, precision);
             }
             text
         }
-        b'x' => hex(
-            to_i64(&value).map_err(|_| "Invalid argument for format 'x'".to_owned())? as u64,
-            precision,
-            false,
-        ),
-        b'X' => hex(
-            to_i64(&value).map_err(|_| "Invalid argument for format 'X'".to_owned())? as u64,
-            precision,
-            true,
-        ),
-        b'e' => float_exponent(
-            to_f64(&value).map_err(|_| "Invalid argument for format 'e'".to_owned())?,
-            precision.unwrap_or(15),
-            0,
-        ),
-        b'f' => float_fixed(
-            to_f64(&value).map_err(|_| "Invalid argument for format 'f'".to_owned())?,
-            precision.unwrap_or(2),
-            false,
-        ),
-        b'n' => float_fixed(
-            to_f64(&value).map_err(|_| "Invalid argument for format 'n'".to_owned())?,
-            precision.unwrap_or(2),
-            true,
-        ),
-        b'm' => currency(
-            to_f64(&value).map_err(|_| "Invalid argument for format 'm'".to_owned())?,
-            precision,
-        ),
-        b'g' => delphi::format_general(
-            to_f64(&value).map_err(|_| "Invalid argument for format 'g'".to_owned())?,
-            precision.unwrap_or(15),
-        ),
-        b's' => {
-            // For `%s` the RTL ignores the precision.
-            let _ = precision;
-            String::from_utf8_lossy(&to_str(&value).map_err(|_| "Invalid argument for format 's'".to_owned())?)
-                .into_owned()
+        // The RTL writes the hexadecimal digits in upper case for `%x` and
+        // `%X` alike (probe `f-18`).
+        (b'x' | b'X', VarRec::Integer(v)) => hex(u64::from(v as u32), precision, true),
+        (b'e' | b'E', VarRec::Currency(c)) => currency_exponent(c),
+        (b'f' | b'F', VarRec::Currency(c)) => currency_fixed(c, precision.unwrap_or(2), false),
+        (b'n' | b'N', VarRec::Currency(c)) => currency_fixed(c, precision.unwrap_or(2), true),
+        (b'm' | b'M', VarRec::Currency(c)) => {
+            let digits = precision.unwrap_or(SETTINGS.currency_decimals.max(0) as usize);
+            let fixed = currency_fixed(c, digits, true);
+            let negative = fixed.starts_with('-');
+            let body = if negative { &fixed[1..] } else { &fixed };
+            if negative {
+                format!("-{}{body}", SETTINGS.currency_string)
+            } else {
+                format!("{}{body}", SETTINGS.currency_string)
+            }
         }
-        b'p' => format!("{:08X}", to_i64(&value).unwrap_or(0) as u64 & 0xFFFF_FFFF),
-        other => {
-            // The RTL treats an unknown conversion character as a literal.
-            format!("%{}", other as char)
+        (b'g' | b'G', VarRec::Currency(c)) => currency_general(c),
+        (b's' | b'S', VarRec::Variant(value)) => {
+            // The precision cuts the text to that many characters (probe
+            // `f-78`).
+            let text = String::from_utf8_lossy(&var_to_str(value)).into_owned();
+            match precision {
+                Some(precision) => text.chars().take(precision).collect(),
+                None => text,
+            }
         }
+        _ => return None,
     })
+}
+
+/// `VarToStr` of the kinds that reach `%s` as `vtVariant`: a string as
+/// it is, the integer kinds `V2OA` does not pass as `vtInteger` as text,
+/// a date as `DateTimeToStr`, and `Null`, `Empty`, an object, a class, a
+/// set or a pointer as nothing.
+fn var_to_str(value: &Value) -> Vec<u8> {
+    match value {
+        Value::Str(bytes) => bytes.clone(),
+        Value::Int64(v) => v.to_string().into_bytes(),
+        Value::Byte(v) => v.to_string().into_bytes(),
+        Value::Date(v) => {
+            let format = format!(
+                "{} {}",
+                super::datetime::SETTINGS.short_date_format,
+                super::datetime::SETTINGS.long_time_format
+            );
+            super::datetime::date_time_to_str(&format, *v).into_bytes()
+        }
+        _ => Vec::new(),
+    }
+}
+
+/// The digits of a currency: `|c|` as a decimal string of at least five
+/// digits (so the four decimals have an integer part) and the sign.
+fn currency_digits(c: i64) -> (bool, String) {
+    let negative = c < 0;
+    let mut digits = c.unsigned_abs().to_string();
+    while digits.len() < 5 {
+        digits.insert(0, '0');
+    }
+    (negative, digits)
+}
+
+/// A currency rounded half to even to `decimals` places (`FloatToDecimal`
+/// over the currency's own digits): the integer part and the decimals,
+/// both as digit strings.
+fn currency_round(c: i64, decimals: usize) -> (bool, String, String) {
+    let (negative, digits) = currency_digits(c);
+    let (integer, fraction) = digits.split_at(digits.len() - 4);
+    if decimals >= 4 {
+        let mut fraction = fraction.to_owned();
+        while fraction.len() < decimals {
+            fraction.push('0');
+        }
+        return (negative, integer.to_owned(), fraction);
+    }
+    // Round the scaled value at `decimals` places, half to even.
+    let keep = 10i64.pow(decimals as u32);
+    let drop = 10_000 / keep;
+    let scaled = c.unsigned_abs() as i64;
+    let quotient = scaled / drop;
+    let remainder = scaled % drop;
+    let rounded = if remainder * 2 > drop || (remainder * 2 == drop && quotient % 2 == 1) {
+        quotient + 1
+    } else {
+        quotient
+    };
+    let mut text = rounded.to_string();
+    while text.len() < decimals + 1 {
+        text.insert(0, '0');
+    }
+    let (integer, fraction) = text.split_at(text.len() - decimals);
+    let negative = negative && rounded != 0;
+    (negative, integer.to_owned(), fraction.to_owned())
+}
+
+/// `%f` and `%n` of a currency.
+fn currency_fixed(c: i64, decimals: usize, thousand: bool) -> String {
+    let (negative, integer, fraction) = currency_round(c, decimals);
+    let integer = if thousand { insert_thousands(&integer) } else { integer };
+    let sign = if negative { "-" } else { "" };
+    if decimals == 0 {
+        format!("{sign}{integer}")
+    } else {
+        format!("{sign}{integer}{}{fraction}", SETTINGS.decimal_separator)
+    }
+}
+
+/// `%e` of a currency: `FloatToText` with `fvCurrency` prints every digit
+/// of the currency, so the mantissa carries 18 decimals whatever the
+/// precision, and the exponent three digits with its sign.
+fn currency_exponent(c: i64) -> String {
+    let (negative, digits) = currency_digits(c);
+    let trimmed = digits.trim_start_matches('0');
+    let (mantissa, exponent) = if trimmed.is_empty() {
+        ("0".to_owned(), 0i64)
+    } else {
+        (trimmed.to_owned(), trimmed.len() as i64 - 1 - 4)
+    };
+    let first = &mantissa[..1];
+    let mut rest = mantissa[1..].to_owned();
+    while rest.len() < 18 {
+        rest.push('0');
+    }
+    rest.truncate(18);
+    let sign = if exponent < 0 { '-' } else { '+' };
+    let sign_prefix = if negative { "-" } else { "" };
+    format!("{sign_prefix}{first}.{rest}E{sign}{:03}", exponent.abs())
+}
+
+/// `%g` of a currency: the general format over the currency's digits --
+/// the decimals without their trailing zeros, no point when none remain.
+fn currency_general(c: i64) -> String {
+    let (negative, integer, fraction) = currency_round(c, 4);
+    let fraction = fraction.trim_end_matches('0');
+    let sign = if negative { "-" } else { "" };
+    if fraction.is_empty() {
+        format!("{sign}{integer}")
+    } else {
+        format!("{sign}{integer}{}{fraction}", SETTINGS.decimal_separator)
+    }
 }
 
 fn zero_pad(text: &str, precision: usize) -> String {
@@ -593,13 +807,39 @@ pub fn curr_to_str(value: f64) -> String {
 
 /// `StrToFloat`, with the RTL's `EConvertError` text on a bad value.
 pub fn str_to_float(text: &str) -> Result<f64, String> {
+    // `TextToFloat` reads the RTL's own `INF`/`NAN` spellings (probes
+    // `x-149`, `x-150`).
+    let trimmed = text.trim();
+    if trimmed.eq_ignore_ascii_case("inf") || trimmed.eq_ignore_ascii_case("+inf") {
+        return Ok(f64::INFINITY);
+    }
+    if trimmed.eq_ignore_ascii_case("-inf") {
+        return Ok(f64::NEG_INFINITY);
+    }
+    if trimmed.eq_ignore_ascii_case("nan") {
+        return Ok(f64::NAN);
+    }
     delphi::str_to_float(text).ok_or_else(|| format!("'{text}' is not a valid floating point value"))
 }
 
 /// `StrToInt`, with the RTL's `EConvertError` text on a bad value.
 pub fn str_to_int(text: &str) -> Result<i32, String> {
-    xedit_script::values::parse_int_literal(text.as_bytes())
-        .and_then(|value| i32::try_from(value).ok())
+    // `Val` skips the spaces before the number (not after: `'5 '` is
+    // refused, probe `x-138`) and reads the `0x` prefix as well as `$`
+    // (probes `x-137`, `x-140`); a hexadecimal up to `$FFFFFFFF` is
+    // accepted and wraps into the `Integer` (`StrToInt('$FFFFFFFF')` is -1,
+    // probe `x-071`).
+    let body = text.trim_start();
+    let body = match body.strip_prefix("0x").or_else(|| body.strip_prefix("0X")) {
+        Some(hex) => format!("${hex}"),
+        None => body.to_owned(),
+    };
+    xedit_script::values::parse_int_literal(body.as_bytes())
+        .and_then(|value| {
+            i32::try_from(value).ok().or_else(|| {
+                (body.starts_with('$') && (0..=0xFFFF_FFFF).contains(&value)).then_some(value as u32 as i32)
+            })
+        })
         .ok_or_else(|| format!("'{text}' is not a valid integer value"))
 }
 
@@ -619,6 +859,14 @@ mod tests {
 
     fn text(format: &str, args: Vec<Value>) -> String {
         String::from_utf8_lossy(&format_text(format.as_bytes(), &args).unwrap()).into_owned()
+    }
+
+    fn error(format: &str, args: Vec<Value>) -> String {
+        match format_text(format.as_bytes(), &args) {
+            Err(ValueError::ExternalClass { class, message }) => format!("[{class}] {message}"),
+            Err(ValueError::Variant) => "Type mismatch".to_owned(),
+            other => panic!("expected an error, got {other:?}"),
+        }
     }
 
     fn int(v: i32) -> Value {
@@ -641,15 +889,112 @@ mod tests {
         assert_eq!(text("%0:s", vec![string("a"), string("b")]), "a");
         assert_eq!(text("%6s|", vec![string("ab")]), "    ab|");
         assert_eq!(text("%-6s|", vec![string("ab")]), "ab    |");
-        assert_eq!(text("%1.1f", vec![Value::Double(2.25)]), "2.3");
-        assert_eq!(text("%x", vec![int(255)]), "ff");
+        // `2.25` is the currency `2.2500`, rounded half to even: `2.2`.
+        assert_eq!(text("%1.1f", vec![Value::Double(2.25)]), "2.2");
+        assert_eq!(text("%x", vec![int(255)]), "FF");
         assert_eq!(text("%X", vec![int(255)]), "FF");
         assert_eq!(text("%%d", vec![int(3)]), "%d");
         assert_eq!(text("%d%%", vec![int(3)]), "3%");
-        // Unknown conversions are literal, as the RTL leaves them.
-        assert_eq!(text("%q", vec![int(3)]), "%q");
         // A missing argument is the RTL's conversion error.
         assert!(format_text(b"%d", &[]).is_err());
+    }
+
+    /// The `TVarRec` rules of `V2OA` and `FormatBuf`, each line an oracle
+    /// probe of `cargo xtask parity script --phase probe` (`f-*`).
+    #[test]
+    fn format_arguments_are_the_oracle_var_recs() {
+        let fail = "invalid or incompatible with argument";
+        // `%d` takes `vtInteger` only: an `Int64` (`TList.Count`), a
+        // string, a boolean, a double, a `Byte` are refused.
+        assert_eq!(
+            error("%d", vec![Value::Int64(5)]),
+            format!("[EConvertError] Format '%d' {fail}")
+        );
+        assert_eq!(
+            error("%d", vec![string("5")]),
+            format!("[EConvertError] Format '%d' {fail}")
+        );
+        assert_eq!(
+            error("%d", vec![Value::Bool(true)]),
+            format!("[EConvertError] Format '%d' {fail}")
+        );
+        assert_eq!(
+            error("%d", vec![Value::Double(1.5)]),
+            format!("[EConvertError] Format '%d' {fail}")
+        );
+        assert_eq!(
+            error("%d", vec![Value::Byte(5)]),
+            format!("[EConvertError] Format '%d' {fail}")
+        );
+        assert_eq!(text("%d", vec![Value::Smallint(5)]), "5");
+        // `%s` takes `vtVariant` only.
+        assert_eq!(error("%s", vec![int(5)]), format!("[EConvertError] Format '%s' {fail}"));
+        assert_eq!(
+            error("%s", vec![Value::Double(1.5)]),
+            format!("[EConvertError] Format '%s' {fail}")
+        );
+        assert_eq!(
+            error("%s", vec![Value::Bool(true)]),
+            format!("[EConvertError] Format '%s' {fail}")
+        );
+        assert_eq!(text("%s", vec![Value::Int64(4294967296)]), "4294967296");
+        assert_eq!(text("%s", vec![Value::Null]), "");
+        // The float conversions take `vtCurrency` only.
+        assert_eq!(error("%f", vec![int(1)]), format!("[EConvertError] Format '%f' {fail}"));
+        assert_eq!(
+            error("%f", vec![Value::Int64(1)]),
+            format!("[EConvertError] Format '%f' {fail}")
+        );
+        assert_eq!(
+            error("%f", vec![Value::Date(1.0)]),
+            format!("[EConvertError] Format '%f' {fail}")
+        );
+        // The currency's four decimals and its half-to-even rounding.
+        assert_eq!(text("%.6f", vec![Value::Double(1.23456789)]), "1.234600");
+        assert_eq!(text("%.2f", vec![Value::Double(2.675)]), "2.68");
+        assert_eq!(text("%.0f", vec![Value::Double(2.5)]), "2");
+        assert_eq!(text("%.0f", vec![Value::Double(3.5)]), "4");
+        assert_eq!(text("%.4f", vec![Value::Double(0.00005)]), "0.0001");
+        assert_eq!(text("%f", vec![Value::Double(0.00005)]), "0.00");
+        assert_eq!(text("%f", vec![Value::Double(-1.00005)]), "-1.00");
+        assert_eq!(text("%e", vec![Value::Double(1.5)]), "1.500000000000000000E+000");
+        assert_eq!(text("%.3e", vec![Value::Double(1.5)]), "1.500000000000000000E+000");
+        assert_eq!(
+            text("%e", vec![Value::Double(123456789.0)]),
+            "1.234567890000000000E+008"
+        );
+        assert_eq!(text("%g", vec![Value::Double(1.5)]), "1.5");
+        assert_eq!(text("%g", vec![Value::Double(1234567890123.0)]), "1234567890123");
+        assert_eq!(text("%n", vec![Value::Double(1234567.891)]), "1,234,567.89");
+        assert_eq!(text("%m", vec![Value::Double(1234.5678)]), "$1,234.57");
+        assert_eq!(text("%8.3f", vec![Value::Double(1.23456)]), "   1.235");
+        // Beyond the currency range the cast is an `EVariantError`.
+        assert_eq!(error("%f", vec![Value::Double(1e15)]), "Type mismatch");
+        // `%u` and `%x` are 32-bit.
+        assert_eq!(text("%u", vec![int(-1)]), "4294967295");
+        assert_eq!(text("%x", vec![int(-1)]), "FFFFFFFF");
+        assert_eq!(text("%*d", vec![int(4), int(5)]), "   5");
+        assert_eq!(text("%.2s", vec![string("abcdef")]), "ab");
+        // An unknown conversion and the 31-character excerpt.
+        assert_eq!(error("%q", vec![int(1)]), format!("[EConvertError] Format '%q' {fail}"));
+        assert_eq!(
+            error(
+                "%s and this format string is longer than thirty-one chars",
+                vec![int(5)]
+            ),
+            format!("[EConvertError] Format '%s and this format string is lo' {fail}")
+        );
+        assert_eq!(
+            error("%s %s this is a long format string over 31 chars", vec![string("a")]),
+            "[EConvertError] No argument for format '%s %s this is a long format str'"
+        );
+        assert_eq!(
+            error(
+                "    %s   Males: %d   Females: %d",
+                vec![string("r"), Value::Int64(1), Value::Int64(2)]
+            ),
+            format!("[EConvertError] Format '    %s   Males: %d   Females: %' {fail}")
+        );
     }
 
     /// `%n` groups with the en-US thousand separator and honours the
@@ -659,8 +1004,7 @@ mod tests {
         assert_eq!(text("%.0n", vec![Value::Double(1234567.0)]), "1,234,567");
         assert_eq!(text("%n", vec![Value::Double(1234.5)]), "1,234.50");
         assert_eq!(text("%m", vec![Value::Double(1234.5)]), "$1,234.50");
-        // `-1.005` is the binary `-1.00499999999999989...`, so the RTL
-        // (and the port) round it to `-1.00`.
+        // `-1.005` is the currency `-1.0050`, rounded half to even to `-1.00`.
         assert_eq!(text("%.2f", vec![Value::Double(-1.005)]), "-1.00");
         // The phase-5 `FloatToDecimal` tie cases, kept as anchors.
         assert_eq!(delphi::float_to_str_f_fixed(0.0078125, 6), "0.007813");

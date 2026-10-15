@@ -279,10 +279,24 @@ pub trait ScriptObject {
     fn message(&self) -> Option<&str> {
         None
     }
+    /// `E.ClassName` of an exception object whose Delphi class is not a
+    /// registered script class: the handler's `E` is the real exception
+    /// upstream, so `E.ClassName` is `EVariantTypeCastError` for the error
+    /// of a typed assignment (probe `x-raise-04`) although `on E:
+    /// EVariantTypeCastError` is an unknown class name to the interpreter.
+    fn exception_class_name(&self) -> Option<&str> {
+        None
+    }
     /// `Args.Obj.Free` (`JvInterpreter.pas:3976`). A Rust object cannot be
     /// freed through a shared handle; this is the adapter's signal to mark
     /// itself released. Upstream frees the Delphi object here.
     fn free(&mut self) {}
+    /// Whether the value is an `IInterface` (`varUnknown`) rather than a
+    /// `varObject`: the element wrappers of a run. `VarType` answers 13 for
+    /// them, `=` refuses them and `<>` compares them raw.
+    fn is_interface(&self) -> bool {
+        false
+    }
     /// The object as its `TStrings` lines, when it is one
     /// ([`crate::strings::StringList`]): what a host function that takes a
     /// `TStrings` parameter reads, whatever class registered the value.
@@ -563,6 +577,13 @@ pub fn array_init(
                 Some(data_type) => data_type.init(),
                 None => Value::Null,
             },
+            // UPSTREAM-QUIRK: `JvInterpreterArrayGetElement` reads only
+            // `varInteger`, `varDouble`, `varByte`, `varSmallint`, `varDate`,
+            // `varString`, `varEmpty` and `varObject` elements (`:2240`),
+            // and `JvInterpreterArraySetElement` writes the same set, so an
+            // `array of Boolean` (or of `Int64`, a set, ...) reads
+            // `Unassigned` whatever was stored (probe `a-17`).
+            typ if !array_element_kind_is_handled(typ) => Value::Empty,
             typ => zero_value(typ),
         })
         .collect();
@@ -572,6 +593,24 @@ pub fn array_init(
         item_type,
         values,
     })
+}
+
+/// The item types `JvInterpreterArrayGetElement`/`SetElement` handle
+/// (`JvInterpreter.pas:2240`, `:2201`); `Variant` is the port's spelling of
+/// the `varEmpty` item of `array of Variant`.
+fn array_element_kind_is_handled(typ: VarType) -> bool {
+    matches!(
+        typ,
+        VarType::Integer
+            | VarType::Double
+            | VarType::Byte
+            | VarType::Smallint
+            | VarType::Date
+            | VarType::Str
+            | VarType::Empty
+            | VarType::Variant
+            | VarType::Object
+    )
 }
 
 /// `JvInterpreterArrayGetElement` (`JvInterpreter.pas:2226`): the element
@@ -586,6 +625,11 @@ pub fn array_get(array: &ArrayInstance, offset: usize) -> Value {
 /// `VarAsType(Value, varString)` into the string list, `varEmpty` through
 /// `JvInterpreterVarAssignment`, `varObject` through `V2O`).
 pub fn array_set(array: &mut ArrayInstance, offset: usize, value: &Value) -> Result<(), ValueError> {
+    if !array_element_kind_is_handled(array.item_type) {
+        // UPSTREAM-QUIRK: the write of an unhandled item type is the empty
+        // `else` of `JvInterpreterArraySetElement` (`:2213`): nothing.
+        return Ok(());
+    }
     let converted = match array.item_type {
         VarType::Integer => Value::Integer(to_i32(value)?),
         VarType::Double | VarType::Date => Value::Double(to_f64(value)?),
@@ -621,11 +665,28 @@ pub fn array_set(array: &mut ArrayInstance, offset: usize, value: &Value) -> Res
 pub struct VariantArray {
     pub low: i64,
     pub values: Vec<Value>,
+    /// The element type `VarArrayCreate` was given: `varVariant` (12) for
+    /// an open array, `varOleStr` (8) for a `TArray<string>` result such as
+    /// `TDirectory.GetFiles` (`VarType` is `varArray or` this, probe
+    /// `r-04`).
+    pub element_code: i32,
 }
 
 impl VariantArray {
     pub fn new(values: Vec<Value>) -> Self {
-        VariantArray { low: 0, values }
+        VariantArray {
+            low: 0,
+            values,
+            element_code: 12,
+        }
+    }
+
+    pub fn of_strings(values: Vec<Value>) -> Self {
+        VariantArray {
+            low: 0,
+            values,
+            element_code: 8,
+        }
     }
 }
 
@@ -639,6 +700,10 @@ pub enum Value {
     Smallint(i16),
     Integer(i32),
     Byte(u8),
+    /// `varWord`: what `VarType` answers with (a `TVarType` is a `Word`,
+    /// so `VarType(VarType(x))` is 18, probe `a-17`); no declared type maps
+    /// to it (`word` is `varSmallint` to `TypeName2VarTyp`).
+    Word(u16),
     /// `varInt64` -- what an integer literal above `High(Integer)` becomes
     /// (`ParseToken`, `JvInterpreter.pas:5565`).
     Int64(i64),
@@ -671,6 +736,9 @@ impl Value {
             Value::Smallint(_) => VarType::Smallint,
             Value::Integer(_) => VarType::Integer,
             Value::Byte(_) => VarType::Byte,
+            // No declared type is a `Word`; the nearest for the typed-slot
+            // rules is the 16-bit `Smallint`.
+            Value::Word(_) => VarType::Smallint,
             Value::Int64(_) => VarType::Int64,
             Value::Double(_) => VarType::Double,
             Value::Date(_) => VarType::Date,
@@ -708,7 +776,7 @@ impl Value {
     pub fn is_ordinal(&self) -> bool {
         matches!(
             self,
-            Value::Smallint(_) | Value::Integer(_) | Value::Byte(_) | Value::Int64(_) | Value::Bool(_)
+            Value::Smallint(_) | Value::Integer(_) | Value::Byte(_) | Value::Word(_) | Value::Int64(_) | Value::Bool(_)
         )
     }
 
@@ -772,6 +840,7 @@ impl Value {
             Value::Smallint(v) => Some(*v as i64),
             Value::Integer(v) => Some(*v as i64),
             Value::Byte(v) => Some(*v as i64),
+            Value::Word(v) => Some(*v as i64),
             Value::Int64(v) => Some(*v),
             Value::Bool(v) => Some(*v as i64),
             Value::Set(v) => Some(*v as i64),
@@ -799,6 +868,7 @@ impl std::fmt::Debug for Value {
             Value::Smallint(v) => write!(f, "Smallint({v})"),
             Value::Integer(v) => write!(f, "Integer({v})"),
             Value::Byte(v) => write!(f, "Byte({v})"),
+            Value::Word(v) => write!(f, "Word({v})"),
             Value::Int64(v) => write!(f, "Int64({v})"),
             Value::Double(v) => write!(f, "Double({v:?})"),
             Value::Date(v) => write!(f, "Date({v:?})"),
@@ -825,6 +895,7 @@ impl PartialEq for Value {
             (Value::Smallint(a), Value::Smallint(b)) => a == b,
             (Value::Integer(a), Value::Integer(b)) => a == b,
             (Value::Byte(a), Value::Byte(b)) => a == b,
+            (Value::Word(a), Value::Word(b)) => a == b,
             (Value::Int64(a), Value::Int64(b)) => a == b,
             (Value::Double(a), Value::Double(b)) | (Value::Date(a), Value::Date(b)) => a == b,
             (Value::Str(a), Value::Str(b)) => a == b,
@@ -852,7 +923,10 @@ pub fn var_as_type(value: &Value, typ: VarType) -> Result<Value, ValueError> {
     if value.is_empty() || value.is_null() {
         return match typ {
             VarType::Str => Ok(Value::Str(Vec::new())),
-            VarType::Integer | VarType::Smallint | VarType::Byte | VarType::Int64 => Ok(zero_value(typ)),
+            // `Result := 0` (`:2473`): a Delphi literal in a `Variant` takes
+            // the smallest type that holds it, so the slot reads as a
+            // `Byte` (`i := Null; VarType(i)` is 17, probe `v-slot-18`).
+            VarType::Integer | VarType::Smallint | VarType::Byte | VarType::Int64 => Ok(Value::Byte(0)),
             VarType::Bool => Ok(Value::Bool(false)),
             VarType::Double | VarType::Date => Ok(Value::Double(0.0)),
             VarType::Variant => Ok(Value::Null),
@@ -867,8 +941,16 @@ pub fn var_as_type(value: &Value, typ: VarType) -> Result<Value, ValueError> {
         VarType::Array => {
             if value.is_array() {
                 Ok(value.clone())
+            } else if value.is_nil() {
+                // `a := nil` stores the nil pointer; the next `a[0]` is
+                // then `Array type required` (probe `a-28`).
+                Ok(value.clone())
             } else {
-                Err(ValueError::Variant)
+                // `VarAsType` into a custom type (probe `a-29`).
+                Err(ValueError::external_class(
+                    "EVariantTypeCastError",
+                    "Invalid variant type conversion".to_owned(),
+                ))
             }
         }
         VarType::Empty => Ok(value.clone()),
@@ -894,6 +976,44 @@ pub fn var_as_type(value: &Value, typ: VarType) -> Result<Value, ValueError> {
                 Err(ValueError::Variant)
             }
         }
+    }
+}
+
+/// `TypeCast`'s retag (`JvInterpreter.pas:4433`, `TVarData(Value).VType :=
+/// VT`): a double cast to an integer kind reads the low bits of its IEEE
+/// payload (`Integer(1.5)` is 0), an integer cast to a double reads its
+/// bits as a double, a nil pointer is 0, and the conversions that are
+/// well-defined (a numeric string, a boolean, an integer into a wider or
+/// narrower integer) convert; what would fail keeps the value, as a retag
+/// never raises.
+pub fn retag(value: &Value, typ: VarType) -> Value {
+    match (value, typ) {
+        (Value::Double(v) | Value::Date(v), VarType::Integer) => Value::Integer(v.to_bits() as u32 as i32),
+        (Value::Double(v) | Value::Date(v), VarType::Smallint) => Value::Smallint(v.to_bits() as u16 as i16),
+        (Value::Double(v) | Value::Date(v), VarType::Byte) => Value::Byte(v.to_bits() as u8),
+        (Value::Double(v) | Value::Date(v), VarType::Int64) => Value::Int64(v.to_bits() as i64),
+        (Value::Integer(v), VarType::Double) => Value::Double(f64::from_bits(*v as u32 as u64)),
+        (Value::Smallint(v), VarType::Double) => Value::Double(f64::from_bits(*v as u16 as u64)),
+        (Value::Byte(v), VarType::Double) => Value::Double(f64::from_bits(u64::from(*v))),
+        (Value::Int64(v), VarType::Double) => Value::Double(f64::from_bits(*v as u64)),
+        (Value::Pointer(0) | Value::Null | Value::Empty, VarType::Integer | VarType::Smallint | VarType::Byte) => {
+            Value::Byte(0)
+        }
+        // A conversion that fails is a reinterpreted payload upstream
+        // (`Integer('x')` is the low bits of a string pointer, `Double('x')`
+        // those bits as a double): the port stands in the target's zero,
+        // so the script continues as it does there (probes `x-048`,
+        // `x-050`, `x-053`).
+        _ => var_as_type(value, typ).unwrap_or_else(|_| match typ {
+            VarType::Integer => Value::Integer(0),
+            VarType::Smallint => Value::Smallint(0),
+            VarType::Byte => Value::Byte(0),
+            VarType::Int64 => Value::Int64(0),
+            VarType::Double | VarType::Date => Value::Double(0.0),
+            VarType::Bool => Value::Bool(false),
+            VarType::Str => Value::Str(Vec::new()),
+            _ => value.clone(),
+        }),
     }
 }
 
@@ -982,76 +1102,199 @@ pub fn v2s(value: &Value) -> Result<i32, ValueError> {
 }
 
 //=== Numeric conversions (the implicit conversions of typed slots) ==========
+//
+// The conversions are Delphi's `VarAsType` over the interpreter's values
+// (`JvInterpreterVarAsType`, `JvInterpreter.pas:2466`, and the `Integer(V)`
+// reads of the RTL handlers). A conversion that fails raises Delphi's own
+// variant error, with its class and text: `EVariantTypeCastError` `Could
+// not convert variant of type (UnicodeString) into type (Integer)` for a
+// string that is no number, `EVariantOverflowError` `Overflow while
+// converting variant of type (Int64) into type (Integer)` for a value out
+// of the target's range, `EVariantTypeCastError` `Invalid variant type
+// conversion` for a custom kind (an object, an array). Inside an expression
+// `Expression1`'s handler turns any of them into `Type mismatch`
+// (`Interpreter::expression1`); in a typed assignment or a statement call
+// the error reaches the log with its class, as the oracle prints it
+// (probes `v-slot-03`, `v-slot-12`, `x-006`, `x-038`, 2026-10-15).
 
+thread_local! {
+    static PENDING_VARIANT_ERROR: RefCell<Option<ValueError>> = const { RefCell::new(None) };
+}
+
+/// Records a variant error an argument reader found (an `IInterface(V)`
+/// cast of a value that is no interface, which upstream raises inside the
+/// handler); the adapter raises it when the handler returns
+/// ([`take_pending_variant_error`]).
+pub fn set_pending_variant_error(error: ValueError) {
+    PENDING_VARIANT_ERROR.with(|slot| {
+        let mut slot = slot.borrow_mut();
+        if slot.is_none() {
+            *slot = Some(error);
+        }
+    });
+}
+
+/// The error [`set_pending_variant_error`] recorded, as a `Result`.
+pub fn take_pending_variant_error() -> Result<(), ValueError> {
+    match PENDING_VARIANT_ERROR.with(|slot| slot.borrow_mut().take()) {
+        Some(error) => Err(error),
+        None => Ok(()),
+    }
+}
+
+/// `VarTypeAsText` of a value, for the conversion messages.
+pub fn delphi_type_name(value: &Value) -> &'static str {
+    match value {
+        Value::Empty => "Empty",
+        Value::Null => "Null",
+        Value::Smallint(_) => "Smallint",
+        Value::Integer(_) => "Integer",
+        Value::Byte(_) => "Byte",
+        Value::Word(_) => "Word",
+        Value::Int64(_) => "Int64",
+        Value::Double(_) => "Double",
+        Value::Date(_) => "Date",
+        Value::Str(_) => "UnicodeString",
+        Value::Bool(_) => "Boolean",
+        Value::Set(_) | Value::Pointer(_) | Value::Object(_) | Value::Class(_) | Value::Record(_) => "",
+        Value::Array(_) | Value::VariantArray(_) => "",
+    }
+}
+
+/// `EVariantTypeCastError`: `Could not convert variant of type (X) into
+/// type (Y)`, or `Invalid variant type conversion` for a custom kind.
+pub fn cast_error(value: &Value, target: &str) -> ValueError {
+    let source = match value {
+        // An `IInterface` element is a `varUnknown` (probe `x-236`).
+        Value::Object(object) if object.borrow().is_interface() => "Unknown",
+        other => delphi_type_name(other),
+    };
+    if source.is_empty() {
+        return ValueError::external_class("EVariantTypeCastError", "Invalid variant type conversion".to_owned());
+    }
+    ValueError::external_class(
+        "EVariantTypeCastError",
+        format!("Could not convert variant of type ({source}) into type ({target})"),
+    )
+}
+
+/// `EVariantOverflowError`: `Overflow while converting variant of type (X)
+/// into type (Y)`.
+pub fn overflow_error(value: &Value, target: &str) -> ValueError {
+    ValueError::external_class(
+        "EVariantOverflowError",
+        format!(
+            "Overflow while converting variant of type ({}) into type ({target})",
+            delphi_type_name(value)
+        ),
+    )
+}
+
+/// The whole-number reading of a value for an integer slot: the integer
+/// kinds as they are, a boolean as Delphi's `-1`/`0`, a double rounded
+/// half to even (`VarR8ToI4`), a string through [`str_to_number`] (a
+/// hexadecimal `$` form or a decimal, rounded when fractional), `Empty` and
+/// `Null` as 0 (`JvInterpreterVarAsType`), a nil pointer as 0.
 pub fn to_i64(value: &Value) -> Result<i64, ValueError> {
     match value {
         Value::Smallint(v) => Ok(i64::from(*v)),
         Value::Integer(v) => Ok(i64::from(*v)),
         Value::Byte(v) => Ok(i64::from(*v)),
+        Value::Word(v) => Ok(i64::from(*v)),
         Value::Int64(v) => Ok(*v),
-        Value::Bool(v) => Ok(i64::from(*v)),
+        Value::Bool(v) => Ok(if *v { -1 } else { 0 }),
         Value::Set(v) => Ok(i64::from(*v)),
-        Value::Double(v) | Value::Date(v) => f64_to_i64(*v),
-        Value::Empty | Value::Null => Ok(0),
-        Value::Str(bytes) => match str_to_i64(bytes) {
-            Some(v) => Ok(v),
-            None => Err(ValueError::Variant),
+        Value::Double(v) | Value::Date(v) => f64_to_i64(*v).ok_or_else(|| overflow_error(value, "Int64")),
+        // `Unassigned` converts to 0; `Null` does not convert at all
+        // (`NullStrictConvert`: `IntToStr(Null)` is the cast error, probe
+        // `x-257`); the typed-slot rule for both is `var_as_type`'s.
+        Value::Empty => Ok(0),
+        Value::Null => Err(cast_error(value, "Int64")),
+        Value::Str(bytes) => match str_to_number(bytes) {
+            Some(Number::Int(v)) => Ok(v),
+            Some(Number::Float(v)) => f64_to_i64(v).ok_or_else(|| overflow_error(value, "Int64")),
+            None => Err(cast_error(value, "Int64")),
         },
-        _ => Err(ValueError::Variant),
+        Value::Pointer(0) => Ok(0),
+        // `i := <element>` is the cast error `(Unknown) into type (Integer)`
+        // (probe `x-236`); `IntToStr(<element>)` is `Type mismatch` (probe
+        // `x-234`) and the function refuses the interface itself.
+        _ => Err(cast_error(value, "Int64")),
     }
 }
 
+/// The `Integer` reading: [`to_i64`] within the `Integer` range.
 pub fn to_i32(value: &Value) -> Result<i32, ValueError> {
-    let v = to_i64(value)?;
-    i32::try_from(v).map_err(|_| ValueError::Variant)
+    let v = to_i64(value).map_err(|error| retarget(error, "Integer"))?;
+    i32::try_from(v).map_err(|_| overflow_error(value, "Integer"))
 }
 
 pub fn to_i16(value: &Value) -> Result<i16, ValueError> {
-    let v = to_i64(value)?;
-    i16::try_from(v).map_err(|_| ValueError::Variant)
+    let v = to_i64(value).map_err(|error| retarget(error, "Smallint"))?;
+    i16::try_from(v).map_err(|_| overflow_error(value, "Smallint"))
 }
 
 pub fn to_u8(value: &Value) -> Result<u8, ValueError> {
-    let v = to_i64(value)?;
-    u8::try_from(v).map_err(|_| ValueError::Variant)
+    let v = to_i64(value).map_err(|error| retarget(error, "Byte"))?;
+    u8::try_from(v).map_err(|_| overflow_error(value, "Byte"))
 }
 
+/// The message of a failed [`to_i64`] names `Int64`; the narrower readers
+/// name their own target.
+fn retarget(error: ValueError, target: &str) -> ValueError {
+    match error {
+        ValueError::ExternalClass { class, message } => ValueError::ExternalClass {
+            class,
+            message: message.replace("into type (Int64)", &format!("into type ({target})")),
+        },
+        other => other,
+    }
+}
+
+/// The `Double` reading: a boolean is `-1`/`0`, a string is parsed as the
+/// OLE automation `VarR8FromStr` parses it ([`str_to_f64`]: a leading
+/// currency sign and grouping commas are accepted), `Empty` and `Null` are
+/// 0.
 pub fn to_f64(value: &Value) -> Result<f64, ValueError> {
     match value {
         Value::Smallint(v) => Ok(f64::from(*v)),
         Value::Integer(v) => Ok(f64::from(*v)),
         Value::Byte(v) => Ok(f64::from(*v)),
+        Value::Word(v) => Ok(f64::from(*v)),
         Value::Int64(v) => Ok(*v as f64),
         Value::Double(v) | Value::Date(v) => Ok(*v),
-        Value::Bool(v) => Ok(if *v { 1.0 } else { 0.0 }),
-        Value::Empty | Value::Null => Ok(0.0),
-        Value::Str(bytes) => match std::str::from_utf8(bytes)
-            .ok()
-            .and_then(|s| s.trim().parse::<f64>().ok())
-        {
-            Some(v) => Ok(v),
-            None => Err(ValueError::Variant),
-        },
-        _ => Err(ValueError::Variant),
+        Value::Bool(v) => Ok(if *v { -1.0 } else { 0.0 }),
+        Value::Empty | Value::Pointer(0) => Ok(0.0),
+        Value::Null => Err(cast_error(value, "Double")),
+        Value::Str(bytes) => str_to_f64(bytes).ok_or_else(|| cast_error(value, "Double")),
+        _ => Err(cast_error(value, "Double")),
     }
 }
 
+/// The `Boolean` reading: a number is `<> 0`, the strings `True`/`False`
+/// (and the `-1`/`0` texts) convert, anything else is the cast error.
 pub fn to_bool(value: &Value) -> Result<bool, ValueError> {
     match value {
         Value::Bool(v) => Ok(*v),
-        Value::Empty | Value::Null => Ok(false),
-        Value::Integer(0) | Value::Smallint(0) | Value::Byte(0) | Value::Int64(0) => Ok(false),
-        Value::Integer(_) | Value::Smallint(_) | Value::Byte(_) | Value::Int64(_) => Ok(true),
+        Value::Empty => Ok(false),
+        Value::Null => Err(cast_error(value, "Boolean")),
+        Value::Integer(0) | Value::Smallint(0) | Value::Byte(0) | Value::Word(0) | Value::Int64(0) => Ok(false),
+        Value::Integer(_) | Value::Smallint(_) | Value::Byte(_) | Value::Word(_) | Value::Int64(_) => Ok(true),
+        Value::Double(v) | Value::Date(v) => Ok(*v != 0.0),
         Value::Str(bytes) => {
-            if bytes.eq_ignore_ascii_case(b"true") {
+            let text = String::from_utf8_lossy(bytes);
+            let text = text.trim();
+            if text.eq_ignore_ascii_case("true") {
                 Ok(true)
-            } else if bytes.eq_ignore_ascii_case(b"false") {
+            } else if text.eq_ignore_ascii_case("false") {
                 Ok(false)
+            } else if let Ok(v) = text.parse::<f64>() {
+                Ok(v != 0.0)
             } else {
-                Err(ValueError::Variant)
+                Err(cast_error(value, "Boolean"))
             }
         }
-        _ => Err(ValueError::Variant),
+        _ => Err(cast_error(value, "Boolean")),
     }
 }
 
@@ -1062,12 +1305,21 @@ pub fn to_str(value: &Value) -> Result<Vec<u8>, ValueError> {
         Value::Smallint(v) => Ok(v.to_string().into_bytes()),
         Value::Integer(v) => Ok(v.to_string().into_bytes()),
         Value::Byte(v) => Ok(v.to_string().into_bytes()),
+        Value::Word(v) => Ok(v.to_string().into_bytes()),
         Value::Int64(v) => Ok(v.to_string().into_bytes()),
         Value::Double(v) | Value::Date(v) => Ok(float_to_str_delphi(*v)),
         Value::Bool(true) => Ok(b"True".to_vec()),
         Value::Bool(false) => Ok(b"False".to_vec()),
-        Value::Empty | Value::Null => Ok(Vec::new()),
-        _ => Err(ValueError::Variant),
+        Value::Empty | Value::Pointer(0) => Ok(Vec::new()),
+        // The string parameters of the RTL are `OleStr`s to the conversion
+        // (`sl.Add(Null)` is `Could not convert variant of type (Null) into
+        // type (OleStr)`, probe `x-289`).
+        Value::Null => Err(cast_error(value, "OleStr")),
+        Value::Object(object) if object.borrow().is_interface() => Err(ValueError::external_class(
+            "EVariantTypeCastError",
+            "Could not convert variant of type (Unknown) into type (OleStr)".to_owned(),
+        )),
+        _ => Err(cast_error(value, "OleStr")),
     }
 }
 
@@ -1088,35 +1340,65 @@ pub fn parse_float_literal(text: &[u8]) -> Option<f64> {
     std::str::from_utf8(text).ok().and_then(|s| s.parse().ok())
 }
 
-fn str_to_i64(bytes: &[u8]) -> Option<i64> {
+/// A number read from a string.
+pub enum Number {
+    Int(i64),
+    Float(f64),
+}
+
+/// The string-to-integer reading of a typed slot (`VarAsType(S,
+/// varInteger)`): a `$` hexadecimal, a whole decimal, else the decimal
+/// reading of [`str_to_f64`] (so `'1.5'` lands as `2` after rounding),
+/// with the spaces around it ignored.
+pub fn str_to_number(bytes: &[u8]) -> Option<Number> {
     let text = std::str::from_utf8(bytes).ok()?.trim();
     if let Some(hex) = text.strip_prefix('$') {
-        i64::from_str_radix(hex.trim(), 16).ok()
-    } else {
-        text.parse().ok()
+        return i64::from_str_radix(hex.trim(), 16).ok().map(Number::Int);
     }
+    if let Ok(v) = text.parse::<i64>() {
+        return Some(Number::Int(v));
+    }
+    str_to_f64(bytes).map(Number::Float)
+}
+
+/// The string-to-double reading of the variant arithmetic
+/// (`VarR8FromStr`, the OLE automation parser): spaces around the number,
+/// a leading `$` currency sign and grouping commas are accepted, an
+/// exponent too; anything else is no number (`'x' + 5` is `Type mismatch`,
+/// `'$10' + 1` is `11`, `'1e2' + 1` is `101`, probes `v-04`, `v-66`,
+/// `v-67`).
+pub fn str_to_f64(bytes: &[u8]) -> Option<f64> {
+    let text = std::str::from_utf8(bytes).ok()?.trim();
+    let text = text.strip_prefix('$').unwrap_or(text).trim();
+    let text: String = text.chars().filter(|c| *c != ',').collect();
+    if text.is_empty() || text.eq_ignore_ascii_case("inf") || text.eq_ignore_ascii_case("nan") || text.contains("inf") {
+        return None;
+    }
+    text.parse::<f64>().ok()
 }
 
 /// The variant-to-integer conversion of a typed slot assignment: the value
 /// rounds to the nearest whole number (`VarI4FromR8`; the port rounds half
 /// to even, as the RTL `Round` does, see `xedit_core::delphi::round`), and a
-/// value outside the target's range is a variant error.
-fn f64_to_i64(value: f64) -> Result<i64, ValueError> {
+/// value outside the `Int64` range is `None`.
+fn f64_to_i64(value: f64) -> Option<i64> {
     if !value.is_finite() || value < i64::MIN as f64 || value >= i64::MAX as f64 {
-        return Err(ValueError::Variant);
+        return None;
     }
-    Ok(value.round_ties_even() as i64)
+    Some(value.round_ties_even() as i64)
 }
 
 /// `FloatToStr` for the values a script turns into text: 15 significant
 /// digits, plain notation inside `1e-4 .. 1e15`, otherwise one digit before
-/// the point and an `E` exponent (`1E16`, `1E-5`).
+/// the point and an `E` exponent (`1E16`, `1E-5`); the RTL's `INF`, `-INF`
+/// and `NAN` for the non-finite values (`VarToStr(1 / 0)` is `INF`, probe
+/// `v-56`).
 pub fn float_to_str_delphi(value: f64) -> Vec<u8> {
     if value.is_nan() {
-        return b"Nan".to_vec();
+        return b"NAN".to_vec();
     }
     if value.is_infinite() {
-        return if value > 0.0 { b"Inf".to_vec() } else { b"-Inf".to_vec() };
+        return if value > 0.0 { b"INF".to_vec() } else { b"-INF".to_vec() };
     }
     if value == value.trunc() && value.abs() < 1e15 {
         return format!("{}", value as i64).into_bytes();
@@ -1164,93 +1446,241 @@ pub fn float_to_str_delphi(value: f64) -> Vec<u8> {
     result
 }
 
+//=== The variant arithmetic ================================================
+//
+// Delphi's `Variant` operators as the oracle computes them (the `v-*`
+// probes of `cargo xtask parity script --phase probe`, 2026-10-15), which
+// `Expression` applies to its operands (`JvInterpreter.pas:5710-5836`):
+//
+// - `Null` on either side of an arithmetic operator is `Null`.
+// - Two strings concatenate under `+`; a string beside a number or under
+//   any other operator is read as a `Double` ([`str_to_f64`]), and one
+//   that is no number is the `EVariantTypeCastError` `Expression1` reports
+//   as `Type mismatch` (`'1' + 5` is the double `6`, `'x' + 5` fails).
+// - A boolean is the integer `-1`/`0` beside an integer (`True + 1` is
+//   `0`), and a double beside a double, a string or another boolean
+//   (`True + True` is the double `-2`).
+// - Two `Integer`s compute in `Integer`; a sum, difference or product
+//   that overflows is a `Double` (`2147483647 + 1` is the double
+//   `2147483648`). An `Int64` beside an integer computes in `Int64`.
+// - `/` is a double division without a zero check (`1 / 0` is `INF`);
+//   `div` and `mod` round their operands to integers (`1.5 div 1` is `2`)
+//   and raise `EDivByZero` `Division by zero`.
+// - A comparison of two strings is the string order; of a string and a
+//   number the number order after the string is read as a double (`'10' >
+//   9`, `'5' = 5`, `'x' = 5` fails); a boolean counts `-1`/`0` (`True = 1`
+//   is `False`). `Null` equals only `Null` and orders below everything
+//   (`Null < 1` is `True`, `Null > 1` is `False`).
+
+/// A numeric operand of the arithmetic.
+#[derive(Clone, Copy)]
+enum Num {
+    Int(i32),
+    Int64(i64),
+    Double(f64),
+}
+
+/// `+`, `-` and `*` of Delphi's variants.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Arith {
+    Add,
+    Sub,
+    Mul,
+}
+
+/// The arithmetic reading of an operand beside `other`.
+fn arith_operand(value: &Value, other: &Value) -> Result<Num, ValueError> {
+    Ok(match value {
+        Value::Smallint(v) => Num::Int(i32::from(*v)),
+        Value::Integer(v) => Num::Int(*v),
+        Value::Byte(v) => Num::Int(i32::from(*v)),
+        Value::Word(v) => Num::Int(i32::from(*v)),
+        Value::Int64(v) => Num::Int64(*v),
+        Value::Double(v) | Value::Date(v) => Num::Double(*v),
+        Value::Empty => Num::Int(0),
+        Value::Bool(v) => {
+            let n = if *v { -1 } else { 0 };
+            match other {
+                Value::Smallint(_)
+                | Value::Integer(_)
+                | Value::Byte(_)
+                | Value::Word(_)
+                | Value::Int64(_)
+                | Value::Empty => Num::Int(n),
+                _ => Num::Double(f64::from(n)),
+            }
+        }
+        Value::Str(bytes) => Num::Double(str_to_f64(bytes).ok_or_else(|| cast_error(value, "Double"))?),
+        _ => return Err(cast_error(value, "Double")),
+    })
+}
+
+fn arith(op: Arith, left: &Value, right: &Value) -> Result<Value, ValueError> {
+    if left.is_null() || right.is_null() {
+        return Ok(Value::Null);
+    }
+    if op == Arith::Add && left.is_str() && right.is_str() {
+        let mut result = left.as_str().unwrap_or_default().to_vec();
+        result.extend_from_slice(right.as_str().unwrap_or_default());
+        return Ok(Value::Str(result));
+    }
+    let a = arith_operand(left, right)?;
+    let b = arith_operand(right, left)?;
+    let double = |a: f64, b: f64| match op {
+        Arith::Add => a + b,
+        Arith::Sub => a - b,
+        Arith::Mul => a * b,
+    };
+    Ok(match (a, b) {
+        (Num::Double(a), b) => Num::Double(double(a, num_f64(b))),
+        (a, Num::Double(b)) => Num::Double(double(num_f64(a), b)),
+        (Num::Int(a), Num::Int(b)) => {
+            let result = match op {
+                Arith::Add => a.checked_add(b),
+                Arith::Sub => a.checked_sub(b),
+                Arith::Mul => a.checked_mul(b),
+            };
+            match result {
+                Some(v) => Num::Int(v),
+                None => Num::Double(double(f64::from(a), f64::from(b))),
+            }
+        }
+        (a, b) => {
+            let (a, b) = (num_i64(a), num_i64(b));
+            let result = match op {
+                Arith::Add => a.checked_add(b),
+                Arith::Sub => a.checked_sub(b),
+                Arith::Mul => a.checked_mul(b),
+            };
+            match result {
+                Some(v) => Num::Int64(v),
+                None => Num::Double(double(a as f64, b as f64)),
+            }
+        }
+    }
+    .into_value())
+}
+
+fn num_f64(n: Num) -> f64 {
+    match n {
+        Num::Int(v) => f64::from(v),
+        Num::Int64(v) => v as f64,
+        Num::Double(v) => v,
+    }
+}
+
+fn num_i64(n: Num) -> i64 {
+    match n {
+        Num::Int(v) => i64::from(v),
+        Num::Int64(v) => v,
+        Num::Double(v) => v.round_ties_even() as i64,
+    }
+}
+
+impl Num {
+    fn into_value(self) -> Value {
+        match self {
+            Num::Int(v) => Value::Integer(v),
+            Num::Int64(v) => Value::Int64(v),
+            Num::Double(v) => Value::Double(v),
+        }
+    }
+}
+
+/// `EDivByZero`'s `Division by zero`.
+fn div_by_zero() -> ValueError {
+    ValueError::external_class("EDivByZero", "Division by zero".to_owned())
+}
+
+/// The integer reading of an operand of `div`, `mod`, `shl`, `shr`, `and`,
+/// `or` and `xor`: a double or a numeric string rounded, a boolean as
+/// `-1`/`0`.
+fn int_operand(value: &Value) -> Result<(i64, bool), ValueError> {
+    Ok(match value {
+        Value::Int64(v) => (*v, true),
+        other => (to_i64(other)?, false),
+    })
+}
+
+/// `Integer` when it fits and neither operand was an `Int64`, else
+/// `Int64`.
+fn int_value(value: i64, wide: bool) -> Value {
+    match (wide, i32::try_from(value)) {
+        (false, Ok(v)) => Value::Integer(v),
+        _ => Value::Int64(value),
+    }
+}
+
 //=== Comparison =============================================================
 
-/// `VarCmp` for the pairs the interpreter's expression stack can produce.
-/// `Null` propagates (a comparison with `Null` is `Null`); `Empty` coerces
-/// to the other side's zero default; numbers compare as `Double` when either
-/// is one (a `varBoolean` counts 0/1, the `Ord(V = True)` of `Var2Type`);
-/// strings compare byte-wise (the locale case-sensitive collation upstream),
-/// and every other pairing is a variant error.
+/// `VarCmp` for the pairs the interpreter's expression stack can produce:
+/// two strings compare byte-wise (the locale-free `VarCompareValue` of
+/// Unicode strings upstream); otherwise both sides read as doubles (a
+/// string that is no number is the cast error, a boolean `-1`/`0`,
+/// `Empty` 0). `Null` is handled by the callers.
 pub fn variant_compare(left: &Value, right: &Value) -> Result<Ordering, ValueError> {
     if left.is_null() || right.is_null() {
         return Err(ValueError::Variant);
     }
-    let left = coerce_empty(left, right);
-    let right = coerce_empty(right, &left);
-    let (left, right) = (left.as_ref(), right.as_ref());
     match (left, right) {
         (Value::Str(a), Value::Str(b)) => Ok(a.cmp(b)),
         (Value::Bool(a), Value::Bool(b)) => Ok(a.cmp(b)),
-        (a, b) if is_numeric(a) && is_numeric(b) => {
-            if matches!(a, Value::Double(_) | Value::Date(_)) || matches!(b, Value::Double(_) | Value::Date(_)) {
-                let a = to_f64(a)?;
-                let b = to_f64(b)?;
-                a.partial_cmp(&b).ok_or(ValueError::Variant)
-            } else {
-                Ok(to_i64(a)?.cmp(&to_i64(b)?))
-            }
-        }
         (Value::VariantArray(a), Value::VariantArray(b)) => Ok((Rc::as_ptr(a) as usize).cmp(&(Rc::as_ptr(b) as usize))),
-        _ => Err(ValueError::Variant),
-    }
-}
-
-fn is_numeric(value: &Value) -> bool {
-    matches!(
-        value,
-        Value::Smallint(_)
-            | Value::Integer(_)
-            | Value::Byte(_)
-            | Value::Int64(_)
-            | Value::Double(_)
-            | Value::Date(_)
-            | Value::Bool(_)
-    )
-}
-
-/// An `Empty`/`Null` operand takes the other side's zero default (COM's
-/// `VarCmp` coercion).
-fn coerce_empty<'a>(value: &'a Value, other: &Value) -> std::borrow::Cow<'a, Value> {
-    if value.is_empty() {
-        std::borrow::Cow::Owned(match other.var_type() {
-            VarType::Str => Value::Str(Vec::new()),
-            VarType::Double | VarType::Date => Value::Double(0.0),
-            VarType::Bool => Value::Bool(false),
-            _ => Value::Integer(0),
-        })
-    } else {
-        std::borrow::Cow::Borrowed(value)
+        (a, b) => {
+            let a = to_f64(a)?;
+            let b = to_f64(b)?;
+            a.partial_cmp(&b).ok_or(ValueError::Variant)
+        }
     }
 }
 
 //=== Operators ==============================================================
 
 /// `not Expression(TTyp)` (`JvInterpreter.pas:5785`): logical for a boolean,
-/// bitwise for an integer.
+/// bitwise for an integer (a double or a numeric string rounded first);
+/// `Null` stays `Null`.
 pub fn unary_not(value: &Value) -> Result<Value, ValueError> {
     match value {
         Value::Bool(v) => Ok(Value::Bool(!v)),
+        Value::Null => Ok(Value::Null),
         Value::Smallint(v) => Ok(Value::Smallint(!v)),
         Value::Integer(v) => Ok(Value::Integer(!v)),
         Value::Byte(v) => Ok(Value::Byte(!v)),
         Value::Int64(v) => Ok(Value::Int64(!v)),
         Value::Set(v) => Ok(Value::Set(!v)),
-        _ => Err(ValueError::Variant),
+        Value::Str(_) => Err(ValueError::Variant),
+        other => {
+            let (v, wide) = int_operand(other)?;
+            Ok(int_value(!v, wide))
+        }
     }
 }
 
-/// Unary minus (`JvInterpreter.pas:5741`).
+/// Unary minus (`JvInterpreter.pas:5741`): a string negates as a double
+/// (`-'5'` is the double `-5`), a boolean as its integer, an `Integer`
+/// whose negation overflows becomes a double, `Null` stays `Null`.
 pub fn unary_minus(value: &Value) -> Result<Value, ValueError> {
     match value {
-        Value::Smallint(v) => Ok(Value::Smallint(v.checked_neg().ok_or(ValueError::Variant)?)),
-        Value::Integer(v) => Ok(Value::Integer(v.checked_neg().ok_or(ValueError::Variant)?)),
+        Value::Smallint(v) => Ok(Value::Integer(-(i32::from(*v)))),
+        Value::Integer(v) => Ok(match v.checked_neg() {
+            Some(n) => Value::Integer(n),
+            None => Value::Double(-f64::from(*v)),
+        }),
         Value::Byte(v) => Ok(Value::Integer(-(i32::from(*v)))),
-        Value::Int64(v) => Ok(Value::Int64(v.checked_neg().ok_or(ValueError::Variant)?)),
+        Value::Int64(v) => Ok(match v.checked_neg() {
+            Some(n) => Value::Int64(n),
+            None => Value::Double(-(*v as f64)),
+        }),
         Value::Double(v) => Ok(Value::Double(-v)),
         Value::Date(v) => Ok(Value::Date(-v)),
-        Value::Empty | Value::Null => Ok(Value::Integer(0)),
-        _ => Err(ValueError::Variant),
+        // `-True` is the `Smallint` `-1` (probes `x-188`, `x-197`).
+        Value::Bool(v) => Ok(Value::Smallint(if *v { -1 } else { 0 })),
+        Value::Str(bytes) => Ok(Value::Double(
+            -str_to_f64(bytes).ok_or_else(|| cast_error(value, "Double"))?,
+        )),
+        Value::Null => Ok(Value::Null),
+        Value::Empty => Ok(Value::Integer(0)),
+        _ => Err(cast_error(value, "Double")),
     }
 }
 
@@ -1262,40 +1692,39 @@ pub fn binary_op(op: BinOp, left: &Value, right: &Value) -> Result<Value, ValueE
             // The `varSet` union (`:5727`): only a set on the *left* takes
             // this arm, as upstream tests `Tmp` only.
             Value::Set(a) => Ok(Value::Set(*a | to_i32(right)?)),
-            _ => variant_add(left, right),
+            _ => arith(Arith::Add, left, right),
         },
         BinOp::Minus => match left {
             // The `varSet` difference (`:5748`).
             Value::Set(a) => Ok(Value::Set(*a & !to_i32(right)?)),
-            _ => variant_sub(left, right),
+            _ => arith(Arith::Sub, left, right),
         },
-        BinOp::Mul => variant_mul(left, right),
-        // `/` is always a double division (`:5759`).
+        BinOp::Mul => arith(Arith::Mul, left, right),
+        // `/` is always a double division (`:5759`), without a zero check:
+        // the floating point exceptions are masked, so `1 / 0` is `INF`.
         BinOp::Div => {
-            let a = to_f64(left)?;
-            let b = to_f64(right)?;
-            if b == 0.0 {
-                return Err(ValueError::External("Division by zero".to_owned()));
+            if left.is_null() || right.is_null() {
+                return Ok(Value::Null);
             }
+            let a = num_f64(arith_operand(left, right)?);
+            let b = num_f64(arith_operand(right, left)?);
             Ok(Value::Double(a / b))
         }
-        BinOp::IntDiv => {
-            let a = to_i64(left)?;
-            let b = to_i64(right)?;
-            if b == 0 {
-                return Err(ValueError::External("Division by zero".to_owned()));
+        BinOp::IntDiv | BinOp::Mod => {
+            if left.is_null() || right.is_null() {
+                return Ok(Value::Null);
             }
-            let quotient = a.checked_div(b).ok_or(ValueError::Variant)?;
-            Ok(int_result(left, right, quotient))
-        }
-        BinOp::Mod => {
-            let a = to_i64(left)?;
-            let b = to_i64(right)?;
+            let (a, wide_a) = int_operand(left)?;
+            let (b, wide_b) = int_operand(right)?;
             if b == 0 {
-                return Err(ValueError::External("Division by zero".to_owned()));
+                return Err(div_by_zero());
             }
-            let remainder = a.checked_rem(b).ok_or(ValueError::Variant)?;
-            Ok(int_result(left, right, remainder))
+            let result = if op == BinOp::IntDiv {
+                a.checked_div(b)
+            } else {
+                a.checked_rem(b)
+            };
+            Ok(int_value(result.ok_or(ValueError::Variant)?, wide_a || wide_b))
         }
         BinOp::Or | BinOp::And | BinOp::Xor => match (left, right) {
             (Value::Bool(a), Value::Bool(b)) => Ok(Value::Bool(match op {
@@ -1304,34 +1733,48 @@ pub fn binary_op(op: BinOp, left: &Value, right: &Value) -> Result<Value, ValueE
                 _ => *a != *b,
             })),
             _ => {
-                let a = to_i64(left)?;
-                let b = to_i64(right)?;
+                if left.is_null() || right.is_null() {
+                    // The three-valued rules: `Null or True` is `True`,
+                    // `Null and False` is `False`, the rest is `Null`
+                    // (probe `x-176`).
+                    let other = if left.is_null() { right } else { left };
+                    return Ok(match (op, other) {
+                        (BinOp::Or, Value::Bool(true)) => Value::Bool(true),
+                        (BinOp::And, Value::Bool(false)) => Value::Bool(false),
+                        _ => Value::Null,
+                    });
+                }
+                let (a, wide_a) = int_operand(left)?;
+                let (b, wide_b) = int_operand(right)?;
                 let result = match op {
                     BinOp::Or => a | b,
                     BinOp::And => a & b,
                     _ => a ^ b,
                 };
-                Ok(int_result(left, right, result))
+                Ok(int_value(result, wide_a || wide_b))
             }
         },
         BinOp::Shl => {
-            let a = to_i32(left)?;
-            let b = to_i32(right)?;
-            Ok(Value::Integer(a.wrapping_shl(b as u32)))
+            let (a, _) = int_operand(left)?;
+            let (b, _) = int_operand(right)?;
+            Ok(Value::Integer((a as i32).wrapping_shl(b as u32)))
         }
         BinOp::Shr => {
             // A logical shift, as the 32-bit `shr` is (`$FFFFFFFF shr 1` is
             // `$7FFFFFFF`).
-            let a = to_i32(left)?;
-            let b = to_i32(right)?;
-            Ok(Value::Integer(((a as u32) >> (b as u32 & 31)) as i32))
+            let (a, _) = int_operand(left)?;
+            let (b, _) = int_operand(right)?;
+            Ok(Value::Integer(((a as i32 as u32) >> (b as u32 & 31)) as i32))
         }
         BinOp::Equ | BinOp::NotEqu => compare_equality(op, left, right),
         BinOp::Greater | BinOp::Less | BinOp::EquGreater | BinOp::EquLess => {
-            if left.is_null() || right.is_null() {
-                return Ok(Value::Null);
-            }
-            let ordering = variant_compare(left, right)?;
+            // `Null` orders below everything and equals itself.
+            let ordering = match (left.is_null(), right.is_null()) {
+                (true, true) => Ordering::Equal,
+                (true, false) => Ordering::Less,
+                (false, true) => Ordering::Greater,
+                (false, false) => variant_compare(left, right)?,
+            };
             Ok(Value::Bool(match op {
                 BinOp::Greater => ordering == Ordering::Greater,
                 BinOp::Less => ordering == Ordering::Less,
@@ -1349,10 +1792,14 @@ fn compare_equality(op: BinOp, left: &Value, right: &Value) -> Result<Value, Val
     // Only these kinds take the raw comparison upstream (`:5792-5793`);
     // records and arrays fall through to the general variant comparison,
     // which rejects them.
-    let raw_left = matches!(
-        left,
-        Value::Object(_) | Value::Class(_) | Value::Set(_) | Value::Pointer(_)
-    );
+    let raw_left = match left {
+        // `varUnknown` (an `IInterface` element) is in the `<>` list only
+        // (`:5807`); under `=` it goes to the variant comparison, which
+        // refuses it (`e = nil` is `Type mismatch`, probe `x-228`).
+        Value::Object(object) if object.borrow().is_interface() => op == BinOp::NotEqu,
+        Value::Object(_) | Value::Class(_) | Value::Set(_) | Value::Pointer(_) => true,
+        _ => false,
+    };
     if raw_left {
         let a = left.raw().ok_or(ValueError::Variant)?;
         // The right side reads `.VInteger` raw upstream; a nil comparison
@@ -1364,103 +1811,16 @@ fn compare_equality(op: BinOp, left: &Value, right: &Value) -> Result<Value, Val
         let equal = a == b;
         return Ok(Value::Bool(if op == BinOp::Equ { equal } else { !equal }));
     }
-    if left.is_null() || right.is_null() {
-        return Ok(Value::Null);
+    // `Null = Null` is `True`, `Null = 1` is `False` (`NullEqualityRule`).
+    if matches!(left, Value::Object(_)) {
+        return Err(ValueError::Variant);
     }
-    let ordering = variant_compare(left, right)?;
-    let equal = ordering == Ordering::Equal;
+    let equal = match (left.is_null(), right.is_null()) {
+        (true, true) => true,
+        (true, false) | (false, true) => false,
+        (false, false) => variant_compare(left, right)? == Ordering::Equal,
+    };
     Ok(Value::Bool(if op == BinOp::Equ { equal } else { !equal }))
-}
-
-/// `Tmp + Expression(TTyp)` (`JvInterpreter.pas:5732`): a string operand
-/// concatenates, numbers add in the wider kind, `Null` propagates. Two
-/// `Integer`-sized operands compute in `Integer` -- an overflow is the
-/// variant error `VarAdd` raises -- and an `Int64` operand widens the pair
-/// to `Int64`; a boolean does not take part in arithmetic (only the
-/// concatenation above reads it, as text).
-fn variant_add(left: &Value, right: &Value) -> Result<Value, ValueError> {
-    if left.is_null() || right.is_null() {
-        return Ok(Value::Null);
-    }
-    if left.is_str() || right.is_str() {
-        let a = to_str(left)?;
-        let b = to_str(right)?;
-        let mut result = a;
-        result.extend_from_slice(&b);
-        return Ok(Value::Str(result));
-    }
-    if matches!(left, Value::Double(_) | Value::Date(_)) || matches!(right, Value::Double(_) | Value::Date(_)) {
-        return Ok(Value::Double(to_f64(left)? + to_f64(right)?));
-    }
-    if matches!(left, Value::Bool(_)) || matches!(right, Value::Bool(_)) {
-        return Err(ValueError::Variant);
-    }
-    if matches!(left, Value::Int64(_)) || matches!(right, Value::Int64(_)) {
-        let a = to_i64(left)?;
-        let b = to_i64(right)?;
-        return Ok(Value::Int64(a.checked_add(b).ok_or(ValueError::Variant)?));
-    }
-    let a = to_i32(left)?;
-    let b = to_i32(right)?;
-    Ok(Value::Integer(a.checked_add(b).ok_or(ValueError::Variant)?))
-}
-
-/// `Tmp - Expression(TTyp)` (`JvInterpreter.pas:5753`).
-fn variant_sub(left: &Value, right: &Value) -> Result<Value, ValueError> {
-    if left.is_null() || right.is_null() {
-        return Ok(Value::Null);
-    }
-    if left.is_str() || right.is_str() {
-        return Err(ValueError::Variant);
-    }
-    if matches!(left, Value::Double(_) | Value::Date(_)) || matches!(right, Value::Double(_) | Value::Date(_)) {
-        return Ok(Value::Double(to_f64(left)? - to_f64(right)?));
-    }
-    if matches!(left, Value::Bool(_)) || matches!(right, Value::Bool(_)) {
-        return Err(ValueError::Variant);
-    }
-    if matches!(left, Value::Int64(_)) || matches!(right, Value::Int64(_)) {
-        let a = to_i64(left)?;
-        let b = to_i64(right)?;
-        return Ok(Value::Int64(a.checked_sub(b).ok_or(ValueError::Variant)?));
-    }
-    let a = to_i32(left)?;
-    let b = to_i32(right)?;
-    Ok(Value::Integer(a.checked_sub(b).ok_or(ValueError::Variant)?))
-}
-
-/// `PopExp * Expression(TTyp)` (`JvInterpreter.pas:5712`).
-fn variant_mul(left: &Value, right: &Value) -> Result<Value, ValueError> {
-    if left.is_null() || right.is_null() {
-        return Ok(Value::Null);
-    }
-    if matches!(left, Value::Double(_) | Value::Date(_)) || matches!(right, Value::Double(_) | Value::Date(_)) {
-        return Ok(Value::Double(to_f64(left)? * to_f64(right)?));
-    }
-    if matches!(left, Value::Bool(_)) || matches!(right, Value::Bool(_)) || left.is_str() || right.is_str() {
-        return Err(ValueError::Variant);
-    }
-    if matches!(left, Value::Int64(_)) || matches!(right, Value::Int64(_)) {
-        let a = to_i64(left)?;
-        let b = to_i64(right)?;
-        return Ok(Value::Int64(a.checked_mul(b).ok_or(ValueError::Variant)?));
-    }
-    let a = to_i32(left)?;
-    let b = to_i32(right)?;
-    Ok(Value::Integer(a.checked_mul(b).ok_or(ValueError::Variant)?))
-}
-
-/// The result kind of an integer operation: `Integer` when it fits and
-/// neither operand is an `Int64`, `Int64` otherwise (the variant promotion
-/// of `VarI4`/`VarI8`).
-fn int_result(left: &Value, right: &Value, value: i64) -> Value {
-    if !matches!(left, Value::Int64(_))
-        && !matches!(right, Value::Int64(_))
-        && let Ok(v) = i32::try_from(value)
-    {
-        return Value::Integer(v);
-    }
-    Value::Int64(value)
 }
 
 #[cfg(test)]
@@ -1504,22 +1864,62 @@ mod tests {
             binary_op(BinOp::Plus, &five, &two_point_five).unwrap(),
             Value::Double(7.5)
         );
-        // Two `Integer` operands compute in `Integer`; the overflow of
-        // `VarAdd` is a variant error, and an `Int64` operand widens the
-        // pair instead.
+        // Two `Integer` operands compute in `Integer`; a sum that overflows
+        // is a double (`2147483647 + 1` is the double `2147483648`, probe
+        // `v-52`), and an `Int64` operand widens the pair instead.
         assert_eq!(
-            binary_op(BinOp::Plus, &Value::Integer(i32::MAX), &five),
-            Err(ValueError::Variant)
+            binary_op(BinOp::Plus, &Value::Integer(i32::MAX), &five).unwrap(),
+            Value::Double(2_147_483_652.0)
         );
         assert_eq!(
             binary_op(BinOp::Plus, &Value::Int64(3_000_000_000), &five).unwrap(),
             Value::Int64(3_000_000_005)
         );
-        // A boolean takes no part in arithmetic.
+        // A boolean is `-1` next to an integer (`True + 1` is `0`, probe
+        // `v-06`) and a double next to another boolean (`True + True` is
+        // the double `-2`, probe `v-08`).
         assert_eq!(
-            binary_op(BinOp::Plus, &Value::Bool(true), &five),
-            Err(ValueError::Variant)
+            binary_op(BinOp::Plus, &Value::Bool(true), &five).unwrap(),
+            Value::Integer(4)
         );
+        assert_eq!(
+            binary_op(BinOp::Plus, &Value::Bool(true), &Value::Bool(true)).unwrap(),
+            Value::Double(-2.0)
+        );
+        // A numeric string reads as a double, one that is no number is the
+        // variant cast error (`'1' + 5` is the double `6`, `'x' + 5` fails,
+        // probes `v-01`, `v-04`).
+        assert_eq!(
+            binary_op(BinOp::Plus, &Value::Str(b"1".to_vec()), &five).unwrap(),
+            Value::Double(6.0)
+        );
+        assert!(matches!(
+            binary_op(BinOp::Plus, &Value::Str(b"x".to_vec()), &five),
+            Err(ValueError::ExternalClass {
+                class: "EVariantTypeCastError",
+                ..
+            })
+        ));
+        assert!(matches!(
+            binary_op(BinOp::Plus, &Value::Str(b"x".to_vec()), &Value::Bool(true)),
+            Err(ValueError::ExternalClass {
+                class: "EVariantTypeCastError",
+                ..
+            })
+        ));
+        // `/` is a double division without a zero check; `div` by zero is
+        // `EDivByZero` (probes `v-56`, `v-57`).
+        assert_eq!(
+            binary_op(BinOp::Div, &Value::Integer(1), &Value::Integer(0)).unwrap(),
+            Value::Double(f64::INFINITY)
+        );
+        assert!(matches!(
+            binary_op(BinOp::IntDiv, &Value::Integer(1), &Value::Integer(0)),
+            Err(ValueError::ExternalClass {
+                class: "EDivByZero",
+                ..
+            })
+        ));
         // Set union and difference (`:5727`, `:5748`).
         assert_eq!(
             binary_op(BinOp::Plus, &Value::Set(0b01), &Value::Set(0b10)).unwrap(),
@@ -1529,15 +1929,28 @@ mod tests {
             binary_op(BinOp::Minus, &Value::Set(0b11), &Value::Set(0b01)).unwrap(),
             Value::Set(0b10)
         );
-        // String concatenation converts the other operand.
+        // A string beside a number is read as a number, so `'a' + 1` is the
+        // variant cast error, not `a1` (probe `v-04`); two strings
+        // concatenate.
+        assert!(matches!(
+            binary_op(BinOp::Plus, &Value::Str(b"a".to_vec()), &Value::Integer(1)),
+            Err(ValueError::ExternalClass {
+                class: "EVariantTypeCastError",
+                ..
+            })
+        ));
         assert_eq!(
-            binary_op(BinOp::Plus, &Value::Str(b"a".to_vec()), &Value::Integer(1)).unwrap(),
+            binary_op(BinOp::Plus, &Value::Str(b"a".to_vec()), &Value::Str(b"1".to_vec())).unwrap(),
             Value::Str(b"a1".to_vec())
         );
-        assert_eq!(
-            binary_op(BinOp::Plus, &Value::Str(b"x".to_vec()), &Value::Bool(true)).unwrap(),
-            Value::Str(b"xTrue".to_vec())
-        );
+        // `'x' + True` is the variant cast error too (probe `v-05`).
+        assert!(matches!(
+            binary_op(BinOp::Plus, &Value::Str(b"x".to_vec()), &Value::Bool(true)),
+            Err(ValueError::ExternalClass {
+                class: "EVariantTypeCastError",
+                ..
+            })
+        ));
         // `div` keeps the integer kind; `/` is a double.
         assert_eq!(
             binary_op(BinOp::IntDiv, &Value::Integer(7), &Value::Integer(2)).unwrap(),
@@ -1592,9 +2005,31 @@ mod tests {
             binary_op(BinOp::Less, &Value::Str(b"A".to_vec()), &Value::Str(b"a".to_vec())).unwrap(),
             Value::Bool(true)
         );
-        // A boolean counts 0/1 next to numbers.
+        // A boolean counts `-1`/`0` next to numbers (`True = 1` is `False`,
+        // probe `v-38`); `Null` equals only `Null` and orders below
+        // everything (probes `v-41`, `v-42`, `v-75`).
         assert_eq!(
             binary_op(BinOp::Equ, &Value::Bool(true), &Value::Integer(1)).unwrap(),
+            Value::Bool(false)
+        );
+        assert_eq!(
+            binary_op(BinOp::Equ, &Value::Bool(true), &Value::Integer(-1)).unwrap(),
+            Value::Bool(true)
+        );
+        assert_eq!(
+            binary_op(BinOp::Equ, &Value::Null, &Value::Null).unwrap(),
+            Value::Bool(true)
+        );
+        assert_eq!(
+            binary_op(BinOp::Equ, &Value::Null, &Value::Integer(1)).unwrap(),
+            Value::Bool(false)
+        );
+        assert_eq!(
+            binary_op(BinOp::Less, &Value::Null, &Value::Integer(1)).unwrap(),
+            Value::Bool(true)
+        );
+        assert_eq!(
+            binary_op(BinOp::Equ, &Value::Str(b"5".to_vec()), &Value::Integer(5)).unwrap(),
             Value::Bool(true)
         );
         // A pointer-like left compares raw: two distinct objects differ, an
@@ -1603,15 +2038,24 @@ mod tests {
             binary_op(BinOp::Equ, &Value::Pointer(0), &Value::Pointer(0)).unwrap(),
             Value::Bool(true)
         );
-        // Mismatched kinds are variant errors.
+        // A numeric string compares as a number (`1 = '1'` is `True`, probe
+        // `v-33`); one that is no number is the variant cast error.
         assert_eq!(
-            binary_op(BinOp::Equ, &Value::Str(b"1".to_vec()), &Value::Integer(1)),
-            Err(ValueError::Variant)
+            binary_op(BinOp::Equ, &Value::Str(b"1".to_vec()), &Value::Integer(1)).unwrap(),
+            Value::Bool(true)
         );
-        // Null propagates through comparisons.
+        assert!(matches!(
+            binary_op(BinOp::Equ, &Value::Str(b"x".to_vec()), &Value::Integer(1)),
+            Err(ValueError::ExternalClass {
+                class: "EVariantTypeCastError",
+                ..
+            })
+        ));
+        // `Null` compares as a value: equal to `Null` only, below the rest
+        // (probes `v-41`, `v-42`, `v-76`).
         assert_eq!(
-            binary_op(BinOp::Equ, &Value::Null, &Value::Integer(1)).unwrap(),
-            Value::Null
+            binary_op(BinOp::Greater, &Value::Null, &Value::Integer(1)).unwrap(),
+            Value::Bool(false)
         );
     }
 }

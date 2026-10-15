@@ -60,7 +60,7 @@ impl ScriptCheck {
 pub fn check_file(path: &Path, scripts_folder: &Path) -> ScriptCheck {
     let file = path.to_string_lossy().into_owned();
     let bytes = match std::fs::read(path) {
-        Ok(bytes) => bytes,
+        Ok(bytes) => crate::host::source_text(&bytes),
         Err(error) => {
             return ScriptCheck {
                 file: file.clone(),
@@ -118,7 +118,7 @@ fn check_uses(
             }
             let file = unit_path.to_string_lossy().into_owned();
             let bytes = match std::fs::read(&unit_path) {
-                Ok(bytes) => bytes,
+                Ok(bytes) => crate::host::source_text(&bytes),
                 Err(error) => {
                     errors.push(ScriptError {
                         file,

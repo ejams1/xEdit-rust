@@ -2486,6 +2486,18 @@ fn run_legacy(run: xedit_session::tool_modes::LegacyRun) -> ExitCode {
     for switch in &run.ignored_switches {
         eprintln!("warning: {switch} is accepted and not acted on by this build");
     }
+    // `-scripthost:<name>` (`xeInit.pas:1545`): `TxeScriptHost.Init` with the
+    // name, `JvI` by default. An unknown name fails the initialization, which
+    // `xeDoInit` reports as `Initialization failed: [Exception] ScriptHost
+    // "<name>" is not supported` (a message box upstream) and the GUI exits.
+    let script_host = run
+        .script_host
+        .clone()
+        .unwrap_or_else(|| xedit_script::host::DEFAULT_SCRIPT_HOST.to_owned());
+    if let Err(error) = xedit_script::host::init(&script_host) {
+        eprintln!("Initialization failed: [Exception] {error}");
+        return ExitCode::FAILURE;
+    }
     let Some(game) = run.game_tag.as_deref() else {
         eprintln!(
             "error: invalid_params: the game is not known; pass -SSE, -FO4 and the like, or name the program after its game"
@@ -2547,6 +2559,19 @@ fn run_legacy(run: xedit_session::tool_modes::LegacyRun) -> ExitCode {
 }
 
 fn main() -> ExitCode {
+    // Everything runs on a thread with a large stack: the interpreter
+    // recurses on the native stack for nested calls (its guard is 128
+    // calls deep) and the element tree resolves deeply through the
+    // definitions; the main thread's 1 MiB is not enough for either.
+    std::thread::Builder::new()
+        .stack_size(xedit_core::threads::STACK_SIZE)
+        .spawn(real_main)
+        .expect("the main worker thread")
+        .join()
+        .unwrap_or_else(|panic| std::panic::resume_unwind(panic))
+}
+
+fn real_main() -> ExitCode {
     // `wbCommandLine` first: the switches of xEdit itself (`-quickautoclean`,
     // `-setesm`, `-D:`, `-SSE`, ...) are not the CLI's syntax and are read as
     // xEdit reads them.

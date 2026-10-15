@@ -422,7 +422,7 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         class.clone(),
         "NamedGroup",
         Rc::new(|value: &mut Value, args: &mut Args| {
-            let name = text_arg(&args.values[0]);
+            let name = text_arg(&args.values[0])?;
             let object = receiver_regex(args)?;
             *value = Value::Integer(borrow_regex(&object).named_group(&name) as i32);
             Ok(())
@@ -459,7 +459,7 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         class.clone(),
         "EscapeRegExChars",
         Rc::new(|value: &mut Value, args: &mut Args| {
-            *value = Value::Str(PerlRegExObject::escape_regex_chars(&text_arg(&args.values[0])).into_bytes());
+            *value = Value::Str(PerlRegExObject::escape_regex_chars(&text_arg(&args.values[0])?).into_bytes());
             Ok(())
         }),
         1,
@@ -576,7 +576,7 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         class.clone(),
         "RegEx",
         Rc::new(|value: &Value, args: &mut Args| {
-            let text = text_arg(value);
+            let text = text_arg(value)?;
             let object = receiver_regex(args)?;
             borrow_regex_mut(&object).regex.set_regex(text);
             Ok(())
@@ -600,7 +600,7 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         class.clone(),
         "Replacement",
         Rc::new(|value: &Value, args: &mut Args| {
-            let text = text_arg(value);
+            let text = text_arg(value)?;
             let object = receiver_regex(args)?;
             borrow_regex_mut(&object).regex.set_replacement(text);
             Ok(())
@@ -624,7 +624,7 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         class.clone(),
         "Subject",
         Rc::new(|value: &Value, args: &mut Args| {
-            let text = text_arg(value);
+            let text = text_arg(value)?;
             let object = receiver_regex(args)?;
             borrow_regex_mut(&object).regex.set_subject(text);
             Ok(())

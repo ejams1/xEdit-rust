@@ -1396,6 +1396,7 @@ impl Adapter {
         for handler in &self.on_get_list {
             let handler = handler.clone();
             if handler(&String::from_utf8_lossy(identifier), value, args)? {
+                values::take_pending_variant_error()?;
                 return Ok(true);
             }
         }
@@ -1421,6 +1422,7 @@ impl Adapter {
                 self.check_args(args, method.param_count, &method.param_types)?;
                 let func = method.func.clone().expect("checked");
                 func(value, args)?;
+                values::take_pending_variant_error()?;
                 return Ok(true);
             }
         }
@@ -1451,6 +1453,7 @@ impl Adapter {
                 self.check_args(args, method.param_count, &method.param_types)?;
                 let func = method.func.clone().expect("checked");
                 func(value, args)?;
+                values::take_pending_variant_error()?;
                 args.return_indexed = true;
                 return Ok(true);
             }
@@ -1479,6 +1482,7 @@ impl Adapter {
                 self.check_args(args, method.param_count, &method.param_types)?;
                 let func = method.func.clone();
                 func(value, args)?;
+                values::take_pending_variant_error()?;
                 return Ok(true);
             }
         }
@@ -1540,6 +1544,7 @@ impl Adapter {
         self.check_args(args, method.param_count, &method.param_types)?;
         let func = method.func.clone().expect("registered function");
         func(value, args)?;
+        values::take_pending_variant_error()?;
         Ok(true)
     }
 
@@ -1564,11 +1569,14 @@ impl Adapter {
     }
 
     /// `TypeCast` (`JvInterpreter.pas:4433`): an identifier that is a type
-    /// name casts its argument. Upstream retags the value without
-    /// converting (`TVarData(Value).VType := VT`); the port converts
-    /// through [`values::var_as_type`], because a retag of a different kind
-    /// is a reinterpreted payload upstream (garbage for `Double(2)` and
-    /// friends, which no script relies on).
+    /// name casts its argument. UPSTREAM-QUIRK: upstream retags the value
+    /// without converting (`TVarData(Value).VType := VT`), so the payload
+    /// is reinterpreted and the cast never raises: `Integer(1.5)` is the
+    /// low 32 bits of the double, 0 (probe `f-61`), `Integer('x')` the low
+    /// bits of a string pointer. The port converts where the conversion
+    /// is what a script means (`Integer('5')`, `Integer(True)`), reads the
+    /// payload bits where upstream's reinterpretation is defined
+    /// ([`values::retag`]), and otherwise keeps the value, never raising.
     fn type_cast(&self, identifier: &[u8], value: &mut Value, args: &mut Args) -> bool {
         let typ = values::type_name_2_var_type(identifier);
         if typ == VarType::Empty {
@@ -1579,7 +1587,7 @@ impl Adapter {
             // no argument is not a value.
             return false;
         };
-        *value = values::var_as_type(&first, typ).unwrap_or(first);
+        *value = values::retag(&first, typ);
         true
     }
 
@@ -1650,6 +1658,7 @@ impl Adapter {
             self.check_args(args, method.param_count, &method.param_types)?;
             let func = method.func.clone().expect("checked");
             func(value, args)?;
+            values::take_pending_variant_error()?;
             return Ok(true);
         }
         Ok(false)
@@ -1673,6 +1682,7 @@ impl Adapter {
             self.check_args(args, method.param_count, &method.param_types)?;
             let func = method.func.clone().expect("checked");
             func(value, args)?;
+            values::take_pending_variant_error()?;
             args.return_indexed = true;
             return Ok(true);
         }
@@ -1699,6 +1709,7 @@ impl Adapter {
                 self.check_args(args, method.param_count, &method.param_types)?;
                 let func = method.func.clone();
                 func(value, args)?;
+                values::take_pending_variant_error()?;
                 return Ok(true);
             }
         }
@@ -1722,6 +1733,7 @@ impl Adapter {
             self.check_args(args, method.param_count, &method.param_types)?;
             let func = method.func.clone().expect("checked");
             func(value, args)?;
+            values::take_pending_variant_error()?;
             return Ok(true);
         }
         Ok(false)
@@ -1741,6 +1753,7 @@ impl Adapter {
             self.check_args(args, method.param_count, &method.param_types)?;
             let func = method.func.clone().expect("checked");
             func(value, args)?;
+            values::take_pending_variant_error()?;
             return Ok(true);
         }
         Ok(false)
@@ -1875,12 +1888,15 @@ mod tests {
         .unwrap();
         let args = Args::new();
         // An integer variable takes an Int64 in range, an out-of-range one
-        // is a variant error.
+        // is Delphi's `EVariantOverflowError` (probe `v-slot-12`).
         assert!(list.set_value(b"Count", &Value::Int64(7), &args).unwrap());
         assert_eq!(list.value_of("", b"count"), Some(&Value::Integer(7)));
         assert_eq!(
             list.set_value(b"count", &Value::Int64(3_000_000_000), &args),
-            Err(ValueError::Variant)
+            Err(ValueError::external_class(
+                "EVariantOverflowError",
+                "Overflow while converting variant of type (Int64) into type (Integer)".to_owned()
+            ))
         );
         // A `varString` variable takes a number as text.
         list.add_var(

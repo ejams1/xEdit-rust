@@ -113,15 +113,56 @@ fn is_host_unit(unit_name: &str) -> bool {
 ///
 /// A host unit answers `unit <name>; end.`; another name is read from
 /// `<scripts_folder>\<Unit>.pas` (the folder is `wbScriptsPath`, which the
-/// run sets to the script's own folder, `xeMainForm.pas:5075`). The file's
-/// bytes are handed to the interpreter as they are, as `crate::check` reads
-/// them.
+/// run sets to the script's own folder, `xeMainForm.pas:5075`) through
+/// [`source_text`], as `TStringList.LoadFromFile` reads it.
 pub fn unit_source(scripts_folder: &Path, unit_name: &str) -> Option<Vec<u8>> {
     if is_host_unit(unit_name) {
         return Some(host_unit_stub(unit_name));
     }
     let path = check::find_unit_file(scripts_folder, unit_name)?;
-    std::fs::read(path).ok()
+    std::fs::read(path).ok().map(|bytes| source_text(&bytes))
+}
+
+/// The text of a script or unit file as upstream reads it: `DoRunScript`
+/// (`xeMainForm.pas:5077`) and `JvInterpreterProgramGetUnitSource`
+/// (`xejviScriptHost.pas:452`) both load the file with
+/// `TStringList.LoadFromFile` and hand its `Text` to the interpreter, so a
+/// byte order mark selects UTF-8 or UTF-16 (either order) and a file
+/// without one is read in the ANSI code page. The interpreter's strings are
+/// UTF-8, so the decoded text is handed on as UTF-8 bytes.
+pub fn source_text(bytes: &[u8]) -> Vec<u8> {
+    // `TStrings.Text` joins the lines `LoadFromFile` split on CR, LF or
+    // CRLF with `sLineBreak` (CRLF), the last line included: a file with
+    // bare LF breaks reaches the interpreter with CRLF ones, which is what
+    // its line numbers count (`GetLineByPos` counts `#13`).
+    let text = xedit_io::encoding::string_list_text(bytes);
+    let mut out = Vec::with_capacity(text.len() + 16);
+    let mut line_open = false;
+    let mut chars = text.chars().peekable();
+    while let Some(c) = chars.next() {
+        match c {
+            '\r' => {
+                if chars.peek() == Some(&'\n') {
+                    chars.next();
+                }
+                out.extend_from_slice(b"\r\n");
+                line_open = false;
+            }
+            '\n' => {
+                out.extend_from_slice(b"\r\n");
+                line_open = false;
+            }
+            other => {
+                let mut buffer = [0u8; 4];
+                out.extend_from_slice(other.encode_utf8(&mut buffer).as_bytes());
+                line_open = true;
+            }
+        }
+    }
+    if line_open {
+        out.extend_from_slice(b"\r\n");
+    }
+    out
 }
 
 /// The `unit <name>; end.` source of a unit compiled into the host, which

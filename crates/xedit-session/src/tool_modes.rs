@@ -1456,6 +1456,11 @@ pub struct LegacyRun {
     /// `-S:<folder>`: the scripts folder, where a relative `-script:` name
     /// resolves and `script mode` reads the units of a script.
     pub scripts_folder: Option<String>,
+    /// `-scripthost:<name>`: the script host `xeInit.pas` selects
+    /// (`TxeScriptHost.Init`, `xeInit.pas:1545`); `None` is
+    /// `xeDefaultScriptHost` (`JvI`). The caller initializes the host and
+    /// reports an unknown name as upstream's `xeDoInit` does.
+    pub script_host: Option<String>,
     /// `-autoload` (`xeAutoLoad`).
     pub auto_load: bool,
     /// `-autoexit` (`xeAutoExit`): accepted; the CLI has no window to close.
@@ -1522,7 +1527,7 @@ const LEGACY_TRIGGERS: &[&str] = &[
 
 /// The parameters of `xeInit.pas` that are followed by a value (`-D:<data>`),
 /// which make a command line legacy as well.
-const LEGACY_PARAMETERS: &[&str] = &["D", "P", "O", "B", "T", "S", "M", "I", "G", "R", "C", "l"];
+const LEGACY_PARAMETERS: &[&str] = &["D", "P", "O", "B", "T", "S", "M", "I", "G", "R", "C", "l", "scripthost"];
 
 /// The parameters of a legacy command line that are not switches at all: the
 /// format of the export mode (`-export RAW`), which `xeFindNextValidCmdLineModule`
@@ -1798,6 +1803,7 @@ pub fn parse_legacy(params: &[String], exe_name: &str) -> Result<Option<LegacyRu
         log_file: find_cmd_line_param_switch(params, "R"),
         script: detected.script,
         scripts_folder: find_cmd_line_param_switch(params, "S"),
+        script_host: find_cmd_line_param_switch(params, "scripthost"),
         auto_load: has_cmd_line_switch(params, "autoload"),
         auto_exit: has_cmd_line_switch(params, "autoexit"),
         resources: crate::resources::ResourceOptions {

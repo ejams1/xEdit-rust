@@ -494,6 +494,10 @@ impl ScriptObject for ScriptElement {
         self.class.clone()
     }
 
+    fn is_interface(&self) -> bool {
+        true
+    }
+
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
@@ -808,6 +812,10 @@ impl ScriptRunState {
         if text.is_empty() {
             return;
         }
+        // The GUI's memo holds its text in the ANSI code page: a character
+        // outside it prints as `?` (`AddMessage('Ж')` logs `?`, probe
+        // `u-09`).
+        let text = xedit_io::encoding::ansi_string(&xedit_io::encoding::ansi_bytes(text));
         for line in text.split("\r\n") {
             self.messages.push(line.to_owned());
         }
@@ -1072,7 +1080,12 @@ fn register_functions(
             0,
             no_params.clone(),
             Rc::new(move |value: &mut Value, _args: &mut Args| {
-                *value = Value::Integer(state.borrow().file_count() as i32);
+                // `Value := Length(frmMain.Files)`
+                // (`xejviScriptAdapterHost.pas:166`): `Length` of a dynamic
+                // array is a `NativeInt`, so the variant is a `varInt64`
+                // (`VarType(FileCount)` is 20 on the oracle, probe
+                // `v-slot-35`), which `Format('%d', [FileCount])` refuses.
+                *value = Value::Int64(state.borrow().file_count() as i64);
                 Ok(())
             }),
         );
@@ -1085,7 +1098,8 @@ fn register_functions(
             1,
             value_param(),
             Rc::new(move |value: &mut Value, args: &mut Args| {
-                let index = v2s(&args.values[0]).map_err(|_| ValueError::interp(IE_DIRECT_INVALID_ARGUMENT))?;
+                let index = xedit_script::values::to_i32(&args.values[0])
+                    .map_err(|_| ValueError::interp(IE_DIRECT_INVALID_ARGUMENT))?;
                 let state = state.borrow();
                 let Some(file) = state.file_at(i64::from(index)) else {
                     return Err(ValueError::interp(IE_DIRECT_INVALID_ARGUMENT));
@@ -1125,7 +1139,7 @@ fn register_functions(
         value_param(),
         Rc::new(|value: &mut Value, args: &mut Args| {
             *value = Value::Str(Vec::new());
-            if let Some(element) = ScriptElement::element_of(&args.values[0]) {
+            if let Some(element) = crate::script_units::element_at(args, 0) {
                 *value = Value::Str(element_name(&element).into_bytes());
             }
             Ok(())
@@ -1657,7 +1671,11 @@ pub fn run_script(
             format!("Could not open script: {}", path.display()),
         ));
     }
-    let text = std::fs::read(&path).map_err(|error| CommandError::new("io", format!("{}: {error}", path.display())))?;
+    // `DoRunScript` loads the script with `TStringList.LoadFromFile`: a byte
+    // order mark selects the encoding, else the ANSI code page.
+    let text = std::fs::read(&path)
+        .map(|bytes| xedit_script::host::source_text(&bytes))
+        .map_err(|error| CommandError::new("io", format!("{}: {error}", path.display())))?;
     let script_folder = path.parent().unwrap_or(&folder).to_path_buf();
     let name = path
         .file_stem()
@@ -1804,11 +1822,16 @@ pub fn run_script(
                         apply_pending_filters(session, &state)?;
                         let result = result_as_integer(&value);
                         if result != 0 {
+                            // `ScriptProcessSingleElement <> 0` exits the
+                            // selection walk only (`ApplyScriptToSelection`,
+                            // `xeMainForm.pas:8762`): `Finalize` still runs,
+                            // and the count does not include this element
+                            // (probes `t-17`, `t-29`).
                             state
                                 .borrow_mut()
                                 .progress(&format!("Script terminated itself, Result={result}").to_owned(), false);
                             self_terminated = Some(result);
-                            break 'run;
+                            break;
                         }
                     }
                     Err(error) => {

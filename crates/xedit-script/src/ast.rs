@@ -463,6 +463,11 @@ pub enum UnOp {
     Plus,
     Minus,
     Not,
+    /// A parenthesized expression (the `ttLB` case of `Expression`,
+    /// `JvInterpreter.pas:5838`): the value itself, kept as a node because
+    /// upstream pushes the inner result onto its expression stack once more
+    /// when the `)` is read (see `Interpreter::eval_in`).
+    Paren,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

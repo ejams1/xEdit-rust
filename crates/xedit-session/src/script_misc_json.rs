@@ -48,7 +48,9 @@ use crate::script_rtl::classes::{
     stream_write,
 };
 use crate::script_rtl::datetime;
-use crate::script_strings::{EncodingKind, borrow_list_mut, encoding_of, list_of_or_error, receiver, text_arg};
+use crate::script_strings::{
+    EncodingKind, borrow_list_mut, encoding_of, list_of_or_error, receiver, text_arg, text_arg_lossy,
+};
 
 /// The exception classes of `JsonDataObjects` and their texts.
 pub const E_JSON_CAST_CLASS: &str = "EJsonCastException";
@@ -1213,7 +1215,7 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         "SetJDOIndentChar",
         1,
         Rc::new(|_value, args| {
-            let text = text_arg(&args.values[0]);
+            let text = text_arg(&args.values[0])?;
             if let Some(ch) = text.chars().next() {
                 set_config(|config| config.indent_char = ch);
             }
@@ -1225,7 +1227,7 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         "SetJDOLineBreak",
         1,
         Rc::new(|_value, args| {
-            set_config(|config| config.line_break = text_arg(&args.values[0]));
+            set_config(|config| config.line_break = text_arg_lossy(&args.values[0]));
             Ok(())
         }),
     );
@@ -1259,7 +1261,7 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         1,
         Rc::new(|_value, args| {
             let object = json_receiver(args)?;
-            let text = text_arg(&args.values[0]);
+            let text = text_arg(&args.values[0])?;
             let parsed = parse_json(&text)?;
             set_node(&object, parsed);
             Ok(())
@@ -1272,7 +1274,7 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         -1,
         Rc::new(|_value, args| {
             let object = json_receiver(args)?;
-            let file_name = text_arg(&args.values[0]);
+            let file_name = text_arg(&args.values[0])?;
             let utf8_without_bom = args.values.get(1).map_or(Ok(true), xedit_script::values::to_bool)?;
             let bytes = std::fs::read(&file_name).map_err(|error| {
                 ValueError::external_class(
@@ -1301,9 +1303,9 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
             // `wbContainerHandler.OpenResourceData('', ResName)` or
             // `(ResType, ResName)`.
             let (container, name) = if args.values.len() > 1 {
-                (text_arg(&args.values[0]), text_arg(&args.values[1]))
+                (text_arg(&args.values[0])?, text_arg(&args.values[1])?)
             } else {
-                (String::new(), text_arg(&args.values[0]))
+                (String::new(), text_arg(&args.values[0])?)
             };
             let bytes = open_resource_data(&container, &name);
             let text = String::from_utf8_lossy(&bytes).into_owned();
@@ -1352,7 +1354,7 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         Rc::new({
             let dom = dom.clone();
             move |value, args| {
-                let text = text_arg(&args.values[0]);
+                let text = text_arg(&args.values[0])?;
                 let parsed = parse_document(&text)?;
                 *value = match parsed {
                     Some(node) => node_value(&dom, node),
@@ -1369,7 +1371,7 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         -1,
         Rc::new(|_value, args| {
             let object = json_receiver(args)?;
-            let file_name = text_arg(&args.values[0]);
+            let file_name = text_arg(&args.values[0])?;
             let compact = args.values.get(1).map_or(Ok(true), xedit_script::values::to_bool)?;
             let encoding = args.values.get(2).and_then(encoding_of);
             let utf8_without_bom = args.values.get(3).map_or(Ok(true), xedit_script::values::to_bool)?;
@@ -1847,7 +1849,7 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         Rc::new({
             let dom = dom.clone();
             move |value, args| {
-                let text = text_arg(&args.values[0]);
+                let text = text_arg(&args.values[0])?;
                 let parsed = parse_document(&text)?;
                 *value = match parsed {
                     Some(node) => node_value(&dom, node),
@@ -1973,7 +1975,7 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         "Contains",
         1,
         Rc::new(|value, args| {
-            let name = text_arg(&args.values[0]);
+            let name = text_arg(&args.values[0])?;
             let object = json_receiver(args)?;
             let entries = object_entries(&object)?;
             *value = Value::Bool(find_index(&entries, &name).is_some());
@@ -2017,7 +2019,7 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         Rc::new({
             let dom = dom.clone();
             move |value, args| {
-                let name = text_arg(&args.values[0]);
+                let name = text_arg(&args.values[0])?;
                 let object = json_receiver(args)?;
                 let node = node_of(&object);
                 let extracted = {
@@ -2052,7 +2054,7 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         Rc::new({
             let dom = dom.clone();
             move |value, args| {
-                let name = text_arg(&args.values[0]);
+                let name = text_arg(&args.values[0])?;
                 let object = json_receiver(args)?;
                 let node = node_of(&object);
                 let extracted = {
@@ -2084,7 +2086,7 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         Rc::new({
             let dom = dom.clone();
             move |value, args| {
-                let name = text_arg(&args.values[0]);
+                let name = text_arg(&args.values[0])?;
                 let object = json_receiver(args)?;
                 let node = node_of(&object);
                 let extracted = {
@@ -2118,7 +2120,7 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         "IndexOf",
         1,
         Rc::new(|value, args| {
-            let name = text_arg(&args.values[0]);
+            let name = text_arg(&args.values[0])?;
             let object = json_receiver(args)?;
             let entries = object_entries(&object)?;
             *value = Value::Integer(find_index(&entries, &name).map_or(-1, |index| index as i32));
@@ -2131,7 +2133,7 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         "IsNull",
         1,
         Rc::new(|value, args| {
-            let name = text_arg(&args.values[0]);
+            let name = text_arg(&args.values[0])?;
             let object = json_receiver(args)?;
             let entries = object_entries(&object)?;
             *value = Value::Bool(match find_index(&entries, &name) {
@@ -2186,7 +2188,7 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         Rc::new({
             let dom = dom.clone();
             move |value, args| {
-                let text = text_arg(&args.values[0]);
+                let text = text_arg(&args.values[0])?;
                 let parsed = parse_document(&text)?;
                 *value = match parsed {
                     Some(node) => node_value(&dom, node),
@@ -2202,7 +2204,7 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         "Remove",
         1,
         Rc::new(|_value, args| {
-            let name = text_arg(&args.values[0]);
+            let name = text_arg(&args.values[0])?;
             let object = json_receiver(args)?;
             let node = node_of(&object);
             if let NodeKind::Object(entries) = &mut *node.borrow_mut()
@@ -2231,7 +2233,7 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         dom.object.clone(),
         "Types",
         Rc::new(|value: &mut Value, args: &mut Args| {
-            let name = text_arg(&args.values[0]);
+            let name = text_arg(&args.values[0])?;
             let object = json_receiver(args)?;
             let entries = object_entries(&object)?;
             *value = Value::Integer(match find_index(&entries, &name) {
@@ -2250,7 +2252,7 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
     adapter.add_id_get(
         dom.object.clone(),
         Rc::new(|value: &mut Value, args: &mut Args| {
-            let name = text_arg(&args.values[0]);
+            let name = text_arg(&args.values[0])?;
             let object = json_receiver(args)?;
             let entries = object_entries(&object)?;
             *value = match find_index(&entries, &name) {
@@ -2269,7 +2271,7 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
     adapter.add_id_set(
         dom.object.clone(),
         Rc::new(|value: &Value, args: &mut Args| {
-            let name = text_arg(&args.values[0]);
+            let name = text_arg(&args.values[0])?;
             let kind = data_type_of_value(value)?;
             let object = json_receiver(args)?;
             let node = node_of(&object);
@@ -2450,7 +2452,7 @@ impl Access {
 
     /// The generic writers of `TJsonDataValue`.
     fn write(self, value: &Value) -> Result<NodeKind, ValueError> {
-        let text = || -> String { text_arg(value) };
+        let text = || -> String { text_arg_lossy(value) };
         Ok(match self {
             Access::String => NodeKind::Str(text()),
             Access::Int => NodeKind::Int(
@@ -2548,7 +2550,7 @@ fn object_accessor(adapter: &mut Adapter, dom: &Rc<JsonDom>, identifier: &str, a
         dom.object.clone(),
         identifier,
         Rc::new(move |value: &mut Value, args: &mut Args| {
-            let name = text_arg(&args.values[0]);
+            let name = text_arg(&args.values[0])?;
             let object = json_receiver(args)?;
             let entries = object_entries(&object)?;
             let item = match find_index(&entries, &name) {
@@ -2605,7 +2607,7 @@ fn object_accessor(adapter: &mut Adapter, dom: &Rc<JsonDom>, identifier: &str, a
         dom.object.clone(),
         identifier,
         Rc::new(move |value: &Value, args: &mut Args| {
-            let name = text_arg(&args.values[0]);
+            let name = text_arg(&args.values[0])?;
             let object = json_receiver(args)?;
             let kind = match access {
                 Access::Array | Access::Object => {

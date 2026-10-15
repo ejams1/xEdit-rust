@@ -163,7 +163,7 @@ var s, t: string;
   b: boolean;
 begin
   Result := 7 div 2 + 7 mod 2 * 3;
-  s := 'a' + 1;
+  s := 'a' + '1';
   d := 1 + 2.5;
   b := (s = 'a1') and (d = 3.5);
   if b then Result := Result + 100;
@@ -298,8 +298,15 @@ end.
 /// instead of killing the process.
 #[test]
 fn runaway_recursion_raises_the_oracle_stack_overflow() {
-    let mut interpreter = Interpreter::new();
-    let source = "\
+    // The call-depth guard sits at 128 interpreted calls (the oracle runs
+    // 100 deep), which a debug build's frames do not fit in a 2 MiB test
+    // thread: the interpreter runs on its own stack here, as the CLI's main
+    // thread does.
+    std::thread::Builder::new()
+        .stack_size(64 << 20)
+        .spawn(|| {
+            let mut interpreter = Interpreter::new();
+            let source = "\
 unit u;
 function R: Integer;
 begin
@@ -311,10 +318,14 @@ begin
 end;
 end.
 ";
-    let error = run_initialize(&mut interpreter, source).unwrap_err();
-    assert_eq!(error.class_name(), "EStackOverflow");
-    assert_eq!(error.message, "Stack overflow");
-    assert!(error.external);
+            let error = run_initialize(&mut interpreter, source).unwrap_err();
+            assert_eq!(error.class_name(), "EStackOverflow");
+            assert_eq!(error.message, "Stack overflow");
+            assert!(error.external);
+        })
+        .unwrap()
+        .join()
+        .unwrap();
 }
 
 #[test]
@@ -676,7 +687,9 @@ fn an_unresolvable_on_class_swallows_the_exception() {
     // (`JvInterpreter.pas:7480`), and the `DoFinallyExcept` wrapper catches
     // every `EJvInterpreterError` of the handler -- only `ieRaise` re-raises
     // (`:7587`) -- so the original exception counts as handled and the
-    // lookup error vanishes.
+    // lookup error vanishes; the `try` then exits with the parser on the
+    // `do`, where the enclosing block fails (`Statement expected but 'do'
+    // found`, probe `x-raise-17`).
     let mut interpreter = Interpreter::new();
     register_exception(&mut interpreter);
     let source = "\
@@ -692,7 +705,13 @@ begin
 end;
 end.
 ";
-    assert_eq!(run_initialize(&mut interpreter, source).unwrap(), Value::Integer(5));
+    let error = run_initialize(&mut interpreter, source).unwrap_err();
+    assert_eq!(error.code, 103);
+    assert!(
+        error.message.ends_with("Statement expected but 'do' found"),
+        "{}",
+        error.message
+    );
 }
 
 #[test]
@@ -709,9 +728,12 @@ end.
 ";
     let error = run_initialize(&mut interpreter, source).unwrap_err();
     assert_eq!(error.code, 4);
+    // The `ieRaise` error carries the `raise` statement's position and the
+    // unit it left (probe `x-raise-22`; the test source has no CR, which
+    // is what the line count reads).
     assert_eq!(
         error.message,
-        "Re-raising an exception only allowed in exception handler"
+        "Error in unit 'u' on line 1 : Re-raising an exception only allowed in exception handler"
     );
 }
 
@@ -744,10 +766,13 @@ end.
 #[test]
 fn division_by_zero_is_the_external_error() {
     let mut interpreter = Interpreter::new();
-    let source = "unit u;\r\nfunction Initialize: integer;\r\nbegin\r\n  Result := 1 / 0;\r\nend;\r\nend.\r\n";
+    // `1 / 0` is the double `INF` (the floating point exceptions are
+    // masked, probe `v-56`); the integer division raises `EDivByZero`.
+    let source = "unit u;\r\nfunction Initialize: integer;\r\nbegin\r\n  Result := 1 div 0;\r\nend;\r\nend.\r\n";
     interpreter.compile(source.as_bytes()).unwrap();
     let error = interpreter.call_function("Initialize", &[]).unwrap_err();
     assert_eq!(error.code, 6);
+    assert_eq!(error.class_name.as_deref(), Some("EDivByZero"));
     // The propagating exception keeps its raw message; the unit, the line
     // and the `External error in unit ...` text live on the recorded
     // `FLastError` (`UpdateExceptionPos`'s `else` arm, `:5390`).
@@ -1006,7 +1031,10 @@ fn the_statement_hook_fires_per_statement_and_separator() {
     }));
     let source = "unit u;\nfunction Initialize: integer;\nvar a, b: integer;\nbegin\n  a := 1; b := 2\nend;\nend.\n";
     interpreter.compile(source.as_bytes()).unwrap();
-    assert_eq!(interpreter.call_function("Initialize", &[]).unwrap(), Value::Integer(0));
+    // A `Result` never assigned is the `Byte` 0 of
+    // `TJvInterpreterSimpleDataType.Init` (`Var2Type(Unassigned, varInteger)`
+    // is the literal `0`, a `varByte`; probe `v-slot-18`).
+    assert_eq!(interpreter.call_function("Initialize", &[]).unwrap(), Value::Byte(0));
     // `InterpretStatement` hooks a statement once, and `InterpretBegin`
     // hooks every separating `;` on its own (`JvInterpreter.pas:6648`,
     // `:7056`): a, ';', b.
@@ -1625,10 +1653,11 @@ end.
     interpreter.compile(SCRIPT.as_bytes()).unwrap();
     let mut args = Args::new();
     args.values.push(Value::Object(root));
-    // `Process` has a result but never assigns it: the initialized 0.
+    // `Process` has a result but never assigns it: the initialized 0 (a
+    // `varByte`, as `Var2Type(Unassigned, varInteger)` makes it).
     assert_eq!(
         interpreter.call_function_ex(None, "Process", &mut args).unwrap(),
-        Value::Integer(0)
+        Value::Byte(0)
     );
     assert_eq!(
         *log.borrow(),

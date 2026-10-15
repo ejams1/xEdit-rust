@@ -65,7 +65,13 @@ impl ScriptClasses {
     /// JVCL `SysUtils` unit `TEncoding`, `xejviScriptAdapterMiscJson` its
     /// three classes and `xejviScriptAdapterMiscRegEx` its one).
     pub fn register(adapter: &mut Adapter) -> ScriptClasses {
-        let t_strings = adapter.add_class("Classes", "TStrings", None);
+        // `TStrings` descends from `TPersistent` and `TObject`, whose
+        // `ClassName`/`ClassType`/`InheritsFrom`/`ClassNameIs` a script
+        // reads on a list (probes `x-323`, `x-333`).
+        let t_object = adapter
+            .find_class(b"TObject")
+            .unwrap_or_else(|| adapter.add_class("System", "TObject", None));
+        let t_strings = adapter.add_class("Classes", "TStrings", Some(t_object));
         let t_string_list = adapter.add_class("Classes", "TStringList", Some(t_strings.clone()));
         let t_encoding = adapter.add_class("SysUtils", "TEncoding", None);
         let t_json_base_object = adapter.add_class("JsonDataObjects", "TJsonBaseObject", None);

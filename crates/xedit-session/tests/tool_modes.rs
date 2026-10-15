@@ -378,6 +378,28 @@ fn the_legacy_command_line_of_a_mod_manager_is_read() {
     assert_eq!(run.modules, ["MyMod.esp"]);
     assert_eq!(run.plugins.len(), 1);
     assert!(run.plugins[0].ends_with("MyMod.esp"));
+    // `-scripthost:<name>` is read as `xeInit.pas` reads it (parity #28);
+    // the CLI initializes the host with it and fails the start on an
+    // unknown name.
+    assert_eq!(run.script_host, None);
+    let params: Vec<String> = [
+        "-SSE",
+        &format!("-D:{}", dir.display()),
+        "-scripthost:Nope",
+        "-script:X.pas",
+        "MyMod.esp",
+    ]
+    .iter()
+    .map(|arg| (*arg).to_owned())
+    .collect();
+    let run: LegacyRun = tool_modes::parse_legacy(&params, "xedit.exe")
+        .unwrap()
+        .expect("a legacy command line");
+    assert_eq!(run.script_host.as_deref(), Some("Nope"));
+    assert_eq!(
+        xedit_script::host::init("Nope").unwrap_err(),
+        "ScriptHost \"Nope\" is not supported"
+    );
 
     // A command line of the CLI's own syntax is not one of xEdit's.
     let params: Vec<String> = ["--game", "sse", "--load", "x", "conflicts"]

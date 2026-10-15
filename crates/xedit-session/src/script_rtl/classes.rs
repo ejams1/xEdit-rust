@@ -595,17 +595,22 @@ fn register_list(adapter: &mut Adapter, t_list: &Rc<ClassDef>) {
     });
     method_new(adapter, t_list, "Delete", &[EMPTY], |_value, args| {
         let object = list_arg(args)?;
-        let index = arg_i32(args, 0)?;
+        let index = list_index(args, 0)?;
         let mut borrowed = object.borrow_mut();
-        borrowed.list_mut().ok_or(ValueError::Variant)?.delete_at(index);
+        let list = borrowed.list_mut().ok_or(ValueError::Variant)?;
+        list_bounds(index, list.count(), T_LIST)?;
+        list.delete_at(index);
         Ok(())
     });
     method_new(adapter, t_list, "Exchange", &[EMPTY, EMPTY], |_value, args| {
         let object = list_arg(args)?;
-        let first = arg_i32(args, 0)?;
-        let second = arg_i32(args, 1)?;
+        let first = list_index(args, 0)?;
+        let second = list_index(args, 1)?;
         let mut borrowed = object.borrow_mut();
-        borrowed.list_mut().ok_or(ValueError::Variant)?.exchange(first, second);
+        let list = borrowed.list_mut().ok_or(ValueError::Variant)?;
+        list_bounds(first, list.count(), T_LIST)?;
+        list_bounds(second, list.count(), T_LIST)?;
+        list.exchange(first, second);
         Ok(())
     });
     method_new(adapter, t_list, "Expand", &[], |value, args| {
@@ -617,6 +622,7 @@ fn register_list(adapter: &mut Adapter, t_list: &Rc<ClassDef>) {
         let object = list_arg(args)?;
         let borrowed = object.borrow();
         let list = borrowed.list().ok_or(ValueError::Variant)?;
+        list_bounds(0, list.count(), T_LIST)?;
         *value = list.items().first().cloned().unwrap_or(Value::Pointer(0));
         Ok(())
     });
@@ -625,10 +631,12 @@ fn register_list(adapter: &mut Adapter, t_list: &Rc<ClassDef>) {
         let item = arg(args, 0).clone();
         let borrowed = object.borrow();
         let list = borrowed.list().ok_or(ValueError::Variant)?;
+        // The items are pointers upstream: two values of the same
+        // interface match, `nil` matches 0 (probes `x-373`, `x-378`).
         let index = list
             .items()
             .iter()
-            .position(|entry| *entry == item)
+            .position(|entry| list_items_match(entry, &item))
             .map(|at| at as i32)
             .unwrap_or(-1);
         *value = Value::Integer(index);
@@ -636,25 +644,33 @@ fn register_list(adapter: &mut Adapter, t_list: &Rc<ClassDef>) {
     });
     method_new(adapter, t_list, "Insert", &[EMPTY, EMPTY], |_value, args| {
         let object = list_arg(args)?;
-        let index = arg_i32(args, 0)?;
+        let index = list_index(args, 0)?;
         let item = arg(args, 1).clone();
         let mut borrowed = object.borrow_mut();
-        borrowed.list_mut().ok_or(ValueError::Variant)?.insert(index, item);
+        let list = borrowed.list_mut().ok_or(ValueError::Variant)?;
+        // `Insert` accepts `Count` itself as the index.
+        list_bounds(index, list.count() + 1, T_LIST)?;
+        list.insert(index, item);
         Ok(())
     });
     method_new(adapter, t_list, "Last", &[], |value, args| {
         let object = list_arg(args)?;
         let borrowed = object.borrow();
         let list = borrowed.list().ok_or(ValueError::Variant)?;
+        // `TList.Last` of an empty list reports index 0 (probe `x-357`).
+        list_bounds(0, list.count(), T_LIST)?;
         *value = list.items().last().cloned().unwrap_or(Value::Pointer(0));
         Ok(())
     });
     method_new(adapter, t_list, "Move", &[EMPTY, EMPTY], |_value, args| {
         let object = list_arg(args)?;
-        let from = arg_i32(args, 0)?;
-        let to = arg_i32(args, 1)?;
+        let from = list_index(args, 0)?;
+        let to = list_index(args, 1)?;
         let mut borrowed = object.borrow_mut();
-        borrowed.list_mut().ok_or(ValueError::Variant)?.move_item(from, to);
+        let list = borrowed.list_mut().ok_or(ValueError::Variant)?;
+        list_bounds(from, list.count(), T_LIST)?;
+        list_bounds(to, list.count(), T_LIST)?;
+        list.move_item(from, to);
         Ok(())
     });
     method_new(adapter, t_list, "Remove", &[EMPTY], |value, args| {
@@ -677,7 +693,9 @@ fn register_list(adapter: &mut Adapter, t_list: &Rc<ClassDef>) {
     method_new(adapter, t_list, "Capacity", &[], |value, args| {
         let object = list_arg(args)?;
         let borrowed = object.borrow();
-        *value = Value::Integer(borrowed.list().ok_or(ValueError::Variant)?.capacity() as i32);
+        // `TList.Capacity` and `Count` are `NativeInt`s (`varInt64`, probes
+        // `x-345`, `x-346`), which `Format('%d', [...])` refuses.
+        *value = Value::Int64(borrowed.list().ok_or(ValueError::Variant)?.capacity() as i64);
         Ok(())
     });
     setter_new(adapter, t_list, "Capacity", &[EMPTY], |value, args| {
@@ -690,7 +708,7 @@ fn register_list(adapter: &mut Adapter, t_list: &Rc<ClassDef>) {
     method_new(adapter, t_list, "Count", &[], |value, args| {
         let object = list_arg(args)?;
         let borrowed = object.borrow();
-        *value = Value::Integer(borrowed.list().ok_or(ValueError::Variant)?.count());
+        *value = Value::Int64(i64::from(borrowed.list().ok_or(ValueError::Variant)?.count()));
         Ok(())
     });
     setter_new(adapter, t_list, "Count", &[EMPTY], |value, args| {
@@ -702,20 +720,20 @@ fn register_list(adapter: &mut Adapter, t_list: &Rc<ClassDef>) {
     });
     let read_item = |value: &mut Value, args: &mut Args| {
         let object = list_arg(args)?;
-        let index = arg_i32(args, 0)?;
+        let index = list_index(args, 0)?;
         let borrowed = object.borrow();
         let list = borrowed.list().ok_or(ValueError::Variant)?;
+        list_bounds(index, list.count(), T_LIST)?;
         *value = list.get(index).cloned().unwrap_or(Value::Pointer(0));
         Ok(())
     };
     let write_item = |value: &Value, args: &mut Args| {
         let object = list_arg(args)?;
-        let index = arg_i32(args, 0)?;
+        let index = list_index(args, 0)?;
         let mut borrowed = object.borrow_mut();
-        borrowed
-            .list_mut()
-            .ok_or(ValueError::Variant)?
-            .set(index, value.clone());
+        let list = borrowed.list_mut().ok_or(ValueError::Variant)?;
+        list_bounds(index, list.count(), T_LIST)?;
+        list.set(index, value.clone());
         Ok(())
     };
     index_get_new(adapter, t_list, "Items", &[EMPTY], read_item);
@@ -1070,7 +1088,7 @@ fn register_strings(adapter: &mut Adapter, classes: &Classes) {
     // The `TStrings` members.
     let add = |value: &mut Value, args: &mut Args| {
         let object = strings_arg(args)?;
-        let text = arg_str(args, 0);
+        let text = arg_str(args, 0)?;
         let mut borrowed = object.borrow_mut();
         let list = borrowed.string_list_mut().ok_or(ValueError::Variant)?;
         *value = Value::Integer(list.add(text));
@@ -1086,7 +1104,7 @@ fn register_strings(adapter: &mut Adapter, classes: &Classes) {
         |value, args| {
             let item = arg(args, 1).clone();
             let object = strings_arg(args)?;
-            let text = arg_str(args, 0);
+            let text = arg_str(args, 0)?;
             let mut borrowed = object.borrow_mut();
             let list = borrowed.string_list_mut().ok_or(ValueError::Variant)?;
             *value = Value::Integer(list.add_object(text, item));
@@ -1095,7 +1113,7 @@ fn register_strings(adapter: &mut Adapter, classes: &Classes) {
     );
     method_new(adapter, &classes.t_strings, "Append", &[EMPTY], |_value, args| {
         let object = strings_arg(args)?;
-        let text = arg_str(args, 0);
+        let text = arg_str(args, 0)?;
         let mut borrowed = object.borrow_mut();
         borrowed.string_list_mut().ok_or(ValueError::Variant)?.add(text);
         Ok(())
@@ -1139,7 +1157,9 @@ fn register_strings(adapter: &mut Adapter, classes: &Classes) {
         let object = strings_arg(args)?;
         let index = arg_i32(args, 0)?;
         let mut borrowed = object.borrow_mut();
-        borrowed.string_list_mut().ok_or(ValueError::Variant)?.delete(index);
+        let list = borrowed.string_list_mut().ok_or(ValueError::Variant)?;
+        list_bounds(index, list.lines().len() as i32, T_STRING_LIST)?;
+        list.delete(index);
         Ok(())
     };
     method_new(adapter, &classes.t_strings, "Delete", &[EMPTY], delete);
@@ -1163,17 +1183,17 @@ fn register_strings(adapter: &mut Adapter, classes: &Classes) {
         let first = arg_i32(args, 0)?;
         let second = arg_i32(args, 1)?;
         let mut borrowed = object.borrow_mut();
-        borrowed
-            .string_list_mut()
-            .ok_or(ValueError::Variant)?
-            .exchange(first, second);
+        let list = borrowed.string_list_mut().ok_or(ValueError::Variant)?;
+        list_bounds(first, list.lines().len() as i32, T_STRING_LIST)?;
+        list_bounds(second, list.lines().len() as i32, T_STRING_LIST)?;
+        list.exchange(first, second);
         Ok(())
     };
     method_new(adapter, &classes.t_strings, "Exchange", &[EMPTY, EMPTY], exchange);
     method_new(adapter, &classes.t_string_list, "Exchange", &[EMPTY, EMPTY], exchange);
     let index_of = |value: &mut Value, args: &mut Args| {
         let object = strings_arg(args)?;
-        let text = arg_str(args, 0);
+        let text = arg_str(args, 0)?;
         let borrowed = object.borrow();
         let list = borrowed.string_list().ok_or(ValueError::Variant)?;
         *value = Value::Integer(list.index_of(&text));
@@ -1182,7 +1202,7 @@ fn register_strings(adapter: &mut Adapter, classes: &Classes) {
     method_new(adapter, &classes.t_strings, "IndexOf", &[EMPTY], index_of);
     method_new(adapter, &classes.t_string_list, "IndexOf", &[EMPTY], index_of);
     method_new(adapter, &classes.t_strings, "IndexOfName", &[EMPTY], |value, args| {
-        let name = arg_str(args, 0);
+        let name = arg_str(args, 0)?;
         let object = strings_arg(args)?;
         let borrowed = object.borrow();
         let list = borrowed.string_list().ok_or(ValueError::Variant)?;
@@ -1212,12 +1232,11 @@ fn register_strings(adapter: &mut Adapter, classes: &Classes) {
     let insert = |_value: &mut Value, args: &mut Args| {
         let object = strings_arg(args)?;
         let index = arg_i32(args, 0)?;
-        let text = arg_str(args, 1);
+        let text = arg_str(args, 1)?;
         let mut borrowed = object.borrow_mut();
-        borrowed
-            .string_list_mut()
-            .ok_or(ValueError::Variant)?
-            .insert(index, text, Value::Empty);
+        let list = borrowed.string_list_mut().ok_or(ValueError::Variant)?;
+        list_bounds(index, list.lines().len() as i32 + 1, T_STRING_LIST)?;
+        list.insert(index, text, Value::Empty);
         Ok(())
     };
     method_new(adapter, &classes.t_strings, "Insert", &[EMPTY, EMPTY], insert);
@@ -1229,7 +1248,7 @@ fn register_strings(adapter: &mut Adapter, classes: &Classes) {
         &[EMPTY, EMPTY, EMPTY],
         |_value, args| {
             let index = arg_i32(args, 0)?;
-            let text = arg_str(args, 1);
+            let text = arg_str(args, 1)?;
             let item = arg(args, 2).clone();
             let object = strings_arg(args)?;
             let mut borrowed = object.borrow_mut();
@@ -1277,10 +1296,10 @@ fn register_strings(adapter: &mut Adapter, classes: &Classes) {
         let from = arg_i32(args, 0)?;
         let to = arg_i32(args, 1)?;
         let mut borrowed = object.borrow_mut();
-        borrowed
-            .string_list_mut()
-            .ok_or(ValueError::Variant)?
-            .move_line(from, to);
+        let list = borrowed.string_list_mut().ok_or(ValueError::Variant)?;
+        list_bounds(from, list.lines().len() as i32, T_STRING_LIST)?;
+        list_bounds(to, list.lines().len() as i32, T_STRING_LIST)?;
+        list.move_line(from, to);
         Ok(())
     });
     method_new(adapter, &classes.t_strings, "SaveToFile", &[EMPTY], |_value, args| {
@@ -1366,7 +1385,7 @@ fn register_strings(adapter: &mut Adapter, classes: &Classes) {
         }
     });
     index_get_new(adapter, &classes.t_strings, "Values", &[EMPTY], |value, args| {
-        let name = arg_str(args, 0);
+        let name = arg_str(args, 0)?;
         let object = strings_arg(args)?;
         let borrowed = object.borrow();
         let list = borrowed.string_list().ok_or(ValueError::Variant)?;
@@ -1382,7 +1401,7 @@ fn register_strings(adapter: &mut Adapter, classes: &Classes) {
         Ok(())
     });
     index_set_new(adapter, &classes.t_strings, "Values", &[NULL], |value, args| {
-        let name = arg_str(args, 0);
+        let name = arg_str(args, 0)?;
         let text = to_str(value)?;
         let mut line = name.clone();
         line.push(b'=');
@@ -1408,6 +1427,7 @@ fn register_strings(adapter: &mut Adapter, classes: &Classes) {
         let object = strings_arg(args)?;
         let borrowed = object.borrow();
         let list = borrowed.string_list().ok_or(ValueError::Variant)?;
+        list_bounds(index, list.lines().len() as i32, T_STRING_LIST)?;
         *value = usize::try_from(index)
             .ok()
             .and_then(|index| list.objects().get(index))
@@ -1420,10 +1440,9 @@ fn register_strings(adapter: &mut Adapter, classes: &Classes) {
         let index = arg_i32(args, 0)?;
         let object = strings_arg(args)?;
         let mut borrowed = object.borrow_mut();
-        borrowed
-            .string_list_mut()
-            .ok_or(ValueError::Variant)?
-            .set_object(index, value.clone());
+        let list = borrowed.string_list_mut().ok_or(ValueError::Variant)?;
+        list_bounds(index, list.lines().len() as i32, T_STRING_LIST)?;
+        list.set_object(index, value.clone());
         Ok(())
     });
     let read_string_at = |value: &mut Value, args: &mut Args| {
@@ -1431,6 +1450,7 @@ fn register_strings(adapter: &mut Adapter, classes: &Classes) {
         let object = strings_arg(args)?;
         let borrowed = object.borrow();
         let list = borrowed.string_list().ok_or(ValueError::Variant)?;
+        list_bounds(index, list.lines().len() as i32, T_STRING_LIST)?;
         *value = Value::Str(
             usize::try_from(index)
                 .ok()
@@ -1445,10 +1465,9 @@ fn register_strings(adapter: &mut Adapter, classes: &Classes) {
         let text = to_str(value)?;
         let object = strings_arg(args)?;
         let mut borrowed = object.borrow_mut();
-        borrowed
-            .string_list_mut()
-            .ok_or(ValueError::Variant)?
-            .set_line(index, text);
+        let list = borrowed.string_list_mut().ok_or(ValueError::Variant)?;
+        list_bounds(index, list.lines().len() as i32, T_STRING_LIST)?;
+        list.set_line(index, text);
         Ok(())
     };
     index_get_new(adapter, &classes.t_strings, "Strings", &[EMPTY], read_string_at);
@@ -1494,7 +1513,7 @@ fn register_strings(adapter: &mut Adapter, classes: &Classes) {
         "Find",
         &[EMPTY, BYREF],
         |value, args| {
-            let text = arg_str(args, 0);
+            let text = arg_str(args, 0)?;
             let object = strings_arg(args)?;
             let borrowed = object.borrow();
             let list = borrowed.string_list().ok_or(ValueError::Variant)?;
@@ -2069,7 +2088,7 @@ fn register_stream(adapter: &mut Adapter, classes: &Classes) {
         &[EMPTY],
         |_value, args| {
             let stream = stream_arg(args)?;
-            let text = arg_str(args, 0);
+            let text = arg_str(args, 0)?;
             stream_write(&stream, &text)?;
             Ok(())
         },
@@ -2745,4 +2764,49 @@ fn register_binary_streams(adapter: &mut Adapter, classes: &Classes) {
             },
         );
     }
+}
+
+/// The list classes of the bounds errors: `TStringList` raises
+/// `EStringListError`, `TList` `EListError`.
+const T_STRING_LIST: (&str, &str) = ("TStringList", "EStringListError");
+const T_LIST: (&str, &str) = ("TList", "EListError");
+
+/// `TList.Error`/`TStrings.Error` with `SListIndexError`: `List index out
+/// of bounds (%d).  %s range is %d..%d` (the RTL's two spaces), or `%s is
+/// empty` when the list has no entries (probes `x-008`, `x-351`, `x-390`).
+fn list_bounds(index: i32, count: i32, class: (&str, &'static str)) -> Result<(), ValueError> {
+    if index >= 0 && index < count {
+        return Ok(());
+    }
+    let (name, error_class) = class;
+    let message = if count == 0 {
+        format!("List index out of bounds ({index}).  {name} is empty")
+    } else {
+        format!("List index out of bounds ({index}).  {name} range is 0..{}", count - 1)
+    };
+    Err(ValueError::external_class(error_class, message))
+}
+
+/// `TList.IndexOf`'s pointer comparison over the port's values: two
+/// element wrappers of the same element match, a nil pointer matches the
+/// integer 0, the rest compare as values.
+fn list_items_match(entry: &Value, item: &Value) -> bool {
+    if let (Some(a), Some(b)) = (
+        crate::script::ScriptRunState::element_of(entry),
+        crate::script::ScriptRunState::element_of(item),
+    ) {
+        return std::ptr::addr_eq(std::sync::Arc::as_ptr(&a), std::sync::Arc::as_ptr(&b));
+    }
+    match (entry.raw(), item.raw()) {
+        (Some(a), Some(b)) if !matches!(entry, Value::Object(_)) && !matches!(item, Value::Object(_)) => a == b,
+        _ => *entry == *item,
+    }
+}
+
+/// A `TList` index is a `NativeInt` (`varInt64` to the conversion): a value
+/// that is no number is `Could not convert ... into type (Int64)` (probe
+/// `x-392`).
+fn list_index(args: &Args, index: usize) -> Result<i32, ValueError> {
+    let value = xedit_script::values::to_i64(arg(args, index))?;
+    Ok(value.clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32)
 }

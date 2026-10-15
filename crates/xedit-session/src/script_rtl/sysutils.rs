@@ -353,7 +353,8 @@ fn open_shared(path: &Path, read: bool, write: bool, create: bool, mode: i32) ->
 pub fn register(adapter: &mut Adapter) {
     // `Exception` descends from `TObject` (registered by `System` first), so
     // `E.ClassName`, `ClassType` and `ClassNameIs` reach it as Delphi's RTTI
-    // does for every object.
+    // does for every object (`E.ClassName + ': ' + E.Message`, probe
+    // `x-raise-03`).
     let t_object = adapter.find_class(b"TObject");
     let exception = adapter.add_class(UNIT, "Exception", t_object);
     // The constructor family, in the registration order of the unit.
@@ -440,13 +441,16 @@ pub fn register(adapter: &mut Adapter) {
         Ok(())
     });
     method(adapter, &exception, "Message", &[], |value, args| {
-        *value = text_value(
+        // A raised `Exception` object's message, or the error an
+        // interpreter/external exception carries (`E.Message` inside `on
+        // E: Exception`, probes `x-raise-04` to `x-raise-10`).
+        let message = args.obj.as_ref().and_then(ExceptionObject::message_of).or_else(|| {
             args.obj
                 .as_ref()
-                .and_then(ExceptionObject::message_of)
-                .unwrap_or_default()
-                .into_bytes(),
-        );
+                .and_then(Value::as_object)
+                .and_then(|object| object.borrow().message().map(str::to_owned))
+        });
+        *value = text_value(message.unwrap_or_default().into_bytes());
         Ok(())
     });
     setter(adapter, &exception, "Message", &[EMPTY], |value, args| {
@@ -557,15 +561,15 @@ fn register_functions(adapter: &mut Adapter) {
     //=== Strings ============================================================
 
     f(adapter, "UpperCase", &[EMPTY], |value, args| {
-        *value = text_value(upper_case(&arg_str(args, 0)));
+        *value = text_value(upper_case(&arg_str(args, 0)?));
         Ok(())
     });
     f(adapter, "LowerCase", &[EMPTY], |value, args| {
-        *value = text_value(lower_case(&arg_str(args, 0)));
+        *value = text_value(lower_case(&arg_str(args, 0)?));
         Ok(())
     });
     f(adapter, "CompareStr", &[EMPTY, EMPTY], |value, args| {
-        *value = Value::Integer(compare(&arg_str(args, 0), &arg_str(args, 1), false, None));
+        *value = Value::Integer(compare(&arg_str(args, 0)?, &arg_str(args, 1)?, false, None));
         Ok(())
     });
     f(adapter, "CompareMem", &[EMPTY, EMPTY, EMPTY], |value, args| {
@@ -579,26 +583,26 @@ fn register_functions(adapter: &mut Adapter) {
         Ok(())
     });
     f(adapter, "CompareText", &[EMPTY, EMPTY], |value, args| {
-        *value = Value::Integer(compare(&arg_str(args, 0), &arg_str(args, 1), true, None));
+        *value = Value::Integer(compare(&arg_str(args, 0)?, &arg_str(args, 1)?, true, None));
         Ok(())
     });
     f(adapter, "ExtractQuotedString", &[EMPTY, EMPTY], |value, args| {
-        let text = arg_str(args, 0);
+        let text = arg_str(args, 0)?;
         let quote = arg_char(args, 1);
         *value = text_value(extract_quoted(&text, quote).1);
         Ok(())
     });
     f(adapter, "AnsiUpperCase", &[EMPTY], |value, args| {
-        *value = text_value(upper_case(&arg_str(args, 0)));
+        *value = text_value(upper_case(&arg_str(args, 0)?));
         Ok(())
     });
     f(adapter, "AnsiLowerCase", &[EMPTY], |value, args| {
-        *value = text_value(lower_case(&arg_str(args, 0)));
+        *value = text_value(lower_case(&arg_str(args, 0)?));
         Ok(())
     });
     f(adapter, "AnsiCompareStr", &[EMPTY, EMPTY], |value, args| {
-        let a = String::from_utf8_lossy(&arg_str(args, 0)).into_owned();
-        let b = String::from_utf8_lossy(&arg_str(args, 1)).into_owned();
+        let a = String::from_utf8_lossy(&arg_str(args, 0)?).into_owned();
+        let b = String::from_utf8_lossy(&arg_str(args, 1)?).into_owned();
         *value = Value::Integer(match ansi_compare_text(&a, &b) {
             std::cmp::Ordering::Less => -1,
             std::cmp::Ordering::Equal => 0,
@@ -607,8 +611,8 @@ fn register_functions(adapter: &mut Adapter) {
         Ok(())
     });
     f(adapter, "AnsiCompareText", &[EMPTY, EMPTY], |value, args| {
-        let a = String::from_utf8_lossy(&arg_str(args, 0)).into_owned();
-        let b = String::from_utf8_lossy(&arg_str(args, 1)).into_owned();
+        let a = String::from_utf8_lossy(&arg_str(args, 0)?).into_owned();
+        let b = String::from_utf8_lossy(&arg_str(args, 1)?).into_owned();
         *value = Value::Integer(match ansi_compare_text(&a, &b) {
             std::cmp::Ordering::Less => -1,
             std::cmp::Ordering::Equal => 0,
@@ -617,61 +621,61 @@ fn register_functions(adapter: &mut Adapter) {
         Ok(())
     });
     f(adapter, "AnsiStrComp", &[EMPTY, EMPTY], |value, args| {
-        *value = Value::Integer(compare(&arg_str(args, 0), &arg_str(args, 1), false, None));
+        *value = Value::Integer(compare(&arg_str(args, 0)?, &arg_str(args, 1)?, false, None));
         Ok(())
     });
     f(adapter, "AnsiStrIComp", &[EMPTY, EMPTY], |value, args| {
-        *value = Value::Integer(compare(&arg_str(args, 0), &arg_str(args, 1), true, None));
+        *value = Value::Integer(compare(&arg_str(args, 0)?, &arg_str(args, 1)?, true, None));
         Ok(())
     });
     f(adapter, "AnsiStrLComp", &[EMPTY, EMPTY, EMPTY], |value, args| {
         let max = arg_i32(args, 2)?.max(0) as usize;
-        *value = Value::Integer(compare(&arg_str(args, 0), &arg_str(args, 1), false, Some(max)));
+        *value = Value::Integer(compare(&arg_str(args, 0)?, &arg_str(args, 1)?, false, Some(max)));
         Ok(())
     });
     f(adapter, "AnsiStrLIComp", &[EMPTY, EMPTY, EMPTY], |value, args| {
         let max = arg_i32(args, 2)?.max(0) as usize;
-        *value = Value::Integer(compare(&arg_str(args, 0), &arg_str(args, 1), true, Some(max)));
+        *value = Value::Integer(compare(&arg_str(args, 0)?, &arg_str(args, 1)?, true, Some(max)));
         Ok(())
     });
     f(adapter, "AnsiStrLower", &[EMPTY], |value, args| {
-        *value = text_value(lower_case(&arg_str(args, 0)));
+        *value = text_value(lower_case(&arg_str(args, 0)?));
         Ok(())
     });
     f(adapter, "AnsiStrUpper", &[EMPTY], |value, args| {
-        *value = text_value(upper_case(&arg_str(args, 0)));
+        *value = text_value(upper_case(&arg_str(args, 0)?));
         Ok(())
     });
     f(adapter, "AnsiLastChar", &[EMPTY], |value, args| {
-        *value = text_value(arg_str(args, 0).last().copied().into_iter().collect::<Vec<u8>>());
+        *value = text_value(arg_str(args, 0)?.last().copied().into_iter().collect::<Vec<u8>>());
         Ok(())
     });
     f(adapter, "AnsiStrLastChar", &[EMPTY], |value, args| {
-        *value = text_value(arg_str(args, 0).last().copied().into_iter().collect::<Vec<u8>>());
+        *value = text_value(arg_str(args, 0)?.last().copied().into_iter().collect::<Vec<u8>>());
         Ok(())
     });
     f(adapter, "Trim", &[EMPTY], |value, args| {
-        *value = text_value(trim(&arg_str(args, 0)));
+        *value = text_value(trim(&arg_str(args, 0)?));
         Ok(())
     });
     f(adapter, "TrimLeft", &[EMPTY], |value, args| {
-        *value = text_value(trim_left(&arg_str(args, 0)));
+        *value = text_value(trim_left(&arg_str(args, 0)?));
         Ok(())
     });
     f(adapter, "TrimRight", &[EMPTY], |value, args| {
-        *value = text_value(trim_right(&arg_str(args, 0)));
+        *value = text_value(trim_right(&arg_str(args, 0)?));
         Ok(())
     });
     f(adapter, "QuotedStr", &[EMPTY], |value, args| {
-        *value = text_value(quoted_str(&arg_str(args, 0), b'\''));
+        *value = text_value(quoted_str(&arg_str(args, 0)?, b'\''));
         Ok(())
     });
     f(adapter, "AnsiQuotedStr", &[EMPTY, EMPTY], |value, args| {
-        *value = text_value(quoted_str(&arg_str(args, 0), arg_char(args, 1)));
+        *value = text_value(quoted_str(&arg_str(args, 0)?, arg_char(args, 1)));
         Ok(())
     });
     f(adapter, "AnsiExtractQuotedStr", &[BYREF, EMPTY], |value, args| {
-        let text = arg_str(args, 0);
+        let text = arg_str(args, 0)?;
         let quote = arg_char(args, 1);
         let (rest, extracted) = extract_quoted(&text, quote);
         args.values[0] = Value::Str(rest);
@@ -679,24 +683,51 @@ fn register_functions(adapter: &mut Adapter) {
         Ok(())
     });
     f(adapter, "AdjustLineBreaks", &[EMPTY], |value, args| {
-        *value = text_value(adjust_line_breaks(&arg_str(args, 0)));
+        *value = text_value(adjust_line_breaks(&arg_str(args, 0)?));
         Ok(())
     });
     f(adapter, "IsValidIdent", &[EMPTY], |value, args| {
-        *value = Value::Bool(is_valid_ident(&arg_str(args, 0)));
+        *value = Value::Bool(is_valid_ident(&arg_str(args, 0)?));
         Ok(())
     });
     f(adapter, "IntToStr", &[EMPTY], |value, args| {
-        *value = text_value(arg_i32(args, 0)?.to_string().into_bytes());
+        // `IntToStr(Args.Values[0])` takes the `Int64` overload
+        // (`IntToStr(4294967296)` prints it, probe `x-259`); an object
+        // or a double beyond the range is read without an error upstream
+        // (its payload, `x-250`, `x-262`), which the port stands in with
+        // the pointer-free reading of the value.
+        let number = match arg(args, 0) {
+            // An interface does not convert (`Type mismatch`, probe
+            // `x-251`); another object reads its payload (probe `x-250`).
+            Value::Object(object) if object.borrow().is_interface() => return Err(ValueError::Variant),
+            Value::Object(_) | Value::Class(_) | Value::Pointer(_) => 0,
+            Value::Double(v) | Value::Date(v) if !v.is_finite() || v.abs() >= 9.223_372_036_854_776e18 => i64::MIN,
+            other => xedit_script::values::to_i64(other)?,
+        };
+        *value = text_value(number.to_string().into_bytes());
         Ok(())
     });
     f(adapter, "IntToHex", &[EMPTY, EMPTY], |value, args| {
-        *value = text_value(format::int_to_hex(arg_i64(args, 0)?, arg_i32(args, 1)?).into_bytes());
+        // The `UInt64` overload takes the variant: a negative value is the
+        // conversion's overflow, an `EVariantError` (`IntToHex(-1, 8)` is
+        // `Type mismatch` in an expression, probe `x-073`).
+        let number = arg_i64(args, 0)?;
+        if number < 0 {
+            return Err(xedit_script::values::overflow_error(arg(args, 0), "UInt64"));
+        }
+        *value = text_value(format::int_to_hex(number, arg_i32(args, 1)?).into_bytes());
         Ok(())
     });
     f(adapter, "StrToInt", &[EMPTY], |value, args| {
-        let text = arg_text(args, 0)?;
-        *value = Value::Integer(format::str_to_int(&text).map_err(external)?);
+        // An object reads as `''` here (probe `x-273`).
+        let text = match arg(args, 0) {
+            Value::Object(_) | Value::Class(_) => String::new(),
+            _ => arg_text(args, 0)?,
+        };
+        // `EConvertError` (probe `x-007`).
+        *value = Value::Integer(
+            format::str_to_int(&text).map_err(|message| ValueError::external_class("EConvertError", message))?,
+        );
         Ok(())
     });
     f(adapter, "StrToIntDef", &[EMPTY, EMPTY], |value, args| {
@@ -722,7 +753,7 @@ fn register_functions(adapter: &mut Adapter) {
     //=== The `Str*` pointer helpers =========================================
 
     f(adapter, "StrLen", &[EMPTY], |value, args| {
-        *value = Value::Integer(arg_str(args, 0).len() as i32);
+        *value = Value::Integer(arg_str(args, 0)?.len() as i32);
         Ok(())
     });
     f(adapter, "StrEnd", &[EMPTY], |value, _args| {
@@ -732,96 +763,96 @@ fn register_functions(adapter: &mut Adapter) {
     f(adapter, "StrMove", &[EMPTY, EMPTY, EMPTY], |value, args| {
         // The destination is a buffer; the text it holds after the move is
         // the source's first `Count` characters.
-        let source = arg_str(args, 1);
+        let source = arg_str(args, 1)?;
         let count = arg_i32(args, 2)?.max(0) as usize;
         *value = text_value(source[..count.min(source.len())].to_vec());
         Ok(())
     });
     f(adapter, "StrCopy", &[EMPTY, EMPTY], |value, args| {
-        *value = text_value(arg_str(args, 1));
+        *value = text_value(arg_str(args, 1)?);
         Ok(())
     });
     f(adapter, "StrECopy", &[EMPTY, EMPTY], |value, args| {
-        *value = text_value(arg_str(args, 1));
+        *value = text_value(arg_str(args, 1)?);
         Ok(())
     });
     f(adapter, "StrLCopy", &[EMPTY, EMPTY, EMPTY], |value, args| {
-        let source = arg_str(args, 1);
+        let source = arg_str(args, 1)?;
         let max = arg_i32(args, 2)?.max(0) as usize;
         *value = text_value(source[..max.min(source.len())].to_vec());
         Ok(())
     });
     f(adapter, "StrPCopy", &[EMPTY, EMPTY], |value, args| {
-        *value = text_value(arg_str(args, 1));
+        *value = text_value(arg_str(args, 1)?);
         Ok(())
     });
     f(adapter, "StrPLCopy", &[EMPTY, EMPTY, EMPTY], |value, args| {
-        let source = arg_str(args, 1);
+        let source = arg_str(args, 1)?;
         let max = arg_i32(args, 2)?.max(0) as usize;
         *value = text_value(source[..max.min(source.len())].to_vec());
         Ok(())
     });
     f(adapter, "StrCat", &[EMPTY, EMPTY], |value, args| {
-        let mut text = arg_str(args, 0);
-        text.extend_from_slice(&arg_str(args, 1));
+        let mut text = arg_str(args, 0)?;
+        text.extend_from_slice(&arg_str(args, 1)?);
         *value = text_value(text);
         Ok(())
     });
     f(adapter, "StrLCat", &[EMPTY, EMPTY, EMPTY], |value, args| {
-        let mut text = arg_str(args, 0);
-        text.extend_from_slice(&arg_str(args, 1));
+        let mut text = arg_str(args, 0)?;
+        text.extend_from_slice(&arg_str(args, 1)?);
         let max = arg_i32(args, 2)?.max(0) as usize;
         text.truncate(max);
         *value = text_value(text);
         Ok(())
     });
     f(adapter, "StrComp", &[EMPTY, EMPTY], |value, args| {
-        *value = Value::Integer(compare(&arg_str(args, 0), &arg_str(args, 1), false, None));
+        *value = Value::Integer(compare(&arg_str(args, 0)?, &arg_str(args, 1)?, false, None));
         Ok(())
     });
     f(adapter, "StrIComp", &[EMPTY, EMPTY], |value, args| {
-        *value = Value::Integer(compare(&arg_str(args, 0), &arg_str(args, 1), true, None));
+        *value = Value::Integer(compare(&arg_str(args, 0)?, &arg_str(args, 1)?, true, None));
         Ok(())
     });
     f(adapter, "StrLComp", &[EMPTY, EMPTY, EMPTY], |value, args| {
         let max = arg_i32(args, 2)?.max(0) as usize;
-        *value = Value::Integer(compare(&arg_str(args, 0), &arg_str(args, 1), false, Some(max)));
+        *value = Value::Integer(compare(&arg_str(args, 0)?, &arg_str(args, 1)?, false, Some(max)));
         Ok(())
     });
     f(adapter, "StrLIComp", &[EMPTY, EMPTY, EMPTY], |value, args| {
         let max = arg_i32(args, 2)?.max(0) as usize;
-        *value = Value::Integer(compare(&arg_str(args, 0), &arg_str(args, 1), true, Some(max)));
+        *value = Value::Integer(compare(&arg_str(args, 0)?, &arg_str(args, 1)?, true, Some(max)));
         Ok(())
     });
     f(adapter, "StrScan", &[EMPTY, EMPTY], |value, args| {
-        let text = arg_str(args, 0);
+        let text = arg_str(args, 0)?;
         let ch = arg_char(args, 1);
         *value = text_value(scan(&text, ch, false));
         Ok(())
     });
     f(adapter, "StrRScan", &[EMPTY, EMPTY], |value, args| {
-        let text = arg_str(args, 0);
+        let text = arg_str(args, 0)?;
         let ch = arg_char(args, 1);
         *value = text_value(scan(&text, ch, true));
         Ok(())
     });
     f(adapter, "StrPos", &[EMPTY, EMPTY], |value, args| {
         // `StrPos(Str1, Str2)`: the tail of `Str1` from `Str2`.
-        let haystack = arg_str(args, 0);
-        let needle = arg_str(args, 1);
+        let haystack = arg_str(args, 0)?;
+        let needle = arg_str(args, 1)?;
         *value = text_value(pos(&needle, &haystack));
         Ok(())
     });
     f(adapter, "StrUpper", &[EMPTY], |value, args| {
-        *value = text_value(upper_case(&arg_str(args, 0)));
+        *value = text_value(upper_case(&arg_str(args, 0)?));
         Ok(())
     });
     f(adapter, "StrLower", &[EMPTY], |value, args| {
-        *value = text_value(lower_case(&arg_str(args, 0)));
+        *value = text_value(lower_case(&arg_str(args, 0)?));
         Ok(())
     });
     f(adapter, "StrPas", &[EMPTY], |value, args| {
-        *value = text_value(arg_str(args, 0));
+        *value = text_value(arg_str(args, 0)?);
         Ok(())
     });
     f(adapter, "StrAlloc", &[EMPTY], |value, args| {
@@ -832,11 +863,11 @@ fn register_functions(adapter: &mut Adapter) {
     f(adapter, "StrBufSize", &[EMPTY], |value, args| {
         // The allocation's size; the port's strings carry their length plus
         // the terminator.
-        *value = Value::Integer(arg_str(args, 0).len() as i32 + 1);
+        *value = Value::Integer(arg_str(args, 0)?.len() as i32 + 1);
         Ok(())
     });
     f(adapter, "StrNew", &[EMPTY], |value, args| {
-        *value = text_value(arg_str(args, 0));
+        *value = text_value(arg_str(args, 0)?);
         Ok(())
     });
     f(adapter, "StrDispose", &[EMPTY], |_value, _args| {
@@ -847,29 +878,29 @@ fn register_functions(adapter: &mut Adapter) {
     //=== Format =============================================================
 
     f(adapter, "Format", &[EMPTY, EMPTY], |value, args| {
-        let format = arg_str(args, 0);
+        let format = arg_str(args, 0)?;
         let items = args.open_array(1)?;
-        *value = Value::Str(format::format_text(&format, &items).map_err(external)?);
+        *value = Value::Str(format::format_text(&format, &items)?);
         Ok(())
     });
     f(adapter, "FmtStr", &[BYREF, EMPTY, EMPTY], |value, args| {
-        let format = arg_str(args, 1);
+        let format = arg_str(args, 1)?;
         let items = args.open_array(2)?;
-        let text = format::format_text(&format, &items).map_err(external)?;
+        let text = format::format_text(&format, &items)?;
         args.values[0] = Value::Str(text.clone());
         *value = Value::Str(text);
         Ok(())
     });
     f(adapter, "StrFmt", &[EMPTY, EMPTY, EMPTY], |value, args| {
-        let format = arg_str(args, 1);
+        let format = arg_str(args, 1)?;
         let items = args.open_array(2)?;
-        *value = Value::Str(format::format_text(&format, &items).map_err(external)?);
+        *value = Value::Str(format::format_text(&format, &items)?);
         Ok(())
     });
     f(adapter, "StrLFmt", &[EMPTY, EMPTY, EMPTY, EMPTY], |value, args| {
-        let format = arg_str(args, 2);
+        let format = arg_str(args, 2)?;
         let items = args.open_array(3)?;
-        let mut text = format::format_text(&format, &items).map_err(external)?;
+        let mut text = format::format_text(&format, &items)?;
         let max = arg_i32(args, 1)?.max(0) as usize;
         text.truncate(max);
         *value = Value::Str(text);
@@ -880,9 +911,9 @@ fn register_functions(adapter: &mut Adapter) {
         "FormatBuf",
         &[BYREF, EMPTY, EMPTY, EMPTY, EMPTY],
         |value, args| {
-            let format = arg_str(args, 2);
+            let format = arg_str(args, 2)?;
             let items = args.open_array(4)?;
-            let text = format::format_text(&format, &items).map_err(external)?;
+            let text = format::format_text(&format, &items)?;
             args.values[0] = Value::Str(text.clone());
             // The number of characters written including the terminator.
             *value = Value::Integer(text.len() as i32 + 1);
@@ -890,7 +921,14 @@ fn register_functions(adapter: &mut Adapter) {
         },
     );
     f(adapter, "FloatToStr", &[EMPTY], |value, args| {
-        *value = text_value(delphi::float_to_str(arg_f64(args, 0)?).into_bytes());
+        // An object reads its payload upstream, without an error (probe
+        // `x-267`).
+        let number = match arg(args, 0) {
+            Value::Object(object) if !object.borrow().is_interface() => 0.0,
+            Value::Class(_) | Value::Pointer(_) => 0.0,
+            other => xedit_script::values::to_f64(other)?,
+        };
+        *value = text_value(delphi::float_to_str(number).into_bytes());
         Ok(())
     });
     f(adapter, "CurrToStr", &[EMPTY], |value, args| {
@@ -922,18 +960,20 @@ fn register_functions(adapter: &mut Adapter) {
         Ok(())
     });
     f(adapter, "FormatFloat", &[EMPTY, EMPTY], |value, args| {
-        let picture = String::from_utf8_lossy(&arg_str(args, 0)).into_owned();
+        let picture = String::from_utf8_lossy(&arg_str(args, 0)?).into_owned();
         *value = text_value(format::format_float(&picture, arg_f64(args, 1)?).into_bytes());
         Ok(())
     });
     f(adapter, "FormatCurr", &[EMPTY, EMPTY], |value, args| {
-        let picture = String::from_utf8_lossy(&arg_str(args, 0)).into_owned();
+        let picture = String::from_utf8_lossy(&arg_str(args, 0)?).into_owned();
         *value = text_value(format::format_float(&picture, arg_f64(args, 1)?).into_bytes());
         Ok(())
     });
     f(adapter, "StrToFloat", &[EMPTY], |value, args| {
         let text = arg_text(args, 0)?;
-        *value = Value::Double(format::str_to_float(&text).map_err(external)?);
+        *value = Value::Double(
+            format::str_to_float(&text).map_err(|message| ValueError::external_class("EConvertError", message))?,
+        );
         Ok(())
     });
     f(adapter, "StrToCurr", &[EMPTY], |value, args| {
@@ -1213,7 +1253,7 @@ fn register_functions(adapter: &mut Adapter) {
         Ok(())
     });
     f(adapter, "FileDateToDateTime", &[EMPTY], |value, args| {
-        *value = Value::Double(datetime::file_date_to_date_time(arg_i32(args, 0)?));
+        *value = Value::Date(datetime::file_date_to_date_time(arg_i32(args, 0)?));
         Ok(())
     });
     f(adapter, "DateTimeToFileDate", &[EMPTY], |value, args| {
@@ -1290,19 +1330,19 @@ fn register_functions(adapter: &mut Adapter) {
         Ok(())
     });
     f(adapter, "Date", &[EMPTY], |value, _args| {
-        *value = Value::Double(datetime::today());
+        *value = Value::Date(datetime::today());
         Ok(())
     });
     f(adapter, "Time", &[EMPTY], |value, _args| {
-        *value = Value::Double(datetime::time_now());
+        *value = Value::Date(datetime::time_now());
         Ok(())
     });
-    f(adapter, "Now", &[EMPTY], |value, _args| {
-        *value = Value::Double(datetime::now());
+    f(adapter, "Now", &[], |value, _args| {
+        *value = Value::Date(datetime::now());
         Ok(())
     });
     f(adapter, "IncMonth", &[EMPTY, EMPTY], |value, args| {
-        *value = Value::Double(datetime::inc_month(arg_f64(args, 0)?, arg_i64(args, 1)?));
+        *value = Value::Date(datetime::inc_month(arg_f64(args, 0)?, arg_i64(args, 1)?));
         Ok(())
     });
     f(adapter, "IsLeapYear", &[EMPTY], |value, args| {
@@ -1328,26 +1368,26 @@ fn register_functions(adapter: &mut Adapter) {
     });
     f(adapter, "StrToDate", &[EMPTY], |value, args| {
         let text = arg_text(args, 0)?;
-        *value = Value::Double(datetime::str_to_date(&text).map_err(external)?);
+        *value = Value::Date(datetime::str_to_date(&text).map_err(external)?);
         Ok(())
     });
     f(adapter, "StrToTime", &[EMPTY], |value, args| {
         let text = arg_text(args, 0)?;
-        *value = Value::Double(datetime::str_to_time(&text).map_err(external)?);
+        *value = Value::Date(datetime::str_to_time(&text).map_err(external)?);
         Ok(())
     });
     f(adapter, "StrToDateTime", &[EMPTY], |value, args| {
         let text = arg_text(args, 0)?;
-        *value = Value::Double(datetime::str_to_date_time(&text).map_err(external)?);
+        *value = Value::Date(datetime::str_to_date_time(&text).map_err(external)?);
         Ok(())
     });
     f(adapter, "FormatDateTime", &[EMPTY, EMPTY], |value, args| {
-        let format = String::from_utf8_lossy(&arg_str(args, 0)).into_owned();
+        let format = String::from_utf8_lossy(&arg_str(args, 0)?).into_owned();
         *value = text_value(datetime::date_time_to_str(&format, arg_f64(args, 1)?).into_bytes());
         Ok(())
     });
     f(adapter, "DateTimeToString", &[BYREF, EMPTY, EMPTY], |value, args| {
-        let format = String::from_utf8_lossy(&arg_str(args, 1)).into_owned();
+        let format = String::from_utf8_lossy(&arg_str(args, 1)?).into_owned();
         let text = datetime::date_time_to_str(&format, arg_f64(args, 2)?);
         args.values[0] = Value::Str(text.clone().into_bytes());
         *value = Value::Str(text.into_bytes());
@@ -1425,7 +1465,9 @@ fn register_functions(adapter: &mut Adapter) {
         // call has nothing it can do.
         Ok(())
     });
-    f(adapter, "Abort", &[], |_value, _args| Err(external(S_ABORT_ERROR)));
+    f(adapter, "Abort", &[], |_value, _args| {
+        Err(ValueError::external_class("EAbort", S_ABORT_ERROR.to_owned()))
+    });
     f(adapter, "OutOfMemoryError", &[], |_value, _args| {
         Err(external(S_OUT_OF_MEMORY))
     });
@@ -1446,13 +1488,13 @@ fn register_functions(adapter: &mut Adapter) {
         Ok(())
     });
     f(adapter, "ByteToCharLen", &[EMPTY, EMPTY], |value, args| {
-        let text = arg_str(args, 0);
+        let text = arg_str(args, 0)?;
         let max = arg_i32(args, 1)?.max(0) as usize;
         *value = Value::Integer(max.min(text.len()) as i32);
         Ok(())
     });
     f(adapter, "CharToByteLen", &[EMPTY, EMPTY], |value, args| {
-        let text = arg_str(args, 0);
+        let text = arg_str(args, 0)?;
         let max = arg_i32(args, 1)?.max(0) as usize;
         *value = Value::Integer(max.min(text.len()) as i32);
         Ok(())
@@ -1466,7 +1508,7 @@ fn register_functions(adapter: &mut Adapter) {
         Ok(())
     });
     f(adapter, "IsPathDelimiter", &[EMPTY, EMPTY], |value, args| {
-        let text = arg_str(args, 0);
+        let text = arg_str(args, 0)?;
         let index = arg_i32(args, 1)?;
         let delimiter =
             index >= 1 && (index as usize) <= text.len() && matches!(text[index as usize - 1], b'\\' | b'/');
@@ -1474,8 +1516,8 @@ fn register_functions(adapter: &mut Adapter) {
         Ok(())
     });
     f(adapter, "IsDelimiter", &[EMPTY, EMPTY, EMPTY], |value, args| {
-        let delimiters = arg_str(args, 0);
-        let text = arg_str(args, 1);
+        let delimiters = arg_str(args, 0)?;
+        let text = arg_str(args, 1)?;
         let index = arg_i32(args, 2)?;
         let is_delimiter = index >= 1
             && (index as usize) <= text.len()
@@ -1485,8 +1527,8 @@ fn register_functions(adapter: &mut Adapter) {
         Ok(())
     });
     f(adapter, "LastDelimiter", &[EMPTY, EMPTY], |value, args| {
-        let delimiters = arg_str(args, 0);
-        let text = arg_str(args, 1);
+        let delimiters = arg_str(args, 0)?;
+        let text = arg_str(args, 1)?;
         let found = text
             .iter()
             .rposition(|byte| *byte != 0 && delimiters.contains(byte))
@@ -1496,8 +1538,8 @@ fn register_functions(adapter: &mut Adapter) {
         Ok(())
     });
     f(adapter, "AnsiCompareFileName", &[EMPTY, EMPTY], |value, args| {
-        let a = String::from_utf8_lossy(&arg_str(args, 0)).into_owned();
-        let b = String::from_utf8_lossy(&arg_str(args, 1)).into_owned();
+        let a = String::from_utf8_lossy(&arg_str(args, 0)?).into_owned();
+        let b = String::from_utf8_lossy(&arg_str(args, 1)?).into_owned();
         *value = Value::Integer(match ansi_compare_text(&a, &b) {
             std::cmp::Ordering::Less => -1,
             std::cmp::Ordering::Equal => 0,
@@ -1506,16 +1548,16 @@ fn register_functions(adapter: &mut Adapter) {
         Ok(())
     });
     f(adapter, "AnsiLowerCaseFileName", &[EMPTY], |value, args| {
-        *value = text_value(lower_case(&arg_str(args, 0)));
+        *value = text_value(lower_case(&arg_str(args, 0)?));
         Ok(())
     });
     f(adapter, "AnsiUpperCaseFileName", &[EMPTY], |value, args| {
-        *value = text_value(upper_case(&arg_str(args, 0)));
+        *value = text_value(upper_case(&arg_str(args, 0)?));
         Ok(())
     });
     f(adapter, "AnsiPos", &[EMPTY, EMPTY], |value, args| {
-        let needle = arg_str(args, 0);
-        let haystack = arg_str(args, 1);
+        let needle = arg_str(args, 0)?;
+        let haystack = arg_str(args, 1)?;
         *value = Value::Integer(if needle.is_empty() {
             1
         } else {
@@ -1527,19 +1569,19 @@ fn register_functions(adapter: &mut Adapter) {
         Ok(())
     });
     f(adapter, "AnsiStrPos", &[EMPTY, EMPTY], |value, args| {
-        let haystack = arg_str(args, 0);
-        let needle = arg_str(args, 1);
+        let haystack = arg_str(args, 0)?;
+        let needle = arg_str(args, 1)?;
         *value = text_value(pos(&needle, &haystack));
         Ok(())
     });
     f(adapter, "AnsiStrRScan", &[EMPTY, EMPTY], |value, args| {
-        let text = arg_str(args, 0);
+        let text = arg_str(args, 0)?;
         let ch = arg_char(args, 1);
         *value = text_value(scan(&text, ch, true));
         Ok(())
     });
     f(adapter, "AnsiStrScan", &[EMPTY, EMPTY], |value, args| {
-        let text = arg_str(args, 0);
+        let text = arg_str(args, 0)?;
         let ch = arg_char(args, 1);
         *value = text_value(scan(&text, ch, false));
         Ok(())

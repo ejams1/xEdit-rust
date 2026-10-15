@@ -7,7 +7,7 @@
 //! The corpus is the `Edit Scripts` folder of the 4.1.5q oracle
 //! (`XEDIT_SCRIPTS`, default `<XEDIT_ORACLE_DIR>/Edit Scripts`): 150 `.pas`
 //! scripts, of which `xEditAPI.pas` only declares the API and never runs.
-//! Two phases:
+//! Three phases:
 //!
 //! - **parse**: every `.pas` of the folder. The oracle compiles each script
 //!   (the GUI's script mode, `-script:`, `DoRunScript` -> `ApplyScript` ->
@@ -35,6 +35,17 @@
 //!   plugin the case lists (`close_after` closes the GUI after the script,
 //!   so its `SaveChanged` writes what the script changed into the private
 //!   data folder, and the port's saved plugins are compared with them).
+//! - **probe**: the language probes of `crates/xtask/oracle/scripts/probes/`
+//!   (every `.pas` there whose name does not start with `Unit`; the `Unit*`
+//!   files are the units some probes `uses`). Each is a small script that
+//!   establishes one interpreter behaviour -- a variant conversion, an
+//!   array bound, a `Format` argument, the expression stack, a routine
+//!   terminator, a unit's encoding, an exception's class and line -- and
+//!   both sides run it over the probe master the harness writes (the empty
+//!   game master of the parse phase plus two `GMST` records, so `Process`
+//!   runs). The comparison is the run phase's log comparison; nothing is
+//!   written. A probe the oracle ends on a dialog (its exception dialog for
+//!   a native fault, say) is `oracle-dialog`, a class and not a difference.
 //!
 //! Selection semantics, headless (derived from `DoRunScript` and
 //! `ApplyScript`, and recorded again in `runs.json`): the script mode calls
@@ -184,7 +195,7 @@ const BUILT_IN_UNITS: &[&str] = &[
 const LISTED_DIFFERENCES: usize = 12;
 
 const USAGE: &str = "usage: cargo xtask parity script [--script <name part>]... [--skip <name part>]... [--sample <n>] [--game <game>]... \
-                     [--phase parse|run]... [--oracle-only] [--refresh-oracle] [--keep] [--list] [--jobs <n>] \
+                     [--phase parse|run|probe]... [--oracle-only] [--refresh-oracle] [--keep] [--list] [--jobs <n>] \
                      [--memory-budget <GiB>] [--max-memory <GiB>] [--oracle-timeout <minutes>]";
 
 struct Options {
@@ -199,9 +210,10 @@ struct Options {
     sample: Option<usize>,
     games: Vec<&'static Game>,
     all_games: bool,
-    /// `--phase`: `parse`, `run` or both.
+    /// `--phase`: `parse`, `run`, `probe` or all three.
     parse: bool,
     run: bool,
+    probe: bool,
     oracle_only: bool,
     refresh_oracle: bool,
     keep: bool,
@@ -221,6 +233,7 @@ fn parse(args: &[&str]) -> Result<Options> {
         all_games: false,
         parse: false,
         run: false,
+        probe: false,
         oracle_only: false,
         refresh_oracle: false,
         keep: false,
@@ -253,6 +266,7 @@ fn parse(args: &[&str]) -> Result<Options> {
             "--phase" => match rest.next().context(USAGE)?.to_lowercase().as_str() {
                 "parse" => options.parse = true,
                 "run" => options.run = true,
+                "probe" => options.probe = true,
                 other => bail!("unknown phase {other}; {USAGE}"),
             },
             "--oracle-only" => options.oracle_only = true,
@@ -274,9 +288,10 @@ fn parse(args: &[&str]) -> Result<Options> {
         options.games = super::GAMES.iter().collect();
         options.all_games = true;
     }
-    if !options.parse && !options.run {
+    if !options.parse && !options.run && !options.probe {
         options.parse = true;
         options.run = true;
+        options.probe = true;
     }
     Ok(options)
 }
@@ -345,14 +360,49 @@ fn minimal_master(records: u32) -> Vec<u8> {
     file
 }
 
-/// Writes the empty game master of `game` into the scratch folder and
-/// returns its path.
-fn synthetic_master(runner: &Runner, game: &Game) -> Result<PathBuf> {
-    let dir = runner.scratch.join("synthetic");
+/// The probe master: the empty master with a `GMST` top group of two game
+/// settings, so a probe's `Process` runs (over the two records, the last
+/// first) and the closing line carries `Processed Records: 2`.
+fn probe_master() -> Vec<u8> {
+    fn sub_record(signature: &[u8; 4], data: &[u8]) -> Vec<u8> {
+        let mut bytes = signature.to_vec();
+        bytes.extend_from_slice(&(data.len() as u16).to_le_bytes());
+        bytes.extend_from_slice(data);
+        bytes
+    }
+    fn gmst(form_id: u32, editor_id: &[u8]) -> Vec<u8> {
+        let mut data = sub_record(b"EDID", editor_id);
+        data.extend(sub_record(b"DATA", &1.5f32.to_le_bytes()));
+        let mut bytes = b"GMST".to_vec();
+        bytes.extend_from_slice(&(data.len() as u32).to_le_bytes());
+        bytes.extend_from_slice(&0u32.to_le_bytes()); // flags
+        bytes.extend_from_slice(&form_id.to_le_bytes());
+        bytes.extend_from_slice(&0u32.to_le_bytes()); // version control
+        bytes.extend_from_slice(&44u16.to_le_bytes());
+        bytes.extend_from_slice(&0u16.to_le_bytes());
+        bytes.extend_from_slice(&data);
+        bytes
+    }
+    let records = [gmst(0x800, b"fProbeOne\0"), gmst(0x801, b"fProbeTwo\0")].concat();
+    let mut file = minimal_master(2);
+    file.extend_from_slice(b"GRUP");
+    file.extend_from_slice(&((24 + records.len()) as u32).to_le_bytes());
+    file.extend_from_slice(b"GMST");
+    file.extend_from_slice(&0i32.to_le_bytes()); // group type: top
+    file.extend_from_slice(&0u32.to_le_bytes());
+    file.extend_from_slice(&0u32.to_le_bytes());
+    file.extend_from_slice(&records);
+    file
+}
+
+/// Writes the empty game master of `game` (or the probe master) into the
+/// scratch folder and returns its path.
+fn synthetic_master(runner: &Runner, game: &Game, probe: bool) -> Result<PathBuf> {
+    let dir = runner.scratch.join(if probe { "synthetic-probe" } else { "synthetic" });
     fs::create_dir_all(&dir)?;
     let path = dir.join(game_master(game.mode));
     if !path.exists() {
-        fs::write(&path, minimal_master(0))?;
+        fs::write(&path, if probe { probe_master() } else { minimal_master(0) })?;
     }
     Ok(path)
 }
@@ -363,7 +413,7 @@ fn synthetic_master(runner: &Runner, game: &Game) -> Result<PathBuf> {
 /// game's data folder with their masters.
 fn task_plugins(runner: &Runner, task: &Task) -> Result<Vec<PathBuf>> {
     if task.synthetic_master {
-        return Ok(vec![synthetic_master(runner, task.game)?]);
+        return Ok(vec![synthetic_master(runner, task.game, task.phase == "probe")?]);
     }
     if let Some(master) = &task.master {
         let dir = runner.scratch.join("fixtures").join(&task.stem);
@@ -498,6 +548,17 @@ fn corpus_classes(root: &Path) -> std::collections::HashMap<String, String> {
     }
 }
 
+/// The probes file (`crates/xtask/oracle/scripts/probes.json`): the probes
+/// whose oracle outcome the gate accepts with a reason (a native fault, a
+/// hang, a time-dependent value, a documented divergence).
+#[derive(Deserialize)]
+struct ProbesFile {
+    #[allow(dead_code, reason = "documentation in the file")]
+    description: String,
+    #[serde(default)]
+    accept: std::collections::HashMap<String, String>,
+}
+
 /// The parse case (`crates/xtask/oracle/scripts/parse.json`).
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -586,13 +647,14 @@ struct RunCase {
 
 /// One case to run: the parse of a script, or a run of one.
 struct Task {
-    /// `parse` or `run`.
+    /// `parse`, `run` or `probe`.
     phase: &'static str,
     /// The file name of the script.
     script: String,
     /// The folder the script and its units are read from: the corpus
-    /// folder, or `crates/xtask/oracle/scripts/probes` for a probe of the
-    /// repository (a case whose `script` is `probes/<name>.pas`).
+    /// folder, `crates/xtask/oracle/scripts/probes` for the probe phase, or
+    /// a probe of the repository run as a case whose `script` is
+    /// `probes/<name>.pas`.
     scripts_dir: PathBuf,
     class: Class,
     game: &'static Game,
@@ -886,6 +948,45 @@ pub(super) fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
             });
         }
     }
+    if options.probe && game_selected(find_game(&parse_case.game)?) {
+        let game = find_game(&parse_case.game)?;
+        let data = game_data_or_none(game).unwrap_or_default();
+        let probes = root.join("crates/xtask/oracle/scripts/probes");
+        let accept_text = fs::read_to_string(cases_dir.join("probes.json"))
+            .with_context(|| format!("reading {}", cases_dir.join("probes.json").display()))?;
+        let accept: ProbesFile = serde_json::from_str(&accept_text)?;
+        let mut names: Vec<String> = fs::read_dir(&probes)
+            .with_context(|| format!("reading {}", probes.display()))?
+            .filter_map(|entry| entry.ok())
+            .map(|entry| entry.file_name().to_string_lossy().into_owned())
+            .filter(|name| name.to_lowercase().ends_with(".pas") && !name.starts_with("Unit"))
+            .collect();
+        names.sort_by_key(|name| name.to_lowercase());
+        let mut chosen: Vec<&String> = names.iter().filter(|name| selected(name)).collect();
+        if let Some(sample) = options.sample {
+            chosen.truncate(sample);
+        }
+        for name in chosen {
+            tasks.push(Task {
+                phase: "probe",
+                script: name.clone(),
+                scripts_dir: probes.clone(),
+                class: Class::Headless,
+                game,
+                data: data.clone(),
+                load: vec![game_master(game.mode).to_owned()],
+                build_refs: false,
+                close_after: false,
+                save: Vec::new(),
+                timeout: Duration::from_secs(10 * 60),
+                synthetic_master: true,
+                master: None,
+                refcache: false,
+                accepted: accept.accept.get(name.as_str()).cloned(),
+                stem: format!("probe-{name}"),
+            });
+        }
+    }
     if options.list {
         for task in &tasks {
             println!(
@@ -906,7 +1007,7 @@ pub(super) fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
     let port_parses = if let Some(port) = &port
         && has_check
     {
-        Some(port_check(port, &scripts, &tasks)?)
+        Some(port_check(port, &tasks)?)
     } else {
         None
     };
@@ -924,7 +1025,7 @@ pub(super) fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
                 loop {
                     let next = queue.lock().unwrap().next();
                     let Some((index, task)) = next else { break };
-                    let outcome =
+                    let mut outcome =
                         check(runner, options, has_check, has_run, port_parses, &task).unwrap_or_else(|error| {
                             ScriptOutcome {
                                 phase: task.phase,
@@ -939,6 +1040,26 @@ pub(super) fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
                                 port_seconds: None,
                             }
                         });
+                    // A probe `probes.json` accepts: whatever the outcome,
+                    // the reason is the record.
+                    if task.phase == "probe"
+                        && let Some(reason) = &task.accepted
+                        && !matches!(outcome.status, "equal" | "equal-error")
+                    {
+                        outcome.detail = Some(format!(
+                            "  accepted ({}): {reason}{}",
+                            outcome.status,
+                            outcome
+                                .detail
+                                .as_deref()
+                                .map(|d| format!(
+                                    "
+{d}"
+                                ))
+                                .unwrap_or_default()
+                        ));
+                        outcome.status = "known-difference";
+                    }
                     let mut text = format!(
                         "{:14} {} {} {} ({} files, {} log lines)",
                         outcome.status, outcome.phase, outcome.script, outcome.game, outcome.files, outcome.log_lines
@@ -1054,6 +1175,31 @@ fn check(
     if task.phase == "parse" {
         return parse_outcome(has_check, port_parses, task, &oracle, outcome);
     }
+    if task.phase == "probe" && oracle.status == "compile-error" {
+        // The application's exception dialog of a compile error carries
+        // `Error in unit 'X' on line N : <message>.`; the port's `script
+        // check` reports the same failure as `file:line: message`, and the
+        // two compare on their `line : message` part.
+        return match &runner.port {
+            Some(port) if has_check => Ok(probe_compile_error(port, task, &oracle, outcome)),
+            _ => {
+                outcome.status = "port-pending";
+                Ok(outcome)
+            }
+        };
+    }
+    if task.phase == "probe" && !matches!(oracle.status.as_str(), "done" | "aborted") {
+        // A probe that ends on a dialog of the script's own, or that the
+        // oracle never finishes, has no log shape the port could match: its
+        // class is recorded with the dialog.
+        outcome.status = "oracle-dialog";
+        outcome.detail = Some(format!(
+            "  the oracle ended {}: {}",
+            oracle.status,
+            oracle.note.clone().unwrap_or_else(|| oracle.dialogs.join("; "))
+        ));
+        return Ok(outcome);
+    }
     if !matches!(oracle.status.as_str(), "done" | "aborted") {
         // A dialog a corpus script shows (an `InputQuery` even in a script
         // the greps called headless, a message box) ends the run: the class
@@ -1119,10 +1265,14 @@ fn oracle_run(
     if task.refcache {
         recipe.push_str("\nrefcache");
     }
-    recipe.push_str(&script_text);
+    // The texts go in as bytes (a probe may carry a byte order mark or a
+    // UTF-16 encoding, which the oracle's `TStringList.LoadFromFile` reads
+    // and the port has to read the same way), hashed so an encoding change
+    // is a new key.
+    recipe.push_str(&format!("{:016x}", super::nif::fnv(&script_text)));
     for (name, text) in &units {
         recipe.push_str(name);
-        recipe.push_str(text);
+        recipe.push_str(&format!("{:016x}", super::nif::fnv(text)));
     }
     let key = oracle_key(runner, &plugins, &recipe, gui::exe_name(task.game.mode))?;
     let dir = runner.cache.join(format!("{}-oracle-script", task.game.mode));
@@ -1149,13 +1299,9 @@ fn oracle_run(
         close_after: task.close_after,
         ..GuiExtras::default()
     };
-    extras
-        .files
-        .push((PathBuf::from(&task.script), script_text.clone().into_bytes()));
+    extras.files.push((PathBuf::from(&task.script), script_text.clone()));
     for (name, text) in &units {
-        extras
-            .files
-            .push((PathBuf::from(format!("{name}.pas")), text.clone().into_bytes()));
+        extras.files.push((PathBuf::from(format!("{name}.pas")), text.clone()));
     }
     let run = GuiRun {
         exe: &exe,
@@ -1221,11 +1367,27 @@ fn oracle_run(
             // A `Mode:` keyword suppresses the mode's progress lines (the
             // `Start:`/`Aborted:` pair among them, `wbProgressLock`), so a
             // script that raises shows as an idle GUI here, not as a line.
-            let hint = if script_text.contains("Mode:") {
+            let hint = if String::from_utf8_lossy(&script_text).contains("Mode:") {
                 " (the script has a `Mode:` keyword, so its runtime lines are suppressed: an idle GUI can be a runtime failure)"
             } else {
                 ""
             };
+            if task.phase == "probe" {
+                // A probe the oracle never finishes (a native stack
+                // exhaustion, a hang on a NUL character) is its own
+                // witnessed outcome: cached as `failed` with the reason, so
+                // the next run does not wait for it again (`--refresh-oracle`
+                // runs it anew).
+                outcome.oracle_seconds = Some(started.elapsed().as_secs_f64());
+                let captured = OracleResult {
+                    status: "failed".to_owned(),
+                    note: Some(format!("the oracle run failed{hint}: {error:#}")),
+                    ..OracleResult::default()
+                };
+                fs::write(dir.join("log.txt"), "")?;
+                fs::write(&result_file, serde_json::to_string_pretty(&captured)?)?;
+                return Ok((captured, dir));
+            }
             return Err(error).with_context(|| format!("the oracle run failed{hint}"));
         }
     };
@@ -1290,12 +1452,17 @@ fn oracle_run(
     Ok((captured, dir))
 }
 
+/// The units a script `uses`, by name, with their bytes.
+type UnitSources = Vec<(String, Vec<u8>)>;
+
 /// The script text and the texts of the units it `uses` that are not
-/// compiled into the host, by unit name.
-fn script_and_units(scripts: &Path, name: &str) -> Result<(String, Vec<(String, String)>)> {
-    let text = fs::read_to_string(scripts.join(name)).with_context(|| format!("reading {name}"))?;
+/// compiled into the host, by unit name. The texts are the files' bytes:
+/// their encoding (a byte order mark, UTF-16) is part of what both sides
+/// read.
+fn script_and_units(scripts: &Path, name: &str) -> Result<(Vec<u8>, UnitSources)> {
+    let text = fs::read(scripts.join(name)).with_context(|| format!("reading {name}"))?;
     let mut units = Vec::new();
-    for unit in used_units(&text) {
+    for unit in used_units(&String::from_utf8_lossy(&text)) {
         let stripped = strip_namespace(&unit);
         if BUILT_IN_UNITS
             .iter()
@@ -1305,7 +1472,7 @@ fn script_and_units(scripts: &Path, name: &str) -> Result<(String, Vec<(String, 
         }
         let path = scripts.join(format!("{stripped}.pas"));
         if path.exists() {
-            units.push((stripped.to_owned(), fs::read_to_string(&path)?));
+            units.push((stripped.to_owned(), fs::read(&path)?));
         }
     }
     units.sort();
@@ -1681,17 +1848,74 @@ fn parse_outcome(
     Ok(outcome)
 }
 
+/// A probe the oracle refused at compile time: `xedit script check` on the
+/// port, whose first failure's `line: message` must be the dialog's `on
+/// line N : message.` (the dialog's text ends with the period the
+/// application's exception handler appends).
+fn probe_compile_error(port: &Path, task: &Task, oracle: &OracleResult, mut outcome: ScriptOutcome) -> ScriptOutcome {
+    let note = oracle.note.clone().unwrap_or_default();
+    let Some(at) = note.find(" on line ") else {
+        outcome.status = "oracle-failed";
+        outcome.detail = Some(format!("  the oracle's dialog has no compile error: {note}"));
+        return outcome;
+    };
+    let expected = note[at + " on line ".len()..].trim_end_matches('.').trim().to_owned();
+    let output = std::process::Command::new(port)
+        .arg("script")
+        .arg("check")
+        .arg(task.scripts_dir.join(&task.script))
+        .env("XEDIT_SCRIPTS", &task.scripts_dir)
+        .stdin(std::process::Stdio::null())
+        .output();
+    let output = match output {
+        Ok(output) => output,
+        Err(error) => {
+            outcome.status = "port-failed";
+            outcome.detail = Some(format!("  running {} script check: {error}", port.display()));
+            return outcome;
+        }
+    };
+    let text = String::from_utf8_lossy(&output.stdout).into_owned();
+    if output.status.success() {
+        outcome.status = "different";
+        outcome.detail = Some(format!(
+            "  the oracle refused the script (line {expected}), the port parsed it"
+        ));
+        return outcome;
+    }
+    // `<file>:<line>: <message>`: the file path may hold colons, so the
+    // line is the last `:<digits>:` group of the first failure line.
+    let first = text.lines().find(|line| !line.trim().is_empty()).unwrap_or_default();
+    let port_text = match first.rsplit_once(": ") {
+        Some((head, message)) => match head.rsplit_once(':') {
+            Some((_, line)) => format!("{} : {message}", line.trim()),
+            None => first.to_owned(),
+        },
+        None => first.to_owned(),
+    };
+    if port_text == expected {
+        outcome.status = "equal-error";
+        outcome.detail = Some(format!("  both refused the script: line {expected}"));
+    } else {
+        outcome.status = "different";
+        outcome.detail = Some(format!(
+            "  the oracle refused the script with line {expected}, the port with {port_text}"
+        ));
+    }
+    outcome
+}
+
 /// `result.json` of the port is not defined yet: the parse side runs
 /// `xedit script check <file>` for every parse script once and keeps
 /// `ok` or `error` (with the message) per script.
-fn port_check(port: &Path, scripts: &Path, tasks: &[Task]) -> Result<std::collections::HashMap<String, String>> {
+fn port_check(port: &Path, tasks: &[Task]) -> Result<std::collections::HashMap<String, String>> {
     let mut results = std::collections::HashMap::new();
     for task in tasks.iter().filter(|task| task.phase == "parse") {
         let output = std::process::Command::new(port)
             .arg("script")
             .arg("check")
             .arg(task.scripts_dir.join(&task.script))
-            .env("XEDIT_SCRIPTS", scripts)
+            .env("XEDIT_SCRIPTS", &task.scripts_dir)
             .stdin(std::process::Stdio::null())
             .output()
             .with_context(|| format!("running {} script check", port.display()))?;
