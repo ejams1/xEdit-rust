@@ -1,0 +1,18 @@
+{
+  "description": "\"Create New File\" with its module templates (files.new with template; the oracle clicks mniCreateNewFile, the answers check the template in the module selection and give the name to InputQuery): the first template, <new file>.esp (picked with Enter, which takes the first entry), and <new file>.esm with the light flag, the sixth of the Skyrim SE templates (Down five times in the list, whose first entry has the focus, then Enter: the focused entry is taken when none is checked). Each new file gets a record copied into it, as the copy into a new file is how they are used.",
+  "game": "sse",
+  "load": ["Skyrim.esm"],
+  "commands": [
+    {"command": "files.new", "params": {"file": "TemplateEsp", "template": "esp"}},
+    {"command": "files.new", "params": {"file": "TemplateEsmLight", "template": "esm-light"}},
+    {"command": "records.copy", "params": {"form_id": "00000039", "from": "Skyrim.esm", "to": "TemplateEsp.esp"}},
+    {"command": "records.copy", "params": {"form_id": "00000039", "from": "Skyrim.esm", "to": "TemplateEsmLight.esm"}}
+  ],
+  "answers": [
+    {"class": "TfrmModuleSelect", "title": "What type", "keys": [13]},
+    {"class": "TInputQueryForm", "title": "New Module File", "text": "TemplateEsp", "button": "OK"},
+    {"class": "TfrmModuleSelect", "title": "What type", "control": "TVirtualStringTree", "keys": [40, 40, 40, 40, 40, 13]},
+    {"class": "TInputQueryForm", "title": "New Module File", "text": "TemplateEsmLight", "button": "OK"}
+  ],
+  "save": ["TemplateEsp.esp", "TemplateEsmLight.esm"]
+}

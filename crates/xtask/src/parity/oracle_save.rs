@@ -612,6 +612,8 @@ struct SequenceAnswer {
     keys: Vec<u16>,
     button: Option<String>,
     text: Option<String>,
+    /// The class of the control the keys go to (see [`gui::Answer`]).
+    control: Option<String>,
 }
 
 impl EditSequence {
@@ -797,7 +799,10 @@ fn edit_step(index: usize, command: &Value) -> Result<String> {
             // "Create New File": the sequence's `answers` pick the template
             // in the module selection and give the name to `InputQuery`.
             check_params(params, &["file", "template"])?;
-            "frmMain.FindComponent('mniCreateNewFile').Click;".to_owned()
+            "frmMain.FindComponent('mniCreateNewFile').Click;
+      f := FileByIndex(Pred(FileCount));
+      log.Add('made ' + GetFileName(f) + ' flags ' + IntToHex(GetElementNativeValues(ElementByIndex(f, 0), 'Record Header\\Record Flags'), 8));"
+                .to_owned()
         }
         "files.new" => {
             // `AddNewFile(aFile, aIsLight, aIsMedium)` after its
@@ -808,7 +813,7 @@ fn edit_step(index: usize, command: &Value) -> Result<String> {
             format!(
                 "f := AddNewFileName({}, {}, {});
       if not Assigned(f) then raise Exception.Create('can not make ' + {});
-      AddMasterIfMissing(f, GetFileName(FileByIndex(0)));",
+      AddMasterIfMissing(f, '{{{{GAME_MASTER}}}}');",
                 q(&name),
                 pascal_bool(bool_param(params, "light")),
                 pascal_bool(bool_param(params, "medium")),
@@ -924,6 +929,11 @@ fn edit_script(sequence: &EditSequence) -> Result<String> {
         );
         steps.push_str(&edit_step(index, command)?);
     }
+    // The game master is the first plugin a sequence loads.
+    let steps = steps.replace(
+        "{{GAME_MASTER}}",
+        &sequence.load.first().map(|name| name.replace('\'', "''")).unwrap_or_default(),
+    );
     let mut saves = String::new();
     for name in &sequence.save {
         let literal = pascal_string(name);
@@ -1093,6 +1103,7 @@ fn check_edit(
                     keys: answer.keys.clone(),
                     button: answer.button.clone(),
                     text: answer.text.clone(),
+                    control: answer.control.clone(),
                 })
                 .collect(),
             ..Default::default()

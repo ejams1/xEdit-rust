@@ -109,6 +109,11 @@ pub struct Answer {
     /// Text put into the first edit control of the dialog before the keys
     /// (`WM_SETTEXT`), such as the file name an `InputQuery` asks for.
     pub text: Option<String>,
+    /// The class of the child control the keys go to (`TVirtualStringTree`
+    /// for the list of a module selection), in place of the focused one:
+    /// a dialog on the harness's desktop has no focused control, and keys
+    /// posted to the dialog itself reach only its `KeyPreview` handler.
+    pub control: Option<String>,
 }
 
 /// What a run may add to the plain one: files written into the run folder
@@ -379,6 +384,7 @@ impl GuiRun<'_> {
             keys: Vec::new(),
             button: Some("OK".to_owned()),
             text: None,
+            control: None,
         }];
         let mut dialogs = Vec::new();
         let (peak, exit_code) = match self.spawn_and_watch(command, until, &answers, &mut log, &mut dialogs) {
@@ -803,8 +809,12 @@ fn watch(
                             window.texts.join(" | ")
                         );
                     }
+                    // One key at a time, so that a key that moves the
+                    // focus (Down from the filter of the module selection
+                    // into its list) sends the next to the new control.
                     for &key in &answer.keys {
-                        post_key(&window, key);
+                        post_key(&window, answer.control.as_deref(), key);
+                        std::thread::sleep(Duration::from_millis(150));
                     }
                     if let Some(button) = &answer.button {
                         if !answer.keys.is_empty() {
@@ -1316,12 +1326,26 @@ fn set_edit_text(_window: &Window, _text: &str) -> bool {
 /// window itself when none has the focus), as the keyboard would deliver
 /// it: VCL forms with `KeyPreview` see it in their `OnKeyDown` first.
 #[cfg(windows)]
-fn post_key(window: &Window, key: u16) {
+fn post_key(window: &Window, control: Option<&str>, key: u16) {
     use windows_sys::Win32::Foundation::HWND;
     use windows_sys::Win32::UI::WindowsAndMessaging::{
-        GUITHREADINFO, GetGUIThreadInfo, GetWindowThreadProcessId, PostMessageW, WM_KEYDOWN, WM_KEYUP,
+        EnumChildWindows, GUITHREADINFO, GetGUIThreadInfo, GetWindowThreadProcessId, PostMessageW, WM_KEYDOWN,
+        WM_KEYUP,
     };
     let handle = window.handle as HWND;
+    if let Some(control) = control {
+        let mut children: Vec<HWND> = Vec::new();
+        // SAFETY: the callback only pushes into the vector passed as `LPARAM`.
+        unsafe { EnumChildWindows(handle, Some(win::collect), (&raw mut children) as isize) };
+        if let Some(child) = children.into_iter().find(|&child| win::class(child) == control) {
+            // SAFETY: plain messages without pointers.
+            unsafe {
+                PostMessageW(child, WM_KEYDOWN, usize::from(key), 1);
+                PostMessageW(child, WM_KEYUP, usize::from(key), 0xC000_0001u32 as isize);
+            }
+            return;
+        }
+    }
     // SAFETY: a window handle from an enumeration; a stale one gives 0.
     let thread = unsafe { GetWindowThreadProcessId(handle, std::ptr::null_mut()) };
     let mut info = GUITHREADINFO {
@@ -1342,7 +1366,7 @@ fn post_key(window: &Window, key: u16) {
 }
 
 #[cfg(not(windows))]
-fn post_key(_window: &Window, _key: u16) {}
+fn post_key(_window: &Window, _control: Option<&str>, _key: u16) {}
 
 /// The text of the message log of the main form: the first memo below
 /// it. Read with a timeout, as the GUI thread may be busy loading.

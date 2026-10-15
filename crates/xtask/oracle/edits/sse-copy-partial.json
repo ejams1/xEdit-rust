@@ -1,0 +1,15 @@
+{
+  "description": "Partial forms with -AllowMakePartial (the port's --allow-make-partial): cells and worldspaces copied into a new plugin that lacks them become partial forms, MakePartialForm keeping their header and editor ID only. An interior cell copied alone and with its child group (its placed records join the partial cell), a worldspace copied alone, and a small worldspace copied with its child group, whose 30 exterior cells, which can not be partial (`GetCanBePartial`: a cell with a grid position), are copied whole with their placed records, land and navigation meshes. The oracle's save holds 2 partial cells and 2 partial worldspaces among 32 cells, 298 REFR, 15 ACHR, 5 NAVM and 1 LAND.",
+  "game": "sse",
+  "load": ["Skyrim.esm"],
+  "strings": true,
+  "allow_make_partial": true,
+  "commands": [
+    {"command": "files.new", "params": {"file": "PartialTest"}},
+    {"command": "records.copy", "params": {"form_id": "000133C8", "from": "Skyrim.esm", "to": "PartialTest.esp"}},
+    {"command": "records.copy", "params": {"form_id": "000133C7", "from": "Skyrim.esm", "to": "PartialTest.esp", "deep": true}},
+    {"command": "records.copy", "params": {"form_id": "00094B35", "from": "Skyrim.esm", "to": "PartialTest.esp"}},
+    {"command": "records.copy", "params": {"form_id": "000D45F0", "from": "Skyrim.esm", "to": "PartialTest.esp", "deep": true}}
+  ],
+  "save": ["PartialTest.esp"]
+}
