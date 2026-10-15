@@ -443,6 +443,16 @@ impl SubRecordImpl {
         if value_def.get_def_type() != DefType::dtArray {
             return super::assign::container_assign_internal(self, index, source, only_sk);
         }
+        // `IwbMultipleElements`: each element in turn, the last result kept.
+        if let Some(multiple) = source.and_then(|source| source.as_multiple_elements()) {
+            let mut result = None;
+            for element in multiple.elements() {
+                if let Some(assigned) = self.assign_internal_impl(index, Some(element), only_sk)? {
+                    result = Some(assigned);
+                }
+            }
+            return Ok(result);
+        }
         // An entry added without a source is `Add`, which `array_assign_add`
         // ports.
         if index == ASSIGN_ADD && source.is_none() {
@@ -540,9 +550,15 @@ impl SubRecordImpl {
             if index == ASSIGN_THIS && source.is_some_and(|source| source.as_main_record().is_some()) {
                 index = ASSIGN_ADD;
             }
+            // `AlignedCreate`: an entry at a sort order of an aligned array
+            // (the view aligned the arrays of the versions of the record)
+            // that has no entry there takes that sort order.
+            let aligned_create =
+                index >= 0 && array_def.get_count() <= 0 && index < ASSIGN_ADD && self.aligned_free(index);
             if index >= 0
                 && array_def.get_count() <= 0
-                && (index == ASSIGN_ADD
+                && (aligned_create
+                    || index == ASSIGN_ADD
                     || array_def
                         .get_element()
                         .can_assign(Some(&self_ref), ASSIGN_THIS, source_def_ref))
@@ -573,11 +589,27 @@ impl SubRecordImpl {
                     )?;
                     result = Some(element as ElementRef);
                 }
+                if aligned_create && let Some(result) = &result {
+                    result.set_sort_order(index);
+                    self.sort_by_sort_order_impl();
+                    self.reset_memory_order(0, usize::MAX);
+                }
             }
         }
         edit::check_count(self, Some(&value_def));
         edit::check_terminator(self, Some(&value_def));
         Ok(result)
+    }
+
+    /// The condition of `AlignedCreate`: an alignable array sorted by the
+    /// sort orders the view gave its entries, with no entry at `index`.
+    fn aligned_free(&self, index: i32) -> bool {
+        self.get_alignable()
+            && self.container.is_sorted_by_sort_order()
+            && self
+                .container
+                .element_by_sort_order(index - self.get_additional_element_count())
+                .is_none()
     }
 
     /// Port of `TwbSubRecord.CanAssignInternal`.
@@ -604,22 +636,31 @@ impl SubRecordImpl {
             .filter(|_| is_array)
             .and_then(|def| def.as_array_def());
         let Some(source) = source else {
-            return is_array && index == ASSIGN_ADD && array_def.is_some_and(|array| array.get_count() <= 0);
+            return is_array
+                && (index == ASSIGN_ADD || (index >= 0 && self.aligned_free(index)))
+                && array_def.is_some_and(|array| array.get_count() <= 0);
         };
-        let source_def = super::assign::assign_def(&**source);
-        let source_def = super::assign::as_def(&source_def);
         let self_ref = self.element_ref();
-        if let (Some(value_def), Some(array_def)) = (&value_def, array_def) {
-            value_def.can_assign(Some(&self_ref), index, source_def)
-                || (array_def.get_count() <= 0
-                    && array_def
-                        .get_element()
-                        .can_assign(Some(&self_ref), ASSIGN_THIS, source_def))
-        } else {
-            super::assign::container_can_assign_internal(self, index, Some(source), check_dont_show)
-                || self
-                    .def()
-                    .is_some_and(|def| def.can_assign(Some(&self_ref), index, source_def))
+        let check_assign = |source: &ElementRef| {
+            let source_def = super::assign::assign_def(&**source);
+            let source_def = super::assign::as_def(&source_def);
+            if let (Some(value_def), Some(array_def)) = (&value_def, array_def) {
+                value_def.can_assign(Some(&self_ref), index, source_def)
+                    || (array_def.get_count() <= 0
+                        && array_def
+                            .get_element()
+                            .can_assign(Some(&self_ref), ASSIGN_THIS, source_def))
+            } else {
+                super::assign::container_can_assign_internal(self, index, Some(source), check_dont_show)
+                    || self
+                        .def()
+                        .is_some_and(|def| def.can_assign(Some(&self_ref), index, source_def))
+            }
+        };
+        // `IwbMultipleElements`: one of the elements that can be assigned.
+        match source.as_multiple_elements() {
+            Some(multiple) => multiple.elements().iter().any(check_assign),
+            None => check_assign(source),
         }
     }
 
@@ -787,6 +828,12 @@ impl SubRecordImpl {
     /// whenever `srsIsArray` is set, which raises for an array reached
     /// through a union the definitions could not resolve on load; the port
     /// keeps the resolved definition there and answers.
+    /// `srsIsArray in srStates`: the value is an array.
+    pub fn is_array(&self) -> bool {
+        self.do_init();
+        self.sr_is_array.load(Ordering::Relaxed)
+    }
+
     pub fn get_alignable(&self) -> bool {
         if compare_raw_data() || self.get_sorted() {
             return false;
@@ -952,6 +999,11 @@ impl SubRecordArrayImpl {
         }
     }
 
+    /// `arcSorted`: the members are kept sorted.
+    pub fn is_sorted(&self) -> bool {
+        self.arc_sorted.load(Ordering::Relaxed)
+    }
+
     /// Port of `TwbSubRecordArray.AssignInternal`.
     fn assign_internal_impl(
         &self,
@@ -965,6 +1017,16 @@ impl SubRecordArrayImpl {
         let Some(array_def) = self.arc_def.as_sub_record_array_def() else {
             return Ok(None);
         };
+        // `IwbMultipleElements`: each element in turn, the last result kept.
+        if let Some(multiple) = source.and_then(|source| source.as_multiple_elements()) {
+            let mut result = None;
+            for element in multiple.elements() {
+                if let Some(assigned) = self.assign_internal_impl(index, Some(element), only_sk)? {
+                    result = Some(assigned);
+                }
+            }
+            return Ok(result);
+        }
         // An entry added without a source is `Add`.
         if index >= 0 && source.is_none() {
             return self.member_assign_add();
@@ -995,23 +1057,41 @@ impl SubRecordArrayImpl {
             && ((index >= 0 && element_def.can_assign(Some(&self_ref), ASSIGN_THIS, source_def))
                 || (index == ASSIGN_THIS && element_def.can_assign(Some(&self_ref), index, source_def)))
         {
+            // `lElement`: the source, which a template of a union member
+            // gives up once it chose the member (the element is created,
+            // not assigned).
+            let mut assigned_from = Some(source);
             let element = if self.container.cnt_as_created_empty.load(Ordering::Relaxed) {
                 self.set_modified(true);
                 self.container.cnt_as_created_empty.store(false, Ordering::Relaxed);
                 self.container.element_at(0)
             } else {
-                let mut member = element_def;
-                while member.get_def_type() == DefType::dtSubRecordUnion {
+                let mut member = Some(element_def);
+                while let Some(current) = member.clone()
+                    && current.get_def_type() == DefType::dtSubRecordUnion
+                {
+                    if source.get_element_type() == ElementType::etTemplate {
+                        member = source.get_def().and_then(|def| def.def_ref().into_record_member_def());
+                        assigned_from = None;
+                        break;
+                    }
                     let signature = source.get_has_signature().unwrap_or(Signature::new(b"NONE"));
-                    member = member
-                        .as_record_def()
-                        .and_then(|union| union.get_member_for(Some(&self_ref), signature, Some(source)))
-                        .ok_or_else(|| format!("{} has no member for {}", self.get_name(), source.get_name()))?;
+                    member = Some(
+                        current
+                            .as_record_def()
+                            .and_then(|union| union.get_member_for(Some(&self_ref), signature, Some(source)))
+                            .ok_or_else(|| format!("{} has no member for {}", self.get_name(), source.get_name()))?,
+                    );
                 }
-                Some(create_member_new(&self_ref, &self.container, &self.file, member)?)
+                match member {
+                    Some(member) => Some(create_member_new(&self_ref, &self.container, &self.file, member)?),
+                    None => None,
+                }
             };
-            if let Some(element) = &element {
-                element.assign(ASSIGN_THIS, Some(source), only_sk);
+            if let Some(element) = &element
+                && let Some(assigned_from) = assigned_from
+            {
+                element.assign(ASSIGN_THIS, Some(assigned_from), only_sk);
                 self.container.cnt_as_created_empty.store(false, Ordering::Relaxed);
             }
             result = element;
@@ -1040,14 +1120,20 @@ impl SubRecordArrayImpl {
             return false;
         };
         let self_ref: Option<ElementRef> = self.self_ref.upgrade().map(|array| array as ElementRef);
-        let source_def = source.get_def();
-        let source_def = source_def.as_deref().map(|def| def.as_dyn_def());
-        if self.arc_def.can_assign(self_ref.as_ref(), index, source_def) {
-            return true;
+        let check_assign = |source: &ElementRef| {
+            let source_def = source.get_def();
+            let source_def = source_def.as_deref().map(|def| def.as_dyn_def());
+            if self.arc_def.can_assign(self_ref.as_ref(), index, source_def) {
+                return true;
+            }
+            let element_def = array_def.get_element();
+            element_def.can_assign(self_ref.as_ref(), ASSIGN_THIS, source_def)
+                && !(check_dont_show && element_def.get_dont_show(Some(source)))
+        };
+        match source.as_multiple_elements() {
+            Some(multiple) => multiple.elements().iter().any(check_assign),
+            None => check_assign(source),
         }
-        let element_def = array_def.get_element();
-        element_def.can_assign(self_ref.as_ref(), ASSIGN_THIS, source_def)
-            && !(check_dont_show && element_def.get_dont_show(Some(source)))
     }
 
     /// Port of `TwbSubRecordArray.AddIfMissingInternal`.
@@ -1346,9 +1432,19 @@ impl SubRecordStructImpl {
                 {
                     let replacement = create_member_new(&container, container_base, &self.file, source_def)?;
                     if let Some(replacement_impl) = replacement.as_element_impl() {
-                        replacement_impl.set_sort_and_memory_order(self.get_sort_order());
+                        replacement_impl
+                            .element_base()
+                            .e_sort_order
+                            .store(self.get_sort_order(), Ordering::Relaxed);
+                        replacement_impl
+                            .element_base()
+                            .e_memory_order
+                            .store(self.get_memory_order(), Ordering::Relaxed);
                     }
-                    replacement.assign(ASSIGN_THIS, Some(source), only_sk);
+                    // A template gives the member only, not data.
+                    if source.get_element_type() != ElementType::etTemplate {
+                        replacement.assign(ASSIGN_THIS, Some(source), only_sk);
+                    }
                     container_impl.remove_child(&self_ref, true);
                     if let Some(container) = container.as_container() {
                         container.sort_by_sort_order();
@@ -1399,7 +1495,9 @@ impl SubRecordStructImpl {
                     if let Some(element_impl) = element.as_element_impl() {
                         element_impl.element_base().e_sort_order.store(index, Ordering::Relaxed);
                     }
-                    if let Some(source) = source {
+                    if let Some(source) = source
+                        && source.get_element_type() != ElementType::etTemplate
+                    {
                         element.assign(ASSIGN_THIS, Some(source), only_sk);
                     }
                     result = Some(element);
@@ -2185,6 +2283,37 @@ impl ElementImpl for SubRecordImpl {
 
     fn clear_sort_invalid(&self) {
         self.sr_sort_invalid.store(false, Ordering::Relaxed);
+    }
+
+    /// Port of `TwbSubRecord.ResetMemoryOrder`: the entries take their
+    /// positions as their memory order and, in an unsorted array value, the
+    /// name suffix of that position.
+    fn reset_memory_order(&self, from: usize, to: usize) {
+        let value_def = self.value_def();
+        let array_def = value_def
+            .as_ref()
+            .filter(|_| self.sr_is_array.load(Ordering::Relaxed) && !self.sr_sorted.load(Ordering::Relaxed))
+            .and_then(|def| def.as_array_def());
+        for (index, element) in self
+            .container
+            .elements()
+            .iter()
+            .enumerate()
+            .take(to.saturating_add(1))
+            .skip(from)
+        {
+            if let Some(element) = element.as_element_impl() {
+                element
+                    .element_base()
+                    .e_memory_order
+                    .store(index as i32, Ordering::Relaxed);
+                if let Some(array_def) = array_def {
+                    element
+                        .element_base()
+                        .set_name_suffix(&array_def.get_element_name_suffix(index as i32));
+                }
+            }
+        }
     }
 
     /// Port of `TwbSubRecord.ElementChanged`.

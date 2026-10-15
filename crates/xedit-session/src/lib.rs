@@ -10,6 +10,7 @@
 
 pub mod archive;
 pub mod assets;
+pub mod assign;
 pub mod batch;
 pub mod check;
 pub mod clean;
@@ -147,6 +148,7 @@ impl Registry {
         commands::register(&mut registry);
         conflicts::register(&mut registry);
         edit::register(&mut registry);
+        assign::register(&mut registry);
         save::register(&mut registry);
         script::register(&mut registry);
         masters::register(&mut registry);

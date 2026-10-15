@@ -1263,6 +1263,36 @@ impl ElementImpl for ValueImpl {
         self
     }
 
+    /// Port of `TwbArray.ResetMemoryOrder` (`TwbContainer`'s for the other
+    /// values): the entries of an unsorted array also take the name suffix
+    /// of their position.
+    fn reset_memory_order(&self, from: usize, to: usize) {
+        let array_def = (self.get_element_type() == ElementType::etArray && self.get_sorted() != Some(true))
+            .then(|| self.value_def().as_array_def())
+            .flatten();
+        for (index, element) in self
+            .vb
+            .container
+            .elements()
+            .iter()
+            .enumerate()
+            .take(to.saturating_add(1))
+            .skip(from)
+        {
+            if let Some(element) = element.as_element_impl() {
+                element
+                    .element_base()
+                    .e_memory_order
+                    .store(index as i32, std::sync::atomic::Ordering::Relaxed);
+                if let Some(array_def) = array_def {
+                    element
+                        .element_base()
+                        .set_name_suffix(&array_def.get_element_name_suffix(index as i32));
+                }
+            }
+        }
+    }
+
     fn self_element_ref(&self) -> Option<ElementRef> {
         self.self_ref.upgrade().map(|element| element as ElementRef)
     }

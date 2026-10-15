@@ -462,10 +462,14 @@ fn records_compare(session: &mut Session, request: CompareRequest) -> Result<Com
         session,
         &mod_group_choice(&request.mod_groups, request.all_mod_groups, request.saved_mod_groups),
     )?;
+    // The record shown in the view: its sorted and aligned arrays keep the
+    // sort orders the view gives them, as in xEdit after the record was
+    // shown.
     let options = ConflictOptions {
         only_master_and_leafs: request.master_and_leafs,
         hide_no_conflict: request.hide_no_conflict,
         mod_groups: active.filter,
+        apply_to_elements: true,
         ..Default::default()
     };
     let mut context = ConflictContext::new(&options, &files);

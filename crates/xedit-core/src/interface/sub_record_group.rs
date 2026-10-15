@@ -905,6 +905,12 @@ impl SubRecordUnionDef {
         this
     }
 
+    /// The member index the decider gives for the container (`sruDecider`),
+    /// `None` without a decider.
+    pub fn decide(&self, container: ElementArg) -> Option<i32> {
+        self.sru_decider.as_ref().map(|decider| decider(container))
+    }
+
     /// The index of the member that handles the subrecord: the decided member
     /// when there is a decider, else the first member that can handle it.
     fn handling_member(

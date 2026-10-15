@@ -1329,8 +1329,7 @@ fn set_edit_text(_window: &Window, _text: &str) -> bool {
 fn post_key(window: &Window, control: Option<&str>, key: u16) {
     use windows_sys::Win32::Foundation::HWND;
     use windows_sys::Win32::UI::WindowsAndMessaging::{
-        EnumChildWindows, GUITHREADINFO, GetGUIThreadInfo, GetWindowThreadProcessId, PostMessageW, WM_KEYDOWN,
-        WM_KEYUP,
+        EnumChildWindows, GUITHREADINFO, GetGUIThreadInfo, GetWindowThreadProcessId, PostMessageW, WM_KEYDOWN, WM_KEYUP,
     };
     let handle = window.handle as HWND;
     if let Some(control) = control {

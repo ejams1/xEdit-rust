@@ -1363,6 +1363,80 @@ enum ElementsAction {
         #[arg(long)]
         dry_run: bool,
     },
+    /// Assign an element of any loaded record, or a template of the definitions, to an element (elements.assign: the view's drag and drop, ElementAssign, TemplateAssign). Needs --edit unless --dry-run.
+    Assign {
+        /// Load order FormID of the record to change as hexadecimal digits.
+        form_id: String,
+        /// Path of the element to assign to; the record itself when omitted.
+        #[arg(long)]
+        path: Option<String>,
+        /// Plugin whose version of the record is changed; the last loaded plugin when omitted.
+        #[arg(long)]
+        file: Option<String>,
+        /// Where the source goes: this (the element takes its value), add (a new array entry) or a position (a member, or an aligned position of an array records compare aligned).
+        #[arg(long, default_value = "this")]
+        index: String,
+        /// Load order FormID of the record the source element is in.
+        #[arg(long)]
+        source_form_id: Option<String>,
+        /// Plugin the source record is seen from.
+        #[arg(long)]
+        source_file: Option<String>,
+        /// Path of the source element inside its record; the record itself when omitted.
+        #[arg(long)]
+        source_path: Option<String>,
+        /// Assign the template of this name (elements templates lists them) in place of a source element.
+        #[arg(long)]
+        template: Option<String>,
+        /// Assign only the members of the sort key.
+        #[arg(long)]
+        only_sk: bool,
+        /// Report whether the assign can be done, but change nothing.
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// List the templates an element offers for an assign at an index (elements.templates, GetAssignTemplates).
+    Templates {
+        /// Load order FormID of the record as hexadecimal digits.
+        form_id: String,
+        /// Path of the element; the record itself when omitted.
+        #[arg(long)]
+        path: Option<String>,
+        /// Plugin the record is seen from; the last loaded plugin when omitted.
+        #[arg(long)]
+        file: Option<String>,
+        /// The index: this, add or a position.
+        #[arg(long, default_value = "this")]
+        index: String,
+    },
+    /// Move an entry of an unsorted array up or down, or to a position (elements.move: Move Up, Move Down, InsertElement). Needs --edit unless --dry-run.
+    Move {
+        /// Load order FormID of the record as hexadecimal digits.
+        form_id: String,
+        /// Path of the entry inside the record.
+        path: String,
+        /// up or down.
+        #[arg(long)]
+        direction: Option<String>,
+        /// The position to put the entry at, in place of --direction.
+        #[arg(long)]
+        position: Option<i32>,
+        /// Plugin whose version of the record is changed; the last loaded plugin when omitted.
+        #[arg(long)]
+        file: Option<String>,
+        /// Report whether the entry can move, but move nothing.
+        #[arg(long)]
+        dry_run: bool,
+    },
+}
+
+/// The `index` of `elements assign` and `elements templates` as JSON: the
+/// keywords as text, a position as a number.
+fn assign_index_json(index: &str) -> serde_json::Value {
+    match index.parse::<i32>() {
+        Ok(position) => json!(position),
+        Err(_) => json!(index),
+    }
 }
 
 #[derive(Subcommand)]
@@ -1948,6 +2022,48 @@ fn command_of(action: Action) -> Result<(String, Value), CommandError> {
             } => (
                 "elements.remove".to_owned(),
                 json!({ "form_id": form_id, "path": path, "file": file, "dry_run": dry_run }),
+            ),
+            ElementsAction::Assign {
+                form_id,
+                path,
+                file,
+                index,
+                source_form_id,
+                source_file,
+                source_path,
+                template,
+                only_sk,
+                dry_run,
+            } => {
+                let source = source_form_id.map(
+                    |source_form_id| json!({ "form_id": source_form_id, "file": source_file, "path": source_path }),
+                );
+                (
+                    "elements.assign".to_owned(),
+                    json!({ "form_id": form_id, "path": path, "file": file, "index": assign_index_json(&index),
+                            "source": source, "template": template, "only_sk": only_sk, "dry_run": dry_run }),
+                )
+            }
+            ElementsAction::Templates {
+                form_id,
+                path,
+                file,
+                index,
+            } => (
+                "elements.templates".to_owned(),
+                json!({ "form_id": form_id, "path": path, "file": file, "index": assign_index_json(&index) }),
+            ),
+            ElementsAction::Move {
+                form_id,
+                path,
+                direction,
+                position,
+                file,
+                dry_run,
+            } => (
+                "elements.move".to_owned(),
+                json!({ "form_id": form_id, "path": path, "direction": direction, "position": position,
+                        "file": file, "dry_run": dry_run }),
             ),
         },
         Action::Patch { action } => match action {

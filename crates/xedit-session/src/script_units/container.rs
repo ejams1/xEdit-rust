@@ -306,15 +306,14 @@ pub(crate) fn register(adapter: &mut Adapter, state: &Rc<RefCell<ScriptRunState>
             let (Some(element), Some(source)) = (element_at(args, 0), element_at(args, 2)) else {
                 return Ok(());
             };
-            let Some(container) = element.as_container() else {
+            if element.as_container().is_none() {
                 return Ok(());
-            };
-            let index = integer_at(args, 1)?;
-            // `InsertElement` moves the element into the container at the
-            // position; the port's containers take the insert through their
-            // implementation (owed: no `Container` method for it yet, the
-            // corpus uses it in `Add into container.pas`).
-            let _ = (container, index, source);
+            }
+            let index = integer_at(args, 1)? as i32;
+            // `TwbContainer.InsertElement`: the element, which has no
+            // container (one `RemoveElement` gave), goes in at the position.
+            xedit_core::implementation::moving::insert_element(&element, index, &source)
+                .map_err(ValueError::External)?;
             Ok(())
         }),
         3,
@@ -383,33 +382,47 @@ pub(crate) fn register(adapter: &mut Adapter, state: &Rc<RefCell<ScriptRunState>
     adapter.add_function(
         super::C_UNIT,
         "RemoveElement",
-        Rc::new(|result: &mut Value, args: &mut Args| {
-            let Some(element) = element_at(args, 0) else {
-                return Ok(());
-            };
-            let Some(container) = element.as_container() else {
-                return Ok(());
-            };
-            // `case VarType(Args.Values[1]) of varInteger, ...: remove by
-            // index; varString: remove by name; else: remove the element`.
-            match args.values.get(1).map(Value::var_type) {
-                Some(VarType::Integer | VarType::Smallint | VarType::Byte | VarType::Int64) => {
-                    let index = integer_at(args, 1)? as i32;
-                    *result = Value::Integer(i32::from(container.remove_element_at(index, true).is_some()));
-                }
-                Some(VarType::Str) => {
-                    let name = string_at(args, 1);
-                    *result = Value::Integer(i32::from(container.remove_element_by_name(&name).is_some()));
-                }
-                _ => {
-                    if let Some(child) = element_at(args, 1) {
-                        child.remove();
-                        *result = Value::Integer(1);
+        {
+            let state = state.clone();
+            Rc::new(move |result: &mut Value, args: &mut Args| {
+                let Some(element) = element_at(args, 0) else {
+                    return Ok(());
+                };
+                let Some(container) = element.as_container() else {
+                    return Ok(());
+                };
+                // `case VarType(Args.Values[1]) of varInteger, ...: remove by
+                // index; varString: remove by name; else: remove the
+                // element`; the result is the element removed
+                // (`Container.RemoveElement(...)`), which has no container
+                // any more and can go into one with `InsertElement`.
+                let removed = match args.values.get(1).map(Value::var_type) {
+                    Some(VarType::Integer | VarType::Smallint | VarType::Byte | VarType::Int64) => {
+                        let index = integer_at(args, 1)? as i32;
+                        container.remove_element_at(index, true)
                     }
+                    Some(VarType::Str) => {
+                        let name = string_at(args, 1);
+                        container.remove_element_by_name(&name)
+                    }
+                    _ => match element_at(args, 1) {
+                        Some(child) => {
+                            let index = container.get_index_of(&child);
+                            if index >= 0 {
+                                container.remove_element_at(index, true)
+                            } else {
+                                None
+                            }
+                        }
+                        None => None,
+                    },
+                };
+                if let Some(removed) = removed {
+                    *result = state.borrow().element_value(&removed);
                 }
-            }
-            Ok(())
-        }),
+                Ok(())
+            })
+        },
         2,
         vec![ParamType::value(VarType::Empty), ParamType::value(VarType::Empty)],
         VarType::Empty,

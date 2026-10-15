@@ -149,6 +149,24 @@ impl ViewContainer {
         self.by_sort_order = OnceCell::new();
     }
 
+    /// The sort orders of the view written to the elements, and the
+    /// container marked sorted by sort order (`SetIsSortedBySortOrder`,
+    /// forced for an aligned container).
+    fn apply_to_elements(&self, force_sorted: bool) {
+        for (element, &order) in self.elements().iter().zip(self.sort_orders()) {
+            if element.get_sort_order() != order {
+                element.set_sort_order(order);
+            }
+        }
+        if let Some(base) = self
+            .element
+            .as_element_impl()
+            .and_then(|element| element.container_base())
+        {
+            base.set_is_sorted_by_sort_order(force_sorted);
+        }
+    }
+
     /// Port of `TwbContainer.GetElementBySortOrder`: the element whose sort
     /// order is `sort_order` less the additional elements.
     pub fn element_by_sort_order(&self, sort_order: i32) -> Option<&ElementRef> {
@@ -236,6 +254,15 @@ pub struct ConflictOptions {
     pub hide_no_conflict: bool,
     /// `ModGroupsEnabled` with the mod groups; `None` is no mod group.
     pub mod_groups: Option<Arc<dyn ModGroupFilter>>,
+    /// The view writes the sort orders it gives the entries of sorted and
+    /// aligned containers to the elements themselves and marks the
+    /// containers sorted by sort order, as upstream's view does
+    /// (`IwbElement.SortOrder := ...`, `SetIsSortedBySortOrder`), so that
+    /// an assign at an aligned position afterwards creates the entry there
+    /// (`AlignedCreate`). The view of a record (`records.compare`, the
+    /// GUI's `JumpTo`) does; the conflict status of a list of records does
+    /// not.
+    pub apply_to_elements: bool,
 }
 
 /// The conflict status of a main record: upstream `TwbMainRecord.ConflictAll`
@@ -787,6 +814,13 @@ impl<'a> ConflictContext<'a> {
                     }
                 }
             }
+            if self.options.apply_to_elements {
+                for node_data in node_datas.iter() {
+                    if let Some(container) = &node_data.container {
+                        container.apply_to_elements(false);
+                    }
+                }
+            }
         } else {
             let mut all_keys: Option<Vec<String>> = (align_array_elements() && alignable_count > 1).then(Vec::new);
             for node_data in node_datas.iter() {
@@ -934,6 +968,9 @@ impl<'a> ConflictContext<'a> {
                 if let Some(index) = index {
                     container.set_sort_order(*index, position as i32);
                 }
+            }
+            if self.options.apply_to_elements {
+                container.apply_to_elements(true);
             }
         }
         child_count
