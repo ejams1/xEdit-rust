@@ -185,6 +185,11 @@ pub(crate) fn notify_changed_internal(element: &dyn ElementImpl) {
     }
     if let Some(base) = element.container_base() {
         base.cnt_as_created_empty.store(false, Ordering::Relaxed);
+        // `csSortedBySortOrder` is checked again.
+        if base.is_sorted_by_sort_order() {
+            base.cnt_sorted_by_sort_order.store(false, Ordering::Relaxed);
+            base.set_is_sorted_by_sort_order(false);
+        }
     }
     if let (Some(this), Some(container)) = (element.as_dyn_element_impl(), element.element_base().container())
         && let Some(container) = container.as_element_impl()

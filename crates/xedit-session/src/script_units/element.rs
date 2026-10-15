@@ -7,19 +7,21 @@
 //! `xejviScriptAdapterElement.pas`: the `IwbElement` functions over the
 //! element tree of `xedit_core::interface::Element`.
 //!
-//! Owed to a later step, with the upstream body kept where the port has the
-//! pieces: `AssignTemplateByIndex`/`AssignTemplateByName`/`AssignTemplateCount`
-//! and `TemplateAssign` read `IwbDef.GetAssignTemplates`, which the port's
-//! definitions do not carry; `MoveUp`/`MoveDown`/`CanMoveUp`/`CanMoveDown`
-//! need the sort-order machinery of the view; `GetElementState`/
-//! `SetElementState`/`ClearElementState` map the states the port models and
-//! report `False` for the view states it does not (see
+//! `AssignTemplateByIndex`/`AssignTemplateByName`/`AssignTemplateCount` and
+//! `TemplateAssign` read the templates of the definitions
+//! (`xedit_core::implementation::template`), `MoveUp`/`MoveDown`/
+//! `CanMoveUp`/`CanMoveDown` move entries of unsorted arrays
+//! (`xedit_core::implementation::moving`), as the session commands
+//! `elements.assign`, `elements.templates` and `elements.move` do.
+//! `GetElementState`/`SetElementState`/`ClearElementState` map the states
+//! the port models and report `False` for the view states it does not (see
 //! [`element_state`]).
 
 use std::cell::RefCell;
 use std::rc::Rc;
 
 use xedit_core::implementation::write::ElementState;
+use xedit_core::implementation::{moving, template};
 use xedit_core::interface::types::PascalEnum;
 use xedit_core::interface::{Element, ElementType};
 use xedit_script::adapter::{Adapter, Args};
@@ -54,19 +56,17 @@ pub(crate) fn register(adapter: &mut Adapter, state: &Rc<RefCell<ScriptRunState>
 
     //=== IwbElement =========================================================
 
-    // `AssignTemplateByIndex`/`ByName`/`AssignTemplateCount`: owed, the
-    // port's definitions have no assign templates (`IwbDef.GetAssignTemplates`).
-    // Registered so a script finds the name and reports the upstream
-    // behaviour of a def without templates: `nil`/`nil`/0.
+    // `AssignTemplateByIndex`/`ByName`/`AssignTemplateCount`: the templates
+    // of `IwbElement.GetAssignTemplates` at the index.
     add(
         adapter,
         "AssignTemplateCount",
         2,
         params(&[VarType::Empty, VarType::Integer]),
         |result, args| {
-            *result = Value::Integer(0);
-            if element_at(args, 0).is_none() {
-                return Ok(());
+            if let Some(element) = element_at(args, 0) {
+                let index = integer_at(args, 1)? as i32;
+                *result = Value::Integer(template::assign_templates(&element, index).len() as i32);
             }
             Ok(())
         },
@@ -76,14 +76,43 @@ pub(crate) fn register(adapter: &mut Adapter, state: &Rc<RefCell<ScriptRunState>
         "AssignTemplateByIndex",
         3,
         params(&[VarType::Empty, VarType::Integer, VarType::Integer]),
-        |_result, _args| Ok(()),
+        {
+            let state = state.clone();
+            move |result, args| {
+                let index = integer_at(args, 1)? as i32;
+                let template_index = integer_at(args, 2)?;
+                if let Some(element) = element_at(args, 0) {
+                    let templates = template::assign_templates(&element, index);
+                    if let Some(found) = usize::try_from(template_index).ok().and_then(|at| templates.get(at)) {
+                        *result = state.borrow().element_value(found);
+                    }
+                }
+                Ok(())
+            }
+        },
     );
     add(
         adapter,
         "AssignTemplateByName",
         3,
         params(&[VarType::Empty, VarType::Integer, VarType::Str]),
-        |_result, _args| Ok(()),
+        {
+            let state = state.clone();
+            move |result, args| {
+                let index = integer_at(args, 1)? as i32;
+                let name = string_at(args, 2);
+                if let Some(element) = element_at(args, 0) {
+                    let templates = template::assign_templates(&element, index);
+                    if let Some(found) = templates
+                        .iter()
+                        .find(|candidate| candidate.get_name().eq_ignore_ascii_case(&name))
+                    {
+                        *result = state.borrow().element_value(found);
+                    }
+                }
+                Ok(())
+            }
+        },
     );
     add(adapter, "BaseName", 1, value_param(), |result, args| {
         *result = Value::Str(Vec::new());
@@ -117,19 +146,28 @@ pub(crate) fn register(adapter: &mut Adapter, state: &Rc<RefCell<ScriptRunState>
         }
         Ok(())
     });
-    // `CanMoveDown`/`CanMoveUp`/`MoveDown`/`MoveUp`: owed, they order the
-    // element within its container by sort order (`TwbElement.CanMoveUp`
-    // reads `SortOrder` and the sort key of the view), which the port's
-    // containers order through their definitions instead.
-    for name in ["CanMoveDown", "CanMoveUp"] {
-        add(adapter, name, 1, value_param(), |result, _args| {
-            *result = Value::Bool(false);
-            Ok(())
-        });
-    }
-    for name in ["MoveDown", "MoveUp"] {
-        add(adapter, name, 1, value_param(), |_result, _args| Ok(()));
-    }
+    // `CanMoveDown`/`CanMoveUp`/`MoveDown`/`MoveUp`: an entry of an
+    // unsorted array one place down or up (`TwbElement.MoveUp`).
+    add(adapter, "CanMoveDown", 1, value_param(), |result, args| {
+        *result = Value::Bool(element_at(args, 0).is_some_and(|element| moving::can_move_down(&element)));
+        Ok(())
+    });
+    add(adapter, "CanMoveUp", 1, value_param(), |result, args| {
+        *result = Value::Bool(element_at(args, 0).is_some_and(|element| moving::can_move_up(&element)));
+        Ok(())
+    });
+    add(adapter, "MoveDown", 1, value_param(), |_result, args| {
+        if let Some(element) = element_at(args, 0) {
+            moving::move_down(&element);
+        }
+        Ok(())
+    });
+    add(adapter, "MoveUp", 1, value_param(), |_result, args| {
+        if let Some(element) = element_at(args, 0) {
+            moving::move_up(&element);
+        }
+        Ok(())
+    });
     add(adapter, "Check", 1, value_param(), |result, args| {
         *result = Value::Str(Vec::new());
         if let Some(element) = element_at(args, 0) {
@@ -565,16 +603,33 @@ pub(crate) fn register(adapter: &mut Adapter, state: &Rc<RefCell<ScriptRunState>
             Ok(())
         },
     );
-    // `TemplateAssign`: owed, the same assign templates as
-    // `AssignTemplateByName` above; the upstream body finds the template by
-    // name and assigns it at `High(Integer)`.
-    add(
-        adapter,
-        "TemplateAssign",
-        2,
-        params(&[VarType::Empty, VarType::Str]),
-        |_result, _args| Ok(()),
-    );
+    // `TemplateAssign`: the template of the name at `High(Integer)`
+    // (`wbAssignAdd`), assigned there, the element made empty set to its
+    // default.
+    add(adapter, "TemplateAssign", 2, params(&[VarType::Empty, VarType::Str]), {
+        let state = state.clone();
+        move |result, args| {
+            let Some(element) = element_at(args, 0) else {
+                return Ok(());
+            };
+            let name = string_at(args, 1);
+            let index = xedit_core::interface::types::ASSIGN_ADD;
+            let templates = template::assign_templates(&element, index);
+            if let Some(found) = templates
+                .iter()
+                .find(|candidate| name.eq_ignore_ascii_case(&candidate.get_name()))
+            {
+                let assigned = element.assign(index, Some(found), false);
+                if let Some(assigned) = &assigned {
+                    template::set_to_default_if_as_created_empty(assigned).map_err(ValueError::External)?;
+                    *result = state.borrow().element_value(assigned);
+                } else {
+                    *result = Value::Empty;
+                }
+            }
+            Ok(())
+        }
+    });
 
     //=== the `wbCopyElementTo*` helpers =====================================
 

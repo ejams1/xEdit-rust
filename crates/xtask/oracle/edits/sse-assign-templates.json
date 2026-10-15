@@ -1,0 +1,14 @@
+{
+  "description": "Template sources (GetAssignTemplates, TwbTemplateElement) on a quest copied into a new plugin, whose Aliases array is a subrecord array of a union (Reference Alias, Location Alias): the template Location Alias assigned with add (the script function TemplateAssign, which makes a member of that union entry without data and sets an element made empty to its default), the template Specific Reference assigned at the position of the Fill Type union of the first alias (ElementAssign with AssignTemplateByName), which switches its Find Matching Reference member to the other member of the union, and the template Keywords assigned at the position of a member the second alias lacks, which adds the member with its required subrecords only.",
+  "game": "sse",
+  "load": ["Skyrim.esm"],
+  "strings": true,
+  "commands": [
+    {"command": "files.new", "params": {"file": "TemplateAssignTest"}},
+    {"command": "records.copy", "params": {"form_id": "00017297", "from": "Skyrim.esm", "to": "TemplateAssignTest.esp"}},
+    {"command": "elements.assign", "params": {"form_id": "00017297", "file": "TemplateAssignTest.esp", "path": "Aliases", "index": "add", "template": "Location Alias"}},
+    {"command": "elements.assign", "params": {"form_id": "00017297", "file": "TemplateAssignTest.esp", "path": "Aliases\\[0]", "index": 4, "template": "Specific Reference"}},
+    {"command": "elements.assign", "params": {"form_id": "00017297", "file": "TemplateAssignTest.esp", "path": "Aliases\\[1]", "index": 6, "template": "Keywords"}}
+  ],
+  "save": ["TemplateAssignTest.esp"]
+}

@@ -1,0 +1,19 @@
+{
+  "description": "Entries of unsorted arrays moved, as the view's Move Up and Move Down and the script functions MoveUp, MoveDown, RemoveElement and InsertElement do (elements.move): in a new plugin's copy of the idle marker DrunkIdleMarker the second IDLA animation moves down and the fifth up (an array value of a subrecord), the first is taken out and put back in at position 3 (InsertElement); in a copied form list (FormIDs, a subrecord array of LNAM subrecords) the first entry moves down and the last up; and the first keyword of a copied weapon, an entry of the sorted KWDA array, is asked to move up, which a sorted array does not allow, so it stays.",
+  "game": "sse",
+  "load": ["Skyrim.esm"],
+  "strings": true,
+  "commands": [
+    {"command": "files.new", "params": {"file": "MoveTest"}},
+    {"command": "records.copy", "params": {"form_id": "0008B82E", "from": "Skyrim.esm", "to": "MoveTest.esp"}},
+    {"command": "records.copy", "params": {"form_id": "00013634", "from": "Skyrim.esm", "to": "MoveTest.esp"}},
+    {"command": "records.copy", "params": {"form_id": "00013986", "from": "Skyrim.esm", "to": "MoveTest.esp"}},
+    {"command": "elements.move", "params": {"form_id": "0008B82E", "file": "MoveTest.esp", "path": "Idle Animations\\IDLA\\[1]", "direction": "down"}},
+    {"command": "elements.move", "params": {"form_id": "0008B82E", "file": "MoveTest.esp", "path": "Idle Animations\\IDLA\\[4]", "direction": "up"}},
+    {"command": "elements.move", "params": {"form_id": "0008B82E", "file": "MoveTest.esp", "path": "Idle Animations\\IDLA\\[0]", "position": 3}},
+    {"command": "elements.move", "params": {"form_id": "00013634", "file": "MoveTest.esp", "path": "FormIDs\\[0]", "direction": "down"}},
+    {"command": "elements.move", "params": {"form_id": "00013634", "file": "MoveTest.esp", "path": "FormIDs\\[5]", "direction": "up"}},
+    {"command": "elements.move", "params": {"form_id": "00013986", "file": "MoveTest.esp", "path": "Keywords\\KWDA\\[0]", "direction": "up"}}
+  ],
+  "save": ["MoveTest.esp"]
+}

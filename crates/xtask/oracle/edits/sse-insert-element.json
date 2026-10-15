@@ -1,0 +1,13 @@
+{
+  "description": "InsertElement after RemoveElement (elements.move with position) where the move keeps the element at its place: an entry of the IDLA array of a copied DrunkIdleMarker taken out and put back in at its own position, which the oracle saves without that entry (an entry of an array value written back into an array writes no data, an upstream quirk the port reproduces), and the X1 member of the OBND structure of a copied TavernDrinkingMarker taken out and put in at position 2, which keeps its data and is written third.",
+  "game": "sse",
+  "load": ["Skyrim.esm"],
+  "commands": [
+    {"command": "files.new", "params": {"file": "InsertProbe"}},
+    {"command": "records.copy", "params": {"form_id": "0008B82E", "from": "Skyrim.esm", "to": "InsertProbe.esp"}},
+    {"command": "records.copy", "params": {"form_id": "00097539", "from": "Skyrim.esm", "to": "InsertProbe.esp"}},
+    {"command": "elements.move", "params": {"form_id": "0008B82E", "file": "InsertProbe.esp", "path": "Idle Animations\\IDLA\\[2]", "position": 2}},
+    {"command": "elements.move", "params": {"form_id": "00097539", "file": "InsertProbe.esp", "path": "OBND\\X1", "position": 2}}
+  ],
+  "save": ["InsertProbe.esp"]
+}

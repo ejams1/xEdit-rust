@@ -671,6 +671,19 @@ fn new_file_name(params: &Value) -> Result<String> {
     Ok(format!("{base}{extension}"))
 }
 
+/// The index of an `elements.assign` step as the script API takes it:
+/// `this` is `wbAssignThis` (`Low(Integer)`), `add` is `wbAssignAdd`
+/// (`High(Integer)`), else a number.
+fn assign_index(value: &Value) -> Result<String> {
+    Ok(match value {
+        Value::String(text) if text == "this" => "LowInteger".to_owned(),
+        Value::String(text) if text == "add" => "HighInteger".to_owned(),
+        Value::Number(number) => number.to_string(),
+        Value::Null => "LowInteger".to_owned(),
+        _ => bail!("index must be \"this\", \"add\" or a number"),
+    })
+}
+
 /// The plugins the `files.new` steps of a sequence make.
 fn made_files(sequence: &EditSequence) -> Vec<String> {
     sequence
@@ -820,6 +833,83 @@ fn edit_step(index: usize, command: &Value) -> Result<String> {
                 q(&name),
             )
         }
+        "elements.assign" => {
+            // `ElementAssign(target, index, source, onlySK)`, with the
+            // source an element of a record or, with `template`, the
+            // template of that name the target offers at the index
+            // (`AssignTemplateByName`).
+            check_params(
+                params,
+                &["form_id", "file", "path", "index", "source", "template", "only_sk"],
+            )?;
+            let record = format!("RecordIn({}, {})", file()?, form_id()?);
+            let target = match params["path"].as_str().filter(|path| !path.is_empty()) {
+                Some(path) => format!("PathElement({record}, {})", q(path)),
+                None => record,
+            };
+            let index = assign_index(&params["index"])?;
+            let only_sk = pascal_bool(bool_param(params, "only_sk"));
+            if let Some(template) = params["template"].as_str()
+                && index == "HighInteger"
+            {
+                // `TemplateAssign(element, name)`: the template at
+                // `wbAssignAdd`, an element made empty set to its default.
+                return Ok(format!(
+                    "{code}      el := {target};\n      TemplateAssign(el, {});\n",
+                    q(template)
+                ));
+            }
+            let source = if let Some(template) = params["template"].as_str() {
+                format!("AssignTemplateByName(el, {index}, {})", q(template))
+            } else if params["source"].is_object() {
+                let source = &params["source"];
+                check_params(source, &["form_id", "file", "path"])?;
+                let record = format!(
+                    "RecordIn({}, {})",
+                    q(text_param(source, "file")?),
+                    q(text_param(source, "form_id")?)
+                );
+                match source["path"].as_str().filter(|path| !path.is_empty()) {
+                    Some(path) => format!("PathElement({record}, {})", q(path)),
+                    None => record,
+                }
+            } else {
+                "nil".to_owned()
+            };
+            // The view's drop adds the source's masters to the target's file
+            // first (`AddRequiredMasters(SourceElement, TargetElement._File,
+            // False)`).
+            let masters = if params["source"].is_object() {
+                format!("AddRequiredElementMasters({source}, GetFile(el), False, True);\n      ")
+            } else {
+                String::new()
+            };
+            format!("el := {target};\n      {masters}ElementAssign(el, {index}, {source}, {only_sk});")
+        }
+        "elements.move" => {
+            // `MoveUp`/`MoveDown` (the view's "Move up"/"Move down").
+            check_params(params, &["form_id", "file", "path", "direction", "position"])?;
+            if let Some(position) = params["position"].as_i64() {
+                // `RemoveElement` and `InsertElement` of the script API.
+                return Ok(format!(
+                    "{code}      el := PathElement(RecordIn({}, {}), {});\n      f := GetContainer(el);\n      InsertElement(f, {position}, RemoveElement(f, el));\n",
+                    file()?,
+                    form_id()?,
+                    q(text_param(params, "path")?)
+                ));
+            }
+            let call = match text_param(params, "direction")? {
+                "up" => "MoveUp",
+                "down" => "MoveDown",
+                other => bail!("step {index}: direction {other} is neither up nor down"),
+            };
+            format!(
+                "{call}(PathElement(RecordIn({}, {}), {}));",
+                file()?,
+                form_id()?,
+                q(text_param(params, "path")?)
+            )
+        }
         "records.compare" => {
             // The record shown in the view: `JumpTo` selects it in the
             // navigation tree and shows it with its overrides, which reads
@@ -932,7 +1022,11 @@ fn edit_script(sequence: &EditSequence) -> Result<String> {
     // The game master is the first plugin a sequence loads.
     let steps = steps.replace(
         "{{GAME_MASTER}}",
-        &sequence.load.first().map(|name| name.replace('\'', "''")).unwrap_or_default(),
+        &sequence
+            .load
+            .first()
+            .map(|name| name.replace('\'', "''"))
+            .unwrap_or_default(),
     );
     let mut saves = String::new();
     for name in &sequence.save {

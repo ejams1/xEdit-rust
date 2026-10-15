@@ -1,0 +1,16 @@
+{
+  "description": "Assigns at an aligned position of an array (AlignedCreate): a new plugin's copy of the idle marker DrunkIdleMarker loses the second entry of its IDLA animation array; the record is shown in the view (records.compare, the oracle's JumpTo), which aligns the arrays of the two versions and gives the entries of the copy the sort orders 0, 2, 3, 4, 5; the entry of Skyrim.esm assigned at position 1 is made at that sort order and the array is sorted by it, so it returns to its place instead of being appended. Then an entry of another marker assigned with add is appended, and the whole six-entry array of DrunkIdleMarker is assigned (this) over the one-entry array of a second copied marker, TavernDrinkingMarker, as the view's drag and drop and ElementAssign do.",
+  "game": "sse",
+  "load": ["Skyrim.esm"],
+  "commands": [
+    {"command": "files.new", "params": {"file": "AlignTest"}},
+    {"command": "records.copy", "params": {"form_id": "0008B82E", "from": "Skyrim.esm", "to": "AlignTest.esp"}},
+    {"command": "records.copy", "params": {"form_id": "00097539", "from": "Skyrim.esm", "to": "AlignTest.esp"}},
+    {"command": "elements.remove", "params": {"form_id": "0008B82E", "file": "AlignTest.esp", "path": "Idle Animations\\IDLA\\[1]"}},
+    {"command": "records.compare", "params": {"form_id": "0008B82E", "file": "AlignTest.esp"}},
+    {"command": "elements.assign", "params": {"form_id": "0008B82E", "file": "AlignTest.esp", "path": "Idle Animations\\IDLA", "index": 1, "source": {"form_id": "0008B82E", "file": "Skyrim.esm", "path": "Idle Animations\\IDLA\\[1]"}}},
+    {"command": "elements.assign", "params": {"form_id": "0008B82E", "file": "AlignTest.esp", "path": "Idle Animations\\IDLA", "index": "add", "source": {"form_id": "00097539", "file": "Skyrim.esm", "path": "Idle Animations\\IDLA\\[0]"}}},
+    {"command": "elements.assign", "params": {"form_id": "00097539", "file": "AlignTest.esp", "path": "Idle Animations\\IDLA", "source": {"form_id": "0008B82E", "file": "Skyrim.esm", "path": "Idle Animations\\IDLA"}}}
+  ],
+  "save": ["AlignTest.esp"]
+}

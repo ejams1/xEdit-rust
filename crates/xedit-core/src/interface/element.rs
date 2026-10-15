@@ -71,6 +71,11 @@ pub trait Element: Send + Sync {
         None
     }
 
+    /// `Supports(element, IwbMultipleElements)`.
+    fn as_multiple_elements(&self) -> Option<&crate::implementation::template::MultipleElements> {
+        None
+    }
+
     fn get_edit_value(&self) -> String;
 
     /// Upstream `IwbRecord.Signature`: the signature of a record or

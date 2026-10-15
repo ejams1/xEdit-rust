@@ -23,6 +23,7 @@ pub mod form_ids;
 mod info_sort;
 pub mod injected;
 pub mod masters;
+pub mod moving;
 pub mod new_file;
 pub mod new_form_id;
 pub mod reachable;
@@ -31,6 +32,7 @@ pub mod refs;
 mod scan;
 pub mod sortable;
 pub mod structs;
+pub mod template;
 pub mod undelete;
 pub mod write;
 
@@ -604,6 +606,11 @@ pub struct ContainerBase {
     /// Port of `csAsCreatedEmpty`: the one element an array of variable
     /// size was created with, which the first `Assign` takes over.
     pub(crate) cnt_as_created_empty: AtomicBool,
+    /// Port of `csSortedBySortOrder`: the elements are in the order of their
+    /// sort orders (`SortBySortOrder`, or the view's alignment of an array:
+    /// `SetIsSortedBySortOrder`), which an assign at a sort order of an
+    /// alignable array reads (`AlignedCreate`).
+    pub(crate) cnt_sorted_by_sort_order: AtomicBool,
 }
 
 impl ContainerBase {
@@ -645,10 +652,31 @@ impl ContainerBase {
         self.cnt_elements.read().unwrap().get(index).cloned()
     }
 
+    /// Port of `TwbContainer.SetIsSortedBySortOrder(aForce)`: sorted by sort
+    /// order when forced, else when the sort orders rise strictly.
+    pub fn set_is_sorted_by_sort_order(&self, force: bool) {
+        if !force {
+            let elements = self.cnt_elements.read().unwrap();
+            for pair in elements.windows(2) {
+                if pair[0].get_sort_order() >= pair[1].get_sort_order() {
+                    self.cnt_sorted_by_sort_order.store(false, Ordering::Relaxed);
+                    return;
+                }
+            }
+        }
+        self.cnt_sorted_by_sort_order.store(true, Ordering::Relaxed);
+    }
+
+    /// `csSortedBySortOrder in cntStates`.
+    pub fn is_sorted_by_sort_order(&self) -> bool {
+        self.cnt_sorted_by_sort_order.load(Ordering::Relaxed)
+    }
+
     /// Port of `ReleaseElements`: the container gives up its elements, and
     /// with them the element it was created with (`csAsCreatedEmpty`).
     pub(crate) fn release_elements(&self) -> Vec<ElementRef> {
         self.cnt_as_created_empty.store(false, Ordering::Relaxed);
+        self.cnt_sorted_by_sort_order.store(false, Ordering::Relaxed);
         std::mem::take(&mut *self.cnt_elements.write().unwrap())
     }
 
@@ -665,8 +693,14 @@ impl ContainerBase {
         self.cnt_elements.write().unwrap().sort_by(compare);
     }
 
+    /// The elements at `a` and `b` swap places.
+    pub(crate) fn swap(&self, a: usize, b: usize) {
+        self.cnt_elements.write().unwrap().swap(a, b);
+    }
+
     /// Port of `ReverseElements`.
     pub(crate) fn reverse(&self) {
+        self.cnt_sorted_by_sort_order.store(false, Ordering::Relaxed);
         self.cnt_elements.write().unwrap().reverse();
     }
 
@@ -3574,12 +3608,32 @@ pub trait ElementImpl: Element {
         }
     }
 
-    /// Port of `TwbContainer.SortBySortOrder`.
+    /// Port of `TwbContainer.SortBySortOrder`: the elements after the
+    /// additional ones in the order of their sort orders.
     fn sort_by_sort_order_impl(&self) {
         if let Some(base) = self.container_base() {
             self.set_modified(true);
             base.sort_by(|a, b| a.get_sort_order().cmp(&b.get_sort_order()));
             self.invalidate_storage();
+            base.cnt_sorted_by_sort_order.store(true, Ordering::Relaxed);
+        }
+    }
+
+    /// Port of `ResetMemoryOrder(aFrom, aTo)`: the elements from `from` to
+    /// `to` (both included, `usize::MAX` for the last) take their positions
+    /// as their memory order. The default is `TwbContainer`'s; a subrecord
+    /// with an unsorted array value and an unsorted array also give them the
+    /// name suffix of their position.
+    fn reset_memory_order(&self, from: usize, to: usize) {
+        if let Some(base) = self.container_base() {
+            for (index, element) in base.elements().iter().enumerate().take(to.saturating_add(1)).skip(from) {
+                if let Some(element) = element.as_element_impl() {
+                    element
+                        .element_base()
+                        .e_memory_order
+                        .store(index as i32, Ordering::Relaxed);
+                }
+            }
         }
     }
 
