@@ -50,8 +50,8 @@ use xedit_core::helpers::{archive_extension, find_bsas, find_bsas_custom, has_bs
 use xedit_core::implementation::FileImpl;
 use xedit_core::interface::globals::{
     self, GameMode, custom_ini_file_name, decode_texture_hashes, game_mode, game_name, game_name2, language,
-    load_all_bsas, load_bsas, my_games_the_game_path, set_custom_ini_file_name, set_data_path, set_load_all_bsas,
-    set_load_bsas, set_my_games_the_game_path, set_the_game_ini_file_name, the_game_ini_file_name, wb_resources_loaded,
+    load_all_bsas, load_bsas, set_custom_ini_file_name, set_data_path, set_load_all_bsas, set_load_bsas,
+    set_my_games_the_game_path, set_the_game_ini_file_name, the_game_ini_file_name, wb_resources_loaded,
 };
 use xedit_core::interface::misc::progress;
 use xedit_core::interface::{Element, File};
@@ -516,15 +516,5 @@ pub(crate) fn game_loads_bsas(mode: GameMode) -> bool {
     !matches!(
         mode,
         GameMode::gmFNV | GameMode::gmFO3 | GameMode::gmTES3 | GameMode::gmTES4R
-    )
-}
-
-/// The game ini and custom ini the session read, for the response of a
-/// command that reports them.
-pub fn game_inis() -> (String, String, String) {
-    (
-        my_games_the_game_path(),
-        the_game_ini_file_name(),
-        custom_ini_file_name(),
     )
 }

@@ -99,7 +99,7 @@ struct Cli {
     #[arg(long, global = true)]
     force_bsa: bool,
 
-    /// The folder of the game's ini files below My Games (xEdit's -M:). Default: Documents\My Games\<game>\, as xEdit.
+    /// The folder of the game's ini files below My Games, with its trailing backslash as xEdit's -M: takes it. Default: Documents\My Games\<game>\, as xEdit.
     #[arg(long, global = true)]
     my_games: Option<String>,
 
