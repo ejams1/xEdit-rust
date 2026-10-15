@@ -139,9 +139,9 @@ fn the_adapter_helpers_and_records_work() {
            wbFilterStrings(sl, other, filter);\n\
            AddMessage('filtered'#13#10 + other.Text);\n\
            v := wbVector(1, 2.5, -3);\n\
-           AddMessage('vector ' + v.x + ' ' + v.y + ' ' + v.z);\n\
+           AddMessage('vector ' + VarToStr(v.x) + ' ' + VarToStr(v.y) + ' ' + VarToStr(v.z));\n\
            c := wbGridCell(5, -7);\n\
-           AddMessage('cell ' + c.x + ' ' + c.y);\n\
+           AddMessage('cell ' + VarToStr(c.x) + ' ' + VarToStr(c.y));\n\
            sl.Clear;\n\
            GetRecordDefNames(sl);\n\
            AddMessage('defs ' + IfThen(sl.Contains('GMST - Game Setting'), 'yes', 'no'));\n\
@@ -161,7 +161,10 @@ fn the_adapter_helpers_and_records_work() {
     assert_eq!(lines[1], "version 4010510", "{lines:?}");
     assert_eq!(lines[2], r"path C-\Games\Foo Bar\x.nif", "{lines:?}");
     assert_eq!(lines[3], "assigned-list yes", "{lines:?}");
-    assert_eq!(lines[4], "assigned-int no", "{lines:?}");
+    // `Assigned` reads the variant's pointer field: `Assigned(1)` and
+    // `Assigned('x')` are True as upstream's are (probes `x-219`, `x-220`);
+    // only `nil`, `Null`, `Unassigned`, 0 and `''` are not.
+    assert_eq!(lines[4], "assigned-int yes", "{lines:?}");
     // `wbRemoveDuplicateStrings` walks the list from the end, `Find` runs
     // its binary search whatever `Sorted` says (an unsorted list lands on
     // whatever the search sees), and the walk deletes from the end.
@@ -221,8 +224,8 @@ fn the_string_and_math_helpers_work() {
            values := TStringList.Create;\n\
            values.Add('one');\n\
            values.Add('two');\n\
-           AddMessage('indexstr ' + IndexStr('two', values));\n\
-           AddMessage('indextext ' + IndexText('TWO', values));\n\
+           AddMessage('indexstr ' + VarToStr(IndexStr('two', values)));\n\
+           AddMessage('indextext ' + VarToStr(IndexText('TWO', values)));\n\
            AddMessage('matchstr ' + IfThen(MatchStr('two', values), 'yes', 'no'));\n\
            AddMessage('ifthen ' + IfThen(1 > 2, 'a', 'b'));\n\
            parts := SplitString('a;b;c', ';');\n\
@@ -241,14 +244,14 @@ fn the_string_and_math_helpers_work() {
            AddMessage('stringofchar ' + StringOfChar('-', 3));\n\
            AddMessage('vartype ' + IntToHex64(VarType('x'), 0));\n\
            AddMessage('vartype2 ' + IntToHex64(VarType(12), 0));\n\
-           AddMessage('lerp ' + Lerp(0, 10, 0.5));\n\
-           AddMessage('inverse ' + InverseLerp(0, 10, 2.5));\n\
-           AddMessage('clamp ' + EnsureRange(12, 0, 10));\n\
+           AddMessage('lerp ' + VarToStr(Lerp(0, 10, 0.5)));\n\
+           AddMessage('inverse ' + VarToStr(InverseLerp(0, 10, 2.5)));\n\
+           AddMessage('clamp ' + VarToStr(EnsureRange(12, 0, 10)));\n\
            AddMessage('inrange ' + IfThen(InRange(5, 0, 10), 'yes', 'no'));\n\
-           AddMessage('fmod ' + FMod(7, 3));\n\
-           AddMessage('roundto ' + RoundTo(1.2345, -2));\n\
-           AddMessage('sign ' + Sign(-4));\n\
-           AddMessage('compare ' + CompareValue(1, 2, 0));\n\
+           AddMessage('fmod ' + VarToStr(FMod(7, 3)));\n\
+           AddMessage('roundto ' + VarToStr(RoundTo(1.2345, -2)));\n\
+           AddMessage('sign ' + VarToStr(Sign(-4)));\n\
+           AddMessage('compare ' + VarToStr(CompareValue(1, 2, 0)));\n\
            AddMessage('iszero ' + IfThen(IsZero(0.0000000001, 0), 'yes', 'no'));\n\
            Result := 1;\n\
          end;\n\
@@ -622,7 +625,7 @@ fn the_misc_errors_name_their_delphi_class() {
         // The propagating exception keeps its raw message; the unit and the
         // line live on the recorded `FLastError` and come out as the run
         // loop's outer location -- the oracle's line shape.
-        text.contains("Exception in unit Errors line 1: [ERegularExpressionError] Successful match required"),
+        text.contains("Exception in unit Errors line 10: [ERegularExpressionError] Successful match required"),
         "{text}"
     );
     assert!(text.contains("Aborted: Applying script \"Errors\""), "{text}");
@@ -648,7 +651,7 @@ fn the_misc_errors_name_their_delphi_class() {
     assert_eq!(result["aborted"], true);
     let text = script_fixture::abort_text(&result);
     assert!(
-        text.contains("Exception in unit ErrorsJson line 1: [EJsonCastException] Cannot cast String into Object"),
+        text.contains("Exception in unit ErrorsJson line 9: [EJsonCastException] Cannot cast String into Object"),
         "{text}"
     );
     let _ = std::fs::remove_dir_all(&folder);

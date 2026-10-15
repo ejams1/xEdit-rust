@@ -204,21 +204,21 @@ begin
   AddMessage('base=' + BaseName(e));
   AddMessage('value=' + GetValue(e));
   AddMessage('edit=' + GetEditValue(e));
-  AddMessage('native=' + GetNativeValue(ElementByPath(e, 'DATA\\Float')));
-  AddMessage('datanative=' + GetElementNativeValues(e, 'DATA\\Float'));
+  AddMessage('native=' + VarToStr(GetNativeValue(ElementByPath(e, 'DATA\\Float'))));
+  AddMessage('datanative=' + VarToStr(GetElementNativeValues(e, 'DATA\\Float')));
   AddMessage('type=' + ElementTypeAsText(e));
   AddMessage('deftype=' + DefTypeAsText(e));
   AddMessage('sig=' + Signature(e));
   AddMessage('edid=' + EditorID(e));
-  AddMessage('formid=' + GetLoadOrderFormID(e));
-  AddMessage('count=' + ElementCount(e));
+  AddMessage('formid=' + IntToStr(GetLoadOrderFormID(e)));
+  AddMessage('count=' + IntToStr(ElementCount(e)));
   AddMessage('byindex=' + Name(ElementByIndex(e, 0)));
   AddMessage('byname=' + Name(ElementByName(e, 'DATA')));
   AddMessage('bysig=' + Name(ElementBySignature(e, 'EDID')));
   AddMessage('bypath=' + Name(ElementByPath(e, 'DATA')));
-  AddMessage('exists=' + ElementExists(e, 'EDID'));
+  AddMessage('exists=' + VarToStr(ElementExists(e, 'EDID')));
   AddMessage('editvals=' + GetElementEditValues(e, 'EDID'));
-  AddMessage('count2=' + ElementCount(e));
+  AddMessage('count2=' + IntToStr(ElementCount(e)));
   f := GetFile(e);
   AddMessage('file=' + GetFileName(f));
 end;
@@ -264,7 +264,7 @@ fn the_element_functions_read_the_tree() {
             "deftype=dtRecord",
             "sig=GMST",
             "edid=fThird",
-            // A Cardinal concatenated as its decimal text, as in Delphi.
+            // A Cardinal through `IntToStr` prints its decimal text, as in Delphi.
             "formid=2050",
             // The element count and the first child: upstream's main record
             // keeps the `Record Header` among its elements (`TwbElement.
@@ -399,7 +399,7 @@ begin
   AddMessage('container=' + Name(c));
   AddMessage('last=' + Name(LastElement(e)));
   AddMessage('indexof=' + IntToStr(IndexOf(e, ElementBySignature(e, 'DATA'))));
-  AddMessage('equals=' + Equals(e, e));
+  AddMessage('equals=' + VarToStr(Equals(e, e)));
   AddMessage('containing=' + Name(ContainingMainRecord(ElementBySignature(e, 'EDID'))));
 end;
 end.
@@ -411,8 +411,9 @@ fn the_container_functions_walk_an_element() {
     let folder = script_folder("Containers", CONTAINER_SCRIPT);
     let mut session = open_session();
     let result = run(&mut session, &folder, "Containers", json!({}));
-    // The script runs to the end: `IntToStr` is the `SysUtils` unit of phase
-    // 6 step 8, and the boolean concatenation reads `True`/`False` there.
+    // The script runs to the end: integers and booleans go through
+    // `IntToStr`/`VarToStr`, because a string beside a non-string raises
+    // `Type mismatch` (parity #28), so a bare concatenation would abort.
     assert_eq!(result["aborted"], false, "{:?}", lines(&result));
     let lines = lines(&result);
     assert_eq!(lines[1], "container=fThird [GMST:00000802]");
@@ -479,12 +480,12 @@ begin
   AddMessage('override0=' + Name(OverrideByIndex(m, 0)));
   AddMessage('winning=' + Name(WinningOverride(m)));
   AddMessage('highest=' + Name(HighestOverrideOrSelf(m, 1)));
-  AddMessage('ismaster=' + IsMaster(m));
-  AddMessage('iswinning=' + IsWinningOverride(m));
+  AddMessage('ismaster=' + VarToStr(IsMaster(m)));
+  AddMessage('iswinning=' + VarToStr(IsWinningOverride(m)));
   AddMessage('version=' + IntToStr(GetFormVersion(m)));
   AddMessage('childgroup=' + Name(ChildGroup(m)));
-  AddMessage('deleted=' + GetIsDeleted(m));
-  AddMessage('persistent=' + GetIsPersistent(m));
+  AddMessage('deleted=' + VarToStr(GetIsDeleted(m)));
+  AddMessage('persistent=' + VarToStr(GetIsPersistent(m)));
   AddMessage('refcount=' + IntToStr(ReferencedByCount(m)));
 end;
 end.
@@ -496,8 +497,9 @@ fn the_record_functions_walk_the_overrides() {
     let folder = script_folder("Records", RECORD_SCRIPT);
     let mut session = open_session();
     let result = run(&mut session, &folder, "Records", json!({}));
-    // The script runs to the end: `IntToStr` is the `SysUtils` unit of phase
-    // 6 step 8, and the boolean concatenation reads `True`/`False` there.
+    // The script runs to the end: integers and booleans go through
+    // `IntToStr`/`VarToStr`, because a string beside a non-string raises
+    // `Type mismatch` (parity #28), so a bare concatenation would abort.
     assert_eq!(result["aborted"], false, "{:?}", lines(&result));
     let lines = lines(&result);
     assert_eq!(lines[1], "self=fMaster [GMST:00000800]");
@@ -520,10 +522,10 @@ begin
   AddMessage('override0=' + Name(OverrideByIndex(m, 0)));
   AddMessage('winning=' + Name(WinningOverride(m)));
   AddMessage('highest=' + Name(HighestOverrideOrSelf(m, 1)));
-  AddMessage('iswinning=' + IsWinningOverride(m));
+  AddMessage('iswinning=' + VarToStr(IsWinningOverride(m)));
   AddMessage('childgroup=' + Name(ChildGroup(m)));
-  AddMessage('deleted=' + GetIsDeleted(m));
-  AddMessage('persistent=' + GetIsPersistent(m));
+  AddMessage('deleted=' + VarToStr(GetIsDeleted(m)));
+  AddMessage('persistent=' + VarToStr(GetIsPersistent(m)));
   m := OverrideByIndex(m, 0);
   AddMessage('override master=[' + Name(Master(m)) + ']');
   AddMessage('override masterorself=[' + Name(MasterOrSelf(m)) + ']');
@@ -536,16 +538,7 @@ fn the_record_functions_follow_master_and_override() {
     let _guard = test_lock();
     let folder = script_folder("RecordValues", RECORD_VALUES_SCRIPT);
     let mut session = open_session();
-    // `BoolToStr` is step 8's; replace it with the `Assigned`-free equivalent
-    // the port can run: compare with `True`.
-    let folder_b = script_folder(
-        "RecordValuesB",
-        &RECORD_VALUES_SCRIPT
-            .replace("BoolToStr(GetIsDeleted(m))", "GetIsDeleted(m)")
-            .replace("BoolToStr(GetIsPersistent(m))", "GetIsPersistent(m)")
-            .replace("BoolToStr(IsWinningOverride(m))", "IsWinningOverride(m)")
-            .replace("BoolToStr(IsMaster(m))", "IsMaster(m)"),
-    );
+    let folder_b = script_folder("RecordValuesB", RECORD_VALUES_SCRIPT);
     let result = run(&mut session, &folder_b, "RecordValuesB", json!({}));
     let lines = lines(&result);
     assert_eq!(lines[1], "override0=fOverride [GMST:00000800]");
@@ -586,11 +579,11 @@ begin
   r := RecordByEditorID(f, 'fPlugin');
   AddMessage('byeditorid=' + Name(r));
   AddMessage('group=' + DisplayName(GroupBySignature(f, 'GMST')));
-  AddMessage('hasgroup=' + HasGroup(f, 'GMST'));
-  AddMessage('hasmaster=' + HasMaster(f, 'Master.esm'));
+  AddMessage('hasgroup=' + VarToStr(HasGroup(f, 'GMST')));
+  AddMessage('hasmaster=' + VarToStr(HasMaster(f, 'Master.esm')));
   AddMessage('loadorder=' + IntToStr(GetLoadOrder(f)));
-  AddMessage('esm=' + BoolToStr(GetIsESM(f)));
-  AddMessage('canbelight=' + CanBeLight(f));
+  AddMessage('esm=' + VarToStr(GetIsESM(f)));
+  AddMessage('canbelight=' + VarToStr(CanBeLight(f)));
   sl := TStringList.Create;
   GetMasters(f, sl);
   AddMessage('slcount=' + IntToStr(sl.Count) + ' sl0=' + sl.Strings[0]);
@@ -618,15 +611,15 @@ begin
   r := RecordByEditorID(f, 'fPlugin');
   AddMessage('byeditorid=' + Name(r));
   AddMessage('group=' + DisplayName(GroupBySignature(f, 'GMST')));
-  AddMessage('hasgroup=' + HasGroup(f, 'GMST'));
-  AddMessage('hasmaster=' + HasMaster(f, 'Master.esm'));
-  AddMessage('loadorder=' + GetLoadOrder(f));
-  AddMessage('esm=' + GetIsESM(f));
-  AddMessage('canbelight=' + CanBeLight(f));
+  AddMessage('hasgroup=' + VarToStr(HasGroup(f, 'GMST')));
+  AddMessage('hasmaster=' + VarToStr(HasMaster(f, 'Master.esm')));
+  AddMessage('loadorder=' + IntToStr(GetLoadOrder(f)));
+  AddMessage('esm=' + VarToStr(GetIsESM(f)));
+  AddMessage('canbelight=' + VarToStr(CanBeLight(f)));
   AddMessage('loadorderid=' + GetLoadOrderFileID(f));
   sl := TStringList.Create;
   GetMasters(f, sl);
-  AddMessage('slcount=' + sl.Count);
+  AddMessage('slcount=' + IntToStr(sl.Count));
   // The indexed property (`Strings`, `JvInterpreter_Classes.pas:1268-1271`):
   // both the named and the default form, read and written.
   AddMessage('sl0=' + sl.Strings[0]);
@@ -691,8 +684,8 @@ begin
   cell.x := 5;
   cell.y := -3;
   AddMessage('label=' + IntToHex(wbGridCellToGroupLabel(cell), 8));
-  AddMessage('assettype=' + AssetTypeByExtension('meshes\\test.nif'));
-  AddMessage('assetfolder=' + AssetTypeByFolder('textures\\a.dds'));
+  AddMessage('assettype=' + IntToStr(AssetTypeByExtension('meshes\\test.nif')));
+  AddMessage('assetfolder=' + IntToStr(AssetTypeByFolder('textures\\a.dds')));
   sl := TStringList.Create;
   sl.Add('meshes');
   sl.Add('textures');
@@ -714,21 +707,21 @@ begin
   if EditorID(e) <> 'fPlugin' then Exit;
   cell.x := 5;
   cell.y := -3;
-  AddMessage('label=' + wbGridCellToGroupLabel(cell));
-  AddMessage('assetext=' + AssetTypeByExtension('meshes\\test.nif'));
-  AddMessage('assetfolder=' + AssetTypeByFolder('textures\\a.dds'));
+  AddMessage('label=' + IntToStr(wbGridCellToGroupLabel(cell)));
+  AddMessage('assetext=' + IntToStr(AssetTypeByExtension('meshes\\test.nif')));
+  AddMessage('assetfolder=' + IntToStr(AssetTypeByFolder('textures\\a.dds')));
   v.x := 100.0;
   v.y := -100.0;
   v.z := 0.0;
   cell.x := wbPositionToGridCell(v).x;
   cell.y := wbPositionToGridCell(v).y;
-  AddMessage('cell=' + cell.x + ',' + cell.y);
+  AddMessage('cell=' + IntToStr(cell.x) + ',' + IntToStr(cell.y));
   sl := TStringList.Create;
   sl.Add('meshes');
   sl.Add('textures');
-  AddMessage('instring=' + wbStringListInString(sl, 'x\\meshes\\y.dds'));
-  AddMessage('notfound=' + wbStringListInString(sl, 'x\\nope\\y.dds'));
-  AddMessage('exists=' + ResourceExists('meshes\\nope.nif'));
+  AddMessage('instring=' + IntToStr(wbStringListInString(sl, 'x\\meshes\\y.dds')));
+  AddMessage('notfound=' + IntToStr(wbStringListInString(sl, 'x\\nope\\y.dds')));
+  AddMessage('exists=' + VarToStr(ResourceExists('meshes\\nope.nif')));
   sl.Free;
 end;
 end.
