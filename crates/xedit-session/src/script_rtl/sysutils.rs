@@ -610,7 +610,10 @@ fn register_functions(adapter: &mut Adapter) {
     f(adapter, "AnsiCompareStr", &[EMPTY, EMPTY], |value, args| {
         let a = String::from_utf8_lossy(&arg_str(args, 0)?).into_owned();
         let b = String::from_utf8_lossy(&arg_str(args, 1)?).into_owned();
-        *value = Value::Integer(match ansi_compare_text(&a, &b) {
+        // The case-*sensitive* locale comparison (`AnsiCompareText` below is
+        // the case-insensitive one); the probe showed `AnsiCompareStr('a',
+        // 'A')` is -1 in the oracle where the port answered 0 (parity #39).
+        *value = Value::Integer(match xedit_io::collate::ansi_compare_str(&a, &b) {
             std::cmp::Ordering::Less => -1,
             std::cmp::Ordering::Equal => 0,
             std::cmp::Ordering::Greater => 1,
