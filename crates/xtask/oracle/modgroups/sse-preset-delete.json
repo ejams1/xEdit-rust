@@ -1,0 +1,64 @@
+{
+  "description": "Preset delete of the selection dialog: the name of an existing preset is typed into the combo box and Delete is pressed, behind the question answered Yes; the preset is gone from the settings file and from the combo box, the selection and the mod group file are untouched, and OK confirms the dialog.",
+  "game": "sse",
+  "load": [
+    "Skyrim.esm",
+    "Update.esm"
+  ],
+  "files": {
+    "Update.modgroups": [
+      "[One]",
+      "Skyrim.esm",
+      "Update.esm",
+      "[Two]",
+      "Update.esm",
+      "@Skyrim.esm"
+    ]
+  },
+  "settings": [
+    "[ModGroups]",
+    "Selection=\"Two\"",
+    "[frmModGroupSelect_ActiveModGroups_Presets]",
+    "Mine=\"One\"",
+    "Other=\"Two\"",
+    "[Init]",
+    "FirstStart=1"
+  ],
+  "menu": [
+    "mniViewModGroupsReload"
+  ],
+  "answers": [
+    {
+      "class": "TfrmModGroupSelect",
+      "title": "Reloading",
+      "text": "Mine",
+      "control": "TComboBox",
+      "button": "&Delete"
+    },
+    {
+      "class": "#32770",
+      "title": "Confirm",
+      "button": "&Yes"
+    },
+    {
+      "class": "TfrmModGroupSelect",
+      "title": "Reloading",
+      "repeat": true,
+      "button": "OK"
+    }
+  ],
+  "port": [
+    {
+      "command": "modgroups.preset_delete",
+      "params": {
+        "preset": "Mine"
+      }
+    },
+    {
+      "command": "modgroups.select",
+      "params": {
+        "saved": true
+      }
+    }
+  ]
+}

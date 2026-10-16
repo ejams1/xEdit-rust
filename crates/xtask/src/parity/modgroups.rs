@@ -69,6 +69,19 @@ struct ScenarioAnswer {
     #[serde(default)]
     keys: Vec<u16>,
     button: Option<String>,
+    /// The text put into a control of the dialog before the keys: the
+    /// preset name of the selection dialog's combo box, the name of the
+    /// edit form's name field.
+    #[serde(default)]
+    text: Option<String>,
+    /// The class of the control the keys and `text` go to (`TComboBox` of
+    /// the selection dialog's presets).
+    #[serde(default)]
+    control: Option<String>,
+    /// The answer goes to the same window again (a dialog driven control
+    /// by control: set the preset name, press Load, then press OK).
+    #[serde(default)]
+    repeat: bool,
 }
 
 #[derive(Deserialize)]
@@ -85,6 +98,16 @@ struct Scenario {
     files: BTreeMap<String, Text>,
     /// The settings file of the GUI (`Plugins.<app>viewsettings`).
     settings: Option<Text>,
+    /// Plugins of the game's data folder that are put next to the loaded
+    /// ones without being loaded: the modules and `.modgroups` files of a
+    /// module the run does not load (`mfHasFile` off).
+    #[serde(default)]
+    unloaded: Vec<String>,
+    /// The load order FormID of a record the script shows before its
+    /// actions (`JumpTo`): the mod group of the "Create ModGroup" menu item
+    /// of the view is made of the record's loaded override chain.
+    #[serde(default)]
+    jump_to: Option<String>,
     /// The menu items of the main form the GUI clicks, in order.
     menu: Vec<String>,
     /// The dialogs the GUI shows, in order, and how they are answered.
@@ -382,11 +405,19 @@ fn check(
     let files = scenario_files(scenario, game, &plugins)?;
     let compared = compared_names(scenario, game);
 
-    let actions: String = scenario
-        .menu
-        .iter()
-        .map(|item| format!("frmMain.FindComponent('{item}').Click;\n      "))
-        .collect();
+    // `JumpTo` shows a record with its override chain, which the view's
+    // "Create ModGroup" makes a mod group of.
+    let mut actions = String::new();
+    if let Some(form_id) = &scenario.jump_to {
+        actions.push_str(&format!("JumpTo(RecordByHexFormID('{form_id}'), False);\n      "));
+    }
+    actions.push_str(
+        &scenario
+            .menu
+            .iter()
+            .map(|item| format!("frmMain.FindComponent('{item}').Click;\n      "))
+            .collect::<String>(),
+    );
     let script = MODGROUPS_SCRIPT.replace("\r\n", "\n").replace("{{ACTIONS}}", &actions);
     let key = oracle_key(
         runner,
@@ -400,7 +431,7 @@ fn check(
         .join(format!("{stem}.{key:016x}"));
     if !cache_dir.join("status").exists() {
         run_oracle(
-            runner, game, &plugins, script, scenario, &files, &compared, &cache_dir, stem,
+            runner, game, data, &plugins, script, scenario, &files, &compared, &cache_dir, stem,
         )?;
     }
     let status = fs::read_to_string(cache_dir.join("status"))?;
@@ -474,6 +505,7 @@ fn describe(bytes: Option<&[u8]>) -> String {
 fn run_oracle(
     runner: &Runner,
     game: &Game,
+    data: &Path,
     plugins: &[PathBuf],
     script: String,
     scenario: &Scenario,
@@ -492,6 +524,7 @@ fn run_oracle(
             .iter()
             .map(|(_, path, bytes)| (path.clone(), bytes.clone()))
             .collect(),
+        links: unloaded_plugins(data, &scenario.unloaded, Path::new("Data"))?,
         answers: scenario
             .answers
             .iter()
@@ -500,8 +533,9 @@ fn run_oracle(
                 title: answer.title.clone(),
                 keys: answer.keys.clone(),
                 button: answer.button.clone(),
-                text: None,
-                control: None,
+                text: answer.text.clone(),
+                control: answer.control.clone(),
+                repeat: answer.repeat,
             })
             .collect(),
         close_after: false,
@@ -546,6 +580,20 @@ fn run_oracle(
         fs::rename(&partial, cache_dir)?;
     }
     Ok(())
+}
+
+/// The plugins of the game's data folder a scenario puts next to the loaded
+/// ones without loading them: the links of the run folder (or the copies of
+/// the port's data folder).
+fn unloaded_plugins(data: &Path, names: &[String], folder: &Path) -> Result<Vec<(PathBuf, PathBuf)>> {
+    names
+        .iter()
+        .map(|name| {
+            let source = data.join(name);
+            ensure!(source.is_file(), "{} does not exist", source.display());
+            Ok((folder.join(name), source))
+        })
+        .collect()
 }
 
 /// Where the GUI's run folder has the file of a scenario name.
@@ -596,6 +644,21 @@ fn run_port(
 ) -> Result<RunOutput> {
     let dir = runner.scratch.join(format!("{}-modgroups", game.mode)).join(stem);
     let data = conflicts::private_data(&dir, plugins)?;
+    // The modules the scenario does not load, from the game's data folder:
+    // the port's load takes its module information from the folder's files.
+    let game_data = plugins
+        .first()
+        .and_then(|plugin| plugin.parent())
+        .context("a plugin without a folder")?;
+    for name in &scenario.unloaded {
+        let source = game_data.join(name);
+        ensure!(source.is_file(), "{} does not exist", source.display());
+        let target = data.join(name);
+        let _ = fs::remove_file(&target);
+        if fs::hard_link(&source, &target).is_err() {
+            fs::copy(&source, &target).with_context(|| format!("copying {}", source.display()))?;
+        }
+    }
     let global = dir.join("global.modgroups");
     let settings = dir.join(settings_name(game.mode));
     for path in [&global, &settings] {

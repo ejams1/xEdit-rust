@@ -1,0 +1,66 @@
+{
+  "description": "Create ModGroup of the view menu: a record the game master, Update.esm and Dawnguard.esm all hold is shown (`JumpTo`), so the view's active records are its chain, and the handler makes the group of the overriding modules (the master's own record is left out). The module selection takes every module (all tagged, Enter confirms), the CRC32 question is answered Yes, the name is typed into the edit form, and the store-file selection answers Enter, which takes the first module of the group (Update.esm) and writes Update.modgroups. The reload selects the new group along with the saved selection.",
+  "game": "sse",
+  "load": [
+    "Skyrim.esm",
+    "Update.esm",
+    "Dawnguard.esm"
+  ],
+  "files": {
+    "Update.modgroups": [
+      "[Existing]",
+      "Skyrim.esm",
+      "Update.esm"
+    ]
+  },
+  "settings": [
+    "[ModGroups]",
+    "Selection=\"Existing\"",
+    "[Init]",
+    "FirstStart=1"
+  ],
+  "jump_to": "00000031",
+  "menu": [
+    "mniViewCreateModGroup"
+  ],
+  "answers": [
+    {
+      "class": "#32770",
+      "title": "Confirm",
+      "button": "&Yes"
+    },
+    {
+      "class": "TfrmModGroupEdit",
+      "title": "Create",
+      "text": "Default Object Manager",
+      "button": "OK"
+    },
+    {
+      "class": "TfrmModuleSelect",
+      "title": "In which module",
+      "keys": [
+        13
+      ]
+    },
+    {
+      "class": "TfrmModGroupSelect",
+      "title": "Reloading",
+      "keys": [
+        13
+      ]
+    }
+  ],
+  "port": [
+    {
+      "command": "modgroups.create",
+      "params": {
+        "name": "Default Object Manager",
+        "modules": [
+          "Update.esm",
+          "Dawnguard.esm"
+        ],
+        "include_crcs": true
+      }
+    }
+  ]
+}

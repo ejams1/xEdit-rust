@@ -1,0 +1,71 @@
+{
+  "description": "Item edit of the edit dialog: the first item of the group is deleted with the Delete key on the focused node (the tree's first, which the form focuses as it opens), the confirmation answered Yes, and the file written as the dialog's OK leaves it: the remaining items in their order, the deleted one gone, and the group still valid (the new first item is a target of the one after it). The reload then writes the validation messages of the group of the saved selection and selects it again.",
+  "game": "sse",
+  "load": [
+    "Skyrim.esm",
+    "Update.esm",
+    "HearthFires.esm"
+  ],
+  "files": {
+    "HearthFires.modgroups": [
+      "[Edit items]",
+      "Skyrim.esm",
+      "Update.esm",
+      "HearthFires.esm"
+    ]
+  },
+  "settings": [
+    "[ModGroups]",
+    "Selection=\"Edit items\"",
+    "[Init]",
+    "FirstStart=1"
+  ],
+  "menu": [
+    "mniNavEditModGroup"
+  ],
+  "answers": [
+    {
+      "class": "TfrmModGroupSelect",
+      "title": "edit",
+      "keys": [
+        13
+      ]
+    },
+    {
+      "class": "TfrmModGroupEdit",
+      "title": "Editing",
+      "keys": [
+        46
+      ],
+      "control": "TVirtualStringTree"
+    },
+    {
+      "class": "#32770",
+      "title": "Confirm",
+      "button": "&Yes"
+    },
+    {
+      "class": "TfrmModGroupEdit",
+      "title": "Editing",
+      "repeat": true,
+      "button": "OK"
+    },
+    {
+      "class": "TfrmModGroupSelect",
+      "title": "Reloading",
+      "button": "OK"
+    }
+  ],
+  "port": [
+    {
+      "command": "modgroups.edit",
+      "params": {
+        "name": "Edit items",
+        "items": [
+          "Update.esm",
+          "HearthFires.esm"
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,53 @@
+{
+  "description": "Preset load of the selection dialog: the combo box holds the presets of the settings file and the name of one is typed into it, the Load button tags the preset's names (the group of the preset instead of the saved selection), and OK confirms, which saves the tagged selection and activates it. The settings file keeps the preset as it was and writes the loaded selection into [ModGroups] Selection; the hidden set of the comparison is the preset's group.",
+  "game": "sse",
+  "load": [
+    "Skyrim.esm",
+    "Update.esm"
+  ],
+  "files": {
+    "Update.modgroups": [
+      "[One]",
+      "Skyrim.esm",
+      "Update.esm",
+      "[Two]",
+      "Update.esm",
+      "@Skyrim.esm"
+    ]
+  },
+  "settings": [
+    "[ModGroups]",
+    "Selection=\"Two\"",
+    "[frmModGroupSelect_ActiveModGroups_Presets]",
+    "Mine=\"One\"",
+    "Other=\"Two\"",
+    "[Init]",
+    "FirstStart=1"
+  ],
+  "menu": [
+    "mniViewModGroupsReload"
+  ],
+  "answers": [
+    {
+      "class": "TfrmModGroupSelect",
+      "title": "Reloading",
+      "text": "Mine",
+      "control": "TComboBox",
+      "button": "&Load"
+    },
+    {
+      "class": "TfrmModGroupSelect",
+      "title": "Reloading",
+      "repeat": true,
+      "button": "OK"
+    }
+  ],
+  "port": [
+    {
+      "command": "modgroups.preset_load",
+      "params": {
+        "preset": "Mine"
+      }
+    }
+  ]
+}

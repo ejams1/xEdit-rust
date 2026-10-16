@@ -106,14 +106,23 @@ pub struct Answer {
     /// Virtual key codes.
     pub keys: Vec<u16>,
     pub button: Option<String>,
-    /// Text put into the first edit control of the dialog before the keys
-    /// (`WM_SETTEXT`), such as the file name an `InputQuery` asks for.
+    /// Text put into a control of the dialog before the keys
+    /// (`WM_SETTEXT`), such as the file name an `InputQuery` asks for: the
+    /// first control of the class `control` when one is named (a
+    /// `TComboBox` for the preset name of a selection dialog), else the
+    /// first edit control.
     pub text: Option<String>,
     /// The class of the child control the keys go to (`TVirtualStringTree`
     /// for the list of a module selection), in place of the focused one:
     /// a dialog on the harness's desktop has no focused control, and keys
     /// posted to the dialog itself reach only its `KeyPreview` handler.
+    /// Also the class `text` goes to.
     pub control: Option<String>,
+    /// The answer goes to the window again after an earlier answer of the
+    /// same run: a dialog a scenario drives control by control (set the
+    /// preset name, press Load, then press OK) is one window, and every
+    /// answer of it names `repeat`.
+    pub repeat: bool,
 }
 
 /// What a run may add to the plain one: files written into the run folder
@@ -424,6 +433,7 @@ impl GuiRun<'_> {
             button: Some("OK".to_owned()),
             text: None,
             control: None,
+            repeat: false,
         }];
         let mut dialogs = Vec::new();
         let (peak, exit_code) = match self.spawn_and_watch(command, until, &answers, &mut log, &mut dialogs) {
@@ -831,9 +841,10 @@ fn watch(
                 // not a dialog of the GUI.
                 "UAC_InputIndicatorOverlayWnd" | "UAC Input Indicator" => {}
                 _ if window.visible
-                    && !clicked.contains(&window.handle)
                     && next_answer.is_some_and(|answer| {
-                        answer.class == window.class && window.title.contains(answer.title.as_str())
+                        answer.class == window.class
+                            && window.title.contains(answer.title.as_str())
+                            && (answer.repeat || !clicked.contains(&window.handle))
                     }) =>
                 {
                     let answer = next_answer.expect("matched above");
@@ -841,10 +852,11 @@ fn watch(
                     std::thread::sleep(Duration::from_millis(300));
                     if let Some(text) = &answer.text {
                         ensure!(
-                            set_edit_text(&window, text),
-                            "the dialog [{}] \"{}\" has no edit control: {}",
+                            set_edit_text(&window, answer.control.as_deref(), text),
+                            "the dialog [{}] \"{}\" has no {} control: {}",
                             window.class,
                             window.title,
+                            answer.control.as_deref().unwrap_or("edit"),
                             window.texts.join(" | ")
                         );
                     }
@@ -856,9 +868,10 @@ fn watch(
                         std::thread::sleep(Duration::from_millis(150));
                     }
                     if let Some(button) = &answer.button {
-                        if !answer.keys.is_empty() {
-                            std::thread::sleep(Duration::from_millis(500));
-                        }
+                        // A button whose enabled state an action's OnUpdate
+                        // sets (the presets of a selection dialog) needs an
+                        // idle pass after the text and the keys.
+                        std::thread::sleep(Duration::from_millis(500));
                         ensure!(
                             click_button(&window, button),
                             "the dialog [{}] \"{}\" has no {button} button: {}",
@@ -867,7 +880,9 @@ fn watch(
                             window.texts.join(" | ")
                         );
                     }
-                    clicked.push(window.handle);
+                    if !clicked.contains(&window.handle) {
+                        clicked.push(window.handle);
+                    }
                     next_answer = answers.next();
                 }
                 "TfrmModuleSelect" => {
@@ -1159,24 +1174,27 @@ pub(super) fn click_button(window: &Window, caption: &str) -> bool {
     sent != 0
 }
 
-/// Sets the text of the first edit control of a window (a VCL `TEdit`, or
-/// the `Edit` of a system dialog).
+/// Sets the text of a control of a window: the first control of the class
+/// `control` when one is named (a `TComboBox`, whose `WM_SETTEXT` writes
+/// the edit of a drop-down combo box, which is what the dialog reads as its
+/// `Text`), else the first edit control (a VCL `TEdit`, or the `Edit` of a
+/// system dialog).
 #[cfg(windows)]
-fn set_edit_text(window: &Window, text: &str) -> bool {
+fn set_edit_text(window: &Window, control: Option<&str>, text: &str) -> bool {
     use windows_sys::Win32::Foundation::HWND;
     use windows_sys::Win32::UI::WindowsAndMessaging::{EnumChildWindows, SendMessageW, WM_SETTEXT};
     let mut children: Vec<HWND> = Vec::new();
     // SAFETY: the callback only pushes into the vector passed as `LPARAM`.
     unsafe { EnumChildWindows(window.handle as HWND, Some(win::collect), (&raw mut children) as isize) };
-    let Some(edit) = children
-        .into_iter()
-        .find(|&child| matches!(win::class(child).as_str(), "TEdit" | "Edit"))
-    else {
+    let Some(edit) = children.into_iter().find(|&child| match control {
+        Some(class) => win::class(child) == class,
+        None => matches!(win::class(child).as_str(), "TEdit" | "Edit"),
+    }) else {
         return false;
     };
     let wide: Vec<u16> = text.encode_utf16().chain(std::iter::once(0)).collect();
-    // SAFETY: an edit control of the window; the text is null-terminated
-    // and outlives the call, which the system copies across processes.
+    // SAFETY: a control of the window; the text is null-terminated and
+    // outlives the call, which the system copies across processes.
     unsafe { SendMessageW(edit, WM_SETTEXT, 0, wide.as_ptr() as isize) };
     true
 }
@@ -1357,7 +1375,7 @@ pub(super) fn toggle_check_list_item(list: isize, index: usize) {
 pub(super) fn toggle_check_list_item(_list: isize, _index: usize) {}
 
 #[cfg(not(windows))]
-fn set_edit_text(_window: &Window, _text: &str) -> bool {
+fn set_edit_text(_window: &Window, _control: Option<&str>, _text: &str) -> bool {
     false
 }
 
