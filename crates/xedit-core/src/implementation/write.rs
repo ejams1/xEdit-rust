@@ -129,7 +129,11 @@ impl ElementBase {
             self.include_state(ElementState::esParentHiddenChecked);
             let below = self
                 .container()
-                .and_then(|container| container.as_element_impl().map(|element| element.element_base().is_hidden()))
+                .and_then(|container| {
+                    container
+                        .as_element_impl()
+                        .map(|element| element.element_base().is_hidden())
+                })
                 .unwrap_or(false);
             if below {
                 self.include_state(ElementState::esParentHidden);

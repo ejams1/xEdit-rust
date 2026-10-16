@@ -47,18 +47,21 @@ xedit --game sse --load ... conflicts --conflict-this ctConflictLoses --json > l
 
 ## Reading one record's overrides
 
-`compare` shows the records of a FormID side by side as the view tab does: one column per record (file and `conflict_this`), then the rows of the element tree, each with its `conflict_all` and one cell per column:
+`compare` shows the records of a FormID side by side as the view tab does: one column per record (file and `conflict_this`), then the rows of the element tree, each with its `conflict_all` and one cell per column. `compare-selected` compares records of **different** FormIDs the same way, as the GUI's "Compare Selected" does with the selected navigation tree nodes (`ComparingSiblings`):
 
 ```
 xedit --game fo4 --load "<Data>\Fallout4.esm" --load "<Data>\DLCRobot.esm" compare 000BB1F9 --hide-no-conflict
 xedit --game sse --load ... compare 0001A332 --view-filter-name Damage --keep-children
+xedit --game sse --load ... compare-selected 00013EB3 0001A26F --hide-no-conflict
+xedit --game sse --load "<Data>/Update.esm" --compare-to "<data folder>/MyUpdate.esm" conflicts --file Update.esm
+xedit --game sse --load ... conflict-for-elements --form-id 00013EB3 --path "FULL" --other-form-id 0001A26F --other-path "FULL"
 ```
 
 - `--hide-no-conflict` leaves out the rows without a conflict ("Hide no conflict and empty rows"), which turns a big record into just the disputed rows. `--include-hidden` adds the rows the view hides (ignored members, members no record has).
 - Sorted arrays are matched by their sort keys (" (sorted)" in the row name) and unsorted arrays aligned entry by entry (" (aligned)"), so the rows show which entry differs. A cell without an element is `null`.
 - The view filter is `--view-filter-name`, `--view-filter-value` and `--view-filter-or`, with `--keep-children`, `--keep-siblings` and `--keep-parents-siblings`, as the filter panel above the view tab.
 - A game setting (`GMST`) and a default object (`DFOB`) are compared by editor ID, the first of each file, not by FormID; a `NAVI` record is compared only with the records of its own file. Localized strings compare as they resolve: a plugin whose tables are not found shows `<Error: No strings file for lstring ID ...>`, which differs from a resolved text — give the audit loose string tables (`Data\Strings`) if a text matters.
-- The row codes are the same that decide the record status the oracle checks; the element-level view has no oracle of its own (see `checking-parity`).
+- The row codes are the same that decide the record status the oracle checks; the element rows themselves now have an oracle: `cargo xtask parity conflicts --record <FormID>` runs the same probe on both sides and diffs the statuses, row paths, display names, names, extended sort keys and element checks (see `checking-parity`).
 
 ## Mod groups
 
@@ -95,6 +98,6 @@ xedit --game sse --load ... --dont-cache refs build
 
 - A record's status changes with the load order, not with the listing: rerun the whole audit after moving a plugin, and keep the same `--load` list for every step.
 - `ctHiddenByModGroup` records are not compared at all: without their mod group they may be `ctConflictLoses`. Say which groups the audit had active when reporting.
-- The records the GUI user hid and the compare-to load (`Compare to...`) do not exist in the port; the raw data compare and `Compare Selected` across FormIDs have no command yet.
-- The names of placed records and cells are not the special ones xEdit builds (`wbRefrDisplayName` and its neighbours), so a `--view-filter-name` on such a name can miss.
+- **Compare to** (`--compare-to <path>`) loads a file in the place of the last `--load` plugin, as the navigation tree's "Compare to..." does: it takes that plugin's load order slot, so its records are its overrides, and identical records are recognized record by record (`ContentEquals`) instead of cell by cell. Give it another file of the same folder (the GUI copies the chosen file into the data folder); it is not editable. **Hidden records** (`records set-hidden`) leave the comparison and the only-one filter, as the tree's Hide does (a hidden record of an overridden FormID makes the FormID `caOnlyOne`, the hidden record `ctHiddenByModGroup`). **Raw data** (`--raw-data`, dormant in 4.1.5q: nothing assigns `wbCompareRawData`) compares the elements' bytes and aligns nothing. `records set-hidden` is session state like the compare alignment: no `--edit`, no plugin data.
+- The names of placed records and cells are the ones xEdit builds (`GetDisplayName` with the base record of a reference and the grid cell of a cell, `GetName` with the add-info text, `wbDisplayShorterNames`), and `cargo xtask parity conflicts --record` compares them against the release. The file name filter of the navigation tree is `files list --name-filter/--regex`.
 - `--include-single` on a big load order is the slow path; prefer filters.

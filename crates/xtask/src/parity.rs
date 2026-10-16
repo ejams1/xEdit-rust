@@ -246,6 +246,10 @@ struct Options {
     /// `parity conflicts --record <FormID>`: the oracle's probe of these
     /// records instead of the check.
     records: Vec<String>,
+    /// `parity conflicts --record --hidden <FormID>`: the records the probe
+    /// hides first (`records.set_hidden` on the port's side,
+    /// `SetElementState(el, 'esHidden')` on the oracle's).
+    hidden: Vec<String>,
     /// `parity refs`: the reference index of each game's corpus.
     refs: bool,
     /// `parity modgroups`: the mod group scenarios.
@@ -1236,7 +1240,7 @@ fn first_byte_difference(a: &Path, b: &Path) -> Result<Option<u64>> {
 
 fn parse(args: &[&str]) -> Result<Options> {
     const USAGE: &str = "usage: cargo xtask parity dump|saves|roundtrip|oracle-save|oracle-edit|bsarch|conflicts|refs|clean|check|check-dump|modgroups|merged|filter|tool-modes|resources|script [--game <game>]... [--file <name>]... [--mode <tool mode>]... \
-                         [--record <FormID>]... [--oracle-only] [--jobs <n>] [--memory-budget <GiB>] \
+                         [--record <FormID>]... [--hidden <FormID>]... [--oracle-only] [--jobs <n>] [--memory-budget <GiB>] \
                          [--max-memory <GiB>] [--oracle-timeout <minutes>]";
     let (mode, rest) = args.split_first().context(USAGE)?;
     let (saves, roundtrip, oracle_save, oracle_edit) = match *mode {
@@ -1261,6 +1265,7 @@ fn parse(args: &[&str]) -> Result<Options> {
         clean: *mode == "clean",
         check: *mode == "check",
         records: Vec::new(),
+        hidden: Vec::new(),
         refs: *mode == "refs",
         modgroups: *mode == "modgroups",
         merged: *mode == "merged",
@@ -1297,6 +1302,7 @@ fn parse(args: &[&str]) -> Result<Options> {
             "--file" => options.files.push(rest.next().context(USAGE)?.to_lowercase()),
             "--mode" => options.modes.push(rest.next().context(USAGE)?.to_lowercase()),
             "--record" => options.records.push(rest.next().context(USAGE)?.to_uppercase()),
+            "--hidden" => options.hidden.push(rest.next().context(USAGE)?.to_uppercase()),
             "--oracle-only" => options.oracle_only = true,
             "--jobs" => options.jobs = rest.next().context(USAGE)?.parse::<usize>()?.max(1),
             "--memory-budget" => options.memory_budget = Some(gib(rest.next())?),

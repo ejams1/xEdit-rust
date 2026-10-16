@@ -273,3 +273,238 @@ fn compare_shows_the_rows_of_the_view() {
     let editor_id = rows.iter().find(|row| row["name"] == "EDID - Editor ID").unwrap();
     assert_eq!(editor_id["conflict_all"], "caNoConflict");
 }
+
+#[test]
+fn compare_selected_of_records_of_different_form_ids() {
+    let _lock = test_lock();
+    let files = load();
+    let mut session = Session::with_files(GameMode::gmSSE, files);
+    let registry = Registry::standard();
+    // Two globals of different FormIDs, as the GUI's "Compare Selected"
+    // compares the selected navigation tree nodes (`ComparingSiblings`).
+    let result = registry
+        .call(
+            &mut session,
+            "records.compare_selected",
+            json!({ "records": [ { "form_id": "00000801", "file": "Master.esm" }, { "form_id": "00000802", "file": "Master.esm" } ] }),
+        )
+        .unwrap();
+    let columns: Vec<String> = result["records"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|record| {
+            format!(
+                "{}={}",
+                record["file"].as_str().unwrap(),
+                record["form_id"].as_str().unwrap()
+            )
+        })
+        .collect();
+    assert_eq!(columns, ["Master.esm=00000801", "Master.esm=00000802"]);
+    let rows = result["rows"].as_array().unwrap();
+    let value = rows
+        .iter()
+        .find(|row| row["name"] == "FLTV - Value")
+        .unwrap_or_else(|| panic!("no value row in {rows:?}"));
+    // Different values, compared record against record: a benign difference,
+    // which the release's own probe reports as `caOverride` for the pair.
+    assert_eq!(value["conflict_all"], "caConflictBenign");
+    let cells: Vec<String> = value["cells"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|cell| cell["value"].as_str().unwrap().to_owned())
+        .collect();
+    assert_eq!(cells, ["1.000000", "2.000000"]);
+    // One record alone is refused (the GUI keeps a single record for the view).
+    let error = registry
+        .call(
+            &mut session,
+            "records.compare_selected",
+            json!({ "records": [ { "form_id": "00000801" } ] }),
+        )
+        .unwrap_err();
+    assert_eq!(error.code, "invalid_params");
+}
+
+#[test]
+fn conflict_of_two_elements() {
+    let _lock = test_lock();
+    let files = load();
+    let mut session = Session::with_files(GameMode::gmSSE, files);
+    let registry = Registry::standard();
+    // The same editor ID in the two records: no conflict of the pair
+    // (`ConflictAllForElements`, which the release reports as caNoConflict).
+    let result = registry
+        .call(
+            &mut session,
+            "conflicts.for_elements",
+            json!({
+                "form_id": "00000801", "path": "EDID", "file": "Master.esm",
+                "other_form_id": "00000801", "other_path": "EDID", "other_file": "First.esp"
+            }),
+        )
+        .unwrap();
+    assert_eq!(result["conflict_all"], "caNoConflict");
+    // A changed value is a conflict.
+    let result = registry
+        .call(
+            &mut session,
+            "conflicts.for_elements",
+            json!({
+                "form_id": "00000801", "path": "FLTV", "file": "Master.esm",
+                "other_form_id": "00000801", "other_path": "FLTV", "other_file": "First.esp"
+            }),
+        )
+        .unwrap();
+    // A benign difference of the values is an override of the pair.
+    assert_eq!(result["conflict_all"], "caOverride");
+    let error = registry
+        .call(
+            &mut session,
+            "conflicts.for_elements",
+            json!({
+                "form_id": "00000801", "path": "NOPE", "file": "Master.esm",
+                "other_form_id": "00000801", "other_path": "FLTV", "other_file": "First.esp"
+            }),
+        )
+        .unwrap_err();
+    assert_eq!(error.code, "unknown_element");
+}
+
+#[test]
+fn hidden_records_leave_the_comparison() {
+    let _lock = test_lock();
+    let files = load();
+    let mut session = Session::with_files(GameMode::gmSSE, files);
+    let registry = Registry::standard();
+    for file in ["First.esp", "Second.esp"] {
+        let hidden = registry
+            .call(
+                &mut session,
+                "records.set_hidden",
+                json!({ "form_id": "00000801", "file": file }),
+            )
+            .unwrap();
+        assert_eq!(hidden["hidden"], true);
+        assert_eq!(hidden["changed"].as_array().unwrap().len(), 1);
+    }
+    // Both hidden overrides left the comparison: the FormID is single again,
+    // and the records that were not compared are marked (`Fix`).
+    let result = registry
+        .call(&mut session, "conflicts.list", json!({ "include_single": true }))
+        .unwrap();
+    assert_eq!(status(&result, "Master.esm", "00000801"), "caOnlyOne/ctOnlyOne");
+    assert_eq!(
+        status(&result, "First.esp", "00000801"),
+        "caOnlyOne/ctHiddenByModGroup"
+    );
+    // Showing them again restores the comparison.
+    for file in ["First.esp", "Second.esp"] {
+        registry
+            .call(
+                &mut session,
+                "records.set_hidden",
+                json!({ "form_id": "00000801", "file": file, "hidden": false }),
+            )
+            .unwrap();
+    }
+    let result = registry
+        .call(&mut session, "conflicts.list", json!({ "include_single": true }))
+        .unwrap();
+    assert_eq!(status(&result, "Master.esm", "00000801"), "caConflict/ctMaster");
+    // `overrides: true` hides the master and every override (Unhide all).
+    let hidden = registry
+        .call(
+            &mut session,
+            "records.set_hidden",
+            json!({ "form_id": "00000801", "overrides": true }),
+        )
+        .unwrap();
+    assert_eq!(hidden["changed"].as_array().unwrap().len(), 3);
+}
+
+#[test]
+fn element_check_reports_the_element_and_the_errors_below_it() {
+    let _lock = test_lock();
+    let files = load();
+    let mut session = Session::with_files(GameMode::gmSSE, files);
+    let registry = Registry::standard();
+    let result = registry
+        .call(
+            &mut session,
+            "elements.check",
+            json!({ "form_id": "00000801", "path": "EDID", "file": "Master.esm" }),
+        )
+        .unwrap();
+    assert_eq!(result["check"], "");
+    assert_eq!(result["has_errors"], false);
+    assert!(result["errors"].as_array().unwrap().is_empty());
+    let error = registry
+        .call(
+            &mut session,
+            "elements.check",
+            json!({ "form_id": "00000801", "path": "NOPE", "file": "Master.esm" }),
+        )
+        .unwrap_err();
+    assert_eq!(error.code, "unknown_element");
+}
+
+#[test]
+fn files_list_name_filter() {
+    let _lock = test_lock();
+    let files = load();
+    let mut session = Session::with_files(GameMode::gmSSE, files);
+    let registry = Registry::standard();
+    let names = |result: &Value| -> Vec<String> {
+        result["files"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|file| file["name"].as_str().unwrap().to_owned())
+            .collect()
+    };
+    let result = registry
+        .call(&mut session, "files.list", json!({ "name_filter": "first" }))
+        .unwrap();
+    assert_eq!(names(&result), ["First.esp"]);
+    let result = registry
+        .call(
+            &mut session,
+            "files.list",
+            json!({ "name_filter": "^M.*\\.esm$", "regex": true }),
+        )
+        .unwrap();
+    assert_eq!(names(&result), ["Master.esm"]);
+    let error = registry
+        .call(&mut session, "files.list", json!({ "name_filter": "[", "regex": true }))
+        .unwrap_err();
+    assert_eq!(error.code, "invalid_params");
+}
+
+#[test]
+fn probe_reports_the_statuses_and_the_element_rows() {
+    let _lock = test_lock();
+    let files = load();
+    let mut session = Session::with_files(GameMode::gmSSE, files);
+    let registry = Registry::standard();
+    let result = registry
+        .call(&mut session, "conflicts.probe", json!({ "records": ["00000801"] }))
+        .unwrap();
+    let records = result["records"].as_array().unwrap();
+    assert_eq!(records.len(), 1);
+    let record = &records[0];
+    assert_eq!(record["form_id"], "00000801");
+    assert!(record["name"].as_str().unwrap().contains("Changed"));
+    assert_eq!(record["overrides"], 2);
+    assert_eq!(record["override_file"], "First.esp");
+    let elements = record["elements"].as_array().unwrap();
+    assert_eq!(elements[0]["path"], "\\0");
+    let editor_id = elements
+        .iter()
+        .find(|element| element["display_name"] == "EDID - Editor ID")
+        .unwrap_or_else(|| panic!("no editor ID row in {elements:?}"));
+    assert_eq!(editor_id["conflict_all"], 2);
+    assert!(editor_id["check"].is_null());
+}

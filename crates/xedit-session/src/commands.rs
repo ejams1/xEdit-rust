@@ -128,6 +128,12 @@ impl Session {
         // The editor's settings apply before the plugins load: the load
         // itself edits records under `wbAllowInternalEdit`.
         crate::save::apply_edit_settings(mode);
+        // `TfrmMain.FormCreate` sets `wbDisplayShorterNames`, so the editor
+        // names a record `EditorID "Full Name" [SIG:FormID]`; xDump keeps
+        // the long form its dumps compare.
+        if !xdump {
+            xedit_core::interface::globals::set_display_shorter_names(true);
+        }
         // The data folder of the session: the folder of the plugins.
         let data = plugins
             .last()
@@ -224,8 +230,9 @@ impl Session {
                     "the --compare-to file has to sit in the folder of the plugin it compares to ({data}): {path}"
                 ));
             }
-            let file = xedit_core::implementation::wb_file_compare_to(&path, compare_to.load_order(), &compare_to.get_name())
-                .map_err(|error| error.to_string())?;
+            let file =
+                xedit_core::implementation::wb_file_compare_to(&path, compare_to.load_order(), &compare_to.get_name())
+                    .map_err(|error| error.to_string())?;
             files.push(file);
         }
         if let (Some(file), Some(path)) = (files.last(), plugins.last()) {

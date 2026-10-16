@@ -224,23 +224,38 @@ pub(super) fn private_data(dir: &Path, plugins: &[PathBuf]) -> Result<PathBuf> {
     Ok(data)
 }
 
-/// `--record`: runs the probe script on the records and prints what the
-/// oracle reports for each (not cached).
+/// `--record`: runs the probe script on the records on both sides and diffs
+/// what they report for each: the statuses of the records, the element rows
+/// by index with their display names, names, extended sort keys and element
+/// checks, and the records named with `--hidden` hidden first. The oracle's
+/// text is also printed for reading.
 fn probe(runner: &Runner, game: &'static Game, data: &Path, options: &Options) -> Result<()> {
     let plugins = corpus(game, data, options)?;
     let script = PROBE_SCRIPT
         .replace("\r\n", "\n")
-        .replace("{{RECORDS}}", &options.records.join(","));
+        .replace("{{RECORDS}}", &options.records.join(","))
+        .replace("{{HIDDEN}}", &options.hidden.join(","));
     let work = runner
         .scratch
         .join("oracle-work")
         .join(format!("{}-probe.{}", game.mode, std::process::id()));
     let dir = runner.scratch.join(format!("{}-conflicts", game.mode));
     fs::create_dir_all(&dir)?;
+    // Both sides load the plugins from a folder that has only them, as the
+    // GUI's private data folder: no archive and no strings file, so the
+    // localized strings resolve the same on both sides.
+    let data_dir = private_data(&dir.join("probe"), &plugins)?;
+    let plugins: Vec<PathBuf> = plugins
+        .iter()
+        .map(|plugin| {
+            let name = plugin.file_name().unwrap_or_default().to_string_lossy().into_owned();
+            find_in(&data_dir, &name).unwrap_or_else(|_| plugin.clone())
+        })
+        .collect();
     let result = run_gui(
         runner,
         game,
-        plugins,
+        plugins.clone(),
         script,
         false,
         work.clone(),
@@ -248,9 +263,143 @@ fn probe(runner: &Runner, game: &'static Game, data: &Path, options: &Options) -
     )?;
     let text = fs::read_to_string(result.out.join("probe.txt")).unwrap_or_default();
     println!("{}", result.status.join(" / "));
-    println!("{text}");
+    fs::write(dir.join("probe.txt"), &text)?;
     gui::remove_work(&work);
+    if options.oracle_only {
+        println!("{text}");
+        return Ok(());
+    }
+    if result.status.last().map(String::as_str) != Some("done") {
+        anyhow::bail!("the oracle probe stopped: {}", result.status.join(" / "));
+    }
+    let port = runner.port.as_ref().context("no port binary (--oracle-only?)")?;
+    let mut command = std::process::Command::new(port);
+    command.args(["--json", "--game", game.mode]);
+    for plugin in &plugins {
+        command.arg("--load").arg(plugin);
+    }
+    let params = serde_json::json!({ "records": options.records, "hidden": options.hidden });
+    command
+        .args(["call", "conflicts.probe", "--params"])
+        .arg(params.to_string())
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped());
+    let output = command.output().with_context(|| format!("running {port:?}"))?;
+    let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
+    let envelope: Value = serde_json::from_str(stdout.trim()).with_context(|| {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let mut tail: Vec<&str> = stderr.lines().collect();
+        if tail.len() > 10 {
+            tail.drain(..tail.len() - 10);
+        }
+        format!("the port's probe answer is not JSON: {stdout}\n{}", tail.join("\n"))
+    })?;
+    ensure!(
+        envelope["ok"] == Value::Bool(true),
+        "the port's probe failed: {}",
+        envelope["error"]
+    );
+    let port_lines = port_probe_lines(&envelope["result"]);
+    let oracle_lines: Vec<&str> = text.lines().collect();
+    let mut different = 0;
+    let mut known = 0;
+    let mut shown = 0;
+    for index in 0..oracle_lines.len().max(port_lines.len()) {
+        let oracle = oracle_lines.get(index).copied().unwrap_or("<none>");
+        let port = port_lines.get(index).map(String::as_str).unwrap_or("<none>");
+        if oracle == port {
+            continue;
+        }
+        if let Some((_, reason)) = KNOWN_DIFFERENCES
+            .iter()
+            .find(|(pattern, _)| oracle.contains(pattern) || port.contains(pattern))
+        {
+            known += 1;
+            println!(
+                "known difference at line {}: {reason}\n  oracle: {oracle}\n  port:   {port}",
+                index + 1
+            );
+            continue;
+        }
+        different += 1;
+        if shown < LISTED_DIFFERENCES {
+            shown += 1;
+            println!("line {}:\n  oracle: {oracle}\n  port:   {port}", index + 1);
+        }
+    }
+    println!(
+        "{} oracle lines, {} port lines, {different} different, {known} known-difference{}",
+        oracle_lines.len(),
+        port_lines.len(),
+        if different > shown {
+            format!(" ({} shown)", shown)
+        } else {
+            String::new()
+        }
+    );
+    if different == 0 {
+        println!("probe equal");
+    }
+    ensure!(different == 0, "the probe differs");
     Ok(())
+}
+
+/// Differences the probe reports but does not fail on, with the reason.
+const KNOWN_DIFFERENCES: &[(&str, &str)] = &[(
+    "record 00000031",
+    "DOBJ `Name`: the release reports no editor ID for a record whose EDID only the internal edit adds (from its default, `dfInternalEditOnly`); \
+     the port caches the name when the added subrecord's element is built, the release only while the file's subrecords are parsed",
+)];
+
+/// The port's `conflicts.probe` response as the oracle's `probe.txt` lines:
+/// `record <FormID> <Name>: <all>/<this>, overrides <N>`,
+/// `  override in <file>: <all>/<this>, pair <P>`,
+/// `<path> <DisplayName>\t<ca>\t<sort key master>\t<sort key override>`,
+/// `<path> name <Name>` and `<path> check <Check>`.
+fn port_probe_lines(result: &Value) -> Vec<String> {
+    let mut lines = Vec::new();
+    let empty = Vec::new();
+    for record in result["records"].as_array().unwrap_or(&empty) {
+        let text = |name: &str| record[name].as_str().unwrap_or_default();
+        lines.push(format!(
+            "record {} {}: {}/{}, overrides {}",
+            text("form_id"),
+            text("name"),
+            record["conflict_all"],
+            record["conflict_this"],
+            record["overrides"]
+        ));
+        if let Some(status) = record.get("override_status").filter(|value| !value.is_null()) {
+            lines.push(format!(
+                "  override in {}: {}/{}, pair {}",
+                text("override_file"),
+                status["conflict_all"],
+                status["conflict_this"],
+                status["pair"]
+            ));
+        }
+        for element in record["elements"].as_array().unwrap_or(&empty) {
+            let path = element["path"].as_str().unwrap_or_default();
+            lines.push(format!(
+                "{} {}\t{}\t{}\t{}",
+                path,
+                element["display_name"].as_str().unwrap_or_default(),
+                element["conflict_all"],
+                element["sort_key_master"].as_str().unwrap_or_default(),
+                element["sort_key_override"].as_str().unwrap_or_default()
+            ));
+            lines.push(format!(
+                "{} name {}",
+                path,
+                element["name"].as_str().unwrap_or_default()
+            ));
+            if let Some(check) = element.get("check").and_then(Value::as_str) {
+                lines.push(format!("{path} check {check}"));
+            }
+        }
+    }
+    lines
 }
 
 pub(super) fn run_conflicts(

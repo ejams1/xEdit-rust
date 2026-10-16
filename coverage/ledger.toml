@@ -980,8 +980,10 @@ status = "pending"
 source = "btnCancelClick"
 
 [gui."xEdit/xeMainForm.dfm:cbRegExFilter:OnClick"]
-status = "pending"
+status = "covered"
+command = "files.list"
 source = "cbRegExFilterClick"
+note = "The request's regex reads name_filter as a case-insensitive regular expression, as the box does."
 
 [gui."xEdit/xeMainForm.dfm:cbViewFilterKeepChildren:OnClick"]
 status = "covered"
@@ -1036,15 +1038,18 @@ status = "pending"
 source = "edEditorIDSearchKeyDown"
 
 [gui."xEdit/xeMainForm.dfm:edFileNameFilter:OnChange"]
-status = "pending"
+status = "covered"
+command = "files.list"
 source = "edFileNameFilterChange"
+note = "name_filter lists only the files of the navigation tree whose name contains the text (without case)."
 
 [gui."xEdit/xeMainForm.dfm:edFileNameFilter:OnKeyDown"]
-status = "pending"
+status = "presentation"
 source = "edFileNameFilterKeyDown"
+note = "Moves the focus to the tree on Enter and Up."
 
 [gui."xEdit/xeMainForm.dfm:edFileNameFilter:OnKeyPress"]
-status = "pending"
+status = "presentation"
 source = "edFilterNoBeepOnEnterKeyPress"
 
 [gui."xEdit/xeMainForm.dfm:edFormIDSearch:OnChange"]
@@ -1442,12 +1447,16 @@ source = "mniNavRenumberFormIDsFromClick"
 note = "--compact."
 
 [gui."xEdit/xeMainForm.dfm:mniNavCompareSelected:OnClick"]
-status = "pending"
+status = "covered"
+command = "records.compare_selected"
 source = "mniNavCompareSelectedClick"
+note = "The selected records are the request's records; the GUI's own limit of five (wbAutoCompareSelectedLimit) is not applied."
 
 [gui."xEdit/xeMainForm.dfm:mniNavCompareTo:OnClick"]
-status = "pending"
+status = "covered"
+command = "records.compare"
 source = "mniNavCompareToClick"
+note = "`--compare-to <path>` loads the file in the place of the last `--load` plugin (wbFile with aCompareTo, AddMaster(flCompareTo), fsCompareToHasSameMasters); the GUI's copy into the data folder is the requirement that both files sit in one folder."
 
 [gui."xEdit/xeMainForm.dfm:mniNavCopyAsNewRecord:OnClick"]
 status = "covered"
@@ -1598,8 +1607,10 @@ status = "pending"
 source = "mniNavHeaderINFOClick"
 
 [gui."xEdit/xeMainForm.dfm:mniNavHidden:OnClick"]
-status = "pending"
+status = "covered"
+command = "records.set_hidden"
 source = "mniNavHiddenClick"
+note = "The selected record's element state; the view's Unhide all is `overrides: true`."
 
 [gui."xEdit/xeMainForm.dfm:mniNavLOManagersDirtyInfo:OnClick"]
 status = "pending"
@@ -1695,8 +1706,10 @@ status = "pending"
 source = "mniNavApplyScriptClick"
 
 [gui."xEdit/xeMainForm.dfm:mniRefByCompareSelected:OnClick"]
-status = "pending"
+status = "covered"
+command = "records.compare_selected"
 source = "mniRefByCompareSelectedClick"
+note = "The selected entries of the Referenced By tab are records of different FormIDs; the tab's filter is refs.get's filter_name/filter_signature/filter_file."
 
 [gui."xEdit/xeMainForm.dfm:mniRefByCopyAsNewInto:OnClick"]
 status = "covered"
@@ -19419,8 +19432,10 @@ command = "script.run"
 source = "_ClearMessages"
 
 [script."xejviScriptAdapterHost:cUnit.ConflictAllForElements:function"]
-status = "pending"
+status = "covered"
+command = "conflicts.for_elements"
 source = "_ConflictAllForElements"
+note = "The command reports the same TConflictAll of two elements; the script registration itself is the host batch #25."
 
 [script."xejviScriptAdapterHost:cUnit.ConflictAllForMainRecord:function"]
 status = "covered"
