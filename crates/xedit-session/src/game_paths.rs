@@ -507,7 +507,7 @@ fn registry_install_path(mode: GameMode) -> String {
         } else {
             RegistryRoot::LocalMachine
         };
-        return registry_string(root, &key, value).replace('"', "");
+        registry_string(root, &key, value).replace('"', "")
     }
     #[cfg(not(windows))]
     {
@@ -685,15 +685,14 @@ pub fn ini_value(path: &str, section: &str, key: &str) -> Option<String> {
         if !in_section {
             continue;
         }
-        if let Some((name, value)) = line.split_once('=') {
-            if name.trim().eq_ignore_ascii_case(key) {
-                return Some(value.trim().to_owned());
-            }
+        if let Some((name, value)) = line.split_once('=')
+            && name.trim().eq_ignore_ascii_case(key)
+        {
+            return Some(value.trim().to_owned());
         }
     }
     None
 }
-
 
 #[cfg(test)]
 mod tests {
