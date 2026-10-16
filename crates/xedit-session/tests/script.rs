@@ -2418,3 +2418,222 @@ fn the_el_states_probe_gives_the_oracle_lines() {
         .collect();
     assert_eq!(actual, expected);
 }
+
+//=== The VCL object model and the interaction bridge (issue #26) =============
+
+/// A script whose dialogs are a `MessageDlg` question and an `InputQuery`.
+const DIALOG_SCRIPT: &str = "unit Dialogs;\n\
+     function Initialize: Integer;\n\
+     var\n\
+       i: integer;\n\
+       s: string;\n\
+     begin\n\
+       i := MessageDlg('Proceed?', mtConfirmation, [mbYes, mbNo], 0);\n\
+       if i = mrYes then AddMessage('yes') else AddMessage('no');\n\
+       if InputQuery('Enter', 'Name', s) then AddMessage('name=' + s);\n\
+       Result := 1;\n\
+     end;\n\
+     end.\n";
+
+#[test]
+fn the_vcl_dialogs_are_answered_from_the_recorded_answers() {
+    let _guard = test_lock();
+    let folder = script_folder("vcl-dialogs", "Dialogs.pas", DIALOG_SCRIPT);
+    let mut session = open_session();
+    let result = run(
+        &mut session,
+        &folder,
+        "Dialogs.pas",
+        json!({ "answers": [
+            { "class": "#32770", "title": "Confirm", "button": "&Yes" },
+            { "class": "TInputQueryForm", "title": "Enter", "text": "zz" },
+        ]}),
+    );
+    assert_eq!(result["aborted"], false, "{result:#}");
+    assert!(result["pending_interaction"].is_null());
+    let lines = lines(&result);
+    assert!(lines.contains(&"yes".to_owned()), "{lines:?}");
+    assert!(lines.contains(&"name=zz".to_owned()), "{lines:?}");
+    let _ = std::fs::remove_dir_all(&folder);
+}
+
+#[test]
+fn a_dialog_without_an_answer_stops_the_run_with_the_question() {
+    let _guard = test_lock();
+    let folder = script_folder("vcl-pending", "Dialogs.pas", DIALOG_SCRIPT);
+    let mut session = open_session();
+    let result = run(
+        &mut session,
+        &folder,
+        "Dialogs.pas",
+        json!({ "answers": [
+            { "class": "#32770", "title": "Confirm", "button": "&Yes" },
+        ]}),
+    );
+    assert_eq!(result["aborted"], true, "{result:#}");
+    let pending = &result["pending_interaction"];
+    assert_eq!(pending["kind"], "input", "{result:#}");
+    assert_eq!(pending["class"], "TInputQueryForm");
+    assert_eq!(pending["title"], "Enter");
+    assert_eq!(pending["text"], "Name");
+    let error = result["error"].as_str().unwrap_or_default();
+    assert!(error.contains("EVclInteractionRequired"), "{error}");
+    let lines = lines(&result);
+    assert!(lines.iter().any(|line| line.contains("needs an answer")), "{lines:?}");
+    assert!(lines.iter().any(|line| line.contains("Aborted: Applying script \"Dialogs\"")), "{lines:?}");
+    let _ = std::fs::remove_dir_all(&folder);
+}
+
+#[test]
+fn script_resume_completes_the_workflow() {
+    let _guard = test_lock();
+    let folder = script_folder("vcl-resume", "Dialogs.pas", DIALOG_SCRIPT);
+    let mut session = open_session();
+    let first = run(
+        &mut session,
+        &folder,
+        "Dialogs.pas",
+        json!({ "answers": [
+            { "class": "#32770", "title": "Confirm", "button": "&Yes" },
+        ]}),
+    );
+    assert_eq!(first["aborted"], true, "{first:#}");
+    // The documented continuation: the same request as `script run`, with the
+    // accumulated answers plus one for the reported question.
+    let result = Registry::standard()
+        .call(
+            &mut session,
+            "script.resume",
+            json!({
+                "file": "Dialogs.pas",
+                "scripts": folder.display().to_string(),
+                "save": false,
+                "answers": [
+                    { "class": "#32770", "title": "Confirm", "button": "&Yes" },
+                    { "class": "TInputQueryForm", "title": "Enter", "text": "zz" },
+                ],
+            }),
+        )
+        .unwrap();
+    assert_eq!(result["aborted"], false, "{result:#}");
+    let lines = lines(&result);
+    assert!(lines.contains(&"yes".to_owned()), "{lines:?}");
+    assert!(lines.contains(&"name=zz".to_owned()), "{lines:?}");
+    let _ = std::fs::remove_dir_all(&folder);
+}
+
+#[test]
+fn a_form_closes_through_the_clicked_button_and_stores_its_events() {
+    let _guard = test_lock();
+    let folder = script_folder(
+        "vcl-form",
+        "FormModal.pas",
+        "unit FormModal;\n\
+         var\n\
+           frm: TForm;\n\
+           btn: TButton;\n\
+         procedure OnGo(Sender: TObject);\n\
+         begin\n\
+           AddMessage('fired');\n\
+         end;\n\
+         begin\n\
+           frm := TForm.Create(nil);\n\
+           frm.Caption := 'Pick';\n\
+           btn := TButton.Create(frm);\n\
+           btn.Parent := frm;\n\
+           btn.Caption := 'Go';\n\
+           btn.ModalResult := mrOk;\n\
+           btn.OnClick := OnGo;\n\
+           AddMessage('modal=' + IntToStr(frm.ShowModal));\n\
+           frm.Free;\n\
+         end.\n",
+    );
+    let mut session = open_session();
+    let result = run(
+        &mut session,
+        &folder,
+        "FormModal.pas",
+        json!({ "answers": [
+            { "class": "TForm", "title": "Pick", "button": "Go" },
+        ]}),
+    );
+    assert_eq!(result["aborted"], false, "{result:#}");
+    let lines = lines(&result);
+    assert!(lines.contains(&"modal=1".to_owned()), "{lines:?}");
+    // The handler is stored (the assignment did not fail) but not fired
+    // headless; the module documents this, and no chosen corpus case
+    // depends on a fired handler.
+    assert!(!lines.contains(&"fired".to_owned()), "{lines:?}");
+    let _ = std::fs::remove_dir_all(&folder);
+}
+
+#[test]
+fn keys_toggle_a_check_list_before_the_button_closes_the_form() {
+    let _guard = test_lock();
+    let folder = script_folder(
+        "vcl-keys",
+        "Keys.pas",
+        "unit Keys;\n\
+         var\n\
+           frm: TForm;\n\
+           lb: TCheckListBox;\n\
+           btn: TButton;\n\
+         begin\n\
+           frm := TForm.Create(nil);\n\
+           frm.Caption := 'Pick';\n\
+           lb := TCheckListBox.Create(frm);\n\
+           lb.Parent := frm;\n\
+           lb.Items.Add('a');\n\
+           lb.Items.Add('b');\n\
+           lb.Items.Add('c');\n\
+           btn := TButton.Create(frm);\n\
+           btn.Parent := frm;\n\
+           btn.Caption := 'Go';\n\
+           btn.ModalResult := mrOk;\n\
+           AddMessage('modal=' + IntToStr(frm.ShowModal));\n\
+           if lb.Checked[0] then AddMessage('c0') else AddMessage('c0no');\n\
+           if lb.Checked[1] then AddMessage('c1') else AddMessage('c1no');\n\
+           if lb.Checked[2] then AddMessage('c2') else AddMessage('c2no');\n\
+           frm.Free;\n\
+         end.\n",
+    );
+    let mut session = open_session();
+    let result = run(
+        &mut session,
+        &folder,
+        "Keys.pas",
+        // VK_DOWN twice with VK_SPACE after each: the cursor starts on the
+        // first entry, so entries 1 and 2 end checked.
+        json!({ "answers": [
+            { "class": "TForm", "title": "Pick", "keys": [40, 32, 40, 32], "button": "Go" },
+        ]}),
+    );
+    assert_eq!(result["aborted"], false, "{result:#}");
+    let lines = lines(&result);
+    assert!(lines.contains(&"modal=1".to_owned()), "{lines:?}");
+    assert!(lines.contains(&"c0no".to_owned()), "{lines:?}");
+    assert!(lines.contains(&"c1".to_owned()), "{lines:?}");
+    assert!(lines.contains(&"c2".to_owned()), "{lines:?}");
+    let _ = std::fs::remove_dir_all(&folder);
+}
+
+#[test]
+fn a_recorded_answer_the_run_never_shows_fails_it() {
+    let _guard = test_lock();
+    let folder = script_folder("vcl-leftover", "Dialogs.pas", DIALOG_SCRIPT);
+    let mut session = open_session();
+    let result = run(
+        &mut session,
+        &folder,
+        "Dialogs.pas",
+        json!({ "answers": [
+            { "class": "#32770", "title": "Confirm", "button": "&Yes" },
+            { "class": "TInputQueryForm", "title": "Enter", "text": "zz" },
+            { "class": "#32770", "title": "Information", "button": "OK" },
+        ]}),
+    );
+    assert_eq!(result["aborted"], true, "{result:#}");
+    let error = result["error"].as_str().unwrap_or_default();
+    assert!(error.contains("never showed the dialog"), "{error}");
+    let _ = std::fs::remove_dir_all(&folder);
+}
