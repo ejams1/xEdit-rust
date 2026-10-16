@@ -199,21 +199,22 @@ fn build_ref(element: &dyn ElementImpl) {
         }
     }
     // `for i := Low(cntElements) to High(cntElements) do cntElements[i]...`:
-    // the count is read once, the element at each index as the loop goes.
-    // The walk of an element can add one to the list (the Starfield perk
-    // activity of parity #33 adds the virtual `NULL` member over its `ATAV`
-    // text when that value is initialised here), which shifts the elements
-    // behind it: as upstream, the walk visits the added element and leaves
-    // the one that moved past the captured count out.
+    // the element at each index is read as the loop goes, and the walk of an
+    // element may add one to the list (the Starfield perk activity of parity
+    // #33 adds the virtual `NULL` member over its `ATAV` text when that
+    // value is initialised here), so the end of the loop is the count of the
+    // moment. Upstream reaches the same elements: its load builds the
+    // members a definition callback adds before the walk starts.
     if let Some(container) = element.as_container() {
-        let count = container.get_element_count();
-        for index in 0..count {
+        let mut index = 0;
+        while index < container.get_element_count() {
             if let Some(child) = container.get_element(index)
                 && let Some(child) = child.as_element_impl()
                 && can_contain_form_ids(child)
             {
                 build_ref(child);
             }
+            index += 1;
         }
     }
     let is_value = matches!(
@@ -293,17 +294,17 @@ impl MainRecordImpl {
         }
         let outer = BUILDING_REFS.with(|refs| refs.borrow_mut().replace(BTreeSet::new()));
         self.do_init();
-        // `for i := Low(cntElements) to High(cntElements)`: as the walk of
-        // the elements below a record, the count is read once and each
-        // element as the loop goes.
-        let count = self.container.element_count();
-        for index in 0..count {
+        // As the walk of the elements below a record: the element at each
+        // index as the loop goes, to the count of the moment.
+        let mut index = 0;
+        while index < self.container.element_count() {
             if let Some(element) = self.container.element_at(index)
                 && let Some(element) = element.as_element_impl()
                 && can_contain_form_ids(element)
             {
                 build_ref(element);
             }
+            index += 1;
         }
         let collected = BUILDING_REFS.with(|refs| std::mem::replace(&mut *refs.borrow_mut(), outer));
         collected
