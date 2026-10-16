@@ -2086,7 +2086,8 @@ fn the_datetime_probe_gives_the_oracle_lines() {
     assert!((value("parse-neg") - (z + 5.0 / 24.0)).abs() < 1e-9);
     assert_eq!(value("parse-dateonly"), 42036.0);
     // The utc form of a stored value carries the `Z`, its local form the
-    // machine's offset; the utc text is the local one moved by that offset.
+    // machine's offset, or `Z` on a machine whose zone has no offset (the
+    // UTC CI runner; `DateTimeToISO8601` writes `Z` when the offset is 0).
     for line in &all {
         if let Some(rest) = line.strip_prefix("2015-02-01 | utc=") {
             assert!(rest.ends_with("Z types=6 raw=42036.6724444676"), "{line}");
@@ -2094,7 +2095,10 @@ fn the_datetime_probe_gives_the_oracle_lines() {
         if let Some(rest) = line.strip_prefix("2015-02-01 | local=") {
             assert!(rest.starts_with("2015-02-01T16:08:19.202"), "{line}");
             let offset = &rest["2015-02-01T16:08:19.202".len()..];
-            assert!(offset.starts_with('+') || offset.starts_with('-'), "{line}");
+            assert!(
+                offset.starts_with('+') || offset.starts_with('-') || offset == "Z",
+                "{line}"
+            );
         }
     }
 }
