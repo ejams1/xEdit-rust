@@ -1017,6 +1017,27 @@
         "Skyrim.esm"
       ],
       "note": "parity #24 fixture: the head of the response chain is renumbered, the PNAM of the following responses updates through the references and the topic children group sorts again; the chain order and the saved bytes are compared"
+    },
+    {
+      "script": "probes/clean-trim.pas",
+      "game": "fo3",
+      "load": [
+        "Fallout3.esm",
+        "BrokenSteel.esm"
+      ],
+      "note": "parity #35 probe: the records and topic groups the filter for cleaning leaves modified in an editing session (the AfterLoad trim of a response's text is an internal edit): the GREETING responses of BrokenSteel.esm that the quick auto clean mode writes untrimmed"
+    },
+    {
+      "script": "probes/clean-trim.pas",
+      "game": "fo3",
+      "load": [
+        "Fallout3.esm",
+        "BrokenSteel.esm"
+      ],
+      "switches": [
+        "FillPNAM"
+      ],
+      "note": "parity #35 probe: the same with the PNAM fill of the quick clean modes (-FillPNAM)"
     }
   ]
 }
