@@ -224,6 +224,8 @@ pub struct QuickCleanResult {
     /// The message log the GUI writes next to its executable on exit.
     pub log: String,
     pub peak: Option<u64>,
+    /// The log file lost the log; `log` is the one read from the main form.
+    pub log_from_window: bool,
 }
 
 /// What a run of a mode without a script left (`run_auto_mode`).
@@ -235,6 +237,9 @@ pub struct AutoModeResult {
     pub peak: Option<u64>,
     /// The exit code of the GUI.
     pub exit_code: Option<u32>,
+    /// The log file lost the log, which is the one the harness read from
+    /// the main form while the GUI ran.
+    pub log_from_window: bool,
 }
 
 impl GuiRun<'_> {
@@ -378,6 +383,7 @@ impl GuiRun<'_> {
             saved,
             log: run.log,
             peak: run.peak,
+            log_from_window: run.log_from_window,
         })
     }
 
@@ -465,18 +471,28 @@ impl GuiRun<'_> {
         // The log file next to the executable is written on exit; a run
         // that ends at the mode's last line instead (the GUI is killed
         // before its own exit) keeps the log read from the main form.
-        let log = fs::read_dir(self.work.join("bin"))?
+        // `SaveLog` swallows its errors, and `DoRename` clears the memo
+        // before its `Closing files`: a file that lost the log (the quick
+        // auto clean of Fallout 76's NW.esm keeps only that line) is
+        // replaced by the longer log the harness read from the main form.
+        let window_log = log;
+        let file_log = fs::read_dir(self.work.join("bin"))?
             .filter_map(|entry| entry.ok().map(|entry| entry.path()))
             .find(|path| path.to_string_lossy().ends_with("_log.txt"))
             .map(|path| fs::read(path).map(|bytes| String::from_utf8_lossy(&bytes).into_owned()))
-            .transpose()?
-            .unwrap_or(log);
+            .transpose()?;
+        let (log, log_from_window) = match file_log {
+            Some(file_log) if file_log.len() >= window_log.len() => (file_log, false),
+            Some(_) => (window_log, true),
+            None => (window_log, false),
+        };
         ensure!(!log.is_empty(), "the GUI wrote no log");
         Ok(AutoModeResult {
             data,
             log,
             peak,
             exit_code,
+            log_from_window,
         })
     }
 
