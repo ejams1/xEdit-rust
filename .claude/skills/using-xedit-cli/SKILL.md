@@ -88,6 +88,7 @@ Inspection (never mutates):
 | `dump --game G <plugin>` | (none) | The whole plugin as `xDump.exe` prints it, to stdout; progress goes to stderr. |
 | `tool modes` | `tool.modes` | The seventeen tool modes of xEdit with the switch of each, whether the game of the session has it, what it does and what of it is missing here. |
 | `saves dump --game G --data <Data> <save>` | (none) | A save or co-save as `xDump.exe -saves` prints it. The plugins the save lists load from `<Data>`. |
+| `call conflicts.probe --params '{"records": [...]}'` | `conflicts.probe` | The comparison of records as the oracle probe of `cargo xtask parity conflicts --record` reads it: the master's and first override's statuses, their pair, and the two walked side by side by index with the display names, names, extended sort keys and element checks. The harness's side of the probe; `hidden` sets `esHidden` first. |
 | `schema` | (none) | The registry: every command with its request and response JSON Schema. |
 
 Changing data (`mutates`, needs `--edit` or `--dry-run`):
