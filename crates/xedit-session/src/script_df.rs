@@ -256,6 +256,17 @@ struct Doc<'a> {
 }
 
 impl Doc<'_> {
+    /// `TdfElement.ToJSON`: a material file's root overrides it with
+    /// `raise Exception.Create('Not implemented')` (`TwbBGSMFile.ToJSON`,
+    /// `TwbBGEMFile.ToJSON`: "no need to save materials in json"); every
+    /// other element serializes.
+    fn json_text(&mut self, compact: bool) -> Result<String, ValueError> {
+        if self.el == self.file.root && matches!(self.file.kind, Some(AssetKind::Bgsm | AssetKind::Bgem)) {
+            return Err(ValueError::external_class("Exception", "Not implemented".to_owned()));
+        }
+        self.file.tree.to_json(self.el, compact).map_err(df_error)
+    }
+
     /// The script value of an element of this document.
     fn element(&self, ctx: &Ctx, el: El) -> Value {
         ctx.element_value(self.rc, self.file, el)
@@ -1163,10 +1174,10 @@ fn register_tdf_element(adapter: &mut Adapter, ctx: &Ctx) {
         write_file(&path, &data)?;
         Ok(Value::Empty)
     });
-    element_get_args(adapter, &class, "SaveToJSONFile", 2, ctx, |_ctx, doc, args| {
+    element_get_args(adapter, &class, "SaveToJSONFile", 2, ctx, |_ctx, mut doc, args| {
         let path = text_arg(&args.values[0])?;
         let compact = to_bool(&args.values[1])?;
-        let text = doc.file.tree.to_json(doc.el, compact).map_err(df_error)?;
+        let text = doc.json_text(compact)?;
         write_file(&path, text.as_bytes())?;
         Ok(Value::Empty)
     });
@@ -1200,11 +1211,9 @@ fn register_tdf_element(adapter: &mut Adapter, ctx: &Ctx) {
         doc.file.tree.from_json(doc.el, &text).map_err(df_error)?;
         Ok(Value::Empty)
     });
-    element_get_args(adapter, &class, "ToJSON", 1, ctx, |_ctx, doc, args| {
+    element_get_args(adapter, &class, "ToJSON", 1, ctx, |_ctx, mut doc, args| {
         let compact = to_bool(&args.values[0])?;
-        Ok(Value::Str(
-            doc.file.tree.to_json(doc.el, compact).map_err(df_error)?.into_bytes(),
-        ))
+        Ok(Value::Str(doc.json_text(compact)?.into_bytes()))
     });
     element_get(adapter, &class, "ToText", 0, ctx, |_ctx, doc| {
         Ok(Value::Str(

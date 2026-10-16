@@ -562,7 +562,14 @@ pub(crate) fn register(adapter: &mut Adapter, state: &Rc<RefCell<ScriptRunState>
                 // `Exception` on a refusal, which the run line prints as
                 // `[Exception]`.
                 if let Err(message) = element.set_edit_value(&value) {
-                    return Err(ValueError::external_class("Exception", message));
+                    // A main record's FormID text that does not parse is the
+                    // RTL's `EConvertError` (`StrToInt64('$' + value)`).
+                    let class = if message.ends_with("' is not a valid integer value") {
+                        "EConvertError"
+                    } else {
+                        "Exception"
+                    };
+                    return Err(ValueError::external_class(class, message));
                 }
             }
             Ok(())

@@ -115,7 +115,16 @@ pub(crate) fn register(adapter: &mut Adapter, state: &Rc<RefCell<ScriptRunState>
             if element.as_container().is_none() {
                 return Ok(());
             }
-            let mut states: i32 = 1 | 2 | 4 | 1024;
+            // Only the file, a main record and a group are `DoInit`ed when a
+            // script reaches them; the members below hold
+            // `csConstructionCompleted` alone (the oracle's 1024 for the
+            // record header struct, `el-states`).
+            let mut states: i32 = match element.get_element_type() {
+                xedit_core::interface::ElementType::etFile
+                | xedit_core::interface::ElementType::etMainRecord
+                | xedit_core::interface::ElementType::etGroupRecord => 1 | 2 | 4 | 1024,
+                _ => 1024,
+            };
             if let Some(file) = element.get_file()
                 && file.get_file_states().contains(FileState::fsRefsBuild)
             {

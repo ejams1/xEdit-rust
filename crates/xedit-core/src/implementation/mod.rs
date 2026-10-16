@@ -4915,10 +4915,12 @@ impl ElementImpl for MainRecordImpl {
     ///
     /// Upstream runs the edit gate first, and only inside the
     /// `wbDisplayLoadOrderFormID` branch parses the value
-    /// (`TwbFormID.FromStr(aValue)`): with the display off -- which no
-    /// headless run sets -- every value, a FormID or not, meets
+    /// (`TwbFormID.FromStr(aValue)`, `StrToInt64('$' + aValue)`, whose
+    /// `EConvertError` text is `'$<value>' is not a valid integer value`):
+    /// with the display off every value, a FormID or not, meets
     /// `FormID can only be edited if wbDisplayLoadOrderFormID is active`.
-    /// The `el-states` probe compares that text.
+    /// A script run turns the display on (the oracle's GUI has it on), so the
+    /// `el-states` probe sees the conversion error of a bad value.
     fn set_edit_value_impl(&self, value: &str) -> Result<(), EditError> {
         if !self.check_form_id_gate()? {
             return Ok(());
@@ -4927,7 +4929,7 @@ impl ElementImpl for MainRecordImpl {
             return Err("FormID can only be edited if wbDisplayLoadOrderFormID is active".to_owned());
         }
         let form_id = crate::interface::form_id::FormID::from_str(value)
-            .ok_or_else(|| format!("\"{value}\" is not a valid integer value"))?;
+            .ok_or_else(|| format!("'${value}' is not a valid integer value"))?;
         self.set_form_id_value(form_id)
     }
 

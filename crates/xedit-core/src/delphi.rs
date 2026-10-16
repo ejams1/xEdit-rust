@@ -783,6 +783,12 @@ pub fn trunc(value: f64) -> i64 {
 /// the callers report as the RTL's `EConvertError`; an underflow to zero is
 /// a value (`1e-400` is `0.0`).
 pub fn str_to_float(text: &str) -> Option<f64> {
+    with_nearest_rounding(|| str_to_float_nearest(text))
+}
+
+pub use xedit_io::fpu::with_nearest_rounding;
+
+fn str_to_float_nearest(text: &str) -> Option<f64> {
     let bytes = text.as_bytes();
     let blank = |byte: u8| byte == b' ' || byte == b'\t';
     let mut i = 0;

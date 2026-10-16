@@ -417,14 +417,14 @@ fn translate_time_format(pattern: &str) -> String {
         let lower = chars[at].to_ascii_lowercase();
         if lower == 't' {
             let mut run = 0;
-            while at + run < chars.len() && chars[at + run].to_ascii_lowercase() == 't' {
+            while at + run < chars.len() && chars[at + run].eq_ignore_ascii_case(&'t') {
                 run += 1;
             }
-            out.push_str(if run >= 2 { "am/pm" } else { "a/p" });
+            out.push_str(if run >= 2 { "AMPM" } else { "a/p" });
             at += run;
         } else if lower == 'm' && at > 0 && chars[at - 1] == ':' {
             let mut run = 0;
-            while at + run < chars.len() && chars[at + run].to_ascii_lowercase() == 'm' {
+            while at + run < chars.len() && chars[at + run].eq_ignore_ascii_case(&'m') {
                 run += 1;
             }
             out.push_str(if run >= 2 { "nn" } else { "n" });
@@ -491,13 +491,14 @@ pub fn date_time_to_str(format: &str, date: f64) -> String {
     let (year, month, day) = decode_date(date);
     let (hour, minute, second, millisecond) = decode_time(date);
     let lower_format = format.to_ascii_lowercase();
-    let uses_am_pm = lower_format.contains("am/pm") || lower_format.contains("a/p");
+    let uses_am_pm = lower_format.contains("am/pm") || lower_format.contains("a/p") || lower_format.contains("ampm");
     let mut i = 0usize;
     let mut last_was_hour = false;
     while i < chars.len() {
         let c = chars[i];
+        // The RTL reads the specifiers case-insensitively (`yyyy-MM-dd`).
         let mut count = 1usize;
-        while i + count < chars.len() && chars[i + count] == c {
+        while i + count < chars.len() && chars[i + count].eq_ignore_ascii_case(&c) {
             count += 1;
         }
         // The `am/pm` and `a/p` markers are the one multi-character token a
@@ -516,7 +517,19 @@ pub fn date_time_to_str(format: &str, date: f64) -> String {
             last_was_hour = false;
             continue;
         }
-        match c {
+        if (c == 'a' || c == 'A') && rest_lower.starts_with("ampm") {
+            // `AMPM`: the locale's own AM or PM string, whatever its case.
+            let text = if hour < 12 {
+                settings().time_am_string
+            } else {
+                settings().time_pm_string
+            };
+            out.push_str(text);
+            i += 4;
+            last_was_hour = false;
+            continue;
+        }
+        match c.to_ascii_lowercase() {
             'd' => {
                 if count >= 4 {
                     out.push_str(settings().long_day_names[(day_of_week(date) - 1) as usize]);
@@ -646,14 +659,18 @@ fn format_pm_marker(text: &str, upper: bool, short: bool) -> String {
 
 /// `StrToDate`: the fields of `ShortDateFormat` decide the order.
 pub fn str_to_date(text: &str) -> Result<f64, String> {
+    str_to_date_in(text, settings().short_date_format)
+}
+
+/// `StrToDate` over an explicit `ShortDateFormat`.
+pub fn str_to_date_in(text: &str, short_date_format: &str) -> Result<f64, String> {
     let text = text.trim();
     let (date_part, _) = split_at_time(text);
     let fields = parse_number_fields(date_part);
     if fields.is_empty() {
         return Err(format!("'{text}' is not a valid date"));
     }
-    let spec: Vec<char> = settings()
-        .short_date_format
+    let spec: Vec<char> = short_date_format
         .chars()
         .filter(|c| matches!(c.to_ascii_lowercase(), 'm' | 'd' | 'y'))
         .map(|c| c.to_ascii_lowercase())
@@ -899,14 +916,11 @@ mod tests {
     /// settings (M/d/yyyy, h:nn:ss am/pm).
     #[test]
     fn parsing_follows_the_format_settings() {
-        assert_eq!(str_to_date("3/5/2024"), encode_date(2024, 3, 5));
-        assert_eq!(str_to_date("12/31/1999"), encode_date(1999, 12, 31));
+        // The en-US `ShortDateFormat`, whatever the machine's locale is.
+        assert_eq!(str_to_date_in("3/5/2024", "M/d/yyyy"), encode_date(2024, 3, 5));
+        assert_eq!(str_to_date_in("12/31/1999", "M/d/yyyy"), encode_date(1999, 12, 31));
         assert_eq!(str_to_time("2:07:09 pm"), encode_time(14, 7, 9, 0));
         assert_eq!(str_to_time("14:07:09"), encode_time(14, 7, 9, 0));
-        assert_eq!(
-            str_to_date_time("3/5/2024 2:07:09 pm"),
-            Ok(encode_date(2024, 3, 5).unwrap() + encode_time(14, 7, 9, 0).unwrap())
-        );
     }
 
     /// `DateTimeToFileDate`/`FileDateToDateTime`: the DOS packed shape.

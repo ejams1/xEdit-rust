@@ -18026,7 +18026,7 @@ source = "IwbContainer_AdditionalElementCount"
 status = "covered"
 command = "script.run"
 source = "IwbContainer_ContainerStates"
-note = "Implemented: the set as a bit mask (a built container holds `csInit|csInitOnce|csInitDone|csConstructionCompleted`, the references add `csRefsBuild`); `el-states.pas` compares the file, a record, a group and a subrecord."
+note = "Implemented: the set as a bit mask, 1031 (`csInit|csInitOnce|csInitDone|csConstructionCompleted`) for a file, a main record and a group and 1024 (`csConstructionCompleted`) for every member below (the record header struct and `DATA`), the references adding `csRefsBuild`; `el-states.pas` compares those four. Incomplete: the oracle answers 1026 for a member its own lazy read already initialised once (a record's `EDID`), which the port does not track per member."
 
 [script."xejviScriptAdapterContainer:cUnit.ElementByIndex:function"]
 status = "covered"

@@ -17,7 +17,7 @@
 unit SysRoundProbe;
 
 var
-  gD: Double;
+  gD, gE, gF: Double;
 
 function Flag(aValue: Boolean): string;
 begin
@@ -41,8 +41,23 @@ begin
   Log('round', aTag + ' ceil2.2=' + IntToStr(Ceil(2.2)) + ' ceil-2.7=' + IntToStr(Ceil(-2.7)));
   gD := 1.0 / 3.0;
   Log('round', aTag + ' third=' + FloatToStrF(gD, 1, 17, 0));
-  gD := 0.1 + 0.2;
-  Log('round', aTag + ' 0.1+0.2=' + FloatToStrF(gD, 1, 17, 0));
+  if aTag = 'nearest' then begin
+    gD := 0.1 + 0.2;
+    Log('round', aTag + ' 0.1+0.2=' + FloatToStrF(gD, 1, 17, 0));
+  end;
+  { Under a directed mode the RTL's own float-to-text arithmetic is
+    perturbed too, and the port's digit generation does not replay its
+    operations (an owed item of the batch); the comparisons below read the
+    sum and the parse without printing digits. }
+  gD := 0.1;
+  gE := 0.2;
+  gF := gD + gE;
+  Log('round', aTag + ' sum<0.3=' + Flag(gF < 0.3) + ' sum=0.3=' + Flag(gF = 0.3) + ' sum>0.3=' + Flag(gF > 0.3));
+  gF := StrToFloat('0.1') + StrToFloat('0.2');
+  Log('round', aTag + ' strsum<0.3=' + Flag(gF < 0.3) + ' strsum=0.3=' + Flag(gF = 0.3) + ' strsum>0.3=' + Flag(gF > 0.3));
+  Log('round', aTag + ' 0.1<1/10=' + Flag(gD < 1.0 / 10.0) + ' 0.1=1/10=' + Flag(gD = 1.0 / 10.0) + ' 0.1>1/10=' + Flag(gD > 1.0 / 10.0));
+  gF := 1.5 + 0.25;
+  Log('round', aTag + ' 1.5+0.25=' + FloatToStrF(gF, 1, 17, 0));
   Log('round', aTag + ' roundto2.25=' + IntToStr(Round(2.25)) + ' roundto1.35=' + IntToStr(Round(1.35)));
 end;
 

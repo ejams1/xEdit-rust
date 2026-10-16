@@ -83,6 +83,12 @@ begin
   Log('cs', 'record=' + Cs(r));
   Log('cs', 'group=' + Cs(g));
   Log('cs', 'subrecord=' + Cs(sr));
+  Log('cs', 'header-type=' + IntToStr(ElementType(sr)) + ' ' + Name(sr));
+  { Member 1 (`EDID`) answers 1026 on the oracle: the record's own lazy
+    read of its editor ID has run `DoInit` on it once (`csInitOnce`). The
+    port builds no such state per member, so only `DATA`, which nothing
+    has touched, is compared (owed in the ledger note of `ContainerStates`). }
+  Log('cs', 'member2=' + Cs(ElementByIndex(r, 2)) + ' type=' + IntToStr(ElementType(ElementByIndex(r, 2))) + ' ' + Name(ElementByIndex(r, 2)));
   StateRange('file', f);
   StateRange('record', r);
   StateRange('sub', sr);

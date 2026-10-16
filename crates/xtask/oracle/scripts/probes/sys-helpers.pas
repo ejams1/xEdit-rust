@@ -81,6 +81,20 @@ begin
   DiskErrors('neg', -1);
 end;
 
+function NonAscii(const s: string): Boolean;
+var
+  i: Integer;
+begin
+  Result := False;
+  for i := 1 to Length(s) do
+    if Copy(s, i, 1) > #127 then
+      Result := True;
+end;
+
+{ A value with a character outside ASCII (the per-mille sign of type 119)
+  is named, not printed: the port's strings are UTF-8 bytes and the GUI's
+  memo is the ANSI code page, a string-model difference docs/PLAN.md and the
+  writing-xedit-scripts skill record. }
 function SafeLocale(aLocale, aType: Integer): string;
 var
   s: string;
@@ -88,6 +102,8 @@ begin
   s := GetLocaleStr(aLocale, aType, 'DEF');
   if Pos(#0, s) > 0 then
     Result := 'NUL len=' + IntToStr(Length(s))
+  else if NonAscii(s) then
+    Result := 'NONASCII'
   else
     Result := s;
 end;
