@@ -529,6 +529,18 @@ pub(super) fn run_filter(
     Ok(())
 }
 
+/// The Pascal block of `mniNavFilterForCleaningClick` (every filter
+/// variable at its default, "conflict status inherited by parent" on, then
+/// `ApplyFilter`), logged as `[filter] <name>`.
+pub(super) fn cleaning_filter_pascal(name: &str) -> String {
+    Config {
+        name: name.to_owned(),
+        inherit_conflict_by_parent: true,
+        ..Default::default()
+    }
+    .pascal()
+}
+
 /// The script of a scenario: the reachable build and the configurations.
 fn script_of(scenario: &Scenario) -> String {
     let mut actions = String::new();

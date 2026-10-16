@@ -1,0 +1,16 @@
+{
+  "description": "TwbMainRecord.Delete (SetIsDeleted(True), records.set_deleted) before Fallout 4: an override of a placed reference (no NAME is kept, the game is older than Fallout 4), an override of an actor and of a non-player character, a keyword Update.esm adds, and a cell whose child groups stay with it, then the deleted reference undeleted again (SetIsDeleted(False): it takes Skyrim.esm's contents back).",
+  "game": "sse",
+  "strings": true,
+  "load": ["Skyrim.esm", "Update.esm"],
+  "commands": [
+    {"command": "records.set_deleted", "params": {"form_id": "000695D2", "file": "Update.esm"}},
+    {"command": "records.set_deleted", "params": {"form_id": "00019E1B", "file": "Update.esm"}},
+    {"command": "records.set_deleted", "params": {"form_id": "0009F83A", "file": "Update.esm"}},
+    {"command": "records.set_deleted", "params": {"form_id": "01003279", "file": "Update.esm"}},
+    {"command": "records.set_deleted", "params": {"form_id": "00027D1C", "file": "Update.esm"}},
+    {"command": "records.set_deleted", "params": {"form_id": "000695D1", "file": "Update.esm"}},
+    {"command": "records.set_deleted", "params": {"form_id": "000695D1", "file": "Update.esm", "deleted": false}}
+  ],
+  "save": ["Update.esm"]
+}

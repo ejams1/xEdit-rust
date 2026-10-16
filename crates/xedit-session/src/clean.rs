@@ -117,6 +117,14 @@ pub struct CleanRequest {
     /// digits (`0000001B`, `AshPile01`, by default); text that is not a
     /// number keeps the default (`StrToInt64Def`).
     pub udr_mstt_value: Option<String>,
+    /// The file node was reached with `JumpTo` (its header), which expands
+    /// it, so the tree sorts its children (`toAutoSort`): the
+    /// `-checkforitm` and `-checkfordr` modes. A selection clicked in the
+    /// tree leaves the file nodes collapsed, their children in the order of
+    /// the file.
+    #[serde(skip)]
+    #[schemars(skip)]
+    pub jump_to: bool,
 }
 
 fn default_true() -> bool {
@@ -133,7 +141,7 @@ impl Default for CleanRequest {
             itm: false,
             udr: false,
             quick: false,
-            quick_auto_save: false,
+            quick_auto_save: true,
             dry_run: false,
             output: None,
             backup: true,
@@ -145,6 +153,7 @@ impl Default for CleanRequest {
             udr_z_value: None,
             udr_mstt: None,
             udr_mstt_value: None,
+            jump_to: false,
         }
     }
 }
@@ -277,14 +286,16 @@ impl DirtyInfo {
         if self.itm != 0 || self.udr != 0 || self.nav != 0 {
             if file_changed {
                 result.push_str(&format!(
-                    "\r\n  - name: '{}'\r\n    dirty:",
+                    "\r\n  - name: '{}'\r\n    dirty:\r\n",
                     self.plugin.replace('\'', "''")
                 ));
             }
+            // No line break before the first line of a further entry of
+            // the same plugin: the message starts with it.
             if self.nav != 0 {
-                result.push_str("\r\n      - <<: *reqManualFix");
+                result.push_str("      - <<: *reqManualFix");
             } else {
-                result.push_str("\r\n      - <<: *quickClean");
+                result.push_str("      - <<: *quickClean");
             }
             result.push_str(&format!("\r\n        crc: 0x{:08X}", self.crc32));
             result.push_str(&format!("\r\n        util: '{}'", util(true)));
@@ -610,7 +621,9 @@ fn store_dirty_info(infos: &mut Vec<DirtyInfo>, report: &CleanReport, itm: Optio
 /// (`ReInitTree`), the filter runs once (`mniNavFilterForCleaningClick`
 /// before the clicks), and each click walks the selection's file nodes in
 /// the order of the tree (`GetSortedSelection(True)`), each from its last
-/// node back: the UDR over all of them, then the ITM removal.
+/// node back: the UDR over all of them, then the ITM removal. The file
+/// nodes are collapsed (clicked, not expanded), so their children keep the
+/// order of the file, unless the request says the GUI jumped to them.
 fn selection_pass(
     targets: &[Arc<FileImpl>],
     loaded: &[Arc<FileImpl>],
@@ -626,9 +639,12 @@ fn selection_pass(
         let start = tree
             .file_node(target)
             .ok_or_else(|| CommandError::new("internal", "the plugin has no node"))?;
-        // The GUI selects the file node (`JumpTo` its header expands it, and
-        // the tree sorts the children of an expanded node, `toAutoSort`).
-        tree.sort_children(start);
+        // `JumpTo` the header expands the file node, and the tree sorts the
+        // children of an expanded node (`toAutoSort`); a node selected with
+        // a click stays collapsed and unsorted.
+        if request.jump_to {
+            tree.sort_children(start);
+        }
         starts.push(start);
     }
     let mut pass = QuickCleanPass {
@@ -867,4 +883,77 @@ pub fn register(registry: &mut Registry) {
         true,
         files_clean,
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The report of the quick auto clean mode on Fallout 3's Anchorage.esm,
+    /// as the 4.1.5q release logs it: a dirty entry from the first pass, a
+    /// clean one of the saved file's CRC32 from the second (no name line
+    /// again), and the reqManualFix form of a further dirty entry of the
+    /// same plugin, which starts without a line break.
+    #[test]
+    fn writes_the_loot_entries_as_the_release() {
+        let _lock = globals::test_lock();
+        let app = globals::app_name();
+        let url = globals::nexus_mods_url();
+        globals::set_app_name("FO3".to_owned());
+        globals::set_nexus_mods_url("https://www.nexusmods.com/fallout3/mods/637".to_owned());
+        let infos = [
+            DirtyInfo {
+                plugin: "Anchorage.esm".to_owned(),
+                crc32: 0xA4BA_9D10,
+                itm: 55,
+                udr: 10,
+                nav: 0,
+            },
+            DirtyInfo {
+                plugin: "Anchorage.esm".to_owned(),
+                crc32: 0x2AF0_D0E8,
+                itm: 0,
+                udr: 0,
+                nav: 0,
+            },
+            DirtyInfo {
+                plugin: "Anchorage.esm".to_owned(),
+                crc32: 0x0000_0001,
+                itm: 0,
+                udr: 0,
+                nav: 5,
+            },
+        ];
+        let lines = dirty_info_lines(&infos);
+        globals::set_app_name(app);
+        globals::set_nexus_mods_url(url);
+        let expected = [
+            "",
+            "LOOT Masterlist Entries",
+            "",
+            "  - name: 'Anchorage.esm'",
+            "    dirty:",
+            "      - <<: *quickClean",
+            "        crc: 0xA4BA9D10",
+            "        util: '[FO3Edit v4.1.5q](https://www.nexusmods.com/fallout3/mods/637)'",
+            "        itm: 55",
+            "        udr: 10",
+            "    clean:",
+            "      - crc: 0x2AF0D0E8",
+            "        util: 'FO3Edit v4.1.5q'",
+            "      - <<: *reqManualFix",
+            "        crc: 0x00000001",
+            "        util: '[FO3Edit v4.1.5q](https://www.nexusmods.com/fallout3/mods/637)'",
+            "        nav: 5",
+            "",
+        ];
+        assert_eq!(lines, expected);
+    }
+
+    #[test]
+    fn reads_the_mstt_value_as_the_dialog() {
+        assert_eq!(parse_hex_def("0000001B"), Some(0x1B));
+        assert_eq!(parse_hex_def("zz"), None);
+        assert_eq!(parse_hex_def(""), None);
+    }
 }

@@ -1,0 +1,17 @@
+{
+  "description": "TwbMainRecord.Delete (SetIsDeleted(True), records.set_deleted) on the records of a plugin, apart from Remove (records.delete): an override of a placed reference (from Fallout 4 on the deleted reference keeps NAME, its base record), an override of an actor, a reference and a weapon the plugin adds itself, and an exterior cell whose child group of placed references stays with it. Each record keeps its place and its FormID, loses its contents and gains the deleted flag; the cell's children are not touched.",
+  "game": "fo4",
+  "build_refs": false,
+  "load": [
+    "Fallout4.esm",
+    "DLCRobot.esm"
+  ],
+  "commands": [
+    {"command": "records.set_deleted", "params": {"form_id": "0009B4A6", "file": "DLCRobot.esm"}},
+    {"command": "records.set_deleted", "params": {"form_id": "0019A810", "file": "DLCRobot.esm"}},
+    {"command": "records.set_deleted", "params": {"form_id": "01002720", "file": "DLCRobot.esm"}},
+    {"command": "records.set_deleted", "params": {"form_id": "01002E2D", "file": "DLCRobot.esm"}},
+    {"command": "records.set_deleted", "params": {"form_id": "00018AA2", "file": "DLCRobot.esm"}}
+  ],
+  "save": ["DLCRobot.esm"]
+}

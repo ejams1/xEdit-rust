@@ -1613,8 +1613,10 @@ source = "mniNavHiddenClick"
 note = "The selected record's element state; the view's Unhide all is `overrides: true`."
 
 [gui."xEdit/xeMainForm.dfm:mniNavLOManagersDirtyInfo:OnClick"]
-status = "pending"
+status = "covered"
+command = "files.dirty_info"
 source = "mniNavLOManagersDirtyInfoClick"
+note = "The LOOT (and, for Oblivion, BOSS) masterlist entries of the dirty information the session's files.clean steps stored per plugin and CRC32; the quick auto clean mode prints them at its end."
 
 [gui."xEdit/xeMainForm.dfm:mniNavLocalizationSwitch:OnClick"]
 status = "covered"
@@ -1648,7 +1650,7 @@ note = "A record; an element of a record is elements.remove."
 status = "covered"
 command = "files.clean"
 source = "mniNavRemoveIdenticalToMasterClick"
-note = "itm; dry_run counts as tmCheckForITM does. wbAllowMakePartial (partial forms) is not ported."
+note = "itm, over one plugin (file) or a selection of several (files); dry_run counts as tmCheckForITM does; allow_make_partial (or the global -AllowMakePartial) makes partial forms of cells and worldspaces with children."
 
 [gui."xEdit/xeMainForm.dfm:mniNavRemoveIdenticalToMasterObsolete:OnClick"]
 status = "presentation"
@@ -1688,7 +1690,7 @@ source = "mniNavTestClick"
 status = "covered"
 command = "files.clean"
 source = "mniNavUndeleteAndDisableReferencesClick"
-note = "udr; dry_run counts as tmCheckForDR does. The UDR options are the defaults of the game."
+note = "udr, over one plugin (file) or a selection of several (files); dry_run counts as tmCheckForDR does. The options of the Cleaning tab are the udr_* request fields, the game's defaults when omitted."
 
 [gui."xEdit/xeMainForm.dfm:mniNavUndeleteAndDisableReferencesObsolete:OnClick"]
 status = "presentation"
@@ -3022,7 +3024,7 @@ note = "wbAllowESPMasters."
 status = "covered"
 command = "tool.run"
 source = "xEdit/xeInit.pas"
-note = "wbAllowMakePartial; the copies of a cell or worldspace into a file that lacks it become partial forms (MakePartialForm), as --allow-make-partial."
+note = "wbAllowMakePartial; the copies of a cell or worldspace into a file that lacks it become partial forms (MakePartialForm), and Remove Identical to Master makes partial forms of the cells and worldspaces with children (files.clean), as --allow-make-partial."
 
 [switch.allowmasterfilesedit]
 status = "covered"

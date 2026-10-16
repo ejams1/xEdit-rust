@@ -16,7 +16,7 @@ use xedit_core::implementation::copy::{
     CanOverwriteAction, copy_into_file, copy_into_masters, missing_masters, set_can_overwrite_callback,
 };
 use xedit_core::interface::globals::{edit_allowed, set_edit_allowed};
-use xedit_core::interface::{CopyArgs, Element, ElementRef, MainRecordRef};
+use xedit_core::interface::{CopyArgs, Element, ElementRef, MainRecord, MainRecordRef};
 
 use crate::commands::{ElementNode, RecordSummary, node_of, parse_form_id, summary_of};
 use crate::{CommandError, Registry, Session};
@@ -449,6 +449,83 @@ fn records_delete(session: &mut Session, request: RecordsDeleteRequest) -> Resul
     Ok(response)
 }
 
+/// `records.set_deleted`: the request.
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct RecordsSetDeletedRequest {
+    /// Load order FormID of the record as hexadecimal digits.
+    pub form_id: String,
+    /// Plugin whose version of the record changes; the only loaded plugin
+    /// when omitted.
+    pub file: Option<String>,
+    /// `true` marks the record deleted (`TwbMainRecord.Delete`: it keeps
+    /// its place, its child group and the records that refer to it, loses
+    /// its contents, and from Fallout 4 on a placed record keeps its base
+    /// record); `false` undeletes it (it takes the contents of its master
+    /// again). Defaults to `true`.
+    #[serde(default = "default_true")]
+    pub deleted: bool,
+    /// Report the record, change nothing.
+    #[serde(default)]
+    pub dry_run: bool,
+}
+
+fn default_true() -> bool {
+    true
+}
+
+/// `records.set_deleted`: the response.
+#[derive(Serialize, JsonSchema)]
+pub struct RecordsSetDeletedResponse {
+    /// The record, after the change.
+    pub record: RecordSummary,
+    /// The deleted flag before the call.
+    pub was_deleted: bool,
+    /// Whether the flag changed (false for a dry run and when the record
+    /// already had the asked state). The plugin then needs saving.
+    pub changed: bool,
+}
+
+/// `records.set_deleted`: `IsDeleted := deleted` of the record, as the
+/// script function `SetIsDeleted` sets it (`TwbMainRecord.SetIsDeleted`,
+/// which runs `Delete` or the undelete). This is not `records.delete`,
+/// which removes the record from the plugin (`Remove`).
+fn records_set_deleted(
+    session: &mut Session,
+    request: RecordsSetDeletedRequest,
+) -> Result<RecordsSetDeletedResponse, CommandError> {
+    crate::commands::refuse_in_translate_mode("records.set_deleted")?;
+    let file = session.file(request.file.as_deref())?;
+    let form_id = parse_form_id(&request.form_id)?;
+    let record = file.contained_record_by_load_order_form_id(form_id).ok_or_else(|| {
+        CommandError::new(
+            "unknown_record",
+            format!(
+                "{} has no record with FormID {}",
+                file.get_name(),
+                form_id.to_string(false)
+            ),
+        )
+    })?;
+    let record_ref: MainRecordRef = record.clone();
+    if !with_edit_allowed(|| record_ref.get_is_editable()) {
+        return Err(CommandError::new(
+            "not_editable",
+            format!("{} can not be edited", record_ref.get_name()),
+        ));
+    }
+    let was_deleted = record.get_is_deleted();
+    let changed = was_deleted != request.deleted && !request.dry_run;
+    if changed {
+        crate::clean::run_on_large_stack(|| record.set_is_deleted(request.deleted))?.map_err(edit_failed)?;
+    }
+    Ok(RecordsSetDeletedResponse {
+        record: summary_of(&record_ref),
+        was_deleted,
+        changed,
+    })
+}
+
 /// Adds the structure commands to the registry.
 pub fn register(registry: &mut Registry) {
     registry.register(
@@ -474,5 +551,11 @@ pub fn register(registry: &mut Registry) {
         "Remove a record and its child group from a plugin (xEdit's Remove).",
         true,
         records_delete,
+    );
+    registry.register(
+        "records.set_deleted",
+        "Mark a record deleted (TwbMainRecord.Delete: it keeps its place, child group and references) or undelete it, as SetIsDeleted does; unlike records.delete it stays in the plugin.",
+        true,
+        records_set_deleted,
     );
 }

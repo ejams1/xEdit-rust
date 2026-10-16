@@ -1,0 +1,19 @@
+{
+  "description": "\"Undelete and Disable References\" in Fallout 3 with the game's options: two deleted overrides of references to moveable statics (MSTT), which no vanilla plugin has, so the port builds the plugin first (copies of REFR 00045026 and 000648B1 of Fallout3.esm, deleted with SetIsDeleted). UDRSetMSTT gives them AshPile01 ([0000001B]) as their base record; the Fallout 3 defaults leave the height alone (UDRSetZ off).",
+  "game": "fo3",
+  "load": ["Fallout3.esm"],
+  "prepare": {
+    "file": "UdrMstt.esp",
+    "commands": [
+      {"command": "files.new", "params": {"file": "UdrMstt"}},
+      {"command": "records.copy", "params": {"form_id": "00045026", "from": "Fallout3.esm", "to": "UdrMstt.esp"}},
+      {"command": "records.copy", "params": {"form_id": "000648B1", "from": "Fallout3.esm", "to": "UdrMstt.esp"}},
+      {"command": "records.set_deleted", "params": {"form_id": "00045026", "file": "UdrMstt.esp"}},
+      {"command": "records.set_deleted", "params": {"form_id": "000648B1", "file": "UdrMstt.esp"}}
+    ]
+  },
+  "select": ["UdrMstt.esp"],
+  "udr": true,
+  "itm": true,
+  "save": ["UdrMstt.esp"]
+}

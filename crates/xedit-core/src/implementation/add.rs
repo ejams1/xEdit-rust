@@ -967,11 +967,11 @@ impl MainRecordImpl {
     /// Port of `TwbMainRecord.Delete`: the record keeps its place, its child
     /// group and its references; it loses its contents, gains a fresh
     /// header and the contained-in element again, and is marked deleted.
-    /// No port front end runs it yet: upstream calls it from `DeleteInto`
-    /// only, and the GUI's Delete action is the first caller a front end
-    /// gets.
-    #[allow(dead_code)]
+    /// `SetIsDeleted(True)` runs it (`records.set_deleted` and the script
+    /// function `SetIsDeleted`).
     pub(crate) fn delete(self: &Arc<Self>) {
+        // `SelfRef := Self; DoInit(False);`
+        self.do_init();
         self.begin_update();
         let base_record = self.get_base_record();
         self.set_modified(true);

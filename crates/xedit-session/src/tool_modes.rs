@@ -1428,6 +1428,7 @@ fn tool_run(session: &mut Session, request: ToolRunRequest) -> Result<ToolRunRes
                 udr: !itm,
                 dry_run: true,
                 backup: request.backup,
+                jump_to: true,
                 ..Default::default()
             };
             // The checks of the walk (`IsEditable`, `IsRemovable`) read
