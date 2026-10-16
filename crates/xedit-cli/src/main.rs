@@ -668,6 +668,26 @@ enum AssetsAction {
         #[arg(long)]
         dry_run: bool,
     },
+    /// Run the mesh spells of a NIF and write it.
+    Optimize {
+        /// The file, or the archive that holds it.
+        file: String,
+        /// Path to write to.
+        #[arg(long)]
+        output: String,
+        /// An optimization to run: vertex-cache, overdraw, vertex-fetch, stripify or triangulate; repeatable. Omitted: vertex-cache and overdraw (the default of SpellOptimize); stripify+vertex-cache is SpellStripify, triangulate is SpellTriangulate.
+        #[arg(long = "option", alias = "options")]
+        options: Vec<String>,
+        /// The path of the file inside the archive FILE.
+        #[arg(long)]
+        archive_path: Option<String>,
+        /// The format of the file; by the extension when omitted.
+        #[arg(long)]
+        kind: Option<String>,
+        /// Run the spells and report what they would change, but write nothing.
+        #[arg(long)]
+        dry_run: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -2445,6 +2465,27 @@ fn command_of(action: Action) -> Result<(String, Value), CommandError> {
                 "assets.from-json".to_owned(),
                 json!({ "file": file, "output": output, "kind": kind, "dry_run": dry_run }),
             ),
+            AssetsAction::Optimize {
+                file,
+                output,
+                options,
+                archive_path,
+                kind,
+                dry_run,
+            } => {
+                let mut params = json!({
+                    "file": file,
+                    "output": output,
+                    "archive_path": archive_path,
+                    "kind": kind,
+                    "dry_run": dry_run,
+                });
+                // An omitted list leaves the request's default in place.
+                if !options.is_empty() {
+                    params["options"] = json!(options);
+                }
+                ("assets.optimize".to_owned(), params)
+            }
         },
         Action::Sniff { action } => match action {
             SniffAction::List => ("sniff.list".to_owned(), json!({})),
