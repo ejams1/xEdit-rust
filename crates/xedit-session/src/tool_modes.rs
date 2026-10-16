@@ -1424,14 +1424,11 @@ fn tool_run(session: &mut Session, request: ToolRunRequest) -> Result<ToolRunRes
                 .ok_or_else(|| CommandError::new("no_session", "no plugin loaded: pass --load"))?
                 .clone();
             let clean_request = crate::clean::CleanRequest {
-                file: None,
                 itm,
                 udr: !itm,
-                quick: false,
-                quick_auto_save: false,
                 dry_run: true,
-                output: None,
                 backup: request.backup,
+                ..Default::default()
             };
             // The checks of the walk (`IsEditable`, `IsRemovable`) read
             // `wbEditAllowed`, as `files.clean` arranges for its dry run.
@@ -1477,6 +1474,7 @@ fn tool_run(session: &mut Session, request: ToolRunRequest) -> Result<ToolRunRes
                     dry_run: request.dry_run,
                     output: output.clone(),
                     backup: auto_save && request.backup,
+                    ..Default::default()
                 };
                 let cleaned = crate::clean::files_clean(session, clean)?;
                 messages.extend(cleaned.messages.iter().cloned());

@@ -30,9 +30,10 @@ use serde::{Deserialize, Serialize};
 use xedit_analysis::cleaning::{self, CleanReport, CleanedElement, QuickCleanPass, UdrSettings};
 use xedit_analysis::filter::{FilterOptions, FilterReport, NavTree, apply_filter};
 use xedit_core::implementation::{ElementImpl, ElementState, FileImpl};
+use xedit_core::interface::globals;
 use xedit_core::interface::globals::{
-    can_sort_info, display_shorter_names, edit_allowed, fill_pnam, set_display_shorter_names, set_edit_allowed,
-    simple_records,
+    GameMode, can_sort_info, display_shorter_names, edit_allowed, fill_pnam, set_display_shorter_names,
+    set_edit_allowed, simple_records,
 };
 use xedit_core::interface::{Element, File};
 
@@ -45,6 +46,12 @@ pub struct CleanRequest {
     /// Name of the loaded plugin to clean; the only loaded plugin when
     /// omitted. Its masters must be loaded with it.
     pub file: Option<String>,
+    /// The plugins to clean (the navigation tree's selection): each one is
+    /// cleaned in the order given, as one click of the GUI's cleaning menu
+    /// items over a selection of several file nodes does. `file` is used
+    /// when empty. The quick clean mode cleans exactly one plugin.
+    #[serde(default)]
+    pub files: Vec<String>,
     /// Remove the records that are identical to their master, and the
     /// groups left empty ("Remove Identical to Master records").
     #[serde(default)]
@@ -78,10 +85,68 @@ pub struct CleanRequest {
     /// before the quick mode replaces it. Defaults to true, as upstream.
     #[serde(default = "default_true")]
     pub backup: bool,
+    /// `wbAllowMakePartial` (`-IKnowWhatImDoing -AllowMakePartial`): "Remove
+    /// Identical to Master records" does not remove a record identical to
+    /// its master that has children (a cell or worldspace), it makes it a
+    /// partial form (`MakePartialForm`) and counts it as removed, and it
+    /// removes a partial form whose child group is empty. Off by default,
+    /// as the release without the switch.
+    #[serde(default)]
+    pub allow_make_partial: bool,
+    /// The "Cleaning" tab of xEdit's options (`[Options] UDRSetXESP` of the
+    /// settings file), for "Undelete and Disable References": the
+    /// undeleted references get the player as an opposite enable parent
+    /// (`wbUDRSetXESP`). The game's default (`true`) when omitted.
+    pub udr_xesp: Option<bool>,
+    /// `wbUDRSetScale`: the undeleted references get the scale
+    /// `udr_scale_value`. Default `false`.
+    pub udr_scale: Option<bool>,
+    /// `wbUDRSetScaleValue`, a single precision value. Default `0.0`.
+    pub udr_scale_value: Option<f64>,
+    /// `wbUDRSetZ`: an undeleted reference that is not persistent moves to
+    /// the height `udr_z_value`. Default `true`, `false` for Fallout 3 and
+    /// New Vegas (`xeInit.pas`).
+    pub udr_z: Option<bool>,
+    /// `wbUDRSetZValue`, a single precision value. Default `-30000`,
+    /// `-15000` for Fallout 3 and New Vegas.
+    pub udr_z_value: Option<f64>,
+    /// `wbUDRSetMSTT`: in Fallout 3 an undeleted reference to a moveable
+    /// static gets the base record `udr_mstt_value`. Default `true`.
+    pub udr_mstt: Option<bool>,
+    /// `wbUDRSetMSTTValue` as the options dialog takes it: hexadecimal
+    /// digits (`0000001B`, `AshPile01`, by default); text that is not a
+    /// number keeps the default (`StrToInt64Def`).
+    pub udr_mstt_value: Option<String>,
 }
 
 fn default_true() -> bool {
     true
+}
+
+impl Default for CleanRequest {
+    /// Nothing asked for, the backup on, every setting the game's: the
+    /// fields a caller sets come on top (`..Default::default()`).
+    fn default() -> Self {
+        CleanRequest {
+            file: None,
+            files: Vec::new(),
+            itm: false,
+            udr: false,
+            quick: false,
+            quick_auto_save: false,
+            dry_run: false,
+            output: None,
+            backup: true,
+            allow_make_partial: false,
+            udr_xesp: None,
+            udr_scale: None,
+            udr_scale_value: None,
+            udr_z: None,
+            udr_z_value: None,
+            udr_mstt: None,
+            udr_mstt_value: None,
+        }
+    }
 }
 
 /// A record or group a cleaning step changed or counted.
@@ -170,10 +235,139 @@ pub struct CleanPass {
     pub saved: Option<FilesSaveResponse>,
 }
 
+/// One entry of the dirty-information list (`TLOOTPluginInfo` of
+/// `xeMainForm.pas`): the counts the cleaning handlers stored for one plugin
+/// and CRC32. xEdit's "LOOT Masterlist Entries" report
+/// (`mniNavLOManagersDirtyInfoClick`) prints them. Each handler sets only
+/// its own counts and leaves the others as they were.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct DirtyInfo {
+    /// `Plugin`: the name of the file the last record the walk visited
+    /// belongs to, as `TwbFile.FileName` gives it.
+    pub plugin: String,
+    /// `CRC32`: the file's CRC32 as the walk saw it (of the loaded bytes, or
+    /// of the last save when the walk ran after one).
+    pub crc32: u32,
+    /// `ITM`: the records (and groups) "Remove Identical to Master records"
+    /// removed, partial forms included.
+    pub itm: u64,
+    /// `UDR`: the references "Undelete and Disable References" undeleted.
+    pub udr: u64,
+    /// `NAV`: the deleted navigation meshes the UDR could not undelete.
+    pub nav: u64,
+}
+
+impl DirtyInfo {
+    /// `LOOTDirtyInfo` of `xeMainForm.pas`: the LOOT masterlist entry of one
+    /// plugin, without the trailing newline. `file_changed` is
+    /// `(i = 0) or not SameText(plugin, previous plugin)`: the entry starts
+    /// with its name when it is the first of its plugin.
+    pub fn loot_entry(&self, file_changed: bool) -> String {
+        let app = globals::app_name();
+        let (major, minor, release, build) = super::script_adapter::WB_VERSION;
+        let version = format!("{major}.{minor}.{release}{build}");
+        let util = |url: bool| {
+            if url {
+                format!("[{}Edit v{}]({})", app, version, globals::nexus_mods_url())
+            } else {
+                format!("{}Edit v{}", app, version)
+            }
+        };
+        let mut result = String::new();
+        if self.itm != 0 || self.udr != 0 || self.nav != 0 {
+            if file_changed {
+                result.push_str(&format!(
+                    "\r\n  - name: '{}'\r\n    dirty:",
+                    self.plugin.replace('\'', "''")
+                ));
+            }
+            if self.nav != 0 {
+                result.push_str("\r\n      - <<: *reqManualFix");
+            } else {
+                result.push_str("\r\n      - <<: *quickClean");
+            }
+            result.push_str(&format!("\r\n        crc: 0x{:08X}", self.crc32));
+            result.push_str(&format!("\r\n        util: '{}'", util(true)));
+            if self.itm != 0 {
+                result.push_str(&format!("\r\n        itm: {}", self.itm));
+            }
+            if self.udr != 0 {
+                result.push_str(&format!("\r\n        udr: {}", self.udr));
+            }
+            if self.nav != 0 {
+                result.push_str(&format!("\r\n        nav: {}", self.nav));
+            }
+        } else {
+            if file_changed {
+                result.push_str(&format!("\r\n  - name: '{}'\r\n", self.plugin.replace('\'', "''")));
+            }
+            result.push_str("    clean:");
+            result.push_str(&format!("\r\n      - crc: 0x{:08X}", self.crc32));
+            result.push_str(&format!("\r\n        util: '{}'", util(false)));
+        }
+        result
+    }
+
+    /// `BOSSDirtyInfo` of `xeMainForm.pas`: the BOSS entry of one plugin
+    /// (only the report of Oblivion prints them).
+    pub fn boss_entry(&self) -> String {
+        if self.itm == 0 && self.udr == 0 {
+            return String::new();
+        }
+        format!(
+            "\r\n{}\r\n  IF CHECKSUM(\"{}\", {:08X}) DIRTY: {} ITM, {} UDR records. Needs {}Edit cleaning: \"http://cs.elderscrolls.com/index.php?title=TES4Edit_Cleaning_Guide\"",
+            self.plugin,
+            self.plugin,
+            self.crc32,
+            self.itm,
+            self.udr,
+            globals::app_name()
+        )
+    }
+}
+
+/// Port of `mniNavLOManagersDirtyInfoClick`: the lines the message log gets
+/// for the dirty-information list, in order. The entries of one plugin come
+/// after each other without a name line.
+pub fn dirty_info_lines(infos: &[DirtyInfo]) -> Vec<String> {
+    let mut lines = Vec::new();
+    if infos.is_empty() {
+        return lines;
+    }
+    lines.push(String::new());
+    lines.push("LOOT Masterlist Entries".to_owned());
+    let mut boss = false;
+    for (index, info) in infos.iter().enumerate() {
+        let file_changed = index == 0 || !info.plugin.eq_ignore_ascii_case(&infos[index - 1].plugin);
+        for part in info.loot_entry(file_changed).split("\r\n") {
+            lines.push(part.to_owned());
+        }
+        if info.itm != 0 || info.udr != 0 {
+            boss = globals::game_mode() == GameMode::gmTES4;
+        }
+    }
+    lines.push(String::new());
+    if boss {
+        lines.push("BOSS Masterlist Entries".to_owned());
+        for info in infos {
+            for part in info.boss_entry().split("\r\n") {
+                lines.push(part.to_owned());
+            }
+        }
+    }
+    lines
+}
+
 #[derive(Serialize, JsonSchema)]
 pub struct CleanResponse {
     /// The cleaned plugin.
     pub file: String,
+    /// Every plugin that was cleaned (the request's selection), in the
+    /// order of the navigation tree.
+    pub files: Vec<String>,
+    /// The dirty information the steps stored (`LOOTPluginInfos`, which the
+    /// session keeps across calls: `files.dirty_info` prints all of it).
+    pub dirty_info: Vec<DirtyInfo>,
     /// Nothing was changed: the counts are what a clean would do.
     pub dry_run: bool,
     pub passes: Vec<CleanPass>,
@@ -195,6 +389,50 @@ pub struct CleanResponse {
     pub messages: Vec<String>,
 }
 
+/// The UDR settings of a request: the game's defaults (the "Cleaning" tab of
+/// the options dialog as `wbInterface.pas` initialises it and `xeInit.pas`
+/// changes it, [`UdrSettings::for_game`]), with the settings the request
+/// names overriding them.
+pub fn udr_settings(request: &CleanRequest) -> UdrSettings {
+    let mut settings = UdrSettings::for_game();
+    if let Some(value) = request.udr_xesp {
+        settings.set_xesp = value;
+    }
+    if let Some(value) = request.udr_scale {
+        settings.set_scale = value;
+    }
+    // `wbUDRSetScaleValue` and `wbUDRSetZValue` are `Single`.
+    if let Some(value) = request.udr_scale_value {
+        settings.scale_value = f64::from(value as f32);
+    }
+    if let Some(value) = request.udr_z {
+        settings.set_z = value;
+    }
+    if let Some(value) = request.udr_z_value {
+        settings.z_value = f64::from(value as f32);
+    }
+    if let Some(value) = request.udr_mstt {
+        settings.set_mstt = value;
+    }
+    // `StrToInt64Def('$' + edUDRSetMSTTValue.Text, wbUDRSetMSTTValue)`;
+    // the value is an `Int64` the reference's `NAME` takes as a FormID.
+    if let Some(text) = &request.udr_mstt_value
+        && let Some(value) = parse_hex_def(text)
+    {
+        settings.mstt_value = value as u32;
+    }
+    settings
+}
+
+/// `StrToInt64Def('$' + text, ...)`: hexadecimal digits that fit an
+/// `Int64`, else `None` (the default stays).
+fn parse_hex_def(text: &str) -> Option<i64> {
+    if text.is_empty() || !text.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        return None;
+    }
+    u64::from_str_radix(text, 16).ok().map(|value| value as i64)
+}
+
 /// Core of `files.clean` for one plugin, which the tool modes of step 9
 /// (`-quickautoclean`, `-quickclean`, `-checkforitm`, `-checkfordr`) call:
 /// the passes as the request asks for them.
@@ -203,12 +441,49 @@ pub fn clean_file(
     files: &[Arc<FileImpl>],
     request: &CleanRequest,
 ) -> Result<CleanResponse, CommandError> {
+    clean_targets(std::slice::from_ref(target), files, request, &mut Vec::new())
+}
+
+/// Core of `files.clean` for the request's selection: the passes as the
+/// request asks for them, over `targets` (the file nodes the caller
+/// selected) with `loaded` the files of the session (the tree the GUI's
+/// filter walks). `dirty_info` is the session's `LOOTPluginInfos`, which
+/// the steps update.
+pub fn clean_targets(
+    targets: &[Arc<FileImpl>],
+    loaded: &[Arc<FileImpl>],
+    request: &CleanRequest,
+    dirty_info: &mut Vec<DirtyInfo>,
+) -> Result<CleanResponse, CommandError> {
     if !(request.itm || request.udr || request.quick) {
         return Err(CommandError::new("invalid_params", "pass itm, udr or quick"));
     }
-    let settings = UdrSettings::for_game();
+    // `GetSortedSelection(True)`: the file nodes in the order of the tree,
+    // which is the load order.
+    let mut targets = targets.to_vec();
+    targets.sort_by_key(|target| {
+        loaded
+            .iter()
+            .position(|file| Arc::ptr_eq(file, target))
+            .unwrap_or(usize::MAX)
+    });
+    targets.dedup_by(|a, b| Arc::ptr_eq(a, b));
+    let targets = targets.as_slice();
+    let Some(first) = targets.first() else {
+        return Err(CommandError::new("no_file", "no plugin to clean"));
+    };
+    let allow_make_partial = request.allow_make_partial || globals::allow_make_partial();
+    if request.quick && targets.len() > 1 {
+        // `Exactly one module must be selected for Quick Clean mode.`
+        return Err(CommandError::new(
+            "invalid_params",
+            "the quick clean mode cleans exactly one plugin",
+        ));
+    }
+    let settings = udr_settings(request);
     let mut response = CleanResponse {
-        file: target.get_name(),
+        file: first.get_name(),
+        files: targets.iter().map(|target| target.get_name()).collect(),
         dry_run: request.dry_run,
         passes: Vec::new(),
         itm: 0,
@@ -217,6 +492,7 @@ pub fn clean_file(
         unsaved: false,
         fill_pnam: fill_pnam() && can_sort_info(),
         full_definitions: !simple_records(),
+        dirty_info: Vec::new(),
         messages: Vec::new(),
     };
     if request.quick && (simple_records() || (can_sort_info() && !fill_pnam())) {
@@ -236,9 +512,10 @@ pub fn clean_file(
     };
     for pass_index in 0..passes {
         let pass = if request.quick {
-            cleaning::quick_clean_pass(target, files, request.dry_run, &settings).map_err(edit_failed)?
+            cleaning::quick_clean_pass(first, loaded, request.dry_run, &settings, allow_make_partial)
+                .map_err(edit_failed)?
         } else {
-            single_pass(target, files, request, &settings)?
+            selection_pass(targets, loaded, request, &settings, allow_make_partial)?
         };
         response.messages.extend(pass.filter.messages.iter().cloned());
         response.messages.push(format!(
@@ -251,12 +528,16 @@ pub fn clean_file(
             response.messages.extend(pass.udr.messages.iter().cloned());
             response.udr += pass.udr.cleaned.len() as u64;
             response.deleted_navmeshes = pass.udr.deleted_navmeshes;
+            store_dirty_info(dirty_info, &pass.udr, None);
         }
         if do_itm {
             response.messages.extend(pass.itm.messages.iter().cloned());
             response.itm += pass.itm.cleaned.len() as u64;
+            store_dirty_info(dirty_info, &pass.itm, Some(pass.itm.cleaned.len() as u64));
         }
-        let was_unsaved = target.element_base().has_state(ElementState::esUnsaved);
+        let was_unsaved = targets
+            .iter()
+            .any(|target| target.element_base().has_state(ElementState::esUnsaved));
         let mut report = CleanPass {
             filter: CleanFilter::from(&pass.filter),
             udr: do_udr.then(|| CleanStep::from(&pass.udr)),
@@ -268,8 +549,8 @@ pub fn clean_file(
         // is not saved (UPSTREAM-QUIRK).
         let save = request.quick && request.quick_auto_save && !request.dry_run && pass_index < 2;
         if save && was_unsaved {
-            let saved = save_file(target, request.output.clone(), false, request.backup)?;
-            response.messages.push(format!("Saving: {}", target.get_name()));
+            let saved = save_file(first, request.output.clone(), false, request.backup)?;
+            response.messages.push(format!("Saving: {}", first.get_name()));
             report.saved = Some(saved);
         }
         response.passes.push(report);
@@ -277,36 +558,90 @@ pub fn clean_file(
             break;
         }
     }
-    response.unsaved = target.element_base().has_state(ElementState::esUnsaved);
+    response.unsaved = targets
+        .iter()
+        .any(|target| target.element_base().has_state(ElementState::esUnsaved));
+    // The quick clean mode ends with `mniNavLOManagersDirtyInfoClick`
+    // (`if xeQuickCleanAutoSave`): the LOOT Masterlist Entries of the
+    // session's dirty information, which the run's message log holds.
+    if request.quick && request.quick_auto_save && !request.dry_run {
+        response.messages.extend(dirty_info_lines(dirty_info));
+    }
+    response.dirty_info = dirty_info.clone();
     Ok(response)
 }
 
-/// The filter for cleaning, then the UDR and the ITM removal as asked.
-fn single_pass(
-    target: &Arc<FileImpl>,
-    files: &[Arc<FileImpl>],
+/// The dirty information of one cleaning step (`PluginCRC32 := CRC32` of the
+/// last record the walk visited, then the store of the counts): the entry of
+/// that plugin and CRC32 is updated, made when missing, and the counts the
+/// step does not set stay as they were. `itm` is `None` for the UDR step,
+/// which sets the UDR and NAV counts.
+fn store_dirty_info(infos: &mut Vec<DirtyInfo>, report: &CleanReport, itm: Option<u64>) {
+    let Some((plugin, crc32)) = report.plugin.as_ref().map(|(name, crc)| (name.clone(), *crc)) else {
+        return;
+    };
+    let entry = match infos
+        .iter_mut()
+        .find(|info| info.plugin == plugin && info.crc32 == crc32)
+    {
+        Some(entry) => entry,
+        None => {
+            infos.push(DirtyInfo {
+                plugin,
+                crc32,
+                itm: 0,
+                udr: 0,
+                nav: 0,
+            });
+            infos.last_mut().expect("just pushed")
+        }
+    };
+    match itm {
+        Some(count) => entry.itm = count,
+        None => {
+            entry.udr = report.cleaned.len() as u64;
+            entry.nav = report.deleted_navmeshes;
+        }
+    }
+}
+
+/// The filter for cleaning, then the UDR and the ITM removal as asked, over
+/// every selected file node. The tree holds the session's files
+/// (`ReInitTree`), the filter runs once (`mniNavFilterForCleaningClick`
+/// before the clicks), and each click walks the selection's file nodes in
+/// the order of the tree (`GetSortedSelection(True)`), each from its last
+/// node back: the UDR over all of them, then the ITM removal.
+fn selection_pass(
+    targets: &[Arc<FileImpl>],
+    loaded: &[Arc<FileImpl>],
     request: &CleanRequest,
     settings: &UdrSettings,
+    allow_make_partial: bool,
 ) -> Result<QuickCleanPass, CommandError> {
-    let mut tree = NavTree::new(std::slice::from_ref(target));
+    let mut tree = NavTree::new(loaded);
     let filter =
-        apply_filter(&mut tree, &FilterOptions::for_cleaning(), files).map_err(|error| edit_failed(error.message))?;
-    let start = tree
-        .file_node(target)
-        .ok_or_else(|| CommandError::new("internal", "the plugin has no node"))?;
-    // The GUI selects the file node (`JumpTo` its header expands it, and
-    // the tree sorts the children of an expanded node, `toAutoSort`).
-    tree.sort_children(start);
+        apply_filter(&mut tree, &FilterOptions::for_cleaning(), loaded).map_err(|error| edit_failed(error.message))?;
+    let mut starts = Vec::new();
+    for target in targets {
+        let start = tree
+            .file_node(target)
+            .ok_or_else(|| CommandError::new("internal", "the plugin has no node"))?;
+        // The GUI selects the file node (`JumpTo` its header expands it, and
+        // the tree sorts the children of an expanded node, `toAutoSort`).
+        tree.sort_children(start);
+        starts.push(start);
+    }
     let mut pass = QuickCleanPass {
         filter,
         ..Default::default()
     };
     if request.udr {
-        pass.udr = cleaning::undelete_and_disable_references(&mut tree, start, request.dry_run, settings)
+        pass.udr = cleaning::undelete_and_disable_references(&mut tree, &starts, request.dry_run, settings)
             .map_err(edit_failed)?;
     }
     if request.itm {
-        pass.itm = cleaning::remove_identical_to_master(&mut tree, start, request.dry_run).map_err(edit_failed)?;
+        pass.itm = cleaning::remove_identical_to_master(&mut tree, &starts, request.dry_run, allow_make_partial)
+            .map_err(edit_failed)?;
     }
     Ok(pass)
 }
@@ -325,28 +660,34 @@ pub fn quick_auto_clean(
 ) -> Result<CleanResponse, CommandError> {
     let request = CleanRequest {
         file: file.map(str::to_owned),
-        itm: false,
-        udr: false,
         quick: true,
         quick_auto_save: true,
-        dry_run: false,
         output,
-        backup: true,
+        ..Default::default()
     };
     files_clean(session, request)
 }
 
 pub(crate) fn files_clean(session: &mut Session, request: CleanRequest) -> Result<CleanResponse, CommandError> {
     crate::commands::refuse_in_translate_mode("files.clean")?;
-    let target = session.file(request.file.as_deref())?;
-    if target
-        .get_file_states()
-        .contains(xedit_core::interface::FileState::fsIsHardcoded)
-    {
-        return Err(CommandError::new(
-            "not_editable",
-            "the hardcoded records are not a plugin",
-        ));
+    let mut targets = Vec::new();
+    if request.files.is_empty() {
+        targets.push(session.file(request.file.as_deref())?);
+    } else {
+        for name in &request.files {
+            targets.push(session.file(Some(name))?);
+        }
+    }
+    for target in &targets {
+        if target
+            .get_file_states()
+            .contains(xedit_core::interface::FileState::fsIsHardcoded)
+        {
+            return Err(CommandError::new(
+                "not_editable",
+                "the hardcoded records are not a plugin",
+            ));
+        }
     }
     let files = crate::conflicts::session_files(session)?;
     // The checks of the GUI (`IsEditable`, `IsRemovable`) read
@@ -360,10 +701,39 @@ pub(crate) fn files_clean(session: &mut Session, request: CleanRequest) -> Resul
     set_display_shorter_names(true);
     // The records build deeply through the definitions: a thread with a
     // large stack, as the dump and the save use.
-    let result = run_on_large_stack(|| clean_file(&target, &files, &request)).and_then(|result| result);
+    let mut dirty_info = std::mem::take(&mut session.dirty_info);
+    let result =
+        run_on_large_stack(|| clean_targets(&targets, &files, &request, &mut dirty_info)).and_then(|result| result);
+    session.dirty_info = dirty_info;
     set_display_shorter_names(shorter_names);
     set_edit_allowed(allowed);
     result
+}
+
+#[derive(Deserialize, JsonSchema, Default)]
+#[serde(deny_unknown_fields)]
+pub struct DirtyInfoRequest {}
+
+#[derive(Serialize, JsonSchema)]
+pub struct DirtyInfoResponse {
+    /// The dirty information the cleaning steps of the session stored
+    /// (`LOOTPluginInfos`), one entry per plugin and CRC32.
+    pub entries: Vec<DirtyInfo>,
+    /// The lines xEdit's "LOOT Masterlist Entries" (and, for Oblivion, "BOSS
+    /// Masterlist Entries") adds to the message log; empty when no step
+    /// stored anything (the GUI hides the menu item then).
+    pub messages: Vec<String>,
+}
+
+/// `files.dirty_info`: port of `mniNavLOManagersDirtyInfoClick`, the LOOT
+/// masterlist entries of the dirty information the session's cleaning steps
+/// stored.
+fn files_dirty_info(session: &mut Session, _request: DirtyInfoRequest) -> Result<DirtyInfoResponse, CommandError> {
+    session.mode()?;
+    Ok(DirtyInfoResponse {
+        entries: session.dirty_info.clone(),
+        messages: dirty_info_lines(&session.dirty_info),
+    })
 }
 
 #[derive(Deserialize, JsonSchema)]
@@ -484,6 +854,12 @@ pub fn register(registry: &mut Registry) {
         "Copy the records that refer to injected records of a plugin which is not their master into that plugin, and remove those references from the originals (mniNavCleanupInjectedClick).",
         true,
         records_cleanup_injected,
+    );
+    registry.register(
+        "files.dirty_info",
+        "The LOOT masterlist entries of the dirty information the cleaning steps of the session stored (mniNavLOManagersDirtyInfoClick): per plugin and CRC32 the ITM, UDR and deleted navmesh counts.",
+        false,
+        files_dirty_info,
     );
     registry.register(
         "files.clean",

@@ -66,6 +66,9 @@ pub struct Session {
     /// (the `--edit` flag of the CLI). Without it a mutating command runs
     /// only as a dry run.
     edit_allowed: bool,
+    /// `LOOTPluginInfos` of the main form: the dirty information the
+    /// cleaning steps stored, per plugin and CRC32.
+    pub(crate) dirty_info: Vec<clean::DirtyInfo>,
 }
 
 impl Session {
@@ -78,6 +81,7 @@ impl Session {
             game: Some(game),
             files,
             edit_allowed: false,
+            dirty_info: Vec::new(),
         }
     }
 

@@ -339,9 +339,9 @@ enum Action {
     },
     /// Clean a plugin (files.clean): remove the records identical to their master (--itm), undelete and disable the deleted references (--udr), or run xEdit's quick auto clean mode (--quick: both, saved, repeated while a pass changes the plugin). Without --edit only --dry-run, which counts.
     Clean {
-        /// Plugin name; the only loaded plugin when omitted.
+        /// Plugin name; the only loaded plugin when omitted. Repeat it to clean several plugins in one go, as xEdit's cleaning functions do over a selection of several plugins (not with --quick).
         #[arg(long)]
-        file: Option<String>,
+        file: Vec<String>,
         /// Remove the records that are identical to their master and the groups left empty.
         #[arg(long)]
         itm: bool,
@@ -360,6 +360,27 @@ enum Action {
         /// Do not move an existing file at the output path to the backup folder.
         #[arg(long)]
         no_backup: bool,
+        /// UDR option of xEdit's options (UDRSetXESP): the undeleted references get the player as an opposite enable parent. The game's default (true) when omitted.
+        #[arg(long)]
+        udr_xesp: Option<bool>,
+        /// UDR option (UDRSetScale): the undeleted references get the scale of --udr-scale-value. Default false.
+        #[arg(long)]
+        udr_scale: Option<bool>,
+        /// UDR option (UDRSetScaleValue). Default 0.0.
+        #[arg(long, allow_negative_numbers = true)]
+        udr_scale_value: Option<f64>,
+        /// UDR option (UDRSetZ): an undeleted reference that is not persistent moves to the height of --udr-z-value. Default true, false for Fallout 3 and New Vegas.
+        #[arg(long)]
+        udr_z: Option<bool>,
+        /// UDR option (UDRSetZValue). Default -30000, -15000 for Fallout 3 and New Vegas.
+        #[arg(long, allow_negative_numbers = true)]
+        udr_z_value: Option<f64>,
+        /// UDR option (UDRSetMSTT): in Fallout 3 an undeleted reference to a moveable static gets the base record of --udr-mstt-value. Default true.
+        #[arg(long)]
+        udr_mstt: Option<bool>,
+        /// UDR option (UDRSetMSTTValue): the FormID as hexadecimal digits. Default 0000001B (AshPile01).
+        #[arg(long)]
+        udr_mstt_value: Option<String>,
     },
     /// The tool modes of xEdit (xeInit.pas): list them, or run one over the loaded plugins (setesm, clearesm, masterupdate, masterrestore, onamupdate, sortandcleanmasters, generateseq, checkforerrors, checkforitm, checkfordr, export).
     Tool {
@@ -2612,11 +2633,21 @@ fn command_of(action: Action) -> Result<(String, Value), CommandError> {
             dry_run,
             output,
             no_backup,
+            udr_xesp,
+            udr_scale,
+            udr_scale_value,
+            udr_z,
+            udr_z_value,
+            udr_mstt,
+            udr_mstt_value,
         } => (
             "files.clean".to_owned(),
             json!({
-                "file": file, "itm": itm, "udr": udr, "quick": quick, "dry_run": dry_run,
-                "output": output, "backup": !no_backup
+                "files": file, "itm": itm, "udr": udr, "quick": quick, "dry_run": dry_run,
+                "output": output, "backup": !no_backup,
+                "udr_xesp": udr_xesp, "udr_scale": udr_scale, "udr_scale_value": udr_scale_value,
+                "udr_z": udr_z, "udr_z_value": udr_z_value, "udr_mstt": udr_mstt,
+                "udr_mstt_value": udr_mstt_value
             }),
         ),
         Action::Check {
