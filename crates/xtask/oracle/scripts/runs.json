@@ -57,6 +57,7 @@
       "save": [
         "Skyrim.esm"
       ],
+      "accept": "UPSTREAM-BUG not reproduced (docs/PLAN.md, fix-sse-filters): the oracle's quick init (the script reads every record's name first) empties the 850 records whose subrecords all lie before QuickInitLimit and lack a required member (697 KYWD, 2 LCRT, 69 AACT, 82 ACTI), and its save writes their EDID alone; the port keeps and completes their subrecords. Everything else in the saved bytes is compared by the record-by-record diff of parity #23",
       "note": "edits records: the saved bytes are compared"
     },
     {
@@ -777,7 +778,7 @@
       "save": [
         "Skyrim.esm"
       ],
-      "note": "parity #23 fixture: the editor ID edit after a quick init (GetEditorID) of a record whose subrecords all precede QuickInitLimit collapses the record to the EDID the script adds; the AVIF CNAM AfterLoad; the Copy index clamping; the StrictDelimiter parsing. The element lists and the saved bytes are compared"
+      "note": "parity #23 fixture, reshaped by fix-sse-filters: the editor ID edit of records whose subrecords all precede QuickInitLimit, read through ElementByName first so both sides keep them (the name-first read, where upstream's quick init empties the record and the port keeps it, is the UPSTREAM-BUG divergence the unit test the_quick_init_keeps_the_subrecords_upstream_loses pins); the AVIF CNAM AfterLoad; the Copy index clamping; the StrictDelimiter parsing. The element lists and the saved bytes are compared"
     },
     {
       "script": "probes/refs-edit.pas",

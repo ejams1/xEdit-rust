@@ -1578,6 +1578,20 @@ fn fixture_lines_for(
 ) -> Vec<String> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..").join("..");
     let text = std::fs::read_to_string(root.join("crates/xtask/oracle/scripts/probes").join(probe)).unwrap();
+    fixture_lines_for_text(probe, &text, fixture, build_refs, game, mode, master_name)
+}
+
+/// The same over the given script text (a variant of a probe).
+fn fixture_lines_for_text(
+    probe: &str,
+    text: &str,
+    fixture: &str,
+    build_refs: bool,
+    game: &str,
+    mode: GameMode,
+    master_name: &str,
+) -> Vec<String> {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..").join("..");
     let bytes = std::fs::read(root.join("tests/fixtures/parity").join(fixture)).unwrap();
     xedit_core::implementation::clear_files_map();
     xedit_core::implementation::reset_load_order_slots();
@@ -1590,7 +1604,7 @@ fn fixture_lines_for(
     let master = open(master_name, bytes);
     let mut session = Session::with_files(mode, vec![master]);
     session.allow_edit(true);
-    let folder = script_folder(probe.trim_end_matches(".pas"), probe, &text);
+    let folder = script_folder(probe.trim_end_matches(".pas"), probe, text);
     let result = run(&mut session, &folder, probe, json!({"build_refs": build_refs}));
     xedit_core::interface::globals::set_allow_edit_game_master(false);
     assert_eq!(result["aborted"], false, "{:?}", lines(&result));
@@ -1607,20 +1621,20 @@ fn fixture_lines_for(
 }
 
 /// The lines the oracle wrote for the probe (`cargo xtask parity script
-/// --script edid-quick-init`, 2026-10-15, equal): the record read by its
-/// name first loses its subrecords (0 elements, the added EDID alone), the
-/// one read through `ElementByName` first keeps them and gains its required
-/// colour, the AVIF category above 3 becomes 0, `Copy` clamps the index to
-/// 1 and keeps the count, and `StrictDelimiter` splits on the delimiter
-/// alone.
+/// --script edid-quick-init`, 2026-10-16, equal, the case reshaped so every
+/// record is read through `ElementByName` first): a record whose subrecords
+/// all lie before `QuickInitLimit` keeps them and gains its required colour
+/// or marker colour and flags, the AVIF category above 3 becomes 0, `Copy`
+/// clamps the index to 1 and keeps the count, and `StrictDelimiter` splits
+/// on the delimiter alone.
 #[test]
 fn the_edid_quick_init_probe_gives_the_oracle_lines() {
     let _guard = test_lock();
     let expected: Vec<&str> = vec![
-        "Processing: KwdNoColorNamed [KYWD:00000800]",
-        "EDID missing",
-        "before: 0 []",
-        "after: 1 [EDID - Editor ID]",
+        "Processing: 00000800",
+        "EDID present",
+        "before: 3 [Record Header, EDID - Editor ID, CNAM - Color]",
+        "after: 3 [Record Header, EDID - Editor ID, CNAM - Color]",
         "EDID=KwdNoColorNamed2 CNAM=",
         "Processing: 00000801",
         "EDID present",
@@ -1632,10 +1646,10 @@ fn the_edid_quick_init_probe_gives_the_oracle_lines() {
         "before: 3 [Record Header, EDID - Editor ID, CNAM - Color]",
         "after: 3 [Record Header, EDID - Editor ID, CNAM - Color]",
         "EDID=KwdColor2 CNAM=",
-        "Processing: ActiBounds [ACTI:00000803]",
-        "EDID missing",
-        "before: 0 []",
-        "after: 1 [EDID - Editor ID]",
+        "Processing: 00000803",
+        "EDID present",
+        "before: 5 [Record Header, EDID - Editor ID, OBND - Object Bounds, PNAM - Marker Color, FNAM - Flags]",
+        "after: 5 [Record Header, EDID - Editor ID, OBND - Object Bounds, PNAM - Marker Color, FNAM - Flags]",
         "EDID=ActiBounds2 CNAM=",
         "Processing: ActiFull \"Full Activator\" [ACTI:00000804]",
         "EDID present",
@@ -1678,6 +1692,56 @@ fn the_edid_quick_init_probe_gives_the_oracle_lines() {
         fixture_lines("edid-quick-init.pas", "edid-quick-init.esm", false),
         expected
     );
+}
+
+/// UPSTREAM-BUG (not reproduced, user decision 2026-10-16): the same probe
+/// with the keyword and the activator read by their name first. Upstream's
+/// quick init (`GetEditorID` under `mrsQuickInit`) of a record whose
+/// subrecords all lie before `QuickInitLimit` runs the tail of `Init`, adds
+/// the required members as an internal edit and releases the elements with
+/// the storage invalid; its next init collapses the storage from no
+/// elements, so upstream's record has 0 elements and is saved with the
+/// added EDID alone (the oracle's lines of 2026-10-15: `EDID missing`,
+/// `before: 0 []`, `after: 1 [EDID - Editor ID]`). The port collapses the
+/// storage from the elements before it releases them
+/// (`MainRecordImpl::collapse_storage_after_quick_init`), so the record
+/// read by its name first ends as the one read through `ElementByName`
+/// first does.
+#[test]
+fn the_quick_init_keeps_the_subrecords_upstream_loses() {
+    let _guard = test_lock();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..").join("..");
+    let probe = root.join("crates/xtask/oracle/scripts/probes/edid-quick-init.pas");
+    let original = std::fs::read_to_string(&probe).unwrap();
+    let text = original
+        .replace("Probe($00000800, False,", "Probe($00000800, True,")
+        .replace("Probe($00000803, False,", "Probe($00000803, True,");
+    assert_ne!(text, original);
+    let lines = fixture_lines_for_text(
+        "edid-quick-init.pas",
+        &text,
+        "edid-quick-init.esm",
+        false,
+        "sse",
+        GameMode::gmSSE,
+        "Skyrim.esm",
+    );
+    let expected: Vec<&str> = vec![
+        "Processing: KwdNoColorNamed [KYWD:00000800]",
+        "EDID present",
+        "before: 3 [Record Header, EDID - Editor ID, CNAM - Color]",
+        "after: 3 [Record Header, EDID - Editor ID, CNAM - Color]",
+        "EDID=KwdNoColorNamed2 CNAM=",
+    ];
+    assert_eq!(&lines[..5], &expected[..]);
+    let expected: Vec<&str> = vec![
+        "Processing: ActiBounds [ACTI:00000803]",
+        "EDID present",
+        "before: 5 [Record Header, EDID - Editor ID, OBND - Object Bounds, PNAM - Marker Color, FNAM - Flags]",
+        "after: 5 [Record Header, EDID - Editor ID, OBND - Object Bounds, PNAM - Marker Color, FNAM - Flags]",
+        "EDID=ActiBounds2 CNAM=",
+    ];
+    assert_eq!(&lines[15..20], &expected[..]);
 }
 
 /// The lines the oracle wrote for the probe (`cargo xtask parity script

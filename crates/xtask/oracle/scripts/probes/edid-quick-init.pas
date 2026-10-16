@@ -1,14 +1,23 @@
 {
-  Parity fixture (issue #23): the editor ID edit of a record whose name was
-  read first. Upstream's quick init (GetEditorID) of a record whose
-  subrecords all lie before QuickInitLimit runs the tail of Init, adds the
-  required members as an internal edit and releases the elements; the next
-  init collapses the invalidated storage from the elements it has (none),
-  so the record loses its subrecords and is saved with the EDID the script
-  adds alone. A record read through ElementByName first keeps its data and
-  gains its required members. The AVIF CNAM AfterLoad zeroes a category
-  above 3. The Copy lines pin the RTL's index clamping, the DelimitedText
-  lines the StrictDelimiter parsing of TStrings.
+  Parity fixture (issue #23, reshaped by fix-sse-filters): the editor ID
+  edit of records whose subrecords all lie before QuickInitLimit (a KYWD
+  without its CNAM, an ACTI with EDID and OBND alone). Upstream's quick init
+  (GetEditorID, run by Name) of such a record runs the tail of Init, adds
+  the required members as an internal edit and releases the elements; the
+  next init collapses the invalidated storage from the elements it has
+  (none), so upstream loses the record's subrecords and saves the EDID the
+  script adds alone. That is an upstream bug that loses data, which the
+  port does not reproduce (UPSTREAM-BUG, docs/PLAN.md): the port collapses
+  the storage from the elements before it releases them, so the record
+  keeps its data and gains its required members, as a record read through
+  ElementByName first does on both sides. This case therefore reads every
+  record through ElementByName first (aNameFirst False), where both sides
+  end in the same state; the name-first read is pinned port-side by the
+  unit test the_quick_init_keeps_the_subrecords_upstream_loses, which runs
+  this script with aNameFirst True for the two records. The AVIF CNAM
+  AfterLoad zeroes a category above 3. The Copy lines pin the RTL's index
+  clamping, the DelimitedText lines the StrictDelimiter parsing of
+  TStrings.
 }
 unit EdidQuickInit;
 
@@ -63,10 +72,10 @@ begin
     if SameText(GetFileName(f), 'Skyrim.esm') then
       gFile := f;
   end;
-  Probe($00000800, True, 'KwdNoColorNamed2');
+  Probe($00000800, False, 'KwdNoColorNamed2');
   Probe($00000801, False, 'KwdNoColorPath2');
   Probe($00000802, True, 'KwdColor2');
-  Probe($00000803, True, 'ActiBounds2');
+  Probe($00000803, False, 'ActiBounds2');
   Probe($00000804, True, 'ActiFull2');
   Probe($00000805, True, 'AvifBig2');
   Probe($00000806, True, 'AvifSmall2');

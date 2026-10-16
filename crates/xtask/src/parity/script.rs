@@ -664,6 +664,12 @@ struct RunCase {
     /// stem, so the two runs keep separate folders and report lines.
     #[serde(default)]
     variant: Option<String>,
+    /// The reason the case is accepted when it differs: a divergence
+    /// `docs/PLAN.md` documents (an upstream bug that loses data, which the
+    /// port does not reproduce). The outcome is then `known-difference`; a
+    /// case that turns out equal stays `equal`.
+    #[serde(default)]
+    accept: Option<String>,
     /// What the case is for, when it is not obvious.
     #[serde(default)]
     #[allow(dead_code, reason = "documentation in the file")]
@@ -705,7 +711,8 @@ struct Task {
     /// The load settings of the case (`-PseudoESL` for the GUI, the port's
     /// flag for the same setting).
     switches: Vec<String>,
-    /// The reason `parse.json` accepts a script the oracle refuses.
+    /// The reason `parse.json` accepts a script the oracle refuses, a probe
+    /// `probes.json` accepts, or a run case `runs.json` accepts.
     accepted: Option<String>,
     #[allow(dead_code, reason = "read where a case loads the game's plugins")]
     stem: String,
@@ -1014,7 +1021,7 @@ pub(super) fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
                 data_files,
                 synthetic_master: case.synthetic_master,
                 master,
-                accepted: None,
+                accepted: case.accept.clone(),
             });
         }
     }
@@ -1113,9 +1120,10 @@ pub(super) fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
                                 port_seconds: None,
                             }
                         });
-                    // A probe `probes.json` accepts: whatever the outcome,
-                    // the reason is the record.
-                    if task.phase == "probe"
+                    // A probe `probes.json` accepts, or a run case with
+                    // `accept`: whatever the outcome, the reason is the
+                    // record.
+                    if matches!(task.phase, "probe" | "run")
                         && let Some(reason) = &task.accepted
                         && !matches!(outcome.status, "equal" | "equal-error")
                     {
@@ -2271,16 +2279,25 @@ fn port_run(
     // comparison to hold, and the oracle's capture is run-phase only anyway
     // (a probe of the corpus that writes its own scratch files, `streams.pas`,
     // would otherwise differ on files only the port captured).
+    // The file differences are kept apart from the log's: a memo loss
+    // excuses missing log lines only, never a written or saved file that
+    // differs (the `equal-log-loss` status once covered both, so a saved
+    // plugin whose bytes differed read as equal whenever the memo had lost
+    // lines; found by the fix-sse-filters branch on `Add Prefix Plus Name To
+    // EDID.pas`, whose 850 emptied records never showed).
+    let mut file_differences = Vec::new();
     if task.phase == "run" {
         let (port_files, port_saved) = capture_port(&dir, &skip, &task.save)?;
-        compare_files(&oracle.files, &port_files, "written", &mut differences);
-        compare_files(&oracle.saved, &port_saved, "saved", &mut differences);
+        compare_files(&oracle.files, &port_files, "written", &mut file_differences);
+        compare_files(&oracle.saved, &port_saved, "saved", &mut file_differences);
     }
     outcome.files = oracle.files.len() + oracle.saved.len();
     outcome.log_lines = oracle_lines.len();
-    if differences.is_empty() {
+    if differences.is_empty() && file_differences.is_empty() {
         outcome.status = "equal";
-    } else if let Some(lost) = memo_loss(&oracle_lines, &port_lines) {
+    } else if file_differences.is_empty()
+        && let Some(lost) = memo_loss(&oracle_lines, &port_lines)
+    {
         outcome.status = "equal-log-loss";
         outcome.detail = Some(format!(
             "  the oracle's memo of the run lost {} lines in {} runs; every line it kept is the port's, in order, and the first, last and Done lines are equal",
@@ -2288,6 +2305,16 @@ fn port_run(
             lost
         ));
     } else {
+        if !file_differences.is_empty()
+            && let Some(lost) = memo_loss(&oracle_lines, &port_lines)
+        {
+            differences.push(format!(
+                "  the oracle's memo of the run lost {} lines in {} runs (every line it kept is the port's); the files differ:",
+                port_lines.len() - oracle_lines.len(),
+                lost
+            ));
+        }
+        differences.extend(file_differences);
         outcome.status = "different";
         let extra = differences.len().saturating_sub(LISTED_DIFFERENCES);
         differences.truncate(LISTED_DIFFERENCES);
