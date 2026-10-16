@@ -707,8 +707,42 @@ pub fn round(value: f64) -> i64 {
     if value.is_nan() || value >= 9_223_372_036_854_775_808.0 || value < -9_223_372_036_854_775_808.0 {
         i64::MIN
     } else {
-        value.round_ties_even() as i64
+        // `cvtsd2si` follows the rounding mode of the FPU, which
+        // `Math.SetRoundMode` sets (the script's `Round`); `Math.Round` and
+        // the record code run under the default `rmNearest` unless a script
+        // changed it, as upstream.
+        match round_mode() {
+            RM_DOWN => value.floor() as i64,
+            RM_UP => value.ceil() as i64,
+            RM_TRUNCATE => value.trunc() as i64,
+            _ => value.round_ties_even() as i64,
+        }
     }
+}
+
+/// `rmNearest` — `Math.TFPURoundingMode`: 0 nearest, 1 down (-inf), 2 up
+/// (+inf), 3 toward zero (the `MXCSR` encoding, which the RTL's x87 control
+/// word shares).
+pub const RM_NEAREST: u8 = 0;
+pub const RM_DOWN: u8 = 1;
+pub const RM_UP: u8 = 2;
+pub const RM_TRUNCATE: u8 = 3;
+
+static ROUND_MODE: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(RM_NEAREST);
+
+/// `Math.GetRoundMode`: the mode of the process (`rmNearest` at the start,
+/// the x87 control word the RTL's process inherits).
+pub fn round_mode() -> u8 {
+    ROUND_MODE.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+/// `Math.SetRoundMode`: sets the mode the FPU carries and answers the
+/// previous one. The caller also sets the hardware state (the `MXCSR`
+/// rounding bits), so the arithmetic a script makes after the call follows
+/// the mode as the oracle's does (`0.1 + 0.2` prints differently under
+/// `rmDown`).
+pub fn set_round_mode(mode: u8) -> u8 {
+    ROUND_MODE.swap(mode & 3, std::sync::atomic::Ordering::Relaxed)
 }
 
 /// Port of `Trunc` with the same out-of-range rule as [`round`] (`cvttsd2si`

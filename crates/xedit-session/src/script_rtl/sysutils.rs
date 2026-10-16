@@ -1438,8 +1438,20 @@ fn register_functions(adapter: &mut Adapter, vcl: Rc<RefCell<dyn Vcl>>) {
         let locale = arg_i32(args, 0)?;
         let locale_type = arg_i32(args, 1)?;
         let default = arg_text(args, 2)?;
-        let text = locale_string(locale, locale_type).unwrap_or_else(|| ansi_bytes(&default));
-        *value = Value::Str(text.into_iter().take(1).collect());
+        // The RTL reads the value into a *three*-character buffer
+        // (`GetLocaleInfo(..., Buffer, Length(Buffer))`), so a value of one
+        // or two characters answers its first -- the empty value a NUL --
+        // and anything longer fails the call and leaves the caller's
+        // default: `char4` shows `ENC` (three characters) as the default
+        // where `AM` and `39` answer `A` and `3` and `GetLocaleChar(0, 80)`
+        // (the empty positive sign) a NUL, which the GUI's memo cannot show.
+        if let Some(text) = locale_string(locale, locale_type)
+            && text.len() < 3
+        {
+            *value = Value::Str(vec![text.first().copied().unwrap_or(0)]);
+            return Ok(());
+        }
+        *value = Value::Str(ansi_bytes(&default));
         Ok(())
     });
     f(adapter, "GetFormatSettings", &[], |_value, _args| {

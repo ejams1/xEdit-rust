@@ -15233,6 +15233,7 @@ source = "JvInterpreter_AnsiUpperCaseFileName"
 status = "covered"
 command = "script.run"
 source = "JvInterpreter_Beep"
+note = "Implemented: `MessageBeep(0)`, the RTL's sound; `sys-helpers.pas` pins that the call returns (its effect is audible, which a headless run cannot compare)."
 
 [script."JvInterpreter_SysUtils:cSysUtils.ByteToCharIndex:function"]
 status = "covered"
@@ -15353,11 +15354,13 @@ source = "JvInterpreter_DeleteFile"
 status = "covered"
 command = "script.run"
 source = "JvInterpreter_DiskFree"
+note = "Implemented: `GetDiskFreeSpaceExW` with the wrapper's `Integer` truncation of the RTL's `Int64`; `sys-helpers.pas` compares the volume sizes, the -1 sentinel of the absent drives and the wrapped `Byte` argument (300 and -1 read the drives 44 and 255)."
 
 [script."JvInterpreter_SysUtils:cSysUtils.DiskSize:function"]
 status = "covered"
 command = "script.run"
 source = "JvInterpreter_DiskSize"
+note = "Implemented: as `DiskFree` (`DiskSize` reads the total bytes); `sys-helpers.pas` compares the truncated sizes of the fixed volumes."
 
 [script."JvInterpreter_SysUtils:cSysUtils.EAbort:class"]
 status = "covered"
@@ -15738,11 +15741,13 @@ source = "JvInterpreter_GetFormatSettings"
 status = "covered"
 command = "script.run"
 source = "JvInterpreter_GetLocaleChar"
+note = "Implemented: the first character of the `GetLocaleStr` value, the caller's default where the system answers nothing; `sys-helpers.pas` compares the separator, sign and digit types."
 
 [script."JvInterpreter_SysUtils:cSysUtils.GetLocaleStr:function"]
 status = "covered"
 command = "script.run"
 source = "JvInterpreter_GetLocaleStr"
+note = "Implemented: `GetLocaleInfoW` for the locale (`0` is the current user locale), cut to `written - 1` characters and carried in the system code page, as the RTL reads the same data; the reference machine is en-CA, so the answers are the locale's own (`sys-helpers.pas` sweeps 0..127 and the $1000 block)."
 
 [script."JvInterpreter_SysUtils:cSysUtils.IncMonth:function"]
 status = "covered"
@@ -15823,6 +15828,7 @@ source = "JvInterpreter_QuotedStr"
 status = "covered"
 command = "script.run"
 source = "JvInterpreter_RaiseLastWin32Error"
+note = "Implemented: the RTL's `SOSError` text (`System Error.  Code: <n>.` and the system text on the next line), shared with `RaiseLastOSError`; `df-load-missing.pas` carries the same shape through `TdfElement.LoadFromFile`, which raises `EOSError`."
 
 [script."JvInterpreter_SysUtils:cSysUtils.RemoveDir:function"]
 status = "covered"
@@ -15843,6 +15849,7 @@ source = "JvInterpreter_SetCurrentDir"
 status = "covered"
 command = "script.run"
 source = "JvInterpreter_ShowException"
+note = "Routed through the `Vcl` seam: upstream is the RTL's modal message box, so a headless run refuses the call with `[EVclUnavailable] ShowException is not available without a GUI (script \"<name>\")` where the oracle's box ends its run (`sys-showexception.pas` is an `oracle-dialog` case)."
 
 [script."JvInterpreter_SysUtils:cSysUtils.StrAlloc:function"]
 status = "covered"
@@ -16083,6 +16090,7 @@ source = "JvInterpreter_UpperCase"
 status = "covered"
 command = "script.run"
 source = "JvInterpreter_Win32Check"
+note = "Implemented: a false argument raises the same `SOSError` text."
 
 [script."JvInterpreter_SysUtils:cSysUtils.faAnyFile:const"]
 status = "covered"
@@ -18018,6 +18026,7 @@ source = "IwbContainer_AdditionalElementCount"
 status = "covered"
 command = "script.run"
 source = "IwbContainer_ContainerStates"
+note = "Implemented: the set as a bit mask (a built container holds `csInit|csInitOnce|csInitDone|csConstructionCompleted`, the references add `csRefsBuild`); `el-states.pas` compares the file, a record, a group and a subrecord."
 
 [script."xejviScriptAdapterContainer:cUnit.ElementByIndex:function"]
 status = "covered"
@@ -19039,6 +19048,7 @@ source = "IwbElement_Check"
 status = "covered"
 command = "script.run"
 source = "IwbElement_ClearElementState"
+note = "Implemented: as `SetElementState` with the clear flag."
 
 [script."xejviScriptAdapterElement:cUnit.ContainingMainRecord:function"]
 status = "covered"
@@ -19119,6 +19129,7 @@ source = "IwbElement_GetEditValue"
 status = "covered"
 command = "script.run"
 source = "IwbElement_GetElementState"
+note = "Implemented: as `SetElementState`; an element that is no `IwbElement` leaves the result unassigned, as the adapter's failed `Supports` does."
 
 [script."xejviScriptAdapterElement:cUnit.GetFile:function"]
 status = "covered"
@@ -19204,11 +19215,13 @@ source = "IwbElement_ReportRequiredMasters"
 status = "covered"
 command = "script.run"
 source = "IwbElement_SetEditValue"
+note = "Implemented: a main record runs upstream's edit gate and then the `wbDisplayLoadOrderFormID` gate before the FormID parse, so the headless baseline is the refusal `FormID can only be edited if wbDisplayLoadOrderFormID is active` (`el-states.pas`)."
 
 [script."xejviScriptAdapterElement:cUnit.SetElementState:function"]
 status = "covered"
 command = "script.run"
 source = "IwbElement_SetElementState"
+note = "Implemented: `IntToEsState`'s whole mapping (0..12, everything else `esDummy`) over the port's element states, the view states included; `el-states.pas` walks 0..15 on a file, a record and a subrecord."
 
 [script."xejviScriptAdapterElement:cUnit.SetNativeValue:function"]
 status = "covered"
@@ -19306,6 +19319,7 @@ source = "IwbFile_FileFormIDtoLoadOrderFormID"
 status = "covered"
 command = "script.run"
 source = "IwbFile_WriteToStream"
+note = "Implemented: the file's save bytes written into a `Classes` stream with the `TwbResetModified` the third argument names; `file-stream.pas` compares the bytes' size and head and the `esModified`/`esInternalModified`/`esUnsaved` states after each of the four routes."
 
 [script."xejviScriptAdapterFile:cUnit.GetFileName:function"]
 status = "covered"
@@ -19784,11 +19798,13 @@ source = "JvInterpreter_FMod"
 status = "covered"
 command = "script.run"
 source = "JvInterpreter_GetPrecisionMode"
+note = "Implemented: the stored mode; the initial value is `pmExtended` (3), the x87 control word the process starts with (`sys-helpers.pas`)."
 
 [script."xejviScriptAdapterMisc:Math.GetRoundMode:function"]
 status = "covered"
 command = "script.run"
 source = "JvInterpreter_GetRoundMode"
+note = "Implemented: the mode `SetRoundMode` set (`rmNearest` at the start)."
 
 [script."xejviScriptAdapterMisc:Math.InRange:function"]
 status = "covered"
@@ -19834,11 +19850,13 @@ source = "JvInterpreter_RoundTo"
 status = "covered"
 command = "script.run"
 source = "JvInterpreter_SetPrecisionMode"
+note = "Implemented: the mode is stored where `GetPrecisionMode` reads it and the x87 precision field is set with it; x64 SSE arithmetic has no precision control, which the oracle shows too (`sys-helpers.pas`)."
 
 [script."xejviScriptAdapterMisc:Math.SetRoundMode:function"]
 status = "covered"
 command = "script.run"
 source = "JvInterpreter_SetRoundMode"
+note = "Implemented: the mode reaches the x86-64 `MXCSR` rounding bits (`_mm_setcsr`) and the port's `Round` honours it, as `sys-round.pas` shows (the oracle's `0.1 + 0.2` and `Round(2.7)` change with the mode; `Floor`/`Ceil`/`Trunc` do not)."
 
 [script."xejviScriptAdapterMisc:Math.Sign:function"]
 status = "covered"
@@ -20459,6 +20477,7 @@ source = "JvInterpreter_CopyFile"
 status = "covered"
 command = "script.run"
 source = "JvInterpreter_CreateProcessWait"
+note = "Implemented: `CreateProcessW` with upstream's `STARTUPINFO` (`STARTF_USESHOWWINDOW or STARTF_FORCEONFEEDBACK`, the show state) and the file as `lpApplicationName`, so a name without a path resolves against the current directory alone; `sys-process.pas` compares the exit codes, the timeout's `STILL_ACTIVE`, the failure text and the child's `GetStartupInfo`."
 
 [script."xejviScriptAdapterMisc:Windows.GetKeyState:function"]
 status = "covered"

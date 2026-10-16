@@ -240,11 +240,12 @@ pub fn var_type_as_text(ty: i32) -> &'static str {
 
 //=== The FPU state the Math unit reports =====================================
 
-/// `GetPrecisionMode`'s state: the port does not touch the FPU and reports
-/// the x64 SSE default, `pmDouble` (2).
-static PRECISION_MODE: AtomicI32 = AtomicI32::new(2);
-/// `GetRoundMode`'s state: `rmNearest` (0).
-static ROUND_MODE: AtomicI32 = AtomicI32::new(0);
+/// `GetPrecisionMode`'s state: the x87 control word's precision field the
+/// process inherits, `pmExtended` (3) -- the oracle reads 3 before any call
+/// (`sys-helpers.pas`). x64 SSE arithmetic has no precision control, so the
+/// field is only what `GetPrecisionMode` reads back, as the oracle's own
+/// results show.
+static PRECISION_MODE: AtomicI32 = AtomicI32::new(3);
 
 //=== Functions ===============================================================
 
@@ -1385,7 +1386,10 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         "GetRoundMode",
         0,
         Rc::new(|value, _args| {
-            *value = Value::Integer(ROUND_MODE.load(Ordering::Relaxed));
+            // `Math.GetRoundMode` reads the x87 control word the setter
+            // writes; the port keeps the mode where `delphi::round` reads it
+            // and answers it back.
+            *value = Value::Integer(i32::from(xedit_core::delphi::round_mode()));
             Ok(())
         }),
     );
@@ -1396,8 +1400,15 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         1,
         Rc::new(|value, args| {
             let mode = xedit_script::values::to_i32(&args.values[0])?;
-            let previous = ROUND_MODE.swap(mode, Ordering::Relaxed);
-            *value = Value::Integer(previous);
+            // The RTL writes the x87 control word *and*, on Win64, the
+            // `MXCSR` rounding bits, which the SSE arithmetic of the script
+            // then follows: the oracle's `Round(2.7)` is 2 under `rmDown`
+            // and its `0.1 + 0.2` prints the down-rounded double
+            // (`sys-round.pas`). The port sets both: the mode
+            // `delphi::round` reads and the hardware bits.
+            let previous = xedit_core::delphi::set_round_mode((mode & 3) as u8);
+            set_mxcsr_rounding(mode & 3);
+            *value = Value::Integer(i32::from(previous));
             Ok(())
         }),
     );
@@ -1860,6 +1871,30 @@ fn simple_round_to(value: f64, digit: i32) -> f64 {
         ((value / factor) - 0.5).trunc() * factor
     } else {
         ((value / factor) + 0.5).trunc() * factor
+    }
+}
+
+/// The `MXCSR` rounding bits of `Math.SetRoundMode` on x86-64: the control
+/// word's bits 13-14 carry the same encoding as `TFPURoundingMode` (0
+/// nearest, 1 down, 2 up, 3 toward zero), and the instructions the RTL's
+/// `Round` and every SSE arithmetic op compile to honour them.
+fn set_mxcsr_rounding(mode: i32) {
+    #[cfg(target_arch = "x86_64")]
+    {
+        /// The two rounding-control bits of the `MXCSR` control word.
+        const MXCSR_ROUNDING: u32 = 0x6000;
+        let mut value: u32 = 0;
+        // SAFETY: `stmxcsr`/`ldmxcsr` only read and write the control word
+        // of the calling thread, which is where the script runs.
+        unsafe {
+            core::arch::asm!("stmxcsr [{0}]", in(reg) &mut value, options(nostack, preserves_flags));
+            value = (value & !MXCSR_ROUNDING) | ((mode as u32 & 3) << 13);
+            core::arch::asm!("ldmxcsr [{0}]", in(reg) &value, options(nostack, preserves_flags));
+        }
+    }
+    #[cfg(not(target_arch = "x86_64"))]
+    {
+        let _ = mode;
     }
 }
 
