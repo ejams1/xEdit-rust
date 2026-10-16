@@ -3,16 +3,18 @@
   "game": "sse",
   "load": [
     "Skyrim.esm",
-    "Update.esm"
+    "Update.esm",
+    "Dragonborn.esm"
   ],
   "files": {
     "Update.modgroups": [
       "[One]",
       "Skyrim.esm",
-      "Update.esm",
+      "Dragonborn.esm",
       "[Two]",
+      "Skyrim.esm",
       "Update.esm",
-      "@Skyrim.esm"
+      "Dragonborn.esm"
     ]
   },
   "settings": [

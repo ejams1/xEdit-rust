@@ -1,18 +1,20 @@
 {
-  "description": "Preset load of the selection dialog: the combo box holds the presets of the settings file and the name of one is typed into it, the Load button tags the preset's names (the group of the preset instead of the saved selection), and OK confirms, which saves the tagged selection and activates it. The settings file keeps the preset as it was and writes the loaded selection into [ModGroups] Selection; the hidden set of the comparison is the preset's group.",
+  "description": "Preset load of the selection dialog: the combo box holds the presets of the settings file and the name of one is typed into it, the Load button tags the preset's names (the group of the preset instead of the saved selection), and OK confirms, which saves the tagged selection and activates it. The settings file keeps the preset as it was and writes the loaded selection into [ModGroups] Selection; the hidden set of the comparison is the preset's group (Dragonborn.esm hides the records of Skyrim.esm) and not the saved selection's (which hides Skyrim.esm and Update.esm).",
   "game": "sse",
   "load": [
     "Skyrim.esm",
-    "Update.esm"
+    "Update.esm",
+    "Dragonborn.esm"
   ],
   "files": {
     "Update.modgroups": [
       "[One]",
       "Skyrim.esm",
-      "Update.esm",
+      "Dragonborn.esm",
       "[Two]",
+      "Skyrim.esm",
       "Update.esm",
-      "@Skyrim.esm"
+      "Dragonborn.esm"
     ]
   },
   "settings": [

@@ -2058,9 +2058,10 @@ fn command_of(action: Action) -> Result<(String, Value), CommandError> {
                 json!({ "names": names, "file": file, "dry_run": dry_run }),
             ),
             ModgroupsAction::Presets => ("modgroups.presets".to_owned(), json!({})),
-            ModgroupsAction::PresetLoad { preset, dry_run } => {
-                ("modgroups.preset_load".to_owned(), json!({ "preset": preset, "dry_run": dry_run }))
-            }
+            ModgroupsAction::PresetLoad { preset, dry_run } => (
+                "modgroups.preset_load".to_owned(),
+                json!({ "preset": preset, "dry_run": dry_run }),
+            ),
             ModgroupsAction::PresetSave {
                 preset,
                 after_modal,

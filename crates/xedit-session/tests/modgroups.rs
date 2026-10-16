@@ -443,11 +443,7 @@ fn listed_files(session: &mut Session) -> Vec<String> {
 
 /// The file name of a path of a response.
 fn name_of(path: &str) -> String {
-    PathBuf::from(path)
-        .file_name()
-        .unwrap()
-        .to_string_lossy()
-        .into_owned()
+    PathBuf::from(path).file_name().unwrap().to_string_lossy().into_owned()
 }
 
 #[test]
@@ -495,11 +491,7 @@ fn duplicate_group_names_resolve_by_file_order() {
         "[Same]\r\nSkyrim.esm\r\nDawnguard.esm\r\n",
     )
     .unwrap();
-    std::fs::write(
-        dir.join("Alpha.modgroups"),
-        "[Same]\r\nSkyrim.esm\r\n+Alpha.esp\r\n",
-    )
-    .unwrap();
+    std::fs::write(dir.join("Alpha.modgroups"), "[Same]\r\nSkyrim.esm\r\n+Alpha.esp\r\n").unwrap();
     // The dialog lists both by name, the file order deciding between two of
     // one name (the earlier module first); `Enter` picks the first entry,
     // and the edit command follows it.
@@ -538,10 +530,7 @@ fn presets_load_save_and_delete_as_the_selection_dialog() {
     )
     .unwrap();
     std::fs::write(dir.join("settings.ini"), "[Init]\r\nFirstStart=1\r\n").unwrap();
-    assert_eq!(
-        call(&mut session, "modgroups.presets", json!({}))["presets"],
-        json!([])
-    );
+    assert_eq!(call(&mut session, "modgroups.presets", json!({}))["presets"], json!([]));
     // "Save" writes the current selection, which the reload put there.
     call(&mut session, "modgroups.select", json!({ "names": ["B and C"] }));
     let saved = call(&mut session, "modgroups.preset_save", json!({ "preset": "Mine" }));
@@ -589,10 +578,7 @@ fn presets_load_save_and_delete_as_the_selection_dialog() {
     );
     let deleted = call(&mut session, "modgroups.preset_delete", json!({ "preset": "Mine" }));
     assert_eq!(deleted["deleted"], json!(true));
-    assert_eq!(
-        call(&mut session, "modgroups.presets", json!({}))["presets"],
-        json!([])
-    );
+    assert_eq!(call(&mut session, "modgroups.presets", json!({}))["presets"], json!([]));
     // An unknown preset is an error.
     let error = Registry::standard()
         .call(&mut session, "modgroups.preset_load", json!({ "preset": "Other" }))
