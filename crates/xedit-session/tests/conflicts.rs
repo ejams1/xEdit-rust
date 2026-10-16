@@ -396,10 +396,7 @@ fn hidden_records_leave_the_comparison() {
         .call(&mut session, "conflicts.list", json!({ "include_single": true }))
         .unwrap();
     assert_eq!(status(&result, "Master.esm", "00000801"), "caOnlyOne/ctOnlyOne");
-    assert_eq!(
-        status(&result, "First.esp", "00000801"),
-        "caOnlyOne/ctHiddenByModGroup"
-    );
+    assert_eq!(status(&result, "First.esp", "00000801"), "caOnlyOne/ctHiddenByModGroup");
     // Showing them again restores the comparison.
     for file in ["First.esp", "Second.esp"] {
         registry

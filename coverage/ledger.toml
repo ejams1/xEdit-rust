@@ -1526,7 +1526,7 @@ source = "mniNavDeleteModGroupsClick"
 status = "covered"
 command = "modgroups.edit"
 source = "mniNavEditModGroupClick"
-note = "The edit dialog is the new_name, items and add_current_crcs parameters."
+note = "The edit dialog is the new_name, items and add_current_crcs parameters; the selection dialog's entry is picked by name, the first of that name in the dialog's list order (the command follows it, --file disambiguates)."
 
 [gui."xEdit/xeMainForm.dfm:mniNavFilterApply:OnClick"]
 status = "covered"
@@ -1806,7 +1806,7 @@ source = "mniViewCopyToSelectedRecordsClick"
 status = "covered"
 command = "modgroups.create"
 source = "mniNavCreateModGroupClick"
-note = "The records of the view are the modules parameter."
+note = "The loaded records of the view (the override chain of the shown record, the master's own record left out) are the modules parameter; the CRC32 question is include_crcs, the store-file selection is file, and the edit dialog is name, items and add_current_crcs."
 
 [gui."xEdit/xeMainForm.dfm:mniViewEdit:OnClick"]
 status = "pending"

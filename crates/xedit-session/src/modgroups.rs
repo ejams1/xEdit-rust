@@ -990,7 +990,10 @@ pub struct PresetLoadResponse {
     pub dry_run: bool,
 }
 
-fn modgroups_preset_load(session: &mut Session, request: PresetLoadRequest) -> Result<PresetLoadResponse, CommandError> {
+fn modgroups_preset_load(
+    session: &mut Session,
+    request: PresetLoadRequest,
+) -> Result<PresetLoadResponse, CommandError> {
     let mod_groups = load_mod_groups(session)?;
     let validation_messages = mod_groups.validation_messages(&mod_groups.by_name(false));
     let (_, ini) = open_settings()?;
@@ -1061,7 +1064,10 @@ pub struct PresetSaveResponse {
     pub dry_run: bool,
 }
 
-fn modgroups_preset_save(session: &mut Session, request: PresetSaveRequest) -> Result<PresetSaveResponse, CommandError> {
+fn modgroups_preset_save(
+    session: &mut Session,
+    request: PresetSaveRequest,
+) -> Result<PresetSaveResponse, CommandError> {
     if request.preset.is_empty() || request.preset.starts_with('<') {
         return Err(CommandError::new(
             "invalid_params",

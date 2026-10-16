@@ -873,11 +873,12 @@ fn watch(
                         // idle pass after the text and the keys.
                         std::thread::sleep(Duration::from_millis(500));
                         ensure!(
-                            click_button(&window, button),
-                            "the dialog [{}] \"{}\" has no {button} button: {}",
+                            click_answer_button(&window, button),
+                            "the dialog [{}] \"{}\" has no {button} button: {}; its controls: {}",
                             window.class,
                             window.title,
-                            window.texts.join(" | ")
+                            window.texts.join(" | "),
+                            control_list(&window)
                         );
                     }
                     if !clicked.contains(&window.handle) {
@@ -1024,6 +1025,12 @@ mod win {
         String::from_utf16_lossy(&buffer[..copied.min(buffer.len())])
     }
 
+    pub fn enabled(handle: HWND) -> bool {
+        use windows_sys::Win32::UI::Input::KeyboardAndMouse::IsWindowEnabled;
+        // SAFETY: an enumeration handle; a stale one fails.
+        unsafe { IsWindowEnabled(handle) != 0 }
+    }
+
     pub fn visible(handle: HWND) -> bool {
         // SAFETY: a window handle from an enumeration; a stale one fails.
         unsafe { IsWindowVisible(handle) != 0 }
@@ -1158,11 +1165,19 @@ pub(super) fn click_button(window: &Window, caption: &str) -> bool {
     let mut children: Vec<HWND> = Vec::new();
     // SAFETY: the callback only pushes into the vector passed as `LPARAM`.
     unsafe { EnumChildWindows(window.handle as HWND, Some(win::collect), (&raw mut children) as isize) };
+    // The caption is read with `WM_GETTEXT` (`control_text`): a button whose
+    // caption an action assigns at run time (the preset buttons of a
+    // selection dialog) answers that message while its window text is not
+    // what `GetWindowText` reads across processes.
+    let caption_of = |child: HWND| {
+        let text = win::control_text(child);
+        if text.is_empty() { win::text(child) } else { text }
+    };
     let Some(button) = children
         .into_iter()
         // A VCL button, or a button of a system dialog (`MessageDlg` shows
         // one: class `#32770`).
-        .find(|&child| matches!(win::class(child).as_str(), "TButton" | "Button") && win::text(child) == caption)
+        .find(|&child| matches!(win::class(child).as_str(), "TButton" | "Button") && caption_of(child) == caption)
     else {
         return false;
     };
@@ -1188,7 +1203,13 @@ fn set_edit_text(window: &Window, control: Option<&str>, text: &str) -> bool {
     unsafe { EnumChildWindows(window.handle as HWND, Some(win::collect), (&raw mut children) as isize) };
     let Some(edit) = children.into_iter().find(|&child| match control {
         Some(class) => win::class(child) == class,
-        None => matches!(win::class(child).as_str(), "TEdit" | "Edit"),
+        // A VCL `TEdit`, the `TLabeledEdit` of the edit forms (a
+        // `TCustomEdit` subclass with a class of its own), or the `Edit` of
+        // a system dialog.
+        None => matches!(
+            win::class(child).as_str(),
+            "TEdit" | "TLabeledEdit" | "TMaskEdit" | "Edit"
+        ),
     }) else {
         return false;
     };
@@ -1197,6 +1218,70 @@ fn set_edit_text(window: &Window, control: Option<&str>, text: &str) -> bool {
     // outlives the call, which the system copies across processes.
     unsafe { SendMessageW(edit, WM_SETTEXT, 0, wide.as_ptr() as isize) };
     true
+}
+
+/// Every child of a window as `class "text"`, for a failure message.
+#[cfg(windows)]
+pub(super) fn control_list(window: &Window) -> String {
+    use windows_sys::Win32::Foundation::HWND;
+    use windows_sys::Win32::UI::WindowsAndMessaging::EnumChildWindows;
+    let mut children: Vec<HWND> = Vec::new();
+    // SAFETY: the callback only pushes into the vector passed as `LPARAM`.
+    unsafe { EnumChildWindows(window.handle as HWND, Some(win::collect), (&raw mut children) as isize) };
+    children
+        .into_iter()
+        .map(|child| {
+            let text = win::control_text(child);
+            let (class, enabled) = (win::class(child), win::enabled(child));
+            format!("{class} \"{text}\"{}", if enabled { "" } else { " (disabled)" })
+        })
+        .collect::<Vec<String>>()
+        .join(", ")
+}
+
+#[cfg(not(windows))]
+pub(super) fn control_list(_window: &Window) -> String {
+    String::new()
+}
+
+/// Clicks the button of a window whose caption is `caption`, without
+/// waiting for its handler when the button is a VCL one: its handler may
+/// open a dialog of its own (the question of a preset button), and the
+/// click is then only answered once that dialog is, which a waiting send
+/// would take for a missing button. A system dialog's button (class
+/// `Button`) is sent to, which returns with its handler.
+#[cfg(windows)]
+pub(super) fn click_answer_button(window: &Window, caption: &str) -> bool {
+    use windows_sys::Win32::Foundation::HWND;
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        BM_CLICK, EnumChildWindows, PostMessageW, SMTO_ABORTIFHUNG, SendMessageTimeoutW,
+    };
+    let mut children: Vec<HWND> = Vec::new();
+    // SAFETY: the callback only pushes into the vector passed as `LPARAM`.
+    unsafe { EnumChildWindows(window.handle as HWND, Some(win::collect), (&raw mut children) as isize) };
+    let caption_of = |child: HWND| {
+        let text = win::control_text(child);
+        if text.is_empty() { win::text(child) } else { text }
+    };
+    let Some(button) = children
+        .into_iter()
+        .find(|&child| matches!(win::class(child).as_str(), "TButton" | "Button") && caption_of(child) == caption)
+    else {
+        return false;
+    };
+    if win::class(button) == "TButton" {
+        // SAFETY: a button handle of the window; BM_CLICK takes no pointers.
+        unsafe { PostMessageW(button, BM_CLICK, 0, 0) != 0 }
+    } else {
+        // SAFETY: as above, with a timeout for a hung GUI.
+        let sent = unsafe { SendMessageTimeoutW(button, BM_CLICK, 0, 0, SMTO_ABORTIFHUNG, 5000, std::ptr::null_mut()) };
+        sent != 0
+    }
+}
+
+#[cfg(not(windows))]
+pub(super) fn click_answer_button(_window: &Window, _caption: &str) -> bool {
+    false
 }
 
 /// Clicks the button of a window whose caption is `caption` without

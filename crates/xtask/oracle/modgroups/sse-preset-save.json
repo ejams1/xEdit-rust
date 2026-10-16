@@ -1,18 +1,20 @@
 {
-  "description": "Preset save of the selection dialog: a new name is typed into the combo box and Save writes the current selection as a preset (no question, the preset did not exist), then an existing preset is typed and Save writes it too, behind the overwrite question answered Yes (a dialog that stays with the answers of one window, `repeat`). OK confirms the dialog, which saves the selection and activates it; the settings file holds both presets and the untouched selection.",
+  "description": "Preset save of the selection dialog: a new name is typed into the combo box and Save writes the current selection as a preset (the saved selection of [ModGroups] Selection, which the dialog tagged; no question, the preset did not exist), then an existing preset is typed and Save writes it too, behind the overwrite question answered Yes. OK confirms the dialog, which saves the selection and activates it; the settings file holds both presets and the untouched selection.",
   "game": "sse",
   "load": [
     "Skyrim.esm",
-    "Update.esm"
+    "Update.esm",
+    "Dragonborn.esm"
   ],
   "files": {
     "Update.modgroups": [
       "[One]",
       "Skyrim.esm",
-      "Update.esm",
+      "Dragonborn.esm",
       "[Two]",
+      "Skyrim.esm",
       "Update.esm",
-      "@Skyrim.esm"
+      "Dragonborn.esm"
     ]
   },
   "settings": [

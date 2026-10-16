@@ -30,9 +30,7 @@ use std::sync::{Arc, OnceLock};
 
 use xedit_core::implementation::FileImpl;
 use xedit_core::interface::Element;
-use xedit_core::interface::globals::{
-    GameMode, game_exe_name, game_master_esm, game_mode, official_dlc,
-};
+use xedit_core::interface::globals::{GameMode, game_exe_name, game_master_esm, game_mode, official_dlc};
 
 use crate::ini_files::same_text;
 use crate::mod_groups::compare_text;
@@ -52,7 +50,7 @@ pub struct ModuleInfo {
     /// executable).
     pub valid: bool,
     /// `mfIsESM`: the ESM extension of the later games or the header flag
-    /// (`is_esm_extension`).
+    /// (`esm_by_extension`).
     pub is_esm: bool,
     /// `mfHasBlueprintFlag`: the header flag 11, a Starfield blueprint.
     pub has_blueprint: bool,
@@ -133,10 +131,7 @@ fn is_module_name(name: &str) -> bool {
 /// `wbIsSkyrim`.
 fn is_skyrim() -> bool {
     use GameMode::*;
-    matches!(
-        game_mode(),
-        gmTES5 | gmEnderal | gmTES5VR | gmSSE | gmEnderalSE
-    )
+    matches!(game_mode(), gmTES5 | gmEnderal | gmTES5VR | gmSSE | gmEnderalSE)
 }
 
 /// What the load order reads of a file header: the ESM flag of the games
@@ -212,7 +207,11 @@ fn update_index() -> i32 {
 fn load_order_compare(a: &ModuleInfo, b: &ModuleInfo) -> std::cmp::Ordering {
     use std::cmp::Ordering;
     if a.has_blueprint != b.has_blueprint {
-        return if a.has_blueprint { Ordering::Greater } else { Ordering::Less };
+        return if a.has_blueprint {
+            Ordering::Greater
+        } else {
+            Ordering::Less
+        };
     }
     a.official_index
         .cmp(&b.official_index)
@@ -306,7 +305,9 @@ impl Modules {
             let Some(header) = read_module_header(&path) else {
                 continue;
             };
-            let extension = name.rsplit_once('.').map(|(_, extension)| extension.to_ascii_lowercase());
+            let extension = name
+                .rsplit_once('.')
+                .map(|(_, extension)| extension.to_ascii_lowercase());
             modules.push(ModuleInfo {
                 name,
                 original_name,
@@ -315,8 +316,7 @@ impl Modules {
                 valid: true,
                 // The extension of the later games, the header flag of the
                 // others (`mfIsESM`).
-                is_esm: (esm_by_extension()
-                    && matches!(extension.as_deref(), Some("esm") | Some("esl")))
+                is_esm: (esm_by_extension() && matches!(extension.as_deref(), Some("esm") | Some("esl")))
                     || header.is_esm,
                 has_blueprint: header.has_blueprint,
                 official_index: i32::MAX,
