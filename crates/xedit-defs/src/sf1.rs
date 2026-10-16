@@ -5130,8 +5130,8 @@ pub fn wb_condition_desc_from_index(a_index: i32) -> Option<&'static TConditionF
     result
 }
 
-/// Upstream `wbOBND`, line 986 of `wbDefinitionsCommon.pas`.
-pub fn wb_obnd(a_required: bool) -> Option<Arc<dyn RecordMemberDef>> {
+/// Upstream `wbOBND`, line 986 of `wbDefinitionsSF1.pas`.
+pub fn wb_obnd_sf1(a_required: bool) -> Option<Arc<dyn RecordMemberDef>> {
     wb_struct_signature(
         OBND,
         "Object Bounds",
@@ -32581,7 +32581,7 @@ pub fn define_sf1() {
         &[
             wb_edid.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_vmad.clone().map(|def| def as Arc<dyn RecordMemberDef>),
-            wb_obnd(true),
+            wb_obnd_sf1(true),
             wb_odty_req.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_opds.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_ptt2.clone().map(|def| def as Arc<dyn RecordMemberDef>),
@@ -32769,7 +32769,7 @@ pub fn define_sf1() {
         &[
             wb_edid.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_vmad.clone().map(|def| def as Arc<dyn RecordMemberDef>),
-            wb_obnd(true),
+            wb_obnd_sf1(true),
             wb_odty_req.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_base_form_components.clone(),
             wb_generic_model(true, None),
@@ -33032,7 +33032,7 @@ pub fn define_sf1() {
         &[
             wb_edid.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_vmad.clone().map(|def| def as Arc<dyn RecordMemberDef>),
-            wb_obnd(true),
+            wb_obnd_sf1(true),
             wb_odty_req.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_opds.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_ptt2.clone().map(|def| def as Arc<dyn RecordMemberDef>),
@@ -33445,7 +33445,7 @@ pub fn define_sf1() {
         &[
             wb_edid.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_vmad.clone().map(|def| def as Arc<dyn RecordMemberDef>),
-            wb_obnd(true),
+            wb_obnd_sf1(true),
             wb_odty_req.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_sntp.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_snbh.clone().map(|def| def as Arc<dyn RecordMemberDef>),
@@ -33911,7 +33911,7 @@ pub fn define_sf1() {
         .map(|def| def as Arc<dyn IntegerDefFormater>),
         &[
             wb_edid.clone().map(|def| def as Arc<dyn RecordMemberDef>),
-            wb_obnd(true),
+            wb_obnd_sf1(true),
             wb_odty_req.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_odty_req.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_opds.clone().map(|def| def as Arc<dyn RecordMemberDef>),
@@ -34778,7 +34778,7 @@ pub fn define_sf1() {
         &[
             wb_edid.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_vmad.clone().map(|def| def as Arc<dyn RecordMemberDef>),
-            wb_obnd(true),
+            wb_obnd_sf1(true),
             wb_odty_req.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_ptt2.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_base_form_components.clone(),
@@ -35058,7 +35058,7 @@ pub fn define_sf1() {
         &[
             wb_edid.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_vmad.clone().map(|def| def as Arc<dyn RecordMemberDef>),
-            wb_obnd(true),
+            wb_obnd_sf1(true),
             wb_odty_req.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_opds.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_xalg.clone().map(|def| def as Arc<dyn RecordMemberDef>),
@@ -35157,7 +35157,7 @@ pub fn define_sf1() {
         &[
             wb_edid.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_vmad.clone().map(|def| def as Arc<dyn RecordMemberDef>),
-            wb_obnd(true),
+            wb_obnd_sf1(true),
             wb_odty_req.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_opds.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_base_form_components.clone(),
@@ -36753,7 +36753,7 @@ pub fn define_sf1() {
         &[
             wb_edid.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_vmad.clone().map(|def| def as Arc<dyn RecordMemberDef>),
-            wb_obnd(true),
+            wb_obnd_sf1(true),
             wb_odty_req.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_opds.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_ptt2.clone().map(|def| def as Arc<dyn RecordMemberDef>),
@@ -37165,7 +37165,7 @@ pub fn define_sf1() {
         &[
             wb_edid.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_vmad.clone().map(|def| def as Arc<dyn RecordMemberDef>),
-            wb_obnd(false),
+            wb_obnd_sf1(false),
             wb_odty_req.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_base_form_components.clone(),
             wb_struct_signature(
@@ -37268,7 +37268,7 @@ pub fn define_sf1() {
         &[
             wb_edid.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_vmad.clone().map(|def| def as Arc<dyn RecordMemberDef>),
-            wb_obnd(true),
+            wb_obnd_sf1(true),
             wb_odty_req.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_ptt2.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_defl.clone().map(|def| def as Arc<dyn RecordMemberDef>),
@@ -39716,7 +39716,7 @@ pub fn define_sf1() {
         &[
             wb_edid.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_vmad.clone().map(|def| def as Arc<dyn RecordMemberDef>),
-            wb_obnd(true),
+            wb_obnd_sf1(true),
             wb_odty_req.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_opds.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_xalg.clone().map(|def| def as Arc<dyn RecordMemberDef>),
@@ -42335,7 +42335,7 @@ pub fn define_sf1() {
         &[
             wb_edid.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_vmad.clone().map(|def| def as Arc<dyn RecordMemberDef>),
-            wb_obnd(true),
+            wb_obnd_sf1(true),
             wb_odty_req.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_opds.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_ptt2.clone().map(|def| def as Arc<dyn RecordMemberDef>),
@@ -42447,7 +42447,7 @@ pub fn define_sf1() {
         &[
             wb_edid.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_vmad.clone().map(|def| def as Arc<dyn RecordMemberDef>),
-            wb_obnd(true),
+            wb_obnd_sf1(true),
             wb_odty_req.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_opds.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_ptt2.clone().map(|def| def as Arc<dyn RecordMemberDef>),
@@ -42877,7 +42877,7 @@ pub fn define_sf1() {
         &[
             wb_edid.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_vmad.clone().map(|def| def as Arc<dyn RecordMemberDef>),
-            wb_obnd(true),
+            wb_obnd_sf1(true),
             wb_odty_req.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_base_form_components.clone(),
             wb_full.clone().map(|def| def as Arc<dyn RecordMemberDef>),
@@ -43082,7 +43082,7 @@ pub fn define_sf1() {
         "Explosion",
         &[
             wb_edid.clone().map(|def| def as Arc<dyn RecordMemberDef>),
-            wb_obnd(true),
+            wb_obnd_sf1(true),
             wb_odty_req.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_opds.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_defl.clone().map(|def| def as Arc<dyn RecordMemberDef>),
@@ -44108,7 +44108,7 @@ pub fn define_sf1() {
         &[
             wb_edid.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_vmad.clone().map(|def| def as Arc<dyn RecordMemberDef>),
-            wb_obnd(true),
+            wb_obnd_sf1(true),
             wb_odty_req.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_opds.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_ptt2.clone().map(|def| def as Arc<dyn RecordMemberDef>),
@@ -44813,7 +44813,7 @@ pub fn define_sf1() {
         &[
             wb_edid.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_vmad.clone().map(|def| def as Arc<dyn RecordMemberDef>),
-            wb_obnd(true),
+            wb_obnd_sf1(true),
             wb_odty_req.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_opds.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_ptt2.clone().map(|def| def as Arc<dyn RecordMemberDef>),
@@ -45178,7 +45178,7 @@ pub fn define_sf1() {
         &[
             wb_edid.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_vmad.clone().map(|def| def as Arc<dyn RecordMemberDef>),
-            wb_obnd(true),
+            wb_obnd_sf1(true),
             wb_odty_req.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_opds.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_base_form_components.clone(),
@@ -46057,7 +46057,7 @@ pub fn define_sf1() {
         .map(|def| def as Arc<dyn IntegerDefFormater>),
         &[
             wb_edid.clone().map(|def| def as Arc<dyn RecordMemberDef>),
-            wb_obnd(true),
+            wb_obnd_sf1(true),
             wb_odty_req.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_opds.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_xalg.clone().map(|def| def as Arc<dyn RecordMemberDef>),
@@ -46358,7 +46358,7 @@ pub fn define_sf1() {
         &[
             wb_edid.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_vmad.clone().map(|def| def as Arc<dyn RecordMemberDef>),
-            wb_obnd(true),
+            wb_obnd_sf1(true),
             wb_odty_req.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_opds.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_ptt2.clone().map(|def| def as Arc<dyn RecordMemberDef>),
@@ -46864,7 +46864,7 @@ pub fn define_sf1() {
         &[
             wb_edid.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_vmad.clone().map(|def| def as Arc<dyn RecordMemberDef>),
-            wb_obnd(true),
+            wb_obnd_sf1(true),
             wb_odty_req.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_base_form_components.clone(),
             wb_keywords(),
@@ -46957,7 +46957,7 @@ pub fn define_sf1() {
         &[
             wb_edid.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_vmad.clone().map(|def| def as Arc<dyn RecordMemberDef>),
-            wb_obnd(true),
+            wb_obnd_sf1(true),
             wb_odty_req.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_opds.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_ptt2.clone().map(|def| def as Arc<dyn RecordMemberDef>),
@@ -48604,7 +48604,7 @@ pub fn define_sf1() {
         &[
             wb_edid.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_vmad.clone().map(|def| def as Arc<dyn RecordMemberDef>),
-            wb_obnd(true),
+            wb_obnd_sf1(true),
             wb_odty_req.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_opds.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_ptt2.clone().map(|def| def as Arc<dyn RecordMemberDef>),
@@ -50628,7 +50628,7 @@ pub fn define_sf1() {
         &[
             wb_edid.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_vmad.clone().map(|def| def as Arc<dyn RecordMemberDef>),
-            wb_obnd(false),
+            wb_obnd_sf1(false),
             wb_odty_req.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_opds.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_ptt2.clone().map(|def| def as Arc<dyn RecordMemberDef>),
@@ -51314,7 +51314,7 @@ pub fn define_sf1() {
         &[
             wb_edid.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_vmad.clone().map(|def| def as Arc<dyn RecordMemberDef>),
-            wb_obnd(true),
+            wb_obnd_sf1(true),
             wb_odty_req.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_opds.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_ptt2.clone().map(|def| def as Arc<dyn RecordMemberDef>),
@@ -52125,7 +52125,7 @@ pub fn define_sf1() {
         &[
             wb_edid.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_vmad.clone().map(|def| def as Arc<dyn RecordMemberDef>),
-            wb_obnd(true),
+            wb_obnd_sf1(true),
             wb_odty_req.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_opds.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_ptt2.clone().map(|def| def as Arc<dyn RecordMemberDef>),
@@ -52286,7 +52286,7 @@ pub fn define_sf1() {
         &[
             wb_edid.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_vmad.clone().map(|def| def as Arc<dyn RecordMemberDef>),
-            wb_obnd(true),
+            wb_obnd_sf1(true),
             wb_odty_req.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_opds.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_ptt2.clone().map(|def| def as Arc<dyn RecordMemberDef>),
@@ -52477,7 +52477,7 @@ pub fn define_sf1() {
         &[
             wb_edid.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_vmad.clone().map(|def| def as Arc<dyn RecordMemberDef>),
-            wb_obnd(true),
+            wb_obnd_sf1(true),
             wb_odty_req.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_opds.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_xalg.clone().map(|def| def as Arc<dyn RecordMemberDef>),
@@ -52617,7 +52617,7 @@ pub fn define_sf1() {
         &[
             wb_edid.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_vmad.clone().map(|def| def as Arc<dyn RecordMemberDef>),
-            wb_obnd(true),
+            wb_obnd_sf1(true),
             wb_odty_req.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_opds.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_ptt2.clone().map(|def| def as Arc<dyn RecordMemberDef>),
@@ -52900,7 +52900,7 @@ pub fn define_sf1() {
         &[
             wb_edid.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_vmad.clone().map(|def| def as Arc<dyn RecordMemberDef>),
-            wb_obnd(true),
+            wb_obnd_sf1(true),
             wb_odty_req.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_opds.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_ptt2.clone().map(|def| def as Arc<dyn RecordMemberDef>),
@@ -53644,7 +53644,7 @@ pub fn define_sf1() {
         &[
             wb_edid.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_vmad.clone().map(|def| def as Arc<dyn RecordMemberDef>),
-            wb_obnd(true),
+            wb_obnd_sf1(true),
             wb_odty_req.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_opds.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_ptt2.clone().map(|def| def as Arc<dyn RecordMemberDef>),
@@ -53985,7 +53985,7 @@ pub fn define_sf1() {
         &[
             wb_edid.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_vmad.clone().map(|def| def as Arc<dyn RecordMemberDef>),
-            wb_obnd(true),
+            wb_obnd_sf1(true),
             wb_odty_req.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_opds.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_ptt2.clone().map(|def| def as Arc<dyn RecordMemberDef>),
@@ -55350,7 +55350,7 @@ pub fn define_sf1() {
         &[
             wb_edid.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_vmad.clone().map(|def| def as Arc<dyn RecordMemberDef>),
-            wb_obnd(false),
+            wb_obnd_sf1(false),
             wb_odty_req.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_opds.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_ptt2.clone().map(|def| def as Arc<dyn RecordMemberDef>),
@@ -55491,7 +55491,7 @@ pub fn define_sf1() {
         &[
             wb_edid.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_vmad.clone().map(|def| def as Arc<dyn RecordMemberDef>),
-            wb_obnd(true),
+            wb_obnd_sf1(true),
             wb_odty_req.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_opds.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_ptt2.clone().map(|def| def as Arc<dyn RecordMemberDef>),
@@ -59727,7 +59727,7 @@ pub fn define_sf1() {
         &[
             wb_edid.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_vmad.clone().map(|def| def as Arc<dyn RecordMemberDef>),
-            wb_obnd(true),
+            wb_obnd_sf1(true),
             wb_odty_req.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_opds.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_ptt2.clone().map(|def| def as Arc<dyn RecordMemberDef>),
@@ -60343,7 +60343,7 @@ pub fn define_sf1() {
         &[
             wb_edid.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_vmad.clone().map(|def| def as Arc<dyn RecordMemberDef>),
-            wb_obnd(false),
+            wb_obnd_sf1(false),
             wb_odty_req.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_opds.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_ptt2.clone().map(|def| def as Arc<dyn RecordMemberDef>),
@@ -61665,7 +61665,7 @@ pub fn define_sf1() {
         &[
             wb_edid.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_vmad.clone().map(|def| def as Arc<dyn RecordMemberDef>),
-            wb_obnd(true),
+            wb_obnd_sf1(true),
             wb_odty_req.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_opds.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_ptt2.clone().map(|def| def as Arc<dyn RecordMemberDef>),
@@ -68004,7 +68004,7 @@ pub fn define_sf1() {
         &[
             wb_edid.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_vmad.clone().map(|def| def as Arc<dyn RecordMemberDef>),
-            wb_obnd(true),
+            wb_obnd_sf1(true),
             wb_odty_req.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_sntp.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_base_form_components.clone(),
@@ -68037,7 +68037,7 @@ pub fn define_sf1() {
         "Scroll",
         &[
             wb_edid.clone().map(|def| def as Arc<dyn RecordMemberDef>),
-            wb_obnd(true),
+            wb_obnd_sf1(true),
             wb_odty_req.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_base_form_components.clone(),
             wb_full.clone().map(|def| def as Arc<dyn RecordMemberDef>),
@@ -68225,7 +68225,7 @@ pub fn define_sf1() {
         &[
             wb_edid.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_vmad.clone().map(|def| def as Arc<dyn RecordMemberDef>),
-            wb_obnd(false),
+            wb_obnd_sf1(false),
             wb_odty_req.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_opds.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_ptt2.clone().map(|def| def as Arc<dyn RecordMemberDef>),
@@ -69650,7 +69650,7 @@ pub fn define_sf1() {
         &[
             wb_edid.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_vmad.clone().map(|def| def as Arc<dyn RecordMemberDef>),
-            wb_obnd(true),
+            wb_obnd_sf1(true),
             wb_odty_req.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_xalg.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_base_form_components.clone(),
@@ -69780,7 +69780,7 @@ pub fn define_sf1() {
         &[
             wb_edid.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_vmad.clone().map(|def| def as Arc<dyn RecordMemberDef>),
-            wb_obnd(true),
+            wb_obnd_sf1(true),
             wb_odty_req.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_base_form_components.clone(),
             wb_full.clone().map(|def| def as Arc<dyn RecordMemberDef>),
@@ -70140,7 +70140,7 @@ pub fn define_sf1() {
         &[
             wb_edid.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_vmad.clone().map(|def| def as Arc<dyn RecordMemberDef>),
-            wb_obnd(true),
+            wb_obnd_sf1(true),
             wb_odty_req.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_opds.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_ptt2.clone().map(|def| def as Arc<dyn RecordMemberDef>),
@@ -70752,7 +70752,7 @@ pub fn define_sf1() {
         &[
             wb_edid.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_vmad.clone().map(|def| def as Arc<dyn RecordMemberDef>),
-            wb_obnd(false),
+            wb_obnd_sf1(false),
             wb_odty_req.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_opds.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_ptt2.clone().map(|def| def as Arc<dyn RecordMemberDef>),
@@ -70970,7 +70970,7 @@ pub fn define_sf1() {
         &[
             wb_edid.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_vmad.clone().map(|def| def as Arc<dyn RecordMemberDef>),
-            wb_obnd(true),
+            wb_obnd_sf1(true),
             wb_odty_req.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_opds.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_ptt2.clone().map(|def| def as Arc<dyn RecordMemberDef>),
@@ -71266,7 +71266,7 @@ pub fn define_sf1() {
             wb_vmad_fragmented_perk
                 .clone()
                 .map(|def| def as Arc<dyn RecordMemberDef>),
-            wb_obnd(true),
+            wb_obnd_sf1(true),
             wb_odty_req.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_opds.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_ptt2.clone().map(|def| def as Arc<dyn RecordMemberDef>),
@@ -72236,7 +72236,7 @@ pub fn define_sf1() {
         &[
             wb_edid.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_vmad.clone().map(|def| def as Arc<dyn RecordMemberDef>),
-            wb_obnd(true),
+            wb_obnd_sf1(true),
             wb_odty_req.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_opds.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_base_form_components.clone(),
@@ -73151,7 +73151,7 @@ pub fn define_sf1() {
         &[
             wb_edid.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_vmad.clone().map(|def| def as Arc<dyn RecordMemberDef>),
-            wb_obnd(true),
+            wb_obnd_sf1(true),
             wb_odty_req.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_opds.clone().map(|def| def as Arc<dyn RecordMemberDef>),
             wb_ptt2.clone().map(|def| def as Arc<dyn RecordMemberDef>),

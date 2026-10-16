@@ -37,7 +37,8 @@ pub fn sig2_int(a_signature: Signature) -> u32 {
     a_signature.to_int()
 }
 
-/// Upstream `wbNormalizeToRange`: a normalizer that clamps to `aMin..aMax`.
+/// Upstream `wbNormalizeToRange` of `wbInterface`: a normalizer that clamps
+/// to `aMin..aMax`.
 pub fn wb_normalize_to_range(a_min: f64, a_max: f64) -> Option<FloatNormalizer> {
     Some(Arc::new(move |_element: ElementArg, a_float: f64| {
         if a_float < a_min {
@@ -48,6 +49,16 @@ pub fn wb_normalize_to_range(a_min: f64, a_max: f64) -> Option<FloatNormalizer> 
             a_float
         }
     }))
+}
+
+/// Upstream `wbNormalizeToRange`, line 2184 of `wbDefinitionsCommon.pas`: the
+/// same routine as the `wbInterface` one, and it is a copy that upstream
+/// keeps: a unit's own declaration hides the one of the units it uses, so the
+/// calls of `wbDefinitionsCommon` take this one and the calls of every other
+/// definition unit the `wbInterface` one (issue #40). The two bodies are
+/// identical.
+pub fn wb_normalize_to_range_common(a_min: f64, a_max: f64) -> Option<FloatNormalizer> {
+    wb_normalize_to_range(a_min, a_max)
 }
 
 /// Upstream `wbTryGetContainerFromUnion`.
@@ -3090,16 +3101,10 @@ pub fn wb_crowd_property_to_str(
 /// Upstream `wbLGDIFiltersToStr` of `wbDefinitionsCommon`: the legendary mod
 /// of the star slot the filter selects.
 ///
-/// UPSTREAM-QUIRK: upstream has this routine twice with the same signature,
-/// this one in `wbDefinitionsCommon.pas` and an older, simpler one in
-/// `wbDefinitionsFO76.pas` (line 1703) which the Fallout 76 definitions call.
-/// The transpiler keeps one routine per name and signature, so the two are
-/// one function here and the Fallout 76 body is chosen by the game mode
-/// ([`wb_lgdi_filters_to_str_fo76`]).
+/// The definitions of Fallout 76 name their own copy of the routine, which
+/// [`super::fo76::wb_lgdi_filters_to_str_fo76`] is (issue #40); the port
+/// routes the game's records to it.
 pub fn wb_lgdi_filters_to_str(a_int: i64, a_element: ElementArg, a_type: CallbackType) -> String {
-    if game_mode() == GameMode::gmFO76 {
-        return wb_lgdi_filters_to_str_fo76(a_element);
-    }
     const WARNING: &str = "<Warning: Could not resolve mod index>";
     let mut result = match a_type {
         CallbackType::ctToStr => format!("{a_int} {WARNING}"),
@@ -3203,67 +3208,6 @@ pub fn wb_lgdi_filters_to_str(a_int: i64, a_element: ElementArg, a_type: Callbac
         _ => result = format!("{mod_index:02}"),
     }
     format!("{result} {name}")
-}
-
-/// Upstream `wbLGDIFiltersToStr` of `wbDefinitionsFO76`, line 1703: the older
-/// copy of the routine the Fallout 76 definitions call. It ignores the
-/// callback type, answers 'Unknown Ref' where the filter does not resolve and
-/// otherwise the edit value of the legendary mod of the star slot the filter
-/// selects.
-fn wb_lgdi_filters_to_str_fo76(a_element: ElementArg) -> String {
-    const UNKNOWN: &str = "Unknown Ref";
-    let Some(element) = a_element else {
-        return UNKNOWN.to_owned();
-    };
-    let Some(filter) = element.get_container() else {
-        return UNKNOWN.to_owned();
-    };
-    if filter.as_container().is_none() {
-        return UNKNOWN.to_owned();
-    }
-    let Some(main_record) = element.get_containing_main_record() else {
-        return UNKNOWN.to_owned();
-    };
-    let Some(legendary_mods) = main_record.get_element_by_signature(Signature::new(b"BNAM")) else {
-        return UNKNOWN.to_owned();
-    };
-    let Some(legendary_mods) = legendary_mods.as_container() else {
-        return UNKNOWN.to_owned();
-    };
-    let Some(star_slot) = filter.as_container().and_then(|filter| filter.get_element(0)) else {
-        return UNKNOWN.to_owned();
-    };
-    let base_star_slot = variant_int(&star_slot.get_native_value());
-    let mod_index = variant_int(&element.get_native_value());
-    let mut legendary_index = None;
-    for index in 0..legendary_mods.get_element_count() {
-        let Some(legendary_mod) = legendary_mods.get_element(index) else {
-            continue;
-        };
-        let Some(legendary_mod) = legendary_mod.as_container() else {
-            continue;
-        };
-        let Some(star_slot) = legendary_mod.get_element(0) else {
-            continue;
-        };
-        if variant_int(&star_slot.get_native_value()) == base_star_slot {
-            legendary_index = Some(i64::from(index) + mod_index);
-            break;
-        }
-    }
-    let Some(index) = legendary_index.and_then(|index| i32::try_from(index).ok()) else {
-        return UNKNOWN.to_owned();
-    };
-    let Some(legendary_mod) = legendary_mods.get_element(index) else {
-        return UNKNOWN.to_owned();
-    };
-    let Some(legendary_mod) = legendary_mod.as_container() else {
-        return UNKNOWN.to_owned();
-    };
-    legendary_mod
-        .get_element(1)
-        .map(|mod_base| mod_base.get_edit_value())
-        .unwrap_or_else(|| UNKNOWN.to_owned())
 }
 
 /// Upstream `wbLGDIRankSlotArrayShouldInclude`: the array of a rank slot
@@ -4854,6 +4798,72 @@ pub fn weap_after_load_fallout3(a_element: &ElementRef, reset_reload_animation: 
             if variant_float(&path_native(&record, path)) == 0.0 {
                 set_path_native(&record, path, 1.0f64);
             }
+        }
+    });
+}
+
+/// `wbSOUNAfterLoad` of Fallout 3 and New Vegas: a sound record in the old
+/// format (`SNDX` with the `ANAM`, `GNAM` and `HNAM` subrecords next to it)
+/// becomes the `SNDD` one, which takes the members of the old `SNDX`
+/// structure and, from the old subrecords, the attenuation curve, the reverb
+/// attenuation control and the priority, with the definition's defaults
+/// where one is missing (issues #40).
+///
+/// UPSTREAM-QUIRK: the assertions (`Assert(False)` and the element counts)
+/// are not ported; the port returns where upstream would raise, as the other
+/// editing callbacks do.
+pub fn soun_after_load_fallout3(a_element: &ElementRef) {
+    with_internal_edit(|| {
+        let Some(main_record) = wb_try_get_container_with_valid_main_record(Some(a_element)) else {
+            return;
+        };
+        let record: ElementRef = main_record;
+        if path_exists(&record, "SNDD") {
+            return;
+        }
+        let Some(old) = remove_member(&record, "SNDX - Sound Data").and_then(|old| as_container_ref(&old)) else {
+            return;
+        };
+        let Some(new) = add_member(&record, "SNDD").and_then(|new| as_container_ref(&new)) else {
+            return;
+        };
+        for index in 0..element_count(&old).min(element_count(&new)) {
+            if let (Some(target), Some(source)) = (element_at(&new, index), element_at(&old, index)) {
+                let _ = target.assign_from(&source);
+            }
+        }
+        let member = |name: &str| new.as_container().and_then(|new| new.get_element_by_name(name));
+        let Some(curve) = member("Attenuation Curve") else {
+            return;
+        };
+        if let Some(attenuation) = remove_member(&record, "ANAM") {
+            for index in 0..element_count(&attenuation).min(element_count(&curve)) {
+                if let (Some(target), Some(source)) = (element_at(&curve, index), element_at(&attenuation, index)) {
+                    let _ = target.assign_from(&source);
+                }
+            }
+        } else {
+            for (index, value) in [100i64, 50, 20, 5, 0].into_iter().enumerate() {
+                if let Some(target) = element_at(&curve, index as i32) {
+                    set_native(&target, value);
+                }
+            }
+        }
+        let Some(reverb) = member("Reverb Attenuation Control") else {
+            return;
+        };
+        if let Some(control) = remove_member(&record, "GNAM") {
+            let _ = reverb.assign_from(&control);
+        } else {
+            set_native(&reverb, 80i64);
+        }
+        let Some(priority) = member("Priority") else {
+            return;
+        };
+        if let Some(old_priority) = remove_member(&record, "HNAM") {
+            let _ = priority.assign_from(&old_priority);
+        } else {
+            set_native(&priority, 128i64);
         }
     });
 }

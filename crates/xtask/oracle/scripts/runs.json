@@ -698,6 +698,26 @@
     {
       "script": "probes/datetime.pas",
       "note": "parity #30 fixture: the TJsonDataValue.DateTimeValue of every value kind, the ISO 8601 text with the system time zone bias on and off, the JSONToDateTime parsing surface and the daylight saving cases. The message log is compared"
+    },
+    {
+      "script": "probes/soun-after-load.pas",
+      "master": "tests/fixtures/parity/soun-after-load-fo3.esm",
+      "game": "fo3",
+      "close_after": true,
+      "save": [
+        "Fallout3.esm"
+      ],
+      "note": "parity #40 fixture: the wbSOUNAfterLoad of wbDefinitionsFO3, which the load of an editing session runs (the old SNDX/ANAM/GNAM/HNAM sound data becomes the SNDD structure, with the definition's defaults where a subrecord is missing, and a record that already has SNDD or no sound data is left alone). The element lists, the values, the edited curve point and the saved bytes are compared; the copy of the name in wbDefinitionsCommon turns SNDD into SNDX instead"
+    },
+    {
+      "script": "probes/soun-after-load.pas",
+      "master": "tests/fixtures/parity/soun-after-load-fnv.esm",
+      "game": "fnv",
+      "close_after": true,
+      "save": [
+        "FalloutNV.esm"
+      ],
+      "note": "parity #40 fixture: the wbSOUNAfterLoad of wbDefinitionsFNV over the same records (New Vegas keeps its own copy of the routine; the body is the one of Fallout 3)"
     }
   ]
 }

@@ -148,9 +148,15 @@ impl Symbols {
                     return;
                 }
                 let overloads = self.routines.entry(lower(&routine.name)).or_default();
-                // The implementation repeats the header of an interface declaration.
+                // The implementation repeats the header of an interface declaration
+                // of its own unit. A routine of another unit with the same name and
+                // parameters is a routine of its own: the units that declare one
+                // must stay apart, because a name in a unit resolves to its own
+                // copy and the copies can differ (`wbSOUNAfterLoad` of
+                // `wbDefinitionsFO3` against the one of `wbDefinitionsCommon`).
                 let repeated = overloads.iter().any(|known| {
-                    known.params.len() == routine.params.len()
+                    known.unit.eq_ignore_ascii_case(unit)
+                        && known.params.len() == routine.params.len()
                         && known
                             .params
                             .iter()
@@ -386,6 +392,29 @@ impl Symbols {
             Some(TypeKind::Callback(routine)) => Some(routine),
             _ => None,
         }
+    }
+
+    /// The overload of `name` that a name written in `unit` resolves to,
+    /// among the overloads `matches` accepts.
+    ///
+    /// Delphi resolves a routine name in the unit that declares it before the
+    /// units it uses, and among those in the unit the unit names last in its
+    /// `uses` clause. Every definition unit names `wbInterface` last and
+    /// `wbDefinitionsCommon` first, and the caller adds the units in that
+    /// reverse order ([`add_unit`] gets `wbInterface` first), so the copy that
+    /// wins among the used units is the one whose overload comes first.
+    ///
+    /// [`add_unit`]: Symbols::add_unit
+    pub fn resolved_overload(&self, unit: &str, name: &str, matches: impl Fn(&RoutineSig) -> bool) -> Option<usize> {
+        let overloads = self.routines.get(&lower(name))?;
+        let candidates = (0..overloads.len()).filter(|&index| matches(&overloads[index]));
+        let candidates: Vec<usize> = candidates.collect();
+        // The unit's own declaration hides the copies of the units it uses.
+        candidates
+            .iter()
+            .copied()
+            .find(|&index| overloads[index].unit.eq_ignore_ascii_case(unit))
+            .or_else(|| candidates.first().copied())
     }
 }
 

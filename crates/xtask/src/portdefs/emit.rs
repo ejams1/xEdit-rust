@@ -430,11 +430,16 @@ impl<'a> Emitter<'a> {
     /// The Rust name of the overload that a routine implements.
     pub fn rust_name(&self, routine: &Routine) -> Option<String> {
         let lower = routine.name.to_ascii_lowercase();
-        let overloads = self.symbols.routines.get(&lower)?;
-        let index = overloads
-            .iter()
-            .position(|sig| same_params(&sig.params, &routine.params))?;
+        let index = self.overload_of(&lower, &routine.params)?;
         self.names.get(&(lower, index)).cloned()
+    }
+
+    /// The index of the overload of `lower` that the implementation with
+    /// `params` belongs to: the copy of the emitting unit, not the same-named
+    /// copy of a unit it uses.
+    fn overload_of(&self, lower: &str, params: &[Param]) -> Option<usize> {
+        self.symbols
+            .resolved_overload(&self.unit, lower, |sig| same_params(&sig.params, params))
     }
 
     /// The Rust signature of a routine that is written by hand, with the
@@ -446,9 +451,8 @@ impl<'a> Emitter<'a> {
             .routines
             .get(&lower)
             .ok_or_else(|| anyhow!("routine is not in the symbol table"))?;
-        let index = overloads
-            .iter()
-            .position(|sig| same_params(&sig.params, &routine.params))
+        let index = self
+            .overload_of(&lower, &routine.params)
             .ok_or_else(|| anyhow!("no declaration matches the implementation"))?;
         self.signature(&self.names[&(lower, index)], &overloads[index])
     }
@@ -482,9 +486,8 @@ impl<'a> Emitter<'a> {
             .routines
             .get(&lower)
             .ok_or_else(|| anyhow!("routine is not in the symbol table"))?;
-        let index = overloads
-            .iter()
-            .position(|sig| same_params(&sig.params, &routine.params))
+        let index = self
+            .overload_of(&lower, &routine.params)
             .ok_or_else(|| anyhow!("no declaration matches the implementation"))?;
         let sig = &overloads[index];
         let name = &self.names[&(lower, index)];
@@ -1291,13 +1294,18 @@ impl<'a> Emitter<'a> {
     }
 
     /// The Rust function behind a routine that is passed as the callback type.
+    ///
+    /// The routine is the one a name written in the emitting unit resolves to,
+    /// which is the unit's own copy where it has one: the copies of one name
+    /// and signature in different units can differ, and upstream runs the copy
+    /// the definitions of the unit name (issue #40).
     fn callback_function(&self, name: &str, callback_type: &str) -> Option<String> {
         let lower = name.to_ascii_lowercase();
         let overloads = self.symbols.routines.get(&lower)?;
         let callback = self.symbols.callback(callback_type)?;
-        let index = overloads
-            .iter()
-            .position(|sig| super::resolve::callback_matches(sig, callback))?;
+        let index = self.symbols.resolved_overload(&self.unit, &lower, |sig| {
+            super::resolve::callback_matches(sig, callback)
+        })?;
         let function = self.names[&(lower, index)].clone();
         self.references
             .borrow_mut()
@@ -1958,7 +1966,9 @@ impl<'a> Emitter<'a> {
                     Ty::Unknown,
                 ));
             }
-            ("ifthen", [condition, a, b]) if self.resolver().resolve_call(name, args, &cx.scope).is_err() => {
+            ("ifthen", [condition, a, b])
+                if self.resolver().resolve_call(self.unit, name, args, &cx.scope).is_err() =>
+            {
                 // `IfThen` of `System.StrUtils`.
                 let condition = self.condition(condition, cx)?;
                 let a = self.expr(a, cx)?;
@@ -2015,14 +2025,17 @@ impl<'a> Emitter<'a> {
         if !self.symbols.routines.contains_key(&lower) {
             bail!("call of {name}, which is not a known routine");
         }
-        let (resolved, sig) = self.resolver().resolve_call(name, args, &cx.scope).map_err(|error| {
-            let unknown: Vec<String> = args
-                .iter()
-                .filter(|arg| self.resolver().ty_of(arg, &cx.scope) == Ty::Unknown)
-                .map(|arg| format!("{arg:?}").chars().take(200).collect())
-                .collect();
-            anyhow!("{error}; unknown: {unknown:?}")
-        })?;
+        let (resolved, sig) = self
+            .resolver()
+            .resolve_call(self.unit, name, args, &cx.scope)
+            .map_err(|error| {
+                let unknown: Vec<String> = args
+                    .iter()
+                    .filter(|arg| self.resolver().ty_of(arg, &cx.scope) == Ty::Unknown)
+                    .map(|arg| format!("{arg:?}").chars().take(200).collect())
+                    .collect();
+                anyhow!("{error}; unknown: {unknown:?}")
+            })?;
         let mut function = self.names[&(lower.clone(), resolved.overload)].clone();
         if sig.unit.eq_ignore_ascii_case("wbinterface") && lower.starts_with("wbis") {
             function = function[3..].to_owned();
@@ -2079,7 +2092,7 @@ impl<'a> Emitter<'a> {
                 .method_owner(&class_lower, name)
                 .ok_or_else(|| anyhow!("{class} has no constructor {name}"))?;
             let qualified = format!("{owner}.{}", name.to_ascii_lowercase());
-            let (resolved, sig) = self.resolver().resolve_call(&qualified, args, &cx.scope)?;
+            let (resolved, sig) = self.resolver().resolve_call(self.unit, &qualified, args, &cx.scope)?;
             // The function is named after the class that is created.
             let owner_function = &self.names[&(qualified, resolved.overload)];
             let owner_prefix = snake(sig.name.split('.').next().unwrap_or_default());
@@ -2176,7 +2189,7 @@ impl<'a> Emitter<'a> {
             return Ok(value);
         };
         let qualified = format!("{owner}.{name}");
-        let (resolved, sig) = self.resolver().resolve_call(&qualified, args, &cx.scope)?;
+        let (resolved, sig) = self.resolver().resolve_call(self.unit, &qualified, args, &cx.scope)?;
         let rust_name = METHODS
             .iter()
             .find(|(declaring, method, overload, _)| {
@@ -2317,6 +2330,14 @@ fn expr_name(expr: &Expr) -> &'static str {
 /// parameters that not every overload has. `wbInteger` with a signature and
 /// an `aToStr` callback is `wb_integer_signature_to_str`, and `wbInteger`
 /// with a name and a formater is `wb_integer`.
+///
+/// Two copies of one name and signature in different units have no parameter
+/// that tells them apart; the first (the copy of `wbDefinitionsCommon`, the
+/// unit the game units use) keeps the base name and the others are named
+/// after their unit, so `wb_soun_after_load` of Common against
+/// `wb_soun_after_load_fo3` and `wb_soun_after_load_fnv`. Only the emission
+/// that sees both copies uses the suffixed name, and a name written in a game
+/// unit resolves to the game's own copy.
 pub fn overload_names(symbols: &Symbols) -> HashMap<(String, usize), String> {
     let base_of = |sig: &RoutineSig| match sig.name.split_once('.') {
         Some((class, method)) => format!("{}_{}", snake(class), snake(method)),
@@ -2365,7 +2386,8 @@ pub fn overload_names(symbols: &Symbols) -> HashMap<(String, usize), String> {
             })
             .collect();
         for index in 0..overloads.len() {
-            let name = selecting(index, &varying)
+            let unit = super::unit_module(&overloads[index].unit);
+            let selected: Vec<String> = selecting(index, &varying)
                 .into_iter()
                 .map(|words| {
                     if words.is_empty() {
@@ -2374,6 +2396,21 @@ pub fn overload_names(symbols: &Symbols) -> HashMap<(String, usize), String> {
                         format!("{base}_{}", words.join("_"))
                     }
                 })
+                .collect();
+            let candidates = if selected.is_empty() {
+                // Two copies of one signature in different units have no
+                // selecting words at all: the first keeps the base name, the
+                // others carry their unit.
+                (index == 0)
+                    .then(|| base.clone())
+                    .into_iter()
+                    .chain((!unit.is_empty()).then(|| format!("{base}_{unit}")))
+                    .collect()
+            } else {
+                selected
+            };
+            let name = candidates
+                .into_iter()
                 .find(|name| !used.contains(name))
                 .unwrap_or_else(|| format!("{base}_v{}", index + 1));
             used.insert(name.clone());

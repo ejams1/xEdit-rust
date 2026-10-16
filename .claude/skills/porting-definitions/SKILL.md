@@ -27,7 +27,15 @@ done
 
 The last argument is the hand file: every `pub fn` it defines is left out of the stubs. The stub exclusion reads function names from the source text, so define ported callbacks as explicit `pub fn` items, not through macros. The command prints the number of routines translated, the number of stubs written and the number of routines it failed to translate; the failures are listed in the output with their line and are ported by hand like callbacks.
 
-Regenerate all three units together after a transpiler change: the common unit decides which routines the game units import.
+Regenerate every unit after a transpiler change, all fifteen of them: the Common unit decides which routines the game units import, and a name several units declare is named after the unit that resolves (see below). `Common TES3 TES4 FO3 FNV TES5 FO4 FO76 SF1 Reflection TES4Saves FO3Saves FNVSaves TES5Saves FO4Saves` with `$l=$(echo $u | sed 's/\([A-Z]\)/\L\1/g')` is the list; end with `cargo fmt --all` (the emitter writes one long line per statement), and read `git diff` before committing.
+
+## One name in several units
+
+A call or a callback is resolved by the unit it is written in, as Delphi resolves it: the unit's own routine wins, else the copy of the unit it uses last (`add_unit` is given the units in the reverse of the `uses` order, `wbInterface` first). The transpiler keeps the copies apart even when the signatures are equal, so where the copies differ the game's own is what its records name, and the port must provide it:
+
+- The copy of `wbDefinitionsCommon` (or the first unit that declares the name) keeps the base Rust name, which is where the hand file's function lives; a later copy is `<base>_<unit>` (`wbSOUNAfterLoad` of Fallout 3 is `wb_soun_after_load_fo3`, the older `wbLGDIFiltersToStr` of Fallout 76 is `wb_lgdi_filters_to_str_fo76`, `wbOBND` of `wbDefinitionsSF1` is `wb_obnd_sf1` — the last one is generated, not hand-written).
+- That name is what the game's generated file references, so a game copy that is not ported appears as a stub in `<game>_stubs.rs`; port it into `callbacks/<game>.rs` under that name.
+- `cargo xtask port-defs duplicates <upstream checkout>` lists every routine more than one unit declares with its units, lines and whether the bodies are equal. A copy whose body differs, or that a unit's records name, needs its own port; an equal copy (such as `wbNormalizeToRange` in `wbInterface` against `wbDefinitionsCommon`) is a second hand port so each unit's calls can keep their own name, and both are noted in `upstream-map.toml`.
 
 ## Porting a callback
 

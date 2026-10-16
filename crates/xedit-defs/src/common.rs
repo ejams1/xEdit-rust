@@ -2211,7 +2211,7 @@ pub fn wb_float_colors_signature(
                 255.0,
                 0,
                 None,
-                wb_normalize_to_range(0.0, 255.0),
+                wb_normalize_to_range_common(0.0, 255.0),
                 ((a_default_r) as f64),
                 None,
             )
@@ -2223,7 +2223,7 @@ pub fn wb_float_colors_signature(
                 255.0,
                 0,
                 None,
-                wb_normalize_to_range(0.0, 255.0),
+                wb_normalize_to_range_common(0.0, 255.0),
                 ((a_default_g) as f64),
                 None,
             )
@@ -2235,7 +2235,7 @@ pub fn wb_float_colors_signature(
                 255.0,
                 0,
                 None,
-                wb_normalize_to_range(0.0, 255.0),
+                wb_normalize_to_range_common(0.0, 255.0),
                 ((a_default_b) as f64),
                 None,
             )
@@ -2271,7 +2271,7 @@ pub fn wb_float_colors(
                 255.0,
                 0,
                 None,
-                wb_normalize_to_range(0.0, 255.0),
+                wb_normalize_to_range_common(0.0, 255.0),
                 ((a_default_r) as f64),
                 None,
             )
@@ -2283,7 +2283,7 @@ pub fn wb_float_colors(
                 255.0,
                 0,
                 None,
-                wb_normalize_to_range(0.0, 255.0),
+                wb_normalize_to_range_common(0.0, 255.0),
                 ((a_default_g) as f64),
                 None,
             )
@@ -2295,7 +2295,7 @@ pub fn wb_float_colors(
                 255.0,
                 0,
                 None,
-                wb_normalize_to_range(0.0, 255.0),
+                wb_normalize_to_range_common(0.0, 255.0),
                 ((a_default_b) as f64),
                 None,
             )
@@ -2335,7 +2335,7 @@ pub fn wb_r_float_colors(
                 255.0,
                 0,
                 None,
-                wb_normalize_to_range(0.0, 255.0),
+                wb_normalize_to_range_common(0.0, 255.0),
                 ((a_default_r) as f64),
                 None,
             )
@@ -2348,7 +2348,7 @@ pub fn wb_r_float_colors(
                 255.0,
                 0,
                 None,
-                wb_normalize_to_range(0.0, 255.0),
+                wb_normalize_to_range_common(0.0, 255.0),
                 ((a_default_g) as f64),
                 None,
             )
@@ -2361,7 +2361,7 @@ pub fn wb_r_float_colors(
                 255.0,
                 0,
                 None,
-                wb_normalize_to_range(0.0, 255.0),
+                wb_normalize_to_range_common(0.0, 255.0),
                 ((a_default_b) as f64),
                 None,
             )
@@ -2402,7 +2402,7 @@ pub fn wb_float_rgba_signature(
                 255.0,
                 0,
                 None,
-                wb_normalize_to_range(0.0, 255.0),
+                wb_normalize_to_range_common(0.0, 255.0),
                 ((a_default_r) as f64),
                 None,
             )
@@ -2414,7 +2414,7 @@ pub fn wb_float_rgba_signature(
                 255.0,
                 0,
                 None,
-                wb_normalize_to_range(0.0, 255.0),
+                wb_normalize_to_range_common(0.0, 255.0),
                 ((a_default_g) as f64),
                 None,
             )
@@ -2426,7 +2426,7 @@ pub fn wb_float_rgba_signature(
                 255.0,
                 0,
                 None,
-                wb_normalize_to_range(0.0, 255.0),
+                wb_normalize_to_range_common(0.0, 255.0),
                 ((a_default_b) as f64),
                 None,
             )
@@ -2438,7 +2438,7 @@ pub fn wb_float_rgba_signature(
                 255.0,
                 0,
                 None,
-                wb_normalize_to_range(0.0, 255.0),
+                wb_normalize_to_range_common(0.0, 255.0),
                 ((a_default_a) as f64),
                 None,
             )
@@ -2475,7 +2475,7 @@ pub fn wb_float_rgba(
                 255.0,
                 0,
                 None,
-                wb_normalize_to_range(0.0, 255.0),
+                wb_normalize_to_range_common(0.0, 255.0),
                 ((a_default_r) as f64),
                 None,
             )
@@ -2487,7 +2487,7 @@ pub fn wb_float_rgba(
                 255.0,
                 0,
                 None,
-                wb_normalize_to_range(0.0, 255.0),
+                wb_normalize_to_range_common(0.0, 255.0),
                 ((a_default_g) as f64),
                 None,
             )
@@ -2499,7 +2499,7 @@ pub fn wb_float_rgba(
                 255.0,
                 0,
                 None,
-                wb_normalize_to_range(0.0, 255.0),
+                wb_normalize_to_range_common(0.0, 255.0),
                 ((a_default_b) as f64),
                 None,
             )
@@ -2511,7 +2511,7 @@ pub fn wb_float_rgba(
                 255.0,
                 0,
                 None,
-                wb_normalize_to_range(0.0, 255.0),
+                wb_normalize_to_range_common(0.0, 255.0),
                 ((a_default_a) as f64),
                 None,
             )

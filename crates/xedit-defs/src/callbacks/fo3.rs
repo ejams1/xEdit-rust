@@ -993,7 +993,7 @@ use super::common::{
     gmst_edid_after_set, head_parts_after_set, info_after_load_fallout3, mgef_after_load_fallout3,
     mgef_archtype_after_set, mgef_assoc_item_after_set, npc_after_load_fallout3, pack_after_load_fallout3, path_exists,
     perk_data_function_after_set, perk_entry_point_after_set, perk_epft_after_set, refr_after_load_fallout3,
-    remove_member, weap_after_load_fallout3, with_internal_edit,
+    remove_member, soun_after_load_fallout3, weap_after_load_fallout3, with_internal_edit,
 };
 
 /// Upstream `wbConditionsfterLoad`.
@@ -1136,6 +1136,14 @@ pub fn wb_fact_after_load(a_element: &ElementRef) {
 /// Upstream `wbEFITAfterLoad`.
 pub fn wb_efit_after_load(a_element: &ElementRef) {
     efit_after_load(a_element);
+}
+
+/// Upstream `wbSOUNAfterLoad` of `wbDefinitionsFO3`: the old sound data
+/// (a SNDX structure with ANAM, GNAM and HNAM) becomes the SNDD structure.
+/// The copy of `wbDefinitionsCommon` with the same name and signature is the
+/// other direction and is not the one the Fallout 3 definitions name.
+pub fn wb_soun_after_load_fo3(a_element: &ElementRef) {
+    soun_after_load_fallout3(a_element);
 }
 
 /// Upstream `wbWATRAfterLoad`: a legacy `DATA - Visual Data` becomes
