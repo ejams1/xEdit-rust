@@ -705,7 +705,7 @@
       "save": [
         "Skyrim.esm"
       ],
-      "note": "parity #27 fixture: the `Filter` function raises on its third call. The run aborts with the exception line and `Aborted:`, the filter prints no `Done:` line and the code after `ApplyFilter` never runs"
+      "note": "parity #27 fixture: the `Filter` function raises on its third call. The run aborts with the exception line and `Aborted:`, the filter prints no `Done:` line and the code after `ApplyFilter` leaves no message (upstream aborts at the call; the port drops the messages of the statements after it)"
     },
     {
       "script": "probes/streams.pas",
