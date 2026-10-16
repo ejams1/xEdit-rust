@@ -198,11 +198,22 @@ fn build_ref(element: &dyn ElementImpl) {
             value_def.build_ref(data_of(element), self_ref.as_ref());
         }
     }
-    for child in children(element) {
-        if let Some(child) = child.as_element_impl()
-            && can_contain_form_ids(child)
-        {
-            build_ref(child);
+    // `for i := Low(cntElements) to High(cntElements) do cntElements[i]...`:
+    // the count is read once, the element at each index as the loop goes.
+    // The walk of an element can add one to the list (the Starfield perk
+    // activity of parity #33 adds the virtual `NULL` member over its `ATAV`
+    // text when that value is initialised here), which shifts the elements
+    // behind it: as upstream, the walk visits the added element and leaves
+    // the one that moved past the captured count out.
+    if let Some(container) = element.as_container() {
+        let count = container.get_element_count();
+        for index in 0..count {
+            if let Some(child) = container.get_element(index)
+                && let Some(child) = child.as_element_impl()
+                && can_contain_form_ids(child)
+            {
+                build_ref(child);
+            }
         }
     }
     let is_value = matches!(
@@ -282,8 +293,13 @@ impl MainRecordImpl {
         }
         let outer = BUILDING_REFS.with(|refs| refs.borrow_mut().replace(BTreeSet::new()));
         self.do_init();
-        for element in self.container.elements() {
-            if let Some(element) = element.as_element_impl()
+        // `for i := Low(cntElements) to High(cntElements)`: as the walk of
+        // the elements below a record, the count is read once and each
+        // element as the loop goes.
+        let count = self.container.element_count();
+        for index in 0..count {
+            if let Some(element) = self.container.element_at(index)
+                && let Some(element) = element.as_element_impl()
                 && can_contain_form_ids(element)
             {
                 build_ref(element);

@@ -1811,6 +1811,15 @@ fn wb_perk_activity_load_virtual_json(a_element: &ElementRef) {
                 // Clear existing stream elements
                 let stream_element = path_from(&virtual_container, "[0]\\Stream");
                 let virtual_stream_container = stream_element.as_ref().and_then(as_container_ref);
+                if let Some(virtual_stream_container) = &virtual_stream_container {
+                    while element_count(virtual_stream_container) > 0 {
+                        if let Some(container) = virtual_stream_container.as_container() {
+                            container.remove_element_at(0, true);
+                        } else {
+                            break;
+                        }
+                    }
+                }
 
                 // Parse JSON
                 let Some(json_root) = Json::parse(&a_element.get_value()).ok() else {
