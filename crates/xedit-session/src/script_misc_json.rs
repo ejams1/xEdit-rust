@@ -43,10 +43,10 @@ use xedit_script::adapter::{Adapter, Args};
 use xedit_script::values::{ClassDef, ParamType, ScriptObject, Value, ValueError, VarType};
 
 use crate::script_classes::ScriptClasses;
-use crate::script_rtl::datetime;
 use crate::script_rtl::classes::{
     StreamState, access_violation, stream_of, stream_read_to_end, stream_set_size, stream_write,
 };
+use crate::script_rtl::datetime;
 use crate::script_strings::{EncodingKind, borrow_list_mut, encoding_of, list_of_or_error, receiver, text_arg};
 
 /// The exception classes of `JsonDataObjects` and their texts.
@@ -703,7 +703,11 @@ pub fn json_to_date_time(text: &str, convert_to_local_time: bool) -> Result<f64,
         if &dotnet[end..] == ")/" {
             // `UnixDateDelta` is 25569 and `MSecsPerDay` 86400000.
             let value = 25_569.0 + (millis as f64) / 86_400_000.0;
-            return Ok(if convert_to_local_time { utc_to_local(value) } else { value });
+            return Ok(if convert_to_local_time {
+                utc_to_local(value)
+            } else {
+                value
+            });
         }
         return Ok(0.0);
     }
@@ -763,7 +767,11 @@ pub fn json_to_date_time(text: &str, convert_to_local_time: bool) -> Result<f64,
         let offset = encode_time(offset_hour, offset_minute, 0, 0).map_err(encode_error)?;
         value += if negative { -offset } else { offset };
     }
-    Ok(if convert_to_local_time { utc_to_local(value) } else { value })
+    Ok(if convert_to_local_time {
+        utc_to_local(value)
+    } else {
+        value
+    })
 }
 
 /// The readable form's line structure (`TJsonOutputWriter`): compact output
@@ -916,8 +924,7 @@ impl Parser {
     fn error(&self, message: impl Into<String>) -> ValueError {
         let pos = self.pos.min(self.chars.len());
         let line = 1 + self.chars[..pos].iter().filter(|ch| **ch == NL).count();
-        let line_start = self
-            .chars[..pos]
+        let line_start = self.chars[..pos]
             .iter()
             .rposition(|ch| *ch == NL)
             .map_or(0, |index| index + 1);

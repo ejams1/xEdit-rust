@@ -2581,18 +2581,24 @@ fn register_binary_streams(adapter: &mut Adapter, classes: &Classes) {
     // `TBinaryReader.Create(TFileStream(...))`.
     {
         let class = classes.t_binary_reader.clone();
-        method(adapter, &classes.t_binary_reader, "Create", &[EMPTY], move |value, args| {
-            // `if Stream = nil then raise EArgumentNilException.CreateRes(@SArgumentNil)`.
-            let stream = argument_stream(arg(args, 0))?;
-            *value = Value::Object(Rc::new(RefCell::new(BinaryReaderObject {
-                class: class.clone(),
-                state: Rc::new(RefCell::new(BinaryReaderState {
-                    stream,
-                    encoding: crate::script_strings::EncodingKind::Utf8,
-                })),
-            })));
-            Ok(())
-        });
+        method(
+            adapter,
+            &classes.t_binary_reader,
+            "Create",
+            &[EMPTY],
+            move |value, args| {
+                // `if Stream = nil then raise EArgumentNilException.CreateRes(@SArgumentNil)`.
+                let stream = argument_stream(arg(args, 0))?;
+                *value = Value::Object(Rc::new(RefCell::new(BinaryReaderObject {
+                    class: class.clone(),
+                    state: Rc::new(RefCell::new(BinaryReaderState {
+                        stream,
+                        encoding: crate::script_strings::EncodingKind::Utf8,
+                    })),
+                })));
+                Ok(())
+            },
+        );
     }
     // The typed readers, each of which raises `EReadError` at the end.
     for (name, kind) in [
@@ -2614,13 +2620,19 @@ fn register_binary_streams(adapter: &mut Adapter, classes: &Classes) {
             Ok(())
         });
     }
-    method(adapter, &classes.t_binary_reader, "ReadBytes", &[EMPTY], |value, args| {
-        let stream = binary_reader_stream(args)?;
-        let count = to_i32(arg(args, 0))?.max(0) as usize;
-        let bytes = binary_read_bytes(&stream, count)?;
-        *value = bytes_value(&bytes);
-        Ok(())
-    });
+    method(
+        adapter,
+        &classes.t_binary_reader,
+        "ReadBytes",
+        &[EMPTY],
+        |value, args| {
+            let stream = binary_reader_stream(args)?;
+            let count = to_i32(arg(args, 0))?.max(0) as usize;
+            let bytes = binary_read_bytes(&stream, count)?;
+            *value = bytes_value(&bytes);
+            Ok(())
+        },
+    );
     method(adapter, &classes.t_binary_reader, "ReadString", &[], |value, args| {
         let (stream, encoding) = {
             let object = receiver(args)?;
@@ -2652,44 +2664,62 @@ fn register_binary_streams(adapter: &mut Adapter, classes: &Classes) {
     // `TBinaryWriter.Create(TFileStream(...))`.
     {
         let class = classes.t_binary_writer.clone();
-        method(adapter, &classes.t_binary_writer, "Create", &[EMPTY], move |value, args| {
-            let stream = argument_stream(arg(args, 0))?;
-            *value = Value::Object(Rc::new(RefCell::new(BinaryWriterObject {
-                class: class.clone(),
-                state: Rc::new(RefCell::new(BinaryWriterState {
-                    stream,
-                    encoding: crate::script_strings::EncodingKind::Utf8,
-                })),
-            })));
-            Ok(())
-        });
+        method(
+            adapter,
+            &classes.t_binary_writer,
+            "Create",
+            &[EMPTY],
+            move |value, args| {
+                let stream = argument_stream(arg(args, 0))?;
+                *value = Value::Object(Rc::new(RefCell::new(BinaryWriterObject {
+                    class: class.clone(),
+                    state: Rc::new(RefCell::new(BinaryWriterState {
+                        stream,
+                        encoding: crate::script_strings::EncodingKind::Utf8,
+                    })),
+                })));
+                Ok(())
+            },
+        );
     }
     method(adapter, &classes.t_binary_writer, "Write", &[EMPTY], |_value, args| {
         writer_state(args)?.borrow_mut().write_value(arg(args, 0))?;
         Ok(())
     });
-    method(adapter, &classes.t_binary_writer, "WriteSingle", &[EMPTY], |_value, args| {
-        let single = xedit_script::values::to_f64(arg(args, 0))? as f32;
-        writer_state(args)?.borrow_mut().write_bytes(&single.to_le_bytes())?;
-        Ok(())
-    });
+    method(
+        adapter,
+        &classes.t_binary_writer,
+        "WriteSingle",
+        &[EMPTY],
+        |_value, args| {
+            let single = xedit_script::values::to_f64(arg(args, 0))? as f32;
+            writer_state(args)?.borrow_mut().write_bytes(&single.to_le_bytes())?;
+            Ok(())
+        },
+    );
 
     // `TBytesStream.Create(TBytes(...))`: a memory stream over the bytes,
     // its position at their start.
     {
         let class = classes.t_bytes_stream.clone();
-        method(adapter, &classes.t_bytes_stream, "Create", &[EMPTY], move |value, args| {
-            let bytes = bytes_of_value(arg(args, 0))?;
-            *value = Value::Object(Rc::new(RefCell::new(StreamObject {
-                class: class.clone(),
-                state: Rc::new(RefCell::new(StreamState {
-                    kind: StreamKind::Memory(bytes),
-                    pos: 0,
-                    is_memory_stream: false,
-                    released: false,
-                })),
-            })));
-            Ok(())
-        });
+        method(
+            adapter,
+            &classes.t_bytes_stream,
+            "Create",
+            &[EMPTY],
+            move |value, args| {
+                let bytes = bytes_of_value(arg(args, 0))?;
+                *value = Value::Object(Rc::new(RefCell::new(StreamObject {
+                    class: class.clone(),
+                    state: Rc::new(RefCell::new(StreamState {
+                        kind: StreamKind::Memory(bytes),
+                        pos: 0,
+                        is_memory_stream: false,
+                        released: false,
+                    })),
+                })));
+                Ok(())
+            },
+        );
     }
 }

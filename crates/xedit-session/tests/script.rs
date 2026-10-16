@@ -1745,3 +1745,202 @@ fn the_refs_edit_probe_gives_the_oracle_lines() {
     ];
     assert_eq!(fixture_lines("refs-edit.pas", "refs-edit.esm", true), expected);
 }
+
+/// A probe script of the parity fixtures
+/// (`crates/xtask/oracle/scripts/probes`) run over the parity fixture
+/// master: the lines of the run between the `Start:` and the `Done:` line.
+/// The probes write their files into the run folder (`ScriptsPath`), the
+/// temporary scripts folder this helper makes.
+fn parity_probe_lines(probe: &str) -> Vec<String> {
+    let _guard = test_lock();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..").join("..");
+    let text = std::fs::read_to_string(root.join("crates/xtask/oracle/scripts/probes").join(probe)).unwrap();
+    let bytes = std::fs::read(root.join("tests/fixtures/parity/edid-quick-init.esm")).unwrap();
+    xedit_core::implementation::clear_files_map();
+    xedit_core::implementation::reset_load_order_slots();
+    xedit_core::interface::clear_files();
+    xedit_session::dump::setup_game("sse").unwrap();
+    xedit_session::save::apply_edit_settings(GameMode::gmSSE);
+    let master = open("Skyrim.esm", bytes);
+    let mut session = Session::with_files(GameMode::gmSSE, vec![master]);
+    session.allow_edit(true);
+    let folder = script_folder(probe.trim_end_matches(".pas"), probe, &text);
+    let result = run(&mut session, &folder, probe, json!({}));
+    assert_eq!(result["aborted"], false, "{:?}", lines(&result));
+    let all = lines(&result);
+    let start = all
+        .iter()
+        .position(|line| line.starts_with("Start: Applying script"))
+        .unwrap();
+    let end = all
+        .iter()
+        .position(|line| line.starts_with("Done: Applying script"))
+        .unwrap();
+    all[start + 1..end].to_vec()
+}
+
+/// The lines the oracle wrote for the streams probe (`cargo xtask parity
+/// script --phase run --script probes/streams`, 2026-10-15, equal): the JSON
+/// round trips over the memory, bytes, string and file streams with the
+/// sizes and positions they leave (81 bytes from position 0, 162 appended,
+/// 84 after a save at position 3 that truncates a `TMemoryStream`), the
+/// UTF-8 default, the UTF-8 mark and the half-written UTF-16 form
+/// `TEncoding.Unicode` gives, the `TBinaryReader`/`TBinaryWriter` round trip
+/// of every typed read (the writer has no buffer: the file grows by 4 bytes
+/// on the first `Write(42)`), `Read`'s one byte through the encoding and the
+/// nil and freed stream exceptions (a save into nil writes nothing, a nil
+/// constructor argument is `EArgumentNilException`).
+#[test]
+fn the_stream_probe_gives_the_oracle_lines() {
+    let expected = vec![
+        "memory | fresh size=0 pos=0",
+        "memory | saved size=81 pos=81",
+        "memory | loaded pos=81 name=xEdit count=42",
+        "memory | json={\"name\":\"xEdit\",\"count\":42,\"flag\":true,\"pi\":3.5,\"list\":[1,\"two\"],\"sub\":{\"k\":\"v\"}}",
+        "memory | appended size=162 pos=162",
+        "memory | overwrote size=84 pos=84",
+        "memory | mid-load exc=EJsonParserException",
+        "empty | exc=EJsonParserException",
+        "encoding | utf8 size=16 pos=16",
+        "encoding | utf8-bom size=19 pos=19",
+        "encoding | utf16 size=18 pos=18",
+        "encoding | utf16-load exc=EJsonParserException",
+        "encoding | utf16-enc-load exc=EJsonParserException",
+        "encoding | utf16-as-utf8 exc=EJsonParserException",
+        "bytes | file size=27 pos=27",
+        "bytes | tbytes size=27 pos=0",
+        "bytes | load pos=27 name=xEdit count=42",
+        "bytes | json={\"name\":\"xEdit\",\"count\":42}",
+        "bytes | memory size=27",
+        "string | size=16 pos=16 data={\"name\":\"xEdit\"}",
+        "string | load pos=16 json={\"name\":\"xEdit\"}",
+        "binary | empty size=0 pos=0",
+        "binary | int size=4",
+        "binary | string ok size=20",
+        "binary | buffered size=24",
+        "binary | long size=5026",
+        "binary | freed size=5026 pos=5026",
+        "binary | read-plain=42 type=3 pos=2",
+        "binary | read-plain2=0 type=3 pos=4",
+        "binary | read-int=42 pos=4",
+        "binary | read-int2 exc=EEncodingError No mapping for the Unicode character exists in the target multi-byte code page pos=4",
+        "binary | read-double=2.12199578750681E-314 pos=12",
+        "binary | read-bool=0",
+        "binary | read-string= pos=14",
+        "binary | read-single=1.5132080674216E20 pos=18",
+        "binary | read-byte=98 pos=19",
+        "binary | read-shortint=99",
+        "binary | read-smallint=0",
+        "binary | read-uint16=16416",
+        "binary | read-uint32=825239432",
+        "binary | read-char=2",
+        "binary | end pos=29 size=5026",
+        "binary | past-end=909456435",
+        "binary | size=5026",
+        "flush | after4 size=5 pos=5",
+        "flush | after4096 size=4099 pos=4099",
+        "flush | after4097 size=4101 pos=4101",
+        "flush | after8192 size=12295 pos=12295",
+        "flush | freed size=12295",
+        "nil | load exc=EAccessViolation",
+        "nil | save ok",
+        "nil | reader-create exc=EArgumentNilException",
+        "nil | writer-create exc=EArgumentNilException",
+        "freed | load exc=EAccessViolation",
+    ];
+    assert_eq!(parity_probe_lines("streams.pas"), expected);
+}
+
+/// The time zone independent lines of the datetime probe (`cargo xtask
+/// parity script --phase run --script probes/datetime`, 2026-10-15, equal):
+/// the `EncodeDate` day numbers, `DecodeDate`'s truncation and
+/// `DecodeTime`'s positive reading of a negative `TDateTime`'s fraction, the
+/// offset arithmetic `DateTimeToISO8601` does, the value kinds
+/// `DateTimeValue` reads, the invalid date strings (`0`, and
+/// `EConvertError` for a date `EncodeDate` refuses). The lines whose text
+/// depends on the machine's time zone are asserted as relationships after
+/// them, because CI runs in UTC.
+#[test]
+fn the_datetime_probe_gives_the_oracle_lines() {
+    let expected = vec![
+        "enc | 1899-12-29=-1 1899-12-30=0 1899-12-31=1",
+        "dec | dd(-1.25)=1899-12-29",
+        "dec | dd(-0.25)=1899-12-30",
+        "dec | dd(-0.75)=1899-12-30",
+        "dec | dt(-1.25)=6:0:0.0",
+        "dec | dt(-0.79166)=19:0:0.0",
+        "dec | dt(-1.79166)=19:0:0.0",
+        "off | -1.25-u=-0.791666666666667 -0.25-u=-0.791666666666667 -0.75-u=-1.79166666666667",
+        "none | 0",
+        "kinds | i=3 l=4 u=5 f=1.5 b=1",
+        "types | i=2 s=1 b=8",
+        "null | exc=EJsonCastException Cannot cast Object into DateTime",
+        "null | types=10",
+        "parse-dateonly | value=42036 types=1",
+        "parse-empty | value=0 types=1",
+        "parse-garbage | value=0 types=1",
+        "parse-short | value=0 types=1",
+        "parse-zero | exc=EConvertError Invalid argument to date encode",
+        "parse-badmonth | exc=EConvertError Invalid argument to date encode",
+    ];
+    let all = parity_probe_lines("datetime.pas");
+    let kept: Vec<String> = all
+        .iter()
+        .filter(|line| {
+            [
+                "enc |",
+                "dec |",
+                "off |",
+                "none |",
+                "kinds |",
+                "types |",
+                "null |",
+                "parse-empty",
+                "parse-garbage",
+                "parse-short",
+                "parse-zero",
+                "parse-badmonth",
+                "parse-dateonly",
+            ]
+            .iter()
+            .any(|prefix| line.starts_with(prefix))
+        })
+        .cloned()
+        .collect();
+    assert_eq!(kept, expected);
+
+    // The conversions do not depend on the zone: `parse-z` and `parse-plain`
+    // are the same (a text without a zone is UTC), an offset moves the value
+    // by its own size and a date alone carries no time.
+    let value = |tag: &str| -> f64 {
+        let line = all
+            .iter()
+            .find(|line| line.starts_with(tag))
+            .unwrap_or_else(|| panic!("{tag} is in the probe"));
+        line.split("value=")
+            .nth(1)
+            .unwrap()
+            .split(' ')
+            .next()
+            .unwrap()
+            .parse()
+            .unwrap()
+    };
+    let z = value("parse-z");
+    assert_eq!(value("parse-plain"), z);
+    assert!((value("parse-offset") - (z - 2.0 / 24.0)).abs() < 1e-9);
+    assert!((value("parse-neg") - (z + 5.0 / 24.0)).abs() < 1e-9);
+    assert_eq!(value("parse-dateonly"), 42036.0);
+    // The utc form of a stored value carries the `Z`, its local form the
+    // machine's offset; the utc text is the local one moved by that offset.
+    for line in &all {
+        if let Some(rest) = line.strip_prefix("2015-02-01 | utc=") {
+            assert!(rest.ends_with("Z types=6 raw=42036.6724444676"), "{line}");
+        }
+        if let Some(rest) = line.strip_prefix("2015-02-01 | local=") {
+            assert!(rest.starts_with("2015-02-01T16:08:19.202"), "{line}");
+            let offset = &rest["2015-02-01T16:08:19.202".len()..];
+            assert!(offset.starts_with('+') || offset.starts_with('-'), "{line}");
+        }
+    }
+}
