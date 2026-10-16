@@ -66,7 +66,9 @@ mod windows {
     use std::os::windows::io::{FromRawHandle, RawHandle};
     use std::ptr::null_mut;
 
-    use windows_sys::Win32::Foundation::{ERROR_ACCESS_DENIED, ERROR_PIPE_CONNECTED, INVALID_HANDLE_VALUE, LocalFree};
+    use windows_sys::Win32::Foundation::{
+        ERROR_ACCESS_DENIED, ERROR_PIPE_BUSY, ERROR_PIPE_CONNECTED, INVALID_HANDLE_VALUE, LocalFree,
+    };
     use windows_sys::Win32::Security::Authorization::{
         ConvertStringSecurityDescriptorToSecurityDescriptorW, SDDL_REVISION_1,
     };
@@ -127,7 +129,13 @@ mod windows {
             // that is served already fail with `ERROR_ACCESS_DENIED`: a
             // second daemon on one name would run a second session over the
             // same plugins.
-            if created.raw_os_error() == Some(ERROR_ACCESS_DENIED as i32) {
+            // Windows refuses the create of a name that is served already:
+            // `ERROR_PIPE_BUSY` while the instance waits for a client,
+            // `ERROR_ACCESS_DENIED` while one is connected.
+            if matches!(
+                created.raw_os_error(),
+                Some(code) if code == ERROR_ACCESS_DENIED as i32 || code == ERROR_PIPE_BUSY as i32
+            ) {
                 return Err(io::Error::new(
                     io::ErrorKind::AddrInUse,
                     format!(
