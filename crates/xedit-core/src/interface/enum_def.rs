@@ -609,12 +609,19 @@ mod tests {
         assert_eq!(def.to_string(0xC0, None, false), "A");
         assert_eq!(def.to_sort_key(0x41, None), "41");
         assert_eq!(def.get_name(), "TwbKey2Data6EnumDef");
+        // The names of an enum are its type name.
+        assert_eq!(def.get_def_type_name(), "(A,B)");
 
         let def = EnumDef::create(EnumClass::Data6Key2, false, &[], &[]);
         assert_eq!(def.to_string(63, None, false), "63 Small size");
         assert_eq!(def.to_string(64, None, false), "64 Medium size");
         assert_eq!(def.to_string(1 << 14, None, false), "16384 Large size");
         assert_eq!(def.to_string(1 << 22, None, false), "0 Null size");
-        assert_eq!(def.get_def_type_name(), "TwbData6Key2EnumDef");
+        // UPSTREAM-QUIRK: an enum without names has an *empty* type name.
+        // `TwbEnumDef.GetDefTypeName` writes a bare `inherited` there, which
+        // calls the parent method and discards its `ClassName`: the release's
+        // export profile says `Group=` for the sparse `wbEnum([], [...])` of
+        // the actor value unions, never `Group=TwbEnumDef`.
+        assert_eq!(def.get_def_type_name(), "");
     }
 }
