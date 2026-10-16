@@ -765,7 +765,8 @@ pub fn str_to_float(text: &str) -> Option<f64> {
     {
         let rest = &text[i..];
         let word = |word: &str| {
-            rest.get(..word.len()).is_some_and(|head| head.eq_ignore_ascii_case(word))
+            rest.get(..word.len())
+                .is_some_and(|head| head.eq_ignore_ascii_case(word))
                 && rest[word.len()..].bytes().all(blank)
         };
         if word("Inf") {
@@ -781,7 +782,9 @@ pub fn str_to_float(text: &str) -> Option<f64> {
     let mut push = |digit: u8| {
         let digit = i64::from(digit - b'0');
         let next = acc.checked_mul(10).and_then(|scaled| scaled.checked_add(digit));
-        if exact < 19 && let Some(next) = next {
+        if exact < 19
+            && let Some(next) = next
+        {
             acc = next;
             exact += 1;
             mantissa = acc as f64;
@@ -882,11 +885,26 @@ mod tests {
         ] {
             assert_eq!(str_to_float(text).map(f64::to_bits), Some(bits), "{text}");
         }
-        for text in ["1e400", "1.5E999999", "1.5E-999999", "Infinity", "infinityx", "1e", "1.2.3", "1,5", "-NaN", "--1.5", "1 5"] {
+        for text in [
+            "1e400",
+            "1.5E999999",
+            "1.5E-999999",
+            "Infinity",
+            "infinityx",
+            "1e",
+            "1.2.3",
+            "1,5",
+            "-NaN",
+            "--1.5",
+            "1 5",
+        ] {
             assert_eq!(str_to_float(text), None, "{text}");
         }
         assert_eq!(str_to_float("Inf").map(f64::to_bits), Some(f64::INFINITY.to_bits()));
-        assert_eq!(str_to_float("-Inf").map(f64::to_bits), Some(f64::NEG_INFINITY.to_bits()));
+        assert_eq!(
+            str_to_float("-Inf").map(f64::to_bits),
+            Some(f64::NEG_INFINITY.to_bits())
+        );
         assert_eq!(str_to_float("+Inf").map(f64::to_bits), Some(f64::INFINITY.to_bits()));
         assert_eq!(str_to_float("nAn").map(f64::to_bits), Some(NAN_BITS));
         assert_eq!(str_to_float("  1.5  ").map(f64::to_bits), Some(1.5f64.to_bits()));
