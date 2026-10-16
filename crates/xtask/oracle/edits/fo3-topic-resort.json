@@ -1,0 +1,35 @@
+{
+  "description": "Reproduction of two topic bugs parity #35 found (owed, not fixed: the topic sort and child groups of #24): in an editing session (wbFillINOM and wbFillINOA on) three responses of BrokenSteel.esm's HELLO topic are compared (built), which sorts the topic's responses, and the plugin is saved. The release writes the HELLO DIAL with its QSTI list sorted and leaves no empty topic children group; the port writes the QSTI list unsorted and five empty topic children groups (0100A2F6, 0100A306, 0100CC23, 0100D59B, 0100F3B1), five records more in HEDR.",
+  "game": "fo3",
+  "build_refs": false,
+  "load": [
+    "Fallout3.esm",
+    "BrokenSteel.esm"
+  ],
+  "commands": [
+    {
+      "command": "records.compare",
+      "params": {
+        "form_id": "0100BCA0",
+        "file": "BrokenSteel.esm"
+      }
+    },
+    {
+      "command": "records.compare",
+      "params": {
+        "form_id": "0100BCA1",
+        "file": "BrokenSteel.esm"
+      }
+    },
+    {
+      "command": "records.compare",
+      "params": {
+        "form_id": "0100BCA2",
+        "file": "BrokenSteel.esm"
+      }
+    }
+  ],
+  "save": [
+    "BrokenSteel.esm"
+  ]
+}
