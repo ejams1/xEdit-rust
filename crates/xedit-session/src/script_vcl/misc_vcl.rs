@@ -96,12 +96,7 @@ pub(crate) fn register(adapter: &mut Adapter, _state: &Rc<RefCell<ScriptRunState
             _ => unreachable!(),
         }
     }
-    let _ = (
-        &t_registry_ini_file,
-        &t_labeled_edit,
-        &t_check_list_box,
-        &t_ini_file,
-    );
+    let _ = (&t_registry_ini_file, &t_labeled_edit, &t_check_list_box, &t_ini_file);
 
     // `THashedStringList.Create`: a `TStringList` object of the `Classes`
     // unit's model under this class name.

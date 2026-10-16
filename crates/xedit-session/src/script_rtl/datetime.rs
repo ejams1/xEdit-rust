@@ -753,6 +753,33 @@ mod tests {
         assert_eq!(day_of_week(2.0), 2);
         // 1899-12-30 (day 0) was a Saturday (7).
         assert_eq!(day_of_week(0.0), 7);
+        // The negative dates: the day is the truncated one and the time is
+        // the distance from it, read as a positive time of day (the oracle's
+        // `crates/xtask/oracle/scripts/probes/datetime.pas` lines).
+        assert_eq!(decode_date(-0.25), (1899, 12, 30));
+        assert_eq!(decode_date(-0.75), (1899, 12, 30));
+        assert_eq!(decode_date(-1.25), (1899, 12, 29));
+        assert_eq!(decode_time(-0.25), (6, 0, 0, 0));
+        assert_eq!(decode_time(-1.25), (6, 0, 0, 0));
+        assert_eq!(decode_time(-0.791666666666667), (19, 0, 0, 0));
+        assert_eq!(decode_time(-1.791666666666667), (19, 0, 0, 0));
+        // `SystemTimeToDateTime` subtracts the time of a date before the
+        // epoch: the fraction of a negative TDateTime is negative.
+        let record = |year, month, day, hour| SystemTime {
+            year,
+            month,
+            day,
+            hour,
+            minute: 0,
+            second: 0,
+            milliseconds: 0,
+        };
+        assert_eq!(system_time_to_date_time(&record(1899, 12, 30, 1)), Ok(1.0 / 24.0));
+        assert_eq!(
+            system_time_to_date_time(&record(1899, 12, 29, 17)),
+            Ok(-1.0 - 17.0 / 24.0)
+        );
+        assert_eq!(system_time_to_date_time(&record(1899, 12, 29, 18)), Ok(-1.75));
         assert!(is_leap_year(2000));
         assert!(!is_leap_year(1900));
         assert!(encode_date(2023, 2, 29).is_err());
