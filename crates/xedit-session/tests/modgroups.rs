@@ -394,3 +394,209 @@ fn a_utf8_file_keeps_its_preamble_on_delete_but_not_on_edit() {
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// A data folder with the Skyrim SE masters on disk and only two of them
+/// loaded, the mod group options pointing into it.
+fn setup_unloaded(test: &str) -> (PathBuf, Session) {
+    let dir = std::env::temp_dir().join(format!("xedit-modgroups-{test}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    // `Skyrim.esm` is the game master of the mode, `Update.esm` and the
+    // three DLCs are official; the two plugins are not.
+    std::fs::write(dir.join("Skyrim.esm"), plugin(1, &[], 1.0)).unwrap();
+    for name in ["Update.esm", "Dawnguard.esm", "HearthFires.esm", "Dragonborn.esm"] {
+        std::fs::write(dir.join(name), plugin(1, &["Skyrim.esm"], 2.0)).unwrap();
+    }
+    for name in ["Zeta.esp", "Alpha.esp"] {
+        std::fs::write(dir.join(name), plugin(0, &["Skyrim.esm"], 3.0)).unwrap();
+    }
+    xedit_core::implementation::clear_files_map();
+    xedit_core::implementation::reset_load_order_slots();
+    xedit_core::interface::clear_files();
+    xedit_session::dump::setup_game_for_edit("sse").unwrap();
+    xedit_session::save::apply_edit_settings(GameMode::gmSSE);
+    // Only the master and one plugin load; the other plugins stay modules
+    // of the data folder (`mfHasFile` off).
+    let files: Vec<Arc<FileImpl>> = ["Skyrim.esm", "Zeta.esp"]
+        .iter()
+        .map(|name| wb_file(dir.join(name).to_str().unwrap(), i32::MAX, FileStates::empty()).unwrap())
+        .collect();
+    set_data_path(&format!("{}\\", dir.display()));
+    xedit_session::modgroups::set_file_options(
+        Some(dir.join("global.modgroups").to_str().unwrap()),
+        Some(dir.join("settings.ini").to_str().unwrap()),
+    );
+    let mut session = Session::with_files(GameMode::gmSSE, files);
+    session.allow_edit(true);
+    (dir, session)
+}
+
+/// The mod group files `modgroups.list` read, by file name.
+fn listed_files(session: &mut Session) -> Vec<String> {
+    call(session, "modgroups.list", json!({}))["files"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|file| name_of(file.as_str().unwrap()))
+        .collect()
+}
+
+/// The file name of a path of a response.
+fn name_of(path: &str) -> String {
+    PathBuf::from(path)
+        .file_name()
+        .unwrap()
+        .to_string_lossy()
+        .into_owned()
+}
+
+#[test]
+fn unloaded_modules_keep_the_upstream_load_order() {
+    let _guard = test_lock();
+    let (dir, mut session) = setup_unloaded("order");
+    for (name, module) in [
+        ("Skyrim", "Skyrim.esm"),
+        ("Update", "Update.esm"),
+        ("Dawnguard", "Dawnguard.esm"),
+        ("HearthFires", "HearthFires.esm"),
+        ("Dragonborn", "Dragonborn.esm"),
+        ("Zeta", "Zeta.esp"),
+        ("Alpha", "Alpha.esp"),
+    ] {
+        std::fs::write(
+            dir.join(format!("{name}.modgroups")),
+            format!("[Of {name}]\r\nSkyrim.esm\r\n{module}\r\n"),
+        )
+        .unwrap();
+    }
+    // The game master, `Update.esm`, the official DLCs in their official
+    // order, the loaded plugin and then the unloaded one.
+    assert_eq!(
+        listed_files(&mut session),
+        [
+            "Skyrim.modgroups",
+            "Update.modgroups",
+            "Dawnguard.modgroups",
+            "HearthFires.modgroups",
+            "Dragonborn.modgroups",
+            "Zeta.modgroups",
+            "Alpha.modgroups"
+        ]
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn duplicate_group_names_resolve_by_file_order() {
+    let _guard = test_lock();
+    let (dir, mut session) = setup_unloaded("duplicate");
+    std::fs::write(
+        dir.join("Dawnguard.modgroups"),
+        "[Same]\r\nSkyrim.esm\r\nDawnguard.esm\r\n",
+    )
+    .unwrap();
+    std::fs::write(
+        dir.join("Alpha.modgroups"),
+        "[Same]\r\nSkyrim.esm\r\n+Alpha.esp\r\n",
+    )
+    .unwrap();
+    // The dialog lists both by name, the file order deciding between two of
+    // one name (the earlier module first); `Enter` picks the first entry,
+    // and the edit command follows it.
+    let listed = call(&mut session, "modgroups.list", json!({ "all": true }));
+    let files: Vec<String> = listed["mod_groups"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|group| name_of(group["file"].as_str().unwrap()))
+        .collect();
+    assert_eq!(files, ["Dawnguard.modgroups", "Alpha.modgroups"]);
+    let edit = call(
+        &mut session,
+        "modgroups.edit",
+        json!({ "name": "Same", "new_name": "Renamed" }),
+    );
+    assert_eq!(name_of(edit["files"][0].as_str().unwrap()), "Dawnguard.modgroups");
+    assert_eq!(
+        std::fs::read_to_string(dir.join("Dawnguard.modgroups")).unwrap(),
+        "[Renamed]\r\nSkyrim.esm\r\nDawnguard.esm\r\n"
+    );
+    assert_eq!(
+        std::fs::read_to_string(dir.join("Alpha.modgroups")).unwrap(),
+        "[Same]\r\nSkyrim.esm\r\n+Alpha.esp\r\n"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn presets_load_save_and_delete_as_the_selection_dialog() {
+    let _guard = test_lock();
+    let (dir, mut session) = setup("presets");
+    std::fs::write(
+        dir.join("B.modgroups"),
+        "[A and B]\r\nA.esp\r\nB.esp\r\n[B and C]\r\nB.esp\r\nC.esp\r\n",
+    )
+    .unwrap();
+    std::fs::write(dir.join("settings.ini"), "[Init]\r\nFirstStart=1\r\n").unwrap();
+    assert_eq!(
+        call(&mut session, "modgroups.presets", json!({}))["presets"],
+        json!([])
+    );
+    // "Save" writes the current selection, which the reload put there.
+    call(&mut session, "modgroups.select", json!({ "names": ["B and C"] }));
+    let saved = call(&mut session, "modgroups.preset_save", json!({ "preset": "Mine" }));
+    assert_eq!(saved["written"], json!(true));
+    assert_eq!(saved["value"], json!("\"B and C\""));
+    assert_eq!(
+        std::fs::read_to_string(dir.join("settings.ini")).unwrap(),
+        "[Init]\r\nFirstStart=1\r\n\r\n[ModGroups]\r\nSelection=\"B and C\"\r\n\r\n[frmModGroupSelect_ActiveModGroups_Presets]\r\nMine=\"B and C\"\r\n\r\n"
+    );
+    // "Load" tags the preset's names as the dialog's `Enter`/OK would.
+    call(&mut session, "modgroups.select", json!({ "names": ["A and B"] }));
+    let loaded = call(&mut session, "modgroups.preset_load", json!({ "preset": "Mine" }));
+    assert_eq!(loaded["preset"], json!("Mine"));
+    assert_eq!(loaded["selected"], json!(["B and C"]));
+    assert_eq!(loaded["preset_differs"], json!(false));
+    // The selection the load left is saved; `<Last>` loads it back.
+    let last = call(&mut session, "modgroups.preset_load", json!({ "preset": "<Last>" }));
+    assert_eq!(last["selected"], json!(["B and C"]));
+    // The question of the dialog's close ("update the preset with your new
+    // selection?") defaults to No.
+    call(&mut session, "modgroups.select", json!({ "names": ["A and B"] }));
+    let no = call(
+        &mut session,
+        "modgroups.preset_save",
+        json!({ "preset": "Mine", "after_modal": true }),
+    );
+    assert_eq!(no["written"], json!(false));
+    let yes = call(
+        &mut session,
+        "modgroups.preset_save",
+        json!({ "preset": "Mine", "after_modal": true, "confirm": true }),
+    );
+    assert_eq!(yes["written"], json!(true));
+    assert_eq!(yes["value"], json!("\"A and B\""));
+    // "Delete" with its question, default Yes.
+    let kept = call(
+        &mut session,
+        "modgroups.preset_delete",
+        json!({ "preset": "Mine", "confirm": false }),
+    );
+    assert_eq!(kept["deleted"], json!(false));
+    assert_eq!(
+        call(&mut session, "modgroups.presets", json!({}))["presets"],
+        json!(["Mine"])
+    );
+    let deleted = call(&mut session, "modgroups.preset_delete", json!({ "preset": "Mine" }));
+    assert_eq!(deleted["deleted"], json!(true));
+    assert_eq!(
+        call(&mut session, "modgroups.presets", json!({}))["presets"],
+        json!([])
+    );
+    // An unknown preset is an error.
+    let error = Registry::standard()
+        .call(&mut session, "modgroups.preset_load", json!({ "preset": "Other" }))
+        .unwrap_err();
+    assert_eq!(error.code, "unknown_preset");
+    let _ = std::fs::remove_dir_all(&dir);
+}

@@ -1241,6 +1241,47 @@ enum ModgroupsAction {
         #[arg(long)]
         dry_run: bool,
     },
+    /// List the selection presets of the mod group dialog and the saved selection (modgroups.presets).
+    Presets,
+    /// Load a selection preset and save the selection as the dialog's confirmation does (modgroups.preset_load). Needs --edit unless --dry-run.
+    PresetLoad {
+        /// The name of the preset, or <Last> for the saved selection.
+        preset: String,
+        /// Report the selection, but write nothing.
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Write the current selection as a preset of the mod group dialog (modgroups.preset_save). Needs --edit unless --dry-run.
+    PresetSave {
+        /// The name of the preset to write.
+        preset: String,
+        /// The save the dialog runs on close after a preset was loaded (the question about the changed selection).
+        #[arg(long)]
+        after_modal: bool,
+        /// Answer Yes to the question; the default button when omitted.
+        #[arg(long)]
+        confirm: bool,
+        /// Answer No to the question.
+        #[arg(long, conflicts_with = "confirm")]
+        no_confirm: bool,
+        /// Report what would be written, but write nothing.
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Delete a selection preset of the mod group dialog (modgroups.preset_delete). Needs --edit unless --dry-run.
+    PresetDelete {
+        /// The name of the preset to delete.
+        preset: String,
+        /// Answer Yes to the question; the default button when omitted.
+        #[arg(long)]
+        confirm: bool,
+        /// Answer No to the question.
+        #[arg(long, conflicts_with = "confirm")]
+        no_confirm: bool,
+        /// Report what would be deleted, but write nothing.
+        #[arg(long)]
+        dry_run: bool,
+    },
     /// Add the current CRC32s of the modules to the items of mod groups (modgroups.update_crcs). Needs --edit unless --dry-run.
     UpdateCrcs {
         /// Do not add CRC32s to items that have none.
@@ -2015,6 +2056,37 @@ fn command_of(action: Action) -> Result<(String, Value), CommandError> {
             ModgroupsAction::Delete { names, file, dry_run } => (
                 "modgroups.delete".to_owned(),
                 json!({ "names": names, "file": file, "dry_run": dry_run }),
+            ),
+            ModgroupsAction::Presets => ("modgroups.presets".to_owned(), json!({})),
+            ModgroupsAction::PresetLoad { preset, dry_run } => {
+                ("modgroups.preset_load".to_owned(), json!({ "preset": preset, "dry_run": dry_run }))
+            }
+            ModgroupsAction::PresetSave {
+                preset,
+                after_modal,
+                confirm,
+                no_confirm,
+                dry_run,
+            } => (
+                "modgroups.preset_save".to_owned(),
+                json!({
+                    "preset": preset, "after_modal": after_modal,
+                    "confirm": if no_confirm { json!(false) } else if confirm { json!(true) } else { Value::Null },
+                    "dry_run": dry_run
+                }),
+            ),
+            ModgroupsAction::PresetDelete {
+                preset,
+                confirm,
+                no_confirm,
+                dry_run,
+            } => (
+                "modgroups.preset_delete".to_owned(),
+                json!({
+                    "preset": preset,
+                    "confirm": if no_confirm { json!(false) } else if confirm { json!(true) } else { Value::Null },
+                    "dry_run": dry_run
+                }),
             ),
             ModgroupsAction::UpdateCrcs {
                 no_add,
