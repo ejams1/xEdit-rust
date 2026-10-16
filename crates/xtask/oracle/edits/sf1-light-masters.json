@@ -1,0 +1,20 @@
+{
+  "description": "Masters of a light Starfield plugin added, sorted and cleaned again: Constellation.esm loaded as Sf33Light.esm (not an official module, so it can be edited) takes the light module OldMars.esm as a master and loses it again, so every FormID of the file is rewritten twice with the complex (small/light) FileIDs of Starfield: the file's own records move from light slot 0 to 1 and back, and the copied records' references move with them. The file must end with the bytes it started from.",
+  "game": "sf1",
+  "rename": {"Sf33Light.esm": "Constellation.esm"},
+  "load": [
+    "Starfield.esm",
+    "OldMars.esm",
+    "Sf33Light.esm"
+  ],
+  "commands": [
+    {"command": "records.copy", "params": {"form_id": "0000000A", "from": "Starfield.esm", "to": "Sf33Light.esm"}},
+    {"command": "records.copy", "params": {"form_id": "0000000A", "from": "Starfield.esm", "to": "Sf33Light.esm", "as_new": true}},
+    {"command": "masters.add", "params": {"file": "Sf33Light.esm", "masters": ["OldMars.esm"]}},
+    {"command": "masters.sort", "params": {"file": "Sf33Light.esm"}},
+    {"command": "masters.clean", "params": {"file": "Sf33Light.esm"}}
+  ],
+  "save": [
+    "Sf33Light.esm"
+  ]
+}

@@ -12,6 +12,7 @@ pub mod half_float;
 pub mod helpers;
 pub mod implementation;
 pub mod interface;
+pub mod json;
 pub mod localization;
 pub mod pcre;
 pub mod perl_regex;

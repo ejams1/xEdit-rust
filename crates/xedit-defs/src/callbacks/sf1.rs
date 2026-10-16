@@ -16,14 +16,19 @@ use std::sync::{Arc, RwLock};
 
 use xedit_core::container_handler::open_resource_last;
 use xedit_core::delphi::{float_to_str_f_fixed, format_general, round, str_to_float};
+use xedit_core::helpers::serialize_element_to_json;
+use xedit_core::implementation::ElementState;
 use xedit_core::interface::constructors::radians_to_degrees_scale;
-use xedit_core::interface::globals::more_info_for_decider;
+use xedit_core::interface::globals::{begin_internal_edit, end_internal_edit, more_info_for_decider};
 use xedit_core::interface::misc::{int_to_hex64, progress, str_to_int_def};
 use xedit_core::interface::string::to_comma_text;
+use xedit_core::interface::types::ASSIGN_ADD;
 use xedit_core::interface::*;
+use xedit_core::json::{Json, JsonDataType};
 
 use super::common::{
-    index_key_from_ordinal, variant_int, wb_to_string_from_links_to_main_record_name, wb_try_get_container_from_union,
+    element_count, index_key_from_ordinal, set_edit, set_path_edit, variant_int,
+    wb_to_string_from_links_to_main_record_name, wb_try_get_container_from_union,
     wb_try_get_container_ref_from_union_or_value, wb_try_get_containing_main_record, wb_try_get_main_record,
 };
 use crate::common::{wb_idx_addon_node, wb_idx_collision_layer};
@@ -31,7 +36,7 @@ use crate::sf1::{
     TConditionParameterType, WB_CONDITION_FUNCTIONS, WB_EVENT_FUNCTION_ENUM, WB_EVENT_MEMBER_ENUM,
     wb_condition_desc_from_index,
 };
-use crate::signatures::{NAME, PRKE, QUST, SPQU};
+use crate::signatures::{ATAV, NAME, NULL, PRKE, QUST, SPQU};
 
 /// Upstream `CmpW32` of `wbInterface`: -1, 0 or 1 for two unsigned values.
 pub fn cmp_w32(a: u32, b: u32) -> i32 {
@@ -1727,27 +1732,284 @@ pub fn wb_package_data_input_value_type_after_set(
     package_data_input_value_type_after_set(a_element, a_old_value, a_new_value);
 }
 
-/// The perk activity callbacks of Starfield keep a virtual JSON view of
-/// the activity data (`wbPerkActivityLoadVirtualJSON`); the reflection JSON
-/// is not ported, so they do nothing beyond the upstream early exits.
-pub fn define_sf1_anonymous_5247(_a_element: &ElementRef) {}
+/// Port of `wbVirtualPerkActivityUpdateJSON`: the first child of the NULL
+/// root (the resolved activity member) as the JSON text of the `ATAV`
+/// element of the same structure.
+fn wb_virtual_perk_activity_update_json(a_element: &ElementRef) {
+    // get the NULL root
+    let mut current = container_of(a_element);
+    let mut found: Option<(ElementRef, ElementRef)> = None;
+    while let Some(container) = current {
+        if let Some(null) = container
+            .as_container()
+            .and_then(|container| container.get_element_by_signature(NULL))
+        {
+            found = Some((container, null));
+            break;
+        }
+        current = container_of(&container);
+    }
+    let Some((l_container, l_element)) = found else {
+        return;
+    };
+
+    let Some(l_atav) = l_container
+        .as_container()
+        .and_then(|container| container.get_element_by_signature(ATAV))
+    else {
+        return;
+    };
+
+    if begin_internal_edit(false) {
+        let l_first_child = element_at(&l_element, 0);
+        let json_root = l_first_child.map_or_else(Json::object, |child| serialize_element_to_json(&child));
+        set_edit(&l_atav, &json_root.to_text(false));
+        end_internal_edit();
+    }
+
+    l_atav.mark_modified_recursive();
+}
+
+/// Port of `wbPerkActivityLoadVirtualJSON`: the JSON text of the `ATAV`
+/// element of a perk activity as the virtual `NULL` tree (the `Stream`
+/// array, whose FormIDs the reference index reads, the `Data` values and
+/// the tracked-data arrays).
+fn wb_perk_activity_load_virtual_json(a_element: &ElementRef) {
+    if a_element.get_value().is_empty() {
+        return;
+    }
+
+    let Some(owner) = container_of(a_element) else {
+        return;
+    };
+
+    // get and remove virtual tree in case we're loading updated json data to start fresh
+    let mut new_virtual_root = owner
+        .as_container()
+        .and_then(|container| container.get_element_by_signature(NULL));
+
+    let mut json_failed = false;
+    if begin_internal_edit(false) {
+        // Create the virtual node if it doesn't exist
+        if new_virtual_root.is_none() {
+            new_virtual_root = owner
+                .as_container()
+                .and_then(|container| container.add("NULL", false).ok().flatten());
+        }
+
+        let _result = (|| {
+            let new_virtual_root = new_virtual_root.as_ref()?;
+            let virtual_container = as_container_ref(new_virtual_root)?;
+            if element_at(&virtual_container, 0).is_some_and(|element| element.get_name() == "Unknown") {
+                return None;
+            }
+
+            new_virtual_root.begin_update();
+            let result = (|| {
+                set_element_state(new_virtual_root, ElementState::esInternalLoad, true);
+
+                // Clear existing stream elements
+                let stream_element = path_from(&virtual_container, "[0]\\Stream");
+                let virtual_stream_container = stream_element.as_ref().and_then(as_container_ref);
+
+                // Parse JSON
+                let Some(json_root) = Json::parse(&a_element.get_value()).ok() else {
+                    json_failed = true;
+                    return None;
+                };
+
+                let root_data = json_root.o("Data").ok().flatten();
+                let root_stream = json_root.a("Stream").ok().flatten();
+                let root_type = json_root.s("Type").unwrap_or_default();
+
+                set_path_from(&virtual_container, "[0]\\Type", &root_type);
+
+                // Process Stream array
+                if let Some(virtual_stream_container) = &virtual_stream_container
+                    && let Some(root_stream) = root_stream
+                {
+                    for i in 0..root_stream.len() {
+                        // `var lValue: Cardinal := RootStream.I[i]`
+                        let l_value = root_stream.i_at(i).unwrap_or(0) as u32;
+                        if let Some(l_element) = container_assign(virtual_stream_container, ASSIGN_ADD, None, false) {
+                            set_native(&l_element, Variant::UInt(u64::from(l_value)));
+                        }
+                    }
+                }
+
+                // Process Data object
+                if let Some(root_data) = root_data {
+                    for i in 0..root_data.len() {
+                        let Some(l_name) = root_data.names().get(i).cloned() else {
+                            continue;
+                        };
+                        if root_data.is_null(&l_name) {
+                            continue;
+                        }
+
+                        let l_data_type = root_data.type_of(&l_name);
+
+                        if l_data_type == JsonDataType::String {
+                            set_path_edit(
+                                &virtual_container,
+                                &format!("[0]\\Data\\{l_name}"),
+                                &root_data.s(&l_name).unwrap_or_default(),
+                            );
+                        } else if l_data_type == JsonDataType::Object {
+                            let path = format!("[0]\\Data\\{l_name}");
+                            let Some(l_matched_element) = path_from(&virtual_container, &path) else {
+                                continue;
+                            };
+                            let Some(tracked_data_container) = as_container_ref(&l_matched_element) else {
+                                continue;
+                            };
+
+                            let Ok(Some(lj_tracked_data)) = root_data.o(&l_name) else {
+                                continue;
+                            };
+
+                            for j in 0..lj_tracked_data.len() {
+                                let Some(l_name) = lj_tracked_data.names().get(j).cloned() else {
+                                    continue;
+                                };
+                                let l_data_type = lj_tracked_data.type_of(&l_name);
+
+                                if l_data_type == JsonDataType::Array {
+                                    let Some(l_element) = path_from(&tracked_data_container, &l_name) else {
+                                        continue;
+                                    };
+                                    let Some(tracked_pointer_container) = as_container_ref(&l_element) else {
+                                        continue;
+                                    };
+
+                                    // Clear existing array elements
+                                    while element_count(&tracked_pointer_container) > 0 {
+                                        if let Some(container) = tracked_pointer_container.as_container() {
+                                            container.remove_element_at(0, true);
+                                        }
+                                    }
+
+                                    // The tracked data array is just a bunch of null
+                                    if let Ok(Some(lj_array)) = lj_tracked_data.a(&l_name) {
+                                        for _ in 0..lj_array.len() {
+                                            container_assign(&tracked_pointer_container, ASSIGN_ADD, None, false);
+                                        }
+                                    }
+                                } else if l_data_type == JsonDataType::String {
+                                    set_path_from(
+                                        &tracked_data_container,
+                                        &l_name,
+                                        &lj_tracked_data.s(&l_name).unwrap_or_default(),
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
+                Some(())
+            })();
+            new_virtual_root.end_update();
+            result
+        })();
+
+        end_internal_edit();
+        if let Some(new_virtual_root) = &new_virtual_root {
+            // Clear internal load flag
+            set_element_state(new_virtual_root, ElementState::esInternalLoad, false);
+        }
+    }
+    if json_failed {
+        progress("<Error in a definition callback: the perk activity JSON could not be read>");
+    }
+}
+
+/// `aContainer.Assign(aIndex, aSource, aOnlySK)` through the container cast.
+fn container_assign(
+    container: &ElementRef,
+    index: i32,
+    source: Option<&ElementRef>,
+    only_sk: bool,
+) -> Option<ElementRef> {
+    container.as_container()?.assign(index, source, only_sk)
+}
+
+/// `aContainer.ElementByPath[aPath]` through the container cast.
+fn path_from(container: &ElementRef, path: &str) -> Option<ElementRef> {
+    container.as_container()?.get_element_by_path(path)
+}
+
+/// `aContainer.ElementEditValues[aPath] := aValue` through the container cast.
+fn set_path_from(container: &ElementRef, path: &str, value: &str) {
+    if let Some(container) = container.as_container() {
+        report_container_edit(container.set_element_edit_value(path, value));
+    }
+}
+
+/// An edit a callback made that failed, as `super::common` reports it.
+fn report_container_edit(result: Result<(), xedit_core::interface::misc::EditError>) {
+    if let Err(error) = result {
+        progress(&format!("<Error in a definition callback: {error}>"));
+    }
+}
+
+/// Upstream `SetElementState` of `TwbElement`.
+fn set_element_state(element: &ElementRef, state: ElementState, value: bool) {
+    if let Some(element) = element.as_element_impl() {
+        element.element_base().set_state(state, value);
+    }
+}
+
+/// Upstream `ElementStates` membership of `TwbElement`.
+fn has_element_state(element: &ElementRef, state: ElementState) -> bool {
+    element
+        .as_element_impl()
+        .is_some_and(|element| element.element_base().has_state(state))
+}
+
+/// Upstream `wbPerkActivityAfterLoad` (`ATAV`): the JSON text becomes the
+/// virtual tree.
+pub fn define_sf1_anonymous_5247(a_element: &ElementRef) {
+    wb_perk_activity_load_virtual_json(a_element);
+}
 
 /// Upstream anonymous `AfterSet` of the perk activity (`ATAV`).
-pub fn define_sf1_anonymous_5256(_a_element: &ElementRef, a_old_value: &Variant, a_new_value: &Variant) {
+pub fn define_sf1_anonymous_5256(a_element: &ElementRef, a_old_value: &Variant, a_new_value: &Variant) {
     if a_old_value.same_value(a_new_value) || xedit_core::interface::globals::is_internal_edit() {
         return;
     }
-    xedit_core::interface::misc::progress("<Warning: the perk activity JSON of Starfield is not ported>");
+    wb_perk_activity_load_virtual_json(a_element);
 }
 
 /// Upstream anonymous `AfterSet` of the virtual perk activity (`NULL`).
-pub fn define_sf1_anonymous_5271(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
+pub fn define_sf1_anonymous_5271(a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
     if xedit_core::interface::globals::is_internal_edit() {
         return;
     }
-    xedit_core::interface::misc::progress("<Warning: the perk activity JSON of Starfield is not ported>");
+    if !has_element_state(a_element, ElementState::esConstructionComplete)
+        || has_element_state(a_element, ElementState::esInternalLoad)
+        || a_element
+            .get_file()
+            .is_some_and(|file| file.get_file_states().contains(FileState::fsMastersUpdating))
+    {
+        return;
+    }
+    wb_virtual_perk_activity_update_json(a_element);
 }
 
-/// Upstream anonymous `AfterSet` of the virtual perk stream ID: only a
-/// master update triggers it, which is not ported.
-pub fn define_sf1_anonymous_5287(_a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {}
+/// Upstream anonymous `AfterSet` of the virtual perk stream ID: the JSON is
+/// written back only while a masters update runs, whose change notification
+/// the root above skips (`fsMastersUpdating`). The port updates the masters
+/// of a file in place (`implementation/masters.rs`), so the flag is never
+/// set and the root's notification is the one that runs.
+pub fn define_sf1_anonymous_5287(a_element: &ElementRef, a_old_value: &Variant, a_new_value: &Variant) {
+    if a_old_value.same_value(a_new_value) {
+        return;
+    }
+    if !a_element
+        .get_file()
+        .is_some_and(|file| file.get_file_states().contains(FileState::fsMastersUpdating))
+    {
+        return;
+    }
+    wb_virtual_perk_activity_update_json(a_element);
+}

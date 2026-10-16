@@ -528,7 +528,9 @@ impl ElementBase {
             e_sort_order: AtomicI32::new(i32::MAX),
             e_memory_order: AtomicI32::new(i32::MIN),
             e_name_suffix: RwLock::new(String::new()),
-            e_states: std::sync::atomic::AtomicU32::new(0),
+            // Port of `TwbElement.AfterConstruction`, which runs for every
+            // element Delphi builds: `esConstructionComplete` from the start.
+            e_states: std::sync::atomic::AtomicU32::new(ElementState::esConstructionComplete as u32),
             e_update_count: AtomicI32::new(0),
             e_generation: AtomicI32::new(1),
             e_report_masters_gen: std::sync::atomic::AtomicU32::new(0),

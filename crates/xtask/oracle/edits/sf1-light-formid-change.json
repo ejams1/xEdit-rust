@@ -1,0 +1,17 @@
+{
+  "description": "FormID change, compact renumber and reference update in a light Starfield plugin: Constellation.esm loaded as Sf33Light.esm (editable) has its records' FormIDs changed inside the file and renumbered from $800 (the compact form of a light module), with the reference information built, so the referencing record is edited too. The complex (small/light) FileIDs have to survive the change, the renumber and the injected-reference update.",
+  "game": "sf1",
+  "build_refs": true,
+  "rename": {"Sf33Light.esm": "Constellation.esm"},
+  "load": [
+    "Starfield.esm",
+    "Sf33Light.esm"
+  ],
+  "commands": [
+    {"command": "formids.change", "params": {"form_id": "FE000008", "file": "Sf33Light.esm", "new_form_id": "FE000900"}},
+    {"command": "formids.renumber", "params": {"file": "Sf33Light.esm", "start": "000800"}}
+  ],
+  "save": [
+    "Sf33Light.esm"
+  ]
+}
