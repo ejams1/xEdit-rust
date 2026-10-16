@@ -672,6 +672,12 @@ impl ScriptObject for ScriptElement {
         self.class.clone()
     }
 
+    /// Two element values of one element are equal (the interface pointer
+    /// identity of an `IInterface` variant upstream).
+    fn identity(&self) -> Option<u64> {
+        Some(self.element.get_element_id() as u64)
+    }
+
     fn is_interface(&self) -> bool {
         true
     }
