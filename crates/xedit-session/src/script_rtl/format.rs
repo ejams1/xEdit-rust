@@ -603,216 +603,16 @@ pub fn float_to_str_f(value: f64, format: FloatFormat, precision: i32, digits: i
     }
 }
 
-/// `FormatFloat(const Format: string; Value: Extended)`: the picture-string
-/// formatter.
-///
-/// UPSTREAM-NOTE: a picture is split on `;` into the positive, the negative
-/// and the zero section (a missing negative section is the positive one with
-/// a leading `-`, a missing zero section the positive one); within a section
-/// `0` and `#` are digit placeholders around a single `.`, `,` is a grouping
-/// separator, `E+`/`E-` switch to scientific notation with the exponent
-/// padded to the digits after the `E`, quoted text is literal and a leading
-/// `-`/`+` moves the sign. The port implements those rules; two corners the
-/// RTL documents but the corpus never uses (several `,` before the `.`
-/// scaling by powers of 1000, and the `%`-like extras) are not
-/// implemented -- a picture needing them formats without the scaling.
+/// `FormatFloat(const Format: string; Value: Extended)`: the RTL's
+/// `FloatToTextFmt` ([`delphi::float_to_text_fmt`]) with the separators of
+/// the format settings.
 pub fn format_float(picture: &str, value: f64) -> String {
-    if value.is_nan() {
-        return "Nan".to_owned();
-    }
-    let sections: Vec<&str> = split_sections(picture);
-    let section = if value > 0.0 {
-        sections.first().copied().unwrap_or("")
-    } else if value < 0.0 {
-        sections
-            .get(1)
-            .copied()
-            .unwrap_or_else(|| sections.first().copied().unwrap_or(""))
-    } else {
-        sections
-            .get(2)
-            .or_else(|| sections.get(1))
-            .or_else(|| sections.first())
-            .copied()
-            .unwrap_or("")
-    };
-    let negative = value < 0.0 && sections.len() < 2;
-    let (literal_prefix, spec, literal_suffix) = split_literals(section);
-    // `InternalFloatToTextFmt`: a value with more than 18 digits before the
-    // decimal point and no exponent in the picture is formatted by
-    // `FloatToText` in the general format (15 digits for a double), the
-    // picture ignored: `FormatFloat('0.#####', 1E22)` is `1E22`.
-    if value.abs() >= 1e18 && !spec.contains(['E', 'e']) {
-        return delphi::float_to_str(value);
-    }
-    let value = value.abs();
-    let mut out = String::new();
-    if negative {
-        out.push('-');
-    }
-    out.push_str(&literal_prefix);
-    out.push_str(&format_picture(&spec, value));
-    out.push_str(&literal_suffix);
-    out
-}
-
-/// Splits a picture on `;` outside quoted text.
-fn split_sections(picture: &str) -> Vec<&str> {
-    let mut sections = Vec::new();
-    let mut start = 0usize;
-    let mut quote: Option<char> = None;
-    for (index, c) in picture.char_indices() {
-        match quote {
-            Some(q) if c == q => quote = None,
-            Some(_) => {}
-            None if c == '"' || c == '\'' => quote = Some(c),
-            None if c == ';' => {
-                sections.push(&picture[start..index]);
-                start = index + 1;
-            }
-            None => {}
-        }
-    }
-    sections.push(&picture[start..]);
-    sections
-}
-
-/// The leading/trailing literal text of a section: the numeric core runs
-/// from its first digit placeholder through the last format character, and
-/// an `E`/`e` belongs to it only as part of the `E+`/`E-` exponent form
-/// (a bare `e` in `zero` is literal text).
-fn split_literals(section: &str) -> (String, String, String) {
-    let chars: Vec<char> = section.chars().collect();
-    let core = chars.iter().position(|c| matches!(c, '0' | '#')).unwrap_or(chars.len());
-    let mut end = core;
-    while end < chars.len() {
-        let c = chars[end];
-        let exponent = matches!(c, 'E' | 'e') && matches!(chars.get(end + 1), Some('+') | Some('-'));
-        if matches!(c, '0' | '#' | '.' | ',' | '+' | '-') || exponent {
-            end += 1;
-        } else {
-            break;
-        }
-    }
-    let mut prefix = String::new();
-    let mut i = 0usize;
-    while i < core {
-        let c = chars[i];
-        if c == '"' || c == '\'' {
-            let quote = c;
-            i += 1;
-            while i < core && chars[i] != quote {
-                prefix.push(chars[i]);
-                i += 1;
-            }
-            i += 1;
-        } else {
-            prefix.push(c);
-            i += 1;
-        }
-    }
-    let mut suffix = String::new();
-    let mut i = end;
-    while i < chars.len() {
-        let c = chars[i];
-        if c == '"' || c == '\'' {
-            let quote = c;
-            i += 1;
-            while i < chars.len() && chars[i] != quote {
-                suffix.push(chars[i]);
-                i += 1;
-            }
-            i += 1;
-        } else {
-            suffix.push(c);
-            i += 1;
-        }
-    }
-    (prefix, chars[core..end].iter().collect(), suffix)
-}
-
-/// The numeric part of a picture section.
-fn format_picture(spec: &str, mut value: f64) -> String {
-    // A section without a digit placeholder is all literal text.
-    if !spec.contains(['0', '#']) {
-        return String::new();
-    }
-    let spec: String = spec.chars().filter(|c| !matches!(c, '"' | '\'')).collect();
-    // `E+`/`E-`: scientific notation with `digits` exponent digits.
-    if let Some(at) = spec.find(['E', 'e']) {
-        let mantissa_spec = &spec[..at];
-        let exponent_spec = &spec[at + 1..];
-        let exponent_digits = exponent_spec.chars().filter(|c| *c == '0').count().max(1);
-        let decimals = mantissa_spec
-            .split_once('.')
-            .map(|(_, fraction)| fraction.chars().filter(|c| matches!(c, '0' | '#')).count())
-            .unwrap_or(0);
-        let text = format!("{:.*e}", decimals, value);
-        let (mantissa, exponent) = text.split_once('e').expect("scientific format");
-        let exponent: i32 = exponent.parse().expect("exponent");
-        // `E-` prints the sign only for a negative exponent; `E+` prints it
-        // always.
-        let sign = if exponent < 0 || exponent_spec.contains('+') {
-            if exponent < 0 { "-" } else { "+" }
-        } else {
-            ""
-        };
-        let magnitude = exponent.unsigned_abs().to_string();
-        let zeros: String = std::iter::repeat_n('0', exponent_digits.saturating_sub(magnitude.len())).collect();
-        return format!("{mantissa}E{sign}{zeros}{magnitude}");
-    }
-    let (integer_spec, fraction_spec) = match spec.split_once('.') {
-        Some((integer, fraction)) => (integer, Some(fraction)),
-        None => (spec.as_str(), None),
-    };
-    // The picture's scaling: every `,` but the last (which is the grouping
-    // separator) divides by 1000.
-    let commas = integer_spec.matches(',').count();
-    if commas > 1 {
-        value /= 1000f64.powi((commas - 1) as i32);
-    }
-    let fraction_digits = fraction_spec
-        .map(|fraction| fraction.chars().filter(|c| matches!(c, '0' | '#')).count())
-        .unwrap_or(0);
-    let text = format!("{:.*}", fraction_digits, value);
-    let (integer, fraction) = match text.split_once('.') {
-        Some((integer, fraction)) => (integer.to_owned(), fraction.to_owned()),
-        None => (text, String::new()),
-    };
-    // A `0` in the integer part is a minimum digit count; `#` shows leading
-    // zeros only when no `0` follows them (`#,##0` of 5 is `5`, of 0 `0`).
-    let min_integer = integer_spec.chars().filter(|c| *c == '0').count();
-    let mut integer = integer;
-    while integer.len() < min_integer {
-        integer.insert(0, '0');
-    }
-    if integer == "0" && min_integer == 0 && fraction_digits > 0 {
-        integer.clear();
-    }
-    let fraction = match fraction_spec {
-        None => String::new(),
-        Some(fraction_spec) => {
-            // Trailing `#` positions drop a formatted zero.
-            let trailing_hashes = fraction_spec.chars().rev().take_while(|c| *c == '#').count();
-            let minimum = fraction_digits.saturating_sub(trailing_hashes);
-            let mut fraction = fraction;
-            while fraction.len() > minimum && fraction.ends_with('0') {
-                fraction.pop();
-            }
-            fraction
-        }
-    };
-    let grouped = if integer_spec.contains(',') && integer.len() > 3 {
-        insert_thousands(&integer)
-    } else {
-        integer
-    };
-    let show_point = fraction_spec.is_some_and(|spec| !fraction.is_empty() || spec.contains('0'));
-    if show_point {
-        format!("{grouped}.{fraction}")
-    } else {
-        grouped
-    }
+    delphi::float_to_text_fmt(
+        value,
+        picture,
+        settings().decimal_separator,
+        settings().thousand_separator,
+    )
 }
 
 /// `CurrToStr(Value)`: `CurrToStrF(Value, ffGeneral, 15)`-shaped for the
@@ -1023,12 +823,16 @@ mod tests {
         assert_eq!(float_to_str_f(2.5, FloatFormat::Fixed, 99, 2), "2.50");
         assert_eq!(float_to_str_f(1234.5, FloatFormat::Number, 99, 2), "1,234.50");
         assert_eq!(float_to_str_f(1.5, FloatFormat::General, 0, 0), "1.5");
-        // More than 18 integer digits without an exponent picture: the
-        // general format (the oracle's `numerics.pas` line).
+        // 18 or more integer digits (`FloatRec.Exponent >= 18`) without an
+        // exponent picture: the general format (the oracle's
+        // `numerics.pas` and `fmt-float-pictures.pas` lines; 17 digits stay
+        // fixed).
         assert_eq!(format_float("0.#####", 1e22), "1E22");
         assert_eq!(format_float("0.#####", -1.5e22), "-1.5E22");
         assert_eq!(format_float("0.00E+00", 1e22), "1.00E+22");
-        assert_eq!(format_float("0", 123456789012345680.0), "123456789012345680");
+        assert_eq!(format_float("0", 123456789012345680.0), "1.23456789012346E17");
+        assert_eq!(format_float("0", 1e17), "1E17");
+        assert_eq!(format_float("0", 99999999999999984.0), "99999999999999987");
     }
 
     /// `FormatFloat`'s picture language: placeholders, the point, grouping,

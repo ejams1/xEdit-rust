@@ -631,6 +631,13 @@ pub struct ContainerBase {
     /// `SetIsSortedBySortOrder`), which an assign at a sort order of an
     /// alignable array reads (`AlignedCreate`).
     pub(crate) cnt_sorted_by_sort_order: AtomicBool,
+    /// Port of `csInitOnce` of a subrecord or a value: `DoInit` ran once.
+    /// Unlike `csInit` and `csInitDone`, which the reset of the container
+    /// excludes when the last reference to it is released, the bit stays,
+    /// so `ContainerStates` of a member read once answers it (an `EDID`,
+    /// which the record's own `Init` reads, is 1026 in the `el-states`
+    /// probe).
+    cnt_init_once: AtomicBool,
 }
 
 impl ContainerBase {
@@ -665,7 +672,7 @@ impl ContainerBase {
     }
 
     /// The number of elements, without copying the list.
-    pub(crate) fn element_count(&self) -> usize {
+    pub fn element_count(&self) -> usize {
         self.cnt_elements.read().unwrap().len()
     }
 
@@ -687,6 +694,29 @@ impl ContainerBase {
             }
         }
         self.cnt_sorted_by_sort_order.store(true, Ordering::Relaxed);
+    }
+
+    /// Whether an element of the container is referenced from outside it
+    /// (a script variable, an argument being evaluated): upstream counts
+    /// such references in `cntElementRefs`, and a subrecord or a main
+    /// record is reset when that count drops to zero
+    /// (`CanElementReset`).
+    pub fn is_element_referenced(&self) -> bool {
+        self.cnt_elements
+            .read()
+            .unwrap()
+            .iter()
+            .any(|element| Arc::strong_count(element) > 1)
+    }
+
+    /// `csInitOnce in cntStates` for a subrecord or a value.
+    pub fn is_init_once(&self) -> bool {
+        self.cnt_init_once.load(Ordering::Relaxed)
+    }
+
+    /// `Include(cntStates, csInitOnce)` of `DoInit`.
+    pub(crate) fn set_init_once(&self) {
+        self.cnt_init_once.store(true, Ordering::Relaxed);
     }
 
     /// `csSortedBySortOrder in cntStates`.
@@ -3110,6 +3140,12 @@ impl MainRecordImpl {
                 return read(&elements);
             }
         }
+    }
+
+    /// `csInitDone in cntStates`: the subrecords are built (a quick init
+    /// that released them again does not count).
+    pub fn is_initialized(&self) -> bool {
+        self.mr_init.is_done()
     }
 
     /// Port of `DoInit`: builds the subrecords once. Returns whether this

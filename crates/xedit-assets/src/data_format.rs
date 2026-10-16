@@ -84,6 +84,8 @@ pub static FLOAT_DECIMAL_DIGITS: AtomicUsize = AtomicUsize::new(6);
 
 /// The bits of `SingleNaN` (`0.0/0.0`): the default quiet NaN.
 const SINGLE_NAN_BITS: u32 = 0xFFC0_0000;
+/// `SingleNaN` widened to a double.
+const DOUBLE_OF_SINGLE_NAN_BITS: u64 = 0xFFF8_0000_0000_0000;
 
 /// `IsNegZeroString`: `-` followed by zeroes and points only.
 fn is_neg_zero_string(value: &str) -> bool {
@@ -108,7 +110,11 @@ fn not_a_float(value: &str) -> DfError {
 /// `dfStrToFloat`.
 pub fn df_str_to_float(value: &str) -> R<f64> {
     Ok(if value.eq_ignore_ascii_case("NaN") {
-        f64::from(f32::from_bits(SINGLE_NAN_BITS))
+        // `Result := SingleNaN` widens the single with `cvtss2sd`, which
+        // keeps the sign and the quiet bit: the RTL's `0xFFF8...` (the
+        // oracle's `numerics-values.dat`). `f64::from` of the constant is
+        // folded at compile time into the positive `0x7FF8...`.
+        f64::from_bits(DOUBLE_OF_SINGLE_NAN_BITS)
     } else if value.eq_ignore_ascii_case("Inf") {
         f64::INFINITY
     } else if value.eq_ignore_ascii_case("Max") {

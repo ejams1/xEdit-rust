@@ -19126,7 +19126,7 @@ source = "IwbContainer_AdditionalElementCount"
 status = "covered"
 command = "script.run"
 source = "IwbContainer_ContainerStates"
-note = "Implemented: the set as a bit mask, 1031 (`csInit|csInitOnce|csInitDone|csConstructionCompleted`) for a file, a main record and a group and 1024 (`csConstructionCompleted`) for every member below (the record header struct and `DATA`), the references adding `csRefsBuild`; `el-states.pas` compares those four. Incomplete: the oracle answers 1026 for a member its own lazy read already initialised once (a record's `EDID`), which the port does not track per member."
+note = "Implemented: the set as a bit mask, the references adding `csRefsBuild`: 1031 (`csInit|csInitOnce|csInitDone|csConstructionCompleted`) for a file and a group; for a main record or a subrecord built and held (a script references one of its elements: `cntElementRefs`), 1026 (`csInitOnce|csConstructionCompleted`) once built and reset (an `EDID`, which the record's own `Init` reads; `DATA` after a read), 1024 never built (a record `RecordByIndex` reached alone); a value (the record header) 1031 once read, as the script's reference keeps it (`eExternalRefs`). `el-states.pas` compares 23 such lines (fix-numerics, issue #67). The port does not reset a value on a release, so a value read, let go and asked again answers 1031 where the oracle may answer 1026."
 
 [script."xejviScriptAdapterContainer:cUnit.ElementByIndex:function"]
 status = "covered"

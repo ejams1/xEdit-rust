@@ -2235,8 +2235,10 @@ fn the_soun_after_load_probe_gives_the_oracle_lines() {
 
 /// `probes/sys-round.pas`: `SetRoundMode` reaches the arithmetic (the sum of
 /// the nearest `0.1` and `0.2` rounds with the mode, the text conversions
-/// do not), `Round` follows it, and `Floor`/`Ceil`/`Trunc` do not. The lines
-/// are the oracle's, byte for byte.
+/// do not), `Round` follows it, `Floor`/`Ceil`/`Trunc` do not, and the
+/// float-to-text conversions print the digits of the mode (`FloatToDecimal`
+/// rounds in it: `0.3` is `2.9999999999999994E-1` under `rmDown`). The
+/// lines are the oracle's, byte for byte.
 #[test]
 fn the_sys_round_probe_gives_the_oracle_lines() {
     let expected: Vec<&str> = vec![
@@ -2248,6 +2250,15 @@ fn the_sys_round_probe_gives_the_oracle_lines() {
         "round | nearest ceil2.2=3 ceil-2.7=-2",
         "round | nearest third=3.3333333333333331E-1",
         "round | nearest 0.1+0.2=3.0000000000000006E-1",
+        "round | nearest lit0.1=1.0000000000000000E-1 lit0.2=2.0000000000000000E-1 lit0.3=3.0000000000000000E-1",
+        "round | nearest twothirds=6.6666666666666662E-1 g=0.666666666666667 f=0.666667",
+        "round | nearest big=1.4285714285714286E+299 g=1.42857142857143E299",
+        "round | nearest small=1.4285714285714283E-301 g=1.42857142857143E-301",
+        "round | nearest denormal=4.9406564584124653E-324",
+        "round | nearest negthird=-3.3333333333333331E-1 f=-0.333",
+        "round | nearest fixed=123456.79 n=123,456.79 fmt=123456.7890|1.234567890000000000E+005|123456.789",
+        "round | nearest pict=123,456.789 1.23E+05 0.33333",
+        "round | nearest tie=0.13 0.13 1.0000000000000000E+22",
         "round | nearest sum<0.3=F sum=0.3=F sum>0.3=T",
         "round | nearest strsum<0.3=F strsum=0.3=F strsum>0.3=T",
         "round | nearest 0.1<1/10=F 0.1=1/10=T 0.1>1/10=F",
@@ -2261,6 +2272,16 @@ fn the_sys_round_probe_gives_the_oracle_lines() {
         "round | down floor2.7=2 floor-2.1=-3",
         "round | down ceil2.2=3 ceil-2.7=-2",
         "round | down third=3.3333333333333331E-1",
+        "round | down 0.1+0.2=2.9999999999999994E-1",
+        "round | down lit0.1=1.0000000000000000E-1 lit0.2=2.0000000000000000E-1 lit0.3=2.9999999999999994E-1",
+        "round | down twothirds=6.6666666666666662E-1 g=0.666666666666667 f=0.666667",
+        "round | down big=1.4285714285714283E+299 g=1.42857142857143E299",
+        "round | down small=1.4285714285714283E-301 g=1.42857142857143E-301",
+        "round | down denormal=4.9406564584124646E-324",
+        "round | down negthird=-3.3333333333333331E-1 f=-0.333",
+        "round | down fixed=123456.79 n=123,456.79 fmt=123456.7890|1.234567890000000000E+005|123456.789",
+        "round | down pict=123,456.789 1.23E+05 0.33333",
+        "round | down tie=0.13 0.13 9.9999999999999987E+21",
         "round | down sum<0.3=F sum=0.3=T sum>0.3=F",
         "round | down strsum<0.3=F strsum=0.3=T strsum>0.3=F",
         "round | down 0.1<1/10=F 0.1=1/10=F 0.1>1/10=T",
@@ -2274,6 +2295,16 @@ fn the_sys_round_probe_gives_the_oracle_lines() {
         "round | up floor2.7=2 floor-2.1=-3",
         "round | up ceil2.2=3 ceil-2.7=-2",
         "round | up third=3.3333333333333338E-1",
+        "round | up 0.1+0.2=3.0000000000000006E-1",
+        "round | up lit0.1=1.0000000000000002E-1 lit0.2=2.0000000000000003E-1 lit0.3=3.0000000000000000E-1",
+        "round | up twothirds=6.6666666666666675E-1 g=0.666666666666667 f=0.666667",
+        "round | up big=1.4285714285714291E+299 g=1.42857142857143E299",
+        "round | up small=1.4285714285714291E-301 g=1.42857142857143E-301",
+        "round | up denormal=4.9406564584124659E-324",
+        "round | up negthird=-3.3333333333333338E-1 f=-0.333",
+        "round | up fixed=123456.79 n=123,456.79 fmt=123456.7890|1.234567890000000000E+005|123456.789",
+        "round | up pict=123,456.789 1.23E+05 0.33333",
+        "round | up tie=0.13 0.13 1.0000000000000002E+22",
         "round | up sum<0.3=F sum=0.3=F sum>0.3=T",
         "round | up strsum<0.3=F strsum=0.3=F strsum>0.3=T",
         "round | up 0.1<1/10=F 0.1=1/10=T 0.1>1/10=F",
@@ -2287,6 +2318,16 @@ fn the_sys_round_probe_gives_the_oracle_lines() {
         "round | truncate floor2.7=2 floor-2.1=-3",
         "round | truncate ceil2.2=3 ceil-2.7=-2",
         "round | truncate third=3.3333333333333331E-1",
+        "round | truncate 0.1+0.2=2.9999999999999994E-1",
+        "round | truncate lit0.1=1.0000000000000000E-1 lit0.2=2.0000000000000000E-1 lit0.3=2.9999999999999994E-1",
+        "round | truncate twothirds=6.6666666666666662E-1 g=0.666666666666667 f=0.666667",
+        "round | truncate big=1.4285714285714283E+299 g=1.42857142857143E299",
+        "round | truncate small=1.4285714285714283E-301 g=1.42857142857143E-301",
+        "round | truncate denormal=4.9406564584124646E-324",
+        "round | truncate negthird=-3.3333333333333331E-1 f=-0.333",
+        "round | truncate fixed=123456.79 n=123,456.79 fmt=123456.7890|1.234567890000000000E+005|123456.789",
+        "round | truncate pict=123,456.789 1.23E+05 0.33333",
+        "round | truncate tie=0.13 0.13 9.9999999999999987E+21",
         "round | truncate sum<0.3=F sum=0.3=T sum>0.3=F",
         "round | truncate strsum<0.3=F strsum=0.3=T strsum>0.3=F",
         "round | truncate 0.1<1/10=F 0.1=1/10=F 0.1>1/10=T",
@@ -2303,8 +2344,11 @@ fn the_sys_round_probe_gives_the_oracle_lines() {
 /// record, a group, the record header struct and `DATA` (the lines that do not
 /// depend on the records of the master the probe runs over), and `SetEditValue`
 /// of a main record (the conversion error of a text that is no FormID is the
-/// RTL's `EConvertError`). The oracle's `EDID` member answers 1026 (see the
-/// ledger note of `ContainerStates`), so it is not part of the probe.
+/// RTL's `EConvertError`). The probe's tail (the `csInitOnce` of a member
+/// read once, the reset of a record and a subrecord when no element of
+/// theirs is referenced) runs over the harness's probe master, whose
+/// records this fixture does not have, so `cargo xtask parity script
+/// --phase probe --script el-states` compares it.
 #[test]
 fn the_el_states_probe_gives_the_oracle_lines() {
     let expected: Vec<&str> = vec![

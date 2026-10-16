@@ -121,43 +121,160 @@ const POW10_256: (u64, u64) = (0x75154fdd7c000000, 0x736b9df9de8dddbc);
 const POW10_NEG_256: (u64, u64) = (0x3fe8062864000000, 0x3e158de864e7ea44);
 const POW10_NEG_256_SCALE: u64 = 0x0ad0000000000000;
 
+/// The double arithmetic of the RTL under a rounding mode of the `MXCSR`
+/// (`Math.SetRoundMode`): every SSE operation the oracle's `Power10` and
+/// `FloatToDecimal` run rounds in that mode, and `Round` is a `cvtsd2si`,
+/// which rounds in it too.
+///
+/// The port does not change the hardware mode to replay them (the compiler
+/// may move floating point operations across the instruction that would
+/// set it): each operation is the round-to-nearest result corrected by the
+/// sign of its exact error (`TwoSum`, and the `mul_add` remainder of the
+/// product and the quotient), which is the directed result whenever the
+/// error-free transformation is exact (no underflow below the normal
+/// range). The caller runs it under round-to-nearest
+/// ([`with_nearest_rounding`]).
+#[derive(Clone, Copy)]
+struct Arith {
+    mode: u8,
+}
+
+impl Arith {
+    const NEAREST: Arith = Arith { mode: RM_NEAREST };
+
+    /// The arithmetic of the script's current mode.
+    fn current() -> Arith {
+        Arith { mode: round_mode() }
+    }
+
+    /// The directed result of `nearest`, whose exact value is `nearest +
+    /// error` (`error` carries only its sign and whether it is zero).
+    fn direct(self, nearest: f64, error: f64) -> f64 {
+        if error == 0.0 || error.is_nan() {
+            return nearest;
+        }
+        let toward_up = match self.mode {
+            RM_DOWN => false,
+            RM_UP => true,
+            // Toward zero: down for a positive result, up for a negative.
+            RM_TRUNCATE => nearest < 0.0,
+            _ => return nearest,
+        };
+        if toward_up && error > 0.0 {
+            nearest.next_up()
+        } else if !toward_up && error < 0.0 {
+            nearest.next_down()
+        } else {
+            nearest
+        }
+    }
+
+    /// An overflow to an infinity rounds to the largest finite value in
+    /// the modes that round toward zero for its sign.
+    fn overflow(self, result: f64) -> f64 {
+        let toward_zero = match self.mode {
+            RM_DOWN => result > 0.0,
+            RM_UP => result < 0.0,
+            RM_TRUNCATE => true,
+            _ => false,
+        };
+        if toward_zero { f64::MAX.copysign(result) } else { result }
+    }
+
+    fn add(self, a: f64, b: f64) -> f64 {
+        let sum = a + b;
+        if self.mode == RM_NEAREST || !a.is_finite() || !b.is_finite() {
+            return sum;
+        }
+        if sum.is_infinite() {
+            return self.overflow(sum);
+        }
+        // `TwoSum`: the exact error of the rounded sum.
+        let b_virtual = sum - a;
+        let a_virtual = sum - b_virtual;
+        let error = (a - a_virtual) + (b - b_virtual);
+        self.direct(sum, error)
+    }
+
+    fn sub(self, a: f64, b: f64) -> f64 {
+        self.add(a, -b)
+    }
+
+    fn mul(self, a: f64, b: f64) -> f64 {
+        let product = a * b;
+        if self.mode == RM_NEAREST || !a.is_finite() || !b.is_finite() {
+            return product;
+        }
+        if product.is_infinite() {
+            return self.overflow(product);
+        }
+        self.direct(product, a.mul_add(b, -product))
+    }
+
+    fn div(self, a: f64, b: f64) -> f64 {
+        let quotient = a / b;
+        if self.mode == RM_NEAREST || !quotient.is_finite() || b == 0.0 {
+            return quotient;
+        }
+        // `a - quotient * b`, exact: the sign of the error of the quotient
+        // is the sign of the remainder over the sign of the divisor.
+        let remainder = (-quotient).mul_add(b, a);
+        self.direct(quotient, if b < 0.0 { -remainder } else { remainder })
+    }
+
+    /// `Round` of the RTL (`cvtsd2si`) for a value in the `Int64` range.
+    fn round(self, value: f64) -> f64 {
+        match self.mode {
+            RM_DOWN => value.floor(),
+            RM_UP => value.ceil(),
+            RM_TRUNCATE => value.trunc(),
+            _ => value.round_ties_even(),
+        }
+    }
+}
+
 /// The product of `value` and a table pair (at 0x40CD70): `value` split
 /// into a high part of 26 bits and the rest, the partial products added
 /// from the smallest.
-fn mul_pair(value: f64, (hi, lo): (u64, u64)) -> f64 {
+fn mul_pair(math: Arith, value: f64, (hi, lo): (u64, u64)) -> f64 {
     let (hi, lo) = (f64::from_bits(hi), f64::from_bits(lo));
     let vh = f64::from_bits(value.to_bits() & 0xffff_ffff_f800_0000);
-    let vl = value - vh;
+    let vl = math.sub(value, vh);
     if lo == 0.0 {
-        vh * hi + vl * hi
+        math.add(math.mul(vh, hi), math.mul(vl, hi))
     } else {
-        ((vl * lo + vh * lo) + vl * hi) + vh * hi
+        let sum = math.add(math.mul(vl, lo), math.mul(vh, lo));
+        let sum = math.add(sum, math.mul(vl, hi));
+        math.add(sum, math.mul(vh, hi))
     }
 }
 
 /// Port of `Power10` of the 64-bit RTL, from the machine code of
-/// `Sniff.exe`: `value * 10^power` as the product of up to four table
-/// pairs (`mul_pair`), negative powers by the reciprocal tables. The
-/// result is near the correctly rounded one but not always it, and
-/// `FloatToDecimal` turns its last bits into digits (`1.05E-5` from
-/// `0.000014 * 0.75` gives `0.000011` with six decimals, found by `parity
-/// sniff` on the vertices of Skyrim meshes).
-fn power10(value: f64, power: i32) -> f64 {
+/// `Sniff.exe` (the same code at `0xE4C0` in `xTESEdit.exe`): `value *
+/// 10^power` as the product of up to four table pairs (`mul_pair`),
+/// negative powers by the reciprocal tables. The result is near the
+/// correctly rounded one but not always it, and `FloatToDecimal` turns its
+/// last bits into digits (`1.05E-5` from `0.000014 * 0.75` gives
+/// `0.000011` with six decimals, found by `parity sniff` on the vertices of
+/// Skyrim meshes). The RTL masks the precision exception around it and
+/// leaves the rounding mode alone, so its products round in the mode of
+/// `math`.
+fn power10(math: Arith, value: f64, power: i32) -> f64 {
     let mut result = value;
     if power > 0 {
         if power >= 632 {
             return f64::INFINITY;
         }
         if power & 0x1F != 0 {
-            result = mul_pair(result, POW10_TAB0[(power & 0x1F) as usize]);
+            result = mul_pair(math, result, POW10_TAB0[(power & 0x1F) as usize]);
         }
         let p = power >> 5;
         if p != 0 {
             if p & 7 != 0 {
-                result = mul_pair(result, POW10_TAB1[(p & 7) as usize]);
+                result = mul_pair(math, result, POW10_TAB1[(p & 7) as usize]);
             }
             for _ in 0..(p >> 3) {
-                result = mul_pair(result, POW10_256);
+                result = mul_pair(math, result, POW10_256);
             }
         }
     } else if power < 0 {
@@ -166,15 +283,18 @@ fn power10(value: f64, power: i32) -> f64 {
             return 0.0;
         }
         if p & 0x1F != 0 {
-            result = mul_pair(result, POW10_NEG_TAB0[(p & 0x1F) as usize]);
+            result = mul_pair(math, result, POW10_NEG_TAB0[(p & 0x1F) as usize]);
         }
         let p = p >> 5;
         if p != 0 {
             if p & 7 != 0 {
-                result = mul_pair(result, POW10_NEG_TAB1[(p & 7) as usize]);
+                result = mul_pair(math, result, POW10_NEG_TAB1[(p & 7) as usize]);
             }
             for _ in 0..(p >> 3) {
-                result = mul_pair(result, POW10_NEG_256) * f64::from_bits(POW10_NEG_256_SCALE);
+                result = math.mul(
+                    mul_pair(math, result, POW10_NEG_256),
+                    f64::from_bits(POW10_NEG_256_SCALE),
+                );
             }
         }
     }
@@ -192,7 +312,19 @@ fn power10(value: f64, power: i32) -> f64 {
 /// of the exact value (`14060.7578125` becomes `140607578124999984`) and
 /// the rounding to `decimals` that follows, half up on the digit string,
 /// sees those digits. `precision` is at most 18.
+///
+/// Every step rounds in the mode `Math.SetRoundMode` set (`xTESEdit.exe`
+/// 4.1.5q: `Power10` at `0xE4C0` changes only the exception mask, `Round`
+/// is `cvtsd2si` at `0xCB10`, the division by ten a `divsd`), so a script
+/// that prints under `rmDown` sees other digits: `0.3` is
+/// `2.9999999999999994E-1` there and `3.0000000000000000E-1` under
+/// `rmNearest` (the `sys-round` probe).
 fn float_to_decimal(value: f64, precision: i32, decimals: i32) -> FloatRec {
+    let math = Arith::current();
+    with_nearest_rounding(|| float_to_decimal_in(math, value, precision, decimals))
+}
+
+fn float_to_decimal_in(math: Arith, value: f64, precision: i32, decimals: i32) -> FloatRec {
     let bits = value.to_bits();
     let mut negative = bits >> 63 != 0;
     let mut exp = ((bits >> 52) & 0x7FF) as i32;
@@ -217,13 +349,15 @@ fn float_to_decimal(value: f64, precision: i32, decimals: i32) -> FloatRec {
     // high 16 bits of the product sign extended.
     exp = ((exp * 19728) >> 16) + 1;
     let mut exponent = exp;
-    let mut scaled = power10(value, 18 - exp).round_ties_even();
+    // `Round` to an `Int64` and back to a double (`cvtsi2sd`, exact for
+    // the integer of a double).
+    let mut scaled = math.round(power10(math, value, 18 - exp));
     if scaled >= 1e18 {
-        scaled /= 10.0;
+        scaled = math.div(scaled, 10.0);
         exponent += 1;
     }
     // `GetBcdBytes`: `Round` to an `Int64`, then the digits in pairs.
-    let mut int = scaled.round_ties_even() as i64;
+    let mut int = math.round(scaled) as i64;
     let mut digits = vec![b'0'; 18];
     for index in 0..9 {
         let pair = (int % 100) as u8;
@@ -464,6 +598,292 @@ pub fn float_to_str_f_fixed(value: f64, digits: usize) -> String {
 /// when the value is below 0.0001 or has more than 15 digits before the point.
 pub fn float_to_str(value: f64) -> String {
     float_to_text_general(value, 15, 0)
+}
+
+/// Port of `FloatToTextFmt` of the 64-bit RTL (`FormatFloat`), from the
+/// machine code of `xTESEdit.exe` 4.1.5q (`0x46240`, with `FindSection` at
+/// `0x45770`, `ScanSection` at `0x45880` and `ApplyFormat` at `0x45FB0`).
+///
+/// The section is chosen by the sign (`;` separates the positive, negative
+/// and zero sections; a NaN takes the zero section), and an empty section
+/// falls back to the first. A section that is not found, or found at the
+/// very end of the format, is the first one too. The digits come from
+/// [`float_to_decimal`]: 17 significant digits rounded to the section's
+/// decimals, or the section's digit count in scientific notation. The
+/// format falls back to `FloatToStr` (`ffGeneral`, 15 digits) when it is
+/// empty or starts with `;`, when the value is not finite, and when the
+/// value has more than 17 integer digits without an `E+`/`E-` in the
+/// section (`FormatFloat('0.#####', 1e22)` is `1E22`).
+///
+/// UPSTREAM-QUIRK (reproduced): the minus sign is written only when the
+/// section used starts at the format's first character, so a negative
+/// value formatted by its own section has no sign unless the section writes
+/// one; quoted text stops one character before the end of the section
+/// (`while I < Length - 1`); the exponent of a zero is minus the number of
+/// integer placeholders (`FloatRec.Exponent` of a zero is 0).
+pub fn float_to_text_fmt(value: f64, format: &str, decimal_separator: char, thousand_separator: char) -> String {
+    let format: Vec<char> = format.chars().collect();
+    let length = format.len();
+    let section = if value > 0.0 {
+        0
+    } else if value < 0.0 {
+        1
+    } else {
+        2
+    };
+    let mut section_start = find_format_section(&format, section);
+    let mut scan = scan_format_section(&format, section_start);
+    if scan.text.is_empty() {
+        section_start = find_format_section(&format, 0);
+        scan = scan_format_section(&format, section_start);
+    }
+    let (precision, decimals) = if scan.scientific {
+        (scan.digit_count, 9999)
+    } else {
+        (MAX_EXT_PRECISION, scan.digit_count - scan.decimal_index)
+    };
+    let rec = value.is_finite().then(|| float_to_decimal(value, precision, decimals));
+    let rec = match rec {
+        Some(rec) if length > 0 && format[0] != ';' && (rec.exponent < 18 || scan.scientific) => rec,
+        _ => return float_to_str(value).replace('.', &decimal_separator.to_string()),
+    };
+    // `ApplyFormat`.
+    let mut writer = FormatWriter {
+        out: String::new(),
+        rec: &rec,
+        scan: &scan,
+        digit_place: 0,
+        digits_c: 0,
+        decimal_separator,
+        thousand_separator,
+    };
+    if rec.negative && section_start == 0 {
+        writer.out.push('-');
+    }
+    let mut digit_delta = if scan.scientific {
+        writer.digit_place = scan.decimal_index;
+        0
+    } else {
+        let delta = rec.exponent - scan.decimal_index;
+        writer.digit_place = if delta >= 0 { rec.exponent } else { scan.decimal_index };
+        delta
+    };
+    let text = &scan.text;
+    let mut i = 0usize;
+    while i < text.len() {
+        match text[i] {
+            '#' | '0' => {
+                // `PutFmtDigit`.
+                if digit_delta < 0 {
+                    digit_delta += 1;
+                    if writer.digit_place <= scan.first_digit {
+                        writer.write_digit('0');
+                    } else {
+                        writer.digit_place -= 1;
+                    }
+                } else {
+                    while digit_delta > 0 {
+                        writer.add_digit();
+                        digit_delta -= 1;
+                    }
+                    writer.add_digit();
+                }
+                i += 1;
+            }
+            '.' | ',' => i += 1,
+            quote @ ('"' | '\'') => {
+                i += 1;
+                while i + 1 < text.len() && text[i] != quote {
+                    writer.out.push(text[i]);
+                    i += 1;
+                }
+                i += 1;
+            }
+            letter @ ('E' | 'e') => {
+                i += 1;
+                match text.get(i) {
+                    Some(&sign) if sign == '+' || sign == '-' => {
+                        i += 1;
+                        let mut zeros = 0usize;
+                        while i < text.len() && text[i] == '0' {
+                            i += 1;
+                            if zeros < 4 {
+                                zeros += 1;
+                            }
+                        }
+                        // `PutExponent`.
+                        let exponent = rec.exponent - scan.decimal_index;
+                        writer.out.push(letter);
+                        if sign == '+' && exponent >= 0 {
+                            writer.out.push('+');
+                        } else if exponent < 0 {
+                            writer.out.push('-');
+                        }
+                        writer.out.push_str(&format!("{:0zeros$}", exponent.unsigned_abs()));
+                    }
+                    _ => writer.out.push(letter),
+                }
+            }
+            other => {
+                writer.out.push(other);
+                i += 1;
+            }
+        }
+    }
+    writer.out
+}
+
+/// The fields `ScanSection` leaves for `ApplyFormat`.
+struct FormatSection {
+    /// The section's own characters (`Format[APos..I-1]`).
+    text: Vec<char>,
+    digit_count: i32,
+    decimal_index: i32,
+    thousand_separator: bool,
+    scientific: bool,
+    /// The integer places from which a `0` placeholder writes a zero.
+    first_digit: i32,
+    /// The fraction place (zero or negative) of the last `0` placeholder.
+    last_digit: i32,
+}
+
+/// Port of `FindSection`: the start of section `index`, or 0 when there is
+/// none or it starts at the end of the format.
+fn find_format_section(format: &[char], index: usize) -> usize {
+    let length = format.len();
+    let mut current = 0;
+    let mut c = 0;
+    while current != index && c < length {
+        match format[c] {
+            quote @ ('"' | '\'') => {
+                c += 1;
+                while c < length && format[c] != quote {
+                    c += 1;
+                }
+                if c < length {
+                    c += 1;
+                }
+            }
+            ';' => {
+                current += 1;
+                c += 1;
+            }
+            _ => c += 1,
+        }
+    }
+    if current < index || c == length { 0 } else { c }
+}
+
+/// Port of `ScanSection`.
+fn scan_format_section(format: &[char], start: usize) -> FormatSection {
+    let length = format.len();
+    let mut scan = FormatSection {
+        text: Vec::new(),
+        digit_count: 0,
+        decimal_index: -1,
+        thousand_separator: false,
+        scientific: false,
+        first_digit: 0x7FFF,
+        last_digit: 0,
+    };
+    let mut i = start;
+    while i < length && format[i] != ';' {
+        match format[i] {
+            ',' => {
+                scan.thousand_separator = true;
+                i += 1;
+            }
+            '.' => {
+                if scan.decimal_index == -1 {
+                    scan.decimal_index = scan.digit_count;
+                }
+                i += 1;
+            }
+            quote @ ('"' | '\'') => {
+                i += 1;
+                while i < length && format[i] != quote {
+                    i += 1;
+                }
+                if i < length {
+                    i += 1;
+                }
+            }
+            '#' => {
+                scan.digit_count += 1;
+                i += 1;
+            }
+            '0' => {
+                if scan.digit_count < scan.first_digit {
+                    scan.first_digit = scan.digit_count;
+                }
+                scan.digit_count += 1;
+                scan.last_digit = scan.digit_count;
+                i += 1;
+            }
+            'E' | 'e' => {
+                i += 1;
+                if i < length && matches!(format[i], '-' | '+') {
+                    scan.scientific = true;
+                    i += 1;
+                    while i < length && format[i] == '0' {
+                        i += 1;
+                    }
+                }
+            }
+            _ => i += 1,
+        }
+    }
+    if scan.decimal_index == -1 {
+        scan.decimal_index = scan.digit_count;
+    }
+    scan.last_digit = (scan.decimal_index - scan.last_digit).min(0);
+    scan.first_digit = (scan.decimal_index - scan.first_digit).max(0);
+    scan.text = format[start..i].to_vec();
+    scan
+}
+
+/// The output state of `ApplyFormat`'s nested routines.
+struct FormatWriter<'a> {
+    out: String,
+    rec: &'a FloatRec,
+    scan: &'a FormatSection,
+    /// The place of the next digit: positive in the integer part, 0 just
+    /// before the decimal separator, negative in the fraction.
+    digit_place: i32,
+    /// The digits of the `FloatRec` written so far.
+    digits_c: usize,
+    decimal_separator: char,
+    thousand_separator: char,
+}
+
+impl FormatWriter<'_> {
+    /// `WriteDigit`.
+    fn write_digit(&mut self, digit: char) {
+        if self.digit_place == 0 {
+            self.out.push(self.decimal_separator);
+            self.out.push(digit);
+            self.digit_place -= 1;
+        } else {
+            self.out.push(digit);
+            self.digit_place -= 1;
+            if self.scan.thousand_separator && self.digit_place > 1 && self.digit_place % 3 == 0 {
+                self.out.push(self.thousand_separator);
+            }
+        }
+    }
+
+    /// `AddDigit`: the next digit of the value, else a zero down to the
+    /// last `0` placeholder of the fraction.
+    fn add_digit(&mut self) {
+        if let Some(&digit) = self.rec.digits.get(self.digits_c) {
+            self.digits_c += 1;
+            self.write_digit(char::from(digit));
+        } else if self.digit_place <= self.scan.last_digit {
+            self.digit_place -= 1;
+        } else {
+            self.write_digit('0');
+        }
+    }
 }
 
 /// Port of `Format('%.*g', [precision, value])`: up to `precision`
@@ -728,21 +1148,28 @@ pub const RM_DOWN: u8 = 1;
 pub const RM_UP: u8 = 2;
 pub const RM_TRUNCATE: u8 = 3;
 
-static ROUND_MODE: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(RM_NEAREST);
-
-/// `Math.GetRoundMode`: the mode of the process (`rmNearest` at the start,
-/// the x87 control word the RTL's process inherits).
-pub fn round_mode() -> u8 {
-    ROUND_MODE.load(std::sync::atomic::Ordering::Relaxed)
+thread_local! {
+    /// The mode of the thread: the `MXCSR` rounding bits `SetRoundMode`
+    /// writes belong to the thread that runs the script, so a script's
+    /// directed mode reaches neither another script's thread nor the
+    /// parallel work of the session.
+    static ROUND_MODE: std::cell::Cell<u8> = const { std::cell::Cell::new(RM_NEAREST) };
 }
 
-/// `Math.SetRoundMode`: sets the mode the FPU carries and answers the
-/// previous one. The caller also sets the hardware state (the `MXCSR`
-/// rounding bits), so the arithmetic a script makes after the call follows
-/// the mode as the oracle's does (`0.1 + 0.2` prints differently under
-/// `rmDown`).
+/// `Math.GetRoundMode`: the mode of the thread (`rmNearest` at the start,
+/// the control word a new thread starts with).
+pub fn round_mode() -> u8 {
+    ROUND_MODE.with(std::cell::Cell::get)
+}
+
+/// `Math.SetRoundMode`: sets the mode the FPU of the thread carries and
+/// answers the previous one. The caller also sets the hardware state (the
+/// `MXCSR` rounding bits), so the arithmetic a script makes after the call
+/// follows the mode as the oracle's does (`0.1 + 0.2` prints differently
+/// under `rmDown`); the float-to-text conversions read the mode here
+/// ([`Arith::current`]).
 pub fn set_round_mode(mode: u8) -> u8 {
-    ROUND_MODE.swap(mode & 3, std::sync::atomic::Ordering::Relaxed)
+    ROUND_MODE.with(|current| current.replace(mode & 3))
 }
 
 /// Port of `Trunc` with the same out-of-range rule as [`round`] (`cvttsd2si`
@@ -756,136 +1183,197 @@ pub fn trunc(value: f64) -> i64 {
     }
 }
 
-/// Port of `StrToFloat` for a double: `System.SysUtils.TextToFloat` over
-/// the RTL's `Val`, fitted at full precision against the oracle (parity
-/// #39; the oracle's own `maxdouble`/`pi`/30-digit results are the tests).
+/// Port of `StrToFloat` for a double: `InternalTextToFloat` of the 64-bit
+/// RTL, from the machine code of `xTESEdit.exe` 4.1.5q (`0x47030`, with
+/// `ReadNumber` at `0x46EA0`, `ReadExponent` at `0x46FA0` and the special
+/// words at `0x46CF0`).
 ///
-/// The digits of the integer part are accumulated into an `Int64` while
-/// fewer than 19 have gone in and the next one cannot overflow it; the
-/// digits after the decimal point are appended in double precision with
-/// `value := value * 10 + digit` (the RTL converts the integer accumulator
-/// nowhere: the fraction never enters it, which the oracle's subnormal
-/// `2.2250738585072014E-308` shows, where the exact-integer conversion
-/// would be one ulp above). The fraction digits count against the exponent,
-/// the explicit exponent adds to it, and the value is scaled by the RTL's
-/// paired-table [`power10`].
-/// That mixture is the RTL's own rounding and not the correctly rounded
-/// parse: the text of the largest double gives the double one ulp below it,
-/// the 21 digits of Pi give `0x1.921fb54442d17p+1` where a correctly rounded
-/// parse gives `...d18`, and `182222222222222222` gives the exact integer
-/// while `123456789012345678901234567890` gives `0x1.8ee90ff6c373dp+96`.
+/// The text is read as the RTL reads a `PChar`: it ends at its first `#0`
+/// (`'1'#0'.5'` is 1). Spaces, and only spaces (a tab is refused), are
+/// skipped before the number and after it. A sign follows the blanks. The
+/// digits go into an unsigned 64-bit accumulator while it is at most
+/// `$1999999999999990` before the next digit, then the accumulator becomes
+/// a double and every further digit is `value := value * 10; value :=
+/// (value + Ord(ch)) - 48` in double precision (two roundings per digit).
+/// The fraction digits continue the same reading (into the accumulator
+/// again when the integer part was zero) and count against the exponent.
+/// The exponent after `E`/`e` stops reading at the first value above 1024,
+/// which leaves its next digit unread (so `1E9999` is refused while `1E1000`
+/// reads all of its digits), and is clamped to 1024. The value is scaled
+/// by the paired-table [`power10`] (which answers an infinity for a power
+/// of 632 or more, whatever the value, and zero for -632 or less, without
+/// raising the overflow flag) and multiplied by the sign. The conversion
+/// runs under the default control word (`SetMXCSR($1F80)`: round to
+/// nearest whatever `SetRoundMode` set) and fails when the multiplication
+/// raised the invalid or overflow flag; an underflow to zero is a value
+/// (`1e-400` is `0.0`, `1E1000` is `INF`).
 ///
-/// `TextToFloat` reads the words before `Val` runs: `Inf` with or without a
-/// sign and `NaN` without one, case insensitively (the oracle refuses
-/// `Infinity`). Blanks are skipped around the number. A malformed text, a
-/// character the scanner stops at, an exponent of 632 or more in either
-/// direction, and a result that overflows to infinity return `None`, which
-/// the callers report as the RTL's `EConvertError`; an underflow to zero is
-/// a value (`1e-400` is `0.0`).
+/// A text that is no number is compared, from the first non-blank, case
+/// insensitively and as a whole with `NAN`, `INF`, `+INF` and `-INF` (the
+/// oracle refuses `Infinity` and `-NaN`; a trailing blank is part of the
+/// comparison).
+/// `None` is the RTL's `EConvertError`.
+///
+/// That arithmetic is the RTL's own rounding, not the correctly rounded
+/// parse: the 21 digits of Pi give `0x1.921fb54442d17p+1` where a
+/// correctly rounded parse gives `...d18`, and
+/// `123456789012345678901234567890` gives `0x1.8ee90ff6c373dp+96`.
 pub fn str_to_float(text: &str) -> Option<f64> {
-    with_nearest_rounding(|| str_to_float_nearest(text))
+    with_nearest_rounding(|| text_to_float(text))
 }
 
 pub use xedit_io::fpu::with_nearest_rounding;
 
-fn str_to_float_nearest(text: &str) -> Option<f64> {
-    let bytes = text.as_bytes();
-    let blank = |byte: u8| byte == b' ' || byte == b'\t';
-    let mut i = 0;
-    while i < bytes.len() && blank(bytes[i]) {
-        i += 1;
+/// The characters of a `PChar`: the text up to its first `#0`, then `#0`
+/// forever.
+struct PCharReader<'a> {
+    bytes: &'a [u8],
+    position: usize,
+}
+
+impl PCharReader<'_> {
+    fn current(&self) -> u8 {
+        self.bytes.get(self.position).copied().unwrap_or(0)
     }
-    let mut negative = false;
-    let mut signed = false;
-    if i < bytes.len() && (bytes[i] == b'+' || bytes[i] == b'-') {
-        negative = bytes[i] == b'-';
-        signed = true;
-        i += 1;
-    }
-    {
-        let rest = &text[i..];
-        let word = |word: &str| {
-            rest.get(..word.len())
-                .is_some_and(|head| head.eq_ignore_ascii_case(word))
-                && rest[word.len()..].bytes().all(blank)
-        };
-        if word("Inf") {
-            return Some(if negative { f64::NEG_INFINITY } else { f64::INFINITY });
-        }
-        if !signed && word("NaN") {
-            return Some(f64::from_bits(NAN_BITS));
+
+    fn next(&mut self) {
+        if self.current() != 0 {
+            self.position += 1;
         }
     }
-    let mut acc: i64 = 0;
-    let mut exact = 0usize;
-    let mut mantissa = 0.0f64;
-    let mut push = |digit: u8| {
-        let digit = i64::from(digit - b'0');
-        let next = acc.checked_mul(10).and_then(|scaled| scaled.checked_add(digit));
-        if exact < 19
-            && let Some(next) = next
-        {
-            acc = next;
-            exact += 1;
-            mantissa = acc as f64;
-        } else {
-            mantissa = mantissa * 10.0 + digit as f64;
+
+    fn skip_blanks(&mut self) {
+        while self.current() == b' ' {
+            self.next();
         }
+    }
+
+    /// `ReadSign`.
+    fn read_sign(&mut self) -> f64 {
+        match self.current() {
+            b'+' => {
+                self.next();
+                1.0
+            }
+            b'-' => {
+                self.next();
+                -1.0
+            }
+            _ => 1.0,
+        }
+    }
+
+    /// `ReadNumber`: the digits at the cursor appended to `value`, and how
+    /// many there were.
+    fn read_number(&mut self, value: &mut f64) -> i32 {
+        let mut count = 0;
+        if *value == 0.0 {
+            let mut accumulator: u64 = 0;
+            while self.current().is_ascii_digit() && accumulator <= 0x1999_9999_9999_9990 {
+                accumulator = accumulator * 10 + u64::from(self.current() - b'0');
+                self.next();
+                count += 1;
+            }
+            // `cvtsi2sd` of the signed value, then 2^64 added when the top
+            // bit was set.
+            let signed = accumulator as i64;
+            *value = signed as f64;
+            if signed < 0 {
+                *value += 18_446_744_073_709_551_616.0;
+            }
+        }
+        while self.current().is_ascii_digit() {
+            *value *= 10.0;
+            *value = (*value + f64::from(self.current())) - 48.0;
+            self.next();
+            count += 1;
+        }
+        count
+    }
+
+    /// `ReadExponent`: the signed exponent and how many digits were read.
+    fn read_exponent(&mut self) -> (i32, i32) {
+        let sign = if self.read_sign() < 0.0 { -1 } else { 1 };
+        let mut count = 0;
+        let mut exponent: i32 = 0;
+        while self.current().is_ascii_digit() {
+            count += 1;
+            exponent = exponent * 10 + i32::from(self.current() - b'0');
+            if exponent > 0x400 {
+                break;
+            }
+            self.next();
+        }
+        (exponent.min(0x400) * sign, count)
+    }
+}
+
+fn text_to_float(text: &str) -> Option<f64> {
+    let mut reader = PCharReader {
+        bytes: text.as_bytes(),
+        position: 0,
     };
-    let mut any_digit = false;
-    while i < bytes.len() && bytes[i].is_ascii_digit() {
-        push(bytes[i]);
-        any_digit = true;
-        i += 1;
-    }
-    let mut fraction = 0i64;
-    if i < bytes.len() && bytes[i] == b'.' {
-        i += 1;
-        while i < bytes.len() && bytes[i].is_ascii_digit() {
-            mantissa = mantissa * 10.0 + f64::from(bytes[i] - b'0');
-            fraction += 1;
-            any_digit = true;
-            i += 1;
-        }
-    }
-    if !any_digit {
-        return None;
-    }
-    let mut exponent = 0i64;
-    if i < bytes.len() && (bytes[i] == b'e' || bytes[i] == b'E') {
-        i += 1;
-        let mut exponent_negative = false;
-        if i < bytes.len() && (bytes[i] == b'+' || bytes[i] == b'-') {
-            exponent_negative = bytes[i] == b'-';
-            i += 1;
-        }
-        let digits_start = i;
-        while i < bytes.len() && bytes[i].is_ascii_digit() {
-            exponent = exponent.saturating_mul(10).saturating_add(i64::from(bytes[i] - b'0'));
-            i += 1;
-        }
-        if i == digits_start {
+    reader.skip_blanks();
+    let start = reader.position;
+    let number = (|| {
+        if reader.current() == 0 {
             return None;
         }
-        if exponent_negative {
-            exponent = -exponent;
+        let sign = reader.read_sign();
+        if reader.current() == 0 {
+            return None;
         }
+        let mut value = 0.0;
+        let integer_digits = reader.read_number(&mut value);
+        let mut fraction_digits = 0;
+        let mut power = 0;
+        if reader.current() == b'.' {
+            reader.next();
+            fraction_digits = reader.read_number(&mut value);
+            power = -fraction_digits;
+        }
+        if reader.current() & 0xDF == b'E' {
+            reader.next();
+            let (exponent, digits) = reader.read_exponent();
+            if digits == 0 {
+                return Some(None);
+            }
+            power += exponent;
+        }
+        if integer_digits <= 0 && fraction_digits <= 0 {
+            return None;
+        }
+        reader.skip_blanks();
+        if reader.current() != 0 {
+            return None;
+        }
+        // The overflow flag: set by a product that overflowed, not by the
+        // infinity `Power10` answers for a power of 632 or more.
+        let scaled = power10(Arith::NEAREST, value, power);
+        let overflowed = value.is_infinite() || scaled.is_infinite() && power < 632;
+        let value = scaled * sign;
+        Some((!overflowed).then_some(value))
+    })();
+    match number {
+        Some(result) => result,
+        None => special_float_word(&text.as_bytes()[start..]),
     }
-    while i < bytes.len() && blank(bytes[i]) {
-        i += 1;
+}
+
+/// The words `TextToFloat` accepts when the text is no number, compared
+/// with `StrIComp` from the first non-blank to the end of the `PChar`.
+fn special_float_word(rest: &[u8]) -> Option<f64> {
+    let end = rest.iter().position(|&byte| byte == 0).unwrap_or(rest.len());
+    let word = &rest[..end];
+    if word.eq_ignore_ascii_case(b"NAN") {
+        Some(f64::from_bits(NAN_BITS))
+    } else if word.eq_ignore_ascii_case(b"INF") || word.eq_ignore_ascii_case(b"+INF") {
+        Some(f64::INFINITY)
+    } else if word.eq_ignore_ascii_case(b"-INF") {
+        Some(f64::NEG_INFINITY)
+    } else {
+        None
     }
-    if i != bytes.len() {
-        return None;
-    }
-    let exponent = exponent.saturating_sub(fraction);
-    if exponent.unsigned_abs() >= 632 {
-        return None;
-    }
-    let value = power10(mantissa, exponent as i32);
-    if value.is_infinite() {
-        return None;
-    }
-    Some(if negative { -value } else { value })
 }
 
 /// The NaN of the RTL: the x64 real indefinite `0xFFF8...`, which the
@@ -948,6 +1436,54 @@ mod tests {
         assert_eq!(str_to_float("+Inf").map(f64::to_bits), Some(f64::INFINITY.to_bits()));
         assert_eq!(str_to_float("nAn").map(f64::to_bits), Some(NAN_BITS));
         assert_eq!(str_to_float("  1.5  ").map(f64::to_bits), Some(1.5f64.to_bits()));
+    }
+
+    /// The digits `FloatToDecimal` gives in each rounding mode, from the
+    /// oracle's `sys-round` lines (`FloatToStrF(x, ffExponent, 17, 0)` after
+    /// `SetRoundMode`; `1/3` is the quotient in that mode).
+    #[test]
+    fn float_to_decimal_rounds_in_the_script_mode() {
+        let digits = |mode: u8, value: f64| {
+            let rec = float_to_decimal_in(Arith { mode }, value, 17, 9999);
+            format!("{}e{}", String::from_utf8(rec.digits).unwrap(), rec.exponent)
+        };
+        let third_up = (1.0f64 / 3.0).next_up();
+        for (mode, value, expected) in [
+            (RM_NEAREST, 0.3, "3e0"),
+            (RM_NEAREST, 1.0 / 3.0, "33333333333333331e0"),
+            (RM_DOWN, 0.1, "1e0"),
+            (RM_DOWN, 0.2, "2e0"),
+            (RM_DOWN, 0.3, "29999999999999994e0"),
+            (RM_DOWN, 1.0 / 3.0, "33333333333333331e0"),
+            (RM_UP, 0.1, "10000000000000002e0"),
+            (RM_UP, 0.2, "20000000000000003e0"),
+            (RM_UP, 0.3, "3e0"),
+            (RM_UP, third_up, "33333333333333338e0"),
+            (RM_TRUNCATE, 0.1, "1e0"),
+            (RM_TRUNCATE, 0.3, "29999999999999994e0"),
+            (RM_UP, 1.75, "175e1"),
+        ] {
+            assert_eq!(digits(mode, value), expected, "mode {mode} value {value:e}");
+        }
+    }
+
+    /// The directed operations against their exact results.
+    #[test]
+    fn directed_arithmetic() {
+        let down = Arith { mode: RM_DOWN };
+        let up = Arith { mode: RM_UP };
+        let zero = Arith { mode: RM_TRUNCATE };
+        assert_eq!(down.add(0.1, 0.2), 0.3);
+        assert_eq!(up.add(0.1, 0.2), 0.30000000000000004);
+        assert_eq!(down.div(1.0, 3.0), 1.0 / 3.0);
+        assert_eq!(up.div(1.0, 3.0), (1.0f64 / 3.0).next_up());
+        assert_eq!(zero.div(-1.0, 3.0), -1.0 / 3.0);
+        assert_eq!(down.div(-1.0, 3.0), (-1.0f64 / 3.0).next_down());
+        assert_eq!(up.mul(0.1, 3.0), 0.30000000000000004);
+        assert_eq!(down.mul(0.1, 3.0), 0.3);
+        assert_eq!(down.mul(f64::MAX, 2.0), f64::MAX);
+        assert_eq!(up.mul(f64::MAX, 2.0), f64::INFINITY);
+        assert_eq!(down.add(1.0, 1.0), 2.0);
     }
 
     #[test]

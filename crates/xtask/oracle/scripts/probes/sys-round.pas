@@ -41,14 +41,27 @@ begin
   Log('round', aTag + ' ceil2.2=' + IntToStr(Ceil(2.2)) + ' ceil-2.7=' + IntToStr(Ceil(-2.7)));
   gD := 1.0 / 3.0;
   Log('round', aTag + ' third=' + FloatToStrF(gD, 1, 17, 0));
-  if aTag = 'nearest' then begin
-    gD := 0.1 + 0.2;
-    Log('round', aTag + ' 0.1+0.2=' + FloatToStrF(gD, 1, 17, 0));
-  end;
-  { Under a directed mode the RTL's own float-to-text arithmetic is
-    perturbed too, and the port's digit generation does not replay its
-    operations (an owed item of the batch); the comparisons below read the
-    sum and the parse without printing digits. }
+  { The RTL's float-to-text arithmetic (`Power10`, `Round`, the division
+    by ten in `FloatToDecimal`) rounds in the mode too (fix-numerics), so
+    every format prints the digits of that mode. }
+  gD := 0.1 + 0.2;
+  Log('round', aTag + ' 0.1+0.2=' + FloatToStrF(gD, 1, 17, 0));
+  Log('round', aTag + ' lit0.1=' + FloatToStrF(0.1, 1, 17, 0) + ' lit0.2=' + FloatToStrF(0.2, 1, 17, 0) + ' lit0.3=' + FloatToStrF(0.3, 1, 17, 0));
+  gD := 2.0 / 3.0;
+  Log('round', aTag + ' twothirds=' + FloatToStrF(gD, 1, 17, 0) + ' g=' + FloatToStr(gD) + ' f=' + FloatToStrF(gD, 2, 15, 6));
+  gD := 1.0E300 / 7.0;
+  Log('round', aTag + ' big=' + FloatToStrF(gD, 1, 17, 0) + ' g=' + FloatToStr(gD));
+  gD := 1.0E-300 / 7.0;
+  Log('round', aTag + ' small=' + FloatToStrF(gD, 1, 17, 0) + ' g=' + FloatToStr(gD));
+  gD := 5.0E-324;
+  Log('round', aTag + ' denormal=' + FloatToStrF(gD, 1, 17, 0));
+  gD := -1.0 / 3.0;
+  Log('round', aTag + ' negthird=' + FloatToStrF(gD, 1, 17, 0) + ' f=' + FloatToStrF(gD, 2, 15, 3));
+  gD := 123456.789;
+  Log('round', aTag + ' fixed=' + FloatToStrF(gD, 2, 15, 2) + ' n=' + FloatToStrF(gD, 3, 15, 2) + ' fmt=' + Format('%.4f|%e|%g', [gD, gD, gD]));
+  Log('round', aTag + ' pict=' + FormatFloat('#,##0.000', gD) + ' ' + FormatFloat('0.00E+00', gD) + ' ' + FormatFloat('0.#####', 1.0 / 3.0));
+  gD := 0.125;
+  Log('round', aTag + ' tie=' + FloatToStrF(gD, 2, 15, 2) + ' ' + FormatFloat('0.00', gD) + ' ' + FloatToStrF(1e22, 1, 17, 0));
   gD := 0.1;
   gE := 0.2;
   gF := gD + gE;
