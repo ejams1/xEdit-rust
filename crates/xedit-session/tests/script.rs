@@ -1804,7 +1804,7 @@ fn the_stream_probe_gives_the_oracle_lines() {
         "encoding | utf8 size=16 pos=16",
         "encoding | utf8-bom size=19 pos=19",
         "encoding | utf16 size=18 pos=18",
-        "encoding | utf16-load exc=EJsonParserException",
+        "encoding | utf16-load exc=EJsonParserException Unexpected end of file where value was expected (1, 9)",
         "encoding | utf16-enc-load exc=EJsonParserException",
         "encoding | utf16-as-utf8 exc=EJsonParserException",
         "bytes | file size=27 pos=27",
