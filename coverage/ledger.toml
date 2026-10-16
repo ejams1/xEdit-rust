@@ -20976,6 +20976,7 @@ source = "TJsonObject_Write_U"
 status = "covered"
 command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMiscRegEx.pas"
+note = "The parity backlog's #29 replaced the `regex` crate with the port's PCRE engine (`crates/xedit-core/src/pcre.rs` and the class in `perl_regex.rs`): lookaround, in-pattern backreferences, possessive quantifiers, ASCII \\d/\\w/\\s, PCRE's compile errors with their offsets and the UTF-8 byte-offset model answer as the release does. Check: `cargo xtask parity script --script \"Regex probe\" --phase run` (the probe in `crates/xtask/oracle/scripts/probes`)."
 
 [script."xejviScriptAdapterMiscRegEx:RegularExpressionsCore.preAnchored:const"]
 status = "covered"

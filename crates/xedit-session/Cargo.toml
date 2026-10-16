@@ -19,7 +19,6 @@ xedit-io = { path = "../xedit-io" }
 xedit-loadorder = { path = "../xedit-loadorder" }
 xedit-script = { path = "../xedit-script" }
 
-regex = "1.13.1"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61.2", features = [

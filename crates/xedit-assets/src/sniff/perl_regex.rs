@@ -7,216 +7,49 @@
 //! `ReplaceAll` and the replacement text with its backreferences
 //! (`ComputeReplacement`).
 //!
-//! UPSTREAM-QUIRK: upstream runs PCRE; the port runs the `regex` crate,
-//! which has the same syntax for everything but backreferences inside the
-//! expression and look-around, which it refuses with an error. `\d`, `\w`
-//! and `\s` match Unicode characters here and ASCII ones in PCRE.
+//! The class is [`xedit_core::perl_regex::PerlRegEx`], the same one the
+//! script adapter and the filter run, over the port's PCRE engine
+//! (`xedit_core::pcre`): upstream runs PCRE 8 through the RTL, so
+//! look-around, in-pattern backreferences, possessive quantifiers, ASCII
+//! `\d`/`\w`/`\s` and the byte offsets of a multi-byte subject behave as
+//! they do in the release.
 
-use regex::{Captures, Regex, RegexBuilder};
+use xedit_core::perl_regex::{OPTION_CASE_LESS, PerlRegEx as CorePerlRegEx};
 
 use crate::data_format::{DfError, R};
 
-/// `TPerlRegEx` with `preCaseLess`.
+/// `TPerlRegEx` with `preCaseLess`: `ProcReplaceAssets` and
+/// `ProcUniversalTweaker` both set that one option.
 pub struct PerlRegEx {
-    regex: Regex,
+    core: CorePerlRegEx,
 }
 
 impl PerlRegEx {
-    /// `RegEx := aExpression; Study`.
+    /// `RegEx := aExpression; Study`: the expression is compiled here, so a
+    /// pattern the engine refuses fails the operation that builds it.
     pub fn new(expression: &str) -> R<PerlRegEx> {
-        if expression.is_empty() {
-            return Err(DfError::new(
-                "TPerlRegEx.Compile() - Please specify a regular expression in RegEx first",
-            ));
-        }
-        let regex = RegexBuilder::new(expression)
-            .case_insensitive(true)
-            .build()
-            .map_err(|error| DfError::new(format!("Error in regular expression: {error}")))?;
-        Ok(PerlRegEx { regex })
+        let mut core = CorePerlRegEx::new();
+        core.set_regex(expression.to_owned());
+        core.set_options(1 << OPTION_CASE_LESS);
+        core.compile().map_err(|error| DfError::new(error.message()))?;
+        Ok(PerlRegEx { core })
     }
 
     /// `Subject := subject; Replacement := replacement; ReplaceAll`:
     /// whether the expression matched, and the subject after the
     /// replacements.
     pub fn replace_all(&self, subject: &str, replacement: &str) -> (bool, String) {
-        let mut matched = false;
-        let mut result = String::with_capacity(subject.len());
-        let mut last = 0;
-        for captures in self.regex.captures_iter(subject) {
-            matched = true;
-            let whole = captures.get(0).expect("group 0");
-            result.push_str(&subject[last..whole.start()]);
-            result.push_str(&self.compute_replacement(subject, &captures, replacement));
-            last = whole.end();
+        // The class is cheap to clone: the compiled expression is shared.
+        let mut core = self.core.clone();
+        core.set_subject(subject.to_owned());
+        core.set_replacement(replacement.to_owned());
+        match core.replace_all() {
+            Ok(matched) => (matched, core.subject().to_owned()),
+            // `ProcReplaceAssets` and `ProcUniversalTweaker` never let a
+            // `TPerlRegEx` raise here: the expression is compiled when the
+            // object is built.
+            Err(_) => (false, subject.to_owned()),
         }
-        result.push_str(&subject[last..]);
-        (matched, result)
-    }
-
-    /// `ComputeReplacement`: `\n`, `$n` and `${n}` (one or two digits, the
-    /// second only when the group exists), `${name}`, `\g<name>`, `$&`,
-    /// `$+`, `` $` ``, `$'`, `$_`, `\\` and `\$`, and `\l`, `\u`, `\f` with
-    /// a group number for lower, upper and first upper case.
-    fn compute_replacement(&self, subject: &str, captures: &Captures, replacement: &str) -> String {
-        let group_count = captures.len() as i32 - 1;
-        let whole = captures.get(0).expect("group 0");
-        let group = |number: i32| -> String {
-            if number < 0 || number > group_count {
-                return String::new();
-            }
-            captures
-                .get(number as usize)
-                .map_or_else(String::new, |found| found.as_str().to_owned())
-        };
-        let named = |name: &str| -> i32 {
-            self.regex
-                .capture_names()
-                .position(|candidate| candidate == Some(name))
-                .map_or(-1, |index| index as i32)
-        };
-        let s: Vec<char> = replacement.chars().collect();
-        let mut out = String::new();
-        let mut i = 0;
-        // Upstream stops one character before the end: a final `\` or `$`
-        // is plain text.
-        while i + 1 < s.len() {
-            let c = s[i];
-            if c != '\\' && c != '$' {
-                out.push(c);
-                i += 1;
-                continue;
-            }
-            let dollar = c == '$';
-            let mut j = i + 1;
-            let mut mode = '\0';
-            let mut number_only = false;
-            if !dollar {
-                match s[j] {
-                    '$' | '\\' => {
-                        out.push(s[j]);
-                        i = j + 1;
-                        continue;
-                    }
-                    'g' => {
-                        if j + 2 < s.len() && s[j + 1] == '<' && (s[j + 2].is_ascii_alphabetic() || s[j + 2] == '_') {
-                            let mut k = j + 3;
-                            while k < s.len() && (s[k].is_ascii_alphanumeric() || s[k] == '_') {
-                                k += 1;
-                            }
-                            if k < s.len() && s[k] == '>' {
-                                let name: String = s[j + 2..k].iter().collect();
-                                let n = named(&name);
-                                if n > 0 {
-                                    out.push_str(&group(n));
-                                }
-                                i = k + 1;
-                            } else {
-                                out.extend(&s[i..k]);
-                                i = k;
-                            }
-                        } else {
-                            out.extend(&s[i..i + 2]);
-                            i += 2;
-                        }
-                        continue;
-                    }
-                    'l' | 'L' | 'u' | 'U' | 'f' | 'F' => {
-                        mode = s[j];
-                        j += 1;
-                        number_only = true;
-                    }
-                    _ => {}
-                }
-            }
-            // ProcessBackreference
-            let mut number: i32 = -1;
-            if j < s.len() && s[j].is_ascii_digit() {
-                number = s[j] as i32 - '0' as i32;
-                j += 1;
-                if j < s.len() && s[j].is_ascii_digit() {
-                    let two = number * 10 + (s[j] as i32 - '0' as i32);
-                    if two <= group_count {
-                        number = two;
-                        j += 1;
-                    }
-                }
-            } else if !number_only && j < s.len() {
-                if dollar && j + 1 < s.len() && s[j] == '{' {
-                    j += 1;
-                    if s[j].is_ascii_digit() {
-                        number = 0;
-                        while j < s.len() && s[j].is_ascii_digit() {
-                            number = number.saturating_mul(10).saturating_add(s[j] as i32 - '0' as i32);
-                            j += 1;
-                        }
-                    } else if s[j].is_ascii_alphabetic() || s[j] == '_' {
-                        let start = j;
-                        j += 1;
-                        while j < s.len() && (s[j].is_ascii_alphanumeric() || s[j] == '_') {
-                            j += 1;
-                        }
-                        if j < s.len() && s[j] == '}' {
-                            let name: String = s[start..j].iter().collect();
-                            number = named(&name);
-                        }
-                    }
-                    if j >= s.len() || s[j] != '}' {
-                        number = -1;
-                    } else {
-                        j += 1;
-                    }
-                } else if dollar && s[j] == '_' {
-                    out.push_str(subject);
-                    i = j + 1;
-                    continue;
-                } else {
-                    match s[j] {
-                        '&' => {
-                            number = 0;
-                            j += 1;
-                        }
-                        '+' => {
-                            number = group_count;
-                            j += 1;
-                        }
-                        '`' => {
-                            out.push_str(&subject[..whole.start()]);
-                            i = j + 1;
-                            continue;
-                        }
-                        '\'' => {
-                            out.push_str(&subject[whole.end()..]);
-                            i = j + 1;
-                            continue;
-                        }
-                        _ => {}
-                    }
-                }
-            }
-            if number >= 0 {
-                let value = group(number);
-                out.push_str(&match mode {
-                    'L' | 'l' => value.to_lowercase(),
-                    'U' | 'u' => value.to_uppercase(),
-                    'F' | 'f' => {
-                        let mut chars = value.chars();
-                        match chars.next() {
-                            Some(first) => first.to_uppercase().chain(chars.flat_map(char::to_lowercase)).collect(),
-                            None => String::new(),
-                        }
-                    }
-                    _ => value,
-                });
-                i = j;
-            } else {
-                // Not a reference: the character stays.
-                out.push(c);
-                i += 1;
-            }
-        }
-        out.extend(&s[i.min(s.len())..]);
-        out
     }
 }
 
@@ -238,5 +71,30 @@ mod tests {
         assert!(!re.replace_all("xyz", "q").0);
         let re = PerlRegEx::new("(?P<x>b)(c)").unwrap();
         assert_eq!(re.replace_all("abcd", "${x}\\2\\u1"), (true, "abcBd".to_owned()));
+    }
+
+    /// The PCRE syntax the `regex` crate refused before this change.
+    #[test]
+    fn pcre_syntax() {
+        let re = PerlRegEx::new("(?<=a)b(?=c)").unwrap();
+        assert_eq!(re.replace_all("abc", "!"), (true, "a!c".to_owned()));
+        let re = PerlRegEx::new("(a)\\1").unwrap();
+        assert_eq!(re.replace_all("aa ab", "!"), (true, "! ab".to_owned()));
+        let re = PerlRegEx::new("a++b").unwrap();
+        assert_eq!(re.replace_all("aab", "!"), (true, "!".to_owned()));
+    }
+
+    #[test]
+    fn compile_errors_are_the_rtl_ones() {
+        let error = PerlRegEx::new("(?<=a+)b").err().expect("a compile error");
+        assert_eq!(
+            error.to_string(),
+            "Error in regular expression at offset 6: lookbehind assertion is not fixed length"
+        );
+        let error = PerlRegEx::new("").err().expect("an empty expression");
+        assert_eq!(
+            error.to_string(),
+            "A regular expression specified in RegEx is required"
+        );
     }
 }

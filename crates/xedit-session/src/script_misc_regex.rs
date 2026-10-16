@@ -3,712 +3,146 @@
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 // Ported from xEdit: xEdit/JvI/xejviScriptAdapterMiscRegEx.pas (the
-// TPerlRegEx class and its 48 registrations) over the semantics of
-// System.RegularExpressionsCore.pas (TPerlRegEx by Jan Goyvaerts: Match,
+// TPerlRegEx class and its registrations) over
+// `xedit_core::perl_regex::PerlRegEx`, which is the class of Delphi's
+// `System.RegularExpressionsCore` (`TPerlRegEx` by Jan Goyvaerts: Match,
 // MatchAgain, Replace, ReplaceAll, ComputeReplacement, Split, SplitCapture,
 // StoreGroups, Study, Compile, EscapeRegExChars, the Start/Stop window and
-// the group accessors) and System.RegularExpressionsConsts.pas (the
-// ERegularExpressionError texts).
+// the group accessors) on top of the port's PCRE engine
+// (`xedit_core::pcre`). `System.RegularExpressionsConsts` gives the
+// `ERegularExpressionError` texts.
 
-//! `TPerlRegEx` for scripts, over the `regex` crate.
+//! `TPerlRegEx` for scripts.
 //!
-//! UPSTREAM-QUIRK: upstream runs PCRE through `System.RegularExpressionsCore`
-//! over UTF-8 bytes; the port runs the `regex` crate over characters. The
-//! call shape, the option/State flags, the offset bases and the error texts
-//! are the upstream ones; the divergences are:
-//!
-//! - `regex` has no lookaround, no backreferences inside the pattern and no
-//!   possessive quantifiers: a pattern that uses one fails to compile with
-//!   the crate's message where PCRE compiled it (recorded as phase 5's owed
-//!   divergence for Sniff's `perl_regex.rs`, the same decision here).
-//! - `\d`, `\w` and `\s` match Unicode characters where PCRE without UCP
-//!   matched ASCII ones.
-//! - `preNotBOL` and `preNotEOL` have no `regex` equivalent (`PCRE_NOTBOL`
-//!   and `PCRE_NOTBOL`); a pattern anchored with `^`/`$` behaves as if the
-//!   flags were not set. `preNotEmpty` is emulated (empty matches are
-//!   skipped), and `preAnchored` by requiring the match to start at the
-//!   search position.
-//! - offsets and lengths count characters; upstream counts UTF-8 bytes and
-//!   converts for the group accessors, which agree for ASCII subjects. The
-//!   `regex` crate reports byte offsets, so the port converts them.
-//! - `PCRE_UNGREEDY` is `regex`'s `swap_greed`; `PCRE_NO_AUTO_CAPTURE` has
-//!   no `regex` equivalent (documented).
-//! - `pcre_get_stringnumber` is the crate's capture-name table.
+//! The engine is PCRE 8, as the release's run-time library uses it: the
+//! call shape, the option and state flags, the offset bases, the error
+//! texts and the behaviour are the upstream ones, and the check is
+//! `cargo xtask parity script --script "Regex probe" --phase run`.
 
 use std::rc::Rc;
 
-use regex::{Captures, Regex, RegexBuilder};
-
+use xedit_core::perl_regex::{
+    E_REGEX_CLASS, OPTION_ANCHORED, OPTION_CASE_LESS, OPTION_EXTENDED, OPTION_MULTI_LINE,
+    OPTION_NO_AUTO_CAPTURE, OPTION_SINGLE_LINE, OPTION_UN_GREEDY, PerlRegEx, RegexError,
+    STATE_NOT_BOL, STATE_NOT_EOL, STATE_NOT_EMPTY,
+};
 use xedit_script::adapter::{Adapter, Args, PR_ARGS_NO_CHECK};
 use xedit_script::values::{ClassDef, ParamType, ScriptObject, Value, ValueError, VarType};
 
 use crate::script_classes::ScriptClasses;
 use crate::script_strings::{borrow_list_mut, list_of_or_error, receiver, text_arg};
 
-/// `System.RegularExpressionsConsts` texts.
-pub const E_REGEX_CLASS: &str = "ERegularExpressionError";
-pub const S_REGEX_MATCH_REQUIRED: &str = "Successful match required";
-pub const S_REGEX_STRINGS_REQUIRED: &str = "Strings parameter cannot be nil";
+pub use xedit_core::perl_regex::{
+    E_REGEX_CLASS as E_REGEX, S_REGEX_MATCH_REQUIRED as S_MATCH_REQUIRED,
+    S_REGEX_STRINGS_REQUIRED as S_STRINGS_REQUIRED,
+};
 
-fn index_out_of_bounds(index: i64) -> ValueError {
-    ValueError::external_class(E_REGEX_CLASS, format!("Index out of bounds ({index})"))
+/// An `ERegularExpressionError` of the RTL's class.
+fn regex_error(error: RegexError) -> ValueError {
+    ValueError::external_class(E_REGEX_CLASS, error.message())
 }
 
-fn match_required() -> ValueError {
-    ValueError::external_class(E_REGEX_CLASS, S_REGEX_MATCH_REQUIRED.to_owned())
-}
-
-/// `TPerlRegExOptions` (`System.RegularExpressionsCore.pas:25`):
-/// `preCaseLess = 0` .. `preNoAutoCapture = 6`.
-pub const OPTION_CASE_LESS: i32 = 0;
-pub const OPTION_MULTI_LINE: i32 = 1;
-pub const OPTION_SINGLE_LINE: i32 = 2;
-pub const OPTION_EXTENDED: i32 = 3;
-pub const OPTION_ANCHORED: i32 = 4;
-pub const OPTION_UN_GREEDY: i32 = 5;
-pub const OPTION_NO_AUTO_CAPTURE: i32 = 6;
-/// `TPerlRegExState` (`:36`): `preNotBOL = 0`, `preNotEOL = 1`,
-/// `preNotEmpty = 2`. The State property is not registered for scripts; the
-/// port keeps it for the option values' shared ordinals and documents the
-/// emulation.
-pub const STATE_NOT_BOL: i32 = 0;
-pub const STATE_NOT_EOL: i32 = 1;
-pub const STATE_NOT_EMPTY: i32 = 2;
-
-/// One `TPerlRegEx`.
+/// One `TPerlRegEx` script object: the class value it was created from and
+/// the class of the RTL around the PCRE engine.
 pub struct PerlRegExObject {
     class: Rc<ClassDef>,
-    regex: String,
-    replacement: String,
-    subject: String,
-    options: i32,
-    state: i32,
-    compiled: bool,
-    studied: bool,
-    /// The built expression of `RegEx` with `Options`; `None` until
-    /// `Compile`.
-    expression: Option<Regex>,
-    /// `FStart`, 0-based character index into `subject` where `MatchAgain`
-    /// begins (upstream: a 0-based byte index).
-    start: usize,
-    /// `FStop`: the number of characters `Match`/`MatchAgain` search
-    /// through (upstream: bytes).
-    stop: usize,
-    /// `Offsets` of the last match, 0-based character pairs by group;
-    /// `None` inside a pair for a group that did not participate. A failed
-    /// search leaves the last match's offsets in place, as upstream's
-    /// `pcre_exec` does (only `OffsetCount` goes non-positive).
-    offsets: Vec<Option<(usize, usize)>>,
-    /// `OffsetCount > 0`: whether the offsets are a match.
-    found: bool,
-    /// `FStoredGroups` of `StoreGroups`.
-    stored_groups: Option<Vec<String>>,
+    regex: PerlRegEx,
 }
 
 impl PerlRegExObject {
     pub fn new(class: Rc<ClassDef>) -> PerlRegExObject {
         PerlRegExObject {
             class,
-            regex: String::new(),
-            replacement: String::new(),
-            subject: String::new(),
-            options: 0,
-            // `FState := []` (`Create`).
-            state: 0,
-            compiled: false,
-            studied: false,
-            expression: None,
-            start: 0,
-            stop: 0,
-            offsets: Vec::new(),
-            found: false,
-            stored_groups: None,
+            regex: PerlRegEx::new(),
         }
+    }
+
+    // Every accessor the adapter's registrations use, with the RTL's error
+    // class.
+
+    fn compile(&mut self) -> Result<(), ValueError> {
+        self.regex.compile().map_err(regex_error)
+    }
+
+    fn study(&mut self) -> Result<(), ValueError> {
+        self.regex.study().map_err(regex_error)
+    }
+
+    fn match_(&mut self) -> Result<bool, ValueError> {
+        self.regex.match_().map_err(regex_error)
+    }
+
+    fn match_again(&mut self) -> Result<bool, ValueError> {
+        self.regex.match_again().map_err(regex_error)
+    }
+
+    fn replace(&mut self) -> Result<String, ValueError> {
+        self.regex.replace().map_err(regex_error)
+    }
+
+    fn replace_all(&mut self) -> Result<bool, ValueError> {
+        self.regex.replace_all().map_err(regex_error)
+    }
+
+    fn compute_replacement(&self) -> Result<String, ValueError> {
+        self.regex.compute_replacement().map_err(regex_error)
+    }
+
+    fn groups(&self, index: i64) -> Result<String, ValueError> {
+        self.regex.groups(index).map_err(regex_error)
+    }
+
+    fn group_offsets(&self, index: i64) -> Result<i64, ValueError> {
+        self.regex.group_offsets(index).map_err(regex_error)
+    }
+
+    fn group_lengths(&self, index: i64) -> Result<i64, ValueError> {
+        self.regex.group_lengths(index).map_err(regex_error)
+    }
+
+    fn store_groups(&mut self) -> Result<(), ValueError> {
+        self.regex.store_groups().map_err(regex_error)
+    }
+
+    fn split(&mut self, list: &mut Vec<String>, limit: i32) -> Result<(), ValueError> {
+        self.regex.split(list, limit).map_err(regex_error)
+    }
+
+    fn split_capture(&mut self, list: &mut Vec<String>, limit: i32) -> Result<(), ValueError> {
+        self.regex.split_capture(list, limit).map_err(regex_error)
     }
 
     fn found_match(&self) -> bool {
-        self.found
+        self.regex.found_match()
     }
 
-    /// `OffsetCount` (`pcre_exec`'s return): one more than the highest
-    /// participating group, or 0 when there is no match.
     fn group_count(&self) -> i64 {
-        self.offsets.len() as i64 - 1
+        self.regex.group_count()
     }
 
-    /// `TPerlRegEx.CleanUp` (`:405` of the RTL): the compiled expression of
-    /// an option or pattern change is dropped and the stored groups cleared.
-    fn clean_up(&mut self) {
-        self.compiled = false;
-        self.studied = false;
-        self.expression = None;
-        self.stored_groups = None;
-        self.offsets.clear();
-        self.found = false;
+    fn compiled(&self) -> bool {
+        self.regex.compiled()
     }
 
-    /// `TPerlRegEx.Compile`: the `options` flags and the pattern; the
-    /// missing-expression and compile-error texts are the RTL's.
-    fn compile(&mut self) -> Result<(), ValueError> {
-        if self.regex.is_empty() {
-            return Err(ValueError::external_class(
-                E_REGEX_CLASS,
-                "A regular expression specified in RegEx is required".to_owned(),
-            ));
-        }
-        self.clean_up();
-        let mut builder = RegexBuilder::new(&self.regex);
-        builder
-            .case_insensitive(self.options & (1 << OPTION_CASE_LESS) != 0)
-            .multi_line(self.options & (1 << OPTION_MULTI_LINE) != 0)
-            .dot_matches_new_line(self.options & (1 << OPTION_SINGLE_LINE) != 0)
-            .ignore_whitespace(self.options & (1 << OPTION_EXTENDED) != 0)
-            .swap_greed(self.options & (1 << OPTION_UN_GREEDY) != 0)
-            .unicode(true);
-        let expression = builder.build().map_err(|error| {
-            // The RTL formats PCRE's byte offset into the pattern; the
-            // `regex` crate reports the position inside its own message, so
-            // the port leaves the offset 0 (documented divergence).
-            ValueError::external_class(
-                E_REGEX_CLASS,
-                format!("Error in regular expression at offset 0: {error}"),
-            )
-        })?;
-        self.expression = Some(expression);
-        self.compiled = true;
-        Ok(())
+    fn studied(&self) -> bool {
+        self.regex.studied()
     }
 
-    /// `TPerlRegEx.Study`: compiles when needed; the port's expression is
-    /// built once, so studying only records the state.
-    fn study(&mut self) -> Result<(), ValueError> {
-        if !self.compiled {
-            self.compile()?;
-        }
-        self.studied = true;
-        Ok(())
+    fn named_group(&self, name: &str) -> i64 {
+        self.regex.named_group(name)
     }
 
-    /// The one search both `Match` and `MatchAgain` run: from `from` within
-    /// the search window `[0, stop)`, honoring `preAnchored` and
-    /// `preNotEmpty`, and recording the offsets.
-    fn search(&mut self, from: usize) -> Result<bool, ValueError> {
-        if self.expression.is_none() && !self.compiled {
-            self.compile()?;
-        }
-        let expression = self.expression.clone().expect("compiled");
-        self.stored_groups = None;
-        if self.subject.is_empty() || from >= self.stop {
-            self.found = false;
-            return Ok(false);
-        }
-        let hay_end = char_boundary(&self.subject, self.stop);
-        // The subject is copied so the captures below do not hold `self`
-        // borrowed while `record` writes the offsets.
-        let subject = self.subject.clone();
-        let hay = &subject[..hay_end];
-        let anchored = self.options & (1 << OPTION_ANCHORED) != 0;
-        let not_empty = self.state & (1 << STATE_NOT_EMPTY) != 0;
-        let mut position = from;
-        loop {
-            let Some(captures) = expression.captures_at(hay, position) else {
-                self.found = false;
-                return Ok(false);
-            };
-            let whole = captures.get(0).expect("group 0");
-            let empty = whole.start() == whole.end();
-            let is_anchored = whole.start() == from;
-            if (!anchored || is_anchored) && (!not_empty || !empty) {
-                self.record(&captures);
-                return Ok(true);
-            }
-            if whole.start() >= hay.len() {
-                self.found = false;
-                return Ok(false);
-            }
-            // Advance one character and search again. ADVANCE-BY-CHAR: the
-            // next candidate boundary.
-            let next = whole.start() + hay[whole.start()..].chars().next().map_or(1, char::len_utf8);
-            if next <= position {
-                position += 1;
-            } else {
-                position = next;
-            }
-            if position > hay.len() {
-                self.found = false;
-                return Ok(false);
-            }
-        }
-    }
-
-    /// Records a match's offsets: the character offsets of every group,
-    /// with PCRE's "highest participating group" count.
-    fn record(&mut self, captures: &Captures) {
-        let mut offsets: Vec<Option<(usize, usize)>> = Vec::new();
-        let mut highest = 0usize;
-        for index in 0..captures.len() {
-            match captures.get(index) {
-                Some(found) => {
-                    let start = char_index(&self.subject, found.start());
-                    let end = char_index(&self.subject, found.end());
-                    offsets.push(Some((start, end)));
-                    highest = index;
-                }
-                None => offsets.push(None),
-            }
-        }
-        // pcre_exec returns one more than the highest group that
-        // participated; the port trims the vector to it.
-        offsets.truncate(highest + 1);
-        self.offsets = offsets;
-        self.found = true;
-        if let Some(Some((_, end))) = self.offsets.first().copied() {
-            let whole = self.offsets[0].expect("group 0");
-            self.start = end;
-            if whole.0 == whole.1 {
-                // "Make sure we don't get stuck at the same position."
-                self.start += 1;
-            }
-        }
-    }
-
-    /// `Match`: the search from the beginning of the subject (`startoffset
-    /// 0`).
-    fn match_(&mut self) -> Result<bool, ValueError> {
-        self.search(0)
-    }
-
-    /// `MatchAgain`: from `FStart`; the empty subject and a start at or
-    /// past the stop fail without a search.
-    fn match_again(&mut self) -> Result<bool, ValueError> {
-        if self.subject.is_empty() || self.start >= self.stop {
-            self.found = false;
-            return Ok(false);
-        }
-        self.search(self.start)
-    }
-
-    /// `GetGroups(Index)`: empty for an index past the group count, a
-    /// stored copy after `StoreGroups`, else the subject's slice.
-    fn groups(&self, index: i64) -> Result<String, ValueError> {
-        if !self.found_match() {
-            return Err(match_required());
-        }
-        if index > self.group_count() {
-            return Ok(String::new());
-        }
-        if let Some(stored) = &self.stored_groups {
-            return Ok(stored.get(index as usize).cloned().unwrap_or_default());
-        }
-        match self.offsets.get(index as usize).copied().flatten() {
-            Some((start, end)) => Ok(self.slice_chars(start, end)),
-            None => Ok(String::new()),
-        }
-    }
-
-    /// `GetGroupOffsets(Index)`: a 1-based character offset; a group that
-    /// did not participate reads 1 (`UTF8IndexToUnicode(..., -1) + 1`).
-    fn group_offsets(&self, index: i64) -> Result<i64, ValueError> {
-        if !self.found_match() {
-            return Err(match_required());
-        }
-        if index < 0 || index > self.group_count() {
-            return Err(index_out_of_bounds(index));
-        }
-        Ok(match self.offsets.get(index as usize).copied().flatten() {
-            Some((start, _)) => start as i64 + 1,
-            None => 1,
-        })
-    }
-
-    /// `GetGroupLengths(Index)`.
-    fn group_lengths(&self, index: i64) -> Result<i64, ValueError> {
-        if !self.found_match() {
-            return Err(match_required());
-        }
-        if index < 0 || index > self.group_count() {
-            return Err(index_out_of_bounds(index));
-        }
-        Ok(match self.offsets.get(index as usize).copied().flatten() {
-            Some((start, end)) => (end - start) as i64,
-            None => 0,
-        })
-    }
-
-    fn slice_chars(&self, start: usize, end: usize) -> String {
-        self.subject
-            .chars()
-            .skip(start)
-            .take(end.saturating_sub(start))
-            .collect()
-    }
-
-    /// `SubjectLeft`/`SubjectRight`: the parts around the last match. The
-    /// RTL does not check `FoundMatch` here, so after a failed search the
-    /// stale offsets of the previous match are still used (and a zero-initial
-    /// offset with no match at all gives the whole subject on the right).
     fn subject_left(&self) -> String {
-        let end = self
-            .offsets
-            .first()
-            .and_then(|group| group.map(|(start, _)| start))
-            .unwrap_or(0);
-        self.slice_chars(0, end)
+        self.regex.subject_left()
     }
 
     fn subject_right(&self) -> String {
-        let start = self
-            .offsets
-            .first()
-            .and_then(|group| group.map(|(_, end)| end))
-            .unwrap_or(0);
-        self.slice_chars(start, usize::MAX)
+        self.regex.subject_right()
     }
 
-    /// `NamedGroup`: the index of a named group, -1 when the name is not
-    /// there (`pcre_get_stringnumber`).
-    fn named_group(&self, name: &str) -> i64 {
-        let Some(expression) = &self.expression else {
-            return -1;
-        };
-        expression
-            .capture_names()
-            .position(|candidate| candidate == Some(name))
-            .map_or(-1, |index| index as i64)
-    }
-
-    /// `StoreGroups`: a copy of every group, kept across subject changes.
-    fn store_groups(&mut self) -> Result<(), ValueError> {
-        if !self.found_match() {
-            return Ok(());
-        }
-        let mut stored = Vec::new();
-        for index in 0..=self.group_count() {
-            stored.push(self.groups(index)?);
-        }
-        self.stored_groups = Some(stored);
-        Ok(())
-    }
-
-    /// `ComputeReplacement`: `Replacement` with the backreferences
-    /// substituted for the current match. The JGsoft flavor of the RTL:
-    /// `\n`/`$n` (one or two digits, the second only when the group
-    /// exists), `${n}`, `${name}`, `\g<name>`, `$&`/`\&`, `$+`/`\+`,
-    /// `` $` ``, `$'`, `$_`, `\\`, `\$`, and the case modes `\l \L \u \U \f
-    /// \F \i \I`.
-    fn compute_replacement(&self) -> Result<String, ValueError> {
-        if self.replacement.is_empty() {
-            return Ok(String::new());
-        }
-        if !self.found_match() {
-            return Err(match_required());
-        }
-        let chars: Vec<char> = self.replacement.chars().collect();
-        let mut out = String::new();
-        let mut index = 0usize;
-        // "We let I stop one character before the end": a final `\` or `$`
-        // is plain text.
-        while index + 1 < chars.len() {
-            let current = chars[index];
-            if current != '\\' && current != '$' {
-                out.push(current);
-                index += 1;
-                continue;
-            }
-            let dollar = current == '$';
-            let mut cursor = index + 1;
-            let mut mode = '\0';
-            let mut number_only = false;
-            let mut handled = false;
-            if !dollar {
-                match chars[cursor] {
-                    '$' | '\\' => {
-                        out.push(chars[cursor]);
-                        index = cursor + 1;
-                        handled = true;
-                    }
-                    'g' => {
-                        if cursor + 2 < chars.len() && chars[cursor + 1] == '<' {
-                            let name_start = cursor + 2;
-                            let mut end = name_start;
-                            while end < chars.len() && (chars[end].is_ascii_alphanumeric() || chars[end] == '_') {
-                                end += 1;
-                            }
-                            if end < chars.len() && chars[end] == '>' {
-                                let name: String = chars[name_start..end].iter().collect();
-                                let group = self.named_group(&name);
-                                if group > 0 {
-                                    out.push_str(&self.groups(group)?);
-                                }
-                                index = end + 1;
-                            } else {
-                                out.extend(&chars[index..end]);
-                                index = end;
-                            }
-                            handled = true;
-                        } else {
-                            out.extend(&chars[index..index + 2]);
-                            index += 2;
-                            handled = true;
-                        }
-                    }
-                    'l' | 'L' | 'u' | 'U' | 'f' | 'F' | 'i' | 'I' => {
-                        mode = chars[cursor];
-                        cursor += 1;
-                        number_only = true;
-                    }
-                    _ => {}
-                }
-            }
-            if handled {
-                continue;
-            }
-            // ProcessBackreference.
-            let mut number: i64 = -1;
-            if cursor < chars.len() && chars[cursor].is_ascii_digit() {
-                number = i64::from(chars[cursor] as u32 - '0' as u32);
-                cursor += 1;
-                if cursor < chars.len() && chars[cursor].is_ascii_digit() {
-                    let two = number * 10 + i64::from(chars[cursor] as u32 - '0' as u32);
-                    if two <= self.group_count() {
-                        number = two;
-                        cursor += 1;
-                    }
-                }
-            } else if !number_only && cursor < chars.len() {
-                if dollar && chars[cursor] == '{' {
-                    cursor += 1;
-                    if cursor < chars.len() && chars[cursor].is_ascii_digit() {
-                        number = 0;
-                        while cursor < chars.len() && chars[cursor].is_ascii_digit() {
-                            number = number.saturating_mul(10) + i64::from(chars[cursor] as u32 - '0' as u32);
-                            cursor += 1;
-                        }
-                    } else if cursor < chars.len() && (chars[cursor].is_ascii_alphabetic() || chars[cursor] == '_') {
-                        let start = cursor;
-                        cursor += 1;
-                        while cursor < chars.len() && (chars[cursor].is_ascii_alphanumeric() || chars[cursor] == '_') {
-                            cursor += 1;
-                        }
-                        if cursor < chars.len() && chars[cursor] == '}' {
-                            let name: String = chars[start..cursor].iter().collect();
-                            number = self.named_group(&name);
-                        }
-                    }
-                    if cursor >= chars.len() || chars[cursor] != '}' {
-                        number = -1;
-                    } else {
-                        cursor += 1;
-                    }
-                } else if dollar && chars[cursor] == '_' {
-                    out.push_str(&self.subject);
-                    index = cursor + 1;
-                    continue;
-                } else {
-                    match chars[cursor] {
-                        '&' => {
-                            number = 0;
-                            cursor += 1;
-                        }
-                        '+' => {
-                            number = self.group_count();
-                            cursor += 1;
-                        }
-                        '`' => {
-                            out.push_str(&self.subject_left());
-                            index = cursor + 1;
-                            continue;
-                        }
-                        '\'' => {
-                            out.push_str(&self.subject_right());
-                            index = cursor + 1;
-                            continue;
-                        }
-                        _ => {}
-                    }
-                }
-            }
-            if number >= 0 {
-                let value = self.groups(number)?;
-                let value = match mode {
-                    'L' | 'l' => value.to_lowercase(),
-                    'U' | 'u' => value.to_uppercase(),
-                    'F' | 'f' => first_cap(&value),
-                    'I' | 'i' => initial_caps(&value),
-                    _ => value,
-                };
-                out.push_str(&value);
-                index = cursor;
-            } else {
-                out.push(current);
-                index += 1;
-            }
-        }
-        if index < chars.len() {
-            out.extend(&chars[index..]);
-        }
-        Ok(out)
-    }
-
-    /// `Replace`: returns the replacement text, substitutes it into the
-    /// subject for the current match and moves the search position.
-    fn replace(&mut self) -> Result<String, ValueError> {
-        if !self.found_match() {
-            return Err(match_required());
-        }
-        let replacement = self.compute_replacement()?;
-        let (start, end) = self.offsets[0].expect("group 0");
-        let length = end - start;
-        let replacement_chars = replacement.chars().count();
-        let mut subject = self.slice_chars(0, start);
-        subject.push_str(&replacement);
-        subject.push_str(&self.slice_chars(end, usize::MAX));
-        self.subject = subject;
-        // `FStart := FStart - MatchedLength + Length(Tmp); FStop := ...`.
-        self.start = self.start.saturating_sub(length) + replacement_chars;
-        self.stop = self.stop.saturating_sub(length) + replacement_chars;
-        self.stored_groups = None;
-        self.found = false;
-        Ok(replacement)
-    }
-
-    /// `ReplaceAll`: `Match`, then `Replace`/`MatchAgain` until they drop.
-    fn replace_all(&mut self) -> Result<bool, ValueError> {
-        if !self.match_()? {
-            return Ok(false);
-        }
-        loop {
-            self.replace()?;
-            if !self.match_again()? {
-                return Ok(true);
-            }
-        }
-    }
-
-    /// `Split(Strings, Limit)`: the subject's non-matching pieces, the
-    /// capturing groups ignored.
-    fn split(&mut self, list: &mut crate::script_strings::StringListObject, limit: i32) -> Result<(), ValueError> {
-        if limit == 1 || !self.match_()? {
-            return list.append(self.subject.clone());
-        }
-        let mut offset = 0usize;
-        let mut count = 1;
-        loop {
-            let (start, _) = self.offsets[0].expect("group 0");
-            list.append(self.slice_chars(offset, start))?;
-            count += 1;
-            let (_, end) = self.offsets[0].expect("group 0");
-            offset = end;
-            if (limit > 1 && count >= limit) || !self.match_again()? {
-                break;
-            }
-        }
-        list.append(self.slice_chars(offset, usize::MAX))
-    }
-
-    /// `SplitCapture(Strings, Limit, Offset)`: the pieces plus the last
-    /// capturing group of every match.
-    fn split_capture(
-        &mut self,
-        list: &mut crate::script_strings::StringListObject,
-        mut limit: i32,
-        offset: i32,
-    ) -> Result<(), ValueError> {
-        if limit == 1 || !self.match_()? {
-            return list.append(self.subject.clone());
-        }
-        let mut use_offset = offset != 1;
-        if offset != 1 {
-            limit -= 1;
-        }
-        let offset = offset.max(1) as usize - 1;
-        let mut position = 0usize;
-        let mut count = 1;
-        loop {
-            let (start, end) = self.offsets[0].expect("group 0");
-            if use_offset {
-                if start >= offset {
-                    use_offset = false;
-                    list.append(self.slice_chars(0, start))?;
-                    if self.group_count() > 0 {
-                        list.append(self.groups(self.group_count())?)?;
-                    }
-                }
-            } else {
-                list.append(self.slice_chars(position, start))?;
-                count += 1;
-                if self.group_count() > 0 {
-                    list.append(self.groups(self.group_count())?)?;
-                }
-            }
-            position = end;
-            if (limit > 1 && count >= limit) || !self.match_again()? {
-                break;
-            }
-        }
-        list.append(self.slice_chars(position, usize::MAX))
-    }
-
-    /// `EscapeRegExChars`: the RTL's 2015 list of characters that get a
-    /// backslash, `#0` becoming `\0`.
     fn escape_regex_chars(text: &str) -> String {
-        let mut out = String::new();
-        for ch in text.chars() {
-            match ch {
-                '\\' | '[' | ']' | '^' | '$' | '.' | '|' | '?' | '*' | '+' | '-' | '(' | ')' | '{' | '}' | '&'
-                | '<' | '>' => {
-                    out.push('\\');
-                    out.push(ch);
-                }
-                '\0' => out.push_str("\\0"),
-                ch => out.push(ch),
-            }
-        }
-        out
+        PerlRegEx::escape_regex_chars(text)
     }
-}
-
-/// `FirstCap`: the text lower case with its first character upper.
-fn first_cap(text: &str) -> String {
-    let mut chars = text.chars();
-    match chars.next() {
-        Some(first) => first.to_uppercase().chain(chars.flat_map(char::to_lowercase)).collect(),
-        None => String::new(),
-    }
-}
-
-/// `InitialCaps`: the text lower case with the first character after a
-/// word break upper.
-fn initial_caps(text: &str) -> String {
-    let lowered: String = text.to_lowercase();
-    let mut out = String::new();
-    let mut upper = true;
-    for ch in lowered.chars() {
-        match ch {
-            '\0'..='&' | '(' | '*' | '+' | ',' | '-' | '.' | '?' | '<' | '[' | '{' | '\u{B7}' => {
-                upper = true;
-                out.push(ch);
-            }
-            '\'' => out.push(ch),
-            ch if upper => {
-                out.extend(ch.to_uppercase());
-                upper = false;
-            }
-            ch => out.push(ch),
-        }
-    }
-    out
-}
-
-/// The byte offset of the character boundary at `index` (a character
-/// index), clamped to the string.
-fn char_boundary(text: &str, index: usize) -> usize {
-    text.char_indices().nth(index).map_or(text.len(), |(at, _)| at)
-}
-
-/// The character index of a byte offset.
-fn char_index(text: &str, byte: usize) -> usize {
-    text[..byte.min(text.len())].chars().count()
 }
 
 impl ScriptObject for PerlRegExObject {
@@ -826,7 +260,7 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         "Compiled",
         Rc::new(|value: &mut Value, args: &mut Args| {
             let object = receiver_regex(args)?;
-            *value = Value::Bool(borrow_regex(&object).compiled);
+            *value = Value::Bool(borrow_regex(&object).compiled());
             Ok(())
         }),
         0,
@@ -849,7 +283,7 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         "Studied",
         Rc::new(|value: &mut Value, args: &mut Args| {
             let object = receiver_regex(args)?;
-            *value = Value::Bool(borrow_regex(&object).studied);
+            *value = Value::Bool(borrow_regex(&object).studied());
             Ok(())
         }),
         0,
@@ -901,7 +335,7 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
             let object = receiver_regex(args)?;
             let regex = borrow_regex(&object);
             if !regex.found_match() {
-                return Err(match_required());
+                return Err(regex_error(RegexError::MatchRequired));
             }
             *value = Value::Integer(regex.group_count() as i32);
             Ok(())
@@ -1093,8 +527,13 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
             let limit = xedit_script::values::to_i32(&args.values[1])?;
             let object = receiver_regex(args)?;
             let mut regex = borrow_regex_mut(&object);
+            let mut pieces = Vec::new();
+            regex.split(&mut pieces, limit)?;
             let mut list = borrow_list_mut(&list);
-            regex.split(&mut list, limit)
+            for piece in pieces {
+                list.append(piece)?;
+            }
+            Ok(())
         }),
         2,
         vec![value_param(), value_param()],
@@ -1108,8 +547,13 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
             let limit = xedit_script::values::to_i32(&args.values[1])?;
             let object = receiver_regex(args)?;
             let mut regex = borrow_regex_mut(&object);
+            let mut pieces = Vec::new();
+            regex.split_capture(&mut pieces, limit)?;
             let mut list = borrow_list_mut(&list);
-            regex.split_capture(&mut list, limit, 1)
+            for piece in pieces {
+                list.append(piece)?;
+            }
+            Ok(())
         }),
         2,
         vec![value_param(), value_param()],
@@ -1122,7 +566,7 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         "RegEx",
         Rc::new(|value: &mut Value, args: &mut Args| {
             let object = receiver_regex(args)?;
-            *value = Value::Str(borrow_regex(&object).regex.clone().into_bytes());
+            *value = Value::Str(borrow_regex(&object).regex.regex().as_bytes().to_vec());
             Ok(())
         }),
         0,
@@ -1135,11 +579,7 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         Rc::new(|value: &Value, args: &mut Args| {
             let text = text_arg(value);
             let object = receiver_regex(args)?;
-            let mut regex = borrow_regex_mut(&object);
-            if regex.regex != text {
-                regex.regex = text;
-                regex.clean_up();
-            }
+            borrow_regex_mut(&object).regex.set_regex(text);
             Ok(())
         }),
         0,
@@ -1150,7 +590,7 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         "Replacement",
         Rc::new(|value: &mut Value, args: &mut Args| {
             let object = receiver_regex(args)?;
-            *value = Value::Str(borrow_regex(&object).replacement.clone().into_bytes());
+            *value = Value::Str(borrow_regex(&object).regex.replacement().as_bytes().to_vec());
             Ok(())
         }),
         0,
@@ -1163,7 +603,7 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         Rc::new(|value: &Value, args: &mut Args| {
             let text = text_arg(value);
             let object = receiver_regex(args)?;
-            borrow_regex_mut(&object).replacement = text;
+            borrow_regex_mut(&object).regex.set_replacement(text);
             Ok(())
         }),
         0,
@@ -1174,7 +614,7 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         "Subject",
         Rc::new(|value: &mut Value, args: &mut Args| {
             let object = receiver_regex(args)?;
-            *value = Value::Str(borrow_regex(&object).subject.clone().into_bytes());
+            *value = Value::Str(borrow_regex(&object).regex.subject().as_bytes().to_vec());
             Ok(())
         }),
         0,
@@ -1187,17 +627,7 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         Rc::new(|value: &Value, args: &mut Args| {
             let text = text_arg(value);
             let object = receiver_regex(args)?;
-            let mut regex = borrow_regex_mut(&object);
-            // `if (Length(FSubject) = 0) or (Value <> Subject)`.
-            if regex.subject.is_empty() || regex.subject != text {
-                let length = text.chars().count();
-                regex.subject = text;
-                regex.start = 0;
-                regex.stop = length;
-                if regex.stored_groups.is_none() {
-                    regex.found = false;
-                }
-            }
+            borrow_regex_mut(&object).regex.set_subject(text);
             Ok(())
         }),
         0,
@@ -1208,7 +638,7 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         "Start",
         Rc::new(|value: &mut Value, args: &mut Args| {
             let object = receiver_regex(args)?;
-            *value = Value::Integer(borrow_regex(&object).start as i32 + 1);
+            *value = Value::Integer(borrow_regex(&object).regex.start() as i32);
             Ok(())
         }),
         0,
@@ -1221,7 +651,7 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         Rc::new(|value: &Value, args: &mut Args| {
             let start = xedit_script::values::to_i32(value)?;
             let object = receiver_regex(args)?;
-            borrow_regex_mut(&object).start = if start < 1 { 0 } else { start as usize - 1 };
+            borrow_regex_mut(&object).regex.set_start(i64::from(start));
             Ok(())
         }),
         0,
@@ -1232,7 +662,7 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         "Stop",
         Rc::new(|value: &mut Value, args: &mut Args| {
             let object = receiver_regex(args)?;
-            *value = Value::Integer(borrow_regex(&object).stop as i32);
+            *value = Value::Integer(borrow_regex(&object).regex.stop() as i32);
             Ok(())
         }),
         0,
@@ -1245,13 +675,7 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         Rc::new(|value: &Value, args: &mut Args| {
             let stop = xedit_script::values::to_i32(value)?;
             let object = receiver_regex(args)?;
-            let mut regex = borrow_regex_mut(&object);
-            let length = regex.subject.chars().count() as i32;
-            regex.stop = if stop > length {
-                length.max(0) as usize
-            } else {
-                stop.max(0) as usize
-            };
+            borrow_regex_mut(&object).regex.set_stop(i64::from(stop));
             Ok(())
         }),
         0,
@@ -1263,7 +687,7 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         Rc::new(|value: &mut Value, args: &mut Args| {
             let object = receiver_regex(args)?;
             // `S2V(Byte(Options))`.
-            *value = Value::Integer(borrow_regex(&object).options & 0xFF);
+            *value = Value::Integer(borrow_regex(&object).regex.options());
             Ok(())
         }),
         0,
@@ -1275,13 +699,9 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         "Options",
         Rc::new(|value: &Value, args: &mut Args| {
             // `Options := TPerlRegExOptions(Byte(V2S(Value)))`.
-            let options = xedit_script::values::to_i32(value)? & 0xFF;
+            let options = xedit_script::values::to_i32(value)?;
             let object = receiver_regex(args)?;
-            let mut regex = borrow_regex_mut(&object);
-            if regex.options != options {
-                regex.options = options;
-                regex.clean_up();
-            }
+            borrow_regex_mut(&object).regex.set_options(options);
             Ok(())
         }),
         0,
@@ -1302,15 +722,14 @@ mod tests {
             name: "TPerlRegEx".to_owned(),
             parent: None,
         }));
-        object.regex = pattern.to_owned();
+        object.regex.set_regex(pattern.to_owned());
         object
     }
 
     #[test]
     fn matches_with_offsets_and_groups() {
         let mut object = regex("(b)(c)?");
-        object.subject = "abd".to_owned();
-        object.stop = 3;
+        object.regex.set_subject("abd".to_owned());
         assert!(object.match_().unwrap());
         assert_eq!(object.group_count(), 1, "only group 1 participated");
         assert_eq!(object.groups(0).unwrap(), "b");
@@ -1318,6 +737,13 @@ mod tests {
         assert_eq!(object.groups(2).unwrap(), "", "past the group count");
         assert_eq!(object.group_offsets(0).unwrap(), 2, "1-based character offset");
         assert_eq!(object.group_lengths(0).unwrap(), 1);
+        assert_eq!(
+            object.group_offsets(5).unwrap_err(),
+            ValueError::ExternalClass {
+                class: E_REGEX_CLASS,
+                message: "Index out of bounds (5)".to_owned(),
+            }
+        );
         assert!(!object.match_again().unwrap());
         assert_eq!(object.subject_left(), "a");
         assert_eq!(object.subject_right(), "d");
@@ -1326,8 +752,7 @@ mod tests {
     #[test]
     fn match_again_walks_the_subject() {
         let mut object = regex("\\d+");
-        object.subject = "a12 b345".to_owned();
-        object.stop = object.subject.chars().count();
+        object.regex.set_subject("a12 b345".to_owned());
         let mut found = Vec::new();
         while object.match_again().unwrap() {
             found.push(object.groups(0).unwrap());
@@ -1338,75 +763,101 @@ mod tests {
     #[test]
     fn replace_all_substitutes_every_match() {
         let mut object = regex("a");
-        object.subject = "banana".to_owned();
-        object.stop = 6;
-        object.replacement = "o".to_owned();
+        object.regex.set_subject("banana".to_owned());
+        object.regex.set_replacement("o".to_owned());
         assert!(object.replace_all().unwrap());
-        assert_eq!(object.subject, "bonono");
+        assert_eq!(object.regex.subject(), "bonono");
         assert!(!object.found_match());
     }
 
     #[test]
     fn replacement_backreferences() {
         let mut object = regex("(\\w+)=(\\w+)");
-        object.subject = "key=value".to_owned();
-        object.stop = 9;
+        object.regex.set_subject("key=value".to_owned());
         assert!(object.match_().unwrap());
-        object.replacement = "$2:$1".to_owned();
+        object.regex.set_replacement("$2:$1".to_owned());
         assert_eq!(object.compute_replacement().unwrap(), "value:key");
-        object.replacement = "${1}\\U2".to_owned();
+        object.regex.set_replacement("${1}\\U2".to_owned());
         assert_eq!(object.compute_replacement().unwrap(), "keyVALUE");
-        object.replacement = "$0 $& $+".to_owned();
-        assert_eq!(object.compute_replacement().unwrap(), "key=value key=value value");
+        object.regex.set_replacement("$0 $& $+".to_owned());
+        assert_eq!(
+            object.compute_replacement().unwrap(),
+            "key=value key=value value"
+        );
     }
 
     #[test]
     fn split_appends_pieces() {
-        let class = Rc::new(ClassDef {
-            unit: String::new(),
-            name: "TStringList".to_owned(),
-            parent: None,
-        });
         let mut object = regex(",");
-        object.subject = "a,b,,c".to_owned();
-        object.stop = 6;
-        let mut list = crate::script_strings::StringListObject::new(class);
-        object.split(&mut list, 0).unwrap();
-        assert_eq!(list.string_at(0), "a");
-        assert_eq!(list.string_at(1), "b");
-        assert_eq!(list.string_at(2), "");
-        assert_eq!(list.string_at(3), "c");
+        object.regex.set_subject("a,b,,c".to_owned());
+        let mut pieces = Vec::new();
+        object.split(&mut pieces, 0).unwrap();
+        assert_eq!(pieces, ["a", "b", "", "c"]);
+        let mut pieces = Vec::new();
+        object.split_capture(&mut pieces, 0).unwrap();
+        assert_eq!(pieces, ["a", "b", "", "c"], "no capturing group to add");
     }
 
     #[test]
     fn escape_and_named_groups() {
-        assert_eq!(PerlRegExObject::escape_regex_chars("a.b(c)"), "a\\.b\\(c\\)");
+        assert_eq!(
+            PerlRegExObject::escape_regex_chars("a.b(c)"),
+            "a\\.b\\(c\\)"
+        );
         let mut object = regex("(?P<first>a)(b)");
-        object.subject = "ab".to_owned();
-        object.stop = 2;
+        object.regex.set_subject("ab".to_owned());
         assert!(object.match_().unwrap());
         assert_eq!(object.named_group("first"), 1);
-        assert_eq!(object.named_group("nope"), -1);
+        assert_eq!(
+            object.named_group("nope"),
+            -7,
+            "pcre_get_stringnumber's PCRE_ERROR_NOSUBSTRING"
+        );
     }
 
     #[test]
     fn anchored_and_not_empty_options() {
         let mut object = regex("a");
-        object.options = 1 << OPTION_ANCHORED;
-        object.subject = "ba".to_owned();
-        object.stop = 2;
+        object.regex.set_options(1 << OPTION_ANCHORED);
+        object.regex.set_subject("ba".to_owned());
         assert!(!object.match_().unwrap(), "an anchored match must start at 0");
         // Without the option the same pattern matches at 1.
-        object.options = 0;
+        object.regex.set_options(0);
         assert!(object.match_().unwrap());
         assert_eq!(object.group_offsets(0).unwrap(), 2);
         // `preNotEmpty` skips the empty matches `a*` finds.
-        object.regex = "a*".to_owned();
-        object.clean_up();
-        object.subject = "ba".to_owned();
-        object.stop = 2;
-        object.state = 1 << STATE_NOT_EMPTY;
+        object.regex.set_regex("a*".to_owned());
+        object.regex.set_subject("ba".to_owned());
+        object.regex.set_state(1 << STATE_NOT_EMPTY);
         assert!(object.match_().unwrap());
         assert_eq!(object.groups(0).unwrap(), "a");
+    }
+
+    /// A pattern PCRE refuses raises the RTL's error with PCRE's offset and
+    /// text, as `Error in regular expression at offset N: <text>`.
+    #[test]
+    fn compile_errors_are_the_rtl_ones() {
+        let mut object = regex("(?<=a+)b");
+        let error = object.compile().expect_err("a compile error");
+        assert_eq!(
+            error,
+            ValueError::ExternalClass {
+                class: E_REGEX_CLASS,
+                message: "Error in regular expression at offset 6: lookbehind assertion is not fixed length"
+                    .to_owned(),
+            }
+        );
+        let mut empty = PerlRegExObject::new(Rc::new(ClassDef {
+            unit: String::new(),
+            name: "TPerlRegEx".to_owned(),
+            parent: None,
+        }));
+        assert_eq!(
+            empty.compile().expect_err("a compile error"),
+            ValueError::ExternalClass {
+                class: E_REGEX_CLASS,
+                message: "A regular expression specified in RegEx is required".to_owned(),
+            }
+        );
     }
 }

@@ -1066,7 +1066,6 @@ name = "xedit-analysis"
 version = "0.1.0"
 dependencies = [
  "rayon",
- "regex",
  "xedit-core",
  "xedit-io",
  "xedit-loadorder",
@@ -1076,7 +1075,6 @@ dependencies = [
 name = "xedit-assets"
 version = "0.1.0"
 dependencies = [
- "regex",
  "thiserror",
  "xedit-core",
  "xedit-io",
@@ -1148,7 +1146,6 @@ version = "0.1.0"
 dependencies = [
  "criterion",
  "rayon",
- "regex",
  "schemars",
  "serde",
  "serde_json",

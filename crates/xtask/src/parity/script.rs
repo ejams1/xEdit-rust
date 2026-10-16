@@ -574,6 +574,10 @@ struct RunCase {
     /// `build_refs`.
     #[serde(default)]
     refcache: bool,
+    /// Load the empty master the harness writes instead of the case's
+    /// plugins: a probe that reads no record needs no game data.
+    #[serde(default)]
+    synthetic_master: bool,
     /// What the case is for, when it is not obvious.
     #[serde(default)]
     #[allow(dead_code, reason = "documentation in the file")]
@@ -876,7 +880,7 @@ pub(super) fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
                 timeout: case.timeout_minutes.map_or(Duration::from_secs(10 * 60), |minutes| {
                     Duration::from_secs_f64(minutes * 60.0)
                 }),
-                synthetic_master: false,
+                synthetic_master: case.synthetic_master,
                 master,
                 accepted: None,
             });
@@ -1308,6 +1312,7 @@ fn script_and_units(scripts: &Path, name: &str) -> Result<(String, Vec<(String, 
     Ok((text, units))
 }
 
+
 /// `text` without its comments (`//`, `{ }` and `(* *)`), so that a `uses`
 /// in one does not name a unit. String literals are kept.
 fn without_comments(text: &str) -> String {
@@ -1686,7 +1691,7 @@ fn port_check(port: &Path, scripts: &Path, tasks: &[Task]) -> Result<std::collec
         let output = std::process::Command::new(port)
             .arg("script")
             .arg("check")
-            .arg(scripts.join(&task.script))
+            .arg(task.scripts_dir.join(&task.script))
             .env("XEDIT_SCRIPTS", scripts)
             .stdin(std::process::Stdio::null())
             .output()
