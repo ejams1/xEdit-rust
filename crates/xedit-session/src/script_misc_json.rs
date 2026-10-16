@@ -43,6 +43,10 @@ use xedit_script::adapter::{Adapter, Args};
 use xedit_script::values::{ClassDef, ParamType, ScriptObject, Value, ValueError, VarType};
 
 use crate::script_classes::ScriptClasses;
+use crate::script_rtl::datetime;
+use crate::script_rtl::classes::{
+    StreamState, access_violation, stream_of, stream_read_to_end, stream_set_size, stream_write,
+};
 use crate::script_strings::{EncodingKind, borrow_list_mut, encoding_of, list_of_or_error, receiver, text_arg};
 
 /// The exception classes of `JsonDataObjects` and their texts.
@@ -308,7 +312,10 @@ fn variant_of_node(kind: &NodeKind, _null_converts: bool) -> Result<Value, Value
         // The port has no `varUInt64`; a `ULong` reads as an `Int64` of the
         // same bits.
         NodeKind::ULong(v) => Value::Int64(*v as i64),
-        NodeKind::Float(v) | NodeKind::DateTime(v) | NodeKind::UtcDateTime(v) => Value::Double(*v),
+        NodeKind::Float(v) | NodeKind::DateTime(v) => Value::Double(*v),
+        // `GetVariantValue` (`:2236`): the variant of a `jdtUtcDateTime` is
+        // local time.
+        NodeKind::UtcDateTime(v) => Value::Double(utc_to_local(*v)),
         NodeKind::Bool(v) => Value::Bool(*v),
         NodeKind::Array(_) => {
             return Err(unsupported_variant_type(0x2000));
@@ -329,7 +336,10 @@ fn string_of_node(kind: &NodeKind, null_converts: bool) -> Result<String, ValueE
         NodeKind::Long(v) => Ok(v.to_string()),
         NodeKind::ULong(v) => Ok(v.to_string()),
         NodeKind::Float(v) => Ok(float_to_str(*v)),
-        NodeKind::DateTime(v) | NodeKind::UtcDateTime(v) => Ok(date_text(*v, config().use_utc_time)),
+        NodeKind::DateTime(v) => Ok(date_text(*v, config().use_utc_time)),
+        // `TJsonDataValue.Value` (`:2336`): a `jdtUtcDateTime` is written as
+        // it stands, the `UseUtcTime` config does not apply to it.
+        NodeKind::UtcDateTime(v) => Ok(utc_date_text(*v)),
         NodeKind::Bool(v) => Ok(if *v { "true" } else { "false" }.to_owned()),
         NodeKind::Object(_) => {
             if null_converts {
@@ -419,15 +429,18 @@ fn str_to_float_or(text: &str) -> Result<f64, ValueError> {
     })
 }
 
-/// `TJsonDataValue.DateTimeValue`.
+/// `TJsonDataValue.DateTimeValue` (`:2565`): a `jdtUtcDateTime` is
+/// converted to local time, a date string is parsed with
+/// `ConvertToLocalTime` on.
 fn date_of_node(kind: &NodeKind, null_converts: bool) -> Result<f64, ValueError> {
     match kind {
         NodeKind::None => Ok(0.0),
-        NodeKind::Str(text) => parse_iso_date(text),
+        NodeKind::Str(text) => json_to_date_time(text, true),
         NodeKind::Int(v) => Ok(f64::from(*v)),
         NodeKind::Long(v) => Ok(*v as f64),
         NodeKind::ULong(v) => Ok(*v as f64),
-        NodeKind::Float(v) | NodeKind::DateTime(v) | NodeKind::UtcDateTime(v) => Ok(*v),
+        NodeKind::Float(v) | NodeKind::DateTime(v) => Ok(*v),
+        NodeKind::UtcDateTime(v) => Ok(utc_to_local(*v)),
         NodeKind::Bool(v) => Ok(if *v { 1.0 } else { 0.0 }),
         NodeKind::Object(_) => {
             if null_converts {
@@ -437,6 +450,31 @@ fn date_of_node(kind: &NodeKind, null_converts: bool) -> Result<f64, ValueError>
             }
         }
         _ => Err(cast_error(kind.name(), "DateTime")),
+    }
+}
+
+/// `TJsonDataValue.UtcDateTimeValue` (`:2595`): the value as UTC; a date
+/// string is parsed with `ConvertToLocalTime` off and a local date-time is
+/// converted to UTC.
+#[allow(dead_code, reason = "the adapter registers no member that reads a UtcDateTime")]
+fn utc_date_of_node(kind: &NodeKind, null_converts: bool) -> Result<f64, ValueError> {
+    match kind {
+        NodeKind::None => Ok(0.0),
+        NodeKind::Str(text) => json_to_date_time(text, false),
+        NodeKind::Int(v) => Ok(f64::from(*v)),
+        NodeKind::Long(v) => Ok(*v as f64),
+        NodeKind::ULong(v) => Ok(*v as f64),
+        NodeKind::Float(v) | NodeKind::UtcDateTime(v) => Ok(*v),
+        NodeKind::DateTime(v) => Ok(local_to_utc(*v)),
+        NodeKind::Bool(v) => Ok(if *v { 1.0 } else { 0.0 }),
+        NodeKind::Object(_) => {
+            if null_converts {
+                Ok(0.0)
+            } else {
+                Err(cast_error(kind.name(), "DateTime"))
+            }
+        }
+        _ => Err(cast_error(kind.name(), "UtcDateTime")),
     }
 }
 
@@ -536,95 +574,196 @@ fn double_text(value: f64) -> String {
     if text.contains('.') { text } else { format!("{text}.0") }
 }
 
-/// `TJsonBaseObject.DateTimeToJSON` and `DateTimeToISO8601`: the ISO 8601
-/// text of a `TDateTime`.
+/// `SystemTimeToDateTime` of a converted record, with the caller's value
+/// kept when the record does not encode (a zero record, which the two time
+/// zone functions can give).
+fn system_time_value(value: f64, time: &datetime::SystemTime) -> f64 {
+    datetime::system_time_to_date_time(time).unwrap_or(value)
+}
+
+/// `DateTimeToISO8601` (`JsonDataObjects.pas:1438`): the local wall-clock
+/// text of a `TDateTime` with the offset the machine's time zone gives it,
+/// or `Z` when the offset is zero.
 ///
-/// OWED: upstream converts the local time to UTC for `UseUtcTime` through
-/// the system's time zone (`TzSpecificLocalTimeToSystemTime`); the port
-/// formats the value as it stands (the difference is the time zone's bias).
+/// UPSTREAM-QUIRK: a negative offset goes through `DecodeTime`, which wraps
+/// a negative fraction to its complement, so the west-of-UTC offset is
+/// printed as `-(24h - |offset|)` (UTC-7 prints as `-17:00`). The port does
+/// the same.
+fn iso8601_text(value: f64) -> String {
+    use crate::script_rtl::datetime::{date_time_to_system_time, decode_time, local_time_to_utc};
+    let local = date_time_to_system_time(value);
+    let mut text = format!(
+        "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}.{}",
+        local.year, local.month, local.day, local.hour, local.minute, local.second, local.milliseconds
+    );
+    if let Some(utc) = local_time_to_utc(&local) {
+        let offset = value - system_time_value(value, &utc);
+        let (hour, minute, _second, _millis) = decode_time(offset);
+        if offset < 0.0 {
+            text.push_str(&format!("-{hour:02}:{minute:02}"));
+        } else if offset > 0.0 {
+            text.push_str(&format!("+{hour:02}:{minute:02}"));
+        } else {
+            text.push('Z');
+        }
+    }
+    text
+}
+
+/// `TJsonBaseObject.DateTimeToJSON` (`:2895`): the `Z` suffix of the local
+/// time converted to UTC when `UseUtcTime` is on, the offset form of
+/// [`iso8601_text`] when it is off.
 fn date_text(value: f64, use_utc_time: bool) -> String {
-    let _ = use_utc_time;
-    let (year, month, day, hour, minute, second, millis) = decode_date_time(value);
+    if !use_utc_time {
+        return iso8601_text(value);
+    }
+    use crate::script_rtl::datetime::{date_time_to_system_time, local_time_to_utc};
+    let local = date_time_to_system_time(value);
+    // `if not TzSpecificLocalTimeToSystemTime(nil, LocalTime, UtcTime) then
+    // UtcTime := LocalTime`.
+    let utc = local_time_to_utc(&local).unwrap_or(local);
+    format!(
+        "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}.{}Z",
+        utc.year, utc.month, utc.day, utc.hour, utc.minute, utc.second, utc.milliseconds
+    )
+}
+
+/// `TJsonBaseObject.UtcDateTimeToJSON` (`:2893`): a `jdtUtcDateTime` value
+/// is already UTC, so it is written as it stands, with no time zone
+/// conversion.
+fn utc_date_text(value: f64) -> String {
+    use crate::script_rtl::datetime::{date_time_to_system_time, decode_date, decode_time};
+    let _ = date_time_to_system_time;
+    let (year, month, day) = decode_date(value);
+    let (hour, minute, second, millis) = decode_time(value);
     format!("{year:04}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}.{millis}Z")
 }
 
-/// `DecodeDate`/`DecodeTime` of a `TDateTime` (days since 1899-12-30).
-fn decode_date_time(value: f64) -> (i64, i64, i64, i64, i64, i64, i64) {
-    let days = value.trunc() as i64;
-    let fraction = value - value.trunc();
-    let millis_total = (fraction * 86_400_000.0).round() as i64;
-    let (mut day, mut millis) = (days, millis_total);
-    if millis < 0 {
-        day -= 1;
-        millis += 86_400_000;
+/// `UtcDateTimeToLocalDateTime` (`JsonDataObjects.pas:1404`): a UTC value as
+/// the machine's local time (`SystemTimeToTzSpecificLocalTime` with a nil
+/// time zone); the value is kept when the call fails.
+fn utc_to_local(value: f64) -> f64 {
+    use crate::script_rtl::datetime::{date_time_to_system_time, utc_to_local_time};
+    let utc = date_time_to_system_time(value);
+    match utc_to_local_time(&utc) {
+        Some(local) => system_time_value(value, &local),
+        None => value,
     }
-    if millis >= 86_400_000 {
-        day += 1;
-        millis -= 86_400_000;
-    }
-    // The civil-from-days algorithm; day 0 is 1899-12-30 and 1970-01-01 is
-    // day 25569, the algorithm's epoch.
-    let day = day - 25_569;
-    let z = day + 719_468;
-    let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
-    let doe = z - era * 146_097;
-    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146_096) / 365;
-    let y = yoe + era * 400;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    let mp = (5 * doy + 2) / 153;
-    let d = doy - (153 * mp + 2) / 5 + 1;
-    let m = if mp < 10 { mp + 3 } else { mp - 9 };
-    let year = if m <= 2 { y + 1 } else { y };
-    let hour = millis / 3_600_000;
-    let minute = (millis / 60_000) % 60;
-    let second = (millis / 1000) % 60;
-    let millis = millis % 1000;
-    (year, m, d, hour, minute, second, millis)
 }
 
-/// `TJsonBaseObject.JSONToDateTime`'s ISO 8601 subset: `yyyy-mm-dd`, an
-/// optional `Thh:nn:ss.zzz` and an optional trailing `Z` or offset.
-fn parse_iso_date(text: &str) -> Result<f64, ValueError> {
-    let text = text.trim();
-    let invalid = || ValueError::external_class("EConvertError", format!("'{text}' is not a valid date and time"));
-    let bytes = text.as_bytes();
-    if bytes.len() < 10 {
-        return Err(invalid());
+/// `LocalDateTimeToUtcDateTime` (`JsonDataObjects.pas:1422`): a local time
+/// as UTC; the value is kept when the call fails.
+fn local_to_utc(value: f64) -> f64 {
+    use crate::script_rtl::datetime::{date_time_to_system_time, local_time_to_utc};
+    let local = date_time_to_system_time(value);
+    match local_time_to_utc(&local) {
+        Some(utc) => system_time_value(value, &utc),
+        None => value,
     }
-    let number = |from: usize, to: usize| -> Result<i64, ValueError> {
-        text.get(from..to)
-            .and_then(|part| part.parse::<i64>().ok())
-            .ok_or_else(invalid)
+}
+
+/// `ParseDateTimePart` (`:1480`): up to `max_len` digits, the position after
+/// them. A part without a digit is 0, as upstream (`Value` starts at 0).
+fn parse_date_part(text: &str, max_len: usize) -> (i64, usize) {
+    let mut value: i64 = 0;
+    let mut len = 0;
+    for ch in text.chars().take(max_len) {
+        let Some(digit) = ch.to_digit(10) else { break };
+        value = value * 10 + i64::from(digit);
+        len += 1;
+    }
+    (value, len)
+}
+
+/// `TJsonBaseObject.JSONToDateTime` (`:2937`): the ISO 8601 text, the .NET
+/// `/Date(ms)/` form and the invalid input that reads as 0. The
+/// `ConvertToLocalTime` flag (on for `TJsonDataValue.DateTimeValue`, off for
+/// its `UtcDateTimeValue`) converts a UTC text to local time.
+///
+/// The `Exit`s of the Pascal walk are folded into the returns below: an
+/// invalid format after the date (`2015-02-01X…`) keeps the date the parse
+/// had built, one after the time (`2015-02-01T16` or `…T16:08+xx`) reads as
+/// 0 without the local conversion, and an unparsable part counts as 0
+/// (`ParseDateTimePart` leaves `Value` at 0).
+pub fn json_to_date_time(text: &str, convert_to_local_time: bool) -> Result<f64, ValueError> {
+    use crate::script_rtl::datetime::{encode_date, encode_time};
+    let encode_error = |message: String| ValueError::external_class("EConvertError", message);
+    if text.is_empty() {
+        return Ok(0.0);
+    }
+    // The .NET form: milliseconds since 1970-01-01, `/Date(1234567890+0100)/`.
+    if let Some(dotnet) = text.strip_prefix("/Date(") {
+        let (millis, digits) = parse_date_part(dotnet, usize::MAX);
+        let mut end = digits;
+        let after = &dotnet[digits..];
+        if let Some(sign) = after.chars().next().filter(|ch| *ch == '+' || *ch == '-') {
+            let (_ignored, len) = parse_date_part(&after[sign.len_utf8()..], usize::MAX);
+            end += sign.len_utf8() + len;
+        }
+        if &dotnet[end..] == ")/" {
+            // `UnixDateDelta` is 25569 and `MSecsPerDay` 86400000.
+            let value = 25_569.0 + (millis as f64) / 86_400_000.0;
+            return Ok(if convert_to_local_time { utc_to_local(value) } else { value });
+        }
+        return Ok(0.0);
+    }
+    let mut rest = text;
+    // A negative year: the sign is skipped.
+    if let Some(stripped) = rest.strip_prefix('-') {
+        rest = stripped;
+    }
+    let (year, len) = parse_date_part(rest, 4);
+    rest = &rest[len..];
+    let Some(after) = rest.strip_prefix('-') else {
+        return Ok(0.0);
     };
-    let (year, month, day) = (number(0, 4)?, number(5, 7)?, number(8, 10)?);
-    let mut millis = 0i64;
-    if bytes.len() > 11 {
-        let hour = number(11, 13)?;
-        let minute = number(14, 16)?;
-        let second = number(17, 19)?;
-        millis = ((hour * 60 + minute) * 60 + second) * 1000;
-        if bytes.len() > 20 && bytes[19] == b'.' {
-            let rest: String = text[20..].chars().take_while(char::is_ascii_digit).collect();
-            if !rest.is_empty() {
-                let fraction: f64 = format!("0.{rest}").parse().unwrap_or(0.0);
-                millis += (fraction * 1000.0).round() as i64;
-            }
+    let (month, len) = parse_date_part(after, 2);
+    rest = &after[len..];
+    let Some(after) = rest.strip_prefix('-') else {
+        return Ok(0.0);
+    };
+    let (day, len) = parse_date_part(after, 2);
+    rest = &after[len..];
+    let mut value = encode_date(year, month, day).map_err(encode_error)?;
+    if !rest.starts_with('T') {
+        return Ok(value);
+    }
+    let (hour, len) = parse_date_part(&rest[1..], 2);
+    rest = &rest[1 + len..];
+    let Some(after) = rest.strip_prefix(':') else {
+        // `Exit` with the date the parse had built.
+        return Ok(value);
+    };
+    let (minute, len) = parse_date_part(after, 2);
+    rest = &after[len..];
+    let (mut second, mut millisecond) = (0, 0);
+    if let Some(after) = rest.strip_prefix(':') {
+        let (parsed, len) = parse_date_part(after, 2);
+        second = parsed;
+        rest = &after[len..];
+        if let Some(after) = rest.strip_prefix('.') {
+            let (parsed, len) = parse_date_part(after, 3);
+            millisecond = parsed;
+            rest = &after[len..];
         }
     }
-    // 1970-01-01 is the 25569th day of the `TDateTime` epoch.
-    let days = days_from_civil(year, month, day) + 25_569;
-    Ok(days as f64 + millis as f64 / 86_400_000.0)
-}
-
-/// The inverse of [`decode_date_time`]'s date part.
-fn days_from_civil(year: i64, month: i64, day: i64) -> i64 {
-    let y = if month <= 2 { year - 1 } else { year };
-    let era = if y >= 0 { y } else { y - 399 } / 400;
-    let yoe = y - era * 400;
-    let mp = if month > 2 { month - 3 } else { month + 9 };
-    let doy = (153 * mp + 2) / 5 + day - 1;
-    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
-    era * 146_097 + doe
+    value += encode_time(hour, minute, second, millisecond).map_err(encode_error)?;
+    if !rest.starts_with('Z') && !rest.is_empty() {
+        let Some(sign) = rest.chars().next().filter(|ch| *ch == '+' || *ch == '-') else {
+            return Ok(0.0);
+        };
+        // `+0100` means the time is one hour later than UTC.
+        let negative = sign == '+';
+        let (offset_hour, len) = parse_date_part(&rest[1..], 2);
+        rest = &rest[1 + len..];
+        if let Some(after) = rest.strip_prefix(':') {
+            rest = after;
+        }
+        let (offset_minute, _len) = parse_date_part(rest, 2);
+        let offset = encode_time(offset_hour, offset_minute, 0, 0).map_err(encode_error)?;
+        value += if negative { -offset } else { offset };
+    }
+    Ok(if convert_to_local_time { utc_to_local(value) } else { value })
 }
 
 /// The readable form's line structure (`TJsonOutputWriter`): compact output
@@ -737,10 +876,7 @@ fn parse_json(text: &str) -> Result<NodeKind, ValueError> {
     let value = parser.value()?;
     parser.skip_space();
     if parser.pos != parser.chars.len() {
-        return Err(parser_error(format!(
-            "Expected end of file but found '{}'",
-            parser.chars[parser.pos]
-        )));
+        return Err(parser.expected("end of file"));
     }
     Ok(value)
 }
@@ -750,7 +886,53 @@ struct Parser {
     pos: usize,
 }
 
+/// The line break the reader counts lines with.
+const NL: char = '\n';
+
+/// `JsonTokenKindToStr` (`JsonDataObjects.pas:945`): the name of the token a
+/// character starts, as the reader reports it in a parse error. The port's
+/// parser is a direct one, not the library's tokenizer, so the name is read
+/// off the character at the failure position.
+fn token_name(ch: Option<char>) -> &'static str {
+    match ch {
+        None => "end of file",
+        Some('{') => "\"{\"",
+        Some('}') => "\"}\"",
+        Some('[') => "\"[\"",
+        Some(']') => "\"]\"",
+        Some(',') => "\",\"",
+        Some(':') => "\":\"",
+        Some(c) if c.is_ascii_digit() || c == '-' || c == '"' => "value",
+        Some(c) if c.is_ascii_alphabetic() => "value",
+        Some(_) => "invalid symbol",
+    }
+}
+
 impl Parser {
+    /// `EJsonParserException.CreateResFmt` (`JsonDataObjects.pas:1252`): the
+    /// message carries the reader's ` (line, column)` when it knows the
+    /// line. The port's position is the character index of the failure, which
+    /// is the reader's position at its own failure point.
+    fn error(&self, message: impl Into<String>) -> ValueError {
+        let pos = self.pos.min(self.chars.len());
+        let line = 1 + self.chars[..pos].iter().filter(|ch| **ch == NL).count();
+        let line_start = self
+            .chars[..pos]
+            .iter()
+            .rposition(|ch| *ch == NL)
+            .map_or(0, |index| index + 1);
+        let column = pos - line_start + 1;
+        parser_error(format!("{} ({line}, {column})", message.into()))
+    }
+
+    /// `RsUnexpectedToken` (`:920`): `Expected %s but found %s`.
+    fn expected(&self, expected: &str) -> ValueError {
+        self.error(format!(
+            "Expected {expected} but found {}",
+            token_name(self.chars.get(self.pos).copied())
+        ))
+    }
+
     fn skip_space(&mut self) {
         while self.pos < self.chars.len() && self.chars[self.pos] <= ' ' {
             self.pos += 1;
@@ -760,9 +942,7 @@ impl Parser {
     fn value(&mut self) -> Result<NodeKind, ValueError> {
         self.skip_space();
         let Some(ch) = self.chars.get(self.pos).copied() else {
-            return Err(parser_error(
-                "Unexpected end of file where value was expected".to_owned(),
-            ));
+            return Err(self.error("Unexpected end of file where value was expected"));
         };
         match ch {
             '{' => self.object(),
@@ -781,7 +961,7 @@ impl Parser {
             self.pos += text.len();
             Ok(value)
         } else {
-            Err(parser_error(format!("Expected value but found {word}")))
+            Err(self.error(format!("Expected value but found {word}")))
         }
     }
 
@@ -796,12 +976,12 @@ impl Parser {
         loop {
             self.skip_space();
             if self.chars.get(self.pos) != Some(&'"') {
-                return Err(parser_error("Expected '\"{\"' but found value".to_owned()));
+                return Err(self.expected("\"{\""));
             }
             let name = self.string()?;
             self.skip_space();
             if self.chars.get(self.pos) != Some(&':') {
-                return Err(parser_error("Expected '\":\"' but found value".to_owned()));
+                return Err(self.expected("\":\""));
             }
             self.pos += 1;
             let value = self.value()?;
@@ -814,7 +994,7 @@ impl Parser {
                     self.pos += 1;
                     return Ok(NodeKind::Object(entries));
                 }
-                _ => return Err(parser_error("Expected '\"}\"' but found value".to_owned())),
+                _ => return Err(self.expected("\"}\"")),
             }
         }
     }
@@ -837,7 +1017,7 @@ impl Parser {
                     self.pos += 1;
                     return Ok(NodeKind::Array(items));
                 }
-                _ => return Err(parser_error("Expected '\"]\"' but found value".to_owned())),
+                _ => return Err(self.expected("\"]\"")),
             }
         }
     }
@@ -847,14 +1027,14 @@ impl Parser {
         let mut out = String::new();
         loop {
             let Some(ch) = self.chars.get(self.pos).copied() else {
-                return Err(parser_error("String not closed".to_owned()));
+                return Err(self.error("String not closed"));
             };
             self.pos += 1;
             match ch {
                 '"' => return Ok(out),
                 '\\' => {
                     let Some(escape) = self.chars.get(self.pos).copied() else {
-                        return Err(parser_error("String not closed".to_owned()));
+                        return Err(self.error("String not closed"));
                     };
                     self.pos += 1;
                     match escape {
@@ -869,7 +1049,7 @@ impl Parser {
                         'u' => {
                             let hex: String = self.chars[self.pos..].iter().take(4).collect();
                             let code = u32::from_str_radix(&hex, 16)
-                                .map_err(|_| parser_error(format!("Invalid hex number \"{hex}\"")))?;
+                                .map_err(|_| self.error(format!("Invalid hex number \"{hex}\"")))?;
                             self.pos += 4;
                             let mut code = code;
                             if (0xD800..0xDC00).contains(&code) {
@@ -892,7 +1072,7 @@ impl Parser {
                             }
                             out.push(char::from_u32(code).unwrap_or('\u{FFFD}'));
                         }
-                        _ => return Err(parser_error("Invalid character in string".to_owned())),
+                        _ => return Err(self.error("Invalid character in string")),
                     }
                 }
                 ch => out.push(ch),
@@ -918,7 +1098,7 @@ impl Parser {
         }
         let text: String = self.chars[start..self.pos].iter().collect();
         if text.is_empty() {
-            return Err(parser_error(format!(
+            return Err(self.error(format!(
                 "Expected value but found '{}'",
                 self.chars.get(self.pos).copied().unwrap_or(' ')
             )));
@@ -927,7 +1107,7 @@ impl Parser {
             return text
                 .parse::<f64>()
                 .map(NodeKind::Float)
-                .map_err(|_| parser_error(format!("Expected value but found {text}")));
+                .map_err(|_| self.error(format!("Expected value but found {text}")));
         }
         // The library types an integer of up to 9 digits as `jdtInt`, of up
         // to 19 as `jdtLong`, and a longer one as `jdtULong` or a float.
@@ -937,7 +1117,7 @@ impl Parser {
             return text
                 .parse::<i32>()
                 .map(NodeKind::Int)
-                .map_err(|_| parser_error(format!("Expected value but found {text}")));
+                .map_err(|_| self.error(format!("Expected value but found {text}")));
         }
         match digits.parse::<i64>() {
             Ok(value) => Ok(if negative {
@@ -953,7 +1133,7 @@ impl Parser {
                 Err(_) => text
                     .parse::<f64>()
                     .map(NodeKind::Float)
-                    .map_err(|_| parser_error(format!("Expected value but found {text}"))),
+                    .map_err(|_| self.error(format!("Expected value but found {text}"))),
             },
         }
     }
@@ -1086,7 +1266,6 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
             let object = json_receiver(args)?;
             let file_name = text_arg(&args.values[0]);
             let utf8_without_bom = args.values.get(1).map_or(Ok(true), xedit_script::values::to_bool)?;
-            let _ = utf8_without_bom;
             let bytes = std::fs::read(&file_name).map_err(|error| {
                 ValueError::external_class(
                     "EFOpenError",
@@ -1096,7 +1275,9 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
                     ),
                 )
             })?;
-            let text = decode_stream_bytes(&bytes, None);
+            // `LoadFromFile` reads through `LoadFromStream(Stream, nil,
+            // Utf8WithoutBOM, nil)`.
+            let text = decode_stream_bytes(&bytes, None, utf8_without_bom)?;
             let parsed = parse_json(&text)?;
             set_node(&object, parsed);
             Ok(())
@@ -1128,14 +1309,26 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         &dom.base,
         "LoadFromStream",
         -1,
-        Rc::new(|_value, _args| {
-            // The stream classes (`TMemoryStream`, `TFileStream`) are the JVCL
-            // `Classes` unit's, phase 6 step 8; until then no script can hold
-            // one.
-            Err(ValueError::external_class(
-                E_JSON_CLASS,
-                "LoadFromStream needs a TStream; the JVCL Classes stream classes are phase 6 step 8".to_owned(),
-            ))
+        Rc::new(|_value, args| {
+            // `case Args.Count of 0: ieNotEnoughParams; 1..3: ...; else
+            // ieTooManyParams`.
+            if args.values.is_empty() {
+                return Err(ValueError::interp(xedit_script::error::IE_NOT_ENOUGH_PARAMS));
+            }
+            if args.values.len() > 3 {
+                return Err(ValueError::interp(xedit_script::error::IE_TOO_MANY_PARAMS));
+            }
+            let object = json_receiver(args)?;
+            let stream = json_stream_arg(&args.values[0])?;
+            let encoding = args.values.get(1).and_then(encoding_of);
+            let utf8_without_bom = args.values.get(2).map_or(Ok(true), xedit_script::values::to_bool)?;
+            // `GetStreamBytes` reads from the position to the end and leaves
+            // the stream there.
+            let bytes = stream_read_to_end(&stream)?;
+            let text = decode_stream_bytes(&bytes, encoding, utf8_without_bom)?;
+            let parsed = parse_json(&text)?;
+            set_node(&object, parsed);
+            Ok(())
         }),
     );
     // `Parse` is a class function of `TJsonBaseObject` called through the
@@ -1216,11 +1409,42 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         &dom.base,
         "SaveToStream",
         -1,
-        Rc::new(|_value, _args| {
-            Err(ValueError::external_class(
-                E_JSON_CLASS,
-                "SaveToStream needs a TStream; the JVCL Classes stream classes are phase 6 step 8".to_owned(),
-            ))
+        Rc::new(|_value, args| {
+            if args.values.is_empty() {
+                return Err(ValueError::interp(xedit_script::error::IE_NOT_ENOUGH_PARAMS));
+            }
+            if args.values.len() > 4 {
+                return Err(ValueError::interp(xedit_script::error::IE_TOO_MANY_PARAMS));
+            }
+            let object = json_receiver(args)?;
+            let compact = args.values.get(1).map_or(Ok(true), xedit_script::values::to_bool)?;
+            let encoding = args.values.get(2).and_then(encoding_of);
+            let utf8_without_bom = args.values.get(3).map_or(Ok(true), xedit_script::values::to_bool)?;
+            let Some(stream) = stream_of(&args.values[0]) else {
+                // A nil stream: `TJsonOutputWriter.StreamFlush` writes
+                // nothing when `FStream` is nil, so a save into nil is a
+                // no-op -- unless the encoding asks for a preamble, which is
+                // written through `Stream.Write` and dereferences the nil
+                // (`EAccessViolation`).
+                let without_bom = utf8_without_bom && matches!(encoding, None | Some(EncodingKind::Utf8));
+                if without_bom || encoding.map(|kind| kind.preamble().is_empty()).unwrap_or(true) {
+                    return Ok(());
+                }
+                return Err(access_violation());
+            };
+            let text = to_json(&node_of(&object), compact);
+            // The preamble first, then the text, both at the stream's
+            // position (`TStream.Write`).
+            let bytes = encode_stream_bytes(&text, encoding, utf8_without_bom);
+            let start = stream.borrow().pos;
+            let _ = stream_write(&stream, &bytes)?;
+            if stream.borrow().is_memory_stream {
+                // `FlushToMemoryStream` (`JsonDataObjects.pas:8159`) sets the
+                // `TMemoryStream`'s size to the end of what it wrote, so a
+                // save at a position before the end truncates it.
+                stream_set_size(&stream, start + bytes.len() as u64)?;
+            }
+            Ok(())
         }),
     );
     get(
@@ -2059,29 +2283,74 @@ fn parse_document(text: &str) -> Result<Option<Node>, ValueError> {
     Ok(Some(Rc::new(RefCell::new(kind))))
 }
 
-/// The `GetBytes` side of the stream readers: the byte order mark decides
-/// the encoding when none is given (`GetStreamBytes`).
-fn decode_stream_bytes(bytes: &[u8], encoding: Option<EncodingKind>) -> String {
+/// The `TStream` argument of `LoadFromStream`/`SaveToStream`: a nil value
+/// (`TStream(V2O(nil))`) or a released stream is the access violation
+/// upstream's nil dereference gives.
+fn json_stream_arg(value: &Value) -> Result<Rc<RefCell<StreamState>>, ValueError> {
+    stream_of(value).ok_or_else(access_violation)
+}
+
+/// The `GetBytes` side of the stream readers (`TJsonBaseObject.GetStreamBytes`
+/// and `LoadFromStream`): the byte order mark decides the encoding when none
+/// is given; an encoding the script names is used as it stands, so a mark is
+/// read as text (the RTL's `GetCharsEx` does not skip a preamble). The
+/// UTF-32 marks raise `EJsonException('File encoding is not supported')`, as
+/// upstream.
+fn decode_stream_bytes(
+    bytes: &[u8],
+    encoding: Option<EncodingKind>,
+    utf8_without_bom: bool,
+) -> Result<String, ValueError> {
     if let Some(kind) = encoding {
-        let rest = bytes.strip_prefix(kind.preamble()).unwrap_or(bytes);
-        return kind.string(rest);
+        return Ok(kind.string(bytes));
     }
-    if let Some(rest) = bytes.strip_prefix(&[0xEF, 0xBB, 0xBF]) {
-        return String::from_utf8_lossy(rest).into_owned();
+    // `if Utf8WithoutBOM then Encoding := TEncoding.UTF8 else Encoding :=
+    // TEncoding.Default`, then the mark overrides it.
+    let mut kind = if utf8_without_bom {
+        EncodingKind::Utf8
+    } else {
+        EncodingKind::Default
+    };
+    let mut start = 0usize;
+    if bytes.len() >= 2 {
+        if bytes[0] == 0xEF && bytes[1] == 0xBB {
+            if bytes.len() >= 3 && bytes[2] == 0xBF {
+                kind = EncodingKind::Utf8;
+                start = 3;
+            }
+        } else if bytes[0] == 0xFF && bytes[1] == 0xFE {
+            if bytes.len() >= 4 && bytes[2] == 0 && bytes[3] == 0 {
+                // UTF-32 little endian.
+                return Err(ValueError::external_class(
+                    E_JSON_CLASS,
+                    "File encoding is not supported".to_owned(),
+                ));
+            }
+            kind = EncodingKind::Unicode;
+            start = 2;
+        } else if bytes[0] == 0xFE && bytes[1] == 0xFF {
+            // `TEncoding.BigEndianUnicode`.
+            return Ok(big_endian_unicode_string(&bytes[2..]));
+        } else if bytes[0] == 0 && bytes[1] == 0 && bytes.len() >= 4 && bytes[2] == 0xFE && bytes[3] == 0xFF {
+            // UTF-32 big endian.
+            return Err(ValueError::external_class(
+                E_JSON_CLASS,
+                "File encoding is not supported".to_owned(),
+            ));
+        }
     }
-    if let Some(rest) = bytes.strip_prefix(&[0xFF, 0xFE]) {
-        return EncodingKind::Unicode.string(rest);
-    }
-    if let Some(rest) = bytes.strip_prefix(&[0xFE, 0xFF]) {
-        let units: Vec<u16> = rest
-            .as_chunks::<2>()
-            .0
-            .iter()
-            .map(|pair| u16::from_be_bytes([pair[0], pair[1]]))
-            .collect();
-        return String::from_utf16_lossy(&units);
-    }
-    EncodingKind::Default.string(bytes)
+    Ok(kind.string(&bytes[start..]))
+}
+
+/// `TEncoding.BigEndianUnicode.GetString`: UTF-16 big endian text.
+fn big_endian_unicode_string(bytes: &[u8]) -> String {
+    let units: Vec<u16> = bytes
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .map(|pair| u16::from_be_bytes([pair[0], pair[1]]))
+        .collect();
+    String::from_utf16_lossy(&units)
 }
 
 /// `SaveToStream`: `Utf8WithoutBOM` (default True) with a UTF-8 or no
@@ -2099,7 +2368,20 @@ fn encode_stream_bytes(text: &str, encoding: Option<EncodingKind>, utf8_without_
     } else {
         kind.preamble().to_vec()
     };
-    bytes.extend(kind.bytes(text));
+    if kind == EncodingKind::Unicode {
+        // UPSTREAM-QUIRK: `TJsonOutputWriter.StreamFlush` writes
+        // `FStringBuffer.Len` bytes of its UTF-16 buffer, and `Len` is a
+        // *character* count, so only the first half of the wide text reaches
+        // the stream (8 of 16 characters for an ASCII document; the oracle's
+        // `streams.pas` probe pins the 18 byte result and the
+        // `EJsonParserException` a load of it gives). Every other encoding
+        // goes through `TEncoding.GetBytes` and is complete.
+        let wide = kind.bytes(text);
+        let chars = text.encode_utf16().count();
+        bytes.extend_from_slice(&wide[..chars.min(wide.len())]);
+    } else {
+        bytes.extend(kind.bytes(text));
+    }
     bytes
 }
 

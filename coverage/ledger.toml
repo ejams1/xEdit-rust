@@ -21323,89 +21323,89 @@ command = "script.run"
 source = "xEdit/JvI/xejviScriptAdapterMiscVcl.pas"
 
 [script."xejviScriptAdapterMiscVcl:TBinaryReader.Create:get"]
-status = "excluded"
+status = "covered"
+command = "script.run"
 source = "TBinaryReader_Create"
-note = "the Vcl seam refuses headless: the GUI phase fills the form shim"
 
 [script."xejviScriptAdapterMiscVcl:TBinaryReader.Read:get"]
-status = "excluded"
+status = "covered"
+command = "script.run"
 source = "TBinaryReader_Read"
-note = "the Vcl seam refuses headless: the GUI phase fills the form shim"
 
 [script."xejviScriptAdapterMiscVcl:TBinaryReader.ReadBoolean:get"]
-status = "excluded"
+status = "covered"
+command = "script.run"
 source = "TBinaryReader_ReadBoolean"
-note = "the Vcl seam refuses headless: the GUI phase fills the form shim"
 
 [script."xejviScriptAdapterMiscVcl:TBinaryReader.ReadByte:get"]
-status = "excluded"
+status = "covered"
+command = "script.run"
 source = "TBinaryReader_ReadByte"
-note = "the Vcl seam refuses headless: the GUI phase fills the form shim"
 
 [script."xejviScriptAdapterMiscVcl:TBinaryReader.ReadBytes:get"]
-status = "excluded"
+status = "covered"
+command = "script.run"
 source = "TBinaryReader_ReadBytes"
-note = "the Vcl seam refuses headless: the GUI phase fills the form shim"
 
 [script."xejviScriptAdapterMiscVcl:TBinaryReader.ReadChar:get"]
-status = "excluded"
+status = "covered"
+command = "script.run"
 source = "TBinaryReader_ReadChar"
-note = "the Vcl seam refuses headless: the GUI phase fills the form shim"
 
 [script."xejviScriptAdapterMiscVcl:TBinaryReader.ReadDouble:get"]
-status = "excluded"
+status = "covered"
+command = "script.run"
 source = "TBinaryReader_ReadDouble"
-note = "the Vcl seam refuses headless: the GUI phase fills the form shim"
 
 [script."xejviScriptAdapterMiscVcl:TBinaryReader.ReadInteger:get"]
-status = "excluded"
+status = "covered"
+command = "script.run"
 source = "TBinaryReader_ReadInteger"
-note = "the Vcl seam refuses headless: the GUI phase fills the form shim"
 
 [script."xejviScriptAdapterMiscVcl:TBinaryReader.ReadShortInt:get"]
-status = "excluded"
+status = "covered"
+command = "script.run"
 source = "TBinaryReader_ReadShortInt"
-note = "the Vcl seam refuses headless: the GUI phase fills the form shim"
 
 [script."xejviScriptAdapterMiscVcl:TBinaryReader.ReadSingle:get"]
-status = "excluded"
+status = "covered"
+command = "script.run"
 source = "TBinaryReader_ReadSingle"
-note = "the Vcl seam refuses headless: the GUI phase fills the form shim"
 
 [script."xejviScriptAdapterMiscVcl:TBinaryReader.ReadSmallInt:get"]
-status = "excluded"
+status = "covered"
+command = "script.run"
 source = "TBinaryReader_ReadSmallInt"
-note = "the Vcl seam refuses headless: the GUI phase fills the form shim"
 
 [script."xejviScriptAdapterMiscVcl:TBinaryReader.ReadString:get"]
-status = "excluded"
+status = "covered"
+command = "script.run"
 source = "TBinaryReader_ReadString"
-note = "the Vcl seam refuses headless: the GUI phase fills the form shim"
 
 [script."xejviScriptAdapterMiscVcl:TBinaryReader.ReadUInt16:get"]
-status = "excluded"
+status = "covered"
+command = "script.run"
 source = "TBinaryReader_ReadUInt16"
-note = "the Vcl seam refuses headless: the GUI phase fills the form shim"
 
 [script."xejviScriptAdapterMiscVcl:TBinaryReader.ReadUInt32:get"]
-status = "excluded"
+status = "covered"
+command = "script.run"
 source = "TBinaryReader_ReadUInt32"
-note = "the Vcl seam refuses headless: the GUI phase fills the form shim"
 
 [script."xejviScriptAdapterMiscVcl:TBinaryWriter.Create:get"]
-status = "excluded"
+status = "covered"
+command = "script.run"
 source = "TBinaryWriter_Create"
-note = "the Vcl seam refuses headless: the GUI phase fills the form shim"
 
 [script."xejviScriptAdapterMiscVcl:TBinaryWriter.Write:get"]
-status = "excluded"
+status = "covered"
+command = "script.run"
 source = "TBinaryWriter_Write"
-note = "the Vcl seam refuses headless: the GUI phase fills the form shim"
 
 [script."xejviScriptAdapterMiscVcl:TBinaryWriter.WriteSingle:get"]
-status = "excluded"
+status = "covered"
+command = "script.run"
 source = "TBinaryWriter_WriteSingle"
-note = "the Vcl seam refuses headless: the GUI phase fills the form shim"
 
 [script."xejviScriptAdapterMiscVcl:TBitmap.SetSize:get"]
 status = "excluded"
@@ -21413,9 +21413,9 @@ source = "TBitmap_SetSize"
 note = "the Vcl seam refuses headless: the GUI phase fills the form shim"
 
 [script."xejviScriptAdapterMiscVcl:TBytesStream.Create:get"]
-status = "excluded"
+status = "covered"
+command = "script.run"
 source = "TBytesStream_Create"
-note = "the Vcl seam refuses headless: the GUI phase fills the form shim"
 
 [script."xejviScriptAdapterMiscVcl:TCheckListBox.AllowGrayed:get"]
 status = "excluded"
