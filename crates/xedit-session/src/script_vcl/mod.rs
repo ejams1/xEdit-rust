@@ -21,20 +21,18 @@
 //! [`tables`] are transcribed from their `RegisterJvInterpreterAdapter` calls
 //! and the constant values are captured from the 4.1.5q oracle).
 //!
-//! **The seam.** Headless there is no window to build, no canvas to draw on
-//! and no dialog to show, so every member and every function that needs one
-//! goes through the [`Vcl`] trait instead of being answered here. The default
-//! implementation, [`NoVcl`], is the headless one: it refuses with one clear
-//! error naming the VCL surface and the script that touched it
-//! ([`VCL_ERROR_CLASS`]). It is the same error for a form (`TForm.Create`),
-//! a dialog (`InputQuery`) or a live control (`TEdit.Text`), so a script that
-//! builds or shows a form fails immediately, with the class name in the
-//! message, exactly as the phase plan asks -- and the name is the surface
-//! step 10's corpus classification greps for (`TForm`/`ShowModal` class a
-//! script as `form`, `InputQuery`/`InputBox` as `interactive`), so an abort
-//! lines up with the class `cargo xtask parity script` gives those cases.
-//! The GUI phase fills the seam with an implementation backed by the real
-//! window layer; nothing else in this module changes when it does.
+//! **The seam.** A member or function that needs a window, a canvas or a
+//! dialog goes through the [`Vcl`] trait instead of being answered here.
+//! Since issue #26 a script run passes [`interactive::VclModel`]: a headless
+//! object model that keeps the form and control objects a script builds
+//! (properties, events and synthetic handles) and answers its dialogs from
+//! the recorded answers of `script.run` (`pending_interaction` when none is
+//! recorded). [`NoVcl`] remains the refusing implementation: it raises one
+//! clear error naming the VCL surface and the script ([`VCL_ERROR_CLASS`]),
+//! which is also what the model refuses where it has nothing to answer (the
+//! four `JvInterpreterFm` form-runner functions). Phase 7 renders the same
+//! model with a real window layer; nothing else in this module changes when
+//! it does.
 //!
 //! **What answers headless.** The pure helpers and value types of the units:
 //! `TPoint`/`TRect` and `Point`/`Rect`/`Bounds` with the two `TRect`
@@ -51,6 +49,7 @@
 //! the members refuse through the seam like any other object member.
 
 pub mod helpers;
+pub mod interactive;
 pub mod misc_vcl;
 pub mod tables;
 pub mod windows;
@@ -249,6 +248,34 @@ pub fn register(adapter: &mut Adapter, state: &Rc<RefCell<ScriptRunState>>, vcl:
 
     windows::register(adapter, vcl);
     misc_vcl::register(adapter, state, vcl);
+
+    // The classes an implementation that builds objects needs: the `Rc`s of
+    // the ten units' `AddClass` rows (`ClassDef::is_a` compares pointers,
+    // so a `TForm.Create` object must answer the class the member
+    // registrations were made against) and the RTL classes an object model
+    // hands out as values (the `Classes` unit's `TStringList`, for `Items`
+    // and `Lines`). Registered after the RTL units, so `find_class` sees
+    // them.
+    let mut classes: std::collections::HashMap<String, std::rc::Rc<xedit_script::values::ClassDef>> =
+        std::collections::HashMap::new();
+    for (unit, name, _) in tables::CLASSES {
+        classes.insert((*name).to_owned(), class_of(adapter, unit, name));
+    }
+    for anchor in [
+        "TObject",
+        "TPersistent",
+        "TComponent",
+        "TCollectionItem",
+        "TCollection",
+        "TMemoryStream",
+        "TStringList",
+        "Exception",
+    ] {
+        if let Some(found) = adapter.find_class(anchor.as_bytes()) {
+            classes.insert(anchor.to_owned(), found);
+        }
+    }
+    vcl.borrow_mut().install_classes(classes);
 }
 
 //=== The ledger ==============================================================
@@ -412,8 +439,9 @@ mod tests {
     /// The port-side half of `cargo xtask check`'s script section: every
     /// `covered` entry of the eleven units this step ports is registered by
     /// the port, and the port registers nothing of those units the ledger
-    /// does not list at all (the `excluded` entries are the ones the VCL
-    /// seam refuses headless by design).
+    /// does not list at all (since issue #26 the entries are `covered` --
+    /// the headless model of [`interactive`] -- or `presentation`, the
+    /// renderer-only members).
     #[test]
     fn every_covered_ledger_entry_of_the_units_is_registered() {
         let ledger = include_str!("../../../../coverage/ledger.toml");

@@ -1588,6 +1588,10 @@ fn tool_run(session: &mut Session, request: ToolRunRequest) -> Result<ToolRunRes
                     // The mode builds no references; a script that reads
                     // `ReferencedBy` needs `script run --build-refs`.
                     build_refs: false,
+                    // The mode runs no dialogs of its own; a script that
+                    // shows one stops with `pending_interaction` and the
+                    // caller continues with `script resume`.
+                    answers: Vec::new(),
                 },
                 &mut crate::script::NavigationSelection,
             )?;

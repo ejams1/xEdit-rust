@@ -279,6 +279,21 @@ pub trait ScriptObject {
     fn message(&self) -> Option<&str> {
         None
     }
+    /// The event property `name` as the object stores it: the script routine
+    /// assigned to it. Upstream this is the `tkMethod` property of the real
+    /// object (`GetPropInfo(FCurrArgs.Obj.ClassInfo, Identifier)`, a
+    /// `TMethod` thunk over `NewEvent`); only the headless VCL object model
+    /// (`script_vcl::interactive`) answers.
+    fn event_function(&self, _name: &str) -> Option<String> {
+        None
+    }
+    /// Store the routine `function` into the event property `name`; `None`
+    /// clears it (`X.OnClick := nil`). `true` when this object has such a
+    /// slot (`SetMethodProp(FCurrArgs.Obj, PropInf, Method)`,
+    /// `JvInterpreter.pas:6932`; the `nil` arm is `:6936-6948`).
+    fn set_event(&mut self, _name: &str, _function: Option<&str>) -> bool {
+        false
+    }
     /// `E.ClassName` of an exception object whose Delphi class is not a
     /// registered script class: the handler's `E` is the real exception
     /// upstream, so `E.ClassName` is `EVariantTypeCastError` for the error

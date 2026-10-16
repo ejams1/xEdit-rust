@@ -157,6 +157,20 @@ pub trait Vcl {
     /// interpreter.
     fn run_unit(&mut self, file_name: &str) -> Result<Value, ValueError>;
 
+    /// The registered classes of the run's adapter, as `Rc<ClassDef>`s: the
+    /// classes of the ten VCL-backed units (`cargo xtask sync`'s census,
+    /// [`crate::script_vcl::tables::CLASSES`]) and the RTL classes an object
+    /// model needs to build member values (the `Classes` unit's
+    /// `TStringList`).
+    ///
+    /// The `ClassDef::is_a` check compares pointers, so an implementation
+    /// that builds objects (`TForm.Create`) must answer the very `Rc` the
+    /// adapter registered as the object's class, and a `TStrings` value it
+    /// hands out (`Items`, `Lines`) must carry the registered `TStringList`
+    /// class. Called once, after every unit is registered; the default
+    /// ignores it, as [`NoVcl`] does.
+    fn install_classes(&mut self, _classes: std::collections::HashMap<String, Rc<ClassDef>>) {}
+
     /// One member of a registered VCL class: a property read or write, a
     /// method, or a constructor (a `Get` named `Create`, whose receiver is
     /// nil and whose value is the new object). `value` is the result for a
@@ -177,13 +191,14 @@ pub trait Vcl {
     fn function(&mut self, unit: &str, function: &str, value: &mut Value, args: &mut Args) -> Result<(), ValueError>;
 }
 
-/// The headless default of the [`Vcl`] seam: every call refuses with one
+/// The refusing implementation of the [`Vcl`] seam: every call raises one
 /// clear error, naming the VCL surface and the script that touched it, so a
-/// script that builds or shows a form fails immediately -- with the class
-/// name in the message, which is the surface step 10's corpus classification
-/// greps for (`TForm`/`ShowModal` class a script as `form`,
-/// `InputQuery`/`InputBox` as `interactive`). The GUI phase passes the
-/// implementation backed by the real window layer.
+/// caller without a model fails immediately, with the class name in the
+/// message. A script run passes
+/// [`crate::script_vcl::interactive::VclModel`] instead (issue #26), which
+/// answers the forms, controls and events a script builds and takes its
+/// dialogs from the recorded answers; `NoVcl` answers the callers that have
+/// no model (tests, the standalone registrations).
 pub struct NoVcl {
     /// The script being run (`DoRunScript`'s name), for the error text.
     script: String,
