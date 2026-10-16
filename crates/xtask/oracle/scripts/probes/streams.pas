@@ -10,7 +10,15 @@
   trip of every typed member over a file stream, the writer's buffer, the
   reader's end-of-stream error; and the exception a nil stream raises. The
   files written into the run folder are compared byte for byte by the harness
-  and the message log line by line. The strings written are ASCII: a `#233`
+  and the message log line by line. A load that fails is compared by its
+  exception class (`EJsonParserException`), and the one case the port's
+  direct parser reports with the RTL's own text (`utf16-load`) by its
+  message too; the oracle's other messages name its tokenizer's tokens
+  (`Expected "{" but found identifier (1, 2)` for the mid-stream load,
+  `Unexpected end of file where "{" was expected (1, 1)` for the empty
+  stream, `Expected "{" but found invalid symbol (1, 2)` for the two
+  named-encoding loads), which the port's parser approximates and the log
+  does not compare (see the batch's divergences). The strings written are ASCII: a `#233`
   escape is one byte in the port's byte strings and the character U+00E9 in
   the GUI's UTF-16 ones, so the writer's encoding of a non-ASCII character
   (the GUI's is UTF-8, two bytes for U+00E9; the port's lone byte is not
@@ -119,7 +127,7 @@ begin
     back.LoadFromStream(ms);
     Log('encoding', 'utf16-load pos=' + IntToStr(ms.Position) + ' name=' + back.S['name']);
   except on E: Exception do
-    Log('encoding', 'utf16-load exc=' + E.ClassName);
+    Log('encoding', 'utf16-load exc=' + E.ClassName + ' ' + E.Message);
   end;
   back.Free;
   // The same file with the encoding named.
