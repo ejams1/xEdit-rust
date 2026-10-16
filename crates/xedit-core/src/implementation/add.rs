@@ -1185,7 +1185,7 @@ impl MainRecordImpl {
             // builds its virtual tree over the copied `ATAV` text, inside
             // a later masters update when that is what reads it first;
             // parity #33).
-            self.collapse_storage_in_init();
+            self.collapse_storage();
         } else if index >= 0 && index < mr_def.get_member_count() {
             let mut member = mr_def.get_member(index as usize);
             let source_def = source.and_then(|source| source.get_def());

@@ -3298,6 +3298,20 @@ impl MainRecordImpl {
         edit::invalidate_parent_storage(&**self);
     }
 
+    /// Port of `CollapseStorage(nil, True)` outside `Init`, as the end of
+    /// `TwbMainRecord.AssignInternal(wbAssignThis)` runs it: the collapse
+    /// of [`Self::collapse_storage_in_init`], then `DoReset(True)`, so the
+    /// next read builds the elements again from the collapsed bytes (and
+    /// the `AfterLoad` of the members runs again).
+    pub(crate) fn collapse_storage(self: &Arc<Self>) {
+        if !self.base.has_state(ElementState::esModified) || self.mr_init.is_running() {
+            return;
+        }
+        self.collapse_storage_in_init();
+        let _elements = self.container.cnt_elements.write().unwrap();
+        self.mr_init.reset();
+    }
+
     /// Port of the release of `mrDataStorage`.
     fn release_data(&self) {
         let mut storage = self.mr_data_storage.lock().unwrap();

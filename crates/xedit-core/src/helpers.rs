@@ -644,10 +644,10 @@ pub fn serialize_element(a_element: &ElementRef, a_json_obj: &mut Json) {
                 a_json_obj.set(&name, serialize_element_to_json(&child));
             }
             ElementType::etArray => {
-                if !name.eq_ignore_ascii_case("Stream") {
-                    if let Ok(Some(array)) = a_json_obj.a_mut(&name) {
-                        serialize_array(&child, array);
-                    }
+                if !name.eq_ignore_ascii_case("Stream")
+                    && let Ok(Some(array)) = a_json_obj.a_mut(&name)
+                {
+                    serialize_array(&child, array);
                 }
             }
             _ => a_json_obj.set(&name, Json::Str(child.get_edit_value())),

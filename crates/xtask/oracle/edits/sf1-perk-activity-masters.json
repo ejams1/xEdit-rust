@@ -1,6 +1,7 @@
 {
-  "description": "A masters update rewrites a FormID of a perk activity's Stream: Constellation.esm loaded as Sf33Light.esm (editable, light slot FE001 after OldMars.esm) takes an override of Skill_Rejuvenation, the Stream FormID of its rank 0 is set (twice, see sf1-perk-activity-edit) to one of the file's own records (the native value is the file FormID 01000002, FE001002 in load order, 16777218 in the ATAV JSON text), and the light module OldMars.esm is added as a master and the masters sorted, so the file's own records move from file index 1 to 2. Upstream rewrites the JSON text through wbVirtualPerkStreamIDAfterSet (dfAfterSetOnIDUpdate, fsMastersUpdating) to the new file FormID.",
+  "description": "A masters update rewrites a FormID of a perk activity's Stream: Constellation.esm loaded as Sf33Light.esm (editable, light slot FE001 after OldMars.esm) takes an override of Skill_Rejuvenation, the Stream FormID of its rank 0 is set (twice, see sf1-perk-activity-edit) to one of the file's own records (the native value is the file FormID 01000002, FE001002 in load order, 16777218 in the ATAV JSON text), and the light module OldMars.esm is added as a master and the masters sorted, so the file's own records move from file index 1 to 2. Upstream rewrites the JSON text through wbVirtualPerkStreamIDAfterSet (dfAfterSetOnIDUpdate, fsMastersUpdating) to the new file FormID. The reference information is built (as in sf1-perk-activity-edit): without it the copied record's virtual NULL tree is not there when the step looks the path up (the oracle stops at the first set with \"has no element at\"); with it the path is there, as in sf1-perk-activity-edit.",
   "game": "sf1",
+  "build_refs": true,
   "rename": {
     "Sf33Light.esm": "Constellation.esm"
   },

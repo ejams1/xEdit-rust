@@ -1497,9 +1497,13 @@ fn check_edit(
     let port_dir = runner.scratch.join(format!("{}-oracle-edit", game.mode));
     fs::create_dir_all(&port_dir)?;
     let mut batch = sequence.commands.clone();
-    // The referenced-by lists: the index built before the steps (the
-    // oracle's script mode builds it at load) and read after them.
-    if !sequence.refs.is_empty() {
+    // The reference information: built before the steps whenever the
+    // oracle builds it (its GUI builds it at load with `build_refs`, which
+    // also changes what a step finds: the reference build of a copied
+    // record initialises its elements, the Starfield perk activity's
+    // virtual tree among them), and the referenced-by lists of `refs` read
+    // after the steps.
+    if sequence.build_refs {
         batch.insert(0, serde_json::json!({"command": "refs.build", "params": {}}));
     }
     for query in &sequence.refs {
@@ -1620,11 +1624,7 @@ fn check_edit(
         }
     }
     if !sequence.refs.is_empty() {
-        let oracle_text = fs::read_to_string(dir.join(format!("{oracle_stem}.refs.txt")))?.replace(
-            "
-", "
-",
-        );
+        let oracle_text = fs::read_to_string(dir.join(format!("{oracle_stem}.refs.txt")))?.replace("\r\n", "\n");
         let mut port_text = String::new();
         for step in &steps[saves_start - sequence.refs.len()..saves_start] {
             port_refs_lines(&step["result"], &mut port_text);
@@ -1757,6 +1757,7 @@ fn prepare_edit(
             &sequence.rename,
             &inputs,
             &sequence.archives,
+            sequence.strings,
         )?;
         let tables = if sequence.strings { stage.tables } else { Vec::new() };
         (stage.plugins, stage.load, tables, stage.archives)
