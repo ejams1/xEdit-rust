@@ -2223,10 +2223,21 @@ struct Vm<'a> {
     log: Vec<(usize, usize)>,
     /// Where the search started (`\G`).
     search_start: usize,
+    /// The steps this search may take before it is given up (PCRE's
+    /// `match_limit`, `pcre_exec`'s default of 10,000,000 backtracking
+    /// steps). A pathological pattern (`(a+)+$` over a long subject) would
+    /// otherwise run for hours; where the release raises at its limit, the
+    /// port answers no match (documented, not probed: no oracle run has
+    /// reached a limit).
+    budget: u64,
 }
 
 /// An unset capture slot.
 const UNSET: usize = usize::MAX;
+
+/// `pcre_exec`'s default `match_limit`: the backtracking steps one search
+/// may take.
+const MATCH_LIMIT: u64 = 10_000_000;
 
 impl<'a> Vm<'a> {
     fn new(re: &'a Regex, subject: &'a [u8], end: usize, exec: ExecFlags, search_start: usize) -> Vm<'a> {
@@ -2239,6 +2250,7 @@ impl<'a> Vm<'a> {
             saves: vec![UNSET; groups * 2 + re.registers as usize * 2],
             log: Vec::new(),
             search_start,
+            budget: MATCH_LIMIT,
         }
     }
 
@@ -2309,6 +2321,10 @@ impl<'a> Vm<'a> {
     ) -> Option<usize> {
         let mut stack: Vec<Frame> = Vec::new();
         loop {
+            if self.budget == 0 {
+                return None;
+            }
+            self.budget -= 1;
             let inst = self.re.program[pc];
             match inst {
                 Inst::Match => return Some(pos),
