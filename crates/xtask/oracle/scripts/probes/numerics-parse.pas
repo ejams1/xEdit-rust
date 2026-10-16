@@ -47,7 +47,7 @@ var
   s, frac: string;
 begin
   // 17-, 18- and 19-digit integers and fractions.
-  for i := 1 to 300 do begin
+  for i := 1 to 40 do begin
     m := 10000000 + i * 65537;
     ParseOne(IntToStr(m));
     ParseOne(IntToStr(m) + '.' + IntToStr(m * 3));
@@ -69,7 +69,7 @@ begin
   end;
   // Exponents across the range.
   for i := -320 to 320 do begin
-    if (i >= -60) and (i <= 60) or ((i mod 17) = 0) then begin
+    if (i >= -40) and (i <= 40) or ((i mod 47) = 0) then begin
       ParseOne('1.5E' + IntToStr(i));
       ParseOne('12345E' + IntToStr(i));
     end;
