@@ -491,6 +491,8 @@ impl MainRecordImpl {
             mr_overrides: RwLock::new(Vec::new()),
             mr_fixed_form_id: std::sync::atomic::AtomicU64::new(super::UNSET_FIXED_FORM_ID),
             mr_display_name: RwLock::new(None),
+            mr_name: RwLock::new(String::new()),
+            mr_short_name: RwLock::new(String::new()),
             mr_precombined: std::sync::OnceLock::new(),
             mr_has_vwd_mesh: std::sync::OnceLock::new(),
             mr_ofst_removed: std::sync::atomic::AtomicBool::new(false),

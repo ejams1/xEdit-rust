@@ -39,6 +39,7 @@
 use std::cell::RefCell;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
+use std::sync::Arc;
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -358,29 +359,42 @@ pub trait ScriptSelection {
     /// The loaded plugins the script sees, in load order (`frmMain.Files`).
     fn files(&mut self, session: &mut Session) -> Result<Vec<ElementRef>, CommandError>;
 
-    /// The elements `Process` runs over, in the order the loop walks them.
+    /// The roots the walk runs over ([`selection`](Self::selection)).
     ///
     /// `DoRunScript` selects every root node of the navigation tree (all
     /// loaded files) and `ApplyScriptToSelection` walks each selected node's
     /// subtree *backwards*: it starts at `vstNav.GetLast(node)` and steps
     /// `GetPrevious` until the node itself, so the last element of a file is
-    /// processed first and the file node last. [`NavigationSelection`] gives
-    /// that order.
+    /// processed first and the file node last. With
+    /// [`live_walk`](Self::live_walk) the steps happen over the live tree, so
+    /// the nodes an edit re-materialises are visited where they are now;
+    /// without it the returned elements are the walk's fixed order.
     fn selection(&mut self, session: &mut Session, files: &[ElementRef]) -> Result<Vec<ElementRef>, CommandError>;
+
+    /// Whether the walk steps over the live tree (`vstNav.GetPrevious`): a
+    /// record an edit re-homes or removes re-materialises its node, and the
+    /// oracle's walk then visits it where it is now -- a record moved to a
+    /// place the walk has not reached yet is visited again (`Processed
+    /// Records` above the record count; the issue-#24 `walk-move` probe and
+    /// the two Worldspace cases pin it).
+    fn live_walk(&self) -> bool {
+        false
+    }
 }
 
-/// The port of the navigation tree walk: every loaded file, each of the
-/// file's elements in the reverse of the tree's flat order.
+/// The port of the navigation tree walk: every loaded file is selected as a
+/// root, and each root's subtree is walked backwards over the live tree
+/// ([`live_walk`](ScriptSelection::live_walk)).
 ///
 /// The tree holds the file, its groups and its records (`vstNavInitChildren`
 /// gives every container element a node) and, for a record, the child group
 /// that holds the record's children (`vstNavInitNode`: a main record's node
 /// container is `ChildGroup`, not the record's own elements), so the walk
-/// reaches records through their groups. The port's walk gives the same set:
-/// the default filter of a run is `[etMainRecord]`
-/// (`ApplyScript`), so with no script variable set it is every main record of
-/// the loaded files, each file's records in reverse FormID order (the
-/// file's `flRecords` order).
+/// reaches records through their groups. The default filter of a run is
+/// `[etMainRecord]` (`ApplyScript`), so with no script variable set it is
+/// every main record of the loaded files, each file's records in reverse
+/// FormID order (the file's `flRecords` order) unless an edit re-homes a
+/// record while the walk runs.
 #[derive(Default)]
 pub struct NavigationSelection;
 
@@ -391,67 +405,144 @@ impl ScriptSelection for NavigationSelection {
     }
 
     fn selection(&mut self, _session: &mut Session, files: &[ElementRef]) -> Result<Vec<ElementRef>, CommandError> {
-        let mut order = Vec::new();
-        for file in files {
-            let mut flat = Vec::new();
-            flatten(file, &mut flat);
-            flat.reverse();
-            order.extend(flat);
-        }
-        Ok(order)
+        Ok(files.to_vec())
+    }
+
+    fn live_walk(&self) -> bool {
+        true
     }
 }
 
-/// The flat (pre-order) nav-tree sequence of `root`, as
-/// `vstNavInitChildren`/`vstNavInitNode` build the GUI's tree: a node per
-/// container element, and for a main record the child group that *follows*
-/// it (`NodeData.Container := GroupRecord`, `xeMainForm.pas:20228-20237`;
-/// the `ChildGroup` fallback of `:20249` runs only on a node re-init, so a
-/// record whose group is not its next sibling has no children here). A
-/// parented group whose label is the FormID of the record before it is that
-/// record's hidden node (`:20299-20347`): it contributes no element, and
-/// its records are reached through the record -- exactly once.
-///
-/// A main record's node children are that group *alone* (`:20285-20288`
-/// assigns `NodeData.Container := GroupRecord` for an `etMainRecord`); its
-/// own element container holds no tree nodes, so it is never descended --
-/// `MainRecordImpl::as_container` answers with it, and descending it fired
-/// `Process` for subrecord-level elements the GUI tree does not hold (the
-/// review probe: `ScriptProcessElements := [etSubRecord]` over SSE
-/// `Update.esm` processed 4,373,854 elements where the oracle processes
-/// none).
-fn flatten(root: &ElementRef, out: &mut Vec<ElementRef>) {
-    out.push(root.clone());
-    let Some(container) = root.as_container() else {
-        return;
-    };
-    let count = container.get_element_count();
-    // Set while the loop stands on the group the record before consumed.
-    let mut skip_next = false;
-    for index in 0..count {
-        let Some(child) = container.get_element(index) else {
-            skip_next = false;
-            continue;
-        };
-        if skip_next {
-            skip_next = false;
-            continue;
+/// `vstNav.GetLast(aNode)`: the last node of `root`'s subtree, descending
+/// into the node children of [`node_children`]. The node itself when it has
+/// none (the walk then starts on `root`, as `ApplyScriptToSelection`
+/// substitutes the unassigned `GetLast`).
+fn last_node(root: &ElementRef) -> ElementRef {
+    let mut node = root.clone();
+    loop {
+        let children = node_children(&node);
+        match children.last() {
+            Some(last) => node = last.clone(),
+            None => return node,
         }
+    }
+}
+
+/// `vstNav.GetPrevious(aNode)` over the live tree: the previous node of the
+/// pre-order of [`node_children`] -- the last node of the previous sibling's
+/// subtree, or the parent when the node is its first child. `None` when the
+/// node has no tree parent (a root) or left the tree (upstream reads a
+/// dangling node then; the port's walk ends instead).
+fn previous_node(node: &ElementRef) -> Option<ElementRef> {
+    let parent = tree_parent(node)?;
+    let siblings = node_children(&parent);
+    let index = siblings
+        .iter()
+        .position(|sibling| std::ptr::addr_eq(Arc::as_ptr(sibling), Arc::as_ptr(node)))?;
+    if index > 0 {
+        return Some(last_node(&siblings[index - 1]));
+    }
+    Some(parent)
+}
+
+/// The parent node of `node` in the tree: the container element, or, for a
+/// node inside a parented group that is the hidden child group of the
+/// record before it, that record (`vstNavInitNode`: a record's node
+/// container is its child group).
+fn tree_parent(node: &ElementRef) -> Option<ElementRef> {
+    let container = node.as_element_impl()?.element_base().container()?;
+    let container_impl = container.as_element_impl()?;
+    if let Some(group) = container_impl.group_record_impl()
+        && is_parented_group(group.group_type())
+        && let Some(record) = parent_record_of_hidden_group(&group)
+    {
+        return Some(record);
+    }
+    Some(container)
+}
+
+/// The record a hidden parented group belongs to: the element before the
+/// group in its container, when it is a main record with the group's label
+/// (`xeMainForm.pas:20299-20347`).
+fn parent_record_of_hidden_group(group: &Arc<xedit_core::implementation::GroupRecordImpl>) -> Option<ElementRef> {
+    let group_ref = group.self_element_ref()?;
+    let container = group_ref.as_element_impl()?.element_base().container()?;
+    let base = container.as_element_impl()?.container_base()?;
+    let elements = base.elements();
+    let index = elements
+        .iter()
+        .position(|element| std::ptr::addr_eq(Arc::as_ptr(element), Arc::as_ptr(&group_ref)))?;
+    let before = elements.get(index.checked_sub(1)?)?;
+    let record = before.as_element_impl().and_then(ElementImpl::main_record_impl)?;
+    (group.get_group_label() == record.mr_struct().form_id.to_cardinal()).then_some(before.clone())
+}
+
+/// The children of a node in the navigation tree: for a main record the
+/// elements of its child group alone (`vstNavInitNode`: its own element
+/// container holds no tree nodes); for a file or group the element children
+/// with the hidden parented groups folded into the record before them.
+fn node_children(node: &ElementRef) -> Vec<ElementRef> {
+    let Some(node_impl) = node.as_element_impl() else {
+        return Vec::new();
+    };
+    if let Some(record) = node_impl.main_record_impl() {
+        let Some(container) = node_impl.element_base().container() else {
+            return Vec::new();
+        };
+        let Some(base) = container
+            .as_element_impl()
+            .and_then(|container| container.container_base())
+        else {
+            return Vec::new();
+        };
+        let elements = base.elements();
+        let Some(index) = elements
+            .iter()
+            .position(|element| std::ptr::addr_eq(Arc::as_ptr(element), Arc::as_ptr(node)))
+        else {
+            return Vec::new();
+        };
+        if let Some(next) = elements.get(index + 1)
+            && let Some(group) = next.as_element_impl().and_then(ElementImpl::group_record_impl)
+            && is_parented_group(group.group_type())
+            && group.get_group_label() == record.mr_struct().form_id.to_cardinal()
+        {
+            return tree_children_of_container(next);
+        }
+        return Vec::new();
+    }
+    tree_children_of_container(node)
+}
+
+/// The element children of a file or group container, in order, with a
+/// parented group whose label is the FormID of the record before it left
+/// out (its records are reached through that record, exactly once).
+fn tree_children_of_container(container: &ElementRef) -> Vec<ElementRef> {
+    let mut result = Vec::new();
+    let Some(base) = container.as_element_impl().and_then(|node| node.container_base()) else {
+        return result;
+    };
+    let elements = base.elements();
+    let mut index = 0;
+    while index < elements.len() {
+        let child = &elements[index];
         if child.get_element_type() == ElementType::etMainRecord {
-            out.push(child.clone());
-            if let Some(next) = container.get_element(index + 1)
+            result.push(child.clone());
+            index += 1;
+            if let Some(next) = elements.get(index)
                 && let Some(group) = next.as_element_impl().and_then(ElementImpl::group_record_impl)
                 && is_parented_group(group.group_type())
                 && let Some(record) = child.as_element_impl().and_then(ElementImpl::main_record_impl)
                 && group.get_group_label() == record.mr_struct().form_id.to_cardinal()
             {
-                flatten(&next, out);
-                skip_next = true;
+                index += 1;
             }
             continue;
         }
-        flatten(&child, out);
+        result.push(child.clone());
+        index += 1;
     }
+    result
 }
 
 /// `ParentedGroupRecordType` (`xeMainForm.pas:5157`): world, cell and topic
@@ -2141,52 +2232,124 @@ pub fn run_script(
             }
         }
         if script.function_exists("Process") && !script.function_is_empty("Process") {
-            for element in &order {
-                // `ApplyScriptToSelection` walks the live tree: a node a
-                // filter took out is not visited.
-                if state.borrow().is_filtered_out(element) || !state.borrow().can_process(element) {
-                    continue;
+            if selection.live_walk() {
+                // `ApplyScriptToSelection` over `vstNav`: each selected root
+                // is walked from its last node back to itself, the next
+                // node is read *before* `Process` runs, and the tree is
+                // live, so an edit that re-homes or removes a node changes
+                // what the walk reaches next (a record moved to a place the
+                // walk has not passed is visited again).
+                'roots: for root in &order {
+                    let mut node = last_node(root);
+                    loop {
+                        let at_root = std::ptr::eq(Arc::as_ptr(&node), Arc::as_ptr(root));
+                        let next = if at_root { None } else { previous_node(&node) };
+                        // `ApplyScriptToSelection` walks the live tree: a
+                        // node a filter took out is not visited.
+                        if !state.borrow().is_filtered_out(&node) && state.borrow().can_process(&node) {
+                            let params = {
+                                let state = state.borrow();
+                                [state.element_value(&node)]
+                            };
+                            // `ScriptProcessSingleElement`: without messages
+                            // the walk unlocks the progress callback around
+                            // the call.
+                            if silent {
+                                state.borrow_mut().progress_lock -= 1;
+                            }
+                            let result = call_script(&mut script, &state, "Process", &params);
+                            if silent {
+                                state.borrow_mut().progress_lock += 1;
+                            }
+                            match result {
+                                Ok(value) => {
+                                    if let Some(error) = apply_pending_filters(session, &state, &mut script)? {
+                                        last_error = Some(error);
+                                        break 'run;
+                                    }
+                                    let result = result_as_integer(&value);
+                                    if result != 0 {
+                                        // `ScriptProcessSingleElement <> 0`
+                                        // exits the selection walk only
+                                        // (`ApplyScriptToSelection`,
+                                        // `xeMainForm.pas:8762`): `Finalize`
+                                        // still runs, and the count does not
+                                        // include this element.
+                                        state.borrow_mut().progress(
+                                            &format!("Script terminated itself, Result={result}").to_owned(),
+                                            false,
+                                        );
+                                        self_terminated = Some(result);
+                                        break 'roots;
+                                    }
+                                }
+                                Err(error) => {
+                                    last_error = Some(error);
+                                    break 'run;
+                                }
+                            }
+                            response.processed += 1;
+                            processed_progress = Some(response.processed);
+                        }
+                        if at_root {
+                            break;
+                        }
+                        match next {
+                            Some(next) => node = next,
+                            // The node left the tree; upstream reads a
+                            // dangling node here, the walk ends instead.
+                            None => break,
+                        }
+                    }
                 }
-                let params = {
-                    let state = state.borrow();
-                    [state.element_value(element)]
-                };
-                // `ScriptProcessSingleElement`: without messages the walk
-                // unlocks the progress callback around the call.
-                if silent {
-                    state.borrow_mut().progress_lock -= 1;
-                }
-                let result = call_script(&mut script, &state, "Process", &params);
-                if silent {
-                    state.borrow_mut().progress_lock += 1;
-                }
-                match result {
-                    Ok(value) => {
-                        if let Some(error) = apply_pending_filters(session, &state, &mut script)? {
+            } else {
+                for element in &order {
+                    // `ApplyScriptToSelection` walks the live tree: a node a
+                    // filter took out is not visited.
+                    if state.borrow().is_filtered_out(element) || !state.borrow().can_process(element) {
+                        continue;
+                    }
+                    let params = {
+                        let state = state.borrow();
+                        [state.element_value(element)]
+                    };
+                    // `ScriptProcessSingleElement`: without messages the walk
+                    // unlocks the progress callback around the call.
+                    if silent {
+                        state.borrow_mut().progress_lock -= 1;
+                    }
+                    let result = call_script(&mut script, &state, "Process", &params);
+                    if silent {
+                        state.borrow_mut().progress_lock += 1;
+                    }
+                    match result {
+                        Ok(value) => {
+                            if let Some(error) = apply_pending_filters(session, &state, &mut script)? {
+                                last_error = Some(error);
+                                break 'run;
+                            }
+                            let result = result_as_integer(&value);
+                            if result != 0 {
+                                // `ScriptProcessSingleElement <> 0` exits the
+                                // selection walk only (`ApplyScriptToSelection`,
+                                // `xeMainForm.pas:8762`): `Finalize` still runs,
+                                // and the count does not include this element
+                                // (probes `t-17`, `t-29`).
+                                state
+                                    .borrow_mut()
+                                    .progress(&format!("Script terminated itself, Result={result}").to_owned(), false);
+                                self_terminated = Some(result);
+                                break;
+                            }
+                        }
+                        Err(error) => {
                             last_error = Some(error);
                             break 'run;
                         }
-                        let result = result_as_integer(&value);
-                        if result != 0 {
-                            // `ScriptProcessSingleElement <> 0` exits the
-                            // selection walk only (`ApplyScriptToSelection`,
-                            // `xeMainForm.pas:8762`): `Finalize` still runs,
-                            // and the count does not include this element
-                            // (probes `t-17`, `t-29`).
-                            state
-                                .borrow_mut()
-                                .progress(&format!("Script terminated itself, Result={result}").to_owned(), false);
-                            self_terminated = Some(result);
-                            break;
-                        }
                     }
-                    Err(error) => {
-                        last_error = Some(error);
-                        break 'run;
-                    }
+                    response.processed += 1;
+                    processed_progress = Some(response.processed);
                 }
-                response.processed += 1;
-                processed_progress = Some(response.processed);
             }
         }
         if script.function_exists("Finalize") && !script.function_is_empty("Finalize") {
