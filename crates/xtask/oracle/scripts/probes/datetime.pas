@@ -1,14 +1,20 @@
 {
   Parity fixture (issue #30): the JSON date-time surface.
 
-  TJsonDataValue.DateTimeValue of every value kind, the ISO 8601 text
-  DateTimeToJSON writes with UseUtcTime on (the system's time zone bias and
-  the Z suffix) and off (DateTimeToISO8601 with the local offset), the
-  parsing surface of JSONToDateTime (a Z suffix, an offset, no suffix, a
-  date alone, the .NET "/Date(...)/" form and invalid input) with and
-  without the local-time conversion, and the daylight saving cases: a winter
-  and a summer value, the missing hour of the spring transition and the
-  ambiguous hour of the autumn one. The message log is compared.
+  `Numerics` pins the RTL the library stands on (the day numbers `EncodeDate`
+  gives, `DecodeDate`'s day and `DecodeTime`'s time for negative values --
+  the day is the truncated one and the time is the distance from it, read as
+  a positive time -- and the offset arithmetic `DateTimeToISO8601` does).
+  `WriteValue` prints the ISO 8601 text `DateTimeToJSON` writes with
+  UseUtcTime on (the machine's time zone bias and the Z suffix) and off
+  (`DateTimeToISO8601` with the local offset, negative offsets included) for
+  every value kind and for the daylight saving cases: a winter and a summer
+  value, the missing hour of the spring transition and the ambiguous hour of
+  the autumn one, plus the pre-epoch values whose calendar day precedes
+  1899-12-30. `ParseValue` prints `DateTimeValue` of every string kind of
+  `JSONToDateTime` (a Z suffix, an offset, no suffix, a date alone, the .NET
+  "/Date(...)/" form, the values that read 0 and the ones `EncodeDate`
+  refuses). The message log is compared.
 }
 unit DateTimeProbe;
 
