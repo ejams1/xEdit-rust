@@ -5,7 +5,7 @@ description: Use when an agent needs custom batch logic over Bethesda plugin dat
 
 # Writing xEdit scripts
 
-The port runs xEdit's Pascal scripts with a JvInterpreter-compatible interpreter (`crates/xedit-script`), driven by the port of `xeMainForm.pas`'s `DoRunScript`/`ApplyScript` (`crates/xedit-session/src/script.rs`). The compatibility goal is the phase-6 gate: the 150 shipped `.pas` scripts of the 4.1.5q `Edit Scripts` folder parse (150 of 150), every form-free script that runs produces the oracle's output, and the language probes of `cargo xtask parity script --phase probe` (`crates/xtask/oracle/scripts/probes/`, 877 small scripts run on both sides over a probe master) agree with the oracle (877 of 877, with `probes.json` accepting the 32 faults, hangs and documented divergences with reasons). This skill says when to reach for a script, how to run one, and what the port does and does not answer.
+The port runs xEdit's Pascal scripts with a JvInterpreter-compatible interpreter (`crates/xedit-script`), driven by the port of `xeMainForm.pas`'s `DoRunScript`/`ApplyScript` (`crates/xedit-session/src/script.rs`). The compatibility goal is the phase-6 gate: the 150 shipped `.pas` scripts of the 4.1.5q `Edit Scripts` folder parse (150 of 150), every form-free script that runs produces the oracle's output, and the language probes of `cargo xtask parity script --phase probe` (`crates/xtask/oracle/scripts/probes/`, 879 small scripts run on both sides over a probe master) agree with the oracle (879 of 879, with `probes.json` accepting the 32 faults, hangs and documented divergences with reasons). This skill says when to reach for a script, how to run one, and what the port does and does not answer.
 
 ## Script or `xedit batch`?
 
