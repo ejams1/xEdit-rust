@@ -75,6 +75,12 @@ struct Scenario {
     /// (a deleted reference to a moveable static for `UDRSetMSTT`).
     #[serde(default)]
     prepare: Option<Prepare>,
+    /// Further `[Options]` lines of the oracle's settings file (`FillPNAM`,
+    /// `SimpleRecords`); the port gets the flag of each it has
+    /// (`--fill-pnam`), and a scenario with one it has not runs on the
+    /// oracle only.
+    #[serde(default)]
+    ini: Map<String, Value>,
 }
 
 /// The input plugin of a scenario that the port builds.
@@ -109,6 +115,17 @@ impl Scenario {
                 let value = value.as_f64().with_context(|| format!("{field} must be a number"))?;
                 lines.push_str(&format!("{key}={value}\r\n"));
             }
+        }
+        for (key, value) in &self.ini {
+            let value = match value {
+                Value::Bool(value) => u8::from(*value).to_string(),
+                Value::String(text) => text.clone(),
+                other => other.to_string(),
+            };
+            lines.push_str(&format!(
+                "{key}={value}
+"
+            ));
         }
         if let Some(value) = self.options.get("udr_mstt_value") {
             let text = value.as_str().context("udr_mstt_value must be hexadecimal text")?;
@@ -547,6 +564,16 @@ fn check(
     let port_log = port_dir.join(format!("{file_stem}.port.log"));
     let mut command = std::process::Command::new(port);
     command.args(["--json", "--edit", "--game", game.mode, "--dont-cache"]);
+    for (key, value) in &scenario.ini {
+        let on = value.as_bool().unwrap_or_else(|| value.as_str() == Some("1"));
+        match key.as_str() {
+            "FillPNAM" if on => {
+                command.arg("--fill-pnam");
+            }
+            "FillPNAM" => {}
+            other => anyhow::bail!("the port has no load setting for the oracle's {other}"),
+        }
+    }
     for plugin in &plugins {
         command
             .arg("--load")

@@ -2154,6 +2154,7 @@ fn port_run(
                 "EnforceAllMasters" => "--enforce-all-masters",
                 "speed" => "--speed-over-memory",
                 "memory" => "--memory-over-speed",
+                "FillPNAM" => "--fill-pnam",
                 other => panic!("no port flag for the switch -{other}"),
             });
         }
