@@ -299,7 +299,9 @@ pub fn register(adapter: &mut Adapter) {
         Ok(())
     });
     function_(adapter, "Trunc", &[EMPTY], |value, args| {
-        *value = Value::Integer(arg_f64(args, 0)?.trunc() as i32);
+        // `Integer(Trunc(...))` is a bits-cast of the `Int64` result, which
+        // is the integer indefinite for a NaN or an out-of-range value.
+        *value = Value::Integer(xedit_core::delphi::trunc(arg_f64(args, 0)?) as i32);
         Ok(())
     });
     function_(adapter, "Pos", &[EMPTY, EMPTY], |value, args| {

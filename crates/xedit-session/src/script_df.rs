@@ -864,7 +864,12 @@ fn register_functions(adapter: &mut Adapter) {
         "dfCalcHash",
         Rc::new(|value, args| {
             let text = text_arg(&args.values[0])?;
-            *value = Value::Integer(df_calc_hash(&text) as i32);
+            // `Value := dfCalcHash(...)` is a `Cardinal` (varLongWord); the
+            // port keeps it in an `Int64` so the value and its text stay the
+            // unsigned 32 bit number for hashes above `High(Integer)`
+            // (parity #39; the `VarType` is 20 rather than 19, owed with
+            // #28's value model).
+            *value = Value::Int64(i64::from(df_calc_hash(&text)));
             Ok(())
         }),
         1,
@@ -1825,10 +1830,11 @@ mod tests {
             2.5
         );
         // `HashName` of an ASCII name: the hash phase 5 checked against the
-        // oracle for 1596 definition names.
+        // oracle for 1596 definition names. The value is the full unsigned
+        // 32 bit hash (`varLongWord` upstream, kept in an `Int64` here).
         assert_eq!(
-            int_of(&function("dfCalcHash", vec![Value::Str(b"Name".to_vec())])),
-            df_calc_hash("Name") as i32
+            xedit_script::values::to_i64(&function("dfCalcHash", vec![Value::Str(b"Name".to_vec())])).unwrap(),
+            i64::from(df_calc_hash("Name"))
         );
     }
 

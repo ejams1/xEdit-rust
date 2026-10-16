@@ -509,29 +509,12 @@ fn float_fixed(value: f64, digits: usize, thousand: bool) -> String {
 }
 
 /// `%e`: `digits` significant digits and an exponent of at least three
-/// digits with an explicit sign (the RTL's shape: `1.23E+002`).
+/// digits with an explicit sign (the RTL's shape: `1.23E+002`). The digits
+/// are the RTL's own `FloatToDecimal` ones (`FloatToStrF(..., ffExponent,
+/// ...)`, parity #39): Rust's correctly rounded `{:e}` differed in the last
+/// digit for values like `1e-7` and `0.1`.
 fn float_exponent(value: f64, digits: usize, exponent_digits: usize) -> String {
-    if value.is_nan() {
-        return "Nan".to_owned();
-    }
-    if value.is_infinite() {
-        return if value > 0.0 {
-            "Inf".to_owned()
-        } else {
-            "-Inf".to_owned()
-        };
-    }
-    let digits = digits.clamp(0, 17);
-    // The mantissa digit count the RTL keeps is `Precision` when given,
-    // else the shortest exact representation capped at 15.
-    let text = format!("{:.*e}", digits.saturating_sub(1).min(17), value);
-    let (mantissa, exponent) = text.split_once('e').expect("scientific format");
-    let exponent: i32 = exponent.parse().expect("exponent");
-    let sign = if exponent < 0 { '-' } else { '+' };
-    let magnitude = exponent.unsigned_abs().to_string();
-    let exponent_digits = exponent_digits.max(3);
-    let zeros: String = std::iter::repeat_n('0', exponent_digits.saturating_sub(magnitude.len())).collect();
-    format!("{mantissa}E{sign}{zeros}{magnitude}")
+    delphi::float_to_str_f_exponent(value, digits, exponent_digits.max(3) as i32)
 }
 
 /// `%m`: the currency format (symbol, grouped digits, `CurrencyDecimals`
@@ -580,10 +563,15 @@ pub fn float_to_str_f(value: f64, format: FloatFormat, precision: i32, digits: i
             if precision <= 0 {
                 delphi::float_to_str(value)
             } else {
-                delphi::format_general(value, precision as usize)
+                delphi::float_to_str_f_general(value, precision as usize, digits)
             }
         }
-        FloatFormat::Exponent => float_exponent(value, precision.max(0) as usize, digits.max(0) as usize),
+        FloatFormat::Exponent => {
+            // A precision of 0 or less is the default of 15 significant
+            // digits (`FloatToStr`, the general format, uses it too).
+            let precision = if precision <= 0 { 15 } else { precision as usize };
+            delphi::float_to_str_f_exponent(value, precision, digits)
+        }
         FloatFormat::Fixed => float_fixed(value, digits.max(0) as usize, false),
         FloatFormat::Number => float_fixed(value, digits.max(0) as usize, true),
         FloatFormat::Currency => {
