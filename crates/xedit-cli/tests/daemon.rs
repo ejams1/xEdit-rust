@@ -156,3 +156,60 @@ fn serve_answers_on_a_named_pipe_and_accepts_the_next_client() {
     assert!(ask(&mut second, 3, "rpc.shutdown")["result"].is_object());
     assert!(child.wait().unwrap().success());
 }
+
+/// The concurrency rule of the named pipe: one client at a time (a second
+/// one is refused by Windows while the first is connected) and one daemon
+/// per pipe name (a second one fails at startup instead of writing the same
+/// plugins through a second session).
+#[cfg(windows)]
+#[test]
+fn one_client_at_a_time_and_one_daemon_per_pipe_name() {
+    use std::fs::OpenOptions;
+    use std::time::{Duration, Instant};
+
+    let name = format!("xedit-test-busy-{}", std::process::id());
+    let mut child = Command::new(env!("CARGO_BIN_EXE_xedit"))
+        .args(["serve", "--pipe", &name])
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .spawn()
+        .unwrap();
+    let path = format!(r"\\.\pipe\{name}");
+    let connect = |timeout: Duration| {
+        let started = Instant::now();
+        loop {
+            match OpenOptions::new().read(true).write(true).open(&path) {
+                Ok(pipe) => return Ok(pipe),
+                Err(_) if started.elapsed() < timeout => std::thread::sleep(Duration::from_millis(50)),
+                Err(error) => return Err(error),
+            }
+        }
+    };
+    let first = connect(Duration::from_secs(60)).expect("the pipe never opened");
+    // ERROR_PIPE_BUSY: the one instance is connected to the first client.
+    let busy = connect(Duration::from_millis(200)).expect_err("a second client connected while the first was served");
+    assert_eq!(busy.raw_os_error(), Some(231), "{busy}");
+    // A second daemon cannot create the name at all.
+    let second = Command::new(env!("CARGO_BIN_EXE_xedit"))
+        .args(["serve", "--pipe", &name])
+        .stdin(Stdio::null())
+        .output()
+        .unwrap();
+    assert!(!second.status.success());
+    let stderr = String::from_utf8_lossy(&second.stderr);
+    assert!(stderr.contains("already served by another xedit serve"), "{stderr}");
+    drop(first);
+    // The daemon outlives its client and takes the next one.
+    let mut next = connect(Duration::from_secs(60)).expect("the pipe did not take the next client");
+    writeln!(
+        next,
+        "{}",
+        json!({ "jsonrpc": "2.0", "id": 1, "method": "rpc.shutdown" })
+    )
+    .unwrap();
+    let mut line = String::new();
+    BufReader::new(&next).read_line(&mut line).unwrap();
+    let reply: Value = serde_json::from_str(&line).unwrap();
+    assert!(reply["result"].is_object(), "{reply}");
+    assert!(child.wait().unwrap().success());
+}

@@ -221,7 +221,7 @@ pub fn clean_file(
     };
     if request.quick && (simple_records() || (can_sort_info() && !fill_pnam())) {
         response.messages.push(
-            "<Warning: the plugins were not loaded as the quick clean mode loads them (full record definitions, PNAM fill); the result can differ from xEdit's>"
+            "<Warning: the plugins were not loaded as the quick clean mode loads them (full record definitions, PNAM fill); the result can differ from xEdit's: load with `session.load --mode quickautoclean` (or the legacy -quickautoclean) to run the mode as xEdit does>"
                 .to_owned(),
         );
     }

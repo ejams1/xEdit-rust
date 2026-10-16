@@ -77,6 +77,19 @@ pub struct GuiRun<'a> {
     /// script edit the game master of the private copy, as upstream
     /// requires: `wbAllowEditGameMaster` alone).
     pub extra_args: Vec<String>,
+    /// The run finds the game's data folder and its `Plugins.txt` itself
+    /// (`DoInitPath`): no `-D:`/`-P:` and no private data folder, so the
+    /// discovered paths are the machine's, which is what the case checks.
+    /// An empty `<AppName><ToolName>.ini` is written into the program
+    /// folder, because the GUI would otherwise create the settings file
+    /// next to the discovered `Plugins.txt`, in the user's own folder.
+    /// Every other folder (`-T:`, `-C:`, `-B:`, `-S:`, `-M:`, `-I:`,
+    /// `-G:`) stays private, so the game install is not written to.
+    pub discovery: bool,
+    /// `wbToolName` of the run, for the settings file of a discovery run:
+    /// the switch of the mode without its dash (`CheckForITM`). `Edit` by
+    /// default, which is the mode of most runs.
+    pub tool_name: String,
 }
 
 /// What the script left after a run.
@@ -535,14 +548,23 @@ impl GuiRun<'_> {
         let work_text = format!("{}\\", windows_path(&self.work));
         let script = self.work.join("oracle.pas");
         fs::write(&script, self.script.replace("{{WORK}}", &work_text))?;
+        if self.discovery {
+            // The settings file of the program folder, so that the GUI uses
+            // it instead of creating one next to the discovered
+            // `Plugins.txt` (`xeInit.pas:587`).
+            fs::write(bin.join(format!("{}{}.ini", self.mode, self.tool_name)), "")?;
+        }
 
         // Started hidden: the main form and the module selection are
         // driven through their window handles, which work hidden too.
         let mut command = HiddenCommand::new(&exe);
+        command.arg(format!("-{}", self.mode));
+        if !self.discovery {
+            command
+                .arg(format!("-D:{}\\", windows_path(&data)))
+                .arg(format!("-P:{}", windows_path(&plugins)));
+        }
         command
-            .arg(format!("-{}", self.mode))
-            .arg(format!("-D:{}\\", windows_path(&data)))
-            .arg(format!("-P:{}", windows_path(&plugins)))
             .arg(format!("-T:{}temp\\", work_text))
             .arg(format!("-C:{}cache\\", work_text))
             .arg(format!("-B:{}backup\\", work_text))

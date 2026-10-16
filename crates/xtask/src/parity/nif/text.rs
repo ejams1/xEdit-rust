@@ -255,6 +255,8 @@ pub fn run(_root: &Path, tag: &str, options: &Options) -> Result<()> {
         expected_peak: 2 * GIB,
         max_memory: 16 * GIB,
         extra_args: Vec::new(),
+        discovery: false,
+        tool_name: "Edit".to_owned(),
     };
     println!("oracle        {} files through the script adapter", cases.len());
     let result = run.run().context("running the GUI oracle")?;

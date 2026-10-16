@@ -405,6 +405,8 @@ pub(super) fn run_gui_with_args(
         expected_peak,
         max_memory: runner.max_memory,
         extra_args,
+        discovery: false,
+        tool_name: "Edit".to_owned(),
     };
     let result = run.run_with(extras);
     if let Ok(result) = &result

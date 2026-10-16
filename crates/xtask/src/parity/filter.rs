@@ -608,6 +608,8 @@ fn check(
             expected_peak,
             max_memory: runner.max_memory,
             extra_args: Vec::new(),
+            discovery: false,
+            tool_name: "Edit".to_owned(),
         };
         let started = std::time::Instant::now();
         let result = run.run_with(&Default::default());

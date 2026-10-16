@@ -27,7 +27,7 @@ use schemars::JsonSchema;
 use serde::Serialize;
 use xedit_core::interface::constructors::find_record_def;
 use xedit_core::interface::def::Def;
-use xedit_core::interface::globals::{app_name, header_signature, wb_group_order};
+use xedit_core::interface::globals::{app_name, file_chapters, file_header, header_signature, wb_group_order};
 use xedit_core::interface::types::{DefType, PascalEnum, dt_arrays, dt_non_values};
 use xedit_io::collate::ansi_compare_text;
 
@@ -156,6 +156,10 @@ impl Profiles {
 /// The export of one game.
 struct Export {
     format: ExportFormat,
+    /// The definitions are the saves of the game (`tsSaves`) rather than
+    /// its plugins: the header is `wbFileHeader` and the chapters
+    /// (`wbFileChapters`) are walked, and there is no record array.
+    saves: bool,
     /// The structure text, as xDump writes it to stdout.
     out: String,
     profiles: Profiles,
@@ -384,7 +388,9 @@ impl Export {
         if skip_first {
             self.out.push_str(" Present only if ...");
         }
-        self.out.push('\n');
+        // `WriteLn` of the console: the release writes CRLF, and the
+        // structure text is compared byte for byte.
+        self.out.push_str("\r\n");
 
         let next_indent = format!("{indent}  ");
         if (indent.is_empty() || self.profiles.find(profile) != -1) && do_it {
@@ -396,7 +402,7 @@ impl Export {
             if self.format == ExportFormat::UespWiki {
                 self.out.push_str(UESP_WIKI_CLOSE);
             }
-            self.out.push('\n');
+            self.out.push_str("\r\n");
         }
     }
 
@@ -607,16 +613,23 @@ impl Export {
                 if matches!(def_type, DefType::dtStruct | DefType::dtSubRecordStruct) && self.profiles.find(profile) > 0
                 {
                     self.profiles.mark(profile);
+                    // `CheckPass` clears its `Profile` before it dispatches,
+                    // and `ExportElement` appends to it: the element's own
+                    // `:Name=Type` piece is written by the export, not by
+                    // the caller (`xDump.dpr:506`).
+                    local.clear();
                     self.export_element(def, local, Pass::Shared, indent);
                 }
                 if matches!(def_type, DefType::dtUnion | DefType::dtSubRecordUnion) && self.profiles.find(profile) > 1 {
                     self.profiles.mark(profile);
+                    local.clear();
                     self.export_element(def, local, Pass::Shared, indent);
                 }
             }
             Pass::Chapters => {
                 if matches!(def_type, DefType::dtRecord | DefType::dtStructChapter) {
                     self.profiles.mark(profile);
+                    local.clear();
                     self.export_element(def, local, Pass::Chapters, indent);
                 }
             }
@@ -628,8 +641,17 @@ impl Export {
         }
     }
 
-    /// Upstream `ProfileHeader`: the file header definition (`wbHeaderSignature`).
+    /// Upstream `ProfileHeader`: the file header definition
+    /// (`wbHeaderSignature`) of the plugins, the save header (`wbFileHeader`)
+    /// of a saves source.
     fn profile_header(&mut self, pass: Pass) {
+        if self.saves {
+            if let Some(header) = file_header() {
+                let mut profile = String::new();
+                self.profile_element(header.as_dyn_def(), &mut profile, pass, "");
+            }
+            return;
+        }
         if let Some(def) = find_record_def(header_signature()) {
             let mut profile = String::new();
             self.profile_element(def.as_dyn_def(), &mut profile, pass, "");
@@ -637,8 +659,11 @@ impl Export {
     }
 
     /// Upstream `ProfileArray`: every record definition in the order of the
-    /// top level groups.
+    /// top level groups; nothing for a saves source, which has no records.
     fn profile_array(&mut self, pass: Pass) {
+        if self.saves {
+            return;
+        }
         for signature in wb_group_order() {
             if signature == header_signature() {
                 continue;
@@ -646,6 +671,20 @@ impl Export {
             if let Some(def) = find_record_def(signature) {
                 let mut profile = String::new();
                 self.profile_element(def.as_dyn_def(), &mut profile, pass, "");
+            }
+        }
+    }
+
+    /// Upstream `ProfileChapters`: the chapters of the save definitions
+    /// (`wbFileChapters`), walked for a saves source only.
+    fn profile_chapters(&mut self, pass: Pass) {
+        if !self.saves {
+            return;
+        }
+        if let Some(chapters) = file_chapters() {
+            for index in 0..chapters.get_member_count() as usize {
+                let mut profile = String::new();
+                self.profile_element(chapters.get_member(index).as_dyn_def(), &mut profile, pass, "");
             }
         }
     }
@@ -666,13 +705,46 @@ pub struct ExportResult {
     pub written: bool,
 }
 
+/// The tool sources the export has (`xDump.dpr`'s `tsPlugins` and
+/// `tsSaves`): the definitions of the plugins of a game, or the definitions
+/// of its saves.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum ExportSource {
+    Plugins,
+    Saves,
+}
+
+impl ExportSource {
+    /// `tsPlugins`/`tsSaves`, the names `tool.run export --source` takes
+    /// (`plugins` and `saves`, `ts` prefix and case ignored).
+    pub fn parse(name: &str) -> Option<Self> {
+        let name = name.trim_start_matches("ts").to_ascii_lowercase();
+        match name.as_str() {
+            "plugins" => Some(ExportSource::Plugins),
+            "saves" => Some(ExportSource::Saves),
+            _ => None,
+        }
+    }
+
+    /// `wbSourceName`: the name the profile file carries.
+    pub fn name(self) -> &'static str {
+        match self {
+            ExportSource::Plugins => "Plugins",
+            ExportSource::Saves => "Saves",
+        }
+    }
+}
+
 /// The export tool mode: the profile of the definitions of the loaded game.
-/// `format` is `RAW` or `UESPWIKI`, and `output` is where the profile file
-/// goes (`<AppName>Export<Source>.txt` next to the program when omitted, as
-/// xDump writes it into its working directory).
+/// `format` is `RAW` or `UESPWIKI`, `source` names the definitions (the
+/// plugins or the saves of the game, as `xDump.exe`'s `-saves` switch), and
+/// `output` is where the profile file goes (`<AppName>Export<Source>.txt`
+/// next to the program when omitted, as xDump writes it into its working
+/// directory).
 pub fn export_definitions(
     session: &mut Session,
     format: &str,
+    source: ExportSource,
     output: Option<&str>,
     dry_run: bool,
 ) -> Result<ExportResult, CommandError> {
@@ -686,18 +758,20 @@ pub fn export_definitions(
     let format = ExportFormat::parse(format);
     let mut export = Export {
         format,
+        saves: source == ExportSource::Saves,
         out: String::new(),
         profiles: Profiles::new(),
     };
     // `for Pass := epRead to epRemaining do begin ProfileHeader; ProfileArray;
-    // ProfileChapters; end;` — the save chapters (`wbFileChapters`) are only
-    // walked in the saves source, which has no tool mode here.
+    // ProfileChapters; end;`
     for pass in PASSES {
         export.profile_header(pass);
         export.profile_array(pass);
+        export.profile_chapters(pass);
     }
     let text = export.profiles.text();
-    let path = PathBuf::from(output.map_or_else(|| format!("{}ExportPlugins.txt", app_name()), str::to_owned));
+    let path =
+        PathBuf::from(output.map_or_else(|| format!("{}Export{}.txt", app_name(), source.name()), str::to_owned));
     if !dry_run {
         std::fs::write(&path, text.as_bytes())
             .map_err(|error| CommandError::new("io", format!("{}: {error}", path.display())))?;

@@ -646,6 +646,13 @@ struct RunCase {
     /// them where the game's files would be.
     #[serde(default)]
     data_files: Vec<String>,
+    /// The load settings of the case, as `xeInit.pas` reads them from its
+    /// command line (`PseudoESL`, `IgnoreESL`, `TrackAllEditorID`, ...): the
+    /// GUI gets the switch (`-PseudoESL`), the port the flag of
+    /// `crates/xedit-cli` for it (`--pseudo-light`). A name with no flag
+    /// fails the case.
+    #[serde(default)]
+    switches: Vec<String>,
     /// What the case is for, when it is not obvious.
     #[serde(default)]
     #[allow(dead_code, reason = "documentation in the file")]
@@ -681,6 +688,9 @@ struct Task {
     data_files: Vec<(PathBuf, String)>,
     /// The references are loaded from a cache a first run wrote.
     refcache: bool,
+    /// The load settings of the case (`-PseudoESL` for the GUI, the port's
+    /// flag for the same setting).
+    switches: Vec<String>,
     /// The reason `parse.json` accepts a script the oracle refuses.
     accepted: Option<String>,
     #[allow(dead_code, reason = "read where a case loads the game's plugins")]
@@ -864,6 +874,7 @@ pub(super) fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
                 synthetic_master: true,
                 master: None,
                 refcache: false,
+                switches: Vec::new(),
                 accepted: parse_case.accept.get(name.as_str()).cloned(),
                 stem: format!("parse-{name}"),
             });
@@ -959,6 +970,7 @@ pub(super) fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
                 load,
                 build_refs,
                 refcache: case.refcache,
+                switches: case.switches.clone(),
                 close_after,
                 save: case.save.clone(),
                 timeout: case.timeout_minutes.map_or(Duration::from_secs(10 * 60), |minutes| {
@@ -1006,6 +1018,7 @@ pub(super) fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
                 synthetic_master: true,
                 master: None,
                 refcache: false,
+                switches: Vec::new(),
                 accepted: accept.accept.get(name.as_str()).cloned(),
                 stem: format!("probe-{name}"),
             });
@@ -1286,6 +1299,13 @@ fn oracle_run(
         // Bumped when what a run captures for the saved plugins changes.
         recipe.push_str("\nsave v2");
     }
+    if !task.switches.is_empty() {
+        recipe.push_str(
+            "
+switches ",
+        );
+        recipe.push_str(&task.switches.join(","));
+    }
     if task.refcache {
         recipe.push_str("\nrefcache");
     }
@@ -1352,7 +1372,13 @@ fn oracle_run(
         budget: &runner.budget,
         expected_peak: expected_peak(&peak_file, &plugins),
         max_memory: runner.max_memory,
-        extra_args: EXTRA_ARGS.iter().map(|arg| (*arg).to_owned()).collect(),
+        extra_args: EXTRA_ARGS
+            .iter()
+            .map(|arg| (*arg).to_owned())
+            .chain(task.switches.iter().map(|name| format!("-{name}")))
+            .collect(),
+        discovery: false,
+        tool_name: "Edit".to_owned(),
     };
     let started = std::time::Instant::now();
     if task.refcache {
@@ -1366,6 +1392,8 @@ fn oracle_run(
         let prep = GuiRun {
             work: prep_work.clone(),
             extra_args: EXTRA_ARGS.iter().map(|arg| (*arg).to_owned()).collect(),
+            discovery: false,
+            tool_name: "Edit".to_owned(),
             build_refs: true,
             plugins: plugins.clone(),
             script: String::new(),
@@ -2038,6 +2066,7 @@ fn port_run(
     // empty game ini, so no ini of the user's names archives or a language.
     let my_games = dir.join("mygames");
     fs::create_dir_all(&my_games)?;
+    fs::create_dir_all(dir.join("temp"))?;
     fs::write(my_games.join("game.ini"), "")?;
     let cache = dir.join("cache");
     let port_command = |script: &str| {
@@ -2048,6 +2077,27 @@ fn port_run(
             command.arg("--cache-path").arg(format!("{}\\", cache.display()));
         } else {
             command.arg("--dont-cache");
+        }
+        for name in &task.switches {
+            // The switch of `xeInit.pas` and the flag of the port for the
+            // same load setting.
+            command.arg(match name.as_str() {
+                "PseudoESL" | "PseudoLight" | "PseudoSmall" => "--pseudo-light",
+                "IgnoreESL" | "IgnoreLight" | "IgnoreSmall" => "--ignore-light",
+                "PseudoMedium" => "--pseudo-medium",
+                "IgnoreMedium" => "--ignore-medium",
+                "PseudoUpdate" => "--pseudo-update",
+                "IgnoreUpdate" => "--ignore-update",
+                "dontremoveoffsetdata" => "--dont-remove-offset-data",
+                "reportinjected" => "--report-injected",
+                "noreportinjected" => "--no-report-injected",
+                "TrackAllEditorID" => "--track-all-editor-id",
+                "moreunknown" => "--more-unknown",
+                "EnforceAllMasters" => "--enforce-all-masters",
+                "speed" => "--speed-over-memory",
+                "memory" => "--memory-over-speed",
+                other => panic!("no port flag for the switch -{other}"),
+            });
         }
         command
             // `-IKnowIllBreakMyGameWithThis` on the oracle's side: without it
@@ -2063,6 +2113,10 @@ fn port_run(
             .arg(format!("{}\\", my_games.display()))
             .arg("--game-ini")
             .arg(my_games.join("game.ini"))
+            // The GUI's `-T:`: the temporary folder of the run, which a
+            // script's `wbTempPath` reports.
+            .arg("--temp-path")
+            .arg(format!("{}temp\\", dir.display()))
             .env("XEDIT_SCRIPTS", &dir);
         for plugin in &plugins {
             command.arg("--load").arg(plugin);

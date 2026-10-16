@@ -332,7 +332,7 @@ pub fn game_of_tag(tag: &str) -> Option<GameMode> {
 /// The settings the command line of `xeInit.pas` gives the load, which
 /// [`apply_on_load`] applies. The tool mode is the one that matters most:
 /// it selects the mode's own settings.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct LoadSwitches {
     pub tool_mode: ToolMode,
     pub tool_source: ToolSource,
@@ -360,6 +360,48 @@ pub struct LoadSwitches {
     /// The switches `-IKnowWhatImDoing` and `-IKnowIllBreakMyGameWithThis`
     /// unlock.
     pub dangerous: DangerousSwitches,
+    /// `-PseudoESL`, `-PseudoLight` and `-PseudoSmall` (`wbPseudoLight`):
+    /// every plugin is loaded as a light module whatever its flag says.
+    pub pseudo_light: bool,
+    /// `-IgnoreESL`, `-IgnoreLight` and `-IgnoreSmall` (`wbIgnoreLight`):
+    /// the light flag of a plugin is ignored.
+    pub ignore_light: bool,
+    /// `-PseudoMedium` (`wbPseudoMedium`).
+    pub pseudo_medium: bool,
+    /// `-IgnoreMedium` (`wbIgnoreMedium`).
+    pub ignore_medium: bool,
+    /// `-PseudoUpdate` (`wbPseudoUpdate`).
+    pub pseudo_update: bool,
+    /// `-IgnoreUpdate` (`wbIgnoreUpdate`).
+    pub ignore_update: bool,
+    /// `-reportinjected` and `-noreportinjected` (`wbReportInjected`): the
+    /// load logs `<Note: X was injected into Y>`.
+    pub report_injected: Option<bool>,
+    /// `-TrackAllEditorID` (`wbTrackAllEditorID`): the records of a plugin
+    /// are added to the editor ID index even where its definition does not.
+    pub track_all_editor_id: bool,
+    /// `-moreunknown` (`wbMoreInfoForUnknown`): xDump's `-more`.
+    pub more_info_for_unknown: bool,
+    /// `-EnforceAllMasters` (`wbEnforceAllMasters`).
+    pub enforce_all_masters: bool,
+    /// `-speed` and `-memory` (`wbSpeedOverMemory`).
+    pub speed_over_memory: Option<bool>,
+    /// `-dontremoveoffsetdata` (`wbRemoveOffsetData := False`).
+    pub remove_offset_data: Option<bool>,
+    /// `-IKnowWhatImDoing -StripMasters:<name,...>` (`wbStripMasters` and
+    /// `wbStripMastersFileNames`): the load leaves those masters out of the
+    /// master list it reads from the header.
+    pub strip_masters: Vec<String>,
+    /// `-AllowDirectSaves[:<name>,...]` (`wbAllowDirectSave` and
+    /// `wbAllowDirectSaveFor`).
+    pub allow_direct_saves: Option<Vec<String>>,
+    /// `-ItJustWorksTM -ThisIsFine -GiveMeTheRedPill`, Starfield only
+    /// (`wbRedPill` and `wbStarfieldIsABugInfestedHellhole := False`).
+    pub starfield_red_pill: bool,
+    /// `-cp-general:` (`wbEncoding`).
+    pub code_page: Option<u32>,
+    /// `-cp:` and `-cp-trans:` (`wbEncodingTrans`).
+    pub code_page_trans: Option<u32>,
 }
 
 impl Default for LoadSwitches {
@@ -378,6 +420,23 @@ impl Default for LoadSwitches {
             build_refs: None,
             simple_form_ids: false,
             dangerous: DangerousSwitches::default(),
+            pseudo_light: false,
+            ignore_light: false,
+            pseudo_medium: false,
+            ignore_medium: false,
+            pseudo_update: false,
+            ignore_update: false,
+            report_injected: None,
+            track_all_editor_id: false,
+            more_info_for_unknown: false,
+            enforce_all_masters: false,
+            speed_over_memory: None,
+            remove_offset_data: None,
+            strip_masters: Vec::new(),
+            allow_direct_saves: None,
+            starfield_red_pill: false,
+            code_page: None,
+            code_page_trans: None,
         }
     }
 }
@@ -443,14 +502,28 @@ pub fn loads_like_xdump() -> bool {
     mode_on_load() == ToolMode::tmExport
 }
 
+/// The tool source the next sessions load with (`DetectAppMode`'s `-saves`
+/// and `-plugins`), which `Session::load` reads to decide whether the
+/// definitions are those of the plugins or those of the saves.
+pub fn on_load_tool_source() -> ToolSource {
+    ON_LOAD
+        .lock()
+        .unwrap()
+        .as_ref()
+        .map_or(ToolSource::tsPlugins, |switches| switches.tool_source)
+}
+
 /// Port of the mode settings of `_DoInit`: what the tool mode changes before
 /// the definitions are built and the plugins load, in the order upstream
 /// applies them (the mode's own block, then `-alwayssaveonam`, `-filteronam`
 /// and `-FixPersistence`, then `-nobuildrefs`). `Session::load` calls it.
 pub fn apply_on_load() {
-    let switches = *ON_LOAD.lock().unwrap();
+    let switches = ON_LOAD.lock().unwrap().clone();
     let Some(switches) = switches else { return };
     let mode = switches.tool_mode;
+    // `-saves` and `-plugins` (`DetectAppMode`): the save definitions rather
+    // than the plugin ones. The definitions of a save source set it again.
+    globals::set_tool_source(switches.tool_source);
     // The switches `_DoInit` reads before the mode block, which the mode
     // block then overrides for the modes it names.
     if switches.i_know_what_im_doing {
@@ -479,6 +552,78 @@ pub fn apply_on_load() {
     }
     if switches.simple_form_ids {
         globals::set_pretty_form_id(false);
+    }
+
+    // The switches `_DoInit` reads after the mode settings and before the
+    // plugins load (`xeInit.pas:1160` to 1460): the light, medium and update
+    // flags, the offset data, the injected notes, the editor ID index and
+    // the rest. Upstream sets every one of them before anything loads, so
+    // `apply_on_load` runs before the first `wb_file`.
+    // `-PseudoESL` and `-IgnoreESL` are exclusive: the else branch of
+    // upstream's `if`, and `-IgnoreSmall`/`-PseudoSmall` are aliases of the
+    // light flag.
+    globals::set_ignore_light(switches.ignore_light);
+    globals::set_pseudo_light(switches.pseudo_light && !switches.ignore_light);
+    globals::set_ignore_medium(switches.ignore_medium);
+    globals::set_pseudo_medium(switches.pseudo_medium && !switches.ignore_medium);
+    globals::set_ignore_update(switches.ignore_update);
+    globals::set_pseudo_update(switches.pseudo_update && !switches.ignore_update);
+    // UPSTREAM-QUIRK: the games with the complex file IDs (Starfield) turn
+    // the six flags off again right after the switch block, whatever the
+    // command line asked for (`xeInit.pas:1445`).
+    if globals::complex_file_file_id() {
+        globals::set_ignore_light(false);
+        globals::set_pseudo_light(false);
+        globals::set_ignore_medium(false);
+        globals::set_pseudo_medium(false);
+        globals::set_ignore_update(false);
+        globals::set_pseudo_update(false);
+    }
+    if switches.report_injected == Some(true) {
+        globals::set_report_injected(true);
+    } else if switches.report_injected == Some(false) {
+        globals::set_report_injected(false);
+    }
+    if switches.track_all_editor_id {
+        globals::set_track_all_editor_id(true);
+    }
+    if switches.more_info_for_unknown {
+        globals::set_more_info_for_unknown(true);
+    }
+    if switches.enforce_all_masters {
+        globals::set_enforce_all_masters(true);
+    }
+    if let Some(value) = switches.speed_over_memory {
+        globals::set_speed_over_memory(value);
+    }
+    if switches.remove_offset_data == Some(false) {
+        globals::set_remove_offset_data(false);
+    }
+    if !switches.strip_masters.is_empty() {
+        globals::set_strip_masters(true);
+        globals::set_strip_masters_file_names(switches.strip_masters.clone());
+    }
+    // `-AllowDirectSaves` without a list turns the switch on for every
+    // plugin; with one, the listed plugins are allowed (and the GUI asks
+    // for the others).
+    if let Some(names) = &switches.allow_direct_saves {
+        if names.is_empty() {
+            globals::set_allow_direct_save(true);
+        } else {
+            globals::set_allow_direct_save_for(names.clone());
+        }
+    }
+    if switches.starfield_red_pill && globals::game_mode() == GameMode::gmSF1 {
+        globals::set_red_pill(true);
+        globals::set_starfield_is_a_bug_infested_hellhole(false);
+    }
+    // `-cp-general:` and `-cp:`/`-cp-trans:` (`xeInit.pas:1363`): the code
+    // pages of the general and translated strings, both 1252 by default.
+    if let Some(code_page) = switches.code_page {
+        globals::set_encoding(xedit_io::Encoding::Mbcs(code_page));
+    }
+    if let Some(code_page) = switches.code_page_trans {
+        globals::set_encoding_trans(xedit_io::Encoding::Mbcs(code_page));
     }
 
     // `case wbToolMode of`: the mode's own settings.
@@ -791,6 +936,9 @@ pub struct ToolRunRequest {
     /// `export`: the format of the profile, `raw` (the default) or
     /// `uespwiki`.
     pub format: Option<String>,
+    /// `export`: the definitions to write, `plugins` (the default) or
+    /// `saves` (xDump's `-saves`).
+    pub source: Option<String>,
     /// `generateseq`: where the sequence files go; `<data path>\Seq` when
     /// omitted, as xEdit.
     pub seq_path: Option<String>,
@@ -1356,11 +1504,41 @@ fn tool_run(session: &mut Session, request: ToolRunRequest) -> Result<ToolRunRes
         }
         ToolMode::tmExport => {
             let format = request.format.as_deref().unwrap_or("RAW");
+            let source = request
+                .source
+                .as_deref()
+                .map_or(
+                    Some(crate::export::ExportSource::Plugins),
+                    crate::export::ExportSource::parse,
+                )
+                .ok_or_else(|| {
+                    CommandError::new(
+                        "invalid_params",
+                        format!(
+                            "{} is not a tool source: use plugins or saves",
+                            request.source.as_deref().unwrap_or_default()
+                        ),
+                    )
+                })?;
+            // The definitions of the two sources are built at load
+            // (`Session::load`), so a session loaded with the plugin ones
+            // has no `wbFileHeader` to export.
+            if source == crate::export::ExportSource::Saves && globals::tool_source() != ToolSource::tsSaves {
+                return Err(CommandError::new(
+                    "invalid_params",
+                    "the session was not loaded with the save definitions: pass --source saves (or the legacy -saves switch) at startup",
+                ));
+            }
             let exported =
-                crate::export::export_definitions(session, format, request.output.as_deref(), request.dry_run)?;
+                crate::export::export_definitions(session, format, source, request.output.as_deref(), request.dry_run)?;
             messages.push(format!(
-                "{} the record definitions of {} to {}",
+                "{} the {} definitions of {} to {}",
                 if request.dry_run { "Would export" } else { "Exported" },
+                if source == crate::export::ExportSource::Saves {
+                    "save"
+                } else {
+                    "record"
+                },
                 globals::game_name(),
                 exported.path
             ));
@@ -1468,8 +1646,137 @@ pub struct LegacyRun {
     /// The archive switches and the inis of `DoInitPath`: `-skipbsa`,
     /// `-forcebsa`, `-M:`, `-I:` and `-CustomIni:`.
     pub resources: crate::resources::ResourceOptions,
-    /// The switches that were read and that the port does not act on.
-    pub ignored_switches: Vec<String>,
+    /// The folders and files of `DoInitPath` the caller applies before the
+    /// session loads.
+    pub paths: LegacyPaths,
+    /// The switches that were read and that the port does not act on, with
+    /// the classification of each.
+    pub unacted_switches: Vec<UnactedSwitch>,
+}
+
+/// The paths of `DoInitPath` a legacy command line names or the port finds,
+/// which the caller applies before the session loads (the data folder is
+/// already `LegacyRun::data_path`).
+#[derive(Debug, Clone, Default)]
+pub struct LegacyPaths {
+    /// `-T:`: the folder scripts write their temporary files to, else
+    /// `<system temp>\<AppName>Edit`.
+    pub temp_path: Option<String>,
+    /// `-G:`: the folder the game's saves are in.
+    pub save_path: Option<String>,
+    /// `-B:`: the folder a replaced plugin moves to.
+    pub backup_path: Option<String>,
+    /// `-C:`: the folder of the reference cache files.
+    pub cache_path: Option<String>,
+    /// `-P:` or the `.txt` parameter, when one names the plugin list.
+    pub plugins_file: Option<String>,
+    /// `-moprofile:<name>`: the Mod Organizer profile.
+    pub mo_profile: Option<String>,
+    /// `-l:<language>`: the language of the string tables.
+    pub language: Option<String>,
+    pub dont_cache: bool,
+    pub dont_cache_load: bool,
+    pub dont_cache_save: bool,
+}
+
+/// What the port does with one legacy switch of `xeInit.pas` it does not
+/// act on.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum SwitchKind {
+    /// The release itself does nothing with the switch.
+    NoOp,
+    /// The switch only changes the GUI's own state: its settings file, a
+    /// dialog, the window title.
+    Presentation,
+    /// The feature behind the switch is not ported.
+    Unported,
+}
+
+/// One legacy switch the port read and does not act on.
+#[derive(Clone, Debug)]
+pub struct UnactedSwitch {
+    /// The switch as it was written on the command line (`-PseudoESL`).
+    pub name: String,
+    pub kind: SwitchKind,
+    /// Why the port does not act on it.
+    pub reason: &'static str,
+}
+
+/// The switches `xeInit.pas` reads that the port does not act on, with the
+/// classification of each and the reason. The switches the port does act on
+/// are in [`LoadSwitches`] (or handled by the caller: the paths, the plugin
+/// list, `-autoload`/`-autoexit`, the script host) and are not listed here.
+const UNACTED_SWITCHES: &[(&str, SwitchKind, &str)] = &[
+    // Read by the release and acted on by nothing.
+    (
+        "report",
+        SwitchKind::NoOp,
+        "wbReportMode follows DebugHook, which is 0 in a release build",
+    ),
+    (
+        "MoreInfoForIndex",
+        SwitchKind::NoOp,
+        "wbMoreInfoForIndex is read under `DebugHook <> 0`, which is 0 in a release build",
+    ),
+    (
+        "fixuppgrd",
+        SwitchKind::NoOp,
+        "wbFixupPGRD is set by the release and read nowhere",
+    ),
+    (
+        "devmode",
+        SwitchKind::NoOp,
+        "wbDevMode only opens the log branch a debugger opens",
+    ),
+    (
+        "exceptiontest",
+        SwitchKind::NoOp,
+        "the switch raises and swallows an exception in the release",
+    ),
+    // The GUI's own state.
+    (
+        "resetsettings",
+        SwitchKind::Presentation,
+        "it clears the settings file of the GUI at its first start",
+    ),
+    (
+        "AllowDirectSaves",
+        SwitchKind::Presentation,
+        "it answers the GUI's question before it saves into the data folder; the CLI writes where --output says",
+    ),
+    // Not ported.
+    (
+        "moprofile",
+        SwitchKind::Unported,
+        "the Mod Organizer hook (modorganizer\\hook.dll) is not ported",
+    ),
+];
+
+/// The switches the port read and did not act on: every [`UNACTED_SWITCHES`]
+/// entry that is on the command line.
+fn unacted_switches(params: &[String]) -> Vec<UnactedSwitch> {
+    UNACTED_SWITCHES
+        .iter()
+        .filter(|(name, _, _)| has_cmd_line_switch(params, name))
+        .map(|(name, kind, reason)| UnactedSwitch {
+            name: format!("-{name}"),
+            kind: *kind,
+            reason,
+        })
+        .collect()
+}
+
+/// The list value of a switch that takes one (`-StripMasters:a,b`): the
+/// parts trimmed, the empty ones removed, as upstream's
+/// `Split([',']).ForEach(Trim).RemoveEmpty`.
+fn switch_list(params: &[String], name: &str) -> Option<Vec<String>> {
+    let value = find_cmd_line_param_switch(params, name)?;
+    let names: Vec<String> = value
+        .split(',')
+        .map(|part| part.trim().to_owned())
+        .filter(|part| !part.is_empty())
+        .collect();
+    Some(names)
 }
 
 /// The switches of `xeInit.pas` that make a command line a legacy one: the
@@ -1523,11 +1830,55 @@ const LEGACY_TRIGGERS: &[&str] = &[
     "fo4vr",
     "fo76",
     "sf1",
+    // The load settings `_DoInit` reads, so that a command line that holds
+    // one of them alone is a legacy one too.
+    "PseudoESL",
+    "PseudoLight",
+    "PseudoSmall",
+    "IgnoreESL",
+    "IgnoreLight",
+    "IgnoreSmall",
+    "PseudoMedium",
+    "IgnoreMedium",
+    "PseudoUpdate",
+    "IgnoreUpdate",
+    "dontremoveoffsetdata",
+    "reportinjected",
+    "noreportinjected",
+    "TrackAllEditorID",
+    "moreunknown",
+    "EnforceAllMasters",
+    "AllowDirectSaves",
+    "DontCache",
+    "DontCacheLoad",
+    "DontCacheSave",
+    "IKnowWhatImDoing",
 ];
 
 /// The parameters of `xeInit.pas` that are followed by a value (`-D:<data>`),
 /// which make a command line legacy as well.
-const LEGACY_PARAMETERS: &[&str] = &["D", "P", "O", "B", "T", "S", "M", "I", "G", "R", "C", "l", "scripthost"];
+const LEGACY_PARAMETERS: &[&str] = &[
+    "D",
+    "P",
+    "O",
+    "B",
+    "T",
+    "S",
+    "M",
+    "I",
+    "CustomIni",
+    "G",
+    "R",
+    "C",
+    "l",
+    "cp",
+    "cp-general",
+    "cp-trans",
+    "scripthost",
+    "moprofile",
+    "StripMasters",
+    "AllowDirectSaves",
+];
 
 /// The parameters of a legacy command line that are not switches at all: the
 /// format of the export mode (`-export RAW`), which `xeFindNextValidCmdLineModule`
@@ -1610,16 +1961,7 @@ pub fn parse_legacy(params: &[String], exe_name: &str) -> Result<Option<LegacyRu
         return Ok(None);
     }
     let detected = detect_app_mode(params, exe_name);
-    let mut ignored = Vec::new();
-    // The parameters the port does not act on: the temporary folder and the
-    // save folder. `-S:` is the scripts folder, which the script mode reads;
-    // `-M:`, `-I:` and `-CustomIni:` name the game's inis, whose archives and
-    // language the load reads.
-    for name in ["T", "G"] {
-        if find_cmd_line_param_switch(params, name).is_some() {
-            ignored.push(format!("-{name}:"));
-        }
-    }
+    let unacted = unacted_switches(params);
     let data_path = find_cmd_line_param_switch(params, "D").map(|path| {
         if path.ends_with(['\\', '/']) {
             path
@@ -1646,8 +1988,24 @@ pub fn parse_legacy(params: &[String], exe_name: &str) -> Result<Option<LegacyRu
             tool_name(detected.tool_mode)
         ));
     }
-    let plugins = match find_cmd_line_param_switch(params, "P") {
-        Some(list) => {
+    // `wbPluginsFileName` of `DoInitPath`: `-P:`, else a `.txt` named as a
+    // parameter, else the game's own `Plugins.txt` in the local application
+    // data folder.
+    let plugins_file = find_cmd_line_param_switch(params, "P")
+        .or_else(|| {
+            names
+                .iter()
+                .find(|name| file_extension(name).eq_ignore_ascii_case(".txt"))
+                .cloned()
+        })
+        .or_else(|| {
+            detected.game.and_then(|game| {
+                let path = crate::game_paths::default_plugins_file(game, data_path.as_deref().unwrap_or_default());
+                (!path.is_empty()).then_some(path)
+            })
+        });
+    let plugins = match &plugins_file {
+        Some(list) if std::path::Path::new(list).is_file() => {
             let simple = matches!(
                 detected.game,
                 Some(GameMode::gmTES3)
@@ -1658,16 +2016,15 @@ pub fn parse_legacy(params: &[String], exe_name: &str) -> Result<Option<LegacyRu
                     | Some(GameMode::gmTES5)
                     | Some(GameMode::gmEnderal)
             );
-            read_plugin_list(&list, data_path.as_deref(), simple)?
+            read_plugin_list(list, data_path.as_deref(), simple)?
         }
-        None => modules
+        // Without a plugin list the modules named as parameters load, as
+        // upstream loads the plugins of the module selection.
+        _ => modules
             .iter()
             .filter_map(|name| resolve_module(name, data_path.as_deref()))
             .collect(),
     };
-    if plugins.is_empty() {
-        return Err("no plugin to load: pass a plugin name, or a plugin list with -P:".to_owned());
-    }
     let mut switches = LoadSwitches {
         tool_mode: detected.tool_mode,
         tool_source: detected.tool_source,
@@ -1728,47 +2085,51 @@ pub fn parse_legacy(params: &[String], exe_name: &str) -> Result<Option<LegacyRu
         allow_esp_masters: flag("AllowESPMaster"),
         allow_edit_game_master: flag("IKnowIllBreakMyGameWithThis"),
     };
-    // The switches that are read and that the port does not act on, which
-    // the result names so a caller can report them.
-    for name in [
-        "AllowMakePartial",
-        "AllowMasterFilesEdit",
-        "AllowEditHEDRVersion",
-        "StripEmptyMasters",
-        "StripMasters",
-        "AllowESPMaster",
-        "IKnowIllBreakMyGameWithThis",
-        "TrackAllEditorID",
-        "MoreInfoForIndex",
-        "moreunknown",
-        "reportinjected",
-        "noreportinjected",
-        "speed",
-        "memory",
-        "devmode",
-        "exceptiontest",
-        "resetsettings",
-        "ItJustWorksTM",
-        "ThisIsFine",
-        "GiveMeTheRedPill",
-        "IgnoreESL",
-        "PseudoESL",
-        "IgnoreMedium",
-        "PseudoMedium",
-        "IgnoreUpdate",
-        "PseudoUpdate",
-        "EnforceAllMasters",
-        "dontremoveoffsetdata",
-        "fixuppgrd",
-        "moprofile",
-        "AllowDirectSaves",
-        "bsa",
-        "allbsa",
-    ] {
-        if has_cmd_line_switch(params, name) {
-            ignored.push(format!("-{name}"));
-        }
-    }
+    // The switches of the light, medium and update flags
+    // (`xeInit.pas:1427`): `-IgnoreESL` wins over `-PseudoESL`, and the
+    // small/light aliases are the same switch.
+    switches.ignore_light = flag("IgnoreESL") || flag("IgnoreLight") || flag("IgnoreSmall");
+    switches.pseudo_light = !switches.ignore_light && (flag("PseudoESL") || flag("PseudoLight") || flag("PseudoSmall"));
+    switches.ignore_medium = flag("IgnoreMedium");
+    switches.pseudo_medium = !switches.ignore_medium && flag("PseudoMedium");
+    switches.ignore_update = flag("IgnoreUpdate");
+    switches.pseudo_update = !switches.ignore_update && flag("PseudoUpdate");
+    switches.report_injected = if flag("reportinjected") {
+        Some(true)
+    } else if flag("noreportinjected") {
+        Some(false)
+    } else {
+        None
+    };
+    switches.track_all_editor_id = flag("TrackAllEditorID");
+    switches.more_info_for_unknown = flag("moreunknown");
+    switches.enforce_all_masters = flag("EnforceAllMasters");
+    switches.speed_over_memory = if flag("speed") {
+        Some(true)
+    } else if flag("memory") {
+        Some(false)
+    } else {
+        None
+    };
+    switches.remove_offset_data = flag("dontremoveoffsetdata").then_some(false);
+    // `-IKnowWhatImDoing -StripMasters:<name>,...`: the list turns the switch
+    // off again when it holds no name, as upstream does.
+    switches.strip_masters = if switches.i_know_what_im_doing {
+        switch_list(params, "StripMasters").unwrap_or_default()
+    } else {
+        Vec::new()
+    };
+    switches.allow_direct_saves = switch_list(params, "AllowDirectSaves");
+    // `-ItJustWorksTM -ThisIsFine -GiveMeTheRedPill`, read in the Starfield
+    // block of `_DoInit` only.
+    switches.starfield_red_pill = flag("ItJustWorksTM") && flag("ThisIsFine") && flag("GiveMeTheRedPill");
+    // `-cp-general:` is `wbEncoding`, `-cp:`/`-cp-trans:` `wbEncodingTrans`
+    // (`xeInit.pas:1363`).
+    switches.code_page =
+        find_cmd_line_param_switch(params, "cp-general").and_then(|value| value.trim().parse::<u32>().ok());
+    switches.code_page_trans = find_cmd_line_param_switch(params, "cp")
+        .or_else(|| find_cmd_line_param_switch(params, "cp-trans"))
+        .and_then(|value| value.trim().parse::<u32>().ok());
     let mode = mode_name(detected.tool_mode).to_ascii_lowercase();
     // `-generateseq:<plugin>` and `-quickedit:<plugin>` name a plugin.
     let quick_plugin =
@@ -1819,8 +2180,158 @@ pub fn parse_legacy(params: &[String], exe_name: &str) -> Result<Option<LegacyRu
             game_ini: find_cmd_line_param_switch(params, "I"),
             custom_ini: find_cmd_line_param_switch(params, "CustomIni"),
         },
-        ignored_switches: ignored,
+        paths: LegacyPaths {
+            temp_path: find_cmd_line_param_switch(params, "T"),
+            save_path: find_cmd_line_param_switch(params, "G"),
+            backup_path: find_cmd_line_param_switch(params, "B"),
+            cache_path: find_cmd_line_param_switch(params, "C"),
+            plugins_file: plugins_file.clone(),
+            mo_profile: find_cmd_line_param_switch(params, "moprofile"),
+            language: find_cmd_line_param_switch(params, "l"),
+            // `-DontCache` turns both off, `-DontCacheLoad` and
+            // `-DontCacheSave` one of them (`xeInit.pas:1024`).
+            dont_cache: flag("DontCache"),
+            dont_cache_load: flag("DontCache") || flag("DontCacheLoad"),
+            dont_cache_save: flag("DontCache") || flag("DontCacheSave"),
+        },
+        unacted_switches: unacted,
     }))
+}
+
+/// Port of the part of `DoInitPath` a legacy run needs before anything
+/// loads: the data folder (`-D:`, else what the port finds), the output
+/// folder, the folders below `My Games` and the inis, the temporary and
+/// scripts folders, the save folder, the backup and cache folders and the
+/// plugin list. `program_path` is the folder of the program (upstream
+/// `wbProgramPath`), which the caller passes because the port has no
+/// `ParamStr(0)`.
+pub fn apply_legacy_paths(mode: GameMode, run: &LegacyRun, program_path: &str) -> Result<(), String> {
+    use xedit_core::interface::globals as g;
+    let data = match run.data_path.clone() {
+        Some(path) => path,
+        None => {
+            let folder = crate::game_paths::discover_game_folder(mode);
+            if folder.is_empty() {
+                return Err(crate::game_paths::missing_install_message(mode));
+            }
+            crate::game_paths::data_path_of(&folder, mode)
+        }
+    };
+    g::set_data_path(&data);
+    g::set_output_path(&data);
+    if let Some(output) = &run.output {
+        // `-O:`: a relative path is joined to the data folder, an absolute
+        // one taken as it is (`xeInit.pas:478`).
+        let output = if output.starts_with('.') {
+            format!(
+                "{}{}",
+                xedit_io::archive::include_trailing_path_delimiter(&data),
+                output
+            )
+        } else {
+            output.clone()
+        };
+        g::set_output_path(&output);
+    }
+    if g::program_path().is_empty() && !program_path.is_empty() {
+        g::set_program_path(&xedit_io::archive::include_trailing_path_delimiter(program_path));
+    }
+    // `-T:` else the system's temporary folder with `<AppName>Edit` below it.
+    let temp = match &run.paths.temp_path {
+        Some(path) => xedit_io::archive::include_trailing_path_delimiter(path),
+        None => xedit_io::archive::include_trailing_path_delimiter(&format!(
+            "{}{}Edit",
+            std::env::temp_dir().to_string_lossy(),
+            g::app_name()
+        )),
+    };
+    g::set_temp_path(&temp);
+    // `-S:` else `Edit Scripts` next to the program.
+    let scripts = match &run.scripts_folder {
+        Some(path) => xedit_io::archive::include_trailing_path_delimiter(path),
+        None => format!("{}Edit Scripts\\", g::program_path()),
+    };
+    g::set_scripts_path(&scripts);
+    // The folders below `My Games` and the inis, which the save folder
+    // needs.
+    crate::resources::init_game_paths(mode, &data);
+    let save = match &run.paths.save_path {
+        Some(path) => xedit_io::archive::include_trailing_path_delimiter(path),
+        None => crate::game_paths::save_path(
+            &g::my_games_the_game_path(),
+            &g::the_game_ini_file_name(),
+            &g::custom_ini_file_name(),
+        ),
+    };
+    g::set_save_path(&save);
+    let backup = match &run.paths.backup_path {
+        Some(path) => xedit_io::archive::include_trailing_path_delimiter(path),
+        None => crate::game_paths::default_backup_path(&data, &g::app_name()),
+    };
+    g::set_backup_path(&backup);
+    // `-C:` else the data folder's cache; without a cache path the cache is
+    // off entirely (`wbDontCache`).
+    let cache = match &run.paths.cache_path {
+        Some(path) => xedit_io::archive::include_trailing_path_delimiter(path),
+        None => crate::game_paths::default_cache_path(&data, &g::app_name()),
+    };
+    g::set_cache_path(&cache);
+    crate::refs::set_cache_options(
+        (!cache.is_empty()).then_some(cache.as_str()),
+        run.paths.dont_cache || cache.is_empty(),
+        run.paths.dont_cache_load,
+        run.paths.dont_cache_save,
+    );
+    if let Some(plugins) = &run.paths.plugins_file {
+        g::set_plugins_file_name(plugins);
+    }
+    Ok(())
+}
+
+/// The `Using ...` lines the main form writes to its message log at startup
+/// (`xeMainForm.pas:5200`), in upstream's order. The caller prints them
+/// after the load, because the definitions decide the Creation Club list.
+pub fn legacy_startup_lines(run: &LegacyRun) -> Vec<String> {
+    use xedit_core::interface::globals as g;
+    let mut lines = Vec::new();
+    if let Some(profile) = &run.paths.mo_profile {
+        lines.push(format!("Using Mod Organizer Profile: {profile}"));
+    }
+    lines.push(format!("Using {} Data Path: {}", g::game_name2(), g::data_path()));
+    if !g::backup_path().is_empty() {
+        lines.push(format!("Using Backup Path: {}", g::backup_path()));
+    }
+    lines.push(format!("Using Scripts Path: {}", g::scripts_path()));
+    if !g::cache_path().is_empty() {
+        lines.push(format!("Using Cache Path: {}", g::cache_path()));
+    }
+    lines.push(format!("Using ini: {}", g::the_game_ini_file_name()));
+    if Path::new(&g::custom_ini_file_name()).is_file() {
+        lines.push(format!("Using custom ini: {}", g::custom_ini_file_name()));
+    }
+    if !g::save_path().is_empty() {
+        lines.push(format!("Using save path: {}", g::save_path()));
+    }
+    let ccc = g::creation_club_content_file_name();
+    if !ccc.is_empty() {
+        let path = format!("{}{ccc}", crate::resources::game_folder(&g::data_path()));
+        if Path::new(&path).is_file() {
+            lines.push(format!("Using Creation Club Content list: {path}"));
+        }
+    }
+    lines.push(format!("Using plugin list: {}", g::plugins_file_name()));
+    lines.push(format!("Using settings file: {}", g::settings_file_name()));
+    lines.push(format!("Using language: {}", g::language()));
+    lines.push(format!("Using general string encoding: {}", g::encoding().name()));
+    lines.push(format!(
+        "Using translatable string encoding: {}",
+        g::encoding_trans().name()
+    ));
+    if g::game_mode() >= GameMode::gmTES5 {
+        lines.push(format!("Using VMAD string encoding: {}", g::encoding_vmad().name()));
+    }
+    lines.push(format!("Loading active plugin list: {}", g::plugins_file_name()));
+    lines
 }
 
 pub fn register(registry: &mut Registry) {
@@ -1902,6 +2413,125 @@ mod tests {
         }
         assert_eq!(mode_of_name("qac"), Some(ToolMode::tmEdit));
         assert_eq!(mode_of_name("nonsense"), None);
+    }
+
+    /// The switches of `xeInit.pas` the port acts on reach the load settings
+    /// (`_DoInit`): the light, medium and update flags (where `-Ignore`
+    /// wins over `-Pseudo`), the offset data, the injected notes, the
+    /// editor ID index, the masters, the red pill, the code pages.
+    #[test]
+    fn the_load_switches_of_the_command_line_reach_the_load_settings() {
+        let run = parse_legacy(
+            &params(&[
+                "-FO4",
+                "-PseudoESL",
+                "-IgnoreMedium",
+                "-PseudoUpdate",
+                "-dontremoveoffsetdata",
+                "-noreportinjected",
+                "-TrackAllEditorID",
+                "-EnforceAllMasters",
+                "-moreunknown",
+                "-speed",
+                "-cp-general:1252",
+                "-cp:65001",
+                "-D:C:/Data",
+                "-P:C:/plugins.txt",
+            ]),
+            "FO4Edit.exe",
+        )
+        .unwrap()
+        .expect("a legacy command line");
+        let switches = run.switches;
+        assert!(switches.pseudo_light);
+        assert!(!switches.ignore_light);
+        assert!(switches.ignore_medium);
+        assert!(!switches.pseudo_medium);
+        assert!(switches.pseudo_update);
+        assert!(!switches.ignore_update);
+        assert_eq!(switches.remove_offset_data, Some(false));
+        assert_eq!(switches.report_injected, Some(false));
+        assert!(switches.track_all_editor_id);
+        assert!(switches.enforce_all_masters);
+        assert!(switches.more_info_for_unknown);
+        assert_eq!(switches.speed_over_memory, Some(true));
+        assert_eq!(switches.code_page, Some(1252));
+        assert_eq!(switches.code_page_trans, Some(65001));
+        assert_eq!(run.data_path.as_deref(), Some(r"C:/Data\"));
+        assert_eq!(run.paths.plugins_file.as_deref(), Some("C:/plugins.txt"));
+        // `-IgnoreESL` wins over `-PseudoESL`, as upstream's else branch.
+        let run = parse_legacy(&params(&["-SSE", "-PseudoESL", "-IgnoreESL"]), "SSEEdit.exe")
+            .unwrap()
+            .unwrap();
+        assert!(run.switches.ignore_light);
+        assert!(!run.switches.pseudo_light);
+        // `-memory` is the other side of `-speed`.
+        let run = parse_legacy(&params(&["-SSE", "-memory"]), "SSEEdit.exe")
+            .unwrap()
+            .unwrap();
+        assert_eq!(run.switches.speed_over_memory, Some(false));
+    }
+
+    /// The switches the port reads and does not act on are classified: a
+    /// no-op of the release, a GUI-only switch, or an unported feature.
+    #[test]
+    fn the_unacted_switches_are_classified_with_their_reason() {
+        let run = parse_legacy(
+            &params(&[
+                "-SSE",
+                "-report",
+                "-moprofile:Default",
+                "-AllowDirectSaves",
+                "-resetsettings",
+            ]),
+            "SSEEdit.exe",
+        )
+        .unwrap()
+        .unwrap();
+        let kind = |name: &str| {
+            run.unacted_switches
+                .iter()
+                .find(|switch| switch.name == name)
+                .map(|switch| switch.kind)
+        };
+        assert_eq!(kind("-report"), Some(SwitchKind::NoOp));
+        assert_eq!(kind("-moprofile"), Some(SwitchKind::Unported));
+        assert_eq!(kind("-AllowDirectSaves"), Some(SwitchKind::Presentation));
+        assert_eq!(kind("-resetsettings"), Some(SwitchKind::Presentation));
+        // A switch the port acts on is not in the list.
+        assert_eq!(kind("-PseudoESL"), None);
+        assert!(run.unacted_switches.iter().all(|switch| !switch.reason.is_empty()));
+    }
+
+    /// `-IKnowWhatImDoing -StripMasters:<name>,...` and
+    /// `-AllowDirectSaves[:<name>,...]` take a list; an empty one turns the
+    /// strip switch off again, as upstream's empty `TStringList` does.
+    #[test]
+    fn the_switches_that_take_a_list_read_it() {
+        let run = parse_legacy(
+            &params(&[
+                "-SSE",
+                "-IKnowWhatImDoing",
+                "-StripMasters:Dawnguard.esm, Dragonborn.esm ,,",
+                "-AllowDirectSaves:MyPatch.esp,Other.esp",
+            ]),
+            "SSEEdit.exe",
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!(
+            run.switches.strip_masters,
+            vec!["Dawnguard.esm".to_owned(), "Dragonborn.esm".to_owned()]
+        );
+        assert_eq!(
+            run.switches.allow_direct_saves.as_deref(),
+            Some(["MyPatch.esp".to_owned(), "Other.esp".to_owned()].as_slice())
+        );
+        // Without `-IKnowWhatImDoing` the release does not read the list.
+        let run = parse_legacy(&params(&["-SSE", "-StripMasters:Dawnguard.esm"]), "SSEEdit.exe")
+            .unwrap()
+            .unwrap();
+        assert!(run.switches.strip_masters.is_empty());
     }
 
     #[test]

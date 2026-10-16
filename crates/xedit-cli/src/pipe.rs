@@ -11,6 +11,28 @@
 //! accepts the next client when one disconnects. Only the user that runs
 //! the daemon (and SYSTEM) may open the pipe, and remote clients are
 //! refused.
+//!
+//! # Concurrency
+//!
+//! Two clients, or two daemons, never share one session:
+//!
+//! - **One client at a time.** While a client is connected the daemon is
+//!   inside the request loop and holds the one instance of the pipe, so a
+//!   client that connects then fails with `ERROR_PIPE_BUSY` (231) until the
+//!   first one disconnects. A client that wants to wait can ask Windows to
+//!   wait with `WaitNamedPipe`, or simply retry; nothing of a client that
+//!   never got the pipe reaches the session.
+//! - **One daemon per name.** The instance is created with
+//!   `FILE_FLAG_FIRST_PIPE_INSTANCE`, so a second `xedit serve --pipe NAME`
+//!   fails at startup with `ERROR_ACCESS_DENIED` (5), which
+//!   [`listen`](windows::listen) reports as `NAME is already served by
+//!   another xedit serve`. Two daemons would otherwise load the same
+//!   plugins and both write them at their own `files.save`, which is how
+//!   competing sessions corrupt a plugin.
+//! - **The loaded files are the session's.** The named pipe is the only
+//!   shared state the daemon owns: a client of the daemon reaches the
+//!   session of its operator, while two daemons on two names are two
+//!   processes whose edits reach disk only at their own `files.save`.
 
 #[cfg(not(windows))]
 use std::io;
@@ -44,7 +66,7 @@ mod windows {
     use std::os::windows::io::{FromRawHandle, RawHandle};
     use std::ptr::null_mut;
 
-    use windows_sys::Win32::Foundation::{ERROR_PIPE_CONNECTED, INVALID_HANDLE_VALUE, LocalFree};
+    use windows_sys::Win32::Foundation::{ERROR_ACCESS_DENIED, ERROR_PIPE_CONNECTED, INVALID_HANDLE_VALUE, LocalFree};
     use windows_sys::Win32::Security::Authorization::{
         ConvertStringSecurityDescriptorToSecurityDescriptorW, SDDL_REVISION_1,
     };
@@ -101,6 +123,21 @@ mod windows {
         // SAFETY: the descriptor came from the conversion above.
         unsafe { LocalFree(descriptor) };
         if handle == INVALID_HANDLE_VALUE {
+            // `FILE_FLAG_FIRST_PIPE_INSTANCE` makes the create of a name
+            // that is served already fail with `ERROR_ACCESS_DENIED`: a
+            // second daemon on one name would run a second session over the
+            // same plugins.
+            if created.raw_os_error() == Some(ERROR_ACCESS_DENIED as i32) {
+                return Err(io::Error::new(
+                    io::ErrorKind::AddrInUse,
+                    format!(
+                        "{} is already served by another xedit serve: one daemon per pipe name, because one session owns the loaded files",
+                        String::from_utf16_lossy(
+                            &path[..path.iter().position(|unit| *unit == 0).unwrap_or(path.len())]
+                        )
+                    ),
+                ));
+            }
             return Err(created);
         }
         // The File owns the handle from here on and closes it on every path.

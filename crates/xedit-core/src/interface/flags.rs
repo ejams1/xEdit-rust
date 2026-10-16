@@ -423,7 +423,11 @@ impl Def for FlagsDef {
 
     fn get_def_type_name(&self) -> String {
         if self.flg_names.is_empty() {
-            "TwbFlagsDef".to_owned()
+            // UPSTREAM-QUIRK: as `TwbEnumDef`, `TwbFlagsDef.GetDefTypeName`
+            // writes a bare `inherited` in a function of a string result:
+            // the name of a flag list without names is empty, not the class
+            // name.
+            String::new()
         } else {
             format!("({})", self.flg_names.join(","))
         }

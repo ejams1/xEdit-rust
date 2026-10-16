@@ -65,7 +65,27 @@ pub fn game_tag(mode: GameMode) -> &'static str {
 /// Port of the game setup of `xDump.dpr` for the plugins of a game: the
 /// names of the game, its executable and its master, and the definitions.
 pub fn setup_game(game: &str) -> Result<GameMode, String> {
-    setup(game, None, false)
+    setup(game, DefinitionSource::Plugins, false)
+}
+
+/// The source of the definitions a game is set up with (`xDump.dpr` chooses
+/// it from `-saves` and `-plugins`).
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum DefinitionSource<'a> {
+    /// The plugins of the game (`DefineFO4` and the like).
+    Plugins,
+    /// The save definitions (`DefineFO4Saves` and the like), with the path
+    /// of the save when there is one: its extension picks the co-save
+    /// definitions. `None` is the export of the save definitions, which
+    /// reads no file.
+    Saves(Option<&'a str>),
+}
+
+/// Port of the game setup of `xDump.dpr -saves` for the *definitions* of
+/// the saves of a game without a save file (`xDump.exe -<GAME> -saves
+/// -export`).
+pub fn setup_game_for_save_definitions(game: &str) -> Result<GameMode, String> {
+    setup(game, DefinitionSource::Saves(None), false)
 }
 
 /// The game setup of the editor (`xeInit.pas`) for a session: as
@@ -75,14 +95,14 @@ pub fn setup_game(game: &str) -> Result<GameMode, String> {
 /// contained-in elements of the records in a worldspace, cell or topic
 /// group (`wbCreateContainedIn`, off for Morrowind only).
 pub fn setup_game_for_edit(game: &str) -> Result<GameMode, String> {
-    setup(game, None, true)
+    setup(game, DefinitionSource::Plugins, true)
 }
 
 /// Port of the game setup of `xDump.dpr -saves` for a save or co-save of a
 /// game: the save definitions, switched to the co-save ones for the
 /// extension of the script extender.
 pub fn setup_saves(game: &str, path: &str) -> Result<GameMode, String> {
-    setup(game, Some(path), false)
+    setup(game, DefinitionSource::Saves(Some(path)), false)
 }
 
 /// The save definitions of a game.
@@ -132,7 +152,7 @@ fn save_definitions(mode: GameMode) -> Option<SaveDefinitions> {
     }
 }
 
-fn setup(game: &str, save: Option<&str>, edit: bool) -> Result<GameMode, String> {
+fn setup(game: &str, source: DefinitionSource, edit: bool) -> Result<GameMode, String> {
     // `xDump.dpr`: `wbAllowInternalEdit := False`, so a dump shows a record
     // as loaded, without the required subrecords the editor would add.
     xedit_core::interface::globals::set_allow_internal_edit(false);
@@ -193,21 +213,28 @@ fn setup(game: &str, save: Option<&str>, edit: bool) -> Result<GameMode, String>
     set_game_master_esm(&master_esm.map_or_else(|| format!("{game_name}.esm"), str::to_owned));
     clear_record_defs();
     clear_resources_loaded_handlers();
-    match save {
-        None => {
+    match source {
+        DefinitionSource::Plugins => {
             set_tool_source(ToolSource::tsPlugins);
             define();
         }
-        Some(path) => {
+        DefinitionSource::Saves(path) => {
             set_tool_source(ToolSource::tsSaves);
             let saves =
                 save_definitions(mode).ok_or_else(|| format!("the save definitions of {tag} are not ported yet"))?;
-            let is_co_save = Path::new(path)
-                .extension()
-                .is_some_and(|extension| extension.eq_ignore_ascii_case(saves.co_save_extension));
+            let is_co_save = path.is_some_and(|path| {
+                Path::new(path)
+                    .extension()
+                    .is_some_and(|extension| extension.eq_ignore_ascii_case(saves.co_save_extension))
+            });
             // The oracle warns that the saves of Fallout 3 and Oblivion are
-            // not supported yet, and reads them all the same.
-            if !is_co_save && matches!(mode, GameMode::gmFO3 | GameMode::gmTES4) {
+            // not supported yet, and reads them all the same; the export of
+            // the definitions names the format it was given there too
+            // (`xDump.dpr:1475`).
+            if let Some(path) = path
+                && !is_co_save
+                && matches!(mode, GameMode::gmFO3 | GameMode::gmTES4)
+            {
                 eprintln!("Save are not supported yet \"{path}\". Please check the command line parameters.");
             }
             (saves.define)();

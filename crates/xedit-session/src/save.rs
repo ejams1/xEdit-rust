@@ -21,7 +21,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use xedit_core::implementation::{FileImpl, ResetModified, SaveError};
 use xedit_core::interface::globals::{
-    GameMode, app_name, display_shorter_names, set_allow_esp_masters, set_allow_esp_masters_on_save,
+    GameMode, app_name, backup_path, display_shorter_names, set_allow_esp_masters, set_allow_esp_masters_on_save,
     set_allow_internal_edit, set_always_save_onam, set_always_save_onam_force, set_app_name, set_can_sort_info,
     set_complex_file_file_id, set_display_load_order_form_id, set_display_shorter_names, set_enforce_all_masters,
     set_flags_as_array, set_sort_sub_records, set_tool_name, set_vwd_as_quest_children, set_vwd_in_temporary,
@@ -331,14 +331,20 @@ fn same_path(a: &Path, b: &Path) -> bool {
     }
 }
 
-/// Port of `DoBackupModule`: the file moves to `<AppName>Edit Backups`
-/// next to it as `<name>.backup.<timestamp>`.
+/// Port of `DoBackupModule`: the file moves to `wbBackupPath` as
+/// `<name>.backup.<timestamp>`. `wbBackupPath` is `<data>\<AppName>Edit
+/// Backups\` in a legacy run the caller set up (`xeInit.pas:596`, the `-B:`
+/// switch or the data folder) and empty otherwise, where the folder next to
+/// the file is the same place for a plugin inside the data folder.
 fn backup(target: &Path) -> Result<String, CommandError> {
-    let dir = target
-        .parent()
-        .map(Path::to_path_buf)
-        .unwrap_or_default()
-        .join(format!("{}Edit Backups", app_name()));
+    let dir = match backup_path() {
+        path if !path.is_empty() => PathBuf::from(path),
+        _ => target
+            .parent()
+            .map(Path::to_path_buf)
+            .unwrap_or_default()
+            .join(format!("{}Edit Backups", app_name())),
+    };
     backup_into(target, &dir)
 }
 

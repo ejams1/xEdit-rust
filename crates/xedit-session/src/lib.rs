@@ -21,6 +21,7 @@ pub mod edit;
 pub mod export;
 pub mod filter;
 pub mod formids;
+pub mod game_paths;
 pub mod localization;
 pub mod lodgen;
 pub mod masters;

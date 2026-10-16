@@ -152,7 +152,7 @@ fn documents_folder() -> String {
 
 /// The folder above the data folder, with a trailing separator
 /// (`ExtractFilePath(ExcludeTrailingPathDelimiter(wbDataPath))`).
-fn game_folder(data_path: &str) -> String {
+pub(crate) fn game_folder(data_path: &str) -> String {
     let trimmed = data_path.strip_suffix(['\\', '/']).unwrap_or(data_path);
     extract_file_path(trimmed)
 }

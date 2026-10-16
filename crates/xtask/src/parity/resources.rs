@@ -729,6 +729,8 @@ fn run_oracle_mode(
         expected_peak: 2 * GIB,
         max_memory: runner.max_memory,
         extra_args: Vec::new(),
+        discovery: false,
+        tool_name: "Edit".to_owned(),
     };
     let extras = GuiExtras {
         files: files.to_vec(),
