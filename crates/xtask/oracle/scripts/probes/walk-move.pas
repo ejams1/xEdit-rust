@@ -13,9 +13,9 @@ begin
   AddMessage(Signature(e) + ' ' + IntToHex(GetLoadOrderFormID(e), 8));
   if Signature(e) = 'REFR' then begin
     if GetLoadOrderFormID(e) = $00000808 then
-      SetElementEditValues(e, 'Cell', 'xFitInteriorCell')
+      SetElementEditValues(e, 'Cell', Name(RecordByFormID(FileByIndex(0), $00000807, False)))
     else if GetLoadOrderFormID(e) = $0000080A then
-      SetElementEditValues(e, 'Cell', 'xFitTempCell');
+      SetElementEditValues(e, 'Cell', Name(RecordByFormID(FileByIndex(0), $00000804, False)));
   end;
 end;
 
