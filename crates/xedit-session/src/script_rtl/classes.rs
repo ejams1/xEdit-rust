@@ -162,6 +162,18 @@ pub fn access_violation() -> ValueError {
     )
 }
 
+/// The stream behind a value whether or not `TStream.Destroy` released it:
+/// the callers that treat a nil pointer and a freed one differently (the
+/// JSON save writes nothing into nil but dereferences a freed object).
+pub fn stream_of_including_released(value: &Value) -> Option<Rc<RefCell<StreamState>>> {
+    let object = value.as_object()?;
+    let borrowed = object.borrow();
+    borrowed
+        .as_any()
+        .downcast_ref::<StreamObject>()
+        .map(|stream| stream.state.clone())
+}
+
 pub fn stream_of(value: &Value) -> Option<Rc<RefCell<StreamState>>> {
     let object = value.as_object()?;
     let borrowed = object.borrow();

@@ -44,7 +44,8 @@ use xedit_script::values::{ClassDef, ParamType, ScriptObject, Value, ValueError,
 
 use crate::script_classes::ScriptClasses;
 use crate::script_rtl::classes::{
-    StreamState, access_violation, stream_of, stream_read_to_end, stream_set_size, stream_write,
+    StreamState, access_violation, stream_of, stream_of_including_released, stream_read_to_end, stream_set_size,
+    stream_write,
 };
 use crate::script_rtl::datetime;
 use crate::script_strings::{EncodingKind, borrow_list_mut, encoding_of, list_of_or_error, receiver, text_arg};
@@ -1427,7 +1428,7 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
             let compact = args.values.get(1).map_or(Ok(true), xedit_script::values::to_bool)?;
             let encoding = args.values.get(2).and_then(encoding_of);
             let utf8_without_bom = args.values.get(3).map_or(Ok(true), xedit_script::values::to_bool)?;
-            let Some(stream) = stream_of(&args.values[0]) else {
+            let Some(stream) = stream_of_including_released(&args.values[0]) else {
                 // A nil stream: `TJsonOutputWriter.StreamFlush` writes
                 // nothing when `FStream` is nil, so a save into nil is a
                 // no-op -- unless the encoding asks for a preamble, which is
@@ -1439,6 +1440,10 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
                 }
                 return Err(access_violation());
             };
+            if stream.borrow().released {
+                // A freed stream is a use-after-free upstream, not a no-op.
+                return Err(access_violation());
+            }
             let text = to_json(&node_of(&object), compact);
             // The preamble first, then the text, both at the stream's
             // position (`TStream.Write`).

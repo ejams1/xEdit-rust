@@ -246,7 +246,9 @@ begin
   fs := TFileStream.Create(gOut + 'streams-bin.dat', fmOpenRead);
   r := TBinaryReader.Create(fs);
   // `Read` at the stream's own start (the bytes of 42), then from the
-  // second value: the member's shape is pinned by both.
+  // second value: the member's shape is pinned by both. The value is read
+  // twice per line (once for `IntToStr`, once for `VarType`), which the
+  // compared positions show.
   try
     Log('binary', 'read-plain=' + IntToStr(r.Read) + ' type=' + IntToStr(VarType(r.Read)) + ' pos=' + IntToStr(fs.Position));
   except on E: Exception do
