@@ -1534,7 +1534,7 @@ mod tests {
         assert!(native.contains("SetElementNativeValues(RecordIn('A.esm', '00000800'), 'FLTV', 1.5);"));
         let copy = step(serde_json::json!({"command": "records.copy", "params":
             {"form_id": "00000800", "from": "A.esm", "to": "B.esp", "as_new": true}}));
-        assert!(copy.contains("AddRequiredElementMasters(r, f, True, True);"));
+        assert!(copy.contains("AddCopyMasters(r, f, True, False);"));
         assert!(copy.contains("wbCopyElementToFileWithPrefixAndSuffix(r, f, True, True, '', '', '', '')"));
         let renumber =
             step(serde_json::json!({"command": "formids.renumber", "params": {"file": "B.esp", "start": "000A00"}}));
