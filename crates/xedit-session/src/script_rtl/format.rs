@@ -637,8 +637,15 @@ pub fn format_float(picture: &str, value: f64) -> String {
             .unwrap_or("")
     };
     let negative = value < 0.0 && sections.len() < 2;
-    let value = value.abs();
     let (literal_prefix, spec, literal_suffix) = split_literals(section);
+    // `InternalFloatToTextFmt`: a value with more than 18 digits before the
+    // decimal point and no exponent in the picture is formatted by
+    // `FloatToText` in the general format (15 digits for a double), the
+    // picture ignored: `FormatFloat('0.#####', 1E22)` is `1E22`.
+    if value.abs() >= 1e18 && !spec.contains(['E', 'e']) {
+        return delphi::float_to_str(value);
+    }
+    let value = value.abs();
     let mut out = String::new();
     if negative {
         out.push('-');
@@ -1016,6 +1023,12 @@ mod tests {
         assert_eq!(float_to_str_f(2.5, FloatFormat::Fixed, 99, 2), "2.50");
         assert_eq!(float_to_str_f(1234.5, FloatFormat::Number, 99, 2), "1,234.50");
         assert_eq!(float_to_str_f(1.5, FloatFormat::General, 0, 0), "1.5");
+        // More than 18 integer digits without an exponent picture: the
+        // general format (the oracle's `numerics.pas` line).
+        assert_eq!(format_float("0.#####", 1e22), "1E22");
+        assert_eq!(format_float("0.#####", -1.5e22), "-1.5E22");
+        assert_eq!(format_float("0.00E+00", 1e22), "1.00E+22");
+        assert_eq!(format_float("0", 123456789012345680.0), "123456789012345680");
     }
 
     /// `FormatFloat`'s picture language: placeholders, the point, grouping,
