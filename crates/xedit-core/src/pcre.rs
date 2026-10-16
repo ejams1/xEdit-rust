@@ -720,10 +720,7 @@ impl<'a> Parser<'a> {
         match max {
             Some(max) if max < min => {
                 // PCRE reports the closing brace.
-                return Err(CompileError::new(
-                    self.at - 1,
-                    "numbers out of order in {} quantifier",
-                ));
+                return Err(CompileError::new(self.at - 1, "numbers out of order in {} quantifier"));
             }
             _ => {}
         }
@@ -750,9 +747,9 @@ impl<'a> Parser<'a> {
             b'\\' => self.parse_escape(in_group),
             b'*' | b'+' | b'?' => Err(CompileError::new(self.at, "nothing to repeat")),
             _ => {
-                let (ch, _) = self.next_char().ok_or_else(|| {
-                    CompileError::new(self.at, "invalid UTF-8 string")
-                })?;
+                let (ch, _) = self
+                    .next_char()
+                    .ok_or_else(|| CompileError::new(self.at, "invalid UTF-8 string"))?;
                 Ok(Node::Char(ch, self.flags.caseless))
             }
         }
@@ -832,10 +829,7 @@ impl<'a> Parser<'a> {
                 loop {
                     match self.next() {
                         None => {
-                            return Err(CompileError::new(
-                                self.pattern.len(),
-                                "missing ) after comment",
-                            ));
+                            return Err(CompileError::new(self.pattern.len(), "missing ) after comment"));
                         }
                         Some(b')') => break,
                         Some(_) => {}
@@ -900,10 +894,7 @@ impl<'a> Parser<'a> {
                         self.at += 1;
                         self.parse_named_group(name)
                     }
-                    _ => Err(CompileError::new(
-                        self.at,
-                        "unrecognized character after (?<",
-                    )),
+                    _ => Err(CompileError::new(self.at, "unrecognized character after (?<")),
                 }
             }
             Some(b'\'') => {
@@ -947,10 +938,7 @@ impl<'a> Parser<'a> {
                         self.references.push((BackrefRef::Name(name.clone()), offset));
                         Ok(Node::Backref(BackrefRef::Name(name), self.flags.caseless))
                     }
-                    _ => Err(CompileError::new(
-                        self.at,
-                        "unrecognized character after (?P",
-                    )),
+                    _ => Err(CompileError::new(self.at, "unrecognized character after (?P")),
                 }
             }
             Some(b'(') => {
@@ -978,10 +966,7 @@ impl<'a> Parser<'a> {
                     self.require(b'\'')?;
                     self.named_index(&name)
                 } else {
-                    return Err(CompileError::new(
-                        self.at,
-                        "unrecognized character after (?",
-                    ));
+                    return Err(CompileError::new(self.at, "unrecognized character after (?"));
                 };
                 self.require(b')')?;
                 let yes = self.parse_concat(true)?;
@@ -998,10 +983,7 @@ impl<'a> Parser<'a> {
                     no: Box::new(no),
                 })
             }
-            Some(b'R') | Some(b'&') => Err(CompileError::new(
-                self.at,
-                "recursion is not supported by this engine",
-            )),
+            Some(b'R') | Some(b'&') => Err(CompileError::new(self.at, "recursion is not supported by this engine")),
             _ => {
                 // Inline flags: `(?imsxUn)`, `(?i-s:...)`, `(?i:...)`.
                 let start = self.at;
@@ -1030,9 +1012,7 @@ impl<'a> Parser<'a> {
                         _ => break,
                     }
                 }
-                if self.at == start
-                    || !matches!(self.peek(), Some(b')') | Some(b':'))
-                {
+                if self.at == start || !matches!(self.peek(), Some(b')') | Some(b':')) {
                     return Err(CompileError::new(
                         self.pattern.len(),
                         "unrecognized character after (? or (?-",
@@ -1105,22 +1085,13 @@ impl<'a> Parser<'a> {
     fn parse_name(&mut self) -> PResult<String> {
         let start = self.at;
         if self.peek().is_some_and(|b| b.is_ascii_digit()) {
-            return Err(CompileError::new(
-                self.at,
-                "group name must start with a non-digit",
-            ));
+            return Err(CompileError::new(self.at, "group name must start with a non-digit"));
         }
-        while self
-            .peek()
-            .is_some_and(|b| b.is_ascii_alphanumeric() || b == b'_')
-        {
+        while self.peek().is_some_and(|b| b.is_ascii_alphanumeric() || b == b'_') {
             self.at += 1;
         }
         if self.at == start {
-            return Err(CompileError::new(
-                self.at,
-                "group name must start with a non-digit",
-            ));
+            return Err(CompileError::new(self.at, "group name must start with a non-digit"));
         }
         Ok(String::from_utf8_lossy(&self.pattern[start..self.at]).into_owned())
     }
@@ -1128,10 +1099,7 @@ impl<'a> Parser<'a> {
     /// `(?P<name>` and `(?P=name)`: PCRE reports a digit first.
     fn parse_python_name(&mut self) -> PResult<String> {
         if self.peek().is_some_and(|b| b.is_ascii_digit()) {
-            return Err(CompileError::new(
-                self.at,
-                "group name must start with a non-digit",
-            ));
+            return Err(CompileError::new(self.at, "group name must start with a non-digit"));
         }
         self.parse_name()
     }
@@ -1149,7 +1117,11 @@ impl<'a> Parser<'a> {
 
     fn expect_close(&mut self) -> PResult<()> {
         if self.peek() != Some(b')') {
-            let message = if self.eof() { "missing )" } else { "unmatched parentheses" };
+            let message = if self.eof() {
+                "missing )"
+            } else {
+                "unmatched parentheses"
+            };
             let offset = if self.eof() { self.pattern.len() } else { self.at };
             return Err(CompileError::new(offset, message));
         }
@@ -1245,10 +1217,7 @@ impl<'a> Parser<'a> {
                         items: vec![ClassItem::Char(0x0D), ClassItem::Char(0x0A)],
                     });
                     return Ok(Node::Alt(vec![
-                        Node::Concat(vec![
-                            Node::Class(crlf, false),
-                            Node::Class(pair, false),
-                        ]),
+                        Node::Concat(vec![Node::Class(crlf, false), Node::Class(pair, false)]),
                         Node::Class(pair, false),
                     ]));
                 }
@@ -1262,10 +1231,7 @@ impl<'a> Parser<'a> {
                 let negated = byte == b'P';
                 self.at += 1;
                 if self.peek() != Some(b'{') {
-                    return Err(CompileError::new(
-                        self.at,
-                        "malformed \\P or \\p sequence",
-                    ));
+                    return Err(CompileError::new(self.at, "malformed \\P or \\p sequence"));
                 }
                 self.at += 1;
                 let start = self.at;
@@ -1273,16 +1239,12 @@ impl<'a> Parser<'a> {
                     self.at += 1;
                 }
                 if self.peek() != Some(b'}') {
-                    return Err(CompileError::new(
-                        self.pattern.len(),
-                        "malformed \\P or \\p sequence",
-                    ));
+                    return Err(CompileError::new(self.pattern.len(), "malformed \\P or \\p sequence"));
                 }
                 let name = String::from_utf8_lossy(&self.pattern[start..self.at]).into_owned();
                 self.at += 1;
-                let (property, inner_negated) = parse_property(&name).ok_or_else(|| {
-                    CompileError::new(self.at - 1, "unknown property name after \\P or \\p")
-                })?;
+                let (property, inner_negated) = parse_property(&name)
+                    .ok_or_else(|| CompileError::new(self.at - 1, "unknown property name after \\P or \\p"))?;
                 let class = self.push_class(ClassSet {
                     negated: false,
                     items: vec![ClassItem::Property(property, inner_negated != negated)],
@@ -1322,10 +1284,7 @@ impl<'a> Parser<'a> {
                 let (value, _) = self.parse_octal(0)?;
                 Ok(Node::Char(value, self.flags.caseless))
             }
-            _ => Ok(Node::Char(
-                self.parse_escape_value()?.0,
-                self.flags.caseless,
-            )),
+            _ => Ok(Node::Char(self.parse_escape_value()?.0, self.flags.caseless)),
         }
     }
 
@@ -1379,10 +1338,7 @@ impl<'a> Parser<'a> {
             let reference = if negative {
                 let base = i64::from(self.current_group) + i64::from(number);
                 if base <= 0 {
-                    return Err(CompileError::new(
-                        self.at - 1,
-                        "reference to non-existent subpattern",
-                    ));
+                    return Err(CompileError::new(self.at - 1, "reference to non-existent subpattern"));
                 }
                 BackrefRef::Number(base as u32)
             } else {
@@ -1484,10 +1440,7 @@ impl<'a> Parser<'a> {
                 }
                 if braced {
                     if digits == 0 {
-                        return Err(CompileError::new(
-                            self.at,
-                            "digits missing in \\x{} or \\o{}",
-                        ));
+                        return Err(CompileError::new(self.at, "digits missing in \\x{} or \\o{}"));
                     }
                     if self.peek() != Some(b'}') {
                         return Err(CompileError::new(self.at, "syntax error in \\x{} or \\o{}"));
@@ -1550,10 +1503,7 @@ impl<'a> Parser<'a> {
                     .next_char()
                     .ok_or_else(|| CompileError::new(self.at, "invalid UTF-8 string"))?;
                 if is_alpha(ch) || is_digit(ch) {
-                    return Err(CompileError::new(
-                        self.at - 1,
-                        "unrecognized character follows \\",
-                    ));
+                    return Err(CompileError::new(self.at - 1, "unrecognized character follows \\"));
                 }
                 Ok(EscapeValue(ch))
             }
@@ -1608,9 +1558,7 @@ impl<'a> Parser<'a> {
                 while self.pattern.get(at).is_some_and(|b| *b != b':') {
                     at += 1;
                 }
-                if self.pattern.get(at) == Some(&b':')
-                    && self.pattern.get(at + 1) == Some(&b']')
-                {
+                if self.pattern.get(at) == Some(&b':') && self.pattern.get(at + 1) == Some(&b']') {
                     let name = String::from_utf8_lossy(&self.pattern[name_start..at]).into_owned();
                     let Some(posix) = parse_posix(&name) else {
                         return Err(CompileError::new(name_start, "unknown POSIX class name"));
@@ -1692,16 +1640,12 @@ impl<'a> Parser<'a> {
                         self.at += 1;
                     }
                     if self.peek() != Some(b'}') {
-                        return Err(CompileError::new(
-                            self.pattern.len(),
-                            "malformed \\P or \\p sequence",
-                        ));
+                        return Err(CompileError::new(self.pattern.len(), "malformed \\P or \\p sequence"));
                     }
                     let name = String::from_utf8_lossy(&self.pattern[start..self.at]).into_owned();
                     self.at += 1;
-                    let (property, inner) = parse_property(&name).ok_or_else(|| {
-                        CompileError::new(self.at - 1, "unknown property name after \\P or \\p")
-                    })?;
+                    let (property, inner) = parse_property(&name)
+                        .ok_or_else(|| CompileError::new(self.at - 1, "unknown property name after \\P or \\p"))?;
                     return Ok(ClassChar::Property(property, inner != negated));
                 }
                 _ => {
@@ -1905,9 +1849,7 @@ fn is_fixed_length(node: &Node) -> bool {
         Node::Alt(branches) => branches.iter().all(is_fixed_length),
         Node::Assert { .. } => true,
         Node::Conditional { yes, no, .. } => is_fixed_length(yes) && is_fixed_length(no),
-        Node::Repeat { body, min, max, .. } => {
-            is_fixed_length(body) && max.is_some_and(|max| max == *min)
-        }
+        Node::Repeat { body, min, max, .. } => is_fixed_length(body) && max.is_some_and(|max| max == *min),
     }
 }
 
@@ -1956,7 +1898,6 @@ enum Inst {
     Cut(u32),
     Match,
 }
-
 
 struct Compiler {
     program: Vec<Inst>,
@@ -2031,11 +1972,7 @@ impl Compiler {
                 };
                 self.emit(Inst::Backref(number, *caseless));
             }
-            Node::Group {
-                index,
-                body,
-                atomic,
-            } => {
+            Node::Group { index, body, atomic } => {
                 if *atomic {
                     let register = self.allocate();
                     self.emit(Inst::Mark(register));
@@ -2085,17 +2022,8 @@ impl Compiler {
                 let end = self.here();
                 self.patch(over, end);
             }
-            Node::Repeat {
-                body,
-                min,
-                max,
-                greed,
-            } => self.emit_repeat(body, *min, *max, *greed),
-            Node::Assert {
-                behind,
-                negative,
-                body,
-            } => {
+            Node::Repeat { body, min, max, greed } => self.emit_repeat(body, *min, *max, *greed),
+            Node::Assert { behind, negative, body } => {
                 let (min_len, max_len) = char_length(body);
                 let jump = self.emit(Inst::Assert {
                     behind: *behind,
@@ -2451,9 +2379,7 @@ impl<'a> Vm<'a> {
                 }
                 Inst::EndZ => {
                     let matches = pos == self.end
-                        || (!self.exec.not_eol
-                            && pos + 1 == self.end
-                            && self.subject.get(pos) == Some(&b'\n'));
+                        || (!self.exec.not_eol && pos + 1 == self.end && self.subject.get(pos) == Some(&b'\n'));
                     if matches {
                         pc += 1;
                         continue;
@@ -2736,10 +2662,7 @@ mod tests {
             error("[z-a]"),
             Some("range out of order in character class at 3".to_owned())
         );
-        assert_eq!(
-            error("(?<>)"),
-            Some("unrecognized character after (?< at 3".to_owned())
-        );
+        assert_eq!(error("(?<>)"), Some("unrecognized character after (?< at 3".to_owned()));
         assert_eq!(
             error("(?P<a>x)(?P<a>y)"),
             Some("two named subpatterns have the same name at 13".to_owned())
@@ -2753,10 +2676,7 @@ mod tests {
             Some("reference to non-existent subpattern at 2".to_owned())
         );
         assert_eq!(error("(?#"), Some("missing ) after comment at 3".to_owned()));
-        assert_eq!(
-            error("a{1,2}{3}"),
-            Some("nothing to repeat at 8".to_owned())
-        );
+        assert_eq!(error("a{1,2}{3}"), Some("nothing to repeat at 8".to_owned()));
         assert_eq!(error("]"), None);
         assert_eq!(error("a)b"), Some("unmatched parentheses at 1".to_owned()));
         assert_eq!(
@@ -2776,34 +2696,27 @@ mod tests {
             error("(?P=1)"),
             Some("group name must start with a non-digit at 4".to_owned())
         );
-        assert_eq!(
-            error("[[:nope:]]"),
-            Some("unknown POSIX class name at 3".to_owned())
-        );
+        assert_eq!(error("[[:nope:]]"), Some("unknown POSIX class name at 3".to_owned()));
         assert_eq!(
             error("\\g"),
             Some("a numbered reference must not be zero at 1".to_owned())
         );
-        assert_eq!(
-            error("\\x{}"),
-            Some("digits missing in \\x{} or \\o{} at 3".to_owned())
-        );
+        assert_eq!(error("\\x{}"), Some("digits missing in \\x{} or \\o{} at 3".to_owned()));
         assert_eq!(error("a{,2}"), None);
         assert_eq!(
             error("(?<a)"),
             Some("syntax error in subpattern name (missing terminator) at 4".to_owned())
         );
-        assert_eq!(
-            error("(?Cx)"),
-            Some("closing ) for (?C expected at 3".to_owned())
-        );
+        assert_eq!(error("(?Cx)"), Some("closing ) for (?C expected at 3".to_owned()));
     }
 
     #[test]
     fn groups_and_offsets() {
         let regex = Regex::compile("(a(.))z", Flags::default()).expect("a pattern");
         let subject = "a\u{e9}z".as_bytes();
-        let captures = regex.exec(subject, 0, subject.len(), ExecFlags::default()).expect("a match");
+        let captures = regex
+            .exec(subject, 0, subject.len(), ExecFlags::default())
+            .expect("a match");
         assert_eq!(captures[0], Some((0, 4)));
         assert_eq!(captures[1], Some((0, 3)));
         assert_eq!(captures[2], Some((1, 3)));
