@@ -402,37 +402,34 @@ fn string_to_cursor_of_an_unknown_ident_raises_as_the_oracle() {
     );
 }
 
-/// A script that constructs a registered VCL class whose object the port
-/// cannot build refuses through the shim (not as an undeclared identifier):
-/// the class and its members are registered, so a script compiles and runs to
-/// the point of the call.
+/// A script that constructs a registered VCL class builds a model object
+/// (issue #26): the class and its members are registered, and the headless
+/// object model keeps the control's state, so the script runs to its end.
 #[test]
-fn a_control_member_aborts_with_the_shim_error() {
+fn a_control_is_built_by_the_object_model() {
     let _guard = test_lock();
     let folder = script_folder(
         "Control",
-        "unit Control;\n\
-         function Initialize: integer;\n\
-         var\n\
-           cb: TComboBox;\n\
-         begin\n\
-           cb := TComboBox.Create(nil);\n\
-           Result := 0;\n\
-         end;\n\
-         end.\n",
+        "unit Control;
+         function Initialize: integer;
+         var
+           cb: TComboBox;
+         begin
+           cb := TComboBox.Create(nil);
+           cb.Items.Add('one');
+           cb.ItemIndex := 0;
+           AddMessage('count=' + IntToStr(cb.Items.Count) + ' index=' + IntToStr(cb.ItemIndex));
+           cb.Free;
+           Result := 0;
+         end;
+         end.
+",
     );
     let mut session = open_session();
     let result = run(&mut session, &folder, "Control");
-    assert_eq!(result["aborted"], true);
+    assert_eq!(result["aborted"], false, "{result:#}");
     let lines = lines(&result);
-    let exception = lines
-        .iter()
-        .find(|line| line.starts_with("Exception in unit Control line "))
-        .unwrap_or_else(|| panic!("no exception line: {lines:?}"));
-    assert!(
-        exception.contains("[EVclUnavailable]") && exception.contains("TComboBox.Create is not available"),
-        "{exception}"
-    );
+    assert!(lines.iter().any(|line| line == "count=1 index=0"), "{lines:?}");
 }
 
 //=== The corpus scripts of the two classes ==================================
@@ -468,12 +465,14 @@ fn corpus_class(name: &str) -> Option<String> {
 }
 
 /// A form script of the corpus (`Find records.pas` builds a `TForm` in its
-/// `Initialize`) aborts with the shim's refusal, which names the class and
-/// the script -- and the class is the one step 10's parity gives the case
-/// (`form`: the corpus greps `TForm`/`ShowModal`), so the parity run can
-/// grade the abort against the oracle's form classification.
+/// `Initialize`) run without recorded answers stops on the form: the run is
+/// aborted with `EVclInteractionRequired` and the response names the
+/// pending question (`pending_interaction`), which `script.resume` with an
+/// answer continues past -- and the class is the one step 10's parity gives
+/// the case (`form`: the corpus greps `TForm`/`ShowModal`), whose answered
+/// case `runs.json` carries (issue #26).
 #[test]
-fn a_form_script_aborts_with_the_shim_error() {
+fn a_form_script_without_answers_stops_on_its_form() {
     let Some(folder) = corpus_folder() else {
         eprintln!("skipped: XEDIT_ORACLE_DIR is not set");
         return;
@@ -481,17 +480,17 @@ fn a_form_script_aborts_with_the_shim_error() {
     let _guard = test_lock();
     let mut session = open_session();
     let result = run(&mut session, &folder, "Find records");
-    assert_eq!(result["aborted"], true);
+    assert_eq!(result["aborted"], true, "{result:#}");
+    let pending = &result["pending_interaction"];
+    assert_eq!(pending["kind"], "form", "{result:#}");
+    assert_eq!(pending["class"], "TForm");
+    assert_eq!(pending["title"], "Find records");
     let lines = lines(&result);
     let exception = lines
         .iter()
         .find(|line| line.starts_with("Exception in unit userscript line "))
         .unwrap_or_else(|| panic!("no exception line: {lines:?}"));
-    assert!(exception.contains("[EVclUnavailable]"), "{exception}");
-    assert!(
-        exception.contains("TForm.Create is not available without a GUI (script \"Find records\")"),
-        "{exception}"
-    );
+    assert!(exception.contains("[EVclInteractionRequired]"), "{exception}");
     assert!(
         lines
             .iter()
@@ -501,11 +500,12 @@ fn a_form_script_aborts_with_the_shim_error() {
 }
 
 /// A dialog-only script of the corpus (`Add prefix or suffix to Editor ID.pas`
-/// asks with `MessageDlg`/`InputQuery`) aborts with the shim's refusal naming
-/// the dialog -- step 10's `interactive` classification of the case, which
-/// the parity run defers to a dialog of the oracle's own.
+/// asks with `MessageDlg`/`InputQuery`) run without recorded answers stops
+/// on its first dialog with the question in `pending_interaction` -- step
+/// 10's `interactive` classification of the case, whose answered case
+/// `runs.json` carries (issue #26).
 #[test]
-fn a_dialog_script_aborts_with_the_shim_error() {
+fn a_dialog_script_without_answers_stops_on_its_dialog() {
     let Some(folder) = corpus_folder() else {
         eprintln!("skipped: XEDIT_ORACLE_DIR is not set");
         return;
@@ -513,17 +513,19 @@ fn a_dialog_script_aborts_with_the_shim_error() {
     let _guard = test_lock();
     let mut session = open_session();
     let result = run(&mut session, &folder, "Add prefix or suffix to Editor ID");
-    assert_eq!(result["aborted"], true);
+    assert_eq!(result["aborted"], true, "{result:#}");
+    let pending = &result["pending_interaction"];
+    assert_eq!(pending["kind"], "message", "{result:#}");
+    assert_eq!(pending["class"], "#32770");
+    assert_eq!(pending["title"], "Confirm");
+    assert_eq!(pending["text"], "Prepend [YES] or append [NO] to Editor ID?");
+    assert_eq!(pending["buttons"], serde_json::json!(["&Yes", "&No", "Cancel"]));
     let lines = lines(&result);
     let exception = lines
         .iter()
         .find(|line| line.starts_with("Exception in unit UserScript line "))
         .unwrap_or_else(|| panic!("no exception line: {lines:?}"));
-    assert!(exception.contains("[EVclUnavailable]"), "{exception}");
-    assert!(
-        exception.contains("MessageDlg is not available without a GUI (script \"Add prefix or suffix to Editor ID\")"),
-        "{exception}"
-    );
+    assert!(exception.contains("[EVclInteractionRequired]"), "{exception}");
     assert_eq!(
         corpus_class("Add prefix or suffix to Editor ID.pas").as_deref(),
         Some("interactive")
