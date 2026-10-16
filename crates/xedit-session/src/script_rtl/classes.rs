@@ -69,9 +69,12 @@ const DUP_ACCEPT: i32 = 1;
 const DUP_ERROR: i32 = 2;
 
 /// `fmOpen*` modes.
+#[allow(dead_code, reason = "the access match's fell-through arm is fmOpenRead")]
 const FM_OPEN_READ: i32 = 0x0000;
 const FM_OPEN_WRITE: i32 = 0x0001;
 const FM_OPEN_READWRITE: i32 = 0x0002;
+/// `fmCreate` (`System.SysUtils`): create or truncate.
+const FM_CREATE: i32 = 0xFF00;
 
 //=== The shared list objects =================================================
 
@@ -105,6 +108,17 @@ pub enum StreamKind {
 pub struct StreamState {
     pub kind: StreamKind,
     pub pos: u64,
+    /// The stream is a `TMemoryStream` (not a `TBytesStream`, which derives
+    /// from `TCustomMemoryStream`): the JSON writer's `FlushToMemoryStream`
+    /// path addresses its buffer directly and *truncates* it to the end of
+    /// what it wrote, where every other stream is written through
+    /// `TStream.Write` and keeps the bytes past the write.
+    pub is_memory_stream: bool,
+    /// `TStream.Destroy` released the object: upstream closes the handle and
+    /// frees the object, so a later member call reads freed memory (the
+    /// probe of a freed stream shows what the GUI's build does with it); the
+    /// port refuses every member with [`access_violation`] instead.
+    pub released: bool,
 }
 
 pub struct StreamObject {
@@ -122,15 +136,35 @@ impl ScriptObject for StreamObject {
     fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
         self
     }
+    fn free(&mut self) {
+        let mut state = self.state.borrow_mut();
+        state.released = true;
+        // `TFileStream.Destroy` closes the handle.
+        state.kind = StreamKind::Memory(Vec::new());
+        state.pos = 0;
+    }
+}
+
+/// The access violation a member of a nil or released object gives upstream
+/// (`TStream.Read` of a nil pointer). Upstream's message carries the address
+/// of the faulting instruction and of the target, which differ per run; the
+/// port names the same exception class with zero addresses.
+pub fn access_violation() -> ValueError {
+    ValueError::external_class(
+        "EAccessViolation",
+        "Access violation at address 0000000000000000 in module 'xedit.exe'. Read of address 0000000000000000"
+            .to_owned(),
+    )
 }
 
 pub fn stream_of(value: &Value) -> Option<Rc<RefCell<StreamState>>> {
     let object = value.as_object()?;
     let borrowed = object.borrow();
-    borrowed
-        .as_any()
-        .downcast_ref::<StreamObject>()
-        .map(|stream| stream.state.clone())
+    let state = borrowed.as_any().downcast_ref::<StreamObject>()?.state.clone();
+    if state.borrow().released {
+        return None;
+    }
+    Some(state)
 }
 
 //=== TComponent, TCollection =================================================
@@ -250,6 +284,9 @@ struct Classes {
     t_memory_stream: Rc<ClassDef>,
     t_string_stream: Rc<ClassDef>,
     t_component: Rc<ClassDef>,
+    t_binary_reader: Rc<ClassDef>,
+    t_binary_writer: Rc<ClassDef>,
+    t_bytes_stream: Rc<ClassDef>,
 }
 
 /// Registers the unit.
@@ -295,6 +332,14 @@ pub fn register(adapter: &mut Adapter, state: &Rc<RefCell<ScriptRunState>>) {
     let t_memory_stream = class_of(adapter, "TMemoryStream", Some(t_stream.clone()));
     let t_string_stream = class_of(adapter, "TStringStream", Some(t_stream.clone()));
     let t_component = class_of(adapter, "TComponent", Some(t_persistent.clone()));
+    // `TBinaryReader` and `TBinaryWriter` are `TObject`s and `TBytesStream`
+    // a `TCustomMemoryStream` (`TStream` here, the nearest registered
+    // ancestor). The three are registered by `xejviScriptAdapterMiscVcl.pas`
+    // of the misc family, and their object model is this unit's streams'.
+    let t_object_anchor = t_object_anchor(adapter);
+    let t_binary_reader = class_of(adapter, "TBinaryReader", t_object_anchor.clone());
+    let t_binary_writer = class_of(adapter, "TBinaryWriter", t_object_anchor);
+    let t_bytes_stream = class_of(adapter, "TBytesStream", Some(t_stream.clone()));
 
     let classes = Classes {
         t_persistent,
@@ -307,6 +352,9 @@ pub fn register(adapter: &mut Adapter, state: &Rc<RefCell<ScriptRunState>>) {
         t_memory_stream,
         t_string_stream,
         t_component,
+        t_binary_reader,
+        t_binary_writer,
+        t_bytes_stream,
     };
 
     register_list(adapter, &t_list);
@@ -315,6 +363,7 @@ pub fn register(adapter: &mut Adapter, state: &Rc<RefCell<ScriptRunState>>) {
     register_strings(adapter, &classes);
     register_stream(adapter, &classes);
     register_component(adapter, &classes);
+    register_binary_streams(adapter, &classes);
 
     // The string-list constants.
     constant(adapter, UNIT, "dupIgnore", DUP_IGNORE);
@@ -361,6 +410,12 @@ pub fn register(adapter: &mut Adapter, state: &Rc<RefCell<ScriptRunState>>) {
             Ok(())
         }));
     }
+}
+
+/// The registered `TObject` (the `System` unit's), the parent of
+/// `TBinaryReader` and `TBinaryWriter`.
+fn t_object_anchor(adapter: &mut Adapter) -> Option<Rc<ClassDef>> {
+    adapter.find_class(b"TObject")
 }
 
 /// Whether a member of `class` is already registered by another step of the
@@ -472,7 +527,7 @@ fn strings_arg(args: &Args) -> Result<Rc<RefCell<dyn ScriptObject>>, ValueError>
 }
 
 fn stream_arg(args: &Args) -> Result<Rc<RefCell<StreamState>>, ValueError> {
-    stream_of(&receiver(args)?).ok_or(ValueError::Variant)
+    stream_of(&receiver(args)?).ok_or_else(access_violation)
 }
 
 fn component_arg(args: &Args) -> Result<Rc<RefCell<ComponentState>>, ValueError> {
@@ -1180,7 +1235,7 @@ fn register_strings(adapter: &mut Adapter, classes: &Classes) {
         "LoadFromStream",
         &[EMPTY],
         |_value, args| {
-            let stream = stream_of(arg(args, 0)).ok_or(ValueError::Variant)?;
+            let stream = stream_of(arg(args, 0)).ok_or_else(access_violation)?;
             let bytes = stream_read_to_end(&stream)?;
             let text = decode_text_file(bytes);
             let object = strings_arg(args)?;
@@ -1216,7 +1271,7 @@ fn register_strings(adapter: &mut Adapter, classes: &Classes) {
         Ok(())
     });
     method_new(adapter, &classes.t_strings, "SaveToStream", &[EMPTY], |_value, args| {
-        let stream = stream_of(arg(args, 0)).ok_or(ValueError::Variant)?;
+        let stream = stream_of(arg(args, 0)).ok_or_else(access_violation)?;
         let object = strings_arg(args)?;
         let bytes = {
             let borrowed = object.borrow();
@@ -1504,7 +1559,7 @@ fn file_error(path: &str) -> impl Fn(std::io::Error) -> ValueError + '_ {
 //=== TStream =================================================================
 
 /// The rest of a stream's bytes (its position advances to its end).
-fn stream_read_to_end(stream: &Rc<RefCell<StreamState>>) -> Result<Vec<u8>, ValueError> {
+pub fn stream_read_to_end(stream: &Rc<RefCell<StreamState>>) -> Result<Vec<u8>, ValueError> {
     let mut stream = stream.borrow_mut();
     let mut buffer = Vec::new();
     let pos = stream.pos;
@@ -1524,7 +1579,7 @@ fn stream_read_to_end(stream: &Rc<RefCell<StreamState>>) -> Result<Vec<u8>, Valu
 }
 
 /// Writes at the stream's end (the `SaveToStream` shape).
-fn stream_write_at_end(stream: &Rc<RefCell<StreamState>>, bytes: &[u8]) -> Result<(), ValueError> {
+pub fn stream_write_at_end(stream: &Rc<RefCell<StreamState>>, bytes: &[u8]) -> Result<(), ValueError> {
     let mut stream = stream.borrow_mut();
     match &mut stream.kind {
         StreamKind::File(file) => {
@@ -1542,7 +1597,7 @@ fn stream_write_at_end(stream: &Rc<RefCell<StreamState>>, bytes: &[u8]) -> Resul
 }
 
 /// `TStream.Read`/`ReadBuffer`: up to `count` bytes from the position.
-fn stream_read(stream: &Rc<RefCell<StreamState>>, count: usize) -> Result<Vec<u8>, ValueError> {
+pub fn stream_read(stream: &Rc<RefCell<StreamState>>, count: usize) -> Result<Vec<u8>, ValueError> {
     let mut stream = stream.borrow_mut();
     let pos = stream.pos;
     let mut buffer = vec![0u8; count];
@@ -1566,7 +1621,7 @@ fn stream_read(stream: &Rc<RefCell<StreamState>>, count: usize) -> Result<Vec<u8
 }
 
 /// `TStream.Write`/`WriteBuffer`: `bytes` at the position.
-fn stream_write(stream: &Rc<RefCell<StreamState>>, bytes: &[u8]) -> Result<usize, ValueError> {
+pub fn stream_write(stream: &Rc<RefCell<StreamState>>, bytes: &[u8]) -> Result<usize, ValueError> {
     let mut stream = stream.borrow_mut();
     let pos = stream.pos as usize;
     match &mut stream.kind {
@@ -1594,7 +1649,7 @@ fn stream_write(stream: &Rc<RefCell<StreamState>>, bytes: &[u8]) -> Result<usize
 }
 
 /// The size of a stream.
-fn stream_size(stream: &Rc<RefCell<StreamState>>) -> Result<u64, ValueError> {
+pub fn stream_size(stream: &Rc<RefCell<StreamState>>) -> Result<u64, ValueError> {
     let stream = stream.borrow();
     match &stream.kind {
         StreamKind::File(file) => file
@@ -1606,7 +1661,7 @@ fn stream_size(stream: &Rc<RefCell<StreamState>>) -> Result<u64, ValueError> {
 }
 
 /// `TStream.Size` write.
-fn stream_set_size(stream: &Rc<RefCell<StreamState>>, size: u64) -> Result<(), ValueError> {
+pub fn stream_set_size(stream: &Rc<RefCell<StreamState>>, size: u64) -> Result<(), ValueError> {
     let mut stream = stream.borrow_mut();
     match &mut stream.kind {
         StreamKind::File(file) => file.set_len(size).map_err(|_| ValueError::Variant),
@@ -1618,7 +1673,7 @@ fn stream_set_size(stream: &Rc<RefCell<StreamState>>, size: u64) -> Result<(), V
 }
 
 /// `TStream.Seek` with the `TSeekOrigin` value.
-fn stream_seek(stream: &Rc<RefCell<StreamState>>, offset: i64, origin: i32) -> Result<i64, ValueError> {
+pub fn stream_seek(stream: &Rc<RefCell<StreamState>>, offset: i64, origin: i32) -> Result<i64, ValueError> {
     let mut stream = stream.borrow_mut();
     let current = stream.pos as i64;
     let size = match &stream.kind {
@@ -1702,7 +1757,7 @@ fn register_stream(adapter: &mut Adapter, classes: &Classes) {
         &[EMPTY, EMPTY],
         |value, args| {
             let target = stream_arg(args)?;
-            let source = stream_of(arg(args, 0)).ok_or(ValueError::Variant)?;
+            let source = stream_of(arg(args, 0)).ok_or_else(access_violation)?;
             let count = xedit_script::values::to_i64(arg(args, 1))?;
             // `Count = 0` copies from the source's position to its end.
             let bytes = if count <= 0 {
@@ -1767,11 +1822,22 @@ fn register_stream(adapter: &mut Adapter, classes: &Classes) {
             move |value, args| {
                 let path = arg_text(args, 0)?;
                 let mode = arg_i32(args, 1)?;
-                let access = mode & 0x0F;
-                let read = access == FM_OPEN_READ || access == FM_OPEN_READWRITE;
-                let write = access == FM_OPEN_WRITE || access == FM_OPEN_READWRITE;
+                // `fmCreate` is `$FF00`: create or truncate, opened for
+                // reading and writing (`TFileStream.Create`).
+                let create = mode & 0xFF00 == FM_CREATE;
+                let (read, write) = if create {
+                    (true, true)
+                } else {
+                    match mode & 0x0F {
+                        FM_OPEN_WRITE => (false, true),
+                        FM_OPEN_READWRITE => (true, true),
+                        _ => (true, false),
+                    }
+                    // `FM_OPEN_READ` (and a mode without one of the three
+                    // access bits) reads.
+                };
                 let mut options = std::fs::OpenOptions::new();
-                options.read(read).write(write);
+                options.read(read).write(write).create(create).truncate(create);
                 #[cfg(windows)]
                 {
                     use std::os::windows::fs::OpenOptionsExt;
@@ -1797,6 +1863,8 @@ fn register_stream(adapter: &mut Adapter, classes: &Classes) {
                     state: Rc::new(RefCell::new(StreamState {
                         kind: StreamKind::File(file),
                         pos: 0,
+                        is_memory_stream: false,
+                        released: false,
                     })),
                 })));
                 Ok(())
@@ -1813,6 +1881,8 @@ fn register_stream(adapter: &mut Adapter, classes: &Classes) {
                 state: Rc::new(RefCell::new(StreamState {
                     kind: StreamKind::Memory(Vec::new()),
                     pos: 0,
+                    is_memory_stream: true,
+                    released: false,
                 })),
             })));
             Ok(())
@@ -1845,7 +1915,7 @@ fn register_stream(adapter: &mut Adapter, classes: &Classes) {
         &[EMPTY],
         |_value, args| {
             let stream = stream_arg(args)?;
-            let source = stream_of(arg(args, 0)).ok_or(ValueError::Variant)?;
+            let source = stream_of(arg(args, 0)).ok_or_else(access_violation)?;
             let bytes = stream_read_to_end(&source)?;
             let mut stream = stream.borrow_mut();
             stream.kind = StreamKind::Memory(bytes);
@@ -1881,7 +1951,7 @@ fn register_stream(adapter: &mut Adapter, classes: &Classes) {
         &[EMPTY],
         |_value, args| {
             let stream = stream_arg(args)?;
-            let target = stream_of(arg(args, 0)).ok_or(ValueError::Variant)?;
+            let target = stream_of(arg(args, 0)).ok_or_else(access_violation)?;
             let bytes = match &stream.borrow().kind {
                 StreamKind::Memory(memory) | StreamKind::Text(memory) => memory.clone(),
                 StreamKind::File(_) => Vec::new(),
@@ -1905,6 +1975,8 @@ fn register_stream(adapter: &mut Adapter, classes: &Classes) {
                     state: Rc::new(RefCell::new(StreamState {
                         kind: StreamKind::Text(text.into_bytes()),
                         pos: 0,
+                        is_memory_stream: false,
+                        released: false,
                     })),
                 })));
                 Ok(())
@@ -2239,4 +2311,385 @@ fn register_component(adapter: &mut Adapter, classes: &Classes) {
         component_arg(args)?.borrow_mut().tag = tag;
         Ok(())
     });
+}
+
+//=== TBinaryReader, TBinaryWriter and TBytesStream ===========================
+
+/// The state of a `TBinaryReader` (Delphi `System.Classes`): the stream and
+/// the encoding `ReadString` decodes with. The JVCL registration
+/// (`xejviScriptAdapterMiscVcl.pas:41`) passes the stream alone, so the
+/// encoding is the one the one-argument constructor picks.
+pub struct BinaryReaderState {
+    pub stream: Option<Rc<RefCell<StreamState>>>,
+    pub encoding: crate::script_strings::EncodingKind,
+}
+
+pub struct BinaryReaderObject {
+    class: Rc<ClassDef>,
+    pub state: Rc<RefCell<BinaryReaderState>>,
+}
+
+impl ScriptObject for BinaryReaderObject {
+    fn class(&self) -> Rc<ClassDef> {
+        self.class.clone()
+    }
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+}
+
+/// The `TStream` argument of a binary stream constructor: the RTL's
+/// `Create` raises `EArgumentNilException` for nil (`SArgumentNil`).
+fn argument_stream(value: &Value) -> Result<Option<Rc<RefCell<StreamState>>>, ValueError> {
+    match stream_of(value) {
+        Some(stream) => Ok(Some(stream)),
+        None => Err(ValueError::external_class(
+            "EArgumentNilException",
+            "Argument cannot be nil".to_owned(),
+        )),
+    }
+}
+
+/// The stream a binary reader reads from; a reader built on nil (or one
+/// whose stream a script freed) gives the access violation upstream's nil
+/// dereference gives.
+fn binary_reader_stream(args: &Args) -> Result<Rc<RefCell<StreamState>>, ValueError> {
+    let object = receiver(args)?;
+    let object = object.as_object().ok_or_else(access_violation)?;
+    let reader = object.borrow();
+    reader
+        .as_any()
+        .downcast_ref::<BinaryReaderObject>()
+        .and_then(|reader| reader.state.borrow().stream.clone())
+        .ok_or_else(access_violation)
+}
+
+/// The state of a `TBinaryWriter`: the stream, the encoding `Write(string)`
+/// uses and the buffer the typed `Write`s fill. Upstream flushes the buffer
+/// when it would overflow and at the writer's destroy.
+pub struct BinaryWriterState {
+    pub stream: Option<Rc<RefCell<StreamState>>>,
+    pub encoding: crate::script_strings::EncodingKind,
+}
+
+impl BinaryWriterState {
+    /// `TBinaryWriter.WriteBuffer`: the bytes go straight to the stream
+    /// (the 4.1.5q RTL has no buffer: the oracle's `streams.pas` probe shows
+    /// the file grow by 4 bytes on the first `Write(42)`).
+    fn write_bytes(&mut self, bytes: &[u8]) -> Result<(), ValueError> {
+        let stream = self.stream.clone().ok_or_else(access_violation)?;
+        let _ = stream_write(&stream, bytes)?;
+        Ok(())
+    }
+
+    /// The typed `TBinaryWriter.Write` overloads
+    /// (`xejviScriptAdapterMiscVcl.pas:118`): the bytes of each variant type
+    /// the registration dispatches on. A variant of a type the `case` does
+    /// not name writes nothing, as upstream.
+    fn write_value(&mut self, value: &Value) -> Result<(), ValueError> {
+        match value {
+            Value::Byte(v) => self.write_bytes(&[*v]),
+            Value::VariantArray(array) => {
+                let bytes = bytes_of_array(array)?;
+                self.write_bytes(&bytes)
+            }
+            Value::Integer(v) => self.write_bytes(&v.to_le_bytes()),
+            Value::Smallint(v) => self.write_bytes(&[*v as u8]),
+            Value::Int64(_) => {
+                // `varInt64` is not one of the case's types.
+                Ok(())
+            }
+            Value::Double(v) => self.write_bytes(&v.to_le_bytes()),
+            Value::Str(bytes) => {
+                let text = String::from_utf8_lossy(bytes);
+                let encoded = self.encoding.bytes(&text);
+                // The 7 bit length prefix of the string value.
+                let mut length = Vec::new();
+                let mut rest = encoded.len();
+                while rest >= 0x80 {
+                    length.push((rest as u8) | 0x80);
+                    rest >>= 7;
+                }
+                length.push(rest as u8);
+                self.write_bytes(&length)?;
+                self.write_bytes(&encoded)
+            }
+            _ => Ok(()),
+        }
+    }
+}
+
+pub struct BinaryWriterObject {
+    class: Rc<ClassDef>,
+    pub state: Rc<RefCell<BinaryWriterState>>,
+}
+
+impl ScriptObject for BinaryWriterObject {
+    fn class(&self) -> Rc<ClassDef> {
+        self.class.clone()
+    }
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+    fn free(&mut self) {
+        // `TBinaryWriter.Destroy` flushes and, with `AOwnsStream` off, leaves
+        // the stream alone; the port's writer holds nothing back.
+    }
+}
+
+/// The bytes of a `TBytes` value: a variant array of bytes.
+fn bytes_of_array(array: &Rc<RefCell<xedit_script::values::VariantArray>>) -> Result<Vec<u8>, ValueError> {
+    array
+        .borrow()
+        .values
+        .iter()
+        .map(|byte| match byte {
+            Value::Integer(v) => Ok(*v as u8),
+            Value::Smallint(v) => Ok(*v as u8),
+            Value::Byte(v) => Ok(*v),
+            Value::Int64(v) => Ok(*v as u8),
+            _ => Err(ValueError::Variant),
+        })
+        .collect()
+}
+
+/// The `TBytes` value of a byte buffer (an array of `varByte`).
+fn bytes_value(bytes: &[u8]) -> Value {
+    use xedit_script::values::VariantArray;
+    Value::VariantArray(Rc::new(RefCell::new(VariantArray::new(
+        bytes.iter().map(|byte| Value::Byte(*byte)).collect(),
+    ))))
+}
+
+/// The bytes of a `TBytes` argument: a variant array of bytes or the port's
+/// byte string (`ResourceOpenData` and the other `TBytes` results).
+fn bytes_of_value(value: &Value) -> Result<Vec<u8>, ValueError> {
+    match value {
+        Value::Str(bytes) => Ok(bytes.clone()),
+        Value::VariantArray(array) => bytes_of_array(array),
+        _ => Err(ValueError::Variant),
+    }
+}
+
+/// `TBinaryReader.ReadBuffer`/`FillBuffer`: exactly `count` bytes or the
+/// RTL's `EReadError('Stream read error')`.
+fn binary_read_bytes(stream: &Rc<RefCell<StreamState>>, count: usize) -> Result<Vec<u8>, ValueError> {
+    let bytes = stream_read(stream, count)?;
+    if bytes.len() < count {
+        return Err(ValueError::external_class("EReadError", S_READ_ERROR.to_owned()));
+    }
+    Ok(bytes)
+}
+
+fn writer_state(args: &Args) -> Result<Rc<RefCell<BinaryWriterState>>, ValueError> {
+    let object = receiver(args)?;
+    let object = object.as_object().ok_or_else(access_violation)?;
+    let writer = object.borrow();
+    writer
+        .as_any()
+        .downcast_ref::<BinaryWriterObject>()
+        .map(|writer| writer.state.clone())
+        .ok_or_else(access_violation)
+}
+
+/// The typed readers of `TBinaryReader`, one arm per registration.
+#[derive(Clone, Copy)]
+enum ReadKind {
+    Boolean,
+    Byte,
+    Plain,
+    Char,
+    Double,
+    Integer,
+    ShortInt,
+    Single,
+    SmallInt,
+    UInt16,
+    UInt32,
+}
+
+/// One typed read: the byte order is the machine's (little endian), as the
+/// RTL's raw `ReadBuffer`s of each value.
+fn read_value(stream: &Rc<RefCell<StreamState>>, kind: ReadKind) -> Result<Value, ValueError> {
+    Ok(match kind {
+        ReadKind::Boolean => Value::Bool(binary_read_bytes(stream, 1)?[0] != 0),
+        // The registration's own `Read` (`xejviScriptAdapterMiscVcl.pas:46`)
+        // reads one byte through the reader's encoding: the oracle's probe
+        // reads 42 from the byte `2A` (position +1, a `varInteger` result)
+        // and raises the RTL's `EEncodingError` for a byte that is not ASCII
+        // (`F9`), leaving the position where it was.
+        ReadKind::Plain => {
+            let start = stream.borrow().pos;
+            let byte = binary_read_bytes(stream, 1)?[0];
+            if byte < 0x80 {
+                Value::Integer(i32::from(byte))
+            } else {
+                // The failed decode consumes nothing.
+                stream.borrow_mut().pos = start;
+                return Err(ValueError::external_class(
+                    "EEncodingError",
+                    "No mapping for the Unicode character exists in the target multi-byte code page".to_owned(),
+                ));
+            }
+        }
+        ReadKind::Byte => Value::Byte(binary_read_bytes(stream, 1)?[0]),
+        ReadKind::Char => Value::Str(vec![binary_read_bytes(stream, 1)?[0]]),
+        ReadKind::Double => {
+            let bytes = binary_read_bytes(stream, 8)?;
+            Value::Double(f64::from_le_bytes(bytes.as_slice().try_into().expect("8 bytes")))
+        }
+        ReadKind::Integer => {
+            let bytes = binary_read_bytes(stream, 4)?;
+            Value::Integer(i32::from_le_bytes(bytes.as_slice().try_into().expect("4 bytes")))
+        }
+        ReadKind::ShortInt => Value::Smallint(i16::from(binary_read_bytes(stream, 1)?[0] as i8)),
+        ReadKind::Single => {
+            let bytes = binary_read_bytes(stream, 4)?;
+            Value::Double(f64::from(f32::from_le_bytes(
+                bytes.as_slice().try_into().expect("4 bytes"),
+            )))
+        }
+        ReadKind::SmallInt => {
+            let bytes = binary_read_bytes(stream, 2)?;
+            Value::Smallint(i16::from_le_bytes(bytes.as_slice().try_into().expect("2 bytes")))
+        }
+        ReadKind::UInt16 => {
+            let bytes = binary_read_bytes(stream, 2)?;
+            Value::Integer(i32::from(u16::from_le_bytes(
+                bytes.as_slice().try_into().expect("2 bytes"),
+            )))
+        }
+        ReadKind::UInt32 => {
+            let bytes = binary_read_bytes(stream, 4)?;
+            Value::Int64(i64::from(u32::from_le_bytes(
+                bytes.as_slice().try_into().expect("4 bytes"),
+            )))
+        }
+    })
+}
+
+/// `TBinaryReader`/`TBinaryWriter`/`TBytesStream` (`System.Classes`), the
+/// three classes `xejviScriptAdapterMiscVcl.pas` registers. They are
+/// ordinary memory and file operations: nothing here needs a window.
+fn register_binary_streams(adapter: &mut Adapter, classes: &Classes) {
+    // `TBinaryReader.Create(TFileStream(...))`.
+    {
+        let class = classes.t_binary_reader.clone();
+        method(adapter, &classes.t_binary_reader, "Create", &[EMPTY], move |value, args| {
+            // `if Stream = nil then raise EArgumentNilException.CreateRes(@SArgumentNil)`.
+            let stream = argument_stream(arg(args, 0))?;
+            *value = Value::Object(Rc::new(RefCell::new(BinaryReaderObject {
+                class: class.clone(),
+                state: Rc::new(RefCell::new(BinaryReaderState {
+                    stream,
+                    encoding: crate::script_strings::EncodingKind::Utf8,
+                })),
+            })));
+            Ok(())
+        });
+    }
+    // The typed readers, each of which raises `EReadError` at the end.
+    for (name, kind) in [
+        ("Read", ReadKind::Plain),
+        ("ReadBoolean", ReadKind::Boolean),
+        ("ReadByte", ReadKind::Byte),
+        ("ReadChar", ReadKind::Char),
+        ("ReadDouble", ReadKind::Double),
+        ("ReadInteger", ReadKind::Integer),
+        ("ReadShortInt", ReadKind::ShortInt),
+        ("ReadSingle", ReadKind::Single),
+        ("ReadSmallInt", ReadKind::SmallInt),
+        ("ReadUInt16", ReadKind::UInt16),
+        ("ReadUInt32", ReadKind::UInt32),
+    ] {
+        method(adapter, &classes.t_binary_reader, name, &[], move |value, args| {
+            let stream = binary_reader_stream(args)?;
+            *value = read_value(&stream, kind)?;
+            Ok(())
+        });
+    }
+    method(adapter, &classes.t_binary_reader, "ReadBytes", &[EMPTY], |value, args| {
+        let stream = binary_reader_stream(args)?;
+        let count = to_i32(arg(args, 0))?.max(0) as usize;
+        let bytes = binary_read_bytes(&stream, count)?;
+        *value = bytes_value(&bytes);
+        Ok(())
+    });
+    method(adapter, &classes.t_binary_reader, "ReadString", &[], |value, args| {
+        let (stream, encoding) = {
+            let object = receiver(args)?;
+            let object = object.as_object().ok_or_else(access_violation)?;
+            let reader = object.borrow();
+            let reader = reader
+                .as_any()
+                .downcast_ref::<BinaryReaderObject>()
+                .ok_or_else(access_violation)?;
+            let state = reader.state.borrow();
+            (state.stream.clone().ok_or_else(access_violation)?, state.encoding)
+        };
+        // `Read7BitEncodedInteger` then the bytes through `FEncoding`.
+        let mut length: i64 = 0;
+        let mut shift = 0;
+        loop {
+            let byte = binary_read_bytes(&stream, 1)?[0];
+            length |= i64::from(byte & 0x7F) << shift;
+            if byte & 0x80 == 0 {
+                break;
+            }
+            shift += 7;
+        }
+        let bytes = binary_read_bytes(&stream, length.max(0) as usize)?;
+        *value = Value::Str(encoding.string(&bytes).into_bytes());
+        Ok(())
+    });
+
+    // `TBinaryWriter.Create(TFileStream(...))`.
+    {
+        let class = classes.t_binary_writer.clone();
+        method(adapter, &classes.t_binary_writer, "Create", &[EMPTY], move |value, args| {
+            let stream = argument_stream(arg(args, 0))?;
+            *value = Value::Object(Rc::new(RefCell::new(BinaryWriterObject {
+                class: class.clone(),
+                state: Rc::new(RefCell::new(BinaryWriterState {
+                    stream,
+                    encoding: crate::script_strings::EncodingKind::Utf8,
+                })),
+            })));
+            Ok(())
+        });
+    }
+    method(adapter, &classes.t_binary_writer, "Write", &[EMPTY], |_value, args| {
+        writer_state(args)?.borrow_mut().write_value(arg(args, 0))?;
+        Ok(())
+    });
+    method(adapter, &classes.t_binary_writer, "WriteSingle", &[EMPTY], |_value, args| {
+        let single = xedit_script::values::to_f64(arg(args, 0))? as f32;
+        writer_state(args)?.borrow_mut().write_bytes(&single.to_le_bytes())?;
+        Ok(())
+    });
+
+    // `TBytesStream.Create(TBytes(...))`: a memory stream over the bytes,
+    // its position at their start.
+    {
+        let class = classes.t_bytes_stream.clone();
+        method(adapter, &classes.t_bytes_stream, "Create", &[EMPTY], move |value, args| {
+            let bytes = bytes_of_value(arg(args, 0))?;
+            *value = Value::Object(Rc::new(RefCell::new(StreamObject {
+                class: class.clone(),
+                state: Rc::new(RefCell::new(StreamState {
+                    kind: StreamKind::Memory(bytes),
+                    pos: 0,
+                    is_memory_stream: false,
+                    released: false,
+                })),
+            })));
+            Ok(())
+        });
+    }
 }

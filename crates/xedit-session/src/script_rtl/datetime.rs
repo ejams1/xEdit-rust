@@ -55,17 +55,22 @@ pub fn encode_time(hour: i64, minute: i64, second: i64, millisecond: i64) -> Res
     Ok(seconds / 86400.0)
 }
 
-/// `DecodeDate`.
+/// `DecodeDate`. The RTL takes the day with `Int` (truncation toward zero),
+/// not with a floor: for the negative dates the day of `-0.25` is day 0
+/// (1899-12-30) and the day of `-1.25` is day -1 (1899-12-29), which the
+/// oracle's `D[]` surface and the `DateTimeToISO8601` offsets pin
+/// (`crates/xtask/oracle/scripts/probes/datetime.pas`).
 pub fn decode_date(date: f64) -> (i64, i64, i64) {
-    civil_from_days(date.floor() as i64 + EPOCH_DAYS)
+    civil_from_days(date.trunc() as i64 + EPOCH_DAYS)
 }
 
-/// `DecodeTime`.
+/// `DecodeTime`. The fraction is the distance from the truncated day, so a
+/// negative date reads its time of day as a positive one (`DecodeTime(-1.25)`
+/// is 06:00, `DecodeTime(-1.7916666)` is 19:00): the RTL keeps the fraction
+/// of a negative `TDateTime` negative, and this is the reading the oracle
+/// prints (the same probe).
 pub fn decode_time(date: f64) -> (i64, i64, i64, i64) {
-    let mut fraction = date - date.floor();
-    if fraction < 0.0 {
-        fraction += 1.0;
-    }
+    let fraction = (date - date.trunc()).abs();
     let total_ms = (fraction * 86_400_000.0).round() as i64 % 86_400_000;
     (
         total_ms / 3_600_000,
@@ -169,6 +174,172 @@ pub fn file_date_to_date_time(file_date: i32) -> f64 {
     )
     .unwrap_or(0.0);
     date + time
+}
+
+//=== `TSystemTime` and the time zone =========================================
+//
+// The four routines the data-format date code and `JsonDataObjects` use to
+// cross between a `TDateTime`, a `TSystemTime` and the machine's time zone:
+// `Winapi.Windows.DateTimeToSystemTime`, `System.SysUtils.SystemTimeToDateTime`
+// and the two `kernel32` conversions `JsonDataObjects` calls with a nil time
+// zone (the current one). The port calls the same Win32 functions as the
+// oracle, so the bias, the daylight saving rules and the transition cases
+// (`TzSpecificLocalTimeToSystemTime` of a local time that does not exist or
+// is ambiguous) are the machine's on both sides.
+
+/// A `TSystemTime` (`Winapi.Windows`): the seven fields
+/// `DateTimeToSystemTime` fills and `SystemTimeToDateTime` reads.
+/// `wDayOfWeek` is not modelled: `DecodeDate` does not set it upstream and
+/// neither conversion here reads it.
+#[derive(Clone, Copy, Default, PartialEq, Eq, Debug)]
+pub struct SystemTime {
+    pub year: u16,
+    pub month: u16,
+    pub day: u16,
+    pub hour: u16,
+    pub minute: u16,
+    pub second: u16,
+    pub milliseconds: u16,
+}
+
+/// `Winapi.Windows.DateTimeToSystemTime`: `DecodeDate`/`DecodeTime` into the
+/// record. A date the RTL cannot decode (a year outside 1..9999) leaves the
+/// record zeroed, which is upstream's `except` arm (`FillChar(SystemTime,
+/// SizeOf(SystemTime), 0)`).
+pub fn date_time_to_system_time(date: f64) -> SystemTime {
+    let (year, month, day) = decode_date(date);
+    if !(1..=9999).contains(&year) {
+        return SystemTime::default();
+    }
+    let (hour, minute, second, milliseconds) = decode_time(date);
+    SystemTime {
+        year: year as u16,
+        month: month as u16,
+        day: day as u16,
+        hour: hour as u16,
+        minute: minute as u16,
+        second: second as u16,
+        milliseconds: milliseconds as u16,
+    }
+}
+
+/// `SystemTimeToDateTime` (`System.SysUtils`): `EncodeDate` and
+/// `EncodeTime`, with the RTL's `EConvertError` text for a field out of
+/// range.
+///
+/// The RTL keeps the fraction of a negative `TDateTime` negative, so a date
+/// before 1899-12-30 *subtracts* its time of day (the inverse of
+/// [`decode_date`]/[`decode_time`]): 1899-12-29 18:00 is `-1.75`, not
+/// `-0.25`. The oracle's `D[]` conversion of a pre-epoch UTC text pins it
+/// (`crates/xtask/oracle/scripts/probes/datetime.pas`, the `parse-1899*`
+/// lines).
+pub fn system_time_to_date_time(time: &SystemTime) -> Result<f64, String> {
+    let date = encode_date(i64::from(time.year), i64::from(time.month), i64::from(time.day))?;
+    let clock = encode_time(
+        i64::from(time.hour),
+        i64::from(time.minute),
+        i64::from(time.second),
+        i64::from(time.milliseconds),
+    )?;
+    Ok(if date < 0.0 { date - clock } else { date + clock })
+}
+
+/// `TzSpecificLocalTimeToSystemTime(nil, ...)` (`Winapi.Windows`): a local
+/// wall-clock time as UTC through the machine's current time zone. `None`
+/// when the call fails, which upstream answers by keeping the value.
+#[cfg(windows)]
+pub fn local_time_to_utc(time: &SystemTime) -> Option<SystemTime> {
+    use windows_sys::Win32::Foundation::SYSTEMTIME;
+    use windows_sys::Win32::System::Time::TzSpecificLocalTimeToSystemTime;
+    let local = SYSTEMTIME {
+        wYear: time.year,
+        wMonth: time.month,
+        wDayOfWeek: 0,
+        wDay: time.day,
+        wHour: time.hour,
+        wMinute: time.minute,
+        wSecond: time.second,
+        wMilliseconds: time.milliseconds,
+    };
+    let mut utc = SYSTEMTIME {
+        wYear: 0,
+        wMonth: 0,
+        wDayOfWeek: 0,
+        wDay: 0,
+        wHour: 0,
+        wMinute: 0,
+        wSecond: 0,
+        wMilliseconds: 0,
+    };
+    // SAFETY: a nil time zone asks for the current one, and both records are
+    // live for the call.
+    if unsafe { TzSpecificLocalTimeToSystemTime(std::ptr::null(), &local, &mut utc) } != 0 {
+        return Some(SystemTime {
+            year: utc.wYear,
+            month: utc.wMonth,
+            day: utc.wDay,
+            hour: utc.wHour,
+            minute: utc.wMinute,
+            second: utc.wSecond,
+            milliseconds: utc.wMilliseconds,
+        });
+    }
+    None
+}
+
+/// `TzSpecificLocalTimeToSystemTime` on a platform without it (the port's
+/// tests run on Windows; the fallback keeps the crate building elsewhere).
+#[cfg(not(windows))]
+pub fn local_time_to_utc(_time: &SystemTime) -> Option<SystemTime> {
+    None
+}
+
+/// `SystemTimeToTzSpecificLocalTime(nil, ...)` (`Winapi.Windows`): a UTC time
+/// as the machine's local wall-clock time. `None` when the call fails.
+#[cfg(windows)]
+pub fn utc_to_local_time(time: &SystemTime) -> Option<SystemTime> {
+    use windows_sys::Win32::Foundation::SYSTEMTIME;
+    use windows_sys::Win32::System::Time::SystemTimeToTzSpecificLocalTime;
+    let utc = SYSTEMTIME {
+        wYear: time.year,
+        wMonth: time.month,
+        wDayOfWeek: 0,
+        wDay: time.day,
+        wHour: time.hour,
+        wMinute: time.minute,
+        wSecond: time.second,
+        wMilliseconds: time.milliseconds,
+    };
+    let mut local = SYSTEMTIME {
+        wYear: 0,
+        wMonth: 0,
+        wDayOfWeek: 0,
+        wDay: 0,
+        wHour: 0,
+        wMinute: 0,
+        wSecond: 0,
+        wMilliseconds: 0,
+    };
+    // SAFETY: a nil time zone asks for the current one, and both records are
+    // live for the call.
+    if unsafe { SystemTimeToTzSpecificLocalTime(std::ptr::null(), &utc, &mut local) } != 0 {
+        return Some(SystemTime {
+            year: local.wYear,
+            month: local.wMonth,
+            day: local.wDay,
+            hour: local.wHour,
+            minute: local.wMinute,
+            second: local.wSecond,
+            milliseconds: local.wMilliseconds,
+        });
+    }
+    None
+}
+
+/// `SystemTimeToTzSpecificLocalTime` on a platform without it.
+#[cfg(not(windows))]
+pub fn utc_to_local_time(_time: &SystemTime) -> Option<SystemTime> {
+    None
 }
 
 /// The format settings the `*ToStr`/`StrTo*`/`FormatDateTime` routines use.

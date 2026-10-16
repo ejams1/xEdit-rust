@@ -682,6 +682,14 @@
         "Skyrim.esm"
       ],
       "note": "the same with the references loaded from the reference cache a first run wrote (the master holds 603 records, above wbCacheRecordsThreshold)"
+    },
+    {
+      "script": "probes/streams.pas",
+      "note": "parity #30 fixture: the JSON stream adapters over the memory, bytes, string and file streams with their positions, the encodings and byte order marks, the TBinaryReader/TBinaryWriter round trip and buffer, the end-of-stream error and the nil stream exceptions. The files written below wbOutputPath and the message log are compared"
+    },
+    {
+      "script": "probes/datetime.pas",
+      "note": "parity #30 fixture: the TJsonDataValue.DateTimeValue of every value kind, the ISO 8601 text with the system time zone bias on and off, the JSONToDateTime parsing surface and the daylight saving cases. The message log is compared"
     }
   ]
 }

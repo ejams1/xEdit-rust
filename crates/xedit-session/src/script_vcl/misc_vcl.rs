@@ -11,11 +11,13 @@
 //! `TDirectory` and `TFile` (the `GetDirectories`/`GetFiles` walk and the two
 //! text-file helpers) and `THashedStringList.Create` (a `TStringList` of the
 //! `Classes` unit's object model under this class name, since the list has no
-//! window). Everything else -- the binary stream readers and writers, the
-//! bitmap, the check list box, combo box, labeled edits, list view items,
-//! menus and `TWinControl` members, and `TRegistryIniFile` (the registry, not
-//! a file) -- needs a live object or the stream classes of phase 6 step 8 and
-//! goes through the [`Vcl`] seam, refusing headless with the clear error.
+//! window). The binary readers and writers of the `Classes` unit are
+//! answered too (`script_rtl/classes.rs`: their object model is the `TStream`
+//! family's, and none of them needs a window). Everything else -- the bitmap,
+//! the check list box, combo box, labeled edits, list view items, menus and
+//! `TWinControl` members, and `TRegistryIniFile` (the registry, not a file) --
+//! needs a live object and goes through the [`Vcl`] seam, refusing headless
+//! with the clear error.
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -32,11 +34,6 @@ use crate::script_units::{strings_add, strings_at};
 /// record types with their methods, the `IniFiles` classes and the members
 /// that go through the seam.
 pub(crate) fn register(adapter: &mut Adapter, _state: &Rc<RefCell<ScriptRunState>>, vcl: &Rc<RefCell<dyn Vcl>>) {
-    let t_object = class_of(adapter, "Classes", "TObject");
-    let t_binary_reader = adapter.add_class("Classes", "TBinaryReader", Some(t_object.clone()));
-    let t_binary_writer = adapter.add_class("Classes", "TBinaryWriter", Some(t_object));
-    let t_memory_stream = class_of(adapter, "Classes", "TMemoryStream");
-    let t_bytes_stream = adapter.add_class("Classes", "TBytesStream", Some(t_memory_stream));
     let t_custom_label = class_of(adapter, "StdCtrls", "TCustomLabel");
     let _t_bound_label = adapter.add_class("ExtCtrls", "TBoundLabel", Some(t_custom_label));
     let t_custom_edit = class_of(adapter, "StdCtrls", "TCustomEdit");
@@ -59,9 +56,8 @@ pub(crate) fn register(adapter: &mut Adapter, _state: &Rc<RefCell<ScriptRunState
         adapter.add_const("IOUtils", name, Value::Integer(value));
     }
 
-    // The members whose handler is the seam: the stream classes of the
-    // `Classes` unit (`Create` takes a `TFileStream`, `TBytesStream` takes
-    // the bytes), the controls and the registry-backed ini file.
+    // The members whose handler is the seam: the controls and the
+    // registry-backed ini file.
     for (class, name, kind, count, encoded) in SHIM_MEMBERS {
         let class_def = class_of(adapter, "", class);
         let params = params(encoded);
@@ -101,9 +97,6 @@ pub(crate) fn register(adapter: &mut Adapter, _state: &Rc<RefCell<ScriptRunState
         }
     }
     let _ = (
-        &t_binary_reader,
-        &t_binary_writer,
-        &t_bytes_stream,
         &t_registry_ini_file,
         &t_labeled_edit,
         &t_check_list_box,
@@ -145,32 +138,13 @@ pub(crate) fn register(adapter: &mut Adapter, _state: &Rc<RefCell<ScriptRunState
     }
 }
 
-/// The members of the unit that need a live object or the stream classes of
-/// phase 6 step 8: (class, member, kind, count, params).
+/// The members of the unit that need a live object: (class, member, kind,
+/// count, params). The binary stream classes of the `Classes` unit are not
+/// here: they are ordinary stream operations and are registered with that
+/// unit (`crates/xedit-session/src/script_rtl/classes.rs`).
 const SHIM_MEMBERS: &[(&str, &str, char, i32, &str)] = &[
-    // TBinaryReader
-    ("TBinaryReader", "Create", 'g', 1, "."),
-    ("TBinaryReader", "Read", 'g', 0, ""),
-    ("TBinaryReader", "ReadBoolean", 'g', 0, ""),
-    ("TBinaryReader", "ReadByte", 'g', 0, ""),
-    ("TBinaryReader", "ReadBytes", 'g', 1, "."),
-    ("TBinaryReader", "ReadChar", 'g', 0, ""),
-    ("TBinaryReader", "ReadDouble", 'g', 0, ""),
-    ("TBinaryReader", "ReadInteger", 'g', 0, ""),
-    ("TBinaryReader", "ReadShortInt", 'g', 0, ""),
-    ("TBinaryReader", "ReadSingle", 'g', 0, ""),
-    ("TBinaryReader", "ReadSmallInt", 'g', 0, ""),
-    ("TBinaryReader", "ReadString", 'g', 0, ""),
-    ("TBinaryReader", "ReadUInt16", 'g', 0, ""),
-    ("TBinaryReader", "ReadUInt32", 'g', 0, ""),
-    // TBinaryWriter
-    ("TBinaryWriter", "Create", 'g', 1, "."),
-    ("TBinaryWriter", "Write", 'g', 1, "."),
-    ("TBinaryWriter", "WriteSingle", 'g', 1, "."),
     // TBitmap (`SetSize`)
     ("TBitmap", "SetSize", 'g', 2, ".."),
-    // TBytesStream
-    ("TBytesStream", "Create", 'g', 1, "."),
     // TCheckListBox
     ("TCheckListBox", "AllowGrayed", 'g', 0, "."),
     ("TCheckListBox", "AllowGrayed", 's', 0, "."),
@@ -1028,6 +1002,32 @@ pub(crate) fn ledger_keys() -> std::collections::BTreeSet<String> {
             _ => unreachable!(),
         };
         add(format!("xejviScriptAdapterMiscVcl:{class}.{member}:{kind}"));
+    }
+    // The three binary stream classes of this unit: their members are bound
+    // with the `Classes` unit's stream object model
+    // (`crate::script_rtl::classes::register_binary_streams`), so they are
+    // not rows of [`SHIM_MEMBERS`].
+    for (class, member) in [
+        ("TBinaryReader", "Create"),
+        ("TBinaryReader", "Read"),
+        ("TBinaryReader", "ReadBoolean"),
+        ("TBinaryReader", "ReadByte"),
+        ("TBinaryReader", "ReadBytes"),
+        ("TBinaryReader", "ReadChar"),
+        ("TBinaryReader", "ReadDouble"),
+        ("TBinaryReader", "ReadInteger"),
+        ("TBinaryReader", "ReadShortInt"),
+        ("TBinaryReader", "ReadSingle"),
+        ("TBinaryReader", "ReadSmallInt"),
+        ("TBinaryReader", "ReadString"),
+        ("TBinaryReader", "ReadUInt16"),
+        ("TBinaryReader", "ReadUInt32"),
+        ("TBinaryWriter", "Create"),
+        ("TBinaryWriter", "Write"),
+        ("TBinaryWriter", "WriteSingle"),
+        ("TBytesStream", "Create"),
+    ] {
+        add(format!("xejviScriptAdapterMiscVcl:{class}.{member}:get"));
     }
     for (class, member, kind) in [
         ("TIniFile", "Create", "get"),
