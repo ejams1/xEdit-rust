@@ -314,16 +314,16 @@ fn table_count(bytes: &[u8]) -> u32 {
 ///   each text is set, which in a file that is not localized stores it in
 ///   the plugin as `NoTranslate` does. An empty text is set after `-`,
 ///   because ID 0 reads as an empty text once the flag is cleared and the
-///   set would do nothing. The text is set through the element's container
-///   (`GetContainer`, the sub-record), whose setter writes the same value
-///   through `TwbLStringDef.FromStringNative` without running the value's
-///   own `AfterSet`: the handler sets the value while the file is *still*
-///   localized, so `wbDialogueTextAfterSet` runs there but does not trim;
-///   with the flag already cleared for the `AddValue` reason above it would
-///   trim, which is what the emulation did before (`sf1-strings-delocalize`
-///   lost one trailing space of an `INFO` response text where the handler
-///   keeps it). Through the container the emulation leaves the texts the
-///   handler's bytes carry.
+///   set would do nothing. Known limit: the handler sets each text while
+///   the file is *still* localized (`NoTranslate` stores it in the plugin),
+///   so `wbDialogueTextAfterSet` leaves it alone; here the flag is cleared
+///   first, so that callback trims a response text with outer spaces
+///   (`sf1-strings-delocalize`, one `INFO`). The script API cannot do
+///   better: with the flag set a text goes into the tables, with it cleared
+///   the callback trims, and a set of the text the element already reads as
+///   (its localized state kept) is skipped (`GetEditValue <> aValue`).
+///   Parity #33 tried the element's container instead, which is the record
+///   for a subrecord value and fails (`is not a valid integer value`).
 ///
 /// The script holds no element between the passes: a `TList` keeps no
 /// reference, so an element of a record the GUI released meanwhile would be
@@ -346,8 +346,8 @@ begin
       2: SetEditValue(el, lvalues[lcount]);
       3: begin
         if lvalues[lcount] = '' then
-          SetEditValue(GetContainer(el), '-');
-        SetEditValue(GetContainer(el), lvalues[lcount]);
+          SetEditValue(el, '-');
+        SetEditValue(el, lvalues[lcount]);
       end;
     end;
   except
