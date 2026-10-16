@@ -60,7 +60,7 @@ use xedit_script::values::{Value, ValueError};
 
 use xedit_core::delphi;
 
-/// The en-US format settings the oracle runs with.
+/// The format settings a `Format`/`FloatToStrF` call reads.
 pub struct FormatSettings {
     pub decimal_separator: char,
     pub thousand_separator: char,
@@ -68,8 +68,38 @@ pub struct FormatSettings {
     pub currency_decimals: i32,
 }
 
-/// `DefaultFormatSettings` as the oracle inherits it.
-pub const SETTINGS: FormatSettings = FormatSettings {
+/// `DefaultFormatSettings` as the oracle inherits it: the RTL loads the
+/// separators and the currency symbol from the locale at startup
+/// ([`super::locale_value`], the data `GetLocaleStr` reads), so the three
+/// system values override the table below. `currency_decimals` (`2`) has no
+/// `LOCALE_*` read here: the RTL takes `LOCALE_ICURRDIGITS`, the reference
+/// machine answers 2, and the table holds it.
+pub fn settings() -> &'static FormatSettings {
+    static LOADED: std::sync::OnceLock<FormatSettings> = std::sync::OnceLock::new();
+    LOADED.get_or_init(load_settings)
+}
+
+/// The `LOCALE_*` types the settings load (`winnt.h`).
+const LOCALE_SDECIMAL: i32 = 14;
+const LOCALE_STHOUSAND: i32 = 15;
+const LOCALE_SCURRENCY: i32 = 20;
+
+fn load_settings() -> FormatSettings {
+    let mut settings = DEFAULT_SETTINGS;
+    if let Some(text) = super::locale_value(0, LOCALE_SDECIMAL).and_then(|text| text.chars().next()) {
+        settings.decimal_separator = text;
+    }
+    if let Some(text) = super::locale_value(0, LOCALE_STHOUSAND).and_then(|text| text.chars().next()) {
+        settings.thousand_separator = text;
+    }
+    if let Some(text) = super::locale_value(0, LOCALE_SCURRENCY) {
+        settings.currency_string = Box::leak(text.into_boxed_str());
+    }
+    settings
+}
+
+/// The en-US `DefaultFormatSettings` table.
+const DEFAULT_SETTINGS: FormatSettings = FormatSettings {
     decimal_separator: '.',
     thousand_separator: ',',
     currency_string: "$",
@@ -333,14 +363,14 @@ fn convert(conversion: u8, rec: VarRec<'_>, precision: Option<usize>) -> Option<
         (b'f' | b'F', VarRec::Currency(c)) => currency_fixed(c, precision.unwrap_or(2), false),
         (b'n' | b'N', VarRec::Currency(c)) => currency_fixed(c, precision.unwrap_or(2), true),
         (b'm' | b'M', VarRec::Currency(c)) => {
-            let digits = precision.unwrap_or(SETTINGS.currency_decimals.max(0) as usize);
+            let digits = precision.unwrap_or(settings().currency_decimals.max(0) as usize);
             let fixed = currency_fixed(c, digits, true);
             let negative = fixed.starts_with('-');
             let body = if negative { &fixed[1..] } else { &fixed };
             if negative {
-                format!("-{}{body}", SETTINGS.currency_string)
+                format!("-{}{body}", settings().currency_string)
             } else {
-                format!("{}{body}", SETTINGS.currency_string)
+                format!("{}{body}", settings().currency_string)
             }
         }
         (b'g' | b'G', VarRec::Currency(c)) => currency_general(c),
@@ -369,8 +399,8 @@ fn var_to_str(value: &Value) -> Vec<u8> {
         Value::Date(v) => {
             let format = format!(
                 "{} {}",
-                super::datetime::SETTINGS.short_date_format,
-                super::datetime::SETTINGS.long_time_format
+                super::datetime::settings().short_date_format,
+                super::datetime::settings().long_time_format
             );
             super::datetime::date_time_to_str(&format, *v).into_bytes()
         }
@@ -430,7 +460,7 @@ fn currency_fixed(c: i64, decimals: usize, thousand: bool) -> String {
     if decimals == 0 {
         format!("{sign}{integer}")
     } else {
-        format!("{sign}{integer}{}{fraction}", SETTINGS.decimal_separator)
+        format!("{sign}{integer}{}{fraction}", settings().decimal_separator)
     }
 }
 
@@ -465,7 +495,7 @@ fn currency_general(c: i64) -> String {
     if fraction.is_empty() {
         format!("{sign}{integer}")
     } else {
-        format!("{sign}{integer}{}{fraction}", SETTINGS.decimal_separator)
+        format!("{sign}{integer}{}{fraction}", settings().decimal_separator)
     }
 }
 
@@ -511,14 +541,14 @@ fn float_fixed(value: f64, digits: usize, thousand: bool) -> String {
 /// `%m`: the currency format (symbol, grouped digits, `CurrencyDecimals`
 /// decimals).
 fn currency(value: f64, precision: Option<usize>) -> String {
-    let digits = precision.unwrap_or(SETTINGS.currency_decimals.max(0) as usize);
+    let digits = precision.unwrap_or(settings().currency_decimals.max(0) as usize);
     let fixed = float_fixed(value, digits, true);
     let negative = fixed.starts_with('-');
     let body = if negative { &fixed[1..] } else { &fixed };
     if negative {
-        format!("-{}{body}", SETTINGS.currency_string)
+        format!("-{}{body}", settings().currency_string)
     } else {
-        format!("{}{body}", SETTINGS.currency_string)
+        format!("{}{body}", settings().currency_string)
     }
 }
 
@@ -529,7 +559,7 @@ fn insert_thousands(text: &str) -> String {
         Some(rest) => ("-", rest),
         None => ("", text),
     };
-    let (integer, fraction) = match body.split_once(SETTINGS.decimal_separator) {
+    let (integer, fraction) = match body.split_once(settings().decimal_separator) {
         Some((integer, fraction)) => (integer, Some(fraction)),
         None => (body, None),
     };
@@ -537,12 +567,12 @@ fn insert_thousands(text: &str) -> String {
     let digits: Vec<char> = integer.chars().collect();
     for (index, c) in digits.iter().enumerate() {
         if index > 0 && (digits.len() - index).is_multiple_of(3) {
-            grouped.push(SETTINGS.thousand_separator);
+            grouped.push(settings().thousand_separator);
         }
         grouped.push(*c);
     }
     match fraction {
-        Some(fraction) => format!("{sign}{grouped}{}{fraction}", SETTINGS.decimal_separator),
+        Some(fraction) => format!("{sign}{grouped}{}{fraction}", settings().decimal_separator),
         None => format!("{sign}{grouped}"),
     }
 }

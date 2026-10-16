@@ -193,6 +193,13 @@ impl ExecError {
     /// A non-interpreter exception (`EZeroDivide`, `ERangeError`,
     /// `EJVCLException`): `FLastError.FErrCode := ieExternal` and the
     /// exception's own message as the text (`:5390`).
+    ///
+    /// The class is `Exception`: a host call that raises without a class of
+    /// its own raises the RTL's `Exception` (`raise Exception.Create(...)`),
+    /// and the abort line prints `E.ClassName` of the exception that
+    /// propagates, which the oracle shows as `[Exception]` (`zz-t-exc`'s
+    /// uncaught `Resource not found`). A host call with a class of its own
+    /// sets this field ([`ValueError::ExternalClass`](crate::values::ValueError)).
     pub fn external(message: &str) -> ExecError {
         ExecError {
             code: error::IE_EXTERNAL,
@@ -205,7 +212,7 @@ impl ExecError {
             line: -1,
             exception_pos: false,
             external: true,
-            class_name: None,
+            class_name: Some("Exception".to_owned()),
         }
     }
 

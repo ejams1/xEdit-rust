@@ -846,8 +846,15 @@ pub struct ScriptRunState {
     /// second call replaces the first: what a filter leaves on the tree is
     /// its last state.
     pub pending_filter: Option<PendingFilter>,
-    /// When the run began, for `wbFormatElapsedTime`.
+    /// The clock the `[mm:ss]` prefixes of the log count from: `wbStartTime`,
+    /// which `xeInit.pas` sets when the plugin list load starts and
+    /// `BuildAllRef` re-sets while the references are built (see
+    /// [`reset_progress_start`]).
     started: std::time::Instant,
+    /// When the `Applying script` action began, for the `Done:` line's
+    /// `Elapsed Time`: `PerformLongAction` counts from its own start, which
+    /// is also when it posts `Start: Applying script`.
+    action_started: std::time::Instant,
     /// The script list objects the adapter steps append to (`TList`,
     /// `TStrings`); none until the JVCL `Classes` unit registers them.
     pub lists: ScriptLists,
@@ -887,7 +894,8 @@ impl ScriptRunState {
             filter_applied: false,
             filtered_nodes: None,
             pending_filter: None,
-            started: std::time::Instant::now(),
+            started: progress_start(),
+            action_started: std::time::Instant::now(),
             lists: ScriptLists::default(),
             relayed: std::sync::Arc::new(std::sync::Mutex::new(Vec::new())),
         }
@@ -1027,6 +1035,24 @@ impl ScriptRunState {
 /// `TwbSignature` as a string: four characters.
 pub(crate) fn signature_text(signature: Signature) -> String {
     String::from_utf8_lossy(&signature.0).into_owned()
+}
+
+/// `wbStartTime` (`xeInit.pas:5624`, `BuildAllRef`): the clock the `[mm:ss]`
+/// prefixes of `wbProgress` count from. The GUI sets it just before the
+/// plugin list load starts and again when the reference information is
+/// built; the port's `Session::load` and `--build-refs` call
+/// [`reset_progress_start`], so a prefix is the time since the load began,
+/// as the oracle's is.
+static PROGRESS_START: std::sync::Mutex<Option<std::time::Instant>> = std::sync::Mutex::new(None);
+
+/// `wbStartTime := Now`.
+pub(crate) fn reset_progress_start() {
+    *PROGRESS_START.lock().unwrap() = Some(std::time::Instant::now());
+}
+
+/// The `[mm:ss]` clock; a clock that was never reset counts from now.
+pub(crate) fn progress_start() -> std::time::Instant {
+    PROGRESS_START.lock().unwrap().unwrap_or_else(std::time::Instant::now)
 }
 
 /// `wbFormatElapsedTime` (`xeMainForm.pas:1361`): `FormatDateTime('nn:ss')`,
@@ -2081,6 +2107,9 @@ pub fn run_script(
     // session even when the load built the index anyway.
     globals::set_build_refs(request.build_refs);
     if request.build_refs {
+        // `BuildAllRef` sets `wbStartTime := Now` before it builds: the
+        // prefix clock of the run starts there.
+        reset_progress_start();
         session.ensure_refs()?;
     }
     // The GUI sets `wbDisplayShorterNames := True` at startup
@@ -2419,7 +2448,9 @@ pub fn run_script(
                 state.progress(&format!("Aborted: {action}"), false);
             }
             None => {
-                let elapsed = elapsed_text(state.started.elapsed());
+                // `PerformLongAction`'s `Now - wbLocalStartTime`: the action's
+                // own clock, not the log prefix's.
+                let elapsed = elapsed_text(state.action_started.elapsed());
                 // `PerformLongAction`'s closing line: the `Processed Records`
                 // segment appears only while `wbCurrentProgress` was set,
                 // which `ScriptProcessSingleElement` does after every
@@ -2540,29 +2571,7 @@ fn trailing_separator(path: &Path) -> String {
 /// parity comparison normalizes the digits of the suffix, so the two runs of
 /// a case match whatever the clock says).
 fn save_timestamp() -> String {
-    let seconds = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_or(0, |duration| duration.as_secs() as i64);
-    let (hour, minute, second) = {
-        let day = seconds.rem_euclid(86_400);
-        (day / 3_600, (day / 60) % 60, day % 60)
-    };
-    // The civil date of the days since the epoch (Howard Hinnant's
-    // `civil_from_days`).
-    let z = seconds.div_euclid(86_400) + 719_468;
-    let era = z.div_euclid(146_097);
-    let doe = z.rem_euclid(146_097);
-    let yoe = (doe - doe / 1_460 + doe / 36_524 - doe / 146_096) / 365;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    let mp = (5 * doy + 2) / 153;
-    let day = doy - (153 * mp + 2) / 5 + 1;
-    let month = if mp < 10 { mp + 3 } else { mp - 9 };
-    let year = if month <= 2 {
-        yoe + era * 400 + 1
-    } else {
-        yoe + era * 400
-    };
-    format!("{year:04}_{month:02}_{day:02}_{hour:02}_{minute:02}_{second:02}")
+    crate::save::timestamp()
 }
 
 /// `script.run`: the command handler, over the GUI's selection.

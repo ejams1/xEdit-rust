@@ -1129,9 +1129,12 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         Rc::new(|value, args| {
             let file = text_arg(&args.values[0])?;
             let parameters = text_arg(&args.values[1])?;
-            let _show_window = xedit_script::values::to_i32(&args.values[2])?;
-            let timeout = xedit_script::values::to_i64(&args.values[3])?.max(0) as u32;
-            *value = Value::Integer(create_process_wait(&file, &parameters, timeout)?);
+            // `wShowWindow := Args.Values[2]` and `Cardinal(Args.Values[3])`:
+            // the Word and Cardinal conversions of the variant, which
+            // overflow where the value does not fit the slot.
+            let show = xedit_script::values::to_u16(&args.values[2])?;
+            let timeout = xedit_script::values::to_u32(&args.values[3])?;
+            *value = Value::Integer(create_process_wait(&file, &parameters, show, timeout)?);
             Ok(())
         }),
     );
@@ -1868,51 +1871,81 @@ fn copy_file(source: &str, destination: &str, fail_if_exists: bool) -> bool {
     std::fs::copy(source, destination).is_ok()
 }
 
-/// `Winapi.Windows.CreateProcessWait`: the process runs up to `timeout`
-/// milliseconds; the result is its exit code, or `STILL_ACTIVE` (259) while
-/// it still runs (upstream calls `GetExitCodeProcess` after the wait
-/// whatever the wait returned and never terminates the process).
-fn create_process_wait(file: &str, parameters: &str, timeout: u32) -> Result<i32, ValueError> {
+/// `Winapi.Windows.CreateProcessWait`
+/// (`JvInterpreter_CreateProcessWait`): upstream fills a `TStartUpInfo`
+/// with `cb`, `STARTF_USESHOWWINDOW or STARTF_FORCEONFEEDBACK` and the
+/// show state, starts the file with the parameter string as its command
+/// line, waits up to `timeout` milliseconds, reports `GetExitCodeProcess`
+/// whatever the wait returned -- `STILL_ACTIVE` (259) while the child runs,
+/// which the wait never terminates -- and raises
+/// `Exception.Create('CreateProcess failed, error code <code>')` when
+/// `CreateProcess` fails.
+///
+/// The file is `lpApplicationName`, so Windows resolves a name without a
+/// path against the current directory alone -- no search path -- exactly as
+/// the oracle does (`CreateProcessWait('cmd.exe', ...)` fails with code 2
+/// where a full path runs; `sys-process.pas` compares both).
+fn create_process_wait(file: &str, parameters: &str, show: u16, timeout: u32) -> Result<i32, ValueError> {
     #[cfg(windows)]
     {
-        use std::os::windows::process::CommandExt;
-        let child = std::process::Command::new(file)
-            .raw_arg(parameters)
-            .spawn()
-            .map_err(|error| {
-                ValueError::external_class(
-                    EXCEPTION_CLASS,
-                    format!("CreateProcess failed, error code {}", error.raw_os_error().unwrap_or(0)),
-                )
-            })?;
-        Ok(wait_for_exit(child, timeout))
+        use windows_sys::Win32::Foundation::CloseHandle;
+        use windows_sys::Win32::System::Threading::{
+            CreateProcessW, GetExitCodeProcess, NORMAL_PRIORITY_CLASS, PROCESS_INFORMATION, STARTF_FORCEONFEEDBACK,
+            STARTF_USESHOWWINDOW, STARTUPINFOW, WaitForSingleObject,
+        };
+        let wide = |text: &str| -> Vec<u16> { text.encode_utf16().chain(std::iter::once(0)).collect() };
+        let application = wide(file);
+        // `CreateProcess` writes into the command line buffer, so it is its
+        // own mutable copy.
+        let mut command_line = wide(parameters);
+        let mut startup: STARTUPINFOW = unsafe { std::mem::zeroed() };
+        startup.cb = size_of::<STARTUPINFOW>() as u32;
+        startup.dwFlags = STARTF_USESHOWWINDOW | STARTF_FORCEONFEEDBACK;
+        startup.wShowWindow = show;
+        let mut process: PROCESS_INFORMATION = unsafe { std::mem::zeroed() };
+        // SAFETY: the two buffers are NUL-terminated and live for the call
+        // (the command line is mutable for it); no environment block and no
+        // current directory are given, as upstream passes nil for both.
+        let ok = unsafe {
+            CreateProcessW(
+                application.as_ptr(),
+                command_line.as_mut_ptr(),
+                std::ptr::null(),
+                std::ptr::null(),
+                0,
+                NORMAL_PRIORITY_CLASS,
+                std::ptr::null(),
+                std::ptr::null(),
+                &startup,
+                &mut process,
+            )
+        };
+        if ok == 0 {
+            let code = std::io::Error::last_os_error().raw_os_error().unwrap_or(0);
+            return Err(ValueError::external_class(
+                EXCEPTION_CLASS,
+                format!("CreateProcess failed, error code {code}"),
+            ));
+        }
+        // SAFETY: the handles are the child's, closed once its code is read.
+        // `GetExitCodeProcess` answers `STILL_ACTIVE` (259) while the child
+        // runs and the process is never terminated, as upstream reads it.
+        let mut exit_code: u32 = 0;
+        unsafe {
+            WaitForSingleObject(process.hProcess, timeout);
+            GetExitCodeProcess(process.hProcess, &mut exit_code);
+            CloseHandle(process.hThread);
+            CloseHandle(process.hProcess);
+        }
+        Ok(exit_code as i32)
     }
     #[cfg(not(windows))]
     {
-        let _ = (file, parameters, timeout);
+        let _ = (file, parameters, show, timeout);
         Err(ValueError::external_class(
             EXCEPTION_CLASS,
             "CreateProcessWait is Windows only".to_owned(),
         ))
-    }
-}
-
-/// Waits for the child up to `timeout` milliseconds and reports its exit
-/// code (`STILL_ACTIVE` 259 while it runs).
-#[cfg(windows)]
-fn wait_for_exit(mut child: std::process::Child, timeout: u32) -> i32 {
-    let deadline = std::time::Instant::now() + std::time::Duration::from_millis(u64::from(timeout));
-    loop {
-        match child.try_wait() {
-            Ok(Some(status)) => return status.code().unwrap_or(259),
-            Ok(None) => {
-                if std::time::Instant::now() >= deadline {
-                    return 259;
-                }
-                std::thread::sleep(std::time::Duration::from_millis(10));
-            }
-            Err(_) => return 259,
-        }
     }
 }
 

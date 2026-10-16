@@ -324,6 +324,29 @@ fn write_file(file: &Arc<FileImpl>) -> Result<Vec<u8>, CommandError> {
     })
 }
 
+/// `FileWriteToStream`'s bytes: the save `files.save` builds, for a stream
+/// instead of a file, with the reset the call asked for, on the large-stack
+/// thread the record initialization needs. The error is the refusal's
+/// message, which the caller raises as upstream's `Exception`.
+pub(crate) fn write_file_bytes(file: &Arc<FileImpl>, reset: ResetModified) -> Result<Vec<u8>, String> {
+    let file = file.clone();
+    let shorter_names = display_shorter_names();
+    set_display_shorter_names(true);
+    let worker = std::thread::Builder::new()
+        .stack_size(1 << 30)
+        .spawn(move || file.write_to_bytes(reset));
+    let result = worker.map(|worker| worker.join());
+    set_display_shorter_names(shorter_names);
+    match result {
+        Ok(Ok(Ok(bytes))) => Ok(bytes),
+        Ok(Ok(Err(SaveError::Refused(message) | SaveError::Unsupported(message) | SaveError::Internal(message)))) => {
+            Err(message)
+        }
+        Ok(Err(_)) => Err("the save thread panicked".to_owned()),
+        Err(error) => Err(error.to_string()),
+    }
+}
+
 fn same_path(a: &Path, b: &Path) -> bool {
     match (a.canonicalize(), b.canonicalize()) {
         (Ok(a), Ok(b)) => a == b,
@@ -385,32 +408,17 @@ pub(crate) fn write_atomically(target: &Path, bytes: &[u8]) -> Result<(), Comman
     Ok(())
 }
 
-/// The timestamp of a backup name, `yyyy_mm_dd_hh_nn_ss` as upstream formats
-/// it, in UTC.
-fn timestamp() -> String {
-    let seconds = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0);
-    let days = (seconds / 86_400) as i64;
-    let rest = seconds % 86_400;
-    // Civil date from days since 1970-01-01 (Howard Hinnant's algorithm).
-    let z = days + 719_468;
-    let era = z.div_euclid(146_097);
-    let doe = z.rem_euclid(146_097);
-    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
-    let y = yoe + era * 400;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    let mp = (5 * doy + 2) / 153;
-    let d = doy - (153 * mp + 2) / 5 + 1;
-    let m = if mp < 10 { mp + 3 } else { mp - 9 };
-    let y = if m <= 2 { y + 1 } else { y };
-    format!(
-        "{y:04}_{m:02}_{d:02}_{:02}_{:02}_{:02}",
-        rest / 3600,
-        rest % 3600 / 60,
-        rest % 60
-    )
+/// The timestamp of a backup or save name, `yyyy_mm_dd_hh_nn_ss` as upstream
+/// formats it (`FormatDateTime('yyyy_mm_dd_hh_nn_ss', Now)`).
+///
+/// The GUI's `Now` is local time, not UTC: the parity harness's `Saving:`
+/// lines carry the same clock as the oracle's on the same machine, and the
+/// digits only differ by the seconds between the two runs.
+pub(crate) fn timestamp() -> String {
+    let date = crate::script_rtl::datetime::now();
+    let (year, month, day) = crate::script_rtl::datetime::decode_date(date);
+    let (hour, minute, second, _) = crate::script_rtl::datetime::decode_time(date);
+    format!("{year:04}_{month:02}_{day:02}_{hour:02}_{minute:02}_{second:02}")
 }
 
 pub fn register(registry: &mut Registry) {

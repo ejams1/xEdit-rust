@@ -70,6 +70,20 @@ pub enum ElementState {
     /// Port of `esEndingUpdate`: the last `EndUpdate` runs `UpdateEnded`
     /// (a group sort postponed by the update runs now).
     esEndingUpdate = 4096,
+    /// Port of `esSortKeyValid`: the cached sort key is current.
+    esSortKeyValid = 8192,
+    /// Port of `esExtendedSortKeyValid`: the cached extended sort key is
+    /// current.
+    esExtendedSortKeyValid = 16384,
+    /// Port of `esTagged`: the user tagged the element.
+    esTagged = 32768,
+    /// Port of `esResolving`: a name or a reference is being resolved.
+    esResolving = 65536,
+    /// Port of `esNotSuitableToAddTo`: the element is no target of a drop.
+    esNotSuitableToAddTo = 131072,
+    /// Port of `esDummy`: the state a script names that does not exist
+    /// (`IntToEsState`'s `else` arm).
+    esDummy = 262144,
 }
 
 /// Port of `TwbResetModified`: what a save does to the modified states.

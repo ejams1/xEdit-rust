@@ -1239,6 +1239,16 @@ pub fn to_u8(value: &Value) -> Result<u8, ValueError> {
     u8::try_from(v).map_err(|_| overflow_error(value, "Byte"))
 }
 
+pub fn to_u16(value: &Value) -> Result<u16, ValueError> {
+    let v = to_i64(value).map_err(|error| retarget(error, "Word"))?;
+    u16::try_from(v).map_err(|_| overflow_error(value, "Word"))
+}
+
+pub fn to_u32(value: &Value) -> Result<u32, ValueError> {
+    let v = to_i64(value).map_err(|error| retarget(error, "Cardinal"))?;
+    u32::try_from(v).map_err(|_| overflow_error(value, "Cardinal"))
+}
+
 /// The message of a failed [`to_i64`] names `Int64`; the narrower readers
 /// name their own target.
 fn retarget(error: ValueError, target: &str) -> ValueError {
