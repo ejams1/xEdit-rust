@@ -957,10 +957,19 @@ pub(super) fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
             );
             tasks.push(Task {
                 phase: "run",
-                stem: if case.refcache {
-                    format!("run-{script}-refcache")
-                } else {
-                    format!("run-{script}")
+                stem: {
+                    // The run folder of a case: two cases of the same script
+                    // have to differ, or they overwrite each other's files
+                    // (`--jobs` runs them at once).
+                    let mut stem = format!("run-{script}");
+                    if case.refcache {
+                        stem.push_str("-refcache");
+                    }
+                    if !case.switches.is_empty() {
+                        stem.push('-');
+                        stem.push_str(&case.switches.join("-"));
+                    }
+                    stem
                 },
                 script,
                 scripts_dir,
@@ -2116,7 +2125,7 @@ fn port_run(
             // The GUI's `-T:`: the temporary folder of the run, which a
             // script's `wbTempPath` reports.
             .arg("--temp-path")
-            .arg(format!("{}temp\\", dir.display()))
+            .arg(format!("{}\\temp\\", dir.display()))
             .env("XEDIT_SCRIPTS", &dir);
         for plugin in &plugins {
             command.arg("--load").arg(plugin);
