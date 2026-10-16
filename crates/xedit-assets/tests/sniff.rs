@@ -152,15 +152,20 @@ fn settings_dry_run_and_report_only() {
     assert_eq!(report.modified, 1);
     assert!(!output.join("meshes").exists());
 
-    // Unknown, not ported and failing operations.
+    // Unknown, refusing and failing operations.
     assert!(matches!(
         run(None, &options("No such thing", &input, &output)),
         Err(RunError::UnknownOperation(_))
     ));
-    assert!(matches!(
-        run(None, &options("Update MOPP code", &input, &output)),
-        Err(RunError::NotPorted(..))
-    ));
+    // `Update MOPP code` refuses at its start on a 64-bit build, as the
+    // released Sniff.exe does before it looks for NifMopp.dll.
+    match run(None, &options("Update MOPP code", &input, &output)) {
+        Err(RunError::Message(message)) => assert_eq!(
+            message,
+            "You are running 64 bits version of Sniff. This operation works in 32 bits (x86) Sniff only."
+        ),
+        other => panic!("{other:?}"),
+    }
     let settings = MemIniFile::from_text("[Universaltweaker]\r\nsPath=\r\n");
     match run(Some(settings), &options("Universal tweaker", &input, &output)) {
         Err(RunError::Message(message)) => assert_eq!(message, "Field path can not be empty"),

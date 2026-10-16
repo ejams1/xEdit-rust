@@ -42,11 +42,13 @@ fn list_names_every_operation() {
             .iter()
             .any(|setting| setting["name"] == "sPath" && setting["default"] == "Alpha")
     );
+    // Every operation of the 4.1.5q main form is ported now (`Update MOPP
+    // code`, the last one, refuses at its start on a 64-bit build as the
+    // released Sniff.exe does).
+    assert!(operations.iter().all(|op| op["not_ported"].is_null()));
     let mopp = operations.iter().find(|op| op["title"] == "Update MOPP code").unwrap();
-    assert!(mopp["not_ported"].as_str().unwrap().contains("NifMopp.dll"));
-    // It is the only one: every other operation has its processor and the
-    // settings of its frame.
-    assert_eq!(operations.iter().filter(|op| !op["not_ported"].is_null()).count(), 1);
+    assert_eq!(mopp["group"], "Collision");
+    assert_eq!(mopp["files"], "*.nif");
     let textures = operations.iter().find(|op| op["title"] == "Find textures").unwrap();
     assert_eq!(textures["files"], "*.dds");
     // It writes the files it copies unless `bReportOnly` is on.
@@ -126,11 +128,15 @@ fn run_with_options_dry_run_and_log() {
         registry.call(&mut session, "sniff.run", bad).unwrap_err().code,
         "invalid_params"
     );
-    let mut not_ported = params(true);
-    not_ported["operation"] = json!("Update MOPP code");
+    // `Update MOPP code` refuses at its start, as the released 64-bit
+    // Sniff.exe does before it looks for NifMopp.dll (`LoadMoppDll`).
+    let mut mopp = params(true);
+    mopp["operation"] = json!("Update MOPP code");
+    let error = registry.call(&mut session, "sniff.run", mopp).unwrap_err();
+    assert_eq!(error.code, "invalid_params");
     assert_eq!(
-        registry.call(&mut session, "sniff.run", not_ported).unwrap_err().code,
-        "unsupported"
+        error.message,
+        "You are running 64 bits version of Sniff. This operation works in 32 bits (x86) Sniff only."
     );
     let _ = std::fs::remove_dir_all(&base);
 }

@@ -5,7 +5,8 @@
 // Ported from xEdit: Sniff/frmMain.pas (FormCreate: the AddProc calls)
 
 //! The operations of Sniff in the order of the main form, each with its
-//! group. An operation whose unit is not ported yet is listed with why.
+//! group. `ProcCollapseLinksArrays.pas` has no entry: `frmMain.pas` does
+//! not use the unit, so the released Sniff has no such operation.
 
 use crate::sniff::processor::Proc;
 use crate::sniff::*;
@@ -14,9 +15,11 @@ use crate::sniff::*;
 pub struct ProcEntry {
     pub group: &'static str,
     pub title: &'static str,
-    /// The constructor, or `None` when the unit is not ported yet.
+    /// The constructor. `None` is reserved for a unit that is not ported;
+    /// every operation of the 4.1.5q main form is ported now.
     pub create: Option<fn() -> Box<dyn Proc>>,
-    /// Why the unit is not ported, for one that is not.
+    /// Why the unit is not ported; empty for every entry now, and the field
+    /// stays for the lists that report it.
     pub pending: &'static str,
 }
 
@@ -27,17 +30,6 @@ macro_rules! ported {
             title: $title,
             create: Some(|| Box::new(<$ty>::new())),
             pending: "",
-        }
-    };
-}
-
-macro_rules! pending {
-    ($group:expr, $title:expr, $why:expr) => {
-        ProcEntry {
-            group: $group,
-            title: $title,
-            create: None,
-            pending: $why,
         }
     };
 }
@@ -154,11 +146,7 @@ pub const PROCS: &[ProcEntry] = &[
         "Add blocks from skeleton",
         proc_anim_skeleton_death::ProcAnimSkeletonDeath
     ),
-    pending!(
-        "Collision",
-        "Update MOPP code",
-        "calls NifMopp.dll (Havok's MOPP builder), which the port does not have"
-    ),
+    ported!("Collision", "Update MOPP code", proc_mopp_update::ProcMoppUpdate),
     ported!(
         "Collision",
         "Update Havok settings",
