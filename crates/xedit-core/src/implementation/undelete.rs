@@ -188,9 +188,11 @@ impl MainRecordImpl {
         let values = position
             .as_container()
             .filter(|values| values.get_element_count() == 3)?;
+        // `TwbVector` holds `Single`s: the native value (rounded to six
+        // digits through a single precision factor) is rounded to one.
         let axis = |index: i32| match values.get_element(index)?.get_native_value() {
-            Variant::Float(value) => Some(value),
-            other => other.as_ordinal().map(|value| value as f64),
+            Variant::Float(value) => Some(f64::from(value as f32)),
+            other => other.as_ordinal().map(|value| f64::from(value as f32)),
         };
         Some((axis(0)?, axis(1)?, axis(2)?))
     }
