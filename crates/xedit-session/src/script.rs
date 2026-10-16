@@ -432,13 +432,15 @@ fn last_node(root: &ElementRef) -> ElementRef {
 /// pre-order of [`node_children`] -- the last node of the previous sibling's
 /// subtree, or the parent when the node is its first child. `None` when the
 /// node has no tree parent (a root) or left the tree (upstream reads a
-/// dangling node then; the port's walk ends instead).
+/// dangling node then; the port's walk ends instead). The parent is the
+/// predecessor even when it is the walk's root: the root is processed last
+/// and the walk stops there.
 fn previous_node(node: &ElementRef) -> Option<ElementRef> {
     let parent = tree_parent(node)?;
     let siblings = node_children(&parent);
     let index = siblings
         .iter()
-        .position(|sibling| std::ptr::addr_eq(Arc::as_ptr(sibling), Arc::as_ptr(node)))?;
+        .position(|sibling| sibling.get_element_id() == node.get_element_id())?;
     if index > 0 {
         return Some(last_node(&siblings[index - 1]));
     }
@@ -2241,9 +2243,31 @@ pub fn run_script(
                 // walk has not passed is visited again).
                 'roots: for root in &order {
                     let mut node = last_node(root);
+                    // The predecessor of `next` when it was read: the walk
+                    // continues from it when a `Process` removed the node
+                    // the walk had stepped to (upstream's freed node reads
+                    // nothing to process and its stale links carry the
+                    // predecessor).
+                    let mut fallback: Option<ElementRef> = None;
                     loop {
-                        let at_root = std::ptr::eq(Arc::as_ptr(&node), Arc::as_ptr(root));
-                        let next = if at_root { None } else { previous_node(&node) };
+                        let at_root = node.get_element_id() == root.get_element_id();
+                        let prev = if at_root { None } else { previous_node(&node) };
+                        if !at_root && prev.is_none() {
+                            // The node left the tree: nothing to process
+                            // (`NodeData.Element := nil` in `_RemoveNode`).
+                            match fallback.take() {
+                                Some(next) => {
+                                    node = next;
+                                    continue;
+                                }
+                                None => break,
+                            }
+                        }
+                        let next = prev;
+                        fallback = next
+                            .as_ref()
+                            .filter(|next| next.get_element_id() != root.get_element_id())
+                            .and_then(previous_node);
                         // `ApplyScriptToSelection` walks the live tree: a
                         // node a filter took out is not visited.
                         if !state.borrow().is_filtered_out(&node) && state.borrow().can_process(&node) {

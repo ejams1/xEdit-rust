@@ -806,6 +806,15 @@
       "note": "parity #24 fixture: the persistent cell moves between the worldspaces (the contained-in relocation of a cell, the block and sub-block chain of the new worldspace included) and its children follow it; the visitation order and the saved bytes are compared, and the port side reloads the save and verifies the references"
     },
     {
+      "script": "probes/walk-shift.pas",
+      "master": "tests/fixtures/parity/walk-churn.esm",
+      "close_after": true,
+      "save": [
+        "Skyrim.esm"
+      ],
+      "note": "parity #24 fixture: the shape of Worldspace displacement -- every CELL shifts its grid cell and every placed reference shifts its position, so the references whose cell changed move while the walk runs (UpdateCellChildGroup), and one temporary reference is removed; the visitation order, the re-visits and the saved bytes are compared"
+    },
+    {
       "script": "probes/topic-renumber.pas",
       "master": "tests/fixtures/parity/walk-churn.esm",
       "close_after": true,
