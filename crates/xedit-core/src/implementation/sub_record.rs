@@ -317,13 +317,21 @@ impl SubRecordImpl {
             if value_def.get_name().is_empty() || value.def_base().def_flags.contains(DefFlag::dfUnionStaticResolve) {
                 *self.sr_value_def.write().unwrap() = Some(value_def.clone());
                 match value_def.get_def_type() {
+                    // `ArrayDoInit`, `StructDoInit` and `UnionDoInit` end with
+                    // the `AfterLoad` of the definition (`ArrayDef.AfterLoad`,
+                    // `StructDef.AfterLoad`, `ResolvableDef.AfterLoad`), here
+                    // with the subrecord as the container: the default
+                    // objects of a `DOBJ` (`wbDOBJObjectsAfterLoad`) drop
+                    // their unused entries when the subrecord is read.
                     DefType::dtArray => {
                         self.sr_is_array.store(true, Ordering::Relaxed);
                         let (_, prefix) = array_do_init(&value_def, &self_ref, &self.file, &mut cursor);
                         self.sr_array_size_prefix.store(prefix, Ordering::Relaxed);
+                        value_def.after_load(&self_ref);
                     }
                     DefType::dtStruct | DefType::dtStructChapter => {
-                        struct_do_init(&value_def, &self_ref, &self.file, &mut cursor)
+                        struct_do_init(&value_def, &self_ref, &self.file, &mut cursor);
+                        value_def.after_load(&self_ref);
                     }
                     DefType::dtUnion => {
                         if let Some(resolved) = union_do_init(&value_def, &self_ref, &self.file, &mut cursor) {
@@ -332,6 +340,7 @@ impl SubRecordImpl {
                             }
                             *self.sr_value_def.write().unwrap() = Some(resolved);
                         }
+                        value_def.after_load(&self_ref);
                     }
                     _ => {
                         // The tail of `ValueDoInit` (`wbImplementation.pas:23061-23068`):
@@ -347,6 +356,8 @@ impl SubRecordImpl {
                             }
                             cursor.pos += size as usize;
                         }
+                        // `ValueDoInit` ends with `aResolvedDef.AfterLoad`.
+                        value_def.after_load(&self_ref);
                     }
                 }
             } else {
@@ -776,6 +787,8 @@ impl SubRecordImpl {
             over: false,
         };
         array_do_init(&value_def, &self_ref, &self.file, &mut cursor);
+        // `ArrayDoInit` ends with `ArrayDef.AfterLoad`.
+        value_def.after_load(&self_ref);
         true
     }
 

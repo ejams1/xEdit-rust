@@ -1117,6 +1117,8 @@ pub(super) fn union_do_init(
                 }
                 cursor.pos += size as usize;
             }
+            // `ValueDoInit` ends with `aResolvedDef.AfterLoad`.
+            resolved.after_load(&self_ref);
         }
     }
     Some(resolved)
