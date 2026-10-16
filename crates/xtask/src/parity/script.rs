@@ -896,7 +896,13 @@ pub(super) fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
         }
     }
     if options.run {
-        let mut chosen: Vec<&RunCase> = runs.cases.iter().filter(|case| selected(&case.script)).collect();
+        // A `--script` text selects a case by its script name, or by
+        // `<script>-<variant>` for one case of a script that has several.
+        let case_name = |case: &RunCase| match &case.variant {
+            Some(variant) => format!("{}-{variant}", case.script),
+            None => case.script.clone(),
+        };
+        let mut chosen: Vec<&RunCase> = runs.cases.iter().filter(|case| selected(&case_name(case))).collect();
         if let Some(sample) = options.sample {
             chosen.truncate(sample);
         }
