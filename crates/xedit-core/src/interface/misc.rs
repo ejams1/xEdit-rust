@@ -156,12 +156,21 @@ pub fn set_localization_handler(handler: Option<Arc<dyn LocalizationHandler>>) {
     *LOCALIZATION_HANDLER.write().unwrap() = handler;
 }
 
-/// `wbLocalizationHandler.GetValue`. Nothing is found while no handler is set.
+/// `wbLocalizationHandler.GetValue`. Upstream's handler exists from the
+/// unit's `initialization` on, so a string read while the files load (the
+/// name of a record in a load message, which the official files then keep
+/// in their name caches) already gets the handler's answer; until a session
+/// installs its handler (after the files load, with the resources) an
+/// empty handler answers, which has no tables and no containers to load
+/// them from: `<Error: No strings file for lstring ID ...>` (parity #33:
+/// without it the `Skyrim.esm` reference cache named the cells and
+/// references in Tamriel without the worldspace's full name, which a load
+/// note had cached in Tamriel's `mrName` before the handler was there).
 pub fn localization_get_value(id: u32, element: ElementArg) -> (bool, String) {
     let handler = LOCALIZATION_HANDLER.read().unwrap().clone();
     match handler {
         Some(handler) => handler.get_value(id, element),
-        None => (false, String::new()),
+        None => crate::localization::initial_get_value(id, element),
     }
 }
 

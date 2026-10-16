@@ -814,6 +814,22 @@ pub fn install_localization_handler() -> Arc<LocalizationHandlerImpl> {
     handler
 }
 
+/// `GetValue` of the handler before a session installs its own: upstream's
+/// `wbLocalizationHandler` as the unit's `initialization` makes it, with no
+/// table loaded and, the session setting the containers together with its
+/// handler, none to load them from (`LoadForFile` exits without
+/// `wbContainerHandler`). See `localization_get_value`.
+pub(crate) fn initial_get_value(id: u32, element: ElementArg) -> (bool, String) {
+    if id == 0 {
+        return (true, String::new());
+    }
+    let path = LocalizationHandlerImpl::localization_file_name_by_element(element);
+    if path_file_name(&path).is_empty() {
+        return (false, String::new());
+    }
+    (false, format!("<Error: No strings file for lstring ID {id:08X}>"))
+}
+
 /// The handler `install_localization_handler` made last (`wbLocalizationHandler`).
 pub fn localization_handler() -> Option<Arc<LocalizationHandlerImpl>> {
     HANDLER.read().unwrap().clone()
