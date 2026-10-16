@@ -7,14 +7,17 @@
 // mniNavDeleteModGroupsClick, mniNavUpdateCRCModGroupsClick,
 // LoadModGroupsSelection, SaveModGroupsSelection, the mod groups of
 // NodeDatasForMainRecord), xEdit/xeModGroupEditForm.pas (the CRC32
-// question of ShowModal, CheckState), xEdit/xeInit.pas (xeSettingsFileName,
-// wbModGroupFileName)
+// question of ShowModal, CheckState), xEdit/xeModGroupSelectForm.pas
+// (PresetLoad, PresetSave, PresetDelete, PresetsUpdate, GetPresetsSection,
+// IsPresetDifferent, the SetFlag tagging of CollectSelected),
+// xEdit/xeInit.pas (xeSettingsFileName, wbModGroupFileName)
 
 //! `modgroups.*`: the mod groups of the loaded plugins (`wbModGroups`,
 //! ported in `xedit_loadorder::mod_groups`) and the GUI's handling of them
 //! as session commands: list and show them, choose the active ones (the
 //! selection xEdit keeps in its settings file), create, edit and delete
-//! them, and add the current CRC32s of the modules to their items. The
+//! them, add the current CRC32s of the modules to their items, and keep
+//! the selection presets of the selection dialog in the settings file. The
 //! dialogs of the GUI are parameters; a command that changes a mod group
 //! file ends with the reload the GUI runs after it (the files read again,
 //! their validation messages, the saved selection written again as the
@@ -434,23 +437,19 @@ pub struct ShowResponse {
     pub lines: Vec<String>,
 }
 
-/// The one group of a name among all groups (`wbModGroupsByName(False)`),
-/// in the file when one is given.
+/// The group of a name among all groups (`wbModGroupsByName(False)`), in
+/// the file when one is given: the first of the name in the order the
+/// selection dialog lists them (the dialog's Enter picks that one, so a
+/// name in several files resolves as it does there).
 fn find_group(mod_groups: &ModGroups, name: &str, file: Option<&str>) -> Result<ModGroupRef, CommandError> {
-    let found: Vec<ModGroupRef> = mod_groups
+    mod_groups
         .by_name(false)
         .into_iter()
-        .filter(|&group| same_text(&mod_groups.group(group).name, name))
-        .filter(|&group| file.is_none_or(|file| file_matches(&mod_groups.files[group.0].file_name, file)))
-        .collect();
-    match found.as_slice() {
-        [group] => Ok(*group),
-        [] => Err(unknown_group(name, false)),
-        _ => Err(CommandError::new(
-            "ambiguous_mod_group",
-            format!("several mod groups are named \"{name}\": pass file"),
-        )),
-    }
+        .find(|&group| {
+            same_text(&mod_groups.group(group).name, name)
+                && file.is_none_or(|file| file_matches(&mod_groups.files[group.0].file_name, file))
+        })
+        .ok_or_else(|| unknown_group(name, false))
 }
 
 fn file_matches(path: &Path, file: &str) -> bool {
@@ -865,6 +864,315 @@ fn modgroups_delete(session: &mut Session, request: DeleteRequest) -> Result<Cha
     })
 }
 
+/// The section the selection dialog keeps its presets in
+/// (`TfrmModGroupSelect.GetPresetsSection`: `Name + '_' + PresetCategory +
+/// '_Presets'`; the form is `frmModGroupSelect` and
+/// `mniViewModGroupsReloadClick` and the background loader set
+/// `PresetCategory := 'ActiveModGroups'`).
+const PRESETS_SECTION: &str = "frmModGroupSelect_ActiveModGroups_Presets";
+
+/// The pseudo preset `csLast`, the saved selection of `[ModGroups]`
+/// (`TfrmModGroupSelect.csLast`).
+const LAST_PRESET: &str = "<Last>";
+
+/// The settings file of the GUI (`frmMain.Settings`) opened.
+fn open_settings() -> Result<(PathBuf, MemIniFile), CommandError> {
+    let path = settings_file();
+    let ini = MemIniFile::open(&path).map_err(|error| io_error(error, &path))?;
+    Ok((path, ini))
+}
+
+/// `PresetLoad`'s value of a preset: its comma text, the saved selection
+/// for `<Last>`; `None` for another `<...>` preset (which `PresetLoad`
+/// leaves the selection cleared for).
+fn preset_value(ini: &MemIniFile, preset: &str) -> Option<String> {
+    if preset.starts_with('<') {
+        if preset == LAST_PRESET {
+            Some(ini.read_string("ModGroups", "Selection", ""))
+        } else {
+            None
+        }
+    } else {
+        Some(ini.read_string(PRESETS_SECTION, preset, ""))
+    }
+}
+
+/// The names of a preset as `PresetLoad` tags them: a comma text whose
+/// entries a `TStringList` with `Sorted` and `dupIgnore` holds, matched
+/// against the valid groups without regard to case (`Find`).
+fn preset_names(mod_groups: &ModGroups, value: &str) -> Vec<ModGroupRef> {
+    let valid = mod_groups.by_name(true);
+    let mut names = parse_comma_text(value);
+    names.sort_by(|a, b| xedit_loadorder::mod_groups::compare_text(a, b));
+    names.dedup_by(|a, b| same_text(a, b));
+    tagged(mod_groups, &valid, &names)
+}
+
+/// `IsPresetDifferent`: whether the current selection and the preset hold
+/// the same names (both a sorted list without duplicates, compared without
+/// regard to case).
+fn is_preset_different(selected: &[String], value: &str) -> bool {
+    let list = |names: Vec<String>| {
+        let mut names = names;
+        names.sort_by(|a, b| xedit_loadorder::mod_groups::compare_text(a, b));
+        names.dedup_by(|a, b| same_text(a, b));
+        names
+    };
+    let current = list(selected.to_vec());
+    let preset = list(parse_comma_text(value));
+    current.len() != preset.len() || !same_text(&comma_text(&current), &comma_text(&preset))
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct PresetsRequest {}
+
+/// The presets of the selection dialog (`PresetsUpdate`).
+#[derive(Serialize, JsonSchema)]
+pub struct PresetsResponse {
+    /// The preset names in the order the combo box holds them
+    /// (`ReadSection`).
+    pub presets: Vec<String>,
+    /// The names of the saved selection (`[ModGroups] Selection`), which
+    /// `<Last>` loads.
+    pub selection: Vec<String>,
+    /// Whether the combo box offers `<Last>` (`[ModGroups] Selection`
+    /// exists).
+    pub last: bool,
+    /// The settings section the presets are in (`GetPresetsSection`).
+    pub section: String,
+    /// The settings file (`xeSettingsFileName`).
+    pub settings: String,
+}
+
+fn modgroups_presets(session: &mut Session, _: PresetsRequest) -> Result<PresetsResponse, CommandError> {
+    session.mode()?;
+    let (path, ini) = open_settings()?;
+    Ok(PresetsResponse {
+        presets: ini.read_section(PRESETS_SECTION),
+        selection: parse_comma_text(&ini.read_string("ModGroups", "Selection", "")),
+        last: ini.value_exists("ModGroups", "Selection"),
+        section: PRESETS_SECTION.to_owned(),
+        settings: path.display().to_string(),
+    })
+}
+
+fn unknown_preset(preset: &str) -> CommandError {
+    CommandError::new("unknown_preset", format!("there is no preset named \"{preset}\""))
+}
+
+/// `PresetLoad` and the dialog confirmation that ends it: the preset's
+/// names tag the valid mod groups (`LoadModGroupsSelection`'s tagging for
+/// the preset's names), the selection is saved
+/// (`SaveModGroupsSelection`) and activated.
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct PresetLoadRequest {
+    /// The name of the preset, or `<Last>` for the saved selection.
+    pub preset: String,
+    /// Report the selection and what it hides, but write nothing.
+    #[serde(default)]
+    pub dry_run: bool,
+}
+
+#[derive(Serialize, JsonSchema)]
+pub struct PresetLoadResponse {
+    /// The preset that was loaded (`LoadedPreset`).
+    pub preset: String,
+    /// The reload that follows the dialog as the GUI runs it.
+    #[serde(flatten)]
+    pub reload: Reload,
+    /// `IsPresetDifferent`: whether the selection now differs from the
+    /// preset, the question the dialog asks on close ("Do you want to
+    /// update the preset ... with your new selection?"), which
+    /// `modgroups.preset_save` with `after_modal` answers.
+    pub preset_differs: bool,
+    pub dry_run: bool,
+}
+
+fn modgroups_preset_load(session: &mut Session, request: PresetLoadRequest) -> Result<PresetLoadResponse, CommandError> {
+    let mod_groups = load_mod_groups(session)?;
+    let validation_messages = mod_groups.validation_messages(&mod_groups.by_name(false));
+    let (_, ini) = open_settings()?;
+    if !request.preset.starts_with('<') && !ini.value_exists(PRESETS_SECTION, &request.preset) {
+        return Err(unknown_preset(&request.preset));
+    }
+    let Some(value) = preset_value(&ini, &request.preset) else {
+        return Err(unknown_preset(&request.preset));
+    };
+    let selected = preset_names(&mod_groups, &value);
+    let names: Vec<String> = selected
+        .iter()
+        .map(|&group| mod_groups.group(group).name.clone())
+        .collect();
+    let preset_differs = is_preset_different(&names, &value);
+    if !request.dry_run {
+        save_selection(&names)?;
+    }
+    let activation = mod_groups.activate(&selected);
+    Ok(PresetLoadResponse {
+        preset: request.preset,
+        reload: Reload {
+            validation_messages,
+            selected: names,
+            hides: hides_report(&mod_groups, &activation),
+        },
+        preset_differs,
+        dry_run: request.dry_run,
+    })
+}
+
+/// `PresetSave`: the names of the current selection written as a comma
+/// text. The question is asked only when the preset exists ("Are you sure
+/// you want to overwrite existing preset ...?" for a plain save, "You have
+/// changed the selection after loading a preset. Do you want to update the
+/// preset ... with your new selection?" with `after_modal`); `confirm` is
+/// its answer, its default button when omitted (Yes, No with
+/// `after_modal`).
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct PresetSaveRequest {
+    /// The name of the preset to write.
+    pub preset: String,
+    /// The save the dialog runs on close after a preset was loaded (the
+    /// question about the changed selection, with No as its default
+    /// button).
+    #[serde(default)]
+    pub after_modal: bool,
+    /// The answer to the question; the dialog's default button when
+    /// omitted.
+    pub confirm: Option<bool>,
+    /// Report what would be written, but write nothing.
+    #[serde(default)]
+    pub dry_run: bool,
+}
+
+#[derive(Serialize, JsonSchema)]
+pub struct PresetSaveResponse {
+    pub preset: String,
+    /// The value written, the names of the selection as a comma text.
+    pub value: String,
+    /// Whether the preset was written (the question can stop it).
+    pub written: bool,
+    /// Whether the preset holds another value than before.
+    pub changed: bool,
+    pub section: String,
+    pub settings: String,
+    pub dry_run: bool,
+}
+
+fn modgroups_preset_save(session: &mut Session, request: PresetSaveRequest) -> Result<PresetSaveResponse, CommandError> {
+    if request.preset.is_empty() || request.preset.starts_with('<') {
+        return Err(CommandError::new(
+            "invalid_params",
+            format!("\"{}\" is not a preset name a save writes", request.preset),
+        ));
+    }
+    let mod_groups = load_mod_groups(session)?;
+    let (path, ini) = open_settings()?;
+    // `SelectedModGroups`: the valid groups of the saved selection, which
+    // the reload wrote there.
+    let selection = parse_comma_text(&ini.read_string("ModGroups", "Selection", ""));
+    let selected = tagged(&mod_groups, &mod_groups.by_name(true), &selection);
+    let names: Vec<String> = selected
+        .iter()
+        .map(|&group| mod_groups.group(group).name.clone())
+        .collect();
+    let value = comma_text(&names);
+    let exists = ini.value_exists(PRESETS_SECTION, &request.preset);
+    let confirm = request.confirm.unwrap_or(!request.after_modal);
+    if exists && !confirm {
+        return Ok(PresetSaveResponse {
+            preset: request.preset,
+            value,
+            written: false,
+            changed: false,
+            section: PRESETS_SECTION.to_owned(),
+            settings: path.display().to_string(),
+            dry_run: request.dry_run,
+        });
+    }
+    let changed = ini.read_string(PRESETS_SECTION, &request.preset, "") != value;
+    if !request.dry_run {
+        let mut ini = ini;
+        ini.write_string(PRESETS_SECTION, &request.preset, &value);
+        ini.update_file().map_err(|error| io_error(error, &path))?;
+    }
+    Ok(PresetSaveResponse {
+        preset: request.preset,
+        value,
+        written: true,
+        changed,
+        section: PRESETS_SECTION.to_owned(),
+        settings: path.display().to_string(),
+        dry_run: request.dry_run,
+    })
+}
+
+/// `PresetDelete`: the question "Are you sure you want to delete preset
+/// ...?", then `DeleteKey` and `UpdateFile` (`PresetsUpdate` follows,
+/// which the next `modgroups.presets` shows).
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct PresetDeleteRequest {
+    /// The name of the preset to delete.
+    pub preset: String,
+    /// The answer to the question; the dialog's default button (Yes) when
+    /// omitted.
+    pub confirm: Option<bool>,
+    /// Report what would be deleted, but write nothing.
+    #[serde(default)]
+    pub dry_run: bool,
+}
+
+#[derive(Serialize, JsonSchema)]
+pub struct PresetDeleteResponse {
+    pub preset: String,
+    /// Whether the preset was deleted (the question can stop it).
+    pub deleted: bool,
+    pub section: String,
+    pub settings: String,
+    pub dry_run: bool,
+}
+
+fn modgroups_preset_delete(
+    session: &mut Session,
+    request: PresetDeleteRequest,
+) -> Result<PresetDeleteResponse, CommandError> {
+    if request.preset.is_empty() || request.preset.starts_with('<') {
+        return Err(CommandError::new(
+            "invalid_params",
+            format!("\"{}\" is not a preset name a delete removes", request.preset),
+        ));
+    }
+    session.mode()?;
+    let (path, ini) = open_settings()?;
+    if !ini.value_exists(PRESETS_SECTION, &request.preset) {
+        return Err(unknown_preset(&request.preset));
+    }
+    if !request.confirm.unwrap_or(true) {
+        return Ok(PresetDeleteResponse {
+            preset: request.preset,
+            deleted: false,
+            section: PRESETS_SECTION.to_owned(),
+            settings: path.display().to_string(),
+            dry_run: request.dry_run,
+        });
+    }
+    if !request.dry_run {
+        let mut ini = ini;
+        ini.delete_key(PRESETS_SECTION, &request.preset);
+        ini.update_file().map_err(|error| io_error(error, &path))?;
+    }
+    Ok(PresetDeleteResponse {
+        preset: request.preset,
+        deleted: true,
+        section: PRESETS_SECTION.to_owned(),
+        settings: path.display().to_string(),
+        dry_run: request.dry_run,
+    })
+}
+
 fn default_true() -> bool {
     true
 }
@@ -1043,5 +1351,29 @@ pub fn register(registry: &mut Registry) {
         "Add the current CRC32s of the modules to the items of mod groups (mniNavUpdateCRCModGroupsClick).",
         true,
         modgroups_update_crcs,
+    );
+    registry.register(
+        "modgroups.presets",
+        "List the selection presets of the mod group dialog and the saved selection (PresetsUpdate).",
+        false,
+        modgroups_presets,
+    );
+    registry.register(
+        "modgroups.preset_load",
+        "Load a selection preset and save the selection as the dialog's confirmation does (PresetLoad, SaveModGroupsSelection).",
+        true,
+        modgroups_preset_load,
+    );
+    registry.register(
+        "modgroups.preset_save",
+        "Write the current selection as a preset of the mod group dialog (PresetSave).",
+        true,
+        modgroups_preset_save,
+    );
+    registry.register(
+        "modgroups.preset_delete",
+        "Delete a selection preset of the mod group dialog (PresetDelete).",
+        true,
+        modgroups_preset_delete,
     );
 }

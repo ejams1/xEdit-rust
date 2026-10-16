@@ -311,6 +311,51 @@ impl MemIniFile {
             .unwrap_or_default()
     }
 
+    /// `ReadSection`: the names of the keys of the first section of the
+    /// name, in file order (the order `TMemIniFile` keeps a section's keys
+    /// in).
+    pub fn read_section(&self, section: &str) -> Vec<String> {
+        self.section_index(section)
+            .map(|index| {
+                self.sections[index]
+                    .1
+                    .iter()
+                    .filter_map(|line| name_of(line).map(|name| trim(name).to_owned()))
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// `ValueExists`: whether the first section of the name has a line
+    /// whose key is `ident`.
+    pub fn value_exists(&self, section: &str, ident: &str) -> bool {
+        self.section_index(section).is_some_and(|index| {
+            self.sections[index]
+                .1
+                .iter()
+                .any(|line| name_of(line).is_some_and(|name| same_text(name, ident)))
+        })
+    }
+
+    /// `DeleteKey`: removes the line of the key; whether the section had
+    /// one.
+    pub fn delete_key(&mut self, section: &str, ident: &str) -> bool {
+        let Some(index) = self.section_index(section) else {
+            return false;
+        };
+        let values = &mut self.sections[index].1;
+        match values
+            .iter()
+            .position(|line| name_of(line).is_some_and(|name| same_text(name, ident)))
+        {
+            Some(at) => {
+                values.remove(at);
+                true
+            }
+            None => false,
+        }
+    }
+
     /// `EraseSection`: removes the first section of the name.
     pub fn erase_section(&mut self, section: &str) {
         if let Some(index) = self.section_index(section) {
