@@ -520,11 +520,21 @@ impl GuiRun<'_> {
         let exe = bin.join(self.exe.file_name().context("oracle executable without a name")?);
         fs::copy(self.exe, &exe).with_context(|| format!("copying {}", self.exe.display()))?;
         let mut plugins_txt = String::new();
-        for plugin in &self.plugins {
+        // The older games order their plugins by modification time: the
+        // copies get times one second apart in the order of the list, so the
+        // GUI loads them in the order the run names (the data folder's own
+        // times are not stable: a copy of the game's data reorders them;
+        // parity #33 found `CaravanPack.esm` older than `TribalPack.esm`).
+        let base = std::time::SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_262_304_000);
+        for (index, plugin) in self.plugins.iter().enumerate() {
             let name = plugin.file_name().context("plugin without a name")?;
-            // `fs::copy` keeps the modification time, by which the older
-            // games order their plugins.
-            fs::copy(plugin, data.join(name)).with_context(|| format!("copying {}", plugin.display()))?;
+            let target = data.join(name);
+            fs::copy(plugin, &target).with_context(|| format!("copying {}", plugin.display()))?;
+            fs::File::options()
+                .write(true)
+                .open(&target)
+                .and_then(|file| file.set_modified(base + std::time::Duration::from_secs(index as u64)))
+                .with_context(|| format!("dating {}", target.display()))?;
             if self.star_plugins_txt {
                 plugins_txt.push('*');
             }
