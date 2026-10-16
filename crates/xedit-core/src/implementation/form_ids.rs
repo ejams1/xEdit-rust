@@ -466,9 +466,13 @@ impl MainRecordImpl {
         if !CELL_CHILDREN.contains(&&self.mr_struct().signature.0) {
             return None;
         }
+        // `TwbVector` holds `Single`s: the native value, rounded to six
+        // digits through a single precision factor (61440.0 reads as
+        // 61439.99999987891), is rounded back to one, so a reference on a
+        // cell border stays in its cell (`wbIsInGridCell`).
         let axis = |name: &str| match self.get_element_native_value(&format!("DATA\\Position\\{name}")) {
-            crate::interface::misc::Variant::Float(value) => Some(value),
-            other => other.as_ordinal().map(|value| value as f64),
+            crate::interface::misc::Variant::Float(value) => Some(f64::from(value as f32)),
+            other => other.as_ordinal().map(|value| f64::from(value as f32)),
         };
         Some((axis("X")?, axis("Y")?, axis("Z")?))
     }
