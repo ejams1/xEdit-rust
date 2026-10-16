@@ -58,6 +58,11 @@ use super::{
 /// `cClasses = 'Classes'` (`JvInterpreter_Classes.pas:1164`).
 const UNIT: &str = "Classes";
 
+/// The unit the three binary stream classes belong to: the misc family's
+/// adapter registers them (`xejviScriptAdapterMiscVcl.pas:544`), and the
+/// ledger keys them under that file.
+const BINARY_UNITS_ADAPTER: &str = "xejviScriptAdapterMiscVcl";
+
 /// `SReadError`.
 const S_READ_ERROR: &str = "Stream read error";
 /// `SWriteError`.
@@ -334,12 +339,19 @@ pub fn register(adapter: &mut Adapter, state: &Rc<RefCell<ScriptRunState>>) {
     let t_component = class_of(adapter, "TComponent", Some(t_persistent.clone()));
     // `TBinaryReader` and `TBinaryWriter` are `TObject`s and `TBytesStream`
     // a `TCustomMemoryStream` (`TStream` here, the nearest registered
-    // ancestor). The three are registered by `xejviScriptAdapterMiscVcl.pas`
-    // of the misc family, and their object model is this unit's streams'.
+    // ancestor). The three and their members belong to
+    // `xejviScriptAdapterMiscVcl.pas` of the misc family (the unit the
+    // ledger keys them under and the JVCL unit counts do not see), and their
+    // object model is this unit's streams'.
     let t_object_anchor = t_object_anchor(adapter);
-    let t_binary_reader = class_of(adapter, "TBinaryReader", t_object_anchor.clone());
-    let t_binary_writer = class_of(adapter, "TBinaryWriter", t_object_anchor);
-    let t_bytes_stream = class_of(adapter, "TBytesStream", Some(t_stream.clone()));
+    let binary_class = |adapter: &mut Adapter, name: &str, parent: Option<Rc<ClassDef>>| {
+        adapter
+            .find_class(name.as_bytes())
+            .unwrap_or_else(|| adapter.add_class(BINARY_UNITS_ADAPTER, name, parent))
+    };
+    let t_binary_reader = binary_class(adapter, "TBinaryReader", t_object_anchor.clone());
+    let t_binary_writer = binary_class(adapter, "TBinaryWriter", t_object_anchor);
+    let t_bytes_stream = binary_class(adapter, "TBytesStream", Some(t_stream.clone()));
 
     let classes = Classes {
         t_persistent,
@@ -2367,9 +2379,8 @@ fn binary_reader_stream(args: &Args) -> Result<Rc<RefCell<StreamState>>, ValueEr
         .ok_or_else(access_violation)
 }
 
-/// The state of a `TBinaryWriter`: the stream, the encoding `Write(string)`
-/// uses and the buffer the typed `Write`s fill. Upstream flushes the buffer
-/// when it would overflow and at the writer's destroy.
+/// The state of a `TBinaryWriter`: the stream and the encoding
+/// `Write(string)` uses.
 pub struct BinaryWriterState {
     pub stream: Option<Rc<RefCell<StreamState>>>,
     pub encoding: crate::script_strings::EncodingKind,
