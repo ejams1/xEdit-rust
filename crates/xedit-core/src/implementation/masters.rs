@@ -826,6 +826,7 @@ pub fn element_masters_updated(element: &ElementRef, update: &MastersUpdate) -> 
 fn main_record_masters_updated(record: &Arc<MainRecordImpl>, update: &MastersUpdate) -> Result<bool, EditError> {
     let base = &record.base;
     let was_modified = base.has_state(ElementState::esModified) && !base.has_state(ElementState::esInternalModified);
+    let elements_updated = std::cell::Cell::new(false);
     let result = with_internal_edit(|| {
         super::without_sorting(|| {
             with_update(&**record, || {
@@ -858,6 +859,7 @@ fn main_record_masters_updated(record: &Arc<MainRecordImpl>, update: &MastersUpd
                 } else {
                     false
                 };
+                elements_updated.set(result);
                 Ok(result || header_updated)
             })
         })
@@ -875,21 +877,30 @@ fn main_record_masters_updated(record: &Arc<MainRecordImpl>, update: &MastersUpd
         // esModified)`): a subrecord the definition does not know (no sort
         // order) goes to the end, as the Starfield `FLLD` of `ARMO` and
         // `ARMA` records after a masters update (parity #33,
-        // `sf1-medium-masters`).
-        let order = |record: &Arc<MainRecordImpl>| -> Vec<usize> {
-            record
-                .container
-                .elements()
-                .iter()
-                .map(|element| Arc::as_ptr(element) as *const () as usize)
-                .collect()
-        };
-        let before = order(record);
-        super::edit::sort_sub_records_of(&**record);
-        if order(record) != before {
-            record
-                .mr_storage_invalid
-                .store(true, std::sync::atomic::Ordering::Relaxed);
+        // `sf1-medium-masters`). UPSTREAM-QUIRK: only a record whose
+        // elements the update rewrote gets them built again; one whose
+        // header FormID alone moved keeps its elements in their order, as
+        // the reset of `CollapseStorage(@KAR, False)` (`ResetChildrenLeafFirst`,
+        // which needs every element free of outside references) does not
+        // release them there (the oracle's saves of `sf1-medium-masters`:
+        // the `FLLD` of every record with a rewritten FormID inside go last,
+        // those of the records whose own FormID alone moved stay).
+        if elements_updated.get() {
+            let order = |record: &Arc<MainRecordImpl>| -> Vec<usize> {
+                record
+                    .container
+                    .elements()
+                    .iter()
+                    .map(|element| Arc::as_ptr(element) as *const () as usize)
+                    .collect()
+            };
+            let before = order(record);
+            super::edit::sort_sub_records_of(&**record);
+            if order(record) != before {
+                record
+                    .mr_storage_invalid
+                    .store(true, std::sync::atomic::Ordering::Relaxed);
+            }
         }
     }
     if base.has_state(ElementState::esModified) && record.mr_storage_invalid.load(std::sync::atomic::Ordering::Relaxed)

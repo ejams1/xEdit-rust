@@ -1990,6 +1990,17 @@ pub fn define_sf1_anonymous_5256(a_element: &ElementRef, a_old_value: &Variant, 
 }
 
 /// Upstream anonymous `AfterSet` of the virtual perk activity (`NULL`).
+///
+/// UPSTREAM-BUG: after a record copy upstream loses the first edit of a
+/// rank's virtual tree. The element the edit sets is released with the
+/// tree (`dfDontSave`, built again by `wbPerkActivityAfterLoad` from the
+/// old `ATAV` text when Delphi's reference count of the copied record's
+/// elements drops), so the JSON is written from the rebuilt tree with the
+/// old values; a second set of the same value applies. The port keeps the
+/// edit (user decision 2026-10-16: an upstream bug that loses data is not
+/// reproduced); the oracle edit sequences set every tree value twice so
+/// both sides end in the same state (`sf1-perk-activity-edit`, the probe
+/// `probes/perk-activity.pas`).
 pub fn define_sf1_anonymous_5271(a_element: &ElementRef, _a_old_value: &Variant, _a_new_value: &Variant) {
     if xedit_core::interface::globals::is_internal_edit() {
         return;

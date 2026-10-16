@@ -103,7 +103,15 @@ fn game_table(data: &Path, name: &str) -> Result<Option<Vec<u8>>> {
     Ok(None)
 }
 
-/// Builds the staging folder `dir` of a sequence.
+/// Builds the staging folder `dir` of a sequence. `strings` is the
+/// sequence's: without it the GUI gets no tables of its own, so it finds
+/// those of the game's plugins in the game's archives under their own
+/// names and none for a renamed plugin; the port's staging folder then
+/// leaves out the tables of the renamed plugins as well (a read of one of
+/// their strings, the reference build's for one, would otherwise load
+/// tables the GUI never sees, and a copied string would be added after
+/// their last ID instead of to new tables from ID 1).
+#[allow(clippy::too_many_arguments)]
 pub(super) fn stage(
     game: &Game,
     data: &Path,
@@ -112,6 +120,7 @@ pub(super) fn stage(
     rename: &BTreeMap<String, String>,
     inputs: &BTreeMap<String, Vec<u8>>,
     archives: &[String],
+    strings: bool,
 ) -> Result<Stage> {
     fs::create_dir_all(dir.join("Strings"))?;
     // The archives the sequence names go next to the plugins; the tables
@@ -150,7 +159,15 @@ pub(super) fn stage(
             Some((_, bytes)) => fs::write(&target, bytes)?,
             None => place(source, &target)?,
         }
-        if stage.archives.is_empty() && is_localized(&target)? {
+        let renamed = !name.eq_ignore_ascii_case(&source_name);
+        if !strings && renamed {
+            // Tables an earlier run of the folder left.
+            let stem = Path::new(&name).file_stem().unwrap().to_string_lossy().into_owned();
+            for extension in TABLE_EXTENSIONS {
+                let _ = fs::remove_file(dir.join("Strings").join(format!("{stem}_{language}{extension}")));
+            }
+        }
+        if stage.archives.is_empty() && (strings || !renamed) && is_localized(&target)? {
             let source_stem = Path::new(&source_name)
                 .file_stem()
                 .unwrap()
