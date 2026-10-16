@@ -138,13 +138,17 @@ fn identical_bytes() -> Vec<u8> {
 }
 
 fn load(plugin: Vec<u8>) -> (Vec<Arc<FileImpl>>, Session) {
+    load_with(master_bytes(), plugin)
+}
+
+fn load_with(master: Vec<u8>, plugin: Vec<u8>) -> (Vec<Arc<FileImpl>>, Session) {
     xedit_core::implementation::clear_files_map();
     xedit_core::implementation::reset_load_order_slots();
     xedit_core::interface::clear_files();
     xedit_session::dump::setup_game_for_edit("sse").unwrap();
     xedit_session::save::apply_edit_settings(GameMode::gmSSE);
     let mut files = Vec::new();
-    for (name, bytes) in [("Master.esm", master_bytes()), ("Plugin.esp", plugin)] {
+    for (name, bytes) in [("Master.esm", master), ("Plugin.esp", plugin)] {
         files.push(wb_file_from_bytes(name, i32::MAX, FileStates::empty(), FileBytes::Owned(bytes)).unwrap());
     }
     let mut session = Session::with_files(GameMode::gmSSE, files.clone());
@@ -233,10 +237,10 @@ fn removes_identical_records_and_undeletes_references() {
     let pass = &result["passes"][0];
     assert_eq!(form_ids(&pass["udr"]), ["REFR:00000805"]);
     // The identical game setting and the identical reference go; the cell
-    // keeps the undeleted reference, so it stays with its groups. The top
-    // groups are in the order of the navigation tree ("Cell" before "Game
-    // Setting"), walked from the last.
-    assert_eq!(form_ids(&pass["itm"]), ["GMST:00000800", "REFR:00000804"]);
+    // keeps the undeleted reference, so it stays with its groups. The file
+    // node is selected, not expanded, so its top groups keep the order of
+    // the file ("Game Setting" before "Cell"), walked from the last.
+    assert_eq!(form_ids(&pass["itm"]), ["REFR:00000804", "GMST:00000800"]);
     assert_eq!(result["unsaved"], true);
 
     let saved = files[1].write_to_bytes(ResetModified::rmSetInternal).unwrap();
@@ -355,4 +359,71 @@ fn cleaning_needs_the_edit_flag() {
         )
         .unwrap();
     assert_eq!(dry["udr"], 1);
+}
+
+/// A master whose second reference has a scale of its own, and a plugin
+/// that deletes both references.
+fn scaled_master_bytes() -> Vec<u8> {
+    let mut bytes = header(1, 5, 0x806, &[]);
+    bytes.extend(top_group(b"STAT", &stat(0x802)));
+    let mut references = reference(0x804, 0x802, [1.0, 2.0, 3.0]);
+    let mut scaled = sub_record(b"NAME", &0x802u32.to_le_bytes());
+    scaled.extend(sub_record(b"XSCL", &1.5f32.to_le_bytes()));
+    let mut placement = Vec::new();
+    for value in [4.0f32, 5.0, 6.0, 0.0, 0.0, 0.0] {
+        placement.extend_from_slice(&value.to_le_bytes());
+    }
+    scaled.extend(sub_record(b"DATA", &placement));
+    references.extend(main_record(b"REFR", 0, 0x805, &scaled));
+    bytes.extend(cell_with(&references));
+    bytes
+}
+
+/// UPSTREAM-BUG (parity #35): the release's scale step leaves a scale the
+/// reference already has and writes the value into the element it found
+/// for the reference before; the port gives every undeleted reference the
+/// scale in its own XSCL.
+#[test]
+fn the_udr_scale_goes_to_each_reference() {
+    let _guard = test_lock();
+    let mut plugin = header(0, 3, 0x800, &["Master.esm"]);
+    let mut references = deleted_reference(0x804);
+    references.extend(deleted_reference(0x805));
+    plugin.extend(cell_with(&references));
+    let (files, mut session) = load_with(scaled_master_bytes(), plugin);
+    let result = Registry::standard()
+        .call(
+            &mut session,
+            "files.clean",
+            json!({ "file": "Plugin.esp", "udr": true, "udr_scale": true, "udr_scale_value": 0.5, "udr_xesp": false }),
+        )
+        .unwrap();
+    assert_eq!(result["udr"], 2, "{result:#}");
+    for form_id in [0x804, 0x805] {
+        let record = files[1]
+            .records()
+            .into_iter()
+            .find(|record| record.mr_struct().form_id.to_cardinal() == form_id)
+            .unwrap();
+        let xedit_core::interface::misc::Variant::Float(scale) = record.get_element_native_value("XSCL") else {
+            panic!("{form_id:X} has no scale");
+        };
+        assert!((scale - 0.5).abs() < 1e-6, "{form_id:X}: {scale}");
+        assert_eq!(record.get_element_native_value("NAME").as_ordinal(), Some(0x802));
+        assert!(!record.get_element_exists("XESP"));
+    }
+    // The dirty information of the step: one entry for the plugin.
+    let dirty = Registry::standard()
+        .call(&mut session, "files.dirty_info", json!({}))
+        .unwrap();
+    assert_eq!(dirty["entries"][0]["plugin"], "Plugin.esp");
+    assert_eq!(dirty["entries"][0]["udr"], 2);
+    assert!(
+        dirty["messages"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|line| line == "        udr: 2"),
+        "{dirty:#}"
+    );
 }

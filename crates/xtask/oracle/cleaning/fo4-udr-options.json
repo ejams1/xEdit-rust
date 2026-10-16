@@ -1,9 +1,20 @@
 {
-  "description": "\"Undelete and Disable References\" on DLCRobot.esm with every option of the Cleaning tab away from its default: no player enable parent (UDRSetXESP off), a scale of 0.5 (UDRSetScale on), and a height of -20000 for the references that are not persistent. The scale goes to the XSCL element the reference gets, or (an upstream quirk) to the element the step found last when the reference has one.",
+  "description": "\"Undelete and Disable References\" on DLCRobot.esm with the options of the Cleaning tab away from their defaults: no player enable parent (UDRSetXESP off) and a height of -20000 for the references that are not persistent (UDRSetZValue). UDRSetScale stays off here: seven of the references take a scale back from Fallout4.esm, and the release's scale step leaves such a scale alone and writes the value into the element of the reference before (an upstream bug the port does not reproduce; fo3-udr-options covers the scale over references without one).",
   "game": "fo4",
-  "load": ["Fallout4.esm", "DLCRobot.esm"],
-  "select": ["DLCRobot.esm"],
+  "load": [
+    "Fallout4.esm",
+    "DLCRobot.esm"
+  ],
+  "select": [
+    "DLCRobot.esm"
+  ],
   "udr": true,
-  "options": {"udr_xesp": false, "udr_scale": true, "udr_scale_value": 0.5, "udr_z": true, "udr_z_value": -20000.0},
-  "save": ["DLCRobot.esm"]
+  "options": {
+    "udr_xesp": false,
+    "udr_z": true,
+    "udr_z_value": -20000.0
+  },
+  "save": [
+    "DLCRobot.esm"
+  ]
 }
