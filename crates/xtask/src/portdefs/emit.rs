@@ -1303,9 +1303,9 @@ impl<'a> Emitter<'a> {
         let lower = name.to_ascii_lowercase();
         let overloads = self.symbols.routines.get(&lower)?;
         let callback = self.symbols.callback(callback_type)?;
-        let index = self.symbols.resolved_overload(self.unit, &lower, |sig| {
-            super::resolve::callback_matches(sig, callback)
-        })?;
+        let index = self
+            .symbols
+            .resolved_overload(self.unit, &lower, |sig| super::resolve::callback_matches(sig, callback))?;
         let function = self.names[&(lower, index)].clone();
         self.references
             .borrow_mut()
