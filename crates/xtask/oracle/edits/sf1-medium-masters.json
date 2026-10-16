@@ -1,0 +1,19 @@
+{
+  "description": "Masters of a medium Starfield plugin added, sorted and cleaned again: SFBGS003.esm loaded as Sf33Medium.esm takes the medium module SFBGS006.esm as a master and loses it again, so every FormID of the file is rewritten twice with the complex (medium) FileIDs of Starfield: the file's own records move from medium slot 0 to 1 and back.",
+  "game": "sf1",
+  "rename": {"Sf33Medium.esm": "SFBGS003.esm"},
+  "load": [
+    "Starfield.esm",
+    "SFBGS006.esm",
+    "Sf33Medium.esm"
+  ],
+  "commands": [
+    {"command": "records.copy", "params": {"form_id": "0000000A", "from": "Starfield.esm", "to": "Sf33Medium.esm"}},
+    {"command": "masters.add", "params": {"file": "Sf33Medium.esm", "masters": ["SFBGS006.esm"]}},
+    {"command": "masters.sort", "params": {"file": "Sf33Medium.esm"}},
+    {"command": "masters.clean", "params": {"file": "Sf33Medium.esm"}}
+  ],
+  "save": [
+    "Sf33Medium.esm"
+  ]
+}

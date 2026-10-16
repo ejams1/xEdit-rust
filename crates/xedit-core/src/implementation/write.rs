@@ -84,6 +84,14 @@ pub enum ElementState {
     /// Port of `esDummy`: the state a script names that does not exist
     /// (`IntToEsState`'s `else` arm).
     esDummy = 262144,
+    /// Port of `esConstructionComplete`: the element's constructor ran
+    /// (`TwbElement.AfterConstruction`). Every element of the port gets it
+    /// when it is built.
+    esConstructionComplete = 524288,
+    /// Port of `esInternalLoad`: the Starfield definitions set it around
+    /// `wbPerkActivityLoadVirtualJSON`, and the virtual perk activity's
+    /// change notification leaves the elements that carry it alone.
+    esInternalLoad = 1048576,
 }
 
 /// Port of `TwbResetModified`: what a save does to the modified states.

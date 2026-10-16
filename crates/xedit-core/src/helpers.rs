@@ -16,8 +16,10 @@ use crate::interface::element::Element;
 use crate::interface::globals::{
     GameMode, game_mode, is_fallout3, is_fallout4, is_fallout76, is_oblivion, is_skyrim, is_starfield,
 };
-use crate::interface::misc::progress;
+use crate::interface::misc::{Variant, progress};
+use crate::interface::types::ElementType;
 use crate::interface::{ElementRef, MainRecordRef, Signature};
+use crate::json::Json;
 
 /// `MakeDataFileName`: a name below the data folder, or the name itself
 /// when it is a path; nothing for names under three characters (the
@@ -540,6 +542,124 @@ fn find_records(element: &ElementRef, signatures: &[Signature], records: &mut Ve
             }
         }
     }
+}
+
+// **************** PERK Challenge JSON serialization support
+
+/// `IntToStr` of a variant argument: the RTL converts the variant to an
+/// integer first. Only the ordinal native values of the virtual perk
+/// activities reach this.
+fn variant_int_str(value: &Variant) -> String {
+    let number = match value {
+        Variant::Bool(value) => i64::from(u8::from(*value)),
+        Variant::Int(value) => *value,
+        Variant::UInt(value) => *value as i64,
+        Variant::Float(value) => crate::delphi::round(*value),
+        Variant::Str(text) => crate::interface::misc::str_to_int64(text).unwrap_or(0),
+        Variant::Empty | Variant::Bytes(_) => 0,
+    };
+    number.to_string()
+}
+
+/// Port of `SerializeStreamArray`: the `Stream` member of a virtual perk
+/// activity as its JSON array, the text of every value and a null for
+/// anything else.
+pub fn serialize_stream_array(a_element: &ElementRef, a_json_array: &mut Json) {
+    let Some(container) = a_element.as_container() else {
+        return;
+    };
+    *a_json_array = Json::array();
+    for index in 0..container.get_element_count() {
+        match container.get_element(index) {
+            Some(child) if child.get_element_type() == ElementType::etValue => {
+                a_json_array.push(Json::Str(variant_int_str(&child.get_native_value())));
+            }
+            _ => a_json_array.push(Json::Null),
+        }
+    }
+}
+
+/// Port of `SerializeArray`.
+pub fn serialize_array(a_element: &ElementRef, a_json_array: &mut Json) {
+    let Some(container) = a_element.as_container() else {
+        return;
+    };
+    for index in 0..container.get_element_count() {
+        let Some(child) = container.get_element(index) else {
+            a_json_array.push(Json::Null);
+            continue;
+        };
+        match child.get_element_type() {
+            ElementType::etValue => {
+                let value = child.get_edit_value();
+                if value.is_empty() || value == "<null>" {
+                    a_json_array.push(Json::Null);
+                } else {
+                    a_json_array.push(Json::Str(value));
+                }
+            }
+            ElementType::etStruct | ElementType::etArray => {
+                a_json_array.push(serialize_element_to_json(&child));
+            }
+            _ => a_json_array.push(Json::Str(child.get_edit_value())),
+        }
+    }
+}
+
+/// Port of `SerializeElement`.
+pub fn serialize_element(a_element: &ElementRef, a_json_obj: &mut Json) {
+    let Some(container) = a_element.as_container() else {
+        a_json_obj.set(&a_element.get_name(), Json::Str(a_element.get_edit_value()));
+        return;
+    };
+    for index in 0..container.get_element_count() {
+        let Some(child) = container.get_element(index) else {
+            continue;
+        };
+        let name = child.get_name();
+
+        // ==================== SPECIAL HANDLING ====================
+        if name.eq_ignore_ascii_case("Type") {
+            a_json_obj.set("Type", Json::Str(child.get_edit_value()));
+            continue;
+        }
+        if name.eq_ignore_ascii_case("Stream") {
+            if let Ok(Some(array)) = a_json_obj.a_mut("Stream") {
+                serialize_stream_array(&child, array);
+            }
+            continue;
+        }
+        // ========================================================
+
+        match child.get_element_type() {
+            ElementType::etValue => {
+                let value = child.get_edit_value();
+                if value.is_empty() || value == "<null>" || value == "NULL" {
+                    a_json_obj.set(&name, Json::Null);
+                } else {
+                    a_json_obj.set(&name, Json::Str(value));
+                }
+            }
+            ElementType::etStruct => {
+                a_json_obj.set(&name, serialize_element_to_json(&child));
+            }
+            ElementType::etArray => {
+                if !name.eq_ignore_ascii_case("Stream") {
+                    if let Ok(Some(array)) = a_json_obj.a_mut(&name) {
+                        serialize_array(&child, array);
+                    }
+                }
+            }
+            _ => a_json_obj.set(&name, Json::Str(child.get_edit_value())),
+        }
+    }
+}
+
+/// Port of `SerializeElementToJson`.
+pub fn serialize_element_to_json(a_element: &ElementRef) -> Json {
+    let mut result = Json::object();
+    serialize_element(a_element, &mut result);
+    result
 }
 
 #[cfg(test)]
