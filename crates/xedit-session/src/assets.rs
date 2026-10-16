@@ -23,7 +23,8 @@ use serde::{Deserialize, Serialize};
 use xedit_assets::asset::{AssetFile, AssetKind};
 use xedit_assets::data_format::{DfError, El, FLOAT_DECIMAL_DIGITS};
 use xedit_assets::data_format_nif::{
-    block, block_by_path, block_type, blocks_count, footer, header, wb_ni_object_list,
+    MeshOptimizeOption, MeshOptimizeOptions, block, block_by_path, block_type, blocks_count, footer, header,
+    spell_optimize, wb_ni_object_list,
 };
 use xedit_assets::data_format_nif_types::ROTATION_EULER;
 use xedit_assets::nif_scanner;
@@ -503,6 +504,95 @@ fn assets_scan(_: &mut Session, request: AssetsScanRequest) -> Result<AssetsScan
     })
 }
 
+/// The options of `assets.optimize` when the request names none.
+fn default_optimize_options() -> Vec<String> {
+    vec!["vertex-cache".to_owned(), "overdraw".to_owned()]
+}
+
+/// `assets.optimize`: the request.
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct AssetsOptimizeRequest {
+    /// Path of the file on disk, or of the archive (BSA, BA2) that holds it.
+    pub file: String,
+    /// The path of the file inside the archive `file`, such as
+    /// `meshes\clutter\bucket01.nif`; omitted for a loose file.
+    pub archive_path: Option<String>,
+    /// The format: nif (also KF), bgsm, bgem, lod, dlodsettings, lst, btt
+    /// (also DTL), fuz or dds. By the extension when omitted.
+    pub kind: Option<String>,
+    /// The optimizations to run (`TwbMeshOptimizeOptions` of
+    /// `SpellOptimize`): `vertex-cache`, `overdraw`, `vertex-fetch`,
+    /// `stripify` or `triangulate`. An empty list means the default,
+    /// `[vertex-cache, overdraw]`, which is the default of
+    /// `SpellOptimize`; `[stripify, vertex-cache]` is `SpellStripify` and
+    /// `[triangulate]` is `SpellTriangulate`.
+    #[serde(default = "default_optimize_options")]
+    pub options: Vec<String>,
+    /// Path to write the changed file to.
+    pub output: String,
+    /// Run the spells and report what they would change, but write nothing.
+    #[serde(default)]
+    pub dry_run: bool,
+}
+
+#[derive(Serialize, JsonSchema)]
+pub struct AssetsOptimizeResponse {
+    /// The options of the run in the order of the request.
+    pub options: Vec<String>,
+    /// Whether the spells changed the file (`SpellOptimize`'s result: a
+    /// shape reordered, stripified or triangulated).
+    pub changed: bool,
+    #[serde(flatten)]
+    pub save: AssetsSaveResponse,
+}
+
+/// `TwbMeshOptimizeOptions` of the request: the option names are the ones
+/// the command documents, any case.
+fn optimize_options(names: &[String]) -> Result<(MeshOptimizeOptions, Vec<String>), CommandError> {
+    let mut options = MeshOptimizeOptions::default();
+    let mut used = Vec::new();
+    for name in names {
+        let (option, canonical) = match name.to_ascii_lowercase().as_str() {
+            "vertex-cache" => (MeshOptimizeOption::VertexCache, "vertex-cache"),
+            "overdraw" => (MeshOptimizeOption::Overdraw, "overdraw"),
+            "vertex-fetch" => (MeshOptimizeOption::VertexFetch, "vertex-fetch"),
+            "stripify" => (MeshOptimizeOption::Stripify, "stripify"),
+            "triangulate" => (MeshOptimizeOption::Triangulate, "triangulate"),
+            _ => {
+                return Err(CommandError::new(
+                    "invalid_params",
+                    format!(
+                        "unknown optimization {name}; the options are vertex-cache, overdraw, vertex-fetch, \
+                         stripify and triangulate"
+                    ),
+                ));
+            }
+        };
+        options.include(option);
+        used.push(canonical.to_owned());
+    }
+    Ok((options, used))
+}
+
+fn assets_optimize(_: &mut Session, request: AssetsOptimizeRequest) -> Result<AssetsOptimizeResponse, CommandError> {
+    let (options, used) = optimize_options(&request.options)?;
+    let (mut file, input) = load(&source_of!(request))?;
+    if file.kind != AssetKind::Nif {
+        return Err(CommandError::new(
+            "invalid_params",
+            "assets.optimize works on NIF files (TwbNifFile.SpellOptimize)",
+        ));
+    }
+    let changed = spell_optimize(&mut file.tree, options).map_err(edit_failed)?;
+    let save = finish_save(&mut file, &input, &request.output, request.dry_run)?;
+    Ok(AssetsOptimizeResponse {
+        options: used,
+        changed,
+        save,
+    })
+}
+
 pub fn register(registry: &mut Registry) {
     registry.register(
         "assets.scan",
@@ -545,5 +635,11 @@ pub fn register(registry: &mut Registry) {
         "Build a data format file from its JSON form and write it (FromJSON, SaveToData).",
         true,
         assets_from_json,
+    );
+    registry.register(
+        "assets.optimize",
+        "Run the mesh spells of a file and write it: SpellOptimize with the requested options (SpellStripify and SpellTriangulate are option sets of it).",
+        true,
+        assets_optimize,
     );
 }
