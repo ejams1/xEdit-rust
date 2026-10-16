@@ -299,6 +299,16 @@ impl Script {
         self.program.last_error_location()
     }
 
+    /// A non-interpreter exception raised by host code while a call into the
+    /// script is on the stack (the scripted filter's `Boolean(...)` cast):
+    /// the interpreter records its position, which
+    /// [`last_error_location`](Script::last_error_location) then reports, as
+    /// the raised exception's unwind through the interpreter's frames does
+    /// upstream.
+    pub fn raise_external(&mut self, class: &str, message: &str) -> ExecError {
+        self.program.raise_external(class, message)
+    }
+
     /// `FProgram.LastError`.
     pub fn last_error(&self) -> &ExecError {
         self.program.last_error()

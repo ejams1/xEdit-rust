@@ -42,6 +42,7 @@ use std::rc::Rc;
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use xedit_analysis::filter::{ScriptedFilter, ScriptedFilterError};
 use xedit_core::implementation::{ElementImpl, ElementState};
 use xedit_core::interface::globals;
 use xedit_core::interface::{
@@ -520,8 +521,10 @@ pub struct ScriptVariables {
     /// signatures `ScriptCanProcessElement` searches as a substring; empty
     /// takes every signature.
     pub process_signatures: String,
-    /// `FilterScripted` (`cbScriptedFilter`): the port has no scripted filter
-    /// function yet; the value is recorded for the GUI phase.
+    /// `FilterScripted` (`cbScriptedFilter`): the filter calls the script's
+    /// `Filter` function for every main record it reaches ([`RunScriptedFilter`]).
+    /// Upstream clears the flag when the filter ends, whatever path it exits
+    /// by; the run loop does the same after [`apply_pending_filters`].
     pub scripted: bool,
     pub conflict_all: bool,
     pub conflict_all_set: ConflictAllSet,
@@ -679,6 +682,7 @@ impl ScriptVariables {
             flatten_cell_childs: self.flatten_cell_childs,
             assign_pers_wrld_child: self.assign_pers_wrld_child,
             inherit_conflict_by_parent: self.inherit_conflict_by_parent,
+            scripted: self.scripted,
         }
     }
 }
@@ -738,6 +742,12 @@ pub struct ScriptRunState {
     show_start_time: i32,
     /// `frmMain.FilterApplied`: whether a filter is on the tree.
     pub filter_applied: bool,
+    /// The elements of the nodes the last applied filter left, or `None`
+    /// while no filter is on the tree: `ApplyScriptToSelection` walks the
+    /// live tree, so after a filter the `Process` walk reaches only the
+    /// nodes the filter kept (`RemoveFilter`'s `ReInitTree` returns to
+    /// `None`).
+    pub filtered_nodes: Option<std::collections::HashSet<usize>>,
     /// The filter call the script asked for; the run loop runs it with the
     /// session when the call that asked returns (see [`PendingFilter`]). A
     /// second call replaces the first: what a filter leaves on the tree is
@@ -760,8 +770,14 @@ pub struct ScriptRunState {
 /// applies it as soon as the call into the script returns.
 pub enum PendingFilter {
     /// The request is boxed: it carries the whole filter dialog
-    /// (`FilterRequestOptions`), and `Remove` has no data.
-    Apply(Box<crate::filter::FilterApplyRequest>),
+    /// (`FilterRequestOptions`), and `Remove` has no data. `at` is the
+    /// length of the message log when `ApplyFilter` was called: the filter
+    /// runs inside that call upstream, so its lines belong there, before
+    /// the messages of the statements that follow the call.
+    Apply {
+        request: Box<crate::filter::FilterApplyRequest>,
+        at: usize,
+    },
     Remove,
 }
 
@@ -776,6 +792,7 @@ impl ScriptRunState {
             hide_start_time: 0,
             show_start_time: 0,
             filter_applied: false,
+            filtered_nodes: None,
             pending_filter: None,
             started: std::time::Instant::now(),
             lists: ScriptLists::default(),
@@ -826,18 +843,26 @@ impl ScriptRunState {
     /// `force`, the `wbProgress(..., True)` of the exception line), prefixed
     /// with `[mm:ss]` while `wbShowStartTime > 0` and inside no script call.
     pub fn progress(&mut self, text: &str, force: bool) {
+        if let Some(line) = self.progress_line(text, force) {
+            self.add_message(&line);
+        }
+    }
+
+    /// The line [`progress`](ScriptRunState::progress) writes, without
+    /// adding it: the filter's application moves it (and the lines of the
+    /// walk) back to the position of the `ApplyFilter` call.
+    pub fn progress_line(&self, text: &str, force: bool) -> Option<String> {
         if text.is_empty() || (self.progress_lock > 0 && !force) {
-            return;
+            return None;
         }
         // `PostAddMessage` hands the text to `AddMessage`, which splits it
         // into the lines of the log; the prefix is on the whole text.
-        let line = if self.show_start_time > 0 && self.hide_start_time < 1 {
+        Some(if self.show_start_time > 0 && self.hide_start_time < 1 {
             let elapsed = elapsed_text(self.started.elapsed());
             format!("[{elapsed}] {text}")
         } else {
             text.to_owned()
-        };
-        self.add_message(&line);
+        })
     }
 
     /// `ScriptCanProcessElement` (`xeMainForm.pas:8654`): the element's type
@@ -855,6 +880,15 @@ impl ScriptRunState {
             }
         }
         true
+    }
+
+    /// `ApplyScriptToSelection` walks the live tree, so a node a filter took
+    /// out is not visited: with a filter on the tree the walk reaches the
+    /// nodes the filter kept alone.
+    pub fn is_filtered_out(&self, element: &ElementRef) -> bool {
+        self.filtered_nodes
+            .as_ref()
+            .is_some_and(|nodes| !nodes.contains(&element.get_element_id()))
     }
 
     /// `Length(frmMain.Files)`.
@@ -1246,7 +1280,7 @@ fn register_functions(
                 // already counts as applied.
                 let state = state.borrow();
                 let applied = match &state.pending_filter {
-                    Some(PendingFilter::Apply(_)) => true,
+                    Some(PendingFilter::Apply { .. }) => true,
                     Some(PendingFilter::Remove) => false,
                     None => state.filter_applied,
                 };
@@ -1267,9 +1301,14 @@ fn register_functions(
             0,
             no_params.clone(),
             Rc::new(move |_value: &mut Value, _args: &mut Args| {
-                let options = state.borrow().variables.filter_options();
-                state.borrow_mut().pending_filter =
-                    Some(PendingFilter::Apply(Box::new(crate::filter::FilterApplyRequest {
+                let mut state = state.borrow_mut();
+                // The relay's lines first, so the recorded position is the
+                // one the filter's lines belong at.
+                state.add_message("");
+                let at = state.messages.len();
+                let options = state.variables.filter_options();
+                state.pending_filter = Some(PendingFilter::Apply {
+                    request: Box::new(crate::filter::FilterApplyRequest {
                         files: Vec::new(),
                         options: Some(options),
                         preset: None,
@@ -1280,7 +1319,9 @@ fn register_functions(
                         conflict_only: false,
                         only_one: false,
                         no_game_master: false,
-                    })));
+                    }),
+                    at,
+                });
                 Ok(())
             }),
         );
@@ -1519,6 +1560,100 @@ fn result_as_integer(value: &Value) -> i64 {
     }
 }
 
+/// The scripted filter of a run (`CustomScriptFilter` of
+/// `mniNavFilterApplyClick`): `FilterScripted` with the script's `Filter`
+/// function, called through the interpreter the run uses, so one
+/// implementation serves `script.run` in one-shot, batch, serve and MCP
+/// sessions.
+struct RunScriptedFilter<'a> {
+    script: &'a mut Script,
+    state: &'a Rc<RefCell<ScriptRunState>>,
+}
+
+impl ScriptedFilter for RunScriptedFilter<'_> {
+    fn enabled(&mut self) -> bool {
+        self.state.borrow().variables.scripted
+    }
+
+    fn filter_record(&mut self, record: &ElementRef) -> Result<bool, ScriptedFilterError> {
+        // `Script.FunctionExists('Filter')`: a script without the function
+        // rejects every record (`CustomScriptFilter` is False).
+        if !self.script.function_exists("Filter") {
+            return Ok(false);
+        }
+        let value = self.state.borrow().element_value(record);
+        match self.script.call_function("Filter", &[value]) {
+            Ok(value) => match to_bool(&value) {
+                Ok(accepted) => Ok(accepted),
+                Err(_) => {
+                    // `Boolean(V)` of a variant that does not convert: the
+                    // raise happens in native code while the interpreter's
+                    // frames are on the stack, so it records the position of
+                    // the `Filter` call's last statement.
+                    let message = format!(
+                        "Could not convert variant of type ({}) into type (Boolean)",
+                        value_type_name(&value)
+                    );
+                    let error = self.script.raise_external(VARIANT_CAST_CLASS, &message);
+                    Err(scripted_error_of(self.script, &error))
+                }
+            },
+            Err(error) => Err(scripted_error_of(self.script, &error)),
+        }
+    }
+}
+
+/// The raised error of a `Filter` call as the run's abort lines print it:
+/// the class and the message of the exception, and the location the
+/// interpreter recorded for it (`GetLastErrorLocation`).
+fn scripted_error_of(script: &Script, error: &ExecError) -> ScriptedFilterError {
+    ScriptedFilterError {
+        location: script.last_error_location(),
+        class: error.class_name().to_owned(),
+        message: error.message().to_owned(),
+    }
+}
+
+/// `wbHideStartTime` held up around the filter's application, whose lines
+/// the GUI writes inside the call into the script (`ApplyScript`'s
+/// `Inc(wbHideStartTime)` around `Initialize`): they carry no `[mm:ss]`
+/// prefix. Restored on drop whichever path the application exits by.
+struct HideStartTime(Rc<RefCell<ScriptRunState>>);
+
+impl HideStartTime {
+    fn new(state: &Rc<RefCell<ScriptRunState>>) -> HideStartTime {
+        state.borrow_mut().hide_start_time += 1;
+        HideStartTime(state.clone())
+    }
+}
+
+impl Drop for HideStartTime {
+    fn drop(&mut self) {
+        self.0.borrow_mut().hide_start_time -= 1;
+    }
+}
+
+/// `EVariantTypeCastError`: what `Boolean(V)` raises for a variant that does
+/// not convert (Delphi's `VarCastError` family).
+const VARIANT_CAST_CLASS: &str = "EVariantTypeCastError";
+
+/// The `VarTypeAsText` name of a value, for the variant cast error's
+/// message.
+fn value_type_name(value: &Value) -> &'static str {
+    match value {
+        Value::Str(_) => "UnicodeString",
+        Value::Smallint(_) => "SmallInt",
+        Value::Integer(_) => "Integer",
+        Value::Int64(_) => "Int64",
+        Value::Byte(_) => "Byte",
+        Value::Double(_) | Value::Date(_) => "Double",
+        Value::Bool(_) => "Boolean",
+        Value::Object(_) => "IInterface",
+        Value::Pointer(_) => "Pointer",
+        _ => "Null",
+    }
+}
+
 /// Runs the filter calls the script asked for, as the call returns
 /// (`ApplyFilter`/`RemoveFilter`), and folds their log lines into the run's.
 ///
@@ -1527,8 +1662,18 @@ fn result_as_integer(value: &Value) -> i64 {
 /// `PerformLongAction('Applying Filter', '[Pass 1] Processed Records: 0',
 /// ...)`: a `Start: Applying Filter` line, the filter's own lines, then
 /// `Done: Applying Filter, <wbCurrentProgress>` with the counts of the two
-/// passes.
-fn apply_pending_filters(session: &mut Session, state: &Rc<RefCell<ScriptRunState>>) -> Result<(), CommandError> {
+/// passes. `FilterScripted` is cleared when the filter ends, whatever path
+/// it exits by (the `finally` of `mniNavFilterApplyClick`).
+///
+/// `Ok(Some(error))` is the raised error of a scripted `Filter` call: the
+/// walk aborted where upstream's exception leaves `mniNavFilterApplyClick`,
+/// nothing else of the call that asked for the filter runs, and the caller
+/// records it as the run's failure.
+fn apply_pending_filters(
+    session: &mut Session,
+    state: &Rc<RefCell<ScriptRunState>>,
+    script: &mut Script,
+) -> Result<Option<ExecError>, CommandError> {
     loop {
         // The `borrow_mut()` of a `while let` condition would live for the
         // whole body, which borrows the state again.
@@ -1536,29 +1681,88 @@ fn apply_pending_filters(session: &mut Session, state: &Rc<RefCell<ScriptRunStat
             break;
         };
         match pending {
-            PendingFilter::Apply(request) => {
-                state.borrow_mut().progress("Start: Applying Filter", false);
-                let response = crate::filter::filter_apply(session, *request)?;
-                let mut state = state.borrow_mut();
-                state.filter_applied = true;
-                for line in &response.messages {
-                    state.add_message(line);
-                }
-                state.progress(
-                    &format!(
-                        "Done: Applying Filter, [Pass 1] Processed Records: {}, [Pass 2] Processed Records: {}, Remaining unfiltered nodes: {}",
-                        response.pass1, response.pass2, response.unfiltered
-                    ),
-                    false,
+            PendingFilter::Apply { request, at } => {
+                // `ApplyScript`'s `Inc(wbHideStartTime)` around the call into
+                // the script is still on while the filter runs upstream
+                // (`ApplyFilter` is called from `Initialize`), so the
+                // filter's lines carry no `[mm:ss]` prefix.
+                let _hide = HideStartTime::new(state);
+                // The relay's lines go first, so the block lands on the
+                // message state the call recorded.
+                state.borrow_mut().add_message("");
+                let at = at.min(state.borrow().messages.len());
+                let start = state.borrow().progress_line("Start: Applying Filter", false);
+                let walk_from = state.borrow().messages.len();
+                let outcome = crate::filter::filter_apply_scripted(
+                    session,
+                    *request,
+                    Some(&mut RunScriptedFilter { script, state }),
                 );
+                // The `FilterScripted := False` of the filter's `finally`.
+                state.borrow_mut().variables.scripted = false;
+                // The lines the filter's own walk produced (the script's
+                // `AddMessage` calls), which belong after the `Start:` line.
+                let mut block: Vec<String> = start.into_iter().collect();
+                block.extend(state.borrow_mut().messages.split_off(walk_from));
+                match outcome {
+                    Ok(applied) => {
+                        let mut state = state.borrow_mut();
+                        state.filter_applied = true;
+                        state.filtered_nodes = Some(applied.nodes.iter().map(|node| node.get_element_id()).collect());
+                        block.extend(applied.response.messages);
+                        if let Some(line) = state.progress_line(
+                            &format!(
+                                "Done: Applying Filter, [Pass 1] Processed Records: {}, [Pass 2] Processed Records: {}, Remaining unfiltered nodes: {}",
+                                applied.response.pass1, applied.response.pass2, applied.response.unfiltered
+                            ),
+                            false,
+                        ) {
+                            block.push(line);
+                        }
+                        // The messages of the statements that followed the
+                        // `ApplyFilter` call stay, after the filter's lines.
+                        for (offset, line) in block.into_iter().enumerate() {
+                            state.messages.insert(at + offset, line);
+                        }
+                    }
+                    Err(crate::filter::FilterApplyFailure::Command(error)) => return Err(error),
+                    Err(crate::filter::FilterApplyFailure::Scripted(error)) => {
+                        // `PerformLongAction`'s exception handler of the
+                        // filter's own action (`Error during
+                        // wbCurrentAction: <message>`), then the abort lines
+                        // the run prints; the location comes from the
+                        // script's own error state, as upstream reads
+                        // `GetLastErrorLocation` when `ApplyScript`'s handler
+                        // runs.
+                        let mut state = state.borrow_mut();
+                        if let Some(line) =
+                            state.progress_line(&format!("Error during Applying Filter: {}", error.message), false)
+                        {
+                            block.push(line);
+                        }
+                        // The exception aborts the script at the
+                        // `ApplyFilter` call, so the messages of the
+                        // statements after it were never written.
+                        state.messages.truncate(at);
+                        for (offset, line) in block.into_iter().enumerate() {
+                            state.messages.insert(at + offset, line);
+                        }
+                        let mut exec = ExecError::external(&error.message);
+                        exec.class_name = Some(error.class);
+                        return Ok(Some(exec));
+                    }
+                }
             }
             PendingFilter::Remove => {
                 let _ = crate::filter::filter_remove(session, crate::filter::FilterRemoveRequest {})?;
-                state.borrow_mut().filter_applied = false;
+                let mut state = state.borrow_mut();
+                state.filter_applied = false;
+                // `ReInitTree`: the tree holds every node again.
+                state.filtered_nodes = None;
             }
         }
     }
-    Ok(())
+    Ok(None)
 }
 
 /// `script.run`: the dry-run gate around [`run_script`], so an early return
@@ -1783,7 +1987,10 @@ pub fn run_script(
         if script.function_exists("Initialize") && !script.function_is_empty("Initialize") {
             match call_script(&mut script, &state, "Initialize", &[]) {
                 Ok(value) => {
-                    apply_pending_filters(session, &state)?;
+                    if let Some(error) = apply_pending_filters(session, &state, &mut script)? {
+                        last_error = Some(error);
+                        break 'run;
+                    }
                     let result = result_as_integer(&value);
                     if result != 0 {
                         state
@@ -1801,7 +2008,9 @@ pub fn run_script(
         }
         if script.function_exists("Process") && !script.function_is_empty("Process") {
             for element in &order {
-                if !state.borrow().can_process(element) {
+                // `ApplyScriptToSelection` walks the live tree: a node a
+                // filter took out is not visited.
+                if state.borrow().is_filtered_out(element) || !state.borrow().can_process(element) {
                     continue;
                 }
                 let params = {
@@ -1819,7 +2028,10 @@ pub fn run_script(
                 }
                 match result {
                     Ok(value) => {
-                        apply_pending_filters(session, &state)?;
+                        if let Some(error) = apply_pending_filters(session, &state, &mut script)? {
+                            last_error = Some(error);
+                            break 'run;
+                        }
                         let result = result_as_integer(&value);
                         if result != 0 {
                             // `ScriptProcessSingleElement <> 0` exits the
@@ -1846,7 +2058,10 @@ pub fn run_script(
         if script.function_exists("Finalize") && !script.function_is_empty("Finalize") {
             match call_script(&mut script, &state, "Finalize", &[]) {
                 Ok(value) => {
-                    apply_pending_filters(session, &state)?;
+                    if let Some(error) = apply_pending_filters(session, &state, &mut script)? {
+                        last_error = Some(error);
+                        break 'run;
+                    }
                     let result = result_as_integer(&value);
                     if result != 0 {
                         state

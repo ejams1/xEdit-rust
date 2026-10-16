@@ -1523,7 +1523,7 @@ note = "The edit dialog is the new_name, items and add_current_crcs parameters."
 status = "covered"
 command = "filter.apply"
 source = "mniNavFilterApplyClick"
-note = "The dialog is the options of the request (or of a preset of the settings file); the report holds the pass counts and the records the filter took out of each file."
+note = "The dialog is the options of the request (or of a preset of the settings file); the report holds the pass counts and the records the filter took out of each file. cbScriptedFilter is the scripted field (FilterScripted); inside a script run the filter calls the script's Filter function for every main record the walk reaches (script.run), and without a script it rejects every record, as the GUI's nil Script does."
 
 [gui."xEdit/xeMainForm.dfm:mniNavFilterApplySelected:OnClick"]
 status = "covered"
@@ -19411,6 +19411,7 @@ source = "_AddRequiredElementMasters"
 status = "covered"
 command = "script.run"
 source = "_ApplyFilter"
+note = "The run loop records the call and runs the filter when the call into the script returns. With FilterScripted on, the walk calls the script's `Filter` function for every main record it reaches through the run's own interpreter (xedit_analysis::filter::ScriptedFilter via crates/xedit-session/src/script.rs, RunScriptedFilter), and clears FilterScripted when the filter ends."
 
 [script."xejviScriptAdapterHost:cUnit.ClearMessages:function"]
 status = "covered"

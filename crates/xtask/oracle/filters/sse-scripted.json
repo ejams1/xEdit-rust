@@ -1,0 +1,19 @@
+{
+  "description": "The custom scripted filter (cbScriptedFilter with FilterScripted): the filter calls the Filter function of the script it runs inside, and the generated script defines none, so every record is rejected (CustomScriptFilter is False) and only the file and group nodes stay. The filter clears the flag when it ends (mniNavFilterApplyClick's finally), so the second configuration, a cleaning filter, runs unscripted again and keeps everything.",
+  "game": "sse",
+  "load": [
+    "Skyrim.esm",
+    "Update.esm"
+  ],
+  "configs": [
+    {
+      "name": "scripted",
+      "inherit_conflict_by_parent": false,
+      "scripted": true
+    },
+    {
+      "name": "cleaning-after-scripted",
+      "inherit_conflict_by_parent": true
+    }
+  ]
+}
