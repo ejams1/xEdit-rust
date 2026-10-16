@@ -361,7 +361,7 @@ enum Greed {
 enum Node {
     Empty,
     Char(u32, bool),
-    Class(usize),
+    Class(usize, bool),
     Any(bool),
     Anchor(Anchor),
     Backref(BackrefRef, bool),
@@ -1245,15 +1245,18 @@ impl<'a> Parser<'a> {
                         items: vec![ClassItem::Char(0x0D), ClassItem::Char(0x0A)],
                     });
                     return Ok(Node::Alt(vec![
-                        Node::Concat(vec![Node::Class(crlf), Node::Class(pair)]),
-                        Node::Class(pair),
+                        Node::Concat(vec![
+                            Node::Class(crlf, false),
+                            Node::Class(pair, false),
+                        ]),
+                        Node::Class(pair, false),
                     ]));
                 }
                 let class = self.push_class(ClassSet {
                     negated: false,
                     items: vec![ClassItem::Shorthand(shorthand)],
                 });
-                Ok(Node::Class(class))
+                Ok(Node::Class(class, self.flags.caseless))
             }
             b'p' | b'P' => {
                 let negated = byte == b'P';
@@ -1284,9 +1287,10 @@ impl<'a> Parser<'a> {
                     negated: false,
                     items: vec![ClassItem::Property(property, inner_negated != negated)],
                 });
-                Ok(Node::Class(class))
+                Ok(Node::Class(class, self.flags.caseless))
             }
             b'1'..=b'9' => {
+                let digits_at = self.at;
                 let mut number = 0u32;
                 while let Some(byte) = self.peek() {
                     if byte.is_ascii_digit() {
@@ -1294,6 +1298,18 @@ impl<'a> Parser<'a> {
                         self.at += 1;
                     } else {
                         break;
+                    }
+                }
+                // `\ddd` is a backreference while the number can be one;
+                // above nine with too few groups PCRE re-reads it as an
+                // octal escape (`\101` is `A` with no groups at all).
+                if number > 9 && number > self.group_count {
+                    let digits = &self.pattern[digits_at..self.at];
+                    let octal = digits.iter().take(3).take_while(|b| (b'0'..=b'7').contains(b)).count();
+                    if octal > 0 {
+                        self.at = digits_at;
+                        let (value, _) = self.parse_octal(0)?;
+                        return Ok(Node::Char(value, self.flags.caseless));
                     }
                 }
                 let offset = self.at;
@@ -1641,7 +1657,7 @@ impl<'a> Parser<'a> {
             push_class_char(&mut items, low);
         }
         let index = self.push_class(ClassSet { negated, items });
-        Ok(Node::Class(index))
+        Ok(Node::Class(index, self.flags.caseless))
     }
 
     fn parse_class_char(&mut self) -> PResult<ClassChar> {
@@ -1786,7 +1802,7 @@ fn parse_property(name: &str) -> Option<(Property, bool)> {
 fn char_length(node: &Node) -> (u32, Option<u32>) {
     match node {
         Node::Empty | Node::Anchor(_) => (0, Some(0)),
-        Node::Char(_, _) | Node::Class(_) | Node::Any(_) => (1, Some(1)),
+        Node::Char(_, _) | Node::Class(_, _) | Node::Any(_) => (1, Some(1)),
         Node::Backref(_, _) => (0, None),
         Node::Group { body, .. } => char_length(body),
         Node::Concat(items) => {
@@ -1847,7 +1863,7 @@ fn char_length(node: &Node) -> (u32, Option<u32>) {
 /// every name by the time the whole pattern is read.
 fn resolve_references(node: &mut Node, names: &[(String, u32)]) {
     match node {
-        Node::Empty | Node::Char(_, _) | Node::Class(_) | Node::Any(_) | Node::Anchor(_) => {}
+        Node::Empty | Node::Char(_, _) | Node::Class(_, _) | Node::Any(_) | Node::Anchor(_) => {}
         Node::Backref(reference, _) => {
             if let BackrefRef::Name(name) = reference {
                 let number = names
@@ -1882,7 +1898,7 @@ fn resolve_references(node: &mut Node, names: &[(String, u32)]) {
 fn is_fixed_length(node: &Node) -> bool {
     match node {
         Node::Empty | Node::Anchor(_) => true,
-        Node::Char(_, _) | Node::Class(_) | Node::Any(_) => true,
+        Node::Char(_, _) | Node::Class(_, _) | Node::Any(_) => true,
         Node::Backref(_, _) => false,
         Node::Group { body, .. } => is_fixed_length(body),
         Node::Concat(items) => items.iter().all(is_fixed_length),
@@ -2000,8 +2016,8 @@ impl Compiler {
             Node::Char(ch, caseless) => {
                 self.emit(Inst::Char(*ch, *caseless));
             }
-            Node::Class(index) => {
-                self.emit(Inst::Class(*index as u32, false));
+            Node::Class(index, caseless) => {
+                self.emit(Inst::Class(*index as u32, *caseless));
             }
             Node::Any(single_line) => {
                 self.emit(Inst::Any(*single_line));
@@ -2675,6 +2691,11 @@ mod tests {
         assert_eq!(walk("a$|b", "ab", 0, 10), ["2+1"]);
         assert_eq!(walk("a^b", "ab", 0, 10), Vec::<String>::new());
         assert_eq!(walk("a\\Bb", "axb abb", 0, 10), ["5+2"]);
+        // A class with `preCaseLess`: the release folds Latin-1.
+        assert_eq!(walk("[a-z]", "AZ", 1, 10), ["1+1", "2+1"]);
+        // `\ddd` above nine with too few groups is an octal escape.
+        assert_eq!(walk("\\101", "A", 0, 10), ["1+1"]);
+        assert_eq!(walk("\\12", "\n", 0, 10), ["1+1"]);
     }
 
     #[test]

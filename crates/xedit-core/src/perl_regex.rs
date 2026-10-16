@@ -568,6 +568,12 @@ impl PerlRegEx {
             let mut mode = '\0';
             let mut number_only = false;
             let mut handled = false;
+            // `$$` is a literal dollar sign, as `\$` is.
+            if dollar && chars[cursor] == '$' {
+                out.push('$');
+                index = cursor + 1;
+                continue;
+            }
             if !dollar {
                 match chars[cursor] {
                     '$' | '\\' => {
@@ -896,6 +902,17 @@ mod tests {
         assert_eq!(replaced("(a)", "aa", "<$1>"), (true, "<a><a>".to_owned()));
         assert_eq!(replaced("b", "", "x"), (false, String::new()));
         assert_eq!(replaced("b", "aBc", "x"), (true, "axc".to_owned()));
+        // `$$` is a literal dollar sign.
+        let mut object = regex("a");
+        object.set_subject("a".to_owned());
+        object.set_replacement("$$".to_owned());
+        assert!(object.match_().expect("a match"));
+        assert_eq!(object.compute_replacement().expect("a replacement"), "$");
+        let mut object = regex("a");
+        object.set_subject("a".to_owned());
+        object.set_replacement("[$`$$$&]".to_owned());
+        assert!(object.match_().expect("a match"));
+        assert_eq!(object.compute_replacement().expect("a replacement"), "[$a]");
         // The whole-subject replacement of a multi-byte subject appends one
         // more replacement, as the release does.
         assert_eq!(replaced(".", "a\u{e9}z", "-"), (true, "---".to_owned()));
