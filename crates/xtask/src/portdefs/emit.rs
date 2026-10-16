@@ -439,7 +439,7 @@ impl<'a> Emitter<'a> {
     /// copy of a unit it uses.
     fn overload_of(&self, lower: &str, params: &[Param]) -> Option<usize> {
         self.symbols
-            .resolved_overload(&self.unit, lower, |sig| same_params(&sig.params, params))
+            .resolved_overload(self.unit, lower, |sig| same_params(&sig.params, params))
     }
 
     /// The Rust signature of a routine that is written by hand, with the
@@ -1303,7 +1303,7 @@ impl<'a> Emitter<'a> {
         let lower = name.to_ascii_lowercase();
         let overloads = self.symbols.routines.get(&lower)?;
         let callback = self.symbols.callback(callback_type)?;
-        let index = self.symbols.resolved_overload(&self.unit, &lower, |sig| {
+        let index = self.symbols.resolved_overload(self.unit, &lower, |sig| {
             super::resolve::callback_matches(sig, callback)
         })?;
         let function = self.names[&(lower, index)].clone();
@@ -2385,8 +2385,8 @@ pub fn overload_names(symbols: &Symbols) -> HashMap<(String, usize), String> {
                     .collect()
             })
             .collect();
-        for index in 0..overloads.len() {
-            let unit = super::unit_module(&overloads[index].unit);
+        for (index, overload) in overloads.iter().enumerate() {
+            let unit = super::unit_module(&overload.unit);
             let selected: Vec<String> = selecting(index, &varying)
                 .into_iter()
                 .map(|words| {

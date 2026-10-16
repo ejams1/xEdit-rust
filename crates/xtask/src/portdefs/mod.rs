@@ -903,6 +903,8 @@ mod tests {
         implementation
         end.";
 
+    use super::emit::overload_names;
+
     fn check(call: &str) -> Result<usize> {
         let unit = parse_unit(SOURCE, DEFINES).unwrap();
         let mut symbols = Symbols::default();
