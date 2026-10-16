@@ -681,6 +681,35 @@ enum ScriptAction {
         /// Build the reference information before the script runs, as the GUI's script mode does at load (xEdit's `-nobuildrefs` turns it off there); the parity harness passes it for the scripts that read `ReferencedBy`.
         #[arg(long)]
         build_refs: bool,
+        /// A recorded answer to a dialog the script shows, as a JSON object {"class": ..., "title": ..., "keys": [...], "button": ..., "text": ...}; repeat in the order the dialogs appear. Without an answer for a dialog the run stops with `pending_interaction` in the response.
+        #[arg(long = "answer", value_name = "JSON")]
+        answer: Vec<String>,
+        /// A file with a JSON array of the same answers (the parity harness writes one).
+        #[arg(long)]
+        answers: Option<String>,
+    },
+    /// Continue a script that stopped on a dialog (script.resume): the same options as `run`, with the accumulated answers plus one for the reported question. The script runs from its start again; a deterministic script reaches the same state and proceeds past the dialog.
+    Resume {
+        /// Path of the script, or a name below the scripts folder.
+        file: String,
+        /// The scripts folder (xEdit's -S:), which a relative script name resolves against. Default: the XEDIT_SCRIPTS environment variable, else the oracle's Edit Scripts.
+        #[arg(long)]
+        scripts: Option<String>,
+        /// Leave the changed plugins in memory (save them with `xedit save`).
+        #[arg(long)]
+        no_save: bool,
+        /// Run the script with editing disabled and save nothing.
+        #[arg(long)]
+        dry_run: bool,
+        /// Build the reference information before the script runs, as the GUI's script mode does at load (xEdit's `-nobuildrefs` turns it off there); the parity harness passes it for the scripts that read `ReferencedBy`.
+        #[arg(long)]
+        build_refs: bool,
+        /// A recorded answer to a dialog the script shows, as a JSON object {"class": ..., "title": ..., "keys": [...], "button": ..., "text": ...}; repeat in the order the dialogs appear.
+        #[arg(long = "answer", value_name = "JSON")]
+        answer: Vec<String>,
+        /// A file with a JSON array of the same answers.
+        #[arg(long)]
+        answers: Option<String>,
     },
 }
 
@@ -2019,6 +2048,25 @@ fn filter_command(action: FilterAction) -> Result<(String, Value), CommandError>
     }
 }
 
+/// The `answers` of a `script run`/`script resume` invocation: the `--answer`
+/// JSON objects in order, then the array of an `--answers` file.
+fn script_answers(answer: Vec<String>, answers: Option<String>) -> Result<Value, CommandError> {
+    let mut stored: Vec<Value> = Vec::new();
+    for text in &answer {
+        let value: Value = serde_json::from_str(text)
+            .map_err(|error| CommandError::new("invalid_params", format!("--answer: {error}")))?;
+        stored.push(value);
+    }
+    if let Some(path) = &answers {
+        let text = std::fs::read_to_string(path)
+            .map_err(|error| CommandError::new("io", format!("--answers {path}: {error}")))?;
+        let mut list: Vec<Value> = serde_json::from_str(&text)
+            .map_err(|error| CommandError::new("invalid_params", format!("--answers {path}: {error}")))?;
+        stored.append(&mut list);
+    }
+    Ok(Value::Array(stored))
+}
+
 fn command_of(action: Action) -> Result<(String, Value), CommandError> {
     Ok(match action {
         Action::Dump { .. }
@@ -2742,9 +2790,29 @@ fn command_of(action: Action) -> Result<(String, Value), CommandError> {
                 no_save,
                 dry_run,
                 build_refs,
+                answer,
+                answers,
             } => (
                 "script.run".to_owned(),
-                json!({ "file": file, "scripts": scripts, "save": !no_save, "dry_run": dry_run, "build_refs": build_refs }),
+                json!({
+                    "file": file, "scripts": scripts, "save": !no_save, "dry_run": dry_run,
+                    "build_refs": build_refs, "answers": script_answers(answer, answers)?
+                }),
+            ),
+            ScriptAction::Resume {
+                file,
+                scripts,
+                no_save,
+                dry_run,
+                build_refs,
+                answer,
+                answers,
+            } => (
+                "script.resume".to_owned(),
+                json!({
+                    "file": file, "scripts": scripts, "save": !no_save, "dry_run": dry_run,
+                    "build_refs": build_refs, "answers": script_answers(answer, answers)?
+                }),
             ),
         },
         Action::Conflicts {
@@ -3270,7 +3338,7 @@ fn real_main() -> ExitCode {
     let script_run = matches!(
         cli.action,
         Action::Script {
-            action: ScriptAction::Run { .. }
+            action: ScriptAction::Run { .. } | ScriptAction::Resume { .. }
         }
     );
     let outcome = run(cli.game, cli.load, cli.edit, cli.action);
@@ -3311,6 +3379,13 @@ fn print_script_run(result: &Value) {
         let location = result["error_location"].as_str().unwrap_or_default();
         let error = result["error"].as_str().unwrap_or_default();
         eprintln!("error: {location}: {error}");
+    }
+    if let Some(question) = result.get("pending_interaction") {
+        eprintln!(
+            "the script waits on the dialog [{}] \"{}\": re-invoke with `script resume` and `--answer` for it (the full question is `pending_interaction` of the response)",
+            question["class"].as_str().unwrap_or_default(),
+            question["title"].as_str().unwrap_or_default()
+        );
     }
 }
 

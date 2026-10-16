@@ -618,6 +618,12 @@ struct RunCase {
     /// ones); with them `close_after` is implied.
     #[serde(default)]
     save: Vec<String>,
+    /// The recorded dialogs the script shows, in order: the oracle GUI is
+    /// answered with them (`gui::Answer`) and the port's headless VCL model
+    /// consumes the same JSON (`script.run`'s `answers`). One case file
+    /// drives both sides.
+    #[serde(default)]
+    answers: Vec<super::gui::Answer>,
     /// A script that is slow over the loaded plugins.
     #[serde(default)]
     timeout_minutes: Option<f64>,
@@ -678,6 +684,9 @@ struct Task {
     build_refs: bool,
     close_after: bool,
     save: Vec<String>,
+    /// The recorded dialog answers, given to the oracle GUI and to the
+    /// port's `script.run` alike.
+    answers: Vec<super::gui::Answer>,
     timeout: Duration,
     /// Parse cases load the empty game master instead of the case's
     /// plugins.
@@ -869,6 +878,7 @@ pub(super) fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
                 build_refs: false,
                 close_after: false,
                 save: Vec::new(),
+                answers: Vec::new(),
                 timeout: Duration::from_secs(10 * 60),
                 data_files: Vec::new(),
                 synthetic_master: true,
@@ -982,6 +992,7 @@ pub(super) fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
                 switches: case.switches.clone(),
                 close_after,
                 save: case.save.clone(),
+                answers: case.answers.clone(),
                 timeout: case.timeout_minutes.map_or(Duration::from_secs(10 * 60), |minutes| {
                     Duration::from_secs_f64(minutes * 60.0)
                 }),
@@ -1022,6 +1033,7 @@ pub(super) fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
                 build_refs: false,
                 close_after: false,
                 save: Vec::new(),
+                answers: Vec::new(),
                 timeout: Duration::from_secs(10 * 60),
                 data_files: Vec::new(),
                 synthetic_master: true,
@@ -1308,6 +1320,10 @@ fn oracle_run(
         // Bumped when what a run captures for the saved plugins changes.
         recipe.push_str("\nsave v2");
     }
+    if !task.answers.is_empty() {
+        recipe.push_str("\nanswers ");
+        recipe.push_str(&serde_json::to_string(&task.answers)?);
+    }
     if !task.switches.is_empty() {
         recipe.push_str(
             "
@@ -1354,6 +1370,7 @@ switches ",
     let out = work.join("out");
     let mut extras = GuiExtras {
         close_after: task.close_after,
+        answers: task.answers.clone(),
         ..GuiExtras::default()
     };
     extras.files.push((PathBuf::from(&task.script), script_text.clone()));
@@ -2077,6 +2094,14 @@ fn port_run(
     fs::create_dir_all(&my_games)?;
     fs::create_dir_all(dir.join("temp"))?;
     fs::write(my_games.join("game.ini"), "")?;
+    // The same recorded dialogs the oracle GUI is answered with, as the
+    // `script.run` request's `answers`; the port's VCL model consumes them
+    // in order.
+    let answers_file = dir.join("answers.json");
+    if !task.answers.is_empty() {
+        let answers = serde_json::to_string(&task.answers)?;
+        fs::write(&answers_file, answers)?;
+    }
     let cache = dir.join("cache");
     let port_command = |script: &str| {
         let mut command = std::process::Command::new(port);
@@ -2107,6 +2132,9 @@ fn port_run(
                 "memory" => "--memory-over-speed",
                 other => panic!("no port flag for the switch -{other}"),
             });
+        }
+        if !task.answers.is_empty() {
+            command.arg("--answers").arg(&answers_file);
         }
         command
             // `-IKnowIllBreakMyGameWithThis` on the oracle's side: without it

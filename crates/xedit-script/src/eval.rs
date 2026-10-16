@@ -2000,6 +2000,22 @@ impl Interpreter {
                         "",
                     )));
                 }
+                // The method-property branch of `InternalSetValue`
+                // (`JvInterpreter.pas:6916-6953`): when the receiver models
+                // `name` as an event slot, the *raw token* after `:=` is the
+                // routine name (`FunctionName := Token`, `:6915`) -- nothing
+                // is evaluated -- or `nil` clears the slot (`:6936`).
+                // Upstream reaches the branch through the object's RTTI
+                // (`GetPropInfo` and a `tkMethod` property); the headless VCL
+                // object model is the object that answers here.
+                if args.is_empty()
+                    && !*indexed
+                    && let Some(function) = Self::event_assignment(value)
+                    && let Some(object) = receiver.as_object()
+                    && object.borrow_mut().set_event(name, function.as_deref())
+                {
+                    return Ok(());
+                }
                 self.assign_target(Some(receiver), name, args, *indexed, value)
             }
             _ => Err(FlowError::Error(self.expected_at(target.span.start, "';'"))),
@@ -2082,6 +2098,28 @@ impl Interpreter {
                 )));
             }
             Ok(())
+        }
+    }
+
+    /// The `FunctionName := Token` of `InternalSetValue`'s method-property
+    /// branch (`JvInterpreter.pas:6915`): the routine name of `X.OnClick := F`,
+    /// or `None` for the clear arm (`X.OnClick := nil`, `:6936-6948`). Any other
+    /// value shape is not a method assignment (upstream reads the token whatever
+    /// it is; the corpus only assigns a routine or nil).
+    fn event_assignment(value: &Expr) -> Option<Option<String>> {
+        match &value.node {
+            ExprNode::Ident {
+                name,
+                args,
+                indexed: false,
+            } if args.is_empty() => {
+                if name.eq_ignore_ascii_case("nil") {
+                    Some(None)
+                } else {
+                    Some(Some(name.clone()))
+                }
+            }
+            _ => None,
         }
     }
 

@@ -112,29 +112,34 @@ pub struct GuiResult {
 /// of the class whose title contains `title` gets the `keys` (posted to its
 /// focused control, as a user's key presses) and then a click on the button
 /// `button`, when one is given.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Answer {
     pub class: String,
     pub title: String,
     /// Virtual key codes.
+    #[serde(default)]
     pub keys: Vec<u16>,
+    #[serde(default)]
     pub button: Option<String>,
     /// Text put into a control of the dialog before the keys
     /// (`WM_SETTEXT`), such as the file name an `InputQuery` asks for: the
     /// first control of the class `control` when one is named (a
     /// `TComboBox` for the preset name of a selection dialog), else the
     /// first edit control.
+    #[serde(default)]
     pub text: Option<String>,
     /// The class of the child control the keys go to (`TVirtualStringTree`
     /// for the list of a module selection), in place of the focused one:
     /// a dialog on the harness's desktop has no focused control, and keys
     /// posted to the dialog itself reach only its `KeyPreview` handler.
     /// Also the class `text` goes to.
+    #[serde(default)]
     pub control: Option<String>,
     /// The answer goes to the window again after an earlier answer of the
     /// same run: a dialog a scenario drives control by control (set the
     /// preset name, press Load, then press OK) is one window, and every
     /// answer of it names `repeat`.
+    #[serde(default)]
     pub repeat: bool,
 }
 
@@ -305,7 +310,7 @@ impl GuiRun<'_> {
             Until::ScriptEnd {
                 close_after: extras.close_after,
             },
-            &[],
+            &extras.answers,
             &mut log,
             &mut dialogs,
         )?;

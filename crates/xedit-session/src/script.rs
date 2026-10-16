@@ -265,7 +265,13 @@ pub fn register(registry: &mut Registry) {
     );
     registry.register(
         "script.run",
-        "Run a Pascal script over the loaded plugins as xEdit's -script: mode does (DoRunScript/ApplyScript): Initialize, Process per selected element, Finalize, then save the plugins the script changed. Needs --edit unless --dry-run.",
+        "Run a Pascal script over the loaded plugins as xEdit's -script: mode does (DoRunScript/ApplyScript): Initialize, Process per selected element, Finalize, then save the plugins the script changed. Needs --edit unless --dry-run. `answers` supplies recorded answers to the script's dialogs (the headless VCL model of script_vcl::interactive); a dialog without an answer stops the run with `pending_interaction` in the response.",
+        true,
+        script_run,
+    );
+    registry.register(
+        "script.resume",
+        "Continue a script run that stopped on a dialog (`pending_interaction`): the same parameters as script.run, with the accumulated answers plus one for the reported question. The interpreter has no continuation, so the script runs from its start again with the answers supplied so far; a deterministic script reaches the same state and proceeds past the interaction.",
         true,
         script_run,
     );
@@ -302,6 +308,63 @@ pub struct ScriptRunRequest {
     /// default; the other commands build it on demand.
     #[serde(default)]
     pub build_refs: bool,
+    /// Recorded answers to the dialogs the script shows, in the order it
+    /// shows them (the same JSON the parity harness gives the oracle GUI).
+    /// A dialog with no remaining answer stops the run with a
+    /// `pending_interaction` in the response; re-invoke with the answer
+    /// appended (`script.resume`) to continue.
+    #[serde(default)]
+    pub answers: Vec<ScriptAnswer>,
+}
+
+/// One recorded answer to a dialog a script shows (`script_vcl::interactive`
+/// consumes them in order; the oracle harness's `Answer` has the same core
+/// fields and may carry extra ones, which are ignored).
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+pub struct ScriptAnswer {
+    /// The Delphi window class of the dialog: `#32770` for `MessageDlg`,
+    /// `ShowMessage`, `MessageBox` and the file dialogs, `TInputQueryForm`
+    /// for an `InputQuery`/`InputBox`, the form's class name otherwise. Must
+    /// equal the shown dialog's class.
+    pub class: String,
+    /// A substring of the dialog's caption.
+    pub title: String,
+    /// Virtual-key codes posted to the dialog's focused control, in order
+    /// (the oracle harness's `keys`).
+    #[serde(default)]
+    pub keys: Vec<u16>,
+    /// The button to click, by its caption (`&Yes`, `OK`, `&Find all
+    /// records`); `&` is ignored in the comparison.
+    #[serde(default)]
+    pub button: Option<String>,
+    /// Text put into the dialog's edit control before the keys (`WM_SETTEXT`
+    /// on the first edit, as the oracle harness does): the value an
+    /// `InputQuery`/`InputBox` returns, the file a selection dialog picks.
+    #[serde(default)]
+    pub text: Option<String>,
+}
+
+/// The dialog a run stopped on, reported as `script.run`'s
+/// `pending_interaction`: answer it by re-invoking with the answers
+/// accumulated plus one for this question.
+#[derive(Clone, Debug, Serialize, JsonSchema)]
+pub struct ScriptInteraction {
+    /// `message` (`MessageDlg`/`MessageBox`/`ShowMessage`), `input`
+    /// (`InputQuery`/`InputBox`), `file` (`TOpenDialog`/`TSaveDialog`) or
+    /// `form` (a script-built form shown modal).
+    pub kind: String,
+    /// The Delphi window class a `ScriptAnswer::class` must equal.
+    pub class: String,
+    /// The dialog's caption; a `ScriptAnswer::title` must be a substring of
+    /// it.
+    pub title: String,
+    /// The message or prompt of the dialog.
+    pub text: String,
+    /// The labels of the buttons the dialog offers, `&` included (`&Yes`).
+    pub buttons: Vec<String>,
+    /// The label of the button the default action would click.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub default: Option<String>,
 }
 
 fn default_true() -> bool {
@@ -341,6 +404,12 @@ pub struct ScriptRunResponse {
     pub error_location: Option<String>,
     /// Per plugin: whether the script changed it and whether it was saved.
     pub files: Vec<ScriptRunFile>,
+    /// The dialog the run stopped on: the script's next question, when the
+    /// recorded `answers` ran out (`EVclInteractionRequired`). Re-invoke with
+    /// the answers accumulated plus one for this question (`script.resume`)
+    /// and the run continues past it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pending_interaction: Option<ScriptInteraction>,
     /// The lines of xEdit's message log (`Start:`/`Done:`, the script's own
     /// messages, and the failure lines).
     pub messages: Vec<String>,
@@ -1114,10 +1183,12 @@ pub(crate) const C_UNIT: &str = "";
 /// element API of the later steps downcasts them with
 /// [`ScriptRunState::element_of`].
 ///
-/// `vcl` is the VCL seam (the form shim of phase 6 step 9): the four
-/// `JvInterpreterFm.pas` registrations, the members of the ten VCL-backed
-/// JVCL units and `xejviScriptAdapterMiscVcl.pas` route through it. Headless,
-/// [`crate::script_rtl::NoVcl`] is passed.
+/// `vcl` is the VCL seam: the four `JvInterpreterFm.pas` registrations, the
+/// members of the ten VCL-backed JVCL units and
+/// `xejviScriptAdapterMiscVcl.pas` route through it. A script run passes
+/// [`crate::script_vcl::interactive::VclModel`] (issue #26); the callers
+/// without a model (tests, standalone registrations) pass
+/// [`crate::script_rtl::NoVcl`].
 fn register_functions(
     adapter: &mut Adapter,
     state: &Rc<RefCell<ScriptRunState>>,
@@ -2164,6 +2235,7 @@ pub fn run_script(
         error: None,
         error_location: None,
         files: Vec::new(),
+        pending_interaction: None,
         messages: Vec::new(),
     };
 
@@ -2176,12 +2248,16 @@ pub fn run_script(
     let mut interpreter = Interpreter::new();
     let element_class = interpreter.adapter.add_class(C_UNIT, "IwbElement", None);
     let state = Rc::new(RefCell::new(ScriptRunState::new(files, element_class)));
-    // The VCL seam: headless (`NoVcl`) every form, dialog and control call
-    // refuses with `EVclUnavailable`, naming the surface and the script
-    // (phase 6 step 9). The GUI phase passes the implementation backed by the
-    // real window layer.
-    let vcl: Rc<RefCell<dyn crate::script_rtl::Vcl>> =
-        Rc::new(RefCell::new(crate::script_rtl::NoVcl::new(name.clone())));
+    // The VCL seam: the headless VCL object model (issue #26). Forms,
+    // controls and events are real objects the script builds and reads
+    // back; a dialog the script shows is answered from the recorded
+    // `answers`, and one without an answer stops the run with
+    // `pending_interaction` (the GUI phase renders the same model instead).
+    let model = Rc::new(RefCell::new(crate::script_vcl::interactive::VclModel::new(
+        name.clone(),
+        request.answers.clone(),
+    )));
+    let vcl: Rc<RefCell<dyn crate::script_rtl::Vcl>> = model.clone();
     register_functions(&mut interpreter.adapter, &state, vcl);
     crate::script_units::register_units(&mut interpreter.adapter, &state);
     {
@@ -2429,6 +2505,24 @@ pub fn run_script(
         }
     }
 
+    // A run that finished while a recorded answer is still unconsumed named
+    // a dialog the run never showed; the oracle harness fails a run the same
+    // way ("the oracle did not show the expected dialog"), so the port
+    // reports it as a run failure and the two sides agree.
+    if last_error.is_none()
+        && let Some(answer) = model.borrow().leftover()
+    {
+        last_error = Some(ExecError::new(
+            xedit_script::error::IE_UNKNOWN_IDENTIFIER,
+            None,
+            "",
+            &format!(
+                "the run never showed the dialog the recorded answer names ([{}] \"{}\")",
+                answer.class, answer.title
+            ),
+        ));
+    }
+
     {
         let mut state = state.borrow_mut();
         match &last_error {
@@ -2478,6 +2572,7 @@ pub fn run_script(
         response.error = Some(error.message().to_owned());
         response.error_location = Some(script.last_error_location());
     }
+    response.pending_interaction = model.borrow_mut().take_pending();
 
     // The plugins the script changed: saved as the GUI does at the end of an
     // auto mode (`SaveChanged` of the close), unless the run was a dry run or
