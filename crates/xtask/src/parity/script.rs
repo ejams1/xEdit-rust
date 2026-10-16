@@ -2117,9 +2117,15 @@ fn port_run(
     // to, plus the port's own. Files are hashed in place (the port writes
     // into its own folder).
     let skip = plugin_names(&plugins, task.game.mode);
-    let (port_files, port_saved) = capture_port(&dir, &skip, &task.save)?;
-    compare_files(&oracle.files, &port_files, "written", &mut differences);
-    compare_files(&oracle.saved, &port_saved, "saved", &mut differences);
+    // Probes compare their log lines alone: the phase writes nothing for the
+    // comparison to hold, and the oracle's capture is run-phase only anyway
+    // (a probe of the corpus that writes its own scratch files, `streams.pas`,
+    // would otherwise differ on files only the port captured).
+    if task.phase == "run" {
+        let (port_files, port_saved) = capture_port(&dir, &skip, &task.save)?;
+        compare_files(&oracle.files, &port_files, "written", &mut differences);
+        compare_files(&oracle.saved, &port_saved, "saved", &mut differences);
+    }
     outcome.files = oracle.files.len() + oracle.saved.len();
     outcome.log_lines = oracle_lines.len();
     if differences.is_empty() {
