@@ -573,7 +573,10 @@ impl ElementBase {
         }
     }
 
-    fn container(&self) -> Option<ElementRef> {
+    /// The container this element is an element of (`eContainer`). Public
+    /// for the script walk of `xedit-session`, which steps over the live
+    /// tree (`vstNav.GetPrevious`).
+    pub fn container(&self) -> Option<ElementRef> {
         self.e_container.read().unwrap().as_ref().and_then(Weak::upgrade)
     }
 
@@ -655,7 +658,9 @@ impl ContainerBase {
         self.cnt_elements.write().unwrap().remove(index)
     }
 
-    pub(crate) fn elements(&self) -> Vec<ElementRef> {
+    /// The elements in memory order. Public for the script walk of
+    /// `xedit-session`, which steps over the live tree.
+    pub fn elements(&self) -> Vec<ElementRef> {
         self.cnt_elements.read().unwrap().clone()
     }
 
@@ -2466,6 +2471,14 @@ pub struct MainRecordImpl {
     /// Port of `mrDisplayName`: cached for the records of official files,
     /// dropped when a named subrecord changes.
     mr_display_name: RwLock<Option<String>>,
+    /// Port of `mrName`: the cached `Name` of the record, kept only for
+    /// the records of official files. A FormID change does not clear it,
+    /// as upstream does not clear it either.
+    mr_name: RwLock<String>,
+    /// Port of `mrShortName`: the cached short name, kept only for the
+    /// records of official files and only while the full name may be left
+    /// out (`wbNoFullInShortName`).
+    mr_short_name: RwLock<String>,
     /// Port of `mrPrecombinedCellID` and `mrPrecombinedID` with the
     /// `mrsHasPrecombinedMesh` state: the cell and mesh of a precombined
     /// reference, checked once.
@@ -2560,6 +2573,8 @@ impl MainRecordImpl {
             mr_overrides: RwLock::new(Vec::new()),
             mr_fixed_form_id: std::sync::atomic::AtomicU64::new(UNSET_FIXED_FORM_ID),
             mr_display_name: RwLock::new(None),
+            mr_name: RwLock::new(String::new()),
+            mr_short_name: RwLock::new(String::new()),
             mr_precombined: OnceLock::new(),
             mr_has_vwd_mesh: OnceLock::new(),
             mr_ofst_removed: AtomicBool::new(false),
@@ -2646,6 +2661,8 @@ impl MainRecordImpl {
             return;
         }
         *self.mr_display_name.write().unwrap() = None;
+        *self.mr_name.write().unwrap() = String::new();
+        *self.mr_short_name.write().unwrap() = String::new();
         let mut full_name = String::new();
         if self.mr_names_known.load(Ordering::Acquire)
             && let Some(def) = &self.mr_def
@@ -2976,7 +2993,16 @@ impl MainRecordImpl {
     /// `True` and never changed (`wbInterface.pas:279`): `ShortName` of a
     /// record is `EditorID [SIG:FormID]`.
     fn short_name_internal(&self, a_for_name: bool) -> String {
+        self.check_l_generation();
         if crate::interface::globals::display_shorter_names() {
+            // `CanCache := (not aForName) or not wbNoFullInShortName`.
+            let can_cache = !a_for_name || !crate::interface::globals::no_full_in_short_name();
+            if can_cache {
+                let cached = self.mr_short_name.read().unwrap().clone();
+                if !cached.is_empty() {
+                    return cached;
+                }
+            }
             let mut result = self.get_editor_id();
             let full_name = if a_for_name {
                 self.get_full_name()
@@ -2998,6 +3024,9 @@ impl MainRecordImpl {
                 self.mr_struct().form_id
             };
             result.push_str(&format!("[{}:{}]", self.mr_struct().signature, form_id.to_string(true)));
+            if can_cache && is_official_file(self) {
+                *self.mr_short_name.write().unwrap() = result.clone();
+            }
             return result;
         }
         let mut result = self.mr_struct().signature.to_string();
@@ -4504,6 +4533,15 @@ impl Container for GroupRecordImpl {
     }
 }
 
+/// `fsIsOfficial in GetFile.FileStates`: the records of official files
+/// cache their names (`mrName`, `mrShortName`).
+fn is_official_file(record: &MainRecordImpl) -> bool {
+    record.file_impl().is_some_and(|file| {
+        file.get_file_states()
+            .contains(crate::interface::types::FileState::fsIsOfficial)
+    })
+}
+
 impl Element for MainRecordImpl {
     element_common!(element_base, own_path);
 
@@ -4519,6 +4557,12 @@ impl Element for MainRecordImpl {
 
     /// Port of `TwbMainRecord.GetName`.
     fn get_name(&self) -> String {
+        self.check_l_generation();
+        // `if mrName <> '' then Exit(mrName)`.
+        let cached = self.mr_name.read().unwrap().clone();
+        if !cached.is_empty() {
+            return cached;
+        }
         let mut result = self.short_name_internal(true);
         if let Some(def) = &self.mr_def
             && let Some(main_record) = self.self_ref.upgrade().map(|record| record as MainRecordRef)
@@ -4528,6 +4572,9 @@ impl Element for MainRecordImpl {
             if !info.is_empty() {
                 result = format!("{result} ({info})");
             }
+        }
+        if is_official_file(self) {
+            *self.mr_name.write().unwrap() = result.clone();
         }
         result
     }
@@ -4723,6 +4770,8 @@ impl ElementImpl for MainRecordImpl {
             }
             if relevant {
                 *self.mr_display_name.write().unwrap() = None;
+                *self.mr_name.write().unwrap() = String::new();
+                *self.mr_short_name.write().unwrap() = String::new();
             }
         }
         self.notify_changed();
@@ -4799,6 +4848,8 @@ impl ElementImpl for MainRecordImpl {
                 self.set_full_name(String::new());
             }
             *self.mr_display_name.write().unwrap() = None;
+            *self.mr_name.write().unwrap() = String::new();
+            *self.mr_short_name.write().unwrap() = String::new();
         }
         Some(removed)
     }
