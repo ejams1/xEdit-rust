@@ -2006,10 +2006,11 @@ pub fn define_sf1_anonymous_5271(a_element: &ElementRef, _a_old_value: &Variant,
 }
 
 /// Upstream anonymous `AfterSet` of the virtual perk stream ID: the JSON is
-/// written back only while a masters update runs, whose change notification
-/// the root above skips (`fsMastersUpdating`). The port updates the masters
-/// of a file in place (`implementation/masters.rs`), so the flag is never
-/// set and the root's notification is the one that runs.
+/// written back only while a masters update runs (`fsMastersUpdating`, which
+/// `FileImpl::masters_updated` sets around its walk), whose change
+/// notification the root above skips. A tree built while the update runs
+/// (the record's elements built again after a copy) writes its JSON here as
+/// each Stream FormID is set, before its `Data` values are read.
 pub fn define_sf1_anonymous_5287(a_element: &ElementRef, a_old_value: &Variant, a_new_value: &Variant) {
     if a_old_value.same_value(a_new_value) {
         return;
