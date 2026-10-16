@@ -486,7 +486,7 @@ fn session_load(session: &mut Session, request: SessionLoadRequest) -> Result<Se
     crate::commands::set_translate_on_load(translate);
     crate::commands::set_check_on_load(check);
     let edit_allowed = session.edit_allowed;
-    let reloaded = match Session::load(&crate::dump::game_tag(game), &request.plugins) {
+    let reloaded = match Session::load(crate::dump::game_tag(game), &request.plugins) {
         Ok(reloaded) => reloaded,
         Err(message) => {
             // `Session::load` clears the process-wide file list before it

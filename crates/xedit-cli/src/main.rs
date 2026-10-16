@@ -231,7 +231,7 @@ impl LoadSwitchArgs {
         tool_mode: xedit_core::interface::globals::ToolMode,
         tool_source: xedit_core::interface::globals::ToolSource,
     ) -> xedit_session::tool_modes::LoadSwitches {
-        let switches = xedit_session::tool_modes::LoadSwitches {
+        xedit_session::tool_modes::LoadSwitches {
             tool_mode,
             tool_source,
             pseudo_light: self.pseudo_light,
@@ -264,8 +264,7 @@ impl LoadSwitchArgs {
             code_page: self.code_page,
             code_page_trans: self.code_page_trans,
             ..Default::default()
-        };
-        switches
+        }
     }
 }
 
