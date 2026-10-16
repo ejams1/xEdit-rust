@@ -166,6 +166,10 @@
       "script": "Find ESP plugins which could be turned into ESL.pas"
     },
     {
+      "script": "Find records.pas",
+      "note": "a form script (issue #26): with recorded answers the block list of record signatures is checked through the posted keys and the form closes through the Find button; deferred without answers"
+    },
+    {
       "script": "FNV - Export dialogues.pas",
       "game": "fnv",
       "build_refs": true

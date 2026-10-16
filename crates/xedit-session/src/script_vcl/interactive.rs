@@ -1330,7 +1330,10 @@ impl Vcl for VclModel {
         value: &mut Value,
         args: &mut Args,
     ) -> Result<(), ValueError> {
-        if kind == MemberKind::Get && (member == "Create" || member == "CreateNew") && args.obj.is_none() {
+        // A constructor: the receiver is the class value (`TForm.Create`) or
+        // nil; the owner, when the call names one, is in the arguments.
+        let class_receiver = matches!(args.obj, None | Some(Value::Class(_)));
+        if kind == MemberKind::Get && (member == "Create" || member == "CreateNew") && class_receiver {
             let owner = args.values.first().cloned();
             *value = self.create_object(class, owner.as_ref())?;
             return Ok(());
