@@ -2642,6 +2642,72 @@ fn keys_toggle_a_check_list_before_the_button_closes_the_form() {
 }
 
 #[test]
+fn control_answers_drive_a_form_control_by_control() {
+    let _guard = test_lock();
+    let folder = script_folder(
+        "vcl-control",
+        "Controls.pas",
+        // The `Find records.pas` shape: a check list, a check box, an edit
+        // and the button, each driven by its own answer (`control`), the
+        // later ones naming `repeat`; `btn.ModalResult` and the lower-case
+        // `Wordwrap` are published properties the tables do not carry for
+        // these classes (the RTTI fallback).
+        "unit Controls;
+         var
+           frm: TForm;
+           lb: TCheckListBox;
+           chk: TCheckBox;
+           ed: TEdit;
+           btn: TButton;
+         function Initialize: Integer;
+         begin
+           frm := TForm.Create(nil);
+           frm.Caption := 'Drive';
+           lb := TCheckListBox.Create(frm);
+           lb.Parent := frm;
+           lb.Items.Add('a');
+           lb.Items.Add('b');
+           chk := TCheckBox.Create(frm);
+           chk.Parent := frm;
+           chk.Wordwrap := True;
+           ed := TEdit.Create(frm);
+           ed.Parent := frm;
+           btn := TButton.Create(frm);
+           btn.Parent := frm;
+           btn.Caption := 'Go';
+           btn.ModalResult := mrOk;
+           AddMessage('modal=' + IntToStr(frm.ShowModal));
+           if lb.Checked[0] then AddMessage('c0') else AddMessage('c0no');
+           if lb.Checked[1] then AddMessage('c1') else AddMessage('c1no');
+           if chk.Checked then AddMessage('chk') else AddMessage('chkno');
+           if chk.WordWrap then AddMessage('wrap') else AddMessage('nowrap');
+           AddMessage('ed=' + ed.Text);
+           frm.Free;
+           Result := 1;
+         end;
+         end.
+",
+    );
+    let mut session = open_session();
+    let result = run(
+        &mut session,
+        &folder,
+        "Controls.pas",
+        json!({ "answers": [
+            { "class": "TForm", "title": "Drive", "control": "TCheckListBox", "keys": [40, 40, 32] },
+            { "class": "TForm", "title": "Drive", "control": "TCheckBox", "keys": [32], "repeat": true },
+            { "class": "TForm", "title": "Drive", "control": "TEdit", "text": "EDID", "button": "Go", "repeat": true },
+        ]}),
+    );
+    assert_eq!(result["aborted"], false, "{result:#}");
+    let lines = lines(&result);
+    for line in ["modal=1", "c0no", "c1", "chk", "wrap", "ed=EDID"] {
+        assert!(lines.contains(&line.to_owned()), "{line} missing of {lines:?}");
+    }
+    let _ = std::fs::remove_dir_all(&folder);
+}
+
+#[test]
 fn a_recorded_answer_the_run_never_shows_fails_it() {
     let _guard = test_lock();
     let folder = script_folder("vcl-leftover", "Dialogs.pas", DIALOG_SCRIPT);
