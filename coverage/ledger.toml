@@ -1460,8 +1460,10 @@ command = "records.copy"
 source = "mniNavCopyIntoClick"
 
 [gui."xEdit/xeMainForm.dfm:mniNavCopyAsOverrideWithOverwrite:OnClick"]
-status = "pending"
+status = "covered"
+command = "records.copy"
 source = "mniNavCopyIntoClick"
+note = "The overwrite parameter (aAllowOverwrite with wbCanOverwrite); the overwrite and deleted-source questions of the GUI are answer parameters (remove_deleted)."
 
 [gui."xEdit/xeMainForm.dfm:mniNavCopyAsSpawnRateOverride:OnClick"]
 status = "pending"
@@ -1501,8 +1503,10 @@ command = "records.copy"
 source = "mniNavCopyIntoClick"
 
 [gui."xEdit/xeMainForm.dfm:mniNavDeepCopyAsOverrideWithOverwriting:OnClick"]
-status = "pending"
+status = "covered"
+command = "records.copy"
 source = "mniNavCopyIntoClick"
+note = "The deep and overwrite parameters (the child group copies over with it, through the same callback)."
 
 [gui."xEdit/xeMainForm.dfm:mniNavDeleteModGroups:OnClick"]
 status = "covered"
@@ -1848,11 +1852,13 @@ source = "mniViewModGroupsReloadClick"
 note = "The mod group files read again with their validation messages, the selection (its dialog) as names, saved, activated; modgroups.select with saved keeps the saved selection, as the dialog offers it."
 
 [gui."xEdit/xeMainForm.dfm:mniViewMoveDown:OnClick"]
-status = "pending"
+status = "covered"
+command = "elements.move"
 source = "mniViewMoveDownClick"
 
 [gui."xEdit/xeMainForm.dfm:mniViewMoveUp:OnClick"]
-status = "pending"
+status = "covered"
+command = "elements.move"
 source = "mniViewMoveUpClick"
 
 [gui."xEdit/xeMainForm.dfm:mniViewNextMember:OnClick"]
@@ -2256,8 +2262,10 @@ status = "pending"
 source = "vstViewDragAllowed"
 
 [gui."xEdit/xeMainForm.dfm:vstView:OnDragDrop"]
-status = "pending"
+status = "covered"
+command = "elements.assign"
 source = "vstViewDragDrop"
+note = "The drop position and the sort order the view gives the dragged entry are the index parameter; a drop on an array is an aligned position, for which records.compare (the view showing the record) writes the alignment first."
 
 [gui."xEdit/xeMainForm.dfm:vstView:OnDragOver"]
 status = "pending"
@@ -2989,7 +2997,7 @@ note = "wbAllowESPMasters."
 status = "covered"
 command = "tool.run"
 source = "xEdit/xeInit.pas"
-note = "wbAllowMakePartial; the partial form copies themselves are still pending (MakePartialForm)."
+note = "wbAllowMakePartial; the copies of a cell or worldspace into a file that lacks it become partial forms (MakePartialForm), as --allow-make-partial."
 
 [switch.allowmasterfilesedit]
 status = "covered"
