@@ -1383,6 +1383,42 @@ impl FileImpl {
             }
         }
         self.assign_slot(&header)?;
+        // `fsCompareToHasSameMasters` of `TwbFile.Scan`: a compare load
+        // whose masters are the masters of the file it compares to, in the
+        // same order, compares record by record (`ContentEquals`) instead
+        // of element by element. The hardcoded file compares to the game
+        // master here, where upstream loads it without a compare-to, so it
+        // stays out.
+        if self.get_file_states().contains(FileState::fsIsCompareLoad)
+            && !self.get_file_states().contains(FileState::fsIsHardcoded)
+            && let Some(compare_to) = self.compare_to_file()
+        {
+            {
+                let masters = self.fl_masters.read().unwrap();
+                let compare_masters = compare_to.fl_masters.read().unwrap();
+                if masters.len() == compare_masters.len()
+                    && (masters.is_empty()
+                        || masters
+                            .iter()
+                            .zip(compare_masters.iter())
+                            .all(|(master, other)| Arc::ptr_eq(master, other)))
+                {
+                    self.fl_states
+                        .write()
+                        .unwrap()
+                        .include(FileState::fsCompareToHasSameMasters);
+                }
+            }
+            // `AddMaster(flCompareTo)`: the file it compares to is the last
+            // master of a compare load, so the records it holds are its
+            // overrides and the FormIDs of both files share a slot.
+            {
+                let mut masters = self.fl_masters.write().unwrap();
+                if !masters.iter().any(|master| Arc::ptr_eq(master, &compare_to)) {
+                    masters.push(compare_to);
+                }
+            }
+        }
         // The top level groups, on the worker threads when there are several.
         scan::scan_top_level(self, &container, bytes, &mut offset)?;
         // `SortRecords` and `flActivateIndices` come before the group check:
@@ -1897,6 +1933,31 @@ pub fn wb_file_from_bytes(
     bytes: FileBytes,
 ) -> Result<Arc<FileImpl>, LoadError> {
     wb_file_compare(file_name, load_order, None, states, bytes)
+}
+
+/// Port of `wbFile(f, aLoadOrder, aCompareTo)`: the file at `file_name` read
+/// from disk as a compare load of `compare_to`, which it takes the load
+/// order of (the GUI's "Compare to...", which copies the chosen file into
+/// the data folder and loads it there).
+pub fn wb_file_compare_to(
+    file_name: &str,
+    load_order: i32,
+    compare_to: &str,
+) -> Result<Arc<FileImpl>, LoadError> {
+    if find_in_files_map(file_name).is_some() {
+        return Err(LoadError(format!(
+            "{file_name} is loaded already: a compare load is another file"
+        )));
+    }
+    let path = Path::new(file_name);
+    let mapped = MappedFile::open(path).map_err(|error| LoadError(format!("Cannot open {file_name}: {error}")))?;
+    wb_file_compare(
+        file_name,
+        load_order,
+        Some(compare_to),
+        FileStates::empty(),
+        FileBytes::Mapped(mapped),
+    )
 }
 
 /// Port of `wbFile` with `aCompareTo`: a file loaded in the place of
@@ -4041,6 +4102,11 @@ impl File for FileImpl {
         self.load_order()
     }
 
+    /// The name of the file a compare load compares to (`flCompareTo`).
+    fn get_compare_to_name(&self) -> Option<String> {
+        self.fl_compare_to.as_deref().map(path_file_name).map(str::to_owned)
+    }
+
     fn get_record_from_index_by_key(&self, index: i32, key: &str) -> Option<MainRecordRef> {
         self.record_from_index_by_key(index, key)
             .map(|record| record as MainRecordRef)
@@ -4342,8 +4408,7 @@ impl Element for MainRecordImpl {
     }
 
     /// Port of `TwbMainRecord.GetDisplayName`: the full name, the names
-    /// of references, cells and responses, or the summary. The special names
-    /// of placed records and cells are not ported yet.
+    /// of references, cells and responses, or the summary.
     fn get_display_name(&self, _use_suffix: bool) -> String {
         self.check_l_generation();
         if let Some(cached) = self.mr_display_name.read().unwrap().as_ref() {
@@ -4390,6 +4455,14 @@ impl Element for MainRecordImpl {
                 if in_world {
                     result = "<Persistent Worldspace Cell>".to_owned();
                 } else if let Some((x, y)) = self.get_grid_cell() {
+                    result = format!("<{}, {}>", str_right(&x.to_string(), 3), str_right(&y.to_string(), 3));
+                }
+            } else if crate::interface::globals::game_mode() == GameMode::gmTES3
+                && matches!(signature.0.as_slice(), b"LAND" | b"PGRD")
+            {
+                // `wbGameMode = gmTES3 and (GetSignature = 'LAND') or 'PGRD'`:
+                // a landscape or path grid of Morrowind is a cell as well.
+                if let Some((x, y)) = self.get_grid_cell() {
                     result = format!("<{}, {}>", str_right(&x.to_string(), 3), str_right(&y.to_string(), 3));
                 }
             } else if signature == Signature::new(b"INFO") {

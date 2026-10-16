@@ -60,6 +60,13 @@ pub enum ElementState {
     /// Port of `esNotReachable`: the element is not reached (the state every
     /// element starts in after `ResetReachable`).
     esNotReachable = 256,
+    /// Port of `esHidden`: the user hid the element (`Hide`).
+    esHidden = 512,
+    /// Port of `esParentHidden`: a container above the element is hidden.
+    esParentHidden = 1024,
+    /// Port of `esParentHiddenChecked`: whether `esParentHidden` was looked
+    /// up since the element was created.
+    esParentHiddenChecked = 2048,
 }
 
 /// Port of `TwbResetModified`: what a save does to the modified states.
@@ -106,6 +113,48 @@ impl ElementBase {
 
     pub(crate) fn exclude_state(&self, state: ElementState) {
         self.e_states.fetch_and(!(state as u32), Ordering::Relaxed);
+    }
+
+    /// Port of `TwbElement.GetIsHidden`: the element is hidden itself
+    /// (`esHidden`) or below a hidden container, which is looked up once
+    /// and remembered (`esParentHiddenChecked`/`esParentHidden`).
+    /// UPSTREAM-QUIRK: upstream never clears the cache of an element below
+    /// an element that is hidden or shown later, so a state read before
+    /// `Hide`/`Show` of an ancestor stays.
+    pub fn is_hidden(&self) -> bool {
+        let hidden = ElementState::esHidden as u32;
+        let checked = ElementState::esParentHiddenChecked as u32;
+        let mut states = self.e_states.load(Ordering::Relaxed);
+        if states & (hidden | checked) == 0 {
+            self.include_state(ElementState::esParentHiddenChecked);
+            let below = self
+                .container()
+                .and_then(|container| container.as_element_impl().map(|element| element.element_base().is_hidden()))
+                .unwrap_or(false);
+            if below {
+                self.include_state(ElementState::esParentHidden);
+            } else {
+                self.exclude_state(ElementState::esParentHidden);
+            }
+            states = self.e_states.load(Ordering::Relaxed);
+        }
+        states & (hidden | ElementState::esParentHidden as u32) != 0
+    }
+
+    /// Port of `TwbElement.Hide`: the user hid the element. The cached
+    /// conflict status of the record is dropped upstream (`ResetConflict`);
+    /// the port computes statuses per command, so there is nothing to drop.
+    pub fn hide(&self) {
+        if !self.has_state(ElementState::esHidden) {
+            self.include_state(ElementState::esHidden);
+        }
+    }
+
+    /// Port of `TwbElement.Show`: the user shows a hidden element again.
+    pub fn show(&self) {
+        if self.has_state(ElementState::esHidden) {
+            self.exclude_state(ElementState::esHidden);
+        }
     }
 
     /// Port of `TwbElement.ResetModified`, the tail of every

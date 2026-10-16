@@ -349,6 +349,12 @@ pub struct CompareRequest {
     /// "Hide ignored", members no record has, members the definitions hide).
     #[serde(default)]
     pub include_hidden: bool,
+    /// `wbCompareRawData`: compare the raw data of the elements instead of
+    /// their values, so sorted and aligned arrays are compared entry by
+    /// entry. The release 4.1.5q never turns this on (the flag has no
+    /// switch); the port offers it over the same code paths.
+    #[serde(default)]
+    pub raw_data: bool,
     /// Activate the valid mod groups of these names, so the records they
     /// hide are left out of the comparison (`ctHiddenByModGroup`).
     #[serde(default)]
@@ -451,6 +457,27 @@ pub struct ViewFilterReport {
     pub shown: usize,
 }
 
+/// `wbCompareRawData` for the duration of one command: the option sets the
+/// process-wide flag while the comparison runs and restores it after, so a
+/// `serve` or `mcp` session keeps its default. The release 4.1.5q never
+/// sets the flag (its Options dialog lost the check box), so this is the
+/// port's own option over the upstream code paths that read it.
+struct RawData(bool);
+
+impl RawData {
+    fn new(on: bool) -> Self {
+        let previous = xedit_core::interface::globals::compare_raw_data();
+        xedit_core::interface::globals::set_compare_raw_data(on);
+        RawData(previous)
+    }
+}
+
+impl Drop for RawData {
+    fn drop(&mut self) {
+        xedit_core::interface::globals::set_compare_raw_data(self.0);
+    }
+}
+
 fn records_compare(session: &mut Session, request: CompareRequest) -> Result<CompareResponse, CommandError> {
     let record = session.record(&request.form_id, request.file.as_deref())?;
     let record = record
@@ -462,6 +489,7 @@ fn records_compare(session: &mut Session, request: CompareRequest) -> Result<Com
         session,
         &mod_group_choice(&request.mod_groups, request.all_mod_groups, request.saved_mod_groups),
     )?;
+    let _raw_data = RawData::new(request.raw_data);
     // The record shown in the view: its sorted and aligned arrays keep the
     // sort orders the view gives them, as in xEdit after the record was
     // shown.
@@ -492,7 +520,7 @@ fn records_compare(session: &mut Session, request: CompareRequest) -> Result<Com
         .iter()
         .filter_map(|child| compare_row(child, &view, request.include_hidden))
         .collect();
-    let view_filter = apply_view_filter(&mut rows, &request);
+    let view_filter = apply_view_filter(&mut rows, &request.view_filter());
     let conflict_all = view
         .datas
         .first()
@@ -597,30 +625,35 @@ fn is_view_node_filtered(row: &CompareRow, name_filter: &str, value_filter: &str
     }
 }
 
+/// The view filter panel above the view tab, as `records.compare` and
+/// `records.compare_selected` ask for it.
+#[derive(Default)]
+struct ViewFilter {
+    name: Option<String>,
+    value: Option<String>,
+    or: bool,
+    keep_children: bool,
+    keep_siblings: bool,
+    keep_parents_siblings: bool,
+    include_hidden: bool,
+}
+
 /// Port of `ApplyViewFilter`: every row is marked by `IsViewNodeFiltered`,
 /// and the rows a matching row keeps are marked too: its parents, its
 /// children (`cbViewFilterKeepChildren`), the rows beside it
 /// (`cbViewFilterKeepSiblings`) and the rows beside its parent
 /// (`cbViewFilterKeepParentsSiblings`). The marked rows are left out of the
 /// response unless `include_hidden` lists them.
-fn apply_view_filter(rows: &mut Vec<CompareRow>, request: &CompareRequest) -> Option<ViewFilterReport> {
-    let name_filter = request
-        .view_filter_name
-        .as_deref()
-        .map(str::to_lowercase)
-        .unwrap_or_default();
-    let value_filter = request
-        .view_filter_value
-        .as_deref()
-        .map(str::to_lowercase)
-        .unwrap_or_default();
+fn apply_view_filter(rows: &mut Vec<CompareRow>, request: &ViewFilter) -> Option<ViewFilterReport> {
+    let name_filter = request.name.as_deref().map(str::to_lowercase).unwrap_or_default();
+    let value_filter = request.value.as_deref().map(str::to_lowercase).unwrap_or_default();
     if name_filter.is_empty() && value_filter.is_empty() {
         return None;
     }
     let mut flat = Vec::new();
     flatten_rows(rows, None, &mut Vec::new(), &mut flat);
     let mut filtered: Vec<bool> = Vec::with_capacity(flat.len());
-    mark_rows(rows, &name_filter, &value_filter, request.view_filter_or, &mut filtered);
+    mark_rows(rows, &name_filter, &value_filter, request.or, &mut filtered);
     let total = flat.len();
     let unfiltered: Vec<usize> = (0..flat.len()).filter(|index| !filtered[*index]).collect();
     for index in &unfiltered {
@@ -689,6 +722,270 @@ fn rebuild_rows(rows: &[CompareRow], filtered: &[bool], cursor: &mut usize, keep
     result
 }
 
+/// The view filter of a `records.compare` request.
+impl CompareRequest {
+    fn view_filter(&self) -> ViewFilter {
+        ViewFilter {
+            name: self.view_filter_name.clone(),
+            value: self.view_filter_value.clone(),
+            or: self.view_filter_or,
+            keep_children: self.keep_children,
+            keep_siblings: self.keep_siblings,
+            keep_parents_siblings: self.keep_parents_siblings,
+            include_hidden: self.include_hidden,
+        }
+    }
+}
+
+/// One record of a `records.compare_selected` request.
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct SelectedRecord {
+    /// Load order FormID of the record as hexadecimal digits.
+    pub form_id: String,
+    /// Plugin the record is seen from; the last loaded plugin when omitted.
+    pub file: Option<String>,
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct CompareSelectedRequest {
+    /// The records to compare, in the order of the view's columns; two at
+    /// least. The GUI's "Compare Selected" takes the selected records of
+    /// the navigation tree (two to `wbAutoCompareSelectedLimit`, five, and
+    /// one record alone when more are selected).
+    pub records: Vec<SelectedRecord>,
+    /// Compare only the master and the overrides that no other override has
+    /// as a master (the GUI's "Only show Master and Leafs"). Read by the
+    /// FormID groups a selected record belongs to.
+    #[serde(default)]
+    pub master_and_leafs: bool,
+    /// Hide the rows without a conflict, as the view's "Hide no conflict
+    /// and empty rows" does: below `caConflictBenign`, as a sibling
+    /// comparison does.
+    #[serde(default)]
+    pub hide_no_conflict: bool,
+    /// Also list the rows the view hides.
+    #[serde(default)]
+    pub include_hidden: bool,
+    /// `wbCompareRawData`: compare the raw data of the elements instead of
+    /// their values.
+    #[serde(default)]
+    pub raw_data: bool,
+    /// Activate the valid mod groups of these names.
+    #[serde(default)]
+    pub mod_groups: Vec<String>,
+    /// Activate every valid mod group, as xEdit does with `-autoload`.
+    #[serde(default)]
+    pub all_mod_groups: bool,
+    /// Activate the valid mod groups of the selection saved in xEdit's
+    /// settings file.
+    #[serde(default)]
+    pub saved_mod_groups: bool,
+    /// `edViewFilterName`: keep the rows whose name (column 0) contains this
+    /// text, without regard to case.
+    pub view_filter_name: Option<String>,
+    /// `edViewFilterValue`: keep the rows with this text in one of their
+    /// cells.
+    pub view_filter_value: Option<String>,
+    /// `cobViewFilter` at 1: a row matches when the name or a value matches,
+    /// instead of both.
+    #[serde(default)]
+    pub view_filter_or: bool,
+    /// `cbViewFilterKeepChildren`: also keep the rows below a matching one.
+    #[serde(default)]
+    pub keep_children: bool,
+    /// `cbViewFilterKeepSiblings`: also keep the rows beside a matching one.
+    #[serde(default)]
+    pub keep_siblings: bool,
+    /// `cbViewFilterKeepParentsSiblings`: also keep the rows beside the
+    /// parent of a matching one.
+    #[serde(default)]
+    pub keep_parents_siblings: bool,
+}
+
+/// One column of a sibling comparison: a selected record.
+#[derive(Serialize, JsonSchema)]
+pub struct CompareSelectedColumn {
+    /// File that holds the record.
+    pub file: String,
+    /// Load order FormID as eight hexadecimal digits.
+    pub form_id: String,
+    pub signature: String,
+    pub editor_id: String,
+    /// The name xEdit shows for the record.
+    pub name: String,
+}
+
+#[derive(Serialize, JsonSchema)]
+pub struct CompareSelectedResponse {
+    /// The compared records in the order given (the columns of the view).
+    pub records: Vec<CompareSelectedColumn>,
+    pub rows: Vec<CompareRow>,
+    /// The view filter of the request and what it did, when one was asked
+    /// for (`ApplyViewFilter`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub view_filter: Option<ViewFilterReport>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub messages: Vec<String>,
+}
+
+/// Port of the sibling comparison of `DoSetActiveRecord`, the GUI's
+/// "Compare Selected": the selected records of different FormIDs are the
+/// columns, and their members are compared across them
+/// (`ComparingSiblings`).
+fn records_compare_selected(
+    session: &mut Session,
+    request: CompareSelectedRequest,
+) -> Result<CompareSelectedResponse, CommandError> {
+    if request.records.len() < 2 {
+        return Err(CommandError::new(
+            "invalid_params",
+            "compare_selected compares two records at least",
+        ));
+    }
+    let mut records = Vec::with_capacity(request.records.len());
+    for selected in &request.records {
+        let record = session.record(&selected.form_id, selected.file.as_deref())?;
+        let record = record
+            .as_element_impl()
+            .and_then(ElementImpl::main_record_impl)
+            .ok_or_else(|| CommandError::new("internal", "the record is not a main record of a file"))?;
+        records.push(record);
+    }
+    let files = session_files(session)?;
+    let active = crate::modgroups::activate(
+        session,
+        &mod_group_choice(&request.mod_groups, request.all_mod_groups, request.saved_mod_groups),
+    )?;
+    let _raw_data = RawData::new(request.raw_data);
+    let options = ConflictOptions {
+        only_master_and_leafs: request.master_and_leafs,
+        hide_no_conflict: request.hide_no_conflict,
+        comparing_siblings: true,
+        mod_groups: active.filter,
+        apply_to_elements: true,
+        ..Default::default()
+    };
+    let mut context = ConflictContext::new(&options, &files);
+    let view = context.view_for_sibling_records(&records);
+    let mut rows: Vec<CompareRow> = view
+        .children
+        .iter()
+        .filter_map(|child| compare_row(child, &view, request.include_hidden))
+        .collect();
+    let view_filter = apply_view_filter(
+        &mut rows,
+        &ViewFilter {
+            name: request.view_filter_name.clone(),
+            value: request.view_filter_value.clone(),
+            or: request.view_filter_or,
+            keep_children: request.keep_children,
+            keep_siblings: request.keep_siblings,
+            keep_parents_siblings: request.keep_parents_siblings,
+            include_hidden: request.include_hidden,
+        },
+    );
+    let (_, messages) = context.into_statuses();
+    let columns = records
+        .iter()
+        .map(|record| CompareSelectedColumn {
+            file: record.get_file().map(|file| file.get_name()).unwrap_or_default(),
+            form_id: record.get_load_order_form_id().to_string(false),
+            signature: record.get_signature().to_string(),
+            editor_id: record.get_editor_id(),
+            name: record.get_name(),
+        })
+        .collect();
+    Ok(CompareSelectedResponse {
+        records: columns,
+        rows,
+        view_filter,
+        messages,
+    })
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ForElementsRequest {
+    /// Load order FormID of the first record as hexadecimal digits.
+    pub form_id: String,
+    /// Path of the element inside the first record.
+    pub path: String,
+    /// Plugin the first record is seen from; the last loaded plugin when
+    /// omitted.
+    pub file: Option<String>,
+    /// Load order FormID of the other record.
+    pub other_form_id: String,
+    /// Path of the element inside the other record.
+    pub other_path: String,
+    /// Plugin the other record is seen from; the last loaded plugin when
+    /// omitted.
+    pub other_file: Option<String>,
+    /// `aSiblingCompare` of `ConflictAllForElements`: compare the two as
+    /// records of different FormIDs (the sibling comparison).
+    #[serde(default)]
+    pub sibling_compare: bool,
+    /// `aInjected` of `ConflictAllForElements`.
+    #[serde(default)]
+    pub injected: bool,
+}
+
+#[derive(Serialize, JsonSchema)]
+pub struct ForElementsResponse {
+    /// The `TConflictAll` of the pair (`ConflictAllForElements`).
+    pub conflict_all: ConflictAllName,
+    /// Path of the first element, as the response reports it.
+    pub path: String,
+    /// Path of the other element.
+    pub other_path: String,
+}
+
+/// Port of the script function `ConflictAllForElements(a, b, aSiblingCompare,
+/// aInjected)` (`xejviScriptAdapterHost.pas`): the conflict of two elements,
+/// of their whole containers when both are containers
+/// (`ConflictLevelForChildNodeDatas`), else of the pair
+/// (`ConflictLevelForNodeDatas`).
+fn conflicts_for_elements(session: &mut Session, request: ForElementsRequest) -> Result<ForElementsResponse, CommandError> {
+    let files = session_files(session)?;
+    let mut datas = Vec::new();
+    let mut paths = Vec::new();
+    for (form_id, path, file) in [
+        (&request.form_id, &request.path, request.file.as_deref()),
+        (&request.other_form_id, &request.other_path, request.other_file.as_deref()),
+    ] {
+        let record = session.record(form_id, file)?;
+        let element = record.get_element_by_path(path).ok_or_else(|| {
+            CommandError::new(
+                "unknown_element",
+                format!("{} has no element at {path}", record.get_name()),
+            )
+        })?;
+        paths.push(element.get_full_path());
+        let container = element
+            .as_container()
+            .filter(|container| container.get_element_count() > 0)
+            .map(|_| xedit_analysis::conflict::ViewContainer::new(element.clone()));
+        datas.push(xedit_analysis::conflict::ViewNodeData {
+            container,
+            element: Some(element),
+            ..Default::default()
+        });
+    }
+    let options = ConflictOptions::default();
+    let mut context = ConflictContext::new(&options, &files);
+    let conflict_all = if datas[0].container.is_some() {
+        context.conflict_level_for_child_node_datas(&mut datas, request.sibling_compare, request.injected)
+    } else {
+        conflict::conflict_level_for_node_datas(&mut datas, request.sibling_compare, request.injected)
+    };
+    Ok(ForElementsResponse {
+        conflict_all: conflict_all.into(),
+        path: paths[0].clone(),
+        other_path: paths[1].clone(),
+    })
+}
+
 pub fn register(registry: &mut Registry) {
     registry.register(
         "conflicts.list",
@@ -701,5 +998,17 @@ pub fn register(registry: &mut Registry) {
         "Compare the records of a FormID side by side, row by row with their conflict status, as the view tab does (InitConflictStatus).",
         false,
         records_compare,
+    );
+    registry.register(
+        "records.compare_selected",
+        "Compare records of different FormIDs side by side, as the GUI compares the selected navigation tree nodes (ComparingSiblings, DoSetActiveRecord with several records).",
+        false,
+        records_compare_selected,
+    );
+    registry.register(
+        "conflicts.for_elements",
+        "The conflict of two elements of two records, as the script function ConflictAllForElements reports it (ConflictLevelForNodeDatas, ConflictLevelForChildNodeDatas).",
+        false,
+        conflicts_for_elements,
     );
 }
