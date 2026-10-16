@@ -92,6 +92,20 @@ begin
     Result := s;
 end;
 
+/// `GetLocaleChar` of a type, with a NUL answered as its name: the RTL
+/// answers the empty positive-sign value as a NUL character, and a NUL in an
+/// `AddMessage` hangs the GUI's memo (`x-105`), so no probe can print it.
+function CharName(const aTag: string; aType: Integer): string;
+var
+  c: Char;
+begin
+  c := GetLocaleChar(0, aType, 'D');
+  if c = #0 then
+    Result := aTag + '=NUL'
+  else
+    Result := aTag + '=' + c;
+end;
+
 procedure Locale;
 var
   i: Integer;
@@ -125,16 +139,10 @@ begin
   Log('enus', '89=' + SafeLocale(1033, 89) + ' 90=' + SafeLocale(1033, 90));
   Log('enus', '4098=' + SafeLocale(1033, $1002) + ' 4099=' + SafeLocale(1033, $1003));
   Log('enus', '9999=' + SafeLocale(9999, 14));
-  Log('char', '14=' + GetLocaleChar(0, 14, 'D'));
-  Log('char', '15=' + GetLocaleChar(0, 15, 'D'));
-  Log('char', '20=' + GetLocaleChar(0, 20, 'D'));
-  Log('char', '29=' + GetLocaleChar(0, 29, 'D'));
-  Log('char', '30=' + GetLocaleChar(0, 30, 'D'));
-  Log('char', '40=' + GetLocaleChar(0, 40, 'D'));
-  Log('char', '44=' + GetLocaleChar(0, 44, 'D'));
-  Log('char', '56=' + GetLocaleChar(0, 56, 'D'));
-  Log('char', '80=' + GetLocaleChar(0, 80, 'D') + ' 81=' + GetLocaleChar(0, 81, 'D'));
-  Log('char', '200=' + GetLocaleChar(0, 200, 'D'));
+  Log('char', CharName('14', 14) + ' ' + CharName('15', 15) + ' ' + CharName('20', 20));
+  Log('char', CharName('29', 29) + ' ' + CharName('30', 30) + ' ' + CharName('40', 40));
+  Log('char', CharName('3', 3) + ' ' + CharName('7', 7) + ' ' + CharName('44', 44) + ' ' + CharName('56', 56));
+  Log('char', CharName('80', 80) + ' ' + CharName('81', 81) + ' ' + CharName('91', 91) + ' ' + CharName('200', 200));
 end;
 
 procedure Fpu;
