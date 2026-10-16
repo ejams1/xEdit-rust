@@ -1555,6 +1555,19 @@ fn check_edit(
         .arg(format!("{}\\", my_games.display()))
         .arg("--game-ini")
         .arg(my_games.join("game.ini"));
+    // The oracle's `-C:`: a reference cache folder of the run's own, empty
+    // as the GUI's is, so the port builds the reference information as the
+    // GUI does. Without it the port read and wrote the cache in the game's
+    // data folder, and a cache an earlier run had saved was loaded instead
+    // of built: no record is initialised then, so the fix-ups and the
+    // recompression a build applies were missing (`sse-update-topic`, 4,103
+    // records, the second run after a fresh build; parity #33).
+    let cache = port_dir.join(format!("{stem}.cache"));
+    if cache.exists() {
+        fs::remove_dir_all(&cache)?;
+    }
+    fs::create_dir_all(&cache)?;
+    command.arg("--cache-path").arg(format!("{}\\", cache.display()));
     for switch in &sequence.switches {
         match switch.to_ascii_lowercase().as_str() {
             "-skipbsa" => command.arg("--skip-bsa"),
