@@ -13,4 +13,6 @@ pub mod helpers;
 pub mod implementation;
 pub mod interface;
 pub mod localization;
+pub mod pcre;
+pub mod perl_regex;
 pub mod threads;

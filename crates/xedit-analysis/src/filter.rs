@@ -40,6 +40,8 @@ use std::cmp::Ordering;
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::sync::Arc;
 
+use xedit_core::perl_regex::{OPTION_CASE_LESS, OPTION_MULTI_LINE, PerlRegEx};
+
 use xedit_core::implementation::form_ids::position_to_grid_cell;
 use xedit_core::implementation::{ElementImpl, FileImpl, MainRecordImpl};
 use xedit_core::interface::constructors::find_record_def;
@@ -1235,17 +1237,16 @@ impl FilterChecks {
 
 /// Port of `CheckValueRegex`: `TPerlRegEx` with `preCaseLess` and
 /// `preMultiLine`, and `MatchAgain` (whether the expression matches anywhere
-/// in the text).
+/// in the text). The class is
+/// [`xedit_core::perl_regex::PerlRegEx`], the same one the script adapter
+/// and Sniff run, over the port's PCRE engine.
 fn check_value_regex(expression: &str, text: &str) -> bool {
-    match regex::RegexBuilder::new(expression)
-        .case_insensitive(true)
-        .multi_line(true)
-        .build()
-    {
-        Ok(regex) => regex.is_match(text),
-        // An expression `TPerlRegEx` cannot compile matches nothing.
-        Err(_) => false,
-    }
+    let mut regex = PerlRegEx::new();
+    regex.set_regex(expression.to_owned());
+    regex.set_options((1 << OPTION_CASE_LESS) | (1 << OPTION_MULTI_LINE));
+    regex.set_subject(text.to_owned());
+    // An expression `TPerlRegEx` cannot compile matches nothing.
+    regex.match_again().unwrap_or(false)
 }
 
 /// Port of the `IsUnnecessaryPersistent` function of the main form.

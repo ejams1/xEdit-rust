@@ -9,6 +9,14 @@
   },
   "cases": [
     {
+      "script": "probes/Regex probe.pas",
+      "game": "sse",
+      "load": [],
+      "synthetic_master": true,
+      "timeout_minutes": 6,
+      "note": "the TPerlRegEx check of `parity script --script \"Regex probe\" --phase run`: the probe lives in `crates/xtask/oracle/scripts/probes` (the oracle's folder holds no such file), loads the empty master the harness writes and compares every line it adds to the log"
+    },
+    {
       "script": "_newscript_.pas"
     },
     {
