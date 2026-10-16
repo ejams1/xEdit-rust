@@ -9,6 +9,7 @@ pub mod collate;
 pub mod compression;
 pub mod dds;
 pub mod encoding;
+pub mod fpu;
 pub mod hash;
 pub mod mapped_file;
 pub mod simd;

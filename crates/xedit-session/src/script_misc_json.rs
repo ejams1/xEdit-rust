@@ -1114,10 +1114,9 @@ impl Parser {
             )));
         }
         if is_float {
-            return text
-                .parse::<f64>()
+            return xedit_io::fpu::parse_f64(&text)
                 .map(NodeKind::Float)
-                .map_err(|_| self.error(format!("Expected value but found {text}")));
+                .ok_or_else(|| self.error(format!("Expected value but found {text}")));
         }
         // The library types an integer of up to 9 digits as `jdtInt`, of up
         // to 19 as `jdtLong`, and a longer one as `jdtULong` or a float.
@@ -1140,10 +1139,9 @@ impl Parser {
             Err(_) => match digits.parse::<u64>() {
                 Ok(value) if !negative && digits.len() >= 20 => Ok(NodeKind::ULong(value)),
                 Ok(value) => Ok(NodeKind::Long(value as i64)),
-                Err(_) => text
-                    .parse::<f64>()
+                Err(_) => xedit_io::fpu::parse_f64(&text)
                     .map(NodeKind::Float)
-                    .map_err(|_| self.error(format!("Expected value but found {text}"))),
+                    .ok_or_else(|| self.error(format!("Expected value but found {text}"))),
             },
         }
     }

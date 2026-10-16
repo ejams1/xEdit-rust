@@ -1298,7 +1298,7 @@ pub fn to_bool(value: &Value) -> Result<bool, ValueError> {
                 Ok(true)
             } else if text.eq_ignore_ascii_case("false") {
                 Ok(false)
-            } else if let Ok(v) = text.parse::<f64>() {
+            } else if let Some(v) = xedit_io::fpu::parse_f64(text) {
                 Ok(v != 0.0)
             } else {
                 Err(cast_error(value, "Boolean"))
@@ -1347,7 +1347,7 @@ pub fn parse_int_literal(text: &[u8]) -> Option<i64> {
 
 /// `TextToFloat` on a double token (`ParseToken`, `JvInterpreter.pas:5577`).
 pub fn parse_float_literal(text: &[u8]) -> Option<f64> {
-    std::str::from_utf8(text).ok().and_then(|s| s.parse().ok())
+    std::str::from_utf8(text).ok().and_then(xedit_io::fpu::parse_f64)
 }
 
 /// A number read from a string.
@@ -1384,7 +1384,7 @@ pub fn str_to_f64(bytes: &[u8]) -> Option<f64> {
     if text.is_empty() || text.eq_ignore_ascii_case("inf") || text.eq_ignore_ascii_case("nan") || text.contains("inf") {
         return None;
     }
-    text.parse::<f64>().ok()
+    xedit_io::fpu::parse_f64(&text)
 }
 
 /// The variant-to-integer conversion of a typed slot assignment: the value
