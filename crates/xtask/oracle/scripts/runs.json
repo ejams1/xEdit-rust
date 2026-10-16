@@ -746,6 +746,18 @@
       "timeout_minutes": 45,
       "master": "tests/fixtures/parity/numerics.esm",
       "note": "parity #39 fixture: the RTL's `StrToFloat` over a generated corpus (17-19 digit mantissas, 1-30 digit values, exponents over the double range and past its edges, blanks, signs, malformed texts, Inf/NaN spellings). Every accepted value is written into numerics-parse.dat as its 8 IEEE bytes and as 17-digit text into the log; a refused text is logged with its exception. The harness compares the file byte for byte and the log line by line"
+    },
+    {
+      "script": "probes/atlas.pas",
+      "game": "sse",
+      "synthetic_master": true,
+      "data_files": [
+        "tests/fixtures/parity/atlas/textures/t/one.dds:textures/t/one.dds",
+        "tests/fixtures/parity/atlas/textures/t/one_n.dds:textures/t/one_n.dds",
+        "tests/fixtures/parity/atlas/textures/t/two.dds:textures/t/two.dds",
+        "tests/fixtures/parity/atlas/textures/t/two_n.dds:textures/t/two_n.dds"
+      ],
+      "note": "parity #38 fixture: the atlas builders of xejviScriptAdapterHost.pas, wbBuildAtlasFromTexturesList (a texture list built into an atlas and its map file) and wbBuildAtlasFromAtlasMap (a hand written map rebuilt with brightness and the canvas gamma, 0.9/1.0/1.1), over the fixture textures of tests/fixtures/parity/atlas that the case's data_files place in the private data folder. The atlas DDS files, the map file below wbOutputPath and the message log are compared"
     }
   ]
 }

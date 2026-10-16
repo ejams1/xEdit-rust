@@ -639,6 +639,13 @@ struct RunCase {
     /// plugins: a probe that reads no record needs no game data.
     #[serde(default)]
     synthetic_master: bool,
+    /// Extra files copied into the private data folder of both sides, as
+    /// `<path in the repository>:<path under Data>` (separators either way,
+    /// such as `tests/fixtures/parity/atlas/textures/t/one.dds:textures/t/one.dds`):
+    /// a probe that reads resources (`wbContainerHandler` lookups) needs
+    /// them where the game's files would be.
+    #[serde(default)]
+    data_files: Vec<String>,
     /// What the case is for, when it is not obvious.
     #[serde(default)]
     #[allow(dead_code, reason = "documentation in the file")]
@@ -670,6 +677,8 @@ struct Task {
     synthetic_master: bool,
     /// The fixture master of a probe case, loaded as the game master.
     master: Option<PathBuf>,
+    /// The case's `data_files`: (source in the repository, path under Data).
+    data_files: Vec<(PathBuf, String)>,
     /// The references are loaded from a cache a first run wrote.
     refcache: bool,
     /// The reason `parse.json` accepts a script the oracle refuses.
@@ -851,6 +860,7 @@ pub(super) fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
                 close_after: false,
                 save: Vec::new(),
                 timeout: Duration::from_secs(10 * 60),
+                data_files: Vec::new(),
                 synthetic_master: true,
                 master: None,
                 refcache: false,
@@ -874,6 +884,18 @@ pub(super) fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
             // the game's data folder only matters for the executable of
             // Fallout 3 and New Vegas.
             let master = case.master.as_ref().map(|master| root.join(master));
+            let data_files = case
+                .data_files
+                .iter()
+                .map(|entry| {
+                    let (source, path) = entry
+                        .split_once(':')
+                        .with_context(|| format!("{}: data_files needs <source>:<path under Data>", case.script))?;
+                    let source = root.join(source);
+                    ensure!(source.is_file(), "{}: {} is not a file", case.script, source.display());
+                    Ok((source, path.replace('/', "\\")))
+                })
+                .collect::<Result<Vec<_>>>()?;
             let data = match (game_data_or_none(game), &master) {
                 (Some(data), _) => data,
                 (None, Some(_)) => PathBuf::new(),
@@ -942,6 +964,7 @@ pub(super) fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
                 timeout: case.timeout_minutes.map_or(Duration::from_secs(10 * 60), |minutes| {
                     Duration::from_secs_f64(minutes * 60.0)
                 }),
+                data_files,
                 synthetic_master: case.synthetic_master,
                 master,
                 accepted: None,
@@ -979,6 +1002,7 @@ pub(super) fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
                 close_after: false,
                 save: Vec::new(),
                 timeout: Duration::from_secs(10 * 60),
+                data_files: Vec::new(),
                 synthetic_master: true,
                 master: None,
                 refcache: false,
@@ -1265,6 +1289,10 @@ fn oracle_run(
     if task.refcache {
         recipe.push_str("\nrefcache");
     }
+    for (source, path) in &task.data_files {
+        recipe.push_str(path);
+        recipe.push_str(&format!("{:016x}", super::nif::fnv(&fs::read(source)?)));
+    }
     // The texts go in as bytes (a probe may carry a byte order mark or a
     // UTF-16 encoding, which the oracle's `TStringList.LoadFromFile` reads
     // and the port has to read the same way), hashed so an encoding change
@@ -1302,6 +1330,10 @@ fn oracle_run(
     extras.files.push((PathBuf::from(&task.script), script_text.clone()));
     for (name, text) in &units {
         extras.files.push((PathBuf::from(format!("{name}.pas")), text.clone()));
+    }
+    for (source, path) in &task.data_files {
+        let bytes = fs::read(source).with_context(|| format!("reading {}", source.display()))?;
+        extras.files.push((PathBuf::from(format!("Data\\{path}")), bytes));
     }
     let run = GuiRun {
         exe: &exe,
@@ -1991,6 +2023,16 @@ fn port_run(
             data.display(),
             name.to_string_lossy()
         )));
+    }
+    // The case's own files below `Data` (fixture textures a probe reads
+    // through the container handler), as the oracle's private folder has
+    // them.
+    for (source, path) in &task.data_files {
+        let target = data.join(path);
+        if let Some(parent) = target.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        fs::copy(source, &target).with_context(|| format!("copying {} to {}", source.display(), target.display()))?;
     }
     // The oracle's `-M:` and `-I:`: a My Games folder of the run with an
     // empty game ini, so no ini of the user's names archives or a language.

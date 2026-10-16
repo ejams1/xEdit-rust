@@ -333,7 +333,9 @@ fn run_port(xedit: &Path, work: &Path, case: &Case) -> Result<Result<Vec<u8>, St
         .arg("--edit")
         .arg("--json")
         .arg("--program-path")
-        .arg(work.join("pro").display().to_string())
+        // `ProgramPath` is read with the trailing separator, as the GUI's
+        // `ExtractFilePath(ParamStr(0))` has it.
+        .arg(format!("{}\\", work.join("pro").display()))
         .arg("archive")
         .arg("pack")
         .arg(archive.display().to_string())
