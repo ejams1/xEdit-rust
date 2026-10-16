@@ -5,3 +5,4 @@
 
 # The oracle scripts are hashed into the oracle cache keys; keep them LF.
 crates/xtask/oracle/*.pas text eol=lf
+crates/xtask/oracle/scripts/probes/*.pas text eol=lf

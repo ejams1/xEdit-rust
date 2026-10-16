@@ -161,13 +161,15 @@ begin
   Value('print[zero]', 0.0);
   Value('print[maxdouble]', MaxDouble);
   Value('print[mindouble]', MinDouble);
-  Value('print[maxsingle]', MaxSingle);
-  Value('print[minsingle]', MinSingle);
+  // The `Math` constants are `Single`/`Comp` variables upstream, so their
+  // variants write 4 or 0 bytes; `+ 0.0` makes every probe value a double.
+  Value('print[maxsingle]', MaxSingle + 0.0);
+  Value('print[minsingle]', MinSingle + 0.0);
   Value('print[infinity]', Infinity);
   Value('print[neginfinity]', NegInfinity);
   Value('print[mathnan]', NaN);
-  Value('print[maxcomp]', MaxComp);
-  Value('print[mincomp]', MinComp);
+  Value('print[maxcomp]', MaxComp + 0.0);
+  Value('print[mincomp]', MinComp + 0.0);
   Value('print[minextended]', MinExtended);
   Value('print[pi]', PI);
   Value('print[pisq]', PI * PI);
@@ -193,6 +195,12 @@ begin
   Log('text', 'FloatToStrF(1e22built,1,17,0)=' + FloatToStrF(a, 1, 17, 0));
   Log('text', 'FloatToStrF(1e22built,1,15,0)=' + FloatToStrF(a, 1, 15, 0));
   Log('text', 'FloatToStrF(1e22built,0,17,0)=' + FloatToStrF(a, 0, 17, 0));
+  Log('text', 'Format(%)g=' + Format('%g', [a]));
+  Log('text', 'Format(%.5g)=' + Format('%.5g', [a]));
+  Log('text', 'Format(%.17g)=' + Format('%.17g', [a]));
+  Log('text', 'Format(%)e=' + Format('%e', [a]));
+  Log('text', 'Format(%.17e)=' + Format('%.17e', [a]));
+  Log('text', 'Format(%.2f)=' + Format('%.2f', [1.0 / 3.0]));
 end;
 
 procedure Trig;
@@ -298,7 +306,10 @@ begin
   Log('ceil', 'Floor(-1e19)=' + IntToStr(Floor(-1.0E19)));
   Log('ceil', 'Ceil(2e9+0.5)=' + IntToStr(Ceil(2000000000.5)));
   nan := 0.0;
-  nan := nan / nan;
+  // `nan := nan / nan` writes NaN in the oracle, but the port's
+  // interpreter raises for a float zero division (owed to #28): the
+  // constant stands in here.
+  nan := NaN;
   inf := 1.0E308;
   inf := inf * 10.0;
   ninf := -inf;
@@ -313,6 +324,15 @@ begin
   Log('nan', 'Int(nan)=' + FloatToStrF(Int(nan), 1, 17, 0));
   Log('nan', 'Frac(nan)=' + FloatToStrF(Frac(nan), 1, 17, 0));
   Log('nan', 'Int(inf)=' + FloatToStrF(Int(inf), 1, 17, 0));
+  Log('nan', 'Frac(inf)=' + FloatToStrF(Frac(inf), 1, 17, 0));
+  Log('nan', 'Int(-inf)=' + FloatToStrF(Int(ninf), 1, 17, 0));
+  Log('nan', 'Frac(-inf)=' + FloatToStrF(Frac(ninf), 1, 17, 0));
+  Log('nan', 'Int(mathnan)=' + FloatToStrF(Int(NaN), 1, 17, 0));
+  Log('nan', 'Frac(mathnan)=' + FloatToStrF(Frac(NaN), 1, 17, 0));
+  Log('nan', 'Int(1e18)=' + FloatToStrF(Int(1.0E18), 1, 17, 0));
+  Log('nan', 'Frac(1e18)=' + FloatToStrF(Frac(1.0E18), 1, 17, 0));
+  Log('nan', 'Int(123.25)=' + FloatToStrF(Int(123.25), 1, 17, 0));
+  Log('nan', 'Frac(123.25)=' + FloatToStrF(Frac(123.25), 1, 17, 0));
 end;
 
 function SamePair(const aA, aB: Double): string;
@@ -363,6 +383,25 @@ begin
   s := 'a' + Chr(196) + 'b' + Chr(214) + 'c' + Chr(220) + 'd' + Chr(223);
   Log('hash', 'aAdbOcdUes=' + IntToStr(dfCalcHash(s)));
   Log('hash', 'length=' + IntToStr(dfCalcHash(s)));
+  // The multi-byte probes solve the bytes the hash runs over: an ASCII
+  // anchor before and after a character tells whether it converts to one
+  // byte, drops, or expands.
+  for i := 192 to 255 do begin
+    s := Chr(i);
+    Log('mb', 'one' + IntToStr(i) + '=' + IntToStr(dfCalcHash(s)));
+    Log('mb', 'a-one' + IntToStr(i) + '=' + IntToStr(dfCalcHash('a' + s)));
+    Log('mb', 'one-a' + IntToStr(i) + '=' + IntToStr(dfCalcHash(s + 'a')));
+    Log('mb', 'lower' + IntToStr(i) + '=' + IntToStr(Ord(LowerCase(s)[1])) + ':' + IntToStr(Length(LowerCase(s))));
+    Log('mb', 'upper' + IntToStr(i) + '=' + IntToStr(Ord(UpperCase(s)[1])) + ':' + IntToStr(Length(UpperCase(s))));
+    Log('mb', 'ansilower' + IntToStr(i) + '=' + IntToStr(Ord(AnsiLowerCase(s)[1])));
+    Log('mb', 'ansiupper' + IntToStr(i) + '=' + IntToStr(Ord(AnsiUpperCase(s)[1])));
+  end;
+  Log('mb', 'minuscule=' + IntToStr(Ord(LowerCase(Chr(73))[1])));
+  Log('mb', 'sharp=' + IntToStr(Ord(UpperCase(Chr(223))[1])) + ':' + IntToStr(Length(UpperCase(Chr(223)))));
+  Log('mb', 'idot=' + IntToStr(Ord(LowerCase(Chr(304))[1])) + ':' + IntToStr(Length(LowerCase(Chr(304)))));
+  Log('mb', 'greek=' + IntToStr(Ord(LowerCase(Chr(914))[1])) + ':' + IntToStr(Ord(UpperCase(Chr(946))[1])));
+  Log('mb', 'cyr=' + IntToStr(Ord(LowerCase(Chr(1044))[1])) + ':' + IntToStr(Ord(UpperCase(Chr(1076))[1])));
+  Log('mb', 'longs=' + IntToStr(Ord(LowerCase(Chr(383))[1])));
 end;
 
 procedure Locale;

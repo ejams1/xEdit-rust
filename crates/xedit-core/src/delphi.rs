@@ -762,7 +762,9 @@ pub fn str_to_float(text: &str) -> Option<f64> {
             ("Inf", f64::INFINITY),
             ("NaN", f64::from_bits(NAN_BITS)),
         ] {
-            if rest.len() >= word.len() && rest[..word.len()].eq_ignore_ascii_case(word) {
+            if let Some(head) = rest.get(..word.len())
+                && head.eq_ignore_ascii_case(word)
+            {
                 let trailing = &rest[word.len()..];
                 if trailing.is_empty() || trailing.bytes().all(blank) {
                     return Some(value);
