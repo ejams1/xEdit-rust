@@ -14,16 +14,19 @@
 //! `File::get_record_by_form_id(form_id, new_masters, allow_injected)`, the
 //! same function the `records.get` command reads through.
 //!
-//! `FileWriteToStream` writes the file into a `TStream` object, which the
-//! port has no value for yet (the `Classes` unit of step 8); it is owed with
-//! `FileFormIDtoLoadOrderFormID`'s sibling semantics recorded in the ledger.
+//! `FileWriteToStream` writes the file into a `TStream` object of the
+//! `Classes` unit (step 8's streams): `TwbFile.WriteToStream` with the
+//! `TwbResetModified` the third argument names, the bytes the save writes
+//! and the same flag resets. The `file-stream` probe compares the bytes, the
+//! stream position and the flag states after each of the four routes.
 
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use xedit_core::implementation::ResetModified;
 use xedit_core::interface::{ElementRef, FileRef, FileState, FormID};
 use xedit_script::adapter::{Adapter, Args};
-use xedit_script::values::{ClassDef, Value, VarType};
+use xedit_script::values::{ClassDef, Value, ValueError, VarType};
 
 use super::{
     add, boolean_at, check_arg_count, element_at, file_at, file_impl_of, integer_at, params, string_at, value_param,
@@ -195,7 +198,32 @@ pub(crate) fn register(adapter: &mut Adapter, state: &Rc<RefCell<ScriptRunState>
         "FileWriteToStream",
         3,
         params(&[VarType::Empty, VarType::Empty, VarType::Empty]),
-        |_result, _args| Ok(()),
+        |_result, args| {
+            // `if Supports(IInterface(Args.Values[0]), IwbFile, _File) then
+            // begin Stream := TStream(V2O(Args.Values[1])); if Assigned(
+            // Stream) then ... _File.WriteToStream(Stream, rm)`: a nil or
+            // non-file first argument and a nil stream are no-ops.
+            let Some(file) = file_at(args, 0) else {
+                return Ok(());
+            };
+            let Some(stream) = crate::script_rtl::classes::stream_of(args.values.get(1).unwrap_or(&Value::Empty))
+            else {
+                return Ok(());
+            };
+            // `case i of 0: rmNo; 2: rmSetInternal; else rmYes`.
+            let reset = match integer_at(args, 2).unwrap_or(1) {
+                0 => ResetModified::rmNo,
+                2 => ResetModified::rmSetInternal,
+                _ => ResetModified::rmYes,
+            };
+            let Some(file) = file_impl_of(&file) else {
+                return Ok(());
+            };
+            let bytes = crate::save::write_file_bytes(&file, reset)
+                .map_err(|message| ValueError::external_class("Exception", message))?;
+            crate::script_rtl::classes::stream_write(&stream, &bytes)?;
+            Ok(())
+        },
     );
     add(adapter, "GetFileName", 1, value_param(), |result, args| {
         *result = Value::Str(Vec::new());

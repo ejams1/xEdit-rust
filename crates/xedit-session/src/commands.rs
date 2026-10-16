@@ -116,6 +116,10 @@ pub(crate) fn refuse_in_translate_mode(command: &str) -> Result<(), CommandError
 impl Session {
     /// Loads the plugins of a game in the order given, with their masters.
     pub fn load(game: &str, plugins: &[String]) -> Result<Self, String> {
+        // `xeInit.pas` sets `wbStartTime := Now` right before the loader
+        // thread starts: the `[mm:ss]` prefixes of the message log count
+        // from the load's start.
+        crate::script::reset_progress_start();
         // `xDump.dpr` builds its definitions with settings of its own, which
         // the export of the definitions has to see (`wbSimpleRecords` among
         // them); every other mode loads them as the editor does.

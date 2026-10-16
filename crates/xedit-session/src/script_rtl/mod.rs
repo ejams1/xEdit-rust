@@ -258,11 +258,151 @@ impl Vcl for NoVcl {
 /// afterwards, so the order is only visible through the duplicate-name
 /// tie-breaks the sorted lists resolve by registration order).
 pub fn register(adapter: &mut Adapter, state: &Rc<RefCell<ScriptRunState>>, vcl: Rc<RefCell<dyn Vcl>>) {
-    fm::register(adapter, vcl);
+    fm::register(adapter, vcl.clone());
     system::register(adapter);
-    sysutils::register(adapter);
+    sysutils::register(adapter, vcl);
     classes::register(adapter, state);
     math::register(adapter);
+}
+
+/// The system text of a Win32 error code (`SysErrorMessage`'s shape, the
+/// port's conversion).
+pub(crate) fn os_error_text_code(code: u32) -> String {
+    crate::script_strings::os_error_text(&std::io::Error::from_raw_os_error(code as i32))
+}
+
+/// `RaiseLastOSError`'s message for a code: the RTL's `SOSError` --
+/// `System Error.  Code: <n>.` and the system text on the next line, two
+/// spaces after the first period and a CRLF between them, as the oracle's
+/// `LoadFromFile` line shows (`df-load-missing`).
+pub(crate) fn os_error_message_code(code: u32) -> String {
+    format!(
+        "System Error.  Code: {code}.
+{}",
+        os_error_text_code(code)
+    )
+}
+
+/// The error a `CreateFile` reports, `GetLastError` on failure and `0` when
+/// the call succeeded. `df`'s `LoadFromFile` runs the call itself (read
+/// access, read sharing, `OPEN_EXISTING`, `FILE_FLAG_SEQUENTIAL_SCAN`), so
+/// the code is the file API's own.
+#[cfg(windows)]
+pub(crate) fn create_file_error(path: &str) -> u32 {
+    use windows_sys::Win32::Foundation::{GENERIC_READ, INVALID_HANDLE_VALUE};
+    use windows_sys::Win32::Storage::FileSystem::{
+        CreateFileW, FILE_FLAG_SEQUENTIAL_SCAN, FILE_SHARE_READ, OPEN_EXISTING,
+    };
+    let wide: Vec<u16> = path.encode_utf16().chain(std::iter::once(0)).collect();
+    // SAFETY: the path is NUL-terminated and lives for the call; no attribute
+    // list, no template and no security descriptor are given (`nil`).
+    let handle = unsafe {
+        CreateFileW(
+            wide.as_ptr(),
+            GENERIC_READ,
+            FILE_SHARE_READ,
+            std::ptr::null(),
+            OPEN_EXISTING,
+            FILE_FLAG_SEQUENTIAL_SCAN,
+            std::ptr::null_mut(),
+        )
+    };
+    if handle == INVALID_HANDLE_VALUE {
+        std::io::Error::last_os_error().raw_os_error().unwrap_or(0) as u32
+    } else {
+        // SAFETY: the handle came from `CreateFileW` and is not used again.
+        unsafe { windows_sys::Win32::Foundation::CloseHandle(handle) };
+        0
+    }
+}
+
+/// The error the `TFileStream`-family route reports (`TStrings.LoadFromFile`/
+/// `SaveToFile`, `TdfElement.SaveToJSONFile`, the `Classes` streams): the
+/// same `CreateFile` (`FileOpen`/`FileCreate` read or read-write access,
+/// `OPEN_EXISTING` or `CREATE_ALWAYS`, no flag), except that the RTL checks
+/// the name first -- an empty name is `ERROR_INVALID_NAME` (123) there where
+/// `CreateFile` alone answers `ERROR_PATH_NOT_FOUND` (3), which the
+/// `df-file-errors` probe pins for both routes in one run.
+#[cfg(windows)]
+pub(crate) fn file_stream_error(path: &str, create: bool) -> u32 {
+    use windows_sys::Win32::Foundation::{GENERIC_READ, GENERIC_WRITE, INVALID_HANDLE_VALUE};
+    use windows_sys::Win32::Storage::FileSystem::{CREATE_ALWAYS, CreateFileW, FILE_ATTRIBUTE_NORMAL, OPEN_EXISTING};
+    if path.is_empty() {
+        return 123;
+    }
+    let wide: Vec<u16> = path.encode_utf16().chain(std::iter::once(0)).collect();
+    // SAFETY: as in `create_file_error`; the access is `FileCreate`'s
+    // read-write or `FileOpen`'s read, the sharing is the RTL's default
+    // (`fmShareCompat`, no sharing).
+    let handle = unsafe {
+        CreateFileW(
+            wide.as_ptr(),
+            if create {
+                GENERIC_READ | GENERIC_WRITE
+            } else {
+                GENERIC_READ
+            },
+            0,
+            std::ptr::null(),
+            if create { CREATE_ALWAYS } else { OPEN_EXISTING },
+            FILE_ATTRIBUTE_NORMAL,
+            std::ptr::null_mut(),
+        )
+    };
+    if handle == INVALID_HANDLE_VALUE {
+        std::io::Error::last_os_error().raw_os_error().unwrap_or(0) as u32
+    } else {
+        // SAFETY: the handle came from `CreateFileW` and is not used again.
+        unsafe { windows_sys::Win32::Foundation::CloseHandle(handle) };
+        0
+    }
+}
+
+#[cfg(not(windows))]
+pub(crate) fn create_file_error(_path: &str) -> u32 {
+    0
+}
+
+#[cfg(not(windows))]
+pub(crate) fn file_stream_error(_path: &str, _create: bool) -> u32 {
+    0
+}
+
+/// `GetLocaleStr`/`GetLocaleChar` and the default format settings read it:
+/// the `LOCALE_*` value the system answers for the locale (`0` is the
+/// current user locale), cut to `written - 1` characters. The RTL's
+/// `GetLocaleStr` reads the same locale data and takes the characters before
+/// the terminator whatever the type -- the font signature's 16 characters
+/// become 15, which the `sys-helpers` probe compares. `None` when the system
+/// answers nothing for the locale and the type, for which the callers use
+/// their default.
+#[cfg(windows)]
+pub(crate) fn locale_value(locale: i32, locale_type: i32) -> Option<String> {
+    use windows_sys::Win32::Globalization::{GetLocaleInfoW, LOCALE_USER_DEFAULT};
+    if locale_type <= 0 {
+        return None;
+    }
+    let lcid = if locale == 0 {
+        LOCALE_USER_DEFAULT
+    } else {
+        locale as u32
+    };
+    let mut buffer = [0u16; 256];
+    // SAFETY: the buffer is valid for its length, and the call reads the
+    // locale and type it is given and writes at most that many units.
+    let written = unsafe { GetLocaleInfoW(lcid, locale_type as u32, buffer.as_mut_ptr(), buffer.len() as i32) };
+    if written <= 0 {
+        return None;
+    }
+    let count = (written as usize - 1).min(buffer.len());
+    Some(String::from_utf16_lossy(&buffer[..count]))
+}
+
+/// Off Windows there is no locale table to read; every caller falls back to
+/// its default (the `sys-helpers` probe is a Windows check of the oracle).
+#[cfg(not(windows))]
+pub(crate) fn locale_value(_locale: i32, _locale_type: i32) -> Option<String> {
+    None
 }
 
 //=== Registration helpers ====================================================

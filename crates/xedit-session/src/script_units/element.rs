@@ -31,24 +31,30 @@ use super::{add, boolean_at, element_at, integer_at, params, string_at, value_pa
 use crate::script::ScriptRunState;
 
 /// `IntToEsState` (`xejviScriptAdapterElement.pas:34`): the state index a
-/// script names. The port models the states of `ElementState` (the same
-/// names, its own bit positions) and has none of the view states
-/// (`esSortKeyValid`, `esHidden`, `esParentHidden*`, `esTagged`,
-/// `esResolving`, `esNotSuitableToAddTo`), so a state it does not model is
-/// never in the set and setting it is a no-op -- which is what the port's
-/// element state says about it.
-fn element_state(index: i64) -> Option<ElementState> {
-    Some(match index {
+/// script names. `TwbElement.SetElementState` includes or excludes exactly
+/// that bit, and a read answers whether it is in the element's set, so the
+/// port models every state the mapping names, the view's own included
+/// (`esHidden` and the sort keys): the `el-states` probe walks 0..15 on a
+/// file, a record and a subrecord and compares every bit. The `else` arm is
+/// `esDummy`, which is a real bit a script can set and read (upstream maps
+/// every other index to it).
+fn element_state(index: i64) -> ElementState {
+    match index {
         0 => ElementState::esModified,
         1 => ElementState::esInternalModified,
         2 => ElementState::esUnsaved,
-        4 => ElementState::esModifiedUpdated,
-        5 => ElementState::esLocalized,
-        6 => ElementState::esNotLocalized,
-        9 => ElementState::esReachable,
+        3 => ElementState::esSortKeyValid,
+        4 => ElementState::esExtendedSortKeyValid,
+        5 => ElementState::esHidden,
+        6 => ElementState::esParentHidden,
+        7 => ElementState::esParentHiddenChecked,
         8 => ElementState::esNotReachable,
-        _ => return None,
-    })
+        9 => ElementState::esReachable,
+        10 => ElementState::esTagged,
+        11 => ElementState::esResolving,
+        12 => ElementState::esNotSuitableToAddTo,
+        _ => ElementState::esDummy,
+    }
 }
 
 pub(crate) fn register(adapter: &mut Adapter, state: &Rc<RefCell<ScriptRunState>>, strings: &Rc<ClassDef>) {
@@ -188,11 +194,9 @@ pub(crate) fn register(adapter: &mut Adapter, state: &Rc<RefCell<ScriptRunState>
                 {
                     let base = implemented.element_base();
                     let state = element_state(integer_at(args, 1)?);
-                    let had = state.is_some_and(|state| base.has_state(state));
+                    let had = base.has_state(state);
                     *result = Value::Bool(had);
-                    if let Some(state) = state {
-                        base.set_state(state, !clear);
-                    }
+                    base.set_state(state, !clear);
                 }
                 Ok(())
             },
@@ -209,7 +213,7 @@ pub(crate) fn register(adapter: &mut Adapter, state: &Rc<RefCell<ScriptRunState>
                 && let Some(implemented) = element.as_element_impl()
             {
                 let state = element_state(integer_at(args, 1)?);
-                *result = Value::Bool(state.is_some_and(|state| implemented.element_base().has_state(state)));
+                *result = Value::Bool(implemented.element_base().has_state(state));
             }
             Ok(())
         },

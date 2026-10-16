@@ -23,10 +23,15 @@
 //! * `ExceptObject`/`ExceptAddr` return the nil object/pointer: the
 //!   interpreter's `except on E` handler binds the caught exception as a
 //!   script variable, so an adapter call cannot see it.
-//! * `Beep` is silent, `ShowException` writes nothing: a headless run has
-//!   no console to beep or dialog to show.
-//! * `DiskFree`/`DiskSize` return -1 (the invalid-drive answer): the port
-//!   has no volume API.
+//! * `Beep` is `MessageBeep(0)`, the system sound the RTL plays; it has no
+//!   script-visible result.
+//! * `ShowException` goes through the [`Vcl`](super::Vcl) seam: upstream is
+//!   the RTL's modal message box, and a headless run has no dialog, so
+//!   [`NoVcl`](super::NoVcl) refuses the call (`EVclUnavailable`) where the
+//!   GUI phase shows the box.
+//! * `DiskFree`/`DiskSize` are the volume API (`GetDiskFreeSpaceExW`,
+//!   `xedit-session`'s `disk_space`), with the `Integer` truncation the
+//!   JvInterpreter wrapper applies to the RTL's `Int64` result.
 //! * `FileRead`/`FileWrite` pass their buffer as a `var` *string*, the
 //!   shape `TStream.ReadBuffer` documents (upstream reads and writes the
 //!   variant's raw payload memory, which is garbage by construction), and
@@ -49,9 +54,10 @@ use xedit_io::encoding::ansi_compare_text;
 use super::datetime;
 use super::format;
 use super::{
-    BYREF, EMPTY, arg, arg_bool, arg_char, arg_f64, arg_i32, arg_i64, arg_str, arg_text, constant, method, setter,
+    BYREF, EMPTY, Vcl, arg, arg_bool, arg_char, arg_f64, arg_i32, arg_i64, arg_str, arg_text, constant, method, setter,
     text_value,
 };
+use xedit_io::encoding::ansi_bytes;
 
 /// `cSysUtils = 'SysUtils'` (`JvInterpreter_SysUtils.pas:1742`).
 const UNIT: &str = "SysUtils";
@@ -357,7 +363,7 @@ fn open_shared(path: &Path, read: bool, write: bool, create: bool, mode: i32) ->
 }
 
 /// Registers the unit.
-pub fn register(adapter: &mut Adapter) {
+pub fn register(adapter: &mut Adapter, vcl: Rc<RefCell<dyn Vcl>>) {
     // `Exception` descends from `TObject` (registered by `System` first), so
     // `E.ClassName`, `ClassType` and `ClassNameIs` reach it as Delphi's RTTI
     // does for every object (`E.ClassName + ': ' + E.Message`, probe
@@ -508,7 +514,7 @@ pub fn register(adapter: &mut Adapter) {
     class(adapter, "EOSError", &exception);
     let _ = (e_abort, e_out_of_memory, e_in_out_error);
 
-    register_functions(adapter);
+    register_functions(adapter, vcl);
 
     // The file open mode constants.
     constant(adapter, UNIT, "fmOpenRead", FM_OPEN_READ);
@@ -554,7 +560,7 @@ fn field(name: &str, offset: i64, typ: VarType) -> xedit_script::values::RecordF
     }
 }
 
-fn register_functions(adapter: &mut Adapter) {
+fn register_functions(adapter: &mut Adapter, vcl: Rc<RefCell<dyn Vcl>>) {
     // A `SysUtils` function.
     fn f(
         adapter: &mut Adapter,
@@ -1253,13 +1259,18 @@ fn register_functions(adapter: &mut Adapter) {
         *value = text_value(file_search(&name, &dirs).into_bytes());
         Ok(())
     });
-    f(adapter, "DiskFree", &[EMPTY], |value, _args| {
-        // No volume API: the RTL's invalid-drive answer.
-        *value = Value::Integer(-1);
+    f(adapter, "DiskFree", &[EMPTY], |value, args| {
+        // `Value := Integer(DiskFree(Args.Values[0]))`: the argument is the
+        // RTL's `Drive: Byte` and the wrapper's `Integer` truncates the
+        // RTL's `Int64` result, which the oracle's numbers show
+        // (`DiskSize(0)` of a 1.7 TB volume reads -846204928).
+        let drive = disk_drive(&args.values[0])?;
+        *value = Value::Integer(disk_space(drive, false) as i32);
         Ok(())
     });
-    f(adapter, "DiskSize", &[EMPTY], |value, _args| {
-        *value = Value::Integer(-1);
+    f(adapter, "DiskSize", &[EMPTY], |value, args| {
+        let drive = disk_drive(&args.values[0])?;
+        *value = Value::Integer(disk_space(drive, true) as i32);
         Ok(())
     });
     f(adapter, "FileDateToDateTime", &[EMPTY], |value, args| {
@@ -1370,8 +1381,8 @@ fn register_functions(adapter: &mut Adapter) {
     f(adapter, "DateTimeToStr", &[EMPTY], |value, args| {
         let format = format!(
             "{} {}",
-            datetime::SETTINGS.short_date_format,
-            datetime::SETTINGS.long_time_format
+            datetime::settings().short_date_format,
+            datetime::settings().long_time_format
         );
         *value = text_value(datetime::date_time_to_str(&format, arg_f64(args, 0)?).into_bytes());
         Ok(())
@@ -1417,16 +1428,18 @@ fn register_functions(adapter: &mut Adapter) {
         Ok(())
     });
     f(adapter, "GetLocaleStr", &[EMPTY, EMPTY, EMPTY], |value, args| {
+        let locale = arg_i32(args, 0)?;
         let locale_type = arg_i32(args, 1)?;
         let default = arg_text(args, 2)?;
-        *value = text_value(locale_string(locale_type).unwrap_or(default).into_bytes());
+        *value = Value::Str(locale_string(locale, locale_type).unwrap_or_else(|| ansi_bytes(&default)));
         Ok(())
     });
     f(adapter, "GetLocaleChar", &[EMPTY, EMPTY, EMPTY], |value, args| {
+        let locale = arg_i32(args, 0)?;
         let locale_type = arg_i32(args, 1)?;
         let default = arg_text(args, 2)?;
-        let text = locale_string(locale_type).unwrap_or(default);
-        *value = text_value(text.into_bytes().into_iter().take(1).collect::<Vec<u8>>());
+        let text = locale_string(locale, locale_type).unwrap_or_else(|| ansi_bytes(&default));
+        *value = Value::Str(text.into_iter().take(1).collect());
         Ok(())
     });
     f(adapter, "GetFormatSettings", &[], |_value, _args| {
@@ -1470,11 +1483,16 @@ fn register_functions(adapter: &mut Adapter) {
             Ok(())
         },
     );
-    f(adapter, "ShowException", &[EMPTY, EMPTY], |_value, _args| {
-        // The RTL puts up a message box; a headless run has none, so the
-        // call has nothing it can do.
-        Ok(())
-    });
+    {
+        // `ShowException(ExceptObject, ExceptAddr)` is the RTL's modal
+        // message box: the surface belongs to the GUI, so the call goes
+        // through the `Vcl` seam and the headless [`NoVcl`](super::NoVcl)
+        // refuses it (`EVclUnavailable`) where the oracle's box ends its run.
+        let vcl = vcl.clone();
+        f(adapter, "ShowException", &[EMPTY, EMPTY], move |value, args| {
+            vcl.borrow_mut().function(UNIT, "ShowException", value, args)
+        });
+    }
     f(adapter, "Abort", &[], |_value, _args| {
         Err(ValueError::external_class("EAbort", S_ABORT_ERROR.to_owned()))
     });
@@ -1482,7 +1500,10 @@ fn register_functions(adapter: &mut Adapter) {
         Err(external(S_OUT_OF_MEMORY))
     });
     f(adapter, "Beep", &[], |_value, _args| {
-        // `MessageBeep(0)`; a hidden run must stay silent.
+        // `SysUtils.Beep` is `MessageBeep(0)`, the system sound. Its only
+        // effect is audible, and a headless run has no script-visible
+        // result; the probe pins that the call returns.
+        beep();
         Ok(())
     });
 
@@ -1619,11 +1640,12 @@ fn register_functions(adapter: &mut Adapter) {
     });
 }
 
-/// `RaiseLastOSError`'s message: `GetLastError` through the last OS error.
+/// `RaiseLastOSError`'s message: `GetLastError` through the RTL's
+/// `SOSError` text ([`super::os_error_message_code`]).
 fn os_error_message() -> String {
     let error = std::io::Error::last_os_error();
     match error.raw_os_error() {
-        Some(code) => format!("System Error. Code: {code}. {}", error),
+        Some(code) => super::os_error_message_code(code as u32),
         None => error.to_string(),
     }
 }
@@ -1933,11 +1955,83 @@ fn file_search(name: &str, dir_list: &str) -> String {
     String::new()
 }
 
-/// `GetLocaleStr` for the en-US locale: the RTL's `LOCALE_S*` values the
-/// port can answer (the day and month names, the separators, the date and
-/// time formats, the number symbols); an unknown type is `None`, for which
-/// the caller uses the default.
-fn locale_string(locale_type: i32) -> Option<String> {
+/// `SysUtils.Beep`: `MessageBeep(0)`, the default system sound. Nothing a
+/// script can read; the call is the behaviour, the sound is its effect.
+#[cfg(windows)]
+fn beep() {
+    use windows_sys::Win32::System::Diagnostics::Debug::MessageBeep;
+    // SAFETY: `MessageBeep` reads no memory of this process.
+    unsafe {
+        MessageBeep(0);
+    }
+}
+
+#[cfg(not(windows))]
+fn beep() {}
+
+/// The `Drive: Byte` argument of `DiskFree`/`DiskSize`: the variant
+/// conversion to the byte slot, which truncates rather than raising --
+/// `DiskFree(300)` and `DiskFree(-1)` read the wrapped drive 44 and 255 and
+/// answer the invalid-drive -1, as the oracle's `disk` lines show (the
+/// JvInterpreter's unit is compiled with range checking off, so the
+/// conversion of an out-of-range integer wraps).
+fn disk_drive(value: &Value) -> Result<u8, ValueError> {
+    Ok(xedit_script::values::to_i64(value)? as u8)
+}
+
+/// `DiskFree`/`DiskSize`: the byte count of the volume the drive argument
+/// names (`0` is the drive of the process's current directory, `1`..`26`
+/// are `A:`..`Z:`, as the RTL's `Drive: Byte` reads), or -1 for a drive
+/// that does not exist and for a failed query (`GetDiskFreeSpaceExW` fails
+/// on an unmounted drive). `total` picks `DiskSize`'s total bytes over
+/// `DiskFree`'s bytes available to the caller, the two RTL results.
+#[cfg(windows)]
+fn disk_space(drive: u8, total: bool) -> i64 {
+    use windows_sys::Win32::Storage::FileSystem::GetDiskFreeSpaceExW;
+    let drivenumber = if drive == 0 {
+        // `GetDir(0, ...)`: the drive letter of the current directory.
+        let Ok(dir) = std::env::current_dir() else { return -1 };
+        match dir.to_string_lossy().chars().next() {
+            Some(letter) if letter.is_ascii_alphabetic() => letter.to_ascii_uppercase() as u8,
+            _ => return -1,
+        }
+    } else if drive <= 26 {
+        b'A' + drive - 1
+    } else {
+        return -1;
+    };
+    let root = [u16::from(drivenumber), u16::from(b':'), u16::from(b'\\'), 0];
+    let mut available: u64 = 0;
+    let mut total_bytes: u64 = 0;
+    let mut total_free: u64 = 0;
+    // SAFETY: `root` is a NUL-terminated path, the three out parameters are
+    // `u64` of this frame, and no sharing mode or flag is read.
+    let ok = unsafe { GetDiskFreeSpaceExW(root.as_ptr(), &mut available, &mut total_bytes, &mut total_free) };
+    if ok == 0 {
+        return -1;
+    }
+    (if total { total_bytes } else { available }).cast_signed()
+}
+
+#[cfg(not(windows))]
+fn disk_space(_drive: u8, _total: bool) -> i64 {
+    -1
+}
+
+/// `GetLocaleStr`'s answer: the value [`super::locale_value`] reads from the
+/// system, carried in the system code page -- the bytes the GUI's memo shows,
+/// and what the oracle's `GetLocaleStr` holds after its own conversion. The
+/// types the system answers nothing for are the RTL's `Default` too, so a
+/// `None` here lets the caller's default through.
+#[cfg(windows)]
+fn locale_string(locale: i32, locale_type: i32) -> Option<Vec<u8>> {
+    super::locale_value(locale, locale_type).map(|text| ansi_bytes(&text))
+}
+
+/// `GetLocaleStr` off Windows: the en-US table the port carried before the
+/// locale read, with the day and month names and the separators.
+#[cfg(not(windows))]
+fn locale_string(_locale: i32, locale_type: i32) -> Option<Vec<u8>> {
     const LOCALE_SDECIMAL: i32 = 14;
     const LOCALE_STHOUSAND: i32 = 15;
     const LOCALE_SCURRENCY: i32 = 20;
@@ -1952,27 +2046,28 @@ fn locale_string(locale_type: i32) -> Option<String> {
     const LOCALE_SMONTHNAME1: i32 = 56;
     const LOCALE_SABBREVMONTHNAME1: i32 = 68;
     const LOCALE_STIMEFORMAT: i32 = 4099;
-    Some(match locale_type {
-        LOCALE_SDECIMAL => format::SETTINGS.decimal_separator.to_string(),
-        LOCALE_STHOUSAND => format::SETTINGS.thousand_separator.to_string(),
-        LOCALE_SCURRENCY => format::SETTINGS.currency_string.to_owned(),
-        LOCALE_SDATE => datetime::SETTINGS.date_separator.to_string(),
-        LOCALE_STIME => datetime::SETTINGS.time_separator.to_string(),
-        LOCALE_SSHORTDATE => datetime::SETTINGS.short_date_format.to_owned(),
+    let text = match locale_type {
+        LOCALE_SDECIMAL => format::settings().decimal_separator.to_string(),
+        LOCALE_STHOUSAND => format::settings().thousand_separator.to_string(),
+        LOCALE_SCURRENCY => format::settings().currency_string.to_owned(),
+        LOCALE_SDATE => datetime::settings().date_separator.to_string(),
+        LOCALE_STIME => datetime::settings().time_separator.to_string(),
+        LOCALE_SSHORTDATE => datetime::settings().short_date_format.to_owned(),
         LOCALE_SLONGDATE => "dddd, MMMM d, yyyy".to_owned(),
         LOCALE_STIMEFORMAT => "h:nn:ss am/pm".to_owned(),
-        LOCALE_S1159 => datetime::SETTINGS.time_am_string.to_owned(),
-        LOCALE_S2359 => datetime::SETTINGS.time_pm_string.to_owned(),
+        LOCALE_S1159 => datetime::settings().time_am_string.to_owned(),
+        LOCALE_S2359 => datetime::settings().time_pm_string.to_owned(),
         // `LOCALE_SDAYNAME1`..`LOCALE_SDAYNAME7` (Monday first).
-        42..=48 => datetime::SETTINGS.long_day_names[((locale_type - LOCALE_SDAYNAME1 + 1) % 7) as usize].to_owned(),
+        42..=48 => datetime::settings().long_day_names[((locale_type - LOCALE_SDAYNAME1 + 1) % 7) as usize].to_owned(),
         // `LOCALE_SABBREVDAYNAME1`..`_7`.
         49..=55 => {
-            datetime::SETTINGS.short_day_names[((locale_type - LOCALE_SABBREVDAYNAME1 + 1) % 7) as usize].to_owned()
+            datetime::settings().short_day_names[((locale_type - LOCALE_SABBREVDAYNAME1 + 1) % 7) as usize].to_owned()
         }
         // `LOCALE_SMONTHNAME1`..`_12`.
-        56..=67 => datetime::SETTINGS.long_month_names[(locale_type - LOCALE_SMONTHNAME1) as usize].to_owned(),
+        56..=67 => datetime::settings().long_month_names[(locale_type - LOCALE_SMONTHNAME1) as usize].to_owned(),
         // `LOCALE_SABBREVMONTHNAME1`..`_12`.
-        68..=79 => datetime::SETTINGS.short_month_names[(locale_type - LOCALE_SABBREVMONTHNAME1) as usize].to_owned(),
+        68..=79 => datetime::settings().short_month_names[(locale_type - LOCALE_SABBREVMONTHNAME1) as usize].to_owned(),
         _ => return None,
-    })
+    };
+    Some(ansi_bytes(&text))
 }

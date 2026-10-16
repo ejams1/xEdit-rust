@@ -356,8 +356,89 @@ pub struct DateSettings {
     pub long_day_names: [&'static str; 7],
 }
 
-/// The en-US `DefaultFormatSettings`.
-pub const SETTINGS: DateSettings = DateSettings {
+/// `DefaultFormatSettings` on the reference machine: the separator, short
+/// date, long time and marker words the system locale answers
+/// ([`super::locale_value`], the same data `GetLocaleStr` reads), with the
+/// table below as the base and fallback. The RTL loads its default settings
+/// from the locale at startup, so `DateToStr`/`TimeToStr` print the user's
+/// formats: the `sys-helpers` probe's `fmt` lines compare them against the
+/// oracle (locale en-CA there: `yyyy-MM-dd` with `-` for `/`), which is why
+/// the loaded values override the en-US table. The OS writes a time pattern
+/// in its own words (`h:mm:ss tt`), and the RTL's specifier language is
+/// `h:nn:ss am/pm`: minutes become `nn` and the marker `am/pm`/`a/p`, as
+/// the RTL's own `GetFormatSettings` translates them. The day and month
+/// names stay the table's (the system answers the same words for the
+/// reference locale).
+pub fn settings() -> &'static DateSettings {
+    static LOADED: std::sync::OnceLock<DateSettings> = std::sync::OnceLock::new();
+    LOADED.get_or_init(load_settings)
+}
+
+/// The `LOCALE_*` types the settings load (`winnt.h`).
+const LOCALE_SDATE: i32 = 29;
+const LOCALE_STIME: i32 = 30;
+const LOCALE_SSHORTDATE: i32 = 31;
+const LOCALE_S1159: i32 = 40;
+const LOCALE_S2359: i32 = 41;
+const LOCALE_STIMEFORMAT: i32 = 0x1003;
+
+fn load_settings() -> DateSettings {
+    let mut settings = DEFAULT_SETTINGS;
+    let value = |locale_type: i32| super::locale_value(0, locale_type);
+    if let Some(text) = value(LOCALE_SDATE).and_then(|text| text.chars().next()) {
+        settings.date_separator = text;
+    }
+    if let Some(text) = value(LOCALE_STIME).and_then(|text| text.chars().next()) {
+        settings.time_separator = text;
+    }
+    if let Some(text) = value(LOCALE_SSHORTDATE) {
+        settings.short_date_format = Box::leak(text.into_boxed_str());
+    }
+    if let Some(text) = value(LOCALE_STIMEFORMAT) {
+        settings.long_time_format = Box::leak(translate_time_format(&text).into_boxed_str());
+    }
+    if let Some(text) = value(LOCALE_S1159) {
+        settings.time_am_string = Box::leak(text.into_boxed_str());
+    }
+    if let Some(text) = value(LOCALE_S2359) {
+        settings.time_pm_string = Box::leak(text.into_boxed_str());
+    }
+    settings
+}
+
+/// The OS time pattern in the RTL's specifier language: `tt`/`t` become
+/// `am/pm`/`a/p` and the minutes (`mm`, a `m` next to a `:`) become
+/// `nn`/`n`.
+fn translate_time_format(pattern: &str) -> String {
+    let mut out = String::with_capacity(pattern.len() + 4);
+    let chars: Vec<char> = pattern.chars().collect();
+    let mut at = 0;
+    while at < chars.len() {
+        let lower = chars[at].to_ascii_lowercase();
+        if lower == 't' {
+            let mut run = 0;
+            while at + run < chars.len() && chars[at + run].to_ascii_lowercase() == 't' {
+                run += 1;
+            }
+            out.push_str(if run >= 2 { "am/pm" } else { "a/p" });
+            at += run;
+        } else if lower == 'm' && at > 0 && chars[at - 1] == ':' {
+            let mut run = 0;
+            while at + run < chars.len() && chars[at + run].to_ascii_lowercase() == 'm' {
+                run += 1;
+            }
+            out.push_str(if run >= 2 { "nn" } else { "n" });
+            at += run;
+        } else {
+            out.push(chars[at]);
+            at += 1;
+        }
+    }
+    out
+}
+
+/// The en-US `DefaultFormatSettings` table.
+const DEFAULT_SETTINGS: DateSettings = DateSettings {
     date_separator: '/',
     time_separator: ':',
     short_date_format: "M/d/yyyy",
@@ -395,12 +476,12 @@ pub const SETTINGS: DateSettings = DateSettings {
 
 /// `DateToStr`: `FormatDateTime(ShortDateFormat, Date)`.
 pub fn date_to_str(date: f64) -> String {
-    date_time_to_str(SETTINGS.short_date_format, date)
+    date_time_to_str(settings().short_date_format, date)
 }
 
 /// `TimeToStr`: `FormatDateTime(LongTimeFormat, Time)`.
 pub fn time_to_str(date: f64) -> String {
-    date_time_to_str(SETTINGS.long_time_format, date)
+    date_time_to_str(settings().long_time_format, date)
 }
 
 /// `DateTimeToString(format, DateTime)`: the RTL's specifier language.
@@ -426,9 +507,9 @@ pub fn date_time_to_str(format: &str, date: f64) -> String {
         if (c == 'a' || c == 'A') && (rest_lower.starts_with("am/pm") || rest_lower.starts_with("a/p")) {
             let short = rest_lower.starts_with("a/p");
             let text = if hour < 12 {
-                SETTINGS.time_am_string
+                settings().time_am_string
             } else {
-                SETTINGS.time_pm_string
+                settings().time_pm_string
             };
             out.push_str(&format_pm_marker(text, c == 'A', short));
             i += if short { 3 } else { 5 };
@@ -438,9 +519,9 @@ pub fn date_time_to_str(format: &str, date: f64) -> String {
         match c {
             'd' => {
                 if count >= 4 {
-                    out.push_str(SETTINGS.long_day_names[(day_of_week(date) - 1) as usize]);
+                    out.push_str(settings().long_day_names[(day_of_week(date) - 1) as usize]);
                 } else if count == 3 {
-                    out.push_str(SETTINGS.short_day_names[(day_of_week(date) - 1) as usize]);
+                    out.push_str(settings().short_day_names[(day_of_week(date) - 1) as usize]);
                 } else if count == 2 {
                     out.push_str(&format!("{day:02}"));
                 } else {
@@ -457,9 +538,9 @@ pub fn date_time_to_str(format: &str, date: f64) -> String {
                         out.push_str(&minute.to_string());
                     }
                 } else if count >= 4 {
-                    out.push_str(SETTINGS.long_month_names[(month - 1) as usize]);
+                    out.push_str(settings().long_month_names[(month - 1) as usize]);
                 } else if count == 3 {
-                    out.push_str(SETTINGS.short_month_names[(month - 1) as usize]);
+                    out.push_str(settings().short_month_names[(month - 1) as usize]);
                 } else if count == 2 {
                     out.push_str(&format!("{month:02}"));
                 } else {
@@ -522,10 +603,10 @@ pub fn date_time_to_str(format: &str, date: f64) -> String {
             '/' => {
                 // The RTL keeps the "last specifier was an hour" state
                 // across the separators, so `h:mm:ss` reads minutes.
-                out.push(SETTINGS.date_separator);
+                out.push(settings().date_separator);
             }
             ':' => {
-                out.push(SETTINGS.time_separator);
+                out.push(settings().time_separator);
             }
             '\'' | '"' => {
                 // A quoted literal runs to the next quote (a doubled quote
@@ -571,7 +652,7 @@ pub fn str_to_date(text: &str) -> Result<f64, String> {
     if fields.is_empty() {
         return Err(format!("'{text}' is not a valid date"));
     }
-    let spec: Vec<char> = SETTINGS
+    let spec: Vec<char> = settings()
         .short_date_format
         .chars()
         .filter(|c| matches!(c.to_ascii_lowercase(), 'm' | 'd' | 'y'))
@@ -633,7 +714,7 @@ pub fn str_to_date_time(text: &str) -> Result<f64, String> {
     let (date_part, time_part) = split_at_time(text);
     match time_part {
         None => {
-            if date_part.contains([':', SETTINGS.time_separator]) {
+            if date_part.contains([':', settings().time_separator]) {
                 str_to_time(date_part)
             } else {
                 str_to_date(date_part)
@@ -706,7 +787,7 @@ fn split_at_time(text: &str) -> (&str, Option<&str>) {
     match text.split_once(' ') {
         Some((date, rest))
             if rest.chars().any(|c| c.is_ascii_digit())
-                && (rest.contains(SETTINGS.time_separator)
+                && (rest.contains(settings().time_separator)
                     || rest.to_ascii_lowercase().contains("am")
                     || rest.to_ascii_lowercase().contains("pm")) =>
         {

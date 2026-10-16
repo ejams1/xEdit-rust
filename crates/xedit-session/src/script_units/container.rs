@@ -14,6 +14,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use xedit_core::interface::FileState;
 use xedit_script::adapter::{Adapter, Args};
 use xedit_script::values::{ParamType, Value, ValueError, VarType, to_bool};
 
@@ -96,11 +97,31 @@ pub(crate) fn register(adapter: &mut Adapter, state: &Rc<RefCell<ScriptRunState>
     adapter.add_function(
         super::C_UNIT,
         "ContainerStates",
-        Rc::new(|_result: &mut Value, _args: &mut Args| {
-            // `ContainerStates` is `TwbContainer`'s creation state
-            // (`csAsCreatedEmpty` and the sort states), which the port keeps
-            // on the implementation and not on the `Container` interface:
-            // owed to the phase-7 GUI binding, where the tree reads it.
+        Rc::new(|result: &mut Value, args: &mut Args| {
+            // `Value := Word(Container.ContainerStates)`: the set as a bit
+            // mask (`csInit` 1, `csInitOnce` 2, `csInitDone` 4,
+            // `csInitializing` 8, `csReseting` 16, `csRefsBuild` 32,
+            // `csAsCreatedEmpty` 64, `csSortedBySortOrder` 128,
+            // `csCollapsed` 256, `csExpanded` 512, `csConstructionCompleted`
+            // 1024). A container the port has built answers the states a
+            // `DoInit`ed container of a finished construction holds
+            // (`el-states` compares the file, a record and a group), and the
+            // references a file built or loaded add `csRefsBuild`. An
+            // element that is no container leaves the result unassigned, as
+            // the adapter's failed `Supports` does.
+            let Some(element) = element_at(args, 0) else {
+                return Ok(());
+            };
+            if element.as_container().is_none() {
+                return Ok(());
+            }
+            let mut states: i32 = 1 | 2 | 4 | 1024;
+            if let Some(file) = element.get_file()
+                && file.get_file_states().contains(FileState::fsRefsBuild)
+            {
+                states |= 32;
+            }
+            *result = Value::Integer(states);
             Ok(())
         }),
         1,

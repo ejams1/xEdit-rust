@@ -3308,8 +3308,10 @@ impl MainRecordImpl {
             .and_then(|element| element.as_element_impl()?.value_impl())
     }
 
-    /// The common part of `TwbMainRecord.SetEditValue` and `SetNativeValue`.
-    fn set_form_id_value(&self, form_id: FormID) -> Result<(), EditError> {
+    /// The edit gate of `TwbMainRecord.SetEditValue`/`SetNativeValue`: the
+    /// record must be editable (or internally edited), and an
+    /// internal-edit-only definition is silently left alone.
+    fn check_form_id_gate(&self) -> Result<bool, EditError> {
         if !is_internal_edit() {
             if !edit_allowed() {
                 return Err(format!("{} can not be edited.", self.get_name()));
@@ -3319,8 +3321,16 @@ impl MainRecordImpl {
                 .as_ref()
                 .is_some_and(|def| def.def_base().def_internal_edit_only())
             {
-                return Ok(());
+                return Ok(false);
             }
+        }
+        Ok(true)
+    }
+
+    /// The common part of `TwbMainRecord.SetEditValue` and `SetNativeValue`.
+    fn set_form_id_value(&self, form_id: FormID) -> Result<(), EditError> {
+        if !self.check_form_id_gate()? {
+            return Ok(());
         }
         if !display_load_order_form_id() {
             return Err("FormID can only be edited if wbDisplayLoadOrderFormID is active".to_owned());
@@ -4902,7 +4912,20 @@ impl ElementImpl for MainRecordImpl {
 
     /// Port of `TwbMainRecord.SetEditValue`: the load order FormID of the
     /// record, in hexadecimal (`SetLoadOrderFormID`).
+    ///
+    /// Upstream runs the edit gate first, and only inside the
+    /// `wbDisplayLoadOrderFormID` branch parses the value
+    /// (`TwbFormID.FromStr(aValue)`): with the display off -- which no
+    /// headless run sets -- every value, a FormID or not, meets
+    /// `FormID can only be edited if wbDisplayLoadOrderFormID is active`.
+    /// The `el-states` probe compares that text.
     fn set_edit_value_impl(&self, value: &str) -> Result<(), EditError> {
+        if !self.check_form_id_gate()? {
+            return Ok(());
+        }
+        if !display_load_order_form_id() {
+            return Err("FormID can only be edited if wbDisplayLoadOrderFormID is active".to_owned());
+        }
         let form_id = crate::interface::form_id::FormID::from_str(value)
             .ok_or_else(|| format!("\"{value}\" is not a valid integer value"))?;
         self.set_form_id_value(form_id)

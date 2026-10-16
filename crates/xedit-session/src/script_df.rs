@@ -1124,7 +1124,7 @@ fn register_tdf_element(adapter: &mut Adapter, ctx: &Ctx) {
     });
     element_get_args(adapter, &class, "LoadFromJSONFile", 1, ctx, |_ctx, doc, args| {
         let path = text_arg(&args.values[0])?;
-        let bytes = read_file(&path)?;
+        let bytes = read_json_file(&path)?;
         // `TStringList.LoadFromFile`: a byte order mark, else ANSI.
         let text = xedit_io::encoding::string_list_text(&bytes);
         doc.file.tree.from_json(doc.el, &text).map_err(df_error)?;
@@ -1712,15 +1712,61 @@ fn asset_kind_of(kind: MiscFile) -> AssetKind {
     }
 }
 
-/// `LoadFromFile`'s read (the OSError of the GUI's `CreateFile` route with
-/// the crate's `Cannot open file` convention).
+/// `LoadFromFile`'s read: `TdfElement.LoadFromFile` opens with `CreateFile`
+/// and raises `RaiseLastOSError` when it fails, so the run reports the
+/// unhandled `EOSError` with the RTL's `SOSError` text
+/// (`df-load-missing.pas` compares the abort line: class, both message
+/// lines and the script's unit and line).
 fn read_file(path: &str) -> Result<Vec<u8>, ValueError> {
-    std::fs::read(path).map_err(|error| ValueError::External(format!("Cannot open file \"{path}\". {error}")))
+    let code = crate::script_rtl::create_file_error(path);
+    if code != 0 {
+        return Err(ValueError::external_class(
+            "EOSError",
+            crate::script_rtl::os_error_message_code(code),
+        ));
+    }
+    std::fs::read(path).map_err(|error| ValueError::External(error.to_string()))
 }
 
-/// A write of `SaveToFile`/`SaveToJSONFile`.
+/// A write of `SaveToFile`: upstream creates the file with
+/// `TFileStream.Create(aFileName, fmCreate)`, whose failure is an
+/// `EFCreateError` with `Cannot create file "<path>". <system text>`
+/// (`df-file-errors.pas`).
 fn write_file(path: &str, data: &[u8]) -> Result<(), ValueError> {
-    std::fs::write(path, data).map_err(|error| ValueError::External(format!("Cannot open file \"{path}\". {error}")))
+    let code = crate::script_rtl::file_stream_error(path, true);
+    if code != 0 {
+        return Err(create_error(path, code));
+    }
+    std::fs::write(path, data).map_err(|error| ValueError::External(error.to_string()))
+}
+
+/// `Cannot create file "<path>". <system text>` (the `TFileStream`
+/// `fmCreate` failure of `SaveToFile`).
+fn create_error(path: &str, code: u32) -> ValueError {
+    ValueError::external_class(
+        "EFCreateError",
+        format!(
+            "Cannot create file \"{path}\". {}",
+            crate::script_rtl::os_error_text_code(code)
+        ),
+    )
+}
+
+/// The read a `TStrings.LoadFromFile` route does (`LoadFromJSONFile`): an
+/// `EFOpenError` with `Cannot open file "<path>". <system text>`
+/// (`df-file-errors.pas`).
+fn read_json_file(path: &str) -> Result<Vec<u8>, ValueError> {
+    let code = crate::script_rtl::file_stream_error(path, false);
+    if code != 0 {
+        return Err(ValueError::external_class(
+            "EFOpenError",
+            format!(
+                "Cannot open file \"{path}\". {}",
+                crate::script_rtl::os_error_text_code(code)
+            ),
+        ));
+    }
+    std::fs::read(path).map_err(|error| ValueError::External(error.to_string()))
 }
 
 #[cfg(test)]
