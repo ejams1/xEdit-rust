@@ -40,6 +40,7 @@ pub struct FlagImpl {
     flags_def: Arc<FlagsDef>,
     index: i32,
     sort_order: std::sync::atomic::AtomicI32,
+    memory_order: std::sync::atomic::AtomicI32,
 }
 
 impl FlagImpl {
@@ -58,6 +59,7 @@ impl FlagImpl {
             flags_def,
             index,
             sort_order: std::sync::atomic::AtomicI32::new(index),
+            memory_order: std::sync::atomic::AtomicI32::new(index),
         })
     }
 
@@ -172,6 +174,10 @@ impl Element for FlagImpl {
         self.sort_order.store(order, std::sync::atomic::Ordering::Relaxed);
     }
 
+    fn set_memory_order(&self, order: i32) {
+        self.memory_order.store(order, std::sync::atomic::Ordering::Relaxed);
+    }
+
     /// Port of `TwbFlag.GetSortKeyInternal` (the key is not cached here, so
     /// the check of `GetSortKey` for a changed definition is not needed).
     fn get_sort_key(&self, _extended: bool) -> String {
@@ -198,9 +204,10 @@ impl Element for FlagImpl {
         self.container_ref()
     }
 
-    /// The flags of a value keep the order of their index.
+    /// `SetMemoryOrder(aIndex)` of `TwbFlag.Create`: the flags of a value
+    /// start with the order of their index.
     fn get_memory_order(&self) -> i32 {
-        self.index
+        self.memory_order.load(std::sync::atomic::Ordering::Relaxed)
     }
 
     fn get_file(&self) -> Option<FileRef> {

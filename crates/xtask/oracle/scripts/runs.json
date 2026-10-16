@@ -219,11 +219,15 @@
     },
     {
       "script": "Make new records from overrides.pas",
+      "load": [
+        "Skyrim.esm",
+        "Update.esm"
+      ],
       "close_after": true,
       "save": [
-        "Skyrim.esm"
+        "Update.esm"
       ],
-      "note": "edits records: the saved bytes are compared"
+      "note": "edits records: the saved bytes are compared. Update.esm carries the overrides the script converts (a load of Skyrim.esm alone has none: every record of a master is `IsMaster`), and the references they hold into the game master are reindexed to Update.esm's own records"
     },
     {
       "script": "NIF - List blocks references.pas"

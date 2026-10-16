@@ -12,10 +12,15 @@
 //! The overrides of the other classes are next to them (`sub_record`,
 //! `value`, the main record in `mod.rs`).
 //!
-//! State: the source of an assign is one element; `IwbMultipleElements`,
-//! the template elements and the aligned arrays (`GetAlignable`) are not
-//! ported, nor the sort keys of a value structure (`GetIsInSK` of a
-//! subrecord).
+//! `IwbMultipleElements` (a source with several elements), the template
+//! elements (`implementation/template.rs`) and the aligned arrays
+//! (`GetAlignable`, the `AlignedCreate` of the subrecords and values) are
+//! ported. State: `GetIsInSK` of a subrecord or a value
+//! (`TwbSubRecord.GetIsInSK`, `TwbValueBase.GetIsInSK`) is not ported and
+//! answers false; upstream asks whether the value definition is a sort-key
+//! structure definition (`IwbHasSortKeyDef`), which the definitions never
+//! use as a subrecord or value definition (only as a structure member, the
+//! ported `TwbSubRecordStruct.GetIsInSK`).
 
 use std::sync::Arc;
 

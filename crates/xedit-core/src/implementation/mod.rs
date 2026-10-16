@@ -205,6 +205,12 @@ macro_rules! element_common {
                 .store(order, std::sync::atomic::Ordering::Relaxed);
         }
 
+        fn set_memory_order(&self, order: i32) {
+            self.$base()
+                .e_memory_order
+                .store(order, std::sync::atomic::Ordering::Relaxed);
+        }
+
         fn begin_update(&self) {
             $crate::implementation::edit::begin_update(self)
         }

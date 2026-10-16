@@ -170,6 +170,11 @@ pub trait Element: Send + Sync {
     /// Upstream `SortOrder := aValue`.
     fn set_sort_order(&self, _order: i32) {}
 
+    /// Upstream `MemoryOrder := aValue`: the position the element had in
+    /// the data, which `MergeStorageInternal` writes a container in when
+    /// the tree order differs from it (a sorted array).
+    fn set_memory_order(&self, _order: i32) {}
+
     /// Upstream `BeginUpdate`: change notifications wait for `end_update`.
     fn begin_update(&self) {}
 
