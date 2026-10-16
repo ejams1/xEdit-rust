@@ -487,7 +487,10 @@ pub fn arc_tan(x: f64) -> f64 {
 
 /// The start value of `ArcTan2` by the special types of `Y` (rows) and `X`.
 const ATAN2_TABLE: [[f64; 9]; 9] = {
-    const N: f64 = f64::NAN;
+    // The RTL's `NaN` (`0.0 / 0.0`): the x64 real indefinite, whose sign
+    // bit is set (`ArcSin(2)` is `0xFFF8...` in the oracle's
+    // `numerics-values.dat`).
+    const N: f64 = bits(0xFFF8_0000_0000_0000);
     const H: f64 = HALF_PI_DOUBLE;
     const Q: f64 = QUARTER_PI_DOUBLE;
     const T: f64 = THREE_QUARTERS_PI_DOUBLE;

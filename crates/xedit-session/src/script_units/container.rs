@@ -115,15 +115,47 @@ pub(crate) fn register(adapter: &mut Adapter, state: &Rc<RefCell<ScriptRunState>
             if element.as_container().is_none() {
                 return Ok(());
             }
-            // Only the file, a main record and a group are `DoInit`ed when a
-            // script reaches them; the members below hold
-            // `csConstructionCompleted` alone (the oracle's 1024 for the
-            // record header struct, `el-states`).
+            // `DoInit` includes `csInit`, `csInitOnce` and `csInitDone`
+            // (1031 with `csConstructionCompleted`); `DoReset` excludes the
+            // first and the last again when the container's last reference
+            // goes and `CanElementReset` allows it, so a container that was
+            // read once and let go answers 1026 and one never read 1024.
+            // The file and a group stay held. A main record and a subrecord
+            // may reset while no element of theirs is referenced from
+            // outside (`cntElementRefs < 1`): the record a script holds a
+            // subrecord of, or the `DATA` it holds the value of, is 1031,
+            // the same after the reference is gone 1026 (`el-states`). A
+            // value (the record header) may reset only while nothing refers
+            // to the value itself (`eExternalRefs < 1`), and the script's
+            // reference is there while it asks: once read it is 1031.
+            // UPSTREAM-NOTE: the port does not reset on a release, so a
+            // value read, let go and asked about again answers 1031 where
+            // the oracle may have reset it to 1026.
+            let full = 1 | 2 | 4 | 1024;
+            let element_impl = element.as_element_impl();
             let mut states: i32 = match element.get_element_type() {
-                xedit_core::interface::ElementType::etFile
-                | xedit_core::interface::ElementType::etMainRecord
-                | xedit_core::interface::ElementType::etGroupRecord => 1 | 2 | 4 | 1024,
-                _ => 1024,
+                xedit_core::interface::ElementType::etFile | xedit_core::interface::ElementType::etGroupRecord => full,
+                _ => {
+                    let held_by_elements = element_impl
+                        .and_then(|element| element.container_base())
+                        .is_some_and(|container| container.is_element_referenced());
+                    let (init_once, is_value) = match element_impl.and_then(|element| element.main_record_impl()) {
+                        Some(record) => (record.is_initialized(), false),
+                        None => (
+                            element_impl
+                                .and_then(|element| element.container_base())
+                                .is_some_and(|container| container.is_init_once()),
+                            element_impl.is_some_and(|element| element.value_impl().is_some()),
+                        ),
+                    };
+                    if !init_once {
+                        1024
+                    } else if is_value || held_by_elements {
+                        full
+                    } else {
+                        2 | 1024
+                    }
+                }
             };
             if let Some(file) = element.get_file()
                 && file.get_file_states().contains(FileState::fsRefsBuild)

@@ -279,6 +279,7 @@ impl SubRecordImpl {
     /// The body of `TwbSubRecord.Init`, which `SetDataSize` runs again
     /// while the init runs (from an `AfterLoad` callback).
     fn init(&self) {
+        self.container.set_init_once();
         {
             if self.skipped() {
                 return;

@@ -71,7 +71,8 @@ end;
 
 function Initialize: integer;
 var
-  f, r, sr, g: IInterface;
+  f, r, sr, g, d, c: IInterface;
+  s: string;
   i: Integer;
 begin
   Result := 0;
@@ -84,10 +85,6 @@ begin
   Log('cs', 'group=' + Cs(g));
   Log('cs', 'subrecord=' + Cs(sr));
   Log('cs', 'header-type=' + IntToStr(ElementType(sr)) + ' ' + Name(sr));
-  { Member 1 (`EDID`) answers 1026 on the oracle: the record's own lazy
-    read of its editor ID has run `DoInit` on it once (`csInitOnce`). The
-    port builds no such state per member, so only `DATA`, which nothing
-    has touched, is compared (owed in the ledger note of `ContainerStates`). }
   Log('cs', 'member2=' + Cs(ElementByIndex(r, 2)) + ' type=' + IntToStr(ElementType(ElementByIndex(r, 2))) + ' ' + Name(ElementByIndex(r, 2)));
   StateRange('file', f);
   StateRange('record', r);
@@ -109,6 +106,36 @@ begin
     Log('edit', 'exc-bad=' + E.ClassName + ' ' + E.Message);
   end;
   Log('edit', 'end-states ' + Flag(GetElementState(r, 0)) + Flag(GetElementState(r, 1)) + Flag(GetElementState(r, 2)));
+  { `csInitOnce` (fix-numerics): a member whose value was read once keeps
+    the bit after the release resets it (`DoReset` excludes `csInit` and
+    `csInitDone` only). The record's own `Init` reads its editor ID
+    (`mrEditorID := mrDef.GetEditorID(CurrentRec)`), so `EDID` holds it
+    before the script reads anything; `DATA` holds it once its value is
+    read. The second record is reached here for the first time. }
+  Log('cs', 'member1=' + Cs(ElementByIndex(r, 1)) + ' ' + Name(ElementByIndex(r, 1)));
+  Log('cs', 'member2-read=' + GetEditValue(ElementByIndex(r, 2)) + ' cs=' + Cs(ElementByIndex(r, 2)));
+  Log('cs', 'member1-read=' + GetEditValue(ElementByIndex(r, 1)) + ' cs=' + Cs(ElementByIndex(r, 1)));
+  Log('cs', 'header-read=' + GetEditValue(ElementByIndex(sr, 0)) + ' cs=' + Cs(sr));
+  r := RecordByIndex(f, 1);
+  Log('cs', 'record2=' + Cs(r));
+  Log('cs', 'record2-member0=' + Cs(ElementByIndex(r, 0)));
+  Log('cs', 'record2-member1=' + Cs(ElementByIndex(r, 1)) + ' ' + Name(ElementByIndex(r, 1)));
+  Log('cs', 'record2-member2=' + Cs(ElementByIndex(r, 2)) + ' ' + Name(ElementByIndex(r, 2)));
+  Log('cs', 'record2-edid=' + EditorID(r) + ' cs=' + Cs(ElementByIndex(r, 1)));
+  Log('cs', 'record2-after=' + Cs(r));
+  sr := ElementByIndex(r, 0);
+  Log('cs', 'record2-held=' + Cs(r) + ' header=' + Cs(sr));
+  s := GetEditValue(ElementByIndex(sr, 0));
+  Log('cs', 'record2-header-read=' + s + ' cs=' + Cs(sr) + ' count=' + IntToStr(ElementCount(sr)));
+  d := ElementByIndex(r, 2);
+  Log('cs', 'record2-data-count=' + IntToStr(ElementCount(d)) + ' cs=' + Cs(d));
+  c := ElementByIndex(d, 0);
+  Log('cs', 'record2-data-child=' + Cs(d) + ' ' + Name(c) + ' ' + Cs(c));
+  c := nil;
+  Log('cs', 'record2-data-released=' + Cs(d));
+  d := nil;
+  sr := nil;
+  Log('cs', 'record2-released=' + Cs(r));
 end;
 
 end.

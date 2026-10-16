@@ -642,6 +642,7 @@ impl ValueImpl {
     /// The body of the init, which `SetDataSize` runs again while the init
     /// runs (from an `AfterLoad` callback).
     fn init(&self) {
+        self.vb.container.set_init_once();
         {
             let Some((block, start, end)) = self.vb.data_source() else {
                 return;

@@ -22,22 +22,53 @@ begin
   AddMessage(aTag + ' | ' + aText);
 end;
 
-procedure Value(const aTag: string; aValue: Double);
+{ The text of a case with its control characters spelled `#<code>`: the
+  message log is a memo, whose control truncates a line at a `#0` and
+  breaks it at a `#10`/`#13`, and the harness reads the memo's text up to
+  its first zero, so the raw `#0` cases left the oracle's run without its
+  closing line (it was stopped as a hang after ten minutes). The `.dat`
+  keeps the raw text. }
+function Shown(const aText: string): string;
+var
+  i, k: Integer;
+  c: string;
 begin
-  gW.Write(aTag);
+  Result := '';
+  for i := 1 to Length(aText) do begin
+    c := Copy(aText, i, 1);
+    if c < ' ' then begin
+      for k := 0 to 31 do
+        if c = Chr(k) then
+          Result := Result + '#' + IntToStr(k);
+    end else
+      Result := Result + c;
+  end;
+end;
+
+procedure Value(const aText: string; aValue: Double);
+begin
+  gW.Write('py[' + aText + ']');
   gW.Write(aValue);
-  Log(aTag, FloatToStrF(aValue, 1, 17, 0));
+  Log('py[' + Shown(aText) + ']', FloatToStrF(aValue, 1, 17, 0));
 end;
 
 procedure ParseOne(const aText: string);
 var
   v: Double;
+  m: string;
 begin
   try
     v := StrToFloat(aText);
-    Value('py[' + aText + ']', v);
-  except on E: Exception do
-    Log('py[' + aText + ']', 'exc=' + E.ClassName + ' ' + E.Message);
+    Value(aText, v);
+  except on E: Exception do begin
+    { A script function called with `E.Message` inside the handler's call
+      does not compile in the oracle (`e-proparg-*.pas`), so the message
+      goes through a local first; `Ord` of a one-character string is the
+      variant's integer conversion for a digit, so `Shown` compares
+      characters instead. }
+    m := E.Message;
+    Log('py[' + Shown(aText) + ']', 'exc=' + E.ClassName + ' ' + Shown(m));
+  end;
   end;
 end;
 
