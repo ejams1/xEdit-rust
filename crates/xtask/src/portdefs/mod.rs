@@ -947,4 +947,54 @@ mod tests {
                 .contains("ambiguous")
         );
     }
+
+    /// Two copies of one name and signature in different units are two
+    /// routines: a name written in a unit takes the unit's own copy, and one
+    /// written in another unit takes the copy of the unit it uses last, which
+    /// `add_unit` was given first (issue #40).
+    #[test]
+    fn a_name_of_two_units_resolves_to_the_unit_that_declares_it() {
+        let first = parse_unit(
+            "unit wbUsedFirst; interface function wbPick(aValue: Integer): Integer; implementation end.",
+            DEFINES,
+        )
+        .unwrap();
+        let second = parse_unit(
+            "unit wbUsedSecond; interface function wbPick(aValue: Integer): Integer; implementation end.",
+            DEFINES,
+        )
+        .unwrap();
+        let own = parse_unit(
+            "unit wbOwn; interface function wbPick(aValue: Integer): Integer; implementation end.",
+            DEFINES,
+        )
+        .unwrap();
+        let mut symbols = Symbols::default();
+        symbols.add_unit(&first, false);
+        symbols.add_unit(&second, false);
+        symbols.add_unit(&own, false);
+        let resolver = Resolver { symbols: &symbols };
+        let Expr::Call { callee, args } = crate::pascal::parser::parse_expr("wbPick(1)").unwrap() else {
+            panic!("not a call");
+        };
+        let Expr::Ident(name) = *callee else {
+            panic!("not a routine")
+        };
+        let resolve = |unit: &str| {
+            resolver
+                .resolve_call(unit, &name, &args, &Scope::default())
+                .map(|(resolved, _)| resolved.overload)
+                .unwrap()
+        };
+        // The units are added in the reverse of the uses order, so the first
+        // one is the copy of the unit the caller names last.
+        assert_eq!(resolve("wbOwn"), 2);
+        assert_eq!(resolve("wbCaller"), 0);
+        // The two copies are named apart: the first keeps the base name and
+        // the second carries its unit.
+        let names = overload_names(&symbols);
+        assert_eq!(names[&("wbpick".to_owned(), 0)], "wb_pick");
+        assert_eq!(names[&("wbpick".to_owned(), 1)], "wb_pick_wbusedsecond");
+        assert_eq!(names[&("wbpick".to_owned(), 2)], "wb_pick_wbown");
+    }
 }
