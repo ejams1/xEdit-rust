@@ -59225,7 +59225,7 @@ pub fn define_fo76() {
                         wb_integer_to_str(
                             "Referenced Mod",
                             IntType::itU32,
-                            Some(Arc::new(wb_lgdi_filters_to_str)),
+                            Some(Arc::new(wb_lgdi_filters_to_str_fo76)),
                             None,
                             ConflictPriority::cpNormal,
                             false,
@@ -59278,7 +59278,7 @@ pub fn define_fo76() {
                         wb_integer_to_str(
                             "Referenced Mod",
                             IntType::itU32,
-                            Some(Arc::new(wb_lgdi_filters_to_str)),
+                            Some(Arc::new(wb_lgdi_filters_to_str_fo76)),
                             None,
                             ConflictPriority::cpNormal,
                             false,

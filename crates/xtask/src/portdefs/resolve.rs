@@ -88,7 +88,7 @@ impl<'a> Resolver<'a> {
                     {
                         return self.symbols.ty_of_name(name);
                     }
-                    match self.resolve_call(name, args, scope) {
+                    match self.resolve_call("", name, args, scope) {
                         Ok((_, sig)) => self.return_ty(sig),
                         Err(_) => Ty::Unknown,
                     }
@@ -231,8 +231,16 @@ impl<'a> Resolver<'a> {
             .map(|sig| self.return_ty(sig))
     }
 
-    /// Resolves a call of the routine `name` with `args` to one overload.
-    pub fn resolve_call(&self, name: &str, args: &[Expr], scope: &Scope) -> Result<(Resolved, &'a RoutineSig)> {
+    /// Resolves a call of the routine `name` with `args` to one overload. The
+    /// call is written in `unit`: the unit's own routine hides the same-named
+    /// routines of the units it uses (see `Symbols::resolved_overload`).
+    pub fn resolve_call(
+        &self,
+        unit: &str,
+        name: &str,
+        args: &[Expr],
+        scope: &Scope,
+    ) -> Result<(Resolved, &'a RoutineSig)> {
         let Some(overloads) = self.symbols.routines.get(&name.to_ascii_lowercase()) else {
             bail!("unknown routine {name}");
         };
@@ -266,26 +274,25 @@ impl<'a> Resolver<'a> {
                 .filter(|(c, _)| c == cost)
                 .map(|(_, index)| *index)
                 .collect();
-            // A routine of a unit hides the routines of the units it uses, so
-            // among overloads from different units the last unit wins (the
-            // overloads are in the order their units were added).
-            let last_unit = tied.iter().map(|&index| &overloads[index].unit).max_by_key(|unit| {
-                overloads
-                    .iter()
-                    .rposition(|overload| &overload.unit == *unit)
-                    .unwrap_or(0)
-            });
-            if let Some(last_unit) = last_unit {
-                let own: Vec<usize> = tied
-                    .iter()
-                    .copied()
-                    .filter(|&index| &overloads[index].unit == last_unit)
-                    .collect();
-                if let [index] = own.as_slice()
-                    && own.len() < tied.len()
-                {
-                    return Ok((Resolved { overload: *index }, &overloads[*index]));
-                }
+            // A routine of a unit hides the same-named routines of the units
+            // it uses, so of the tied overloads the unit's own copy wins, or
+            // else the copy of the unit it uses last, which `add_unit` added
+            // first (`wbInterface`).
+            let winner = tied
+                .iter()
+                .copied()
+                .find(|&index| overloads[index].unit.eq_ignore_ascii_case(unit))
+                .unwrap_or(tied[0]);
+            let winner_unit = &overloads[winner].unit;
+            let own: Vec<usize> = tied
+                .iter()
+                .copied()
+                .filter(|&index| &overloads[index].unit == winner_unit)
+                .collect();
+            if let [index] = own.as_slice()
+                && own.len() < tied.len()
+            {
+                return Ok((Resolved { overload: *index }, &overloads[*index]));
             }
             let wide = args.iter().any(|arg| match arg {
                 Expr::Int { digits, hex: true } => u64::from_str_radix(digits, 16).is_ok_and(|v| v > i32::MAX as u64),

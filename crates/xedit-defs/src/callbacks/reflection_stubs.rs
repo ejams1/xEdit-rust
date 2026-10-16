@@ -10,4 +10,6 @@
 
 #![allow(clippy::all, unused_variables, unused_imports)]
 
+use std::sync::Arc;
+
 use xedit_core::interface::*;

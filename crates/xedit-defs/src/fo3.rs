@@ -25127,7 +25127,7 @@ pub fn define_fo3() {
         None,
         None,
     )
-    .map(|def| def.set_after_load(Some(Arc::new(wb_soun_after_load))));
+    .map(|def| def.set_after_load(Some(Arc::new(wb_soun_after_load_fo3))));
     wb_record(
         SPEL,
         "Actor Effect",

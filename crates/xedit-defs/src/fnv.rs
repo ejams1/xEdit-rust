@@ -27702,7 +27702,7 @@ pub fn define_fnv() {
         None,
         ConflictPriority::cpNormal,
         false,
-        Some(Arc::new(wb_soun_after_load)),
+        Some(Arc::new(wb_soun_after_load_fnv)),
         None,
     );
     wb_record(

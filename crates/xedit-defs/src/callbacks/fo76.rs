@@ -1351,6 +1351,69 @@ pub fn wb_lgdi_filters_links_to(a_element: ElementArg) -> Option<ElementRef> {
     mod_base.as_container()?.get_element(1)?.get_links_to()
 }
 
+/// Upstream `wbLGDIFiltersToStr` of `wbDefinitionsFO76`, line 1703: the older
+/// copy of the routine the Fallout 76 definitions call (the copy of
+/// `wbDefinitionsCommon` with the same name and signature is issue #40's
+/// other one, [`super::common::wb_lgdi_filters_to_str`]). It ignores the
+/// callback type and the value, answers 'Unknown Ref' where the filter does
+/// not resolve and otherwise the edit value of the legendary mod of the star
+/// slot the filter selects.
+pub fn wb_lgdi_filters_to_str_fo76(_a_int: i64, a_element: ElementArg, _a_type: CallbackType) -> String {
+    const UNKNOWN: &str = "Unknown Ref";
+    let Some(element) = a_element else {
+        return UNKNOWN.to_owned();
+    };
+    let Some(filter) = element.get_container() else {
+        return UNKNOWN.to_owned();
+    };
+    if filter.as_container().is_none() {
+        return UNKNOWN.to_owned();
+    }
+    let Some(main_record) = element.get_containing_main_record() else {
+        return UNKNOWN.to_owned();
+    };
+    let Some(legendary_mods) = main_record.get_element_by_signature(Signature::new(b"BNAM")) else {
+        return UNKNOWN.to_owned();
+    };
+    let Some(legendary_mods) = legendary_mods.as_container() else {
+        return UNKNOWN.to_owned();
+    };
+    let Some(star_slot) = filter.as_container().and_then(|filter| filter.get_element(0)) else {
+        return UNKNOWN.to_owned();
+    };
+    let base_star_slot = variant_int(&star_slot.get_native_value());
+    let mod_index = variant_int(&element.get_native_value());
+    let mut legendary_index = None;
+    for index in 0..legendary_mods.get_element_count() {
+        let Some(legendary_mod) = legendary_mods.get_element(index) else {
+            continue;
+        };
+        let Some(legendary_mod) = legendary_mod.as_container() else {
+            continue;
+        };
+        let Some(star_slot) = legendary_mod.get_element(0) else {
+            continue;
+        };
+        if variant_int(&star_slot.get_native_value()) == base_star_slot {
+            legendary_index = Some(i64::from(index) + mod_index);
+            break;
+        }
+    }
+    let Some(index) = legendary_index.and_then(|index| i32::try_from(index).ok()) else {
+        return UNKNOWN.to_owned();
+    };
+    let Some(legendary_mod) = legendary_mods.get_element(index) else {
+        return UNKNOWN.to_owned();
+    };
+    let Some(legendary_mod) = legendary_mod.as_container() else {
+        return UNKNOWN.to_owned();
+    };
+    legendary_mod
+        .get_element(1)
+        .map(|mod_base| mod_base.get_edit_value())
+        .unwrap_or_else(|| UNKNOWN.to_owned())
+}
+
 /// Upstream anonymous routine at line 10085 of `wbDefinitionsFO76.pas`: the
 /// `ADDN` index key, from `IKEK` when the record has one, else `DATA`.
 pub fn define_fo76_anonymous_10085(a_main_record: &MainRecordRef, a_index_keys: &mut IndexKeys) {

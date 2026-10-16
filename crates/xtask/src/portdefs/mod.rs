@@ -65,10 +65,79 @@ pub fn run(args: &[&str]) -> Result<()> {
             Path::new(stubs),
             Some(Path::new(ported)),
         ),
+        ["duplicates", upstream] => duplicates(Path::new(upstream)),
         _ => bail!(
             "usage: cargo xtask port-defs resolve <upstream checkout> [<definition unit>]\n       cargo xtask port-defs emit <upstream checkout> <output file>"
         ),
     }
+}
+
+/// Lists the routines that more than one unit declares with the same name and
+/// parameter list, and whether their bodies are the same. A unit's own
+/// declaration hides the copies of the units it uses, so a copy that is never
+/// the one its unit resolves to can be left alone; a copy that is (such as
+/// Fallout 3's `wbSOUNAfterLoad`) needs its own port (issue #40). The copies
+/// that share one emission are the ones a unit declares together with
+/// `wbInterface` or `wbDefinitionsCommon`, which every definition unit uses.
+fn duplicates(upstream: &Path) -> Result<()> {
+    // Name and parameter types to the copies of each unit that declares one.
+    type Key = (String, String);
+    let mut copies: BTreeMap<Key, Vec<(String, u32, String)>> = BTreeMap::new();
+    let units = ["wbInterface", "wbDefinitionsCommon"]
+        .into_iter()
+        .chain(GAME_UNITS.iter().copied())
+        .filter(|unit| *unit != "wbDefinitionsReflection");
+    for unit_name in units {
+        let unit = read_unit(upstream, &format!("Core/{unit_name}.pas"))?;
+        for decl in &unit.implementation {
+            let Decl::Routine(routine) = decl else { continue };
+            if routine.name.contains('.') || routine.body.is_none() {
+                continue;
+            }
+            let key = (
+                routine.name.to_ascii_lowercase(),
+                format!("{:?}", routine.params.iter().map(|param| &param.type_ref).collect::<Vec<_>>()),
+            );
+            // The line of an anonymous routine is part of its Debug text; the
+            // bodies of two copies of a routine differ by it.
+            let body = format!("{:?}", routine.body);
+            let body = body
+                .split("line: ")
+                .enumerate()
+                .map(|(index, part)| {
+                    if index == 0 {
+                        part.to_owned()
+                    } else {
+                        let digits = part.bytes().take_while(u8::is_ascii_digit).count();
+                        format!("line: {}", &part[digits..])
+                    }
+                })
+                .collect::<String>();
+            copies
+                .entry(key)
+                .or_default()
+                .push((unit_name.to_owned(), routine.line, body));
+        }
+    }
+    let mut listed = 0;
+    for ((name, params), copies) in &copies {
+        if copies.len() < 2 {
+            continue;
+        }
+        listed += 1;
+        let same = copies.iter().all(|(_, _, body)| body == &copies[0].2);
+        println!(
+            "{name}{params}: {} [bodies {}]",
+            copies
+                .iter()
+                .map(|(unit, line, _)| format!("{unit} line {line}"))
+                .collect::<Vec<_>>()
+                .join(", "),
+            if same { "equal" } else { "differ" }
+        );
+    }
+    println!("{listed} routine(s) declared by more than one unit");
+    Ok(())
 }
 
 /// Whether the routine builds a definition: its name starts with `wb` and it
@@ -295,7 +364,7 @@ fn resolve_builders(upstream: &Path) -> Result<()> {
                 && let Expr::Ident(name) = &**callee
                 && symbols.routines.contains_key(&name.to_ascii_lowercase())
             {
-                match resolver.resolve_call(name, args, &scope) {
+                match resolver.resolve_call("wbInterface", name, args, &scope) {
                     Ok(_) => resolved += 1,
                     Err(error) => failures.push(format!("{} (line {}): {error}", routine.name, routine.line)),
                 }
@@ -758,7 +827,7 @@ fn resolve_definitions(upstream: &Path, unit_name: &str) -> Result<()> {
                 && name.to_ascii_lowercase().starts_with("wb")
                 && symbols.routines.contains_key(&name.to_ascii_lowercase())
             {
-                match resolver.resolve_call(name, args, &scope) {
+                match resolver.resolve_call(unit_name, name, args, &scope) {
                     Ok(_) => resolved += 1,
                     Err(error) => {
                         let unknown: Vec<String> = args
@@ -843,7 +912,7 @@ mod tests {
             panic!("not a routine")
         };
         resolver
-            .resolve_call(&name, &args, &Scope::default())
+            .resolve_call("wbTest", &name, &args, &Scope::default())
             .map(|(resolved, _)| resolved.overload)
     }
 
