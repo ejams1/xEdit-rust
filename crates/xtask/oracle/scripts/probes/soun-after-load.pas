@@ -86,3 +86,5 @@ begin
     AddMessage('ANAM=<removed>');
   AddMessage('EDID=' + GetElementEditValues(rec, 'EDID'));
 end;
+
+end.

@@ -1561,19 +1561,32 @@ fn a_script_variable_wins_over_a_case_matching_function() {
 /// (`tests/fixtures/parity`): the lines of the run between the `Start:` and
 /// the `Done:` line.
 fn fixture_lines(probe: &str, fixture: &str, build_refs: bool) -> Vec<String> {
+    fixture_lines_for(probe, fixture, build_refs, "sse", GameMode::gmSSE, "Skyrim.esm")
+}
+
+/// The same for another game: `game` is the `setup_game` name and `mode` its
+/// game mode, `master_name` the game master the fixture stands in for.
+fn fixture_lines_for(
+    probe: &str,
+    fixture: &str,
+    build_refs: bool,
+    game: &str,
+    mode: GameMode,
+    master_name: &str,
+) -> Vec<String> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..").join("..");
     let text = std::fs::read_to_string(root.join("crates/xtask/oracle/scripts/probes").join(probe)).unwrap();
     let bytes = std::fs::read(root.join("tests/fixtures/parity").join(fixture)).unwrap();
     xedit_core::implementation::clear_files_map();
     xedit_core::implementation::reset_load_order_slots();
     xedit_core::interface::clear_files();
-    xedit_session::dump::setup_game("sse").unwrap();
-    xedit_session::save::apply_edit_settings(GameMode::gmSSE);
+    xedit_session::dump::setup_game(game).unwrap();
+    xedit_session::save::apply_edit_settings(mode);
     // The fixture stands in for the game master, which the parity run edits
     // with `--allow-edit-game-master`.
     xedit_core::interface::globals::set_allow_edit_game_master(true);
-    let master = open("Skyrim.esm", bytes);
-    let mut session = Session::with_files(GameMode::gmSSE, vec![master]);
+    let master = open(master_name, bytes);
+    let mut session = Session::with_files(mode, vec![master]);
     session.allow_edit(true);
     let folder = script_folder(probe.trim_end_matches(".pas"), probe, &text);
     let result = run(&mut session, &folder, probe, json!({"build_refs": build_refs}));
@@ -1956,4 +1969,66 @@ fn the_datetime_probe_gives_the_oracle_lines() {
             assert!(offset.starts_with('+') || offset.starts_with('-'), "{line}");
         }
     }
+}
+
+/// The lines the oracle wrote for the probe (`cargo xtask parity script
+/// --script soun-after-load`, 2026-10-15, equal for Fallout 3 and New
+/// Vegas): the load runs the unit's own `wbSOUNAfterLoad` (the AfterLoad of
+/// the sound record), so the old SNDX sound data becomes the SNDD structure
+/// (the members of the old structure first, the attenuation curve, the
+/// reverb attenuation control and the priority from ANAM, GNAM and HNAM),
+/// the record without those subrecords takes the definition's defaults
+/// (100/50/20/5/0, 80, 128), the record that already has SNDD and the one
+/// without sound data are left alone, and the edited curve point and editor
+/// ID come back from a second read. With the `wbDefinitionsCommon` copy of
+/// the name (which turns SNDD into SNDX) the four records would differ.
+#[test]
+fn the_soun_after_load_probe_gives_the_oracle_lines() {
+    let _guard = test_lock();
+    let expected: Vec<&str> = vec![
+        "old-full elements=4 [Record Header, EDID - Editor ID, OBND - Object Bounds, SNDD - Sound Data]",
+        "old-full SNDD curve=[70 40 15 4 1] reverb=60 priority=140 attenuation=50/10000 flags=10001",
+        "old-full SNDX=<none>",
+        "old-full ANAM= GNAM= HNAM=",
+        "old-short elements=4 [Record Header, EDID - Editor ID, OBND - Object Bounds, SNDD - Sound Data]",
+        "old-short SNDD curve=[100 50 20 5 0] reverb=80 priority=128 attenuation=100/20000 flags=0000000000000000000000000000000000000000000000000000000000000000",
+        "old-short SNDX=<none>",
+        "old-short ANAM= GNAM= HNAM=",
+        "new elements=4 [Record Header, EDID - Editor ID, OBND - Object Bounds, SNDD - Sound Data]",
+        "new SNDD curve=[90 45 20 5 0] reverb=0 priority=0 attenuation=25/5000 flags=11",
+        "new SNDX=<none>",
+        "new ANAM= GNAM= HNAM=",
+        "none elements=4 [Record Header, EDID - Editor ID, OBND - Object Bounds, SNDD - Sound Data]",
+        "none SNDD curve=[0 0 0 0 0] reverb=0 priority=0 attenuation=0/0 flags=0000000000000000000000000000000000000000000000000000000000000000",
+        "none SNDX=<none>",
+        "none ANAM= GNAM= HNAM=",
+        "old-full-edited elements=4 [Record Header, EDID - Editor ID, OBND - Object Bounds, SNDD - Sound Data]",
+        "old-full-edited SNDD curve=[77 40 15 4 1] reverb=60 priority=140 attenuation=50/10000 flags=10001",
+        "old-full-edited SNDX=<none>",
+        "old-full-edited ANAM= GNAM= HNAM=",
+        "ANAM=<removed>",
+        "EDID=ParityOldFullEdited",
+    ];
+    assert_eq!(
+        fixture_lines_for(
+            "soun-after-load.pas",
+            "soun-after-load-fo3.esm",
+            false,
+            "fo3",
+            GameMode::gmFO3,
+            "Fallout3.esm"
+        ),
+        expected
+    );
+    assert_eq!(
+        fixture_lines_for(
+            "soun-after-load.pas",
+            "soun-after-load-fnv.esm",
+            false,
+            "fnv",
+            GameMode::gmFNV,
+            "FalloutNV.esm"
+        ),
+        expected
+    );
 }

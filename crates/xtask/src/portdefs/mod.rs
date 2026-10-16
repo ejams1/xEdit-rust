@@ -96,7 +96,10 @@ fn duplicates(upstream: &Path) -> Result<()> {
             }
             let key = (
                 routine.name.to_ascii_lowercase(),
-                format!("{:?}", routine.params.iter().map(|param| &param.type_ref).collect::<Vec<_>>()),
+                format!(
+                    "{:?}",
+                    routine.params.iter().map(|param| &param.type_ref).collect::<Vec<_>>()
+                ),
             );
             // The line of an anonymous routine is part of its Debug text; the
             // bodies of two copies of a routine differ by it.
