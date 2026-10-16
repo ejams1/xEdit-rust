@@ -1,0 +1,10 @@
+{
+  "description": "\"Remove Identical to Master records\" on DLCRobot.esm with -AllowMakePartial: a cell or worldspace whose own record is identical to its master but which keeps children that are not becomes a partial form (Making Partial Form:, counted as removed), and then both steps of the quick clean order run (UDR first).",
+  "game": "fo4",
+  "load": ["Fallout4.esm", "DLCRobot.esm"],
+  "select": ["DLCRobot.esm"],
+  "udr": true,
+  "itm": true,
+  "options": {"allow_make_partial": true},
+  "save": ["DLCRobot.esm"]
+}

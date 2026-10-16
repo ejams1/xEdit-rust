@@ -96,6 +96,33 @@ fn strip_time(line: &str) -> &str {
     }
 }
 
+/// The lines of the dirty information report (`mniNavLOManagersDirtyInfoClick`,
+/// which the quick auto clean mode runs last): from `LOOT Masterlist
+/// Entries` to the next line of `wbProgress` (or the end), without the
+/// blank lines at the end.
+fn dirty_report<'a>(lines: impl Iterator<Item = &'a str>) -> Vec<String> {
+    let mut report = Vec::new();
+    let mut inside = false;
+    for line in lines {
+        let line = line.trim_end_matches(['\r', '\n']);
+        if !inside {
+            inside = line == "LOOT Masterlist Entries";
+            if inside {
+                report.push(line.to_owned());
+            }
+            continue;
+        }
+        if strip_time(line).len() != line.len() {
+            break;
+        }
+        report.push(line.to_owned());
+    }
+    while report.last().is_some_and(|line| line.trim().is_empty()) {
+        report.pop();
+    }
+    report
+}
+
 /// The passes of a message log, the oracle's or the port's.
 fn passes_of<'a>(lines: impl Iterator<Item = &'a str>) -> Vec<Pass> {
     let mut passes: Vec<Pass> = Vec::new();
@@ -424,7 +451,9 @@ fn check(runner: &Runner, game: &'static Game, data: &Path, name: &str) -> Resul
         .as_array()
         .map(|lines| lines.iter().filter_map(Value::as_str).collect())
         .unwrap_or_default();
-    let port_passes = passes_of(messages.into_iter());
+    let port_passes = passes_of(messages.iter().copied());
+    let oracle_dirty = dirty_report(oracle_log.lines());
+    let port_dirty = dirty_report(messages.iter().flat_map(|message| message.split("\r\n")));
 
     let mut lines = Vec::new();
     if port_passes.len() != oracle_passes.len() {
@@ -472,6 +501,19 @@ fn check(runner: &Runner, game: &'static Game, data: &Path, name: &str) -> Resul
                 lines.push(format!("  pass {pass}: the same lines in another order"));
             }
         }
+    }
+    if oracle_dirty != port_dirty {
+        let first = oracle_dirty
+            .iter()
+            .zip(&port_dirty)
+            .position(|(a, b)| a != b)
+            .unwrap_or(oracle_dirty.len().min(port_dirty.len()));
+        lines.push(format!(
+            "  dirty report line {}: oracle {:?}, port {:?}",
+            first + 1,
+            oracle_dirty.get(first),
+            port_dirty.get(first)
+        ));
     }
     match (outcome.saved, port_saved.exists()) {
         (true, true) => {
@@ -528,5 +570,27 @@ Removing: [NAVM:00041B98] (in X)
         assert_eq!(passes[0].nav, 5);
         assert_eq!(passes[0].itm, (18540, 255));
         assert_eq!(passes[0].lines.len(), 3);
+    }
+
+    #[test]
+    fn reads_the_dirty_report_of_a_log() {
+        let log = "[Removing \"Identical to Master\" records done]  Processed Records: 43641, Removed Records: 0, Elapsed Time: 00:00
+
+LOOT Masterlist Entries
+
+  - name: 'Anchorage.esm'
+    dirty:
+      - <<: *quickClean
+        crc: 0xA4BA9D10
+        itm: 55
+    clean:
+      - crc: 0x2AF0D0E8
+        util: 'FO3Edit v4.1.5q'
+
+[00:00] Quick Clean mode finished.";
+        let report = dirty_report(log.lines());
+        assert_eq!(report.first().map(String::as_str), Some("LOOT Masterlist Entries"));
+        assert_eq!(report.len(), 10);
+        assert_eq!(report[2], "  - name: 'Anchorage.esm'");
     }
 }

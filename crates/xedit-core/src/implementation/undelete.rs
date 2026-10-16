@@ -50,16 +50,18 @@ impl MainRecordImpl {
         }
     }
 
-    /// Port of `TwbMainRecord.SetIsDeleted`. Only the undelete is ported: the
-    /// record gets its required members and then the contents of the last
-    /// version before it that is in one of its file's masters and is neither
-    /// deleted nor a partial form, else of its master when that is neither.
+    /// Port of `TwbMainRecord.SetIsDeleted`: `Delete` for `true`; for
+    /// `false` the record gets its required members and then the contents
+    /// of the last version before it that is in one of its file's masters
+    /// and is neither deleted nor a partial form, else of its master when
+    /// that is neither.
     pub fn set_is_deleted(self: &Arc<Self>, value: bool) -> Result<(), EditError> {
         if value == self.get_is_deleted() {
             return Ok(());
         }
         if value {
-            return Err("deleting a record (TwbMainRecord.Delete) is not ported".to_owned());
+            self.delete();
+            return Ok(());
         }
         self.rebuild_from_masters(|header| header.flags.set_deleted(false));
         Ok(())

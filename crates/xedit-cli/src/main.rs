@@ -1684,6 +1684,20 @@ enum RecordsAction {
         #[arg(long)]
         dry_run: bool,
     },
+    /// Mark a record deleted (records.set_deleted, SetIsDeleted: TwbMainRecord.Delete keeps the record in the plugin with its child group, without its contents) or undelete it with --undelete. Needs --edit unless --dry-run.
+    SetDeleted {
+        /// Load order FormID as hexadecimal digits.
+        form_id: String,
+        /// Plugin whose version of the record changes; the only loaded plugin when omitted.
+        #[arg(long)]
+        file: Option<String>,
+        /// Undelete the record instead.
+        #[arg(long)]
+        undelete: bool,
+        /// Report the record, change nothing.
+        #[arg(long)]
+        dry_run: bool,
+    },
     /// Copy the records that refer to injected records of a plugin which is not their master into that plugin and remove those references from the originals (records.cleanup_injected, xEdit's "Cleanup injected records"). Needs --edit unless --dry-run.
     CleanupInjected {
         /// Load order FormIDs of the records; every record of the plugin that refers to such injected records when none is given.
@@ -2453,6 +2467,15 @@ fn command_of(action: Action) -> Result<(String, Value), CommandError> {
             RecordsAction::Delete { form_id, file, dry_run } => (
                 "records.delete".to_owned(),
                 json!({ "form_id": form_id, "file": file, "dry_run": dry_run }),
+            ),
+            RecordsAction::SetDeleted {
+                form_id,
+                file,
+                undelete,
+                dry_run,
+            } => (
+                "records.set_deleted".to_owned(),
+                json!({ "form_id": form_id, "file": file, "deleted": !undelete, "dry_run": dry_run }),
             ),
             RecordsAction::SetHidden {
                 form_id,

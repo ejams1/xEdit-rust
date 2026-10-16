@@ -1123,6 +1123,16 @@ fn edit_step(index: usize, command: &Value) -> Result<String> {
             check_params(params, &["form_id", "file"])?;
             format!("Remove(OwnRecord({}, {}));", file()?, form_id()?)
         }
+        "records.set_deleted" => {
+            check_params(params, &["form_id", "file", "deleted"])?;
+            let deleted = params.get("deleted").and_then(Value::as_bool).unwrap_or(true);
+            format!(
+                "SetIsDeleted(OwnRecord({}, {}), {});",
+                file()?,
+                form_id()?,
+                if deleted { "True" } else { "False" }
+            )
+        }
         "masters.add" => {
             check_params(params, &["file", "masters", "sort"])?;
             let masters = params["masters"].as_array().context("masters must be an array")?;

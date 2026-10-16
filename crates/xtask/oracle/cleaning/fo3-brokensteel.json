@@ -1,0 +1,9 @@
+{
+  "description": "Both cleaning steps on Fallout 3's BrokenSteel.esm, selected with a click (its file node collapsed: the walk keeps the order of the file), with the load settings of an editing session (simple records, no PNAM fill), the UDR with the Fallout 3 defaults (no height change).",
+  "game": "fo3",
+  "load": ["Fallout3.esm", "BrokenSteel.esm"],
+  "select": ["BrokenSteel.esm"],
+  "udr": true,
+  "itm": true,
+  "save": ["BrokenSteel.esm"]
+}

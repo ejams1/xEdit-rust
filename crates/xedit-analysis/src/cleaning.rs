@@ -122,10 +122,11 @@ pub struct CleanReport {
     pub plugin: Option<(String, u32)>,
 }
 
-/// `Plugin := _File.FileName; PluginCRC32 := _File.CRC32` for `element`.
-fn plugin_of(element: &ElementRef) -> Option<(String, u32)> {
-    let file = element.as_element_impl()?.file_impl()?;
-    Some((file.file_name().to_owned(), file.crc32()))
+/// `Plugin := _File.FileName; PluginCRC32 := _File.CRC32` for the nodes
+/// below the file node `start` (their `_File` is the file of that node).
+fn plugin_of(tree: &NavTree, start: NodeId) -> Option<(String, u32)> {
+    let file = tree.data(start).element.as_ref()?.as_element_impl()?.file_impl()?;
+    Some((file.get_name(), file.crc32()))
 }
 
 fn cleaned_element(element: &ElementRef) -> CleanedElement {
@@ -230,7 +231,7 @@ pub fn remove_identical_to_master(
             {
                 return;
             }
-            if let Some(plugin) = plugin_of(&element) {
+            if let Some(plugin) = plugin_of(tree, start) {
                 report.plugin = Some(plugin);
             }
             if !element.get_is_removable() {
@@ -306,7 +307,7 @@ pub fn undelete_and_disable_references(
                 return;
             };
             let self_element: ElementRef = record.clone();
-            if let Some(plugin) = plugin_of(&self_element) {
+            if let Some(plugin) = plugin_of(tree, start) {
                 report.plugin = Some(plugin);
             }
             let signature = record.get_signature();

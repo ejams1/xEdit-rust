@@ -60,6 +60,7 @@ mod bsarch;
 mod bsarchpro;
 mod check;
 mod clean;
+mod clean_scenarios;
 mod conflicts;
 mod discovery;
 mod filter;
@@ -280,6 +281,9 @@ struct Options {
     /// `parity clean`: the quick auto clean mode on every plugin with
     /// masters.
     clean: bool,
+    /// `parity clean-scenarios`: the cleaning menu items over a selection
+    /// of plugins, with options.
+    clean_scenarios: bool,
     /// `parity check`: the `-CheckForErrors` mode on every plugin.
     check: bool,
     /// `parity conflicts --record <FormID>`: the oracle's probe of these
@@ -445,6 +449,9 @@ pub fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
     }
     if options.clean {
         return clean::run_clean(root, tag, &options, cache, scratch, oracle_dir);
+    }
+    if options.clean_scenarios {
+        return clean_scenarios::run_clean_scenarios(root, tag, &options, cache, scratch, oracle_dir);
     }
     if options.check {
         return check::run_check(root, tag, &options, cache, scratch, oracle_dir);
@@ -1297,13 +1304,13 @@ fn first_byte_difference(a: &Path, b: &Path) -> Result<Option<u64>> {
 }
 
 fn parse(args: &[&str]) -> Result<Options> {
-    const USAGE: &str = "usage: cargo xtask parity dump|saves|roundtrip|oracle-save|oracle-edit|bsarch|conflicts|refs|clean|check|check-dump|modgroups|merged|filter|tool-modes|resources|discovery|script [--game <game>]... [--file <name>]... [--mode <tool mode>]... \
+    const USAGE: &str = "usage: cargo xtask parity dump|saves|roundtrip|oracle-save|oracle-edit|bsarch|conflicts|refs|clean|clean-scenarios|check|check-dump|modgroups|merged|filter|tool-modes|resources|discovery|script [--game <game>]... [--file <name>]... [--mode <tool mode>]... \
                          [--record <FormID>]... [--hidden <FormID>]... [--oracle-only] [--jobs <n>] [--memory-budget <GiB>] \
                          [--max-memory <GiB>] [--oracle-timeout <minutes>]";
     let (mode, rest) = args.split_first().context(USAGE)?;
     let (saves, roundtrip, oracle_save, oracle_edit) = match *mode {
-        "dump" | "conflicts" | "refs" | "clean" | "check" | "modgroups" | "merged" | "filter" | "tool-modes"
-        | "resources" | "discovery" => (false, false, false, false),
+        "dump" | "conflicts" | "refs" | "clean" | "clean-scenarios" | "check" | "modgroups" | "merged" | "filter"
+        | "tool-modes" | "resources" | "discovery" => (false, false, false, false),
         "check-dump" => {
             CHECK_DUMP.store(true, Ordering::Relaxed);
             (false, false, false, false)
@@ -1321,6 +1328,7 @@ fn parse(args: &[&str]) -> Result<Options> {
         oracle_edit,
         conflicts: *mode == "conflicts",
         clean: *mode == "clean",
+        clean_scenarios: *mode == "clean-scenarios",
         check: *mode == "check",
         records: Vec::new(),
         hidden: Vec::new(),

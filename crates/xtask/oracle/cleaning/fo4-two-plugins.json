@@ -1,0 +1,9 @@
+{
+  "description": "Two plugins selected at once (a click on DLCRobot.esm and a Ctrl+click on DLCworkshop01.esm): \"Undelete and Disable References\" and \"Remove Identical to Master records\" each walk both file nodes in load order in one click, and the dirty information of a click is stored once, under the plugin and CRC32 of the last record the walk stored them for.",
+  "game": "fo4",
+  "load": ["Fallout4.esm", "DLCRobot.esm", "DLCworkshop01.esm"],
+  "select": ["DLCworkshop01.esm", "DLCRobot.esm"],
+  "udr": true,
+  "itm": true,
+  "save": ["DLCRobot.esm", "DLCworkshop01.esm"]
+}

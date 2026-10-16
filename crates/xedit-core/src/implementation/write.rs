@@ -575,6 +575,15 @@ impl MainRecordImpl {
             // compressed; a changed element made the storage stale and the
             // record is written from its elements.
             let loaded = if self.mr_storage_invalid.load(Ordering::Relaxed) {
+                // `ExpectedSize := GetDataSize` comes first: with a stale
+                // storage it is the sum of the elements' sizes
+                // (`TwbContainer.GetDataSizeFromElements`), which inits
+                // every subrecord, so the `AfterLoad` of one read for the
+                // first time here (the trimmed response text of an `INFO`
+                // whose `PNAM` the load filled) changes it before any of
+                // them is written. The size itself is not checked
+                // (`DoCheckSizeAfterWrite` is false for a record).
+                let _ = super::edit::data_size_from_elements(&**self);
                 None
             } else {
                 // `data` is the collapsed data once the record was collapsed.
