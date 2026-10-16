@@ -302,6 +302,15 @@ pub trait ScriptObject {
     fn exception_class_name(&self) -> Option<&str> {
         None
     }
+    /// The identity two values of this object compare by when they are not
+    /// the same wrapper: an `IInterface` variant compares by the interface
+    /// pointer upstream, and the host hands out a fresh wrapper for every
+    /// element value, so an element wrapper answers its element's id
+    /// (`sl.IndexOfObject(base)` finds the element added earlier). `None`
+    /// keeps the wrapper identity (`Rc::ptr_eq`).
+    fn identity(&self) -> Option<u64> {
+        None
+    }
     /// `Args.Obj.Free` (`JvInterpreter.pas:3976`). A Rust object cannot be
     /// freed through a shared handle; this is the adapter's signal to mark
     /// itself released. Upstream frees the Delphi object here.
@@ -903,6 +912,18 @@ impl std::fmt::Debug for Value {
 /// Value identity for tests and equality checks: the scalar kinds compare by
 /// value, the reference kinds (`Object`, `Class`, `Record`, `Array`,
 /// `VariantArray`) by handle.
+/// Two object values are equal when they are one wrapper, or when both
+/// wrappers answer the same [`ScriptObject::identity`].
+pub fn same_object(a: &Rc<RefCell<dyn ScriptObject>>, b: &Rc<RefCell<dyn ScriptObject>>) -> bool {
+    if Rc::ptr_eq(a, b) {
+        return true;
+    }
+    match (a.try_borrow(), b.try_borrow()) {
+        (Ok(a), Ok(b)) => matches!((a.identity(), b.identity()), (Some(x), Some(y)) if x == y),
+        _ => false,
+    }
+}
+
 impl PartialEq for Value {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
@@ -917,7 +938,7 @@ impl PartialEq for Value {
             (Value::Bool(a), Value::Bool(b)) => a == b,
             (Value::Set(a), Value::Set(b)) => a == b,
             (Value::Pointer(a), Value::Pointer(b)) => a == b,
-            (Value::Object(a), Value::Object(b)) => Rc::ptr_eq(a, b),
+            (Value::Object(a), Value::Object(b)) => same_object(a, b),
             (Value::Class(a), Value::Class(b)) => Rc::ptr_eq(a, b),
             (Value::Record(a), Value::Record(b)) => Rc::ptr_eq(a, b),
             (Value::Array(a), Value::Array(b)) => Rc::ptr_eq(a, b),

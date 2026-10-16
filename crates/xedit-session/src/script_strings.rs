@@ -277,7 +277,7 @@ impl StringListObject {
         let equal = |entry: &Value| -> bool {
             match (entry, object) {
                 (Value::Empty | Value::Null, Value::Empty | Value::Null) => true,
-                (Value::Object(a), Value::Object(b)) => Rc::ptr_eq(a, b),
+                (Value::Object(a), Value::Object(b)) => xedit_script::values::same_object(a, b),
                 _ => false,
             }
         };

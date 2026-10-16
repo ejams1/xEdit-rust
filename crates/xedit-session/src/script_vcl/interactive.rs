@@ -1222,6 +1222,24 @@ impl VclModel {
                     *value = Value::Integer(-1);
                     return Ok(());
                 }
+                if member == "Options" {
+                    // A set the script extends (`dlg.Options := dlg.Options +
+                    // [ofOverwritePrompt]`): a file dialog starts with
+                    // `[ofHideReadOnly, ofEnableSizing]` (bits 2 and 19 of
+                    // `TOpenOption`), other controls with the empty set.
+                    let default = if self.is_a(object, "TOpenDialog") {
+                        (1 << 2) | (1 << 19)
+                    } else {
+                        0
+                    };
+                    *value = Value::Set(default);
+                    return Ok(());
+                }
+                if member == "Anchors" {
+                    // `[akLeft, akTop]`.
+                    *value = Value::Set(0b11);
+                    return Ok(());
+                }
                 if STRING_PROPS.contains(&member) {
                     *value = Value::Str(Vec::new());
                     return Ok(());
