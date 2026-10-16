@@ -758,6 +758,25 @@
         "tests/fixtures/parity/atlas/textures/t/two_n.dds:textures/t/two_n.dds"
       ],
       "note": "parity #38 fixture: the atlas builders of xejviScriptAdapterHost.pas, wbBuildAtlasFromTexturesList (a texture list built into an atlas and its map file) and wbBuildAtlasFromAtlasMap (a hand written map rebuilt with brightness and the canvas gamma, 0.9/1.0/1.1), over the fixture textures of tests/fixtures/parity/atlas that the case's data_files place in the private data folder. The atlas DDS files, the map file below wbOutputPath and the message log are compared"
+    },
+    {
+      "script": "probes/switches.pas",
+      "game": "sse",
+      "load": [],
+      "synthetic_master": true,
+      "timeout_minutes": 6,
+      "note": "parity #37 fixture: the load settings of `xeInit.pas` a script reads (`wbIsPseudoESLMode` and its neighbours, `is_light_supported and wbPseudoLight`) and the folders a command line names (`-D:`, `-S:`, `-T:`, `-O:`); the message log is compared. The case runs on a game that supports light modules, so `-PseudoESL` is the one switch of the group the release acts on there (medium and update modules are Starfield's, whose switch block turns the six pseudo and ignore flags off again)."
+    },
+    {
+      "script": "probes/switches.pas",
+      "game": "sse",
+      "load": [],
+      "synthetic_master": true,
+      "timeout_minutes": 6,
+      "switches": [
+        "PseudoESL"
+      ],
+      "note": "the same with `-PseudoESL`: `wbIsPseudoLightMode` (and the ESL and small aliases) is true on both sides."
     }
   ]
 }

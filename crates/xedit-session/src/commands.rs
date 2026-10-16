@@ -120,8 +120,16 @@ impl Session {
         // the export of the definitions has to see (`wbSimpleRecords` among
         // them); every other mode loads them as the editor does.
         let xdump = crate::tool_modes::loads_like_xdump();
+        // `-saves` (`_DoInit`'s tool source): the definitions of the saves
+        // of the game rather than those of its plugins, which the export of
+        // the save definitions walks (`xDump.exe -saves -export`).
+        let saves = crate::tool_modes::on_load_tool_source() == xedit_core::interface::globals::ToolSource::tsSaves;
         let mode = if xdump {
-            crate::dump::setup_game(game)?
+            if saves {
+                crate::dump::setup_game_for_save_definitions(game)?
+            } else {
+                crate::dump::setup_game(game)?
+            }
         } else {
             setup_game_for_edit(game)?
         };
@@ -325,6 +333,183 @@ fn session_info(session: &mut Session, _: NoParams) -> Result<SessionInfo, Comma
         game_name: game_name(),
         data_path: data_path(),
         files: all_files(session).iter().map(|file| file.get_name()).collect(),
+    })
+}
+
+/// `session.load`: the request.
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct SessionLoadRequest {
+    /// The plugins to load, in load order, as full paths (a name resolves
+    /// against the data folder of the session). Masters load with them, as
+    /// they do for `--load`.
+    pub plugins: Vec<String>,
+    /// The tool mode whose load settings apply, as `xeInit.pas` applies them
+    /// before anything loads (`quickclean`, `quickautoclean`,
+    /// `checkforerrors`, `translate`, `edit`). The settings of the mode are
+    /// part of the result; `edit` (the default) applies none of its own.
+    pub mode: Option<String>,
+    /// Reload although a loaded plugin has unsaved changes, which the reload
+    /// discards.
+    #[serde(default)]
+    pub force: bool,
+    /// Report what the load would do (the plugins, the mode and its
+    /// settings, the changes a reload discards), but keep the session as it
+    /// is.
+    #[serde(default)]
+    pub dry_run: bool,
+}
+
+/// `session.load`: the response.
+#[derive(Serialize, JsonSchema)]
+pub struct SessionLoadResponse {
+    /// The game tag of the session, which a load does not change.
+    pub game: String,
+    /// The tool mode the load applies, when `mode` named one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mode: Option<String>,
+    pub dry_run: bool,
+    /// The plugins the load would put in the session, in load order, with
+    /// their masters.
+    pub files: Vec<String>,
+    /// The plugins whose unsaved changes the reload discards.
+    pub discarded: Vec<String>,
+    /// The load settings the mode applies, as `xeInit.pas` sets them
+    /// (`wbFillPNAM`, `wbAllowInternalEdit`, `wbRemoveOffsetData`,
+    /// `wbSimpleRecords` and the rest).
+    pub settings: Vec<String>,
+    /// What the load does not do in this build.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub note: Option<String>,
+}
+
+/// `session.load`: loads another plugin list (or the same one with another
+/// mode's settings) into the running session. The session is the one
+/// `serve`/`mcp` keep open, where the plugins are otherwise fixed at
+/// startup; the edit gate the operator set stays as it is.
+fn session_load(session: &mut Session, request: SessionLoadRequest) -> Result<SessionLoadResponse, CommandError> {
+    use xedit_core::implementation::ElementImpl;
+    use xedit_core::interface::globals::{ToolMode, can_sort_info};
+
+    let game = session.mode()?;
+    // The mode's settings, as `xeInit.pas` reads them (`_DoInit`): the tool
+    // mode, and the quick clean and check modes of the edit mode.
+    let sub = request
+        .mode
+        .as_deref()
+        .and_then(crate::tool_modes::edit_sub_mode_of)
+        .map(str::to_owned);
+    let tool_mode = match request.mode.as_deref() {
+        None => ToolMode::tmEdit,
+        Some(name) => crate::tool_modes::mode_of_name(name).ok_or_else(|| {
+            CommandError::new(
+                "invalid_params",
+                format!(
+                    "{name} is not a tool mode: use the sub mode of the edit mode (quickclean, quickautoclean), a mode of `tool.modes`, or omit it"
+                ),
+            )
+        })?,
+    };
+    let quick = matches!(sub.as_deref(), Some("quick_clean" | "quick_auto_clean"));
+    let translate = tool_mode == ToolMode::tmTranslate;
+    let check = tool_mode == ToolMode::tmCheckForErrors;
+    let mut settings = Vec::new();
+    if quick {
+        settings.push(if can_sort_info() {
+            "wbFillPNAM := True".to_owned()
+        } else {
+            "wbFillPNAM unchanged (the game does not sort the responses)".to_owned()
+        });
+        settings.push("wbAllowInternalEdit := True".to_owned());
+        settings.push("wbFillINOM := False, wbFillINOA := False".to_owned());
+        settings.push("wbRemoveOffsetData := True".to_owned());
+        settings.push("wbSimpleRecords := False (the full record definitions)".to_owned());
+    }
+    if translate {
+        settings.push("wbTranslationMode := True".to_owned());
+        settings.push("wbHideUnused, wbHideIgnored, wbHideNeverShow := True".to_owned());
+        settings.push("wbLoadBSAs := True (the games from Skyrim on)".to_owned());
+    }
+    if check {
+        settings.push("wbAllowInternalEdit := False, wbBuildRefs := False, wbLoadBSAs := False".to_owned());
+    }
+    // A reload drops what a loaded plugin has not saved. The files of the
+    // session, not every file of the process.
+    let discarded: Vec<String> = session
+        .files
+        .iter()
+        .filter(|file| {
+            file.element_base()
+                .has_state(xedit_core::implementation::ElementState::esUnsaved)
+        })
+        .map(|file| file.get_name())
+        .collect();
+    if !discarded.is_empty() && !request.force {
+        return Err(CommandError::new(
+            "invalid_state",
+            format!(
+                "{} has unsaved changes, which a load discards: save them first, or load with force",
+                discarded.join(", ")
+            ),
+        ));
+    }
+    if request.dry_run {
+        // Without loading, the report names the plugins as they were given;
+        // the masters a plugin lists load with it, as they do for a real
+        // load, whose report names every file.
+        return Ok(SessionLoadResponse {
+            game: crate::dump::game_tag(game).to_owned(),
+            mode: request.mode.clone(),
+            dry_run: true,
+            files: request
+                .plugins
+                .iter()
+                .map(|path| {
+                    std::path::Path::new(path)
+                        .file_name()
+                        .map_or_else(|| path.clone(), |name| name.to_string_lossy().into_owned())
+                })
+                .collect(),
+            discarded,
+            settings,
+            note: None,
+        });
+    }
+    // The settings of the mode apply to the definitions and the load, so
+    // they are set before `Session::load` runs, exactly as the CLI sets
+    // them before its own load.
+    crate::tool_modes::set_on_load(crate::tool_modes::LoadSwitches {
+        tool_mode,
+        ..Default::default()
+    });
+    crate::commands::set_quick_clean_on_load(quick);
+    crate::commands::set_translate_on_load(translate);
+    crate::commands::set_check_on_load(check);
+    let edit_allowed = session.edit_allowed;
+    let reloaded = match Session::load(&crate::dump::game_tag(game), &request.plugins) {
+        Ok(reloaded) => reloaded,
+        Err(message) => {
+            // `Session::load` clears the process-wide file list before it
+            // loads, so a failed load leaves the session with no plugin at
+            // all; the caller has to load again.
+            session.files.clear();
+            return Err(CommandError::new(
+                "load_failed",
+                format!("{message} (the session has no plugins now)"),
+            ));
+        }
+    };
+    let files: Vec<String> = reloaded.files.iter().map(|file| file.get_name()).collect();
+    *session = reloaded;
+    session.edit_allowed = edit_allowed;
+    Ok(SessionLoadResponse {
+        game: crate::dump::game_tag(game).to_owned(),
+        mode: request.mode.clone(),
+        dry_run: false,
+        files,
+        discarded,
+        settings,
+        note: None,
     })
 }
 
@@ -888,6 +1073,12 @@ pub fn register(registry: &mut Registry) {
         "Report the game and the loaded plugins.",
         false,
         session_info,
+    );
+    registry.register(
+        "session.load",
+        "Load another plugin list into the running session (or the same one with a tool mode's load settings, as xeInit.pas applies them): the way a serve or MCP session runs the quick clean modes. Discards unsaved changes unless force is set; needs --edit unless dry_run.",
+        true,
+        session_load,
     );
     registry.register(
         "files.list",

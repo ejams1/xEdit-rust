@@ -2983,7 +2983,7 @@ note = "bsarch accepts -af as BSArch does; xedit archive pack takes it as an opt
 [switch.agl]
 status = "pending"
 source = "xEdit/xeInit.pas"
-note = "Read by parse_legacy of tool_modes.rs and named as not acted on; xeAutoGameLink: the GUI activates its Pluggy link; the port's legacy parser reads the switch and names it as not acted on."
+note = "Read and classified by parse_legacy of tool_modes.rs; xeAutoGameLink: the GUI activates its Pluggy link, which needs the Pluggy DLLs; the port reads the switch and reports it."
 
 [switch.aim]
 status = "pending"
@@ -3002,9 +3002,9 @@ source = "xDump.dpr"
 note = "wbLoadAllBSAs: xedit dump --all-bsa (the dump runs outside a session, so the command is the CLI's): every <plugin>* archive of each module, exactly and with the plugin ini in the Skyrim games; xDump has no game ini, so none of its archives (resources.rs, load_dump_resources)."
 
 [switch.allowdirectsaves]
-status = "pending"
+status = "presentation"
 source = "xEdit/xeInit.pas"
-note = "Read by parse_legacy of tool_modes.rs and named as not acted on; wbAllowDirectSave and wbAllowDirectSaveFor; the port saves through a temporary file and a rename, which is what the option is for."
+note = "wbAllowDirectSave and wbAllowDirectSaveFor answer the GUI's question before it saves into the data folder (`wbImplementation.pas:3283`); a CLI run writes where --output or the loaded path says."
 
 [switch.allowedithedrversion]
 status = "covered"
@@ -3045,7 +3045,7 @@ note = "Accepted by the legacy command line; the CLI has no window to close, and
 [switch.autogamelink]
 status = "pending"
 source = "xEdit/xeInit.pas"
-note = "Read by parse_legacy of tool_modes.rs and named as not acted on; As -agl."
+note = "Read and classified by parse_legacy of tool_modes.rs; As -agl."
 
 [switch.autoload]
 status = "covered"
@@ -3054,9 +3054,10 @@ source = "xEdit/xeInit.pas"
 note = "Accepted by the legacy command line; the CLI loads what --load and -P: name."
 
 [switch.b]
-status = "pending"
+status = "covered"
+command = "files.save"
 source = "xEdit/xeInit.pas"
-note = "Read by parse_legacy of tool_modes.rs and named as not acted on; The backup folder of the GUI (-B:); the port writes the backup of a file next to it in <AppName>Edit Backups."
+note = "wbBackupPath: -B: names the folder a replaced file moves to; without it (legacy) `<data>\<AppName>Edit Backups\`, else the folder of the plugin."
 
 [switch.border]
 status = "pending"
@@ -3095,16 +3096,25 @@ status = "pending"
 source = "Tools/TreeLodBillboardCreator/treelod.dpr"
 
 [switch.cp]
-status = "pending"
+status = "covered"
 source = "xDump.dpr"
+command = "tool.run"
+source = "xEdit/xeInit.pas"
+note = "wbEncodingTrans for the translatable strings (`apply_on_load`); a CLI run sets it with --code-page-trans."
 
 [switch.cp-general]
-status = "pending"
+status = "covered"
 source = "xDump.dpr"
+command = "tool.run"
+source = "xEdit/xeInit.pas"
+note = "wbEncoding for the general strings (`apply_on_load`); a CLI run sets it with --code-page."
 
 [switch.cp-trans]
-status = "pending"
+status = "covered"
 source = "xDump.dpr"
+command = "tool.run"
+source = "xEdit/xeInit.pas"
+note = "As -cp:."
 
 [switch.customini]
 status = "covered"
@@ -3113,8 +3123,10 @@ source = "xEdit/xeInit.pas"
 note = "wbCustomIniFileName: the global --custom-ini and the legacy -CustomIni:, else <My Games>\\<game>Custom.ini (FalloutCustom.ini for Fallout 3 and New Vegas); its [Archive] lists replace the game ini's in FindBSAs and its sLanguage the game ini's (resources.rs). Oracle: parity resources fo4-game-ini."
 
 [switch.d]
-status = "pending"
-source = "xDump.dpr"
+status = "covered"
+command = "tool.run"
+source = "xEdit/xeInit.pas"
+note = "wbDataPath: -D: names the data folder the load resolves modules, saves and the archives against (DoInitPath); without it the port finds the folder as the release does (\"parity discovery\")."
 
 [switch.dc]
 status = "pending"
@@ -3127,7 +3139,7 @@ source = "xDump.dpr"
 [switch.devmode]
 status = "pending"
 source = "xEdit/xeInit.pas"
-note = "Read by parse_legacy of tool_modes.rs and named as not acted on; wbDevMode; only the GUI's developer mode reads it."
+note = "wbDevMode swaps the program's CRC32 for the fixed development one (`wbHelpers.pas:621`); the port stores the setting."
 
 [switch.df]
 status = "pending"
@@ -3164,9 +3176,10 @@ source = "xEdit/xeInit.pas"
 note = "The global CLI option --dont-cache-save."
 
 [switch.dontremoveoffsetdata]
-status = "pending"
+status = "covered"
+command = "tool.run"
 source = "xEdit/xeInit.pas"
-note = "Read by parse_legacy of tool_modes.rs and named as not acted on; wbRemoveOffsetData; the port always removes the worldspace offsets on load, as the editor does."
+note = "wbRemoveOffsetData off: the load keeps the offset data of a worldspace (`apply_on_load`); a CLI run sets it with --dont-remove-offset-data."
 
 [switch.dr]
 status = "pending"
@@ -3179,18 +3192,19 @@ source = "BSArch.dpr"
 note = "bsarch accepts -dump as BSArch does; xedit archive list --files lists the files."
 
 [switch.enforceallmasters]
-status = "pending"
+status = "covered"
+command = "tool.run"
 source = "xEdit/xeInit.pas"
-note = "Read by parse_legacy of tool_modes.rs and named as not acted on; wbEnforceAllMasters; set from the game (Starfield) rather than the switch."
+note = "wbEnforceAllMasters (`apply_on_load`); a CLI run sets it with --enforce-all-masters."
 
 [switch.es]
 status = "pending"
 source = "xDump.dpr"
 
 [switch.exceptiontest]
-status = "pending"
+status = "excluded"
 source = "xEdit/xeInit.pas"
-note = "Read by parse_legacy of tool_modes.rs and named as not acted on; A developer switch of the GUI."
+note = "The release raises and swallows an exception to test its exception handler."
 
 [switch.f]
 status = "covered"
@@ -3229,9 +3243,9 @@ source = "xEdit/xeInit.pas"
 note = "wbAllowInternalEdit := True (the internal edits of the load)."
 
 [switch.fixuppgrd]
-status = "pending"
+status = "excluded"
 source = "xEdit/xeInit.pas"
-note = "Read by parse_legacy of tool_modes.rs and named as not acted on; wbFixupPGRD; the quick clean modes set it."
+note = "wbFixupPGRD is set by `xeInit.pas:1568` and read nowhere in the release: the switch does nothing."
 
 [switch.fnv]
 status = "covered"
@@ -3274,9 +3288,9 @@ status = "pending"
 source = "Tools/TreeLodBillboardCreator/treelod.dpr"
 
 [switch.g]
-status = "pending"
+status = "presentation"
 source = "xEdit/xeInit.pas"
-note = "Read by parse_legacy of tool_modes.rs and named as not acted on; The save folder of the game; the port reads a save from the path it is given."
+note = "wbSavePath names the save folder of the GUI's save list (`xeInit.pas:530`), which is read from the game ini's SLocalSavePath; a `saves dump` run takes the file itself."
 
 [switch.generateseq]
 status = "covered"
@@ -3285,9 +3299,10 @@ source = "xEdit/xeInit.pas"
 note = "-generateseq:<plugin>: the SEQ generation of the edit mode (xeQuickSEQ); tool.run mode=generateseq <plugin>."
 
 [switch.givemetheredpill]
-status = "pending"
+status = "covered"
+command = "tool.run"
 source = "xEdit/xeInit.pas"
-note = "Read by parse_legacy of tool_modes.rs and named as not acted on; The Starfield save unlock trio of the GUI."
+note = "As -ItJustWorksTM."
 
 [switch.height]
 status = "pending"
@@ -3310,29 +3325,34 @@ source = "Sniff/frmMain.pas"
 note = "The sniff binary takes -I: as Sniff.exe does; sniff.run takes it as a parameter. xEdit's -I: (xeInit.pas, wbTheGameIniFileName) is the global --game-ini and the legacy -I: of every session (tool.run, lodgen.generate): the archive lists of FindBSAs and the sLanguage of the language (resources.rs)."
 
 [switch.ignoreesl]
-status = "pending"
+status = "covered"
+command = "tool.run"
 source = "xEdit/xeInit.pas"
-note = "Read by parse_legacy of tool_modes.rs and named as not acted on; wbIgnoreLight; the load order of the port is given by --load."
+note = "wbIgnoreLight: the light flag of a plugin is ignored (`apply_on_load`); a CLI run sets it with --ignore-light."
 
 [switch.ignorelight]
-status = "pending"
+status = "covered"
+command = "tool.run"
 source = "xEdit/xeInit.pas"
-note = "Read by parse_legacy of tool_modes.rs and named as not acted on; As -IgnoreESL."
+note = "As -IgnoreESL."
 
 [switch.ignoremedium]
-status = "pending"
+status = "covered"
+command = "tool.run"
 source = "xEdit/xeInit.pas"
-note = "Read by parse_legacy of tool_modes.rs and named as not acted on; wbIgnoreMedium."
+note = "wbIgnoreMedium, as -IgnoreESL."
 
 [switch.ignoresmall]
-status = "pending"
+status = "covered"
+command = "tool.run"
 source = "xEdit/xeInit.pas"
-note = "Read by parse_legacy of tool_modes.rs and named as not acted on; As -IgnoreESL."
+note = "As -IgnoreESL."
 
 [switch.ignoreupdate]
-status = "pending"
+status = "covered"
+command = "tool.run"
 source = "xEdit/xeInit.pas"
-note = "Read by parse_legacy of tool_modes.rs and named as not acted on; wbIgnoreUpdate."
+note = "wbIgnoreUpdate, as -IgnoreESL."
 
 [switch.iknowillbreakmygamewiththis]
 status = "covered"
@@ -3347,9 +3367,10 @@ source = "xEdit/xeInit.pas"
 note = "Read by parse_legacy; the switches it unlocks (-AllowMakePartial, -AllowMasterFilesEdit, -AllowEditHEDRVersion, -StripEmptyMasters, -AllowESPMaster) are applied by apply_on_load where the port has the feature."
 
 [switch.itjustworkstm]
-status = "pending"
+status = "covered"
+command = "tool.run"
 source = "xEdit/xeInit.pas"
-note = "Read by parse_legacy of tool_modes.rs and named as not acted on; The Starfield save unlock trio of the GUI."
+note = "With -ThisIsFine and -GiveMeTheRedPill: wbRedPill on and wbStarfieldIsABugInfestedHellhole off for Starfield (`apply_on_load`); a CLI run sets it with --starfield-red-pill."
 
 [switch.l]
 status = "pending"
@@ -3371,7 +3392,7 @@ note = "The sniff binary takes -LOG: as Sniff.exe does; sniff.run takes it as a 
 status = "covered"
 command = "tool.run"
 source = "xEdit/xeInit.pas"
-note = "wbMyGamesTheGamePath: the global --my-games and the legacy -M:, else <Documents>\\My Games\\<wbGameName2>\\ (the game folder for Morrowind, FalloutNV_Epic for the Epic release), where the game ini and the custom ini are (resources.rs, init_game_paths). The save folder below it is not ported."
+note = "wbMyGamesTheGamePath: the global --my-games and the legacy -M:, else <Documents>\\My Games\\<wbGameName2>\\ (the game folder for Morrowind, FalloutNV_Epic for the Epic release), where the game ini and the custom ini are (resources.rs, init_game_paths). The save folder below it is the SLocalSavePath of those inis (switch.g, game_paths::save_path)."
 
 [switch.maskdiff]
 status = "pending"
@@ -3380,7 +3401,7 @@ source = "Tools/TreeLodBillboardCreator/treelod.dpr"
 [switch.memory]
 status = "pending"
 source = "xEdit/xeInit.pas"
-note = "Read by parse_legacy of tool_modes.rs and named as not acted on; wbSpeedOverMemory."
+note = "As -speed."
 
 [switch.mipmap]
 status = "pending"
@@ -3389,21 +3410,21 @@ source = "Tools/TreeLodBillboardCreator/treelod.dpr"
 [switch.moprofile]
 status = "pending"
 source = "xEdit/xeInit.pas"
-note = "Read by parse_legacy of tool_modes.rs and named as not acted on; The Mod Organizer hook; the port has no DLL hook."
+note = "Read and classified by parse_legacy of tool_modes.rs (SwitchKind::Unported, named on stderr); the Mod Organizer hook (modorganizer\hook.dll) is not ported, so no profile is loaded."
 
 [switch.more]
 status = "pending"
 source = "xDump.dpr"
 
 [switch.moreinfoforindex]
-status = "pending"
+status = "excluded"
 source = "xEdit/xeInit.pas"
-note = "Read by parse_legacy of tool_modes.rs and named as not acted on; wbMoreInfoForIndex."
+note = "wbMoreInfoForIndex is read by the release under `DebugHook <> 0`, which is 0 in a release build: the switch does nothing."
 
 [switch.moreunknown]
 status = "pending"
 source = "xEdit/xeInit.pas"
-note = "Read by parse_legacy of tool_modes.rs and named as not acted on; wbMoreInfoForUnknown."
+note = "wbMoreInfoForUnknown adds the name of an element with unknown data to its value (`wbImplementation.pas:23005`); the port stores the setting and renders unknowns as it does without it."
 
 [switch.mt]
 status = "covered"
@@ -3447,9 +3468,10 @@ source = "xEdit/xeInit.pas"
 note = "wbAllowInternalEdit := False."
 
 [switch.noreportinjected]
-status = "pending"
+status = "covered"
+command = "tool.run"
 source = "xEdit/xeInit.pas"
-note = "Read by parse_legacy of tool_modes.rs and named as not acted on; wbReportInjected := False."
+note = "As -reportinjected, off."
 
 [switch.nosortinfo]
 status = "covered"
@@ -3476,29 +3498,34 @@ source = "Sniff/frmMain.pas"
 note = "The sniff binary takes -P: as Sniff.exe does; sniff.run takes it as a parameter."
 
 [switch.pseudoesl]
-status = "pending"
+status = "covered"
+command = "tool.run"
 source = "xEdit/xeInit.pas"
-note = "Read by parse_legacy of tool_modes.rs and named as not acted on; wbPseudoLight; the load order of the port is given by --load."
+note = "wbPseudoLight: the load treats every plugin as a light module (`LoadSwitches::pseudo_light`, `apply_on_load`); a CLI run sets it with --pseudo-light."
 
 [switch.pseudolight]
-status = "pending"
+status = "covered"
+command = "tool.run"
 source = "xEdit/xeInit.pas"
-note = "Read by parse_legacy of tool_modes.rs and named as not acted on; As -PseudoESL."
+note = "As -PseudoESL."
 
 [switch.pseudomedium]
-status = "pending"
+status = "covered"
+command = "tool.run"
 source = "xEdit/xeInit.pas"
-note = "Read by parse_legacy of tool_modes.rs and named as not acted on; wbPseudoMedium."
+note = "wbPseudoMedium, as -PseudoESL."
 
 [switch.pseudosmall]
-status = "pending"
+status = "covered"
+command = "tool.run"
 source = "xEdit/xeInit.pas"
-note = "Read by parse_legacy of tool_modes.rs and named as not acted on; As -PseudoESL."
+note = "As -PseudoESL."
 
 [switch.pseudoupdate]
-status = "pending"
+status = "covered"
+command = "tool.run"
 source = "xEdit/xeInit.pas"
-note = "Read by parse_legacy of tool_modes.rs and named as not acted on; wbPseudoUpdate."
+note = "wbPseudoUpdate, as -PseudoESL."
 
 [switch.q]
 status = "pending"
@@ -3519,7 +3546,7 @@ note = "The legacy switch -qc of the quick clean mode (the same as -quickautocle
 [switch.qsc]
 status = "pending"
 source = "xEdit/xeInit.pas"
-note = "Read by parse_legacy of tool_modes.rs and named as not acted on; xeQuickShowConflicts of the edit mode; `xedit conflicts --quick-show-conflicts` classifies without comparing."
+note = "Read and classified by parse_legacy of tool_modes.rs; xeQuickShowConflicts of the edit mode; `xedit conflicts --quick-show-conflicts` classifies without comparing."
 
 [switch.quickautoclean]
 status = "covered"
@@ -3536,31 +3563,33 @@ note = "As -qc."
 [switch.quickedit]
 status = "pending"
 source = "xEdit/xeInit.pas"
-note = "Read by parse_legacy of tool_modes.rs and named as not acted on; -quickedit:<plugin>: the edit mode auto loads one plugin; the CLI loads what --load names."
+note = "Read and classified by parse_legacy of tool_modes.rs; -quickedit:<plugin>: the edit mode auto loads one plugin (xeQuickEdit); the port's edit mode loads the plugin list."
 
 [switch.quickshowconflicts]
 status = "pending"
 source = "xEdit/xeInit.pas"
-note = "Read by parse_legacy of tool_modes.rs and named as not acted on; As -qsc."
+note = "Read and classified by parse_legacy of tool_modes.rs; As -qsc."
 
 [switch.r]
 status = "pending"
 source = "xEdit/xeInit.pas"
-note = "Read by parse_legacy of tool_modes.rs and named as not acted on; The log file of the session; the legacy command line writes the messages of the run to -R:<file>."
+note = "Read and classified by parse_legacy of tool_modes.rs; the legacy command line writes the startup lines and the messages of the run to -R:<file>."
 
 [switch.report]
-status = "pending"
+status = "excluded"
 source = "xDump.dpr"
+note = "wbReportMode follows `DebugHook`, which is 0 in a release build: the switch does nothing."
 
 [switch.reportinjected]
-status = "pending"
+status = "covered"
+command = "tool.run"
 source = "xEdit/xeInit.pas"
-note = "Read by parse_legacy of tool_modes.rs and named as not acted on; wbReportInjected."
+note = "wbReportInjected: the load logs `<Note: X was injected into Y>` (`FileImpl::inject_main_record`); a CLI run sets it with --report-injected."
 
 [switch.resetsettings]
-status = "pending"
+status = "presentation"
 source = "xEdit/xeInit.pas"
-note = "Read by parse_legacy of tool_modes.rs and named as not acted on; The settings file of the GUI, which the port does not read."
+note = "It clears the settings file of the GUI at its first start (`xeInit.pas:150`); a CLI run has no first start."
 
 [switch.s]
 status = "covered"
@@ -3571,12 +3600,12 @@ note = "The sniff binary takes -S: as Sniff.exe does; sniff.run takes it as a pa
 [switch.script]
 status = "pending"
 source = "xEdit/xeInit.pas"
-note = "Read by parse_legacy of tool_modes.rs and named as not acted on; The -script:<file> switch selects the script mode and the game of the script's extension; running the script is phase 6."
+note = "Read and classified by parse_legacy of tool_modes.rs; -script:<file> selects the script mode and the game of the script's extension; the script runs (script.run)."
 
 [switch.scripthost]
 status = "pending"
 source = "xEdit/xeInit.pas"
-note = "Read by parse_legacy of tool_modes.rs and named as not acted on; The script host of the GUI (JvInterpreter); phase 6."
+note = "Read and classified by parse_legacy of tool_modes.rs; -scripthost:<name> selects the script host (xedit_script::host::init), JvI by default."
 
 [switch.sf1]
 status = "covered"
@@ -3635,7 +3664,7 @@ note = "wbSortINFO."
 [switch.speed]
 status = "pending"
 source = "xEdit/xeInit.pas"
-note = "Read by parse_legacy of tool_modes.rs and named as not acted on; wbSpeedOverMemory."
+note = "wbSpeedOverMemory trades memory for speed in the release's caches (`wbImplementation.pas:8905`); the port's structures are not the release's, so the setting is stored and nothing reads it."
 
 [switch.split]
 status = "covered"
@@ -3668,9 +3697,10 @@ source = "xEdit/xeInit.pas"
 note = "wbStripEmptyMasters."
 
 [switch.stripmasters]
-status = "pending"
+status = "covered"
+command = "tool.run"
 source = "xEdit/xeInit.pas"
-note = "Read by parse_legacy of tool_modes.rs and named as not acted on; wbStripMasters and wbStripMastersFileNames; the masters commands do not strip named masters yet."
+note = "wbStripMasters and wbStripMastersFileNames: the named masters are left out of the master list a plugin loads with (`FileImpl::strip_master`); needs -IKnowWhatImDoing as upstream, or --strip-masters on the CLI."
 
 [switch.subdir]
 status = "covered"
@@ -3683,9 +3713,10 @@ status = "pending"
 source = "xDump.dpr"
 
 [switch.t]
-status = "pending"
+status = "covered"
+command = "tool.run"
 source = "xEdit/xeInit.pas"
-note = "Read by parse_legacy of tool_modes.rs and named as not acted on; The temporary folder of the GUI."
+note = "wbTempPath: -T: names the folder scripts write their temporary files to; without it the system's temporary folder with `<AppName>Edit` below it. -T: also reads the folder in a legacy run (\"Using Scripts Path\" of the startup log)."
 
 [switch.tes3]
 status = "covered"
@@ -3706,9 +3737,10 @@ source = "BSArch.dpr"
 note = "bsarch accepts it with the upstream spelling (-tes5); xedit archive pack takes it as an option of the same meaning."
 
 [switch.thisisfine]
-status = "pending"
+status = "covered"
+command = "tool.run"
 source = "xEdit/xeInit.pas"
-note = "Read by parse_legacy of tool_modes.rs and named as not acted on; The Starfield save unlock trio of the GUI."
+note = "As -ItJustWorksTM."
 
 [switch.threads]
 status = "covered"
@@ -3721,19 +3753,20 @@ status = "pending"
 source = "xDump.dpr"
 
 [switch.trackalleditorid]
-status = "pending"
+status = "covered"
+command = "tool.run"
 source = "xEdit/xeInit.pas"
-note = "Read by parse_legacy of tool_modes.rs and named as not acted on; wbTrackAllEditorID."
+note = "wbTrackAllEditorID (`apply_on_load`); a CLI run sets it with --track-all-editor-id."
 
 [switch.veryquickshowconflicts]
 status = "pending"
 source = "xEdit/xeInit.pas"
-note = "Read by parse_legacy of tool_modes.rs and named as not acted on; As -vqsc."
+note = "Read and classified by parse_legacy of tool_modes.rs; As -vqsc."
 
 [switch.vqsc]
 status = "pending"
 source = "xEdit/xeInit.pas"
-note = "Read by parse_legacy of tool_modes.rs and named as not acted on; xeVeryQuickShowConflicts."
+note = "Read and classified by parse_legacy of tool_modes.rs; xeVeryQuickShowConflicts."
 
 [switch.width]
 status = "pending"

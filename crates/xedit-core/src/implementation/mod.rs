@@ -249,6 +249,7 @@ use std::path::Path;
 use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use std::sync::{Arc, OnceLock, RwLock, Weak};
 
+use xedit_io::collate::ansi_compare_text;
 use xedit_io::{Encoding, MappedFile};
 
 use crate::delphi::{int_power, path_file_name, round};
@@ -264,8 +265,8 @@ use crate::interface::globals::{
     file_chapters, file_header, file_magic, file_plugins, game_exe_name, game_master_esm, game_mode,
     has_added_light_support, header_signature, is_fallout3, is_fallout4, is_fallout76, is_internal_edit,
     is_light_supported, is_medium_supported, is_skyrim, is_starfield, is_update_supported, pseudo_light, pseudo_medium,
-    pseudo_update, remove_offset_data, size_of_main_record_struct, tool_source, track_all_editor_id,
-    vwd_as_quest_children, wb_get_group_order,
+    pseudo_update, remove_offset_data, report_injected, size_of_main_record_struct, strip_empty_masters, strip_masters,
+    strip_masters_file_names, tool_source, track_all_editor_id, vwd_as_quest_children, wb_get_group_order,
 };
 use crate::interface::integer::IntegerDefFormater;
 use crate::interface::main_record::{
@@ -946,13 +947,52 @@ impl FileImpl {
     }
 
     /// Port of `InjectMainRecord`: a record of another file with a FormID of
-    /// this file, or an override of one that is injected already.
+    /// this file, or an override of one that is injected already. The
+    /// messages are the load log's: the note of a new injection follows
+    /// `-reportinjected`/`-noreportinjected` (`wbReportInjected`), the
+    /// warning of a second one does not.
     fn inject_main_record(&self, record: Arc<MainRecordImpl>) {
         let form_id = record.get_fixed_form_id().to_cardinal();
         let mut injected = self.fl_injected_records.write().unwrap();
+        // `(wbGameMode > gmTES3) or not (fsIsHardcoded in flStates)`.
+        let logged = game_mode() > GameMode::gmTES3 || !self.get_file_states().contains(FileState::fsIsHardcoded);
         match injected.binary_search_by_key(&form_id, |injected| injected.get_fixed_form_id().to_cardinal()) {
-            Ok(index) => injected[index].clone().add_override(&record),
-            Err(index) => injected.insert(index, record),
+            Ok(index) => {
+                let existing = injected[index].clone();
+                if logged
+                    && existing.file_impl().is_some_and(|file| {
+                        let states = file.get_file_states();
+                        !states.contains(FileState::fsIsHardcoded) && !states.contains(FileState::fsIsCompareLoad)
+                    })
+                {
+                    progress(&format!(
+                        "<Warning: {} was injected into {} which already has been injected with {} from {} >",
+                        record.get_name(),
+                        self.get_name(),
+                        existing.get_name(),
+                        existing
+                            .file_impl()
+                            .map_or(String::new(), |file| file.file_name().to_owned())
+                    ));
+                }
+                existing.add_override(&record);
+            }
+            Err(index) => {
+                if logged
+                    && record.file_impl().is_some_and(|file| {
+                        let states = file.get_file_states();
+                        !states.contains(FileState::fsIsHardcoded) && !states.contains(FileState::fsIsCompareLoad)
+                    })
+                    && report_injected()
+                {
+                    progress(&format!(
+                        "<Note: {} was injected into {}>",
+                        record.get_name(),
+                        self.get_name()
+                    ));
+                }
+                injected.insert(index, record);
+            }
         }
     }
 
@@ -1188,6 +1228,22 @@ impl FileImpl {
         Ok(())
     }
 
+    /// Upstream `GetMasterList` (wbImplementation.pas:4803): whether the
+    /// loader leaves this `MAST` entry out of the master list the file
+    /// loads with. `-StripEmptyMasters` (`wbStripEmptyMasters`) leaves an
+    /// empty name out; `-IKnowWhatImDoing -StripMasters:<name>,...`
+    /// (`wbStripMasters` and `wbStripMastersFileNames`) the names it lists,
+    /// compared as the sorted list's `Find` compares them (without case).
+    fn strip_master(&self, name: &str) -> bool {
+        if strip_empty_masters() && name.trim().is_empty() {
+            return true;
+        }
+        strip_masters()
+            && strip_masters_file_names()
+                .iter()
+                .any(|listed| ansi_compare_text(listed, name.trim()) == std::cmp::Ordering::Equal)
+    }
+
     fn element_ref(&self) -> ElementRef {
         self.self_ref.upgrade().expect("a file is alive while it is used")
     }
@@ -1379,7 +1435,15 @@ impl FileImpl {
                             self.fl_file_name
                         ))
                     })?;
-                self.add_master(&master.get_edit_value())?;
+                // Upstream `GetMasterList` (wbImplementation.pas:4803): an
+                // empty name goes with `-StripEmptyMasters`, and
+                // `-IKnowWhatImDoing -StripMasters:<name>` leaves the named
+                // masters out of the list the file loads with.
+                let name = master.get_edit_value();
+                if self.strip_master(&name) {
+                    continue;
+                }
+                self.add_master(&name)?;
             }
         }
         self.assign_slot(&header)?;

@@ -302,7 +302,13 @@ impl Def for EnumDef {
 
     fn get_def_type_name(&self) -> String {
         if self.en_names.is_empty() {
-            self.class.class_name().to_owned()
+            // UPSTREAM-QUIRK: `TwbEnumDef.GetDefTypeName` writes a bare
+            // `inherited` in a function of a string result, which calls the
+            // parent method and *discards* its `ClassName`: the result
+            // stays the empty string the compiler gives a string result
+            // (the profile of an enum of a sparse `wbEnum([], [...])` says
+            // `Group=`).
+            String::new()
         } else {
             format!("({})", self.en_names.join(","))
         }

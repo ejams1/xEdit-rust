@@ -39,7 +39,9 @@ struct Cli {
     /// Load this file as a compare load of the last --load plugin, as the navigation tree's "Compare to..." does: it takes that plugin's load order and is compared with it record by record. The file has to sit in the folder of that plugin (the GUI copies it into the data folder).
     #[arg(long, global = true)]
     compare_to: Option<String>,
-
+    /// The definitions the session loads, plugins (the default) or saves, as xEdit's -plugins and -saves. A saves session reads no plugin and has the save definitions ready for `tool run export --source saves`.
+    #[arg(long, global = true)]
+    source: Option<String>,
     /// Allow the commands that change plugin data or files to do so. Without it they only run with --dry-run.
     #[arg(long, global = true)]
     edit: bool,
@@ -115,8 +117,156 @@ struct Cli {
     #[arg(long, global = true)]
     custom_ini: Option<String>,
 
+    #[command(flatten)]
+    switches: LoadSwitchArgs,
+
     #[command(subcommand)]
     action: Action,
+}
+
+/// The load settings of `xeInit.pas` a legacy command line passes as
+/// switches, which the CLI takes as flags so that a session loads the same
+/// way however it is started (`apply_on_load` applies them before the first
+/// plugin).
+#[derive(clap::Args)]
+struct LoadSwitchArgs {
+    /// Load every plugin as a light module whatever its flag says (xEdit's -PseudoESL/-PseudoLight/-PseudoSmall, wbPseudoLight).
+    #[arg(long, global = true)]
+    pseudo_light: bool,
+
+    /// Ignore the light flag of a plugin (xEdit's -IgnoreESL/-IgnoreLight/-IgnoreSmall, wbIgnoreLight).
+    #[arg(long, global = true, conflicts_with = "pseudo_light")]
+    ignore_light: bool,
+
+    /// Load every plugin as a medium module whatever its flag says (xEdit's -PseudoMedium, wbPseudoMedium).
+    #[arg(long, global = true)]
+    pseudo_medium: bool,
+
+    /// Ignore the medium flag of a plugin (xEdit's -IgnoreMedium, wbIgnoreMedium).
+    #[arg(long, global = true, conflicts_with = "pseudo_medium")]
+    ignore_medium: bool,
+
+    /// Load every plugin as an update module whatever its flag says (xEdit's -PseudoUpdate, wbPseudoUpdate).
+    #[arg(long, global = true)]
+    pseudo_update: bool,
+
+    /// Ignore the update flag of a plugin (xEdit's -IgnoreUpdate, wbIgnoreUpdate).
+    #[arg(long, global = true, conflicts_with = "pseudo_update")]
+    ignore_update: bool,
+
+    /// Keep the offset data (OFFSET/OFST) of a worldspace on load; the editor drops it (xEdit's -dontremoveoffsetdata, wbRemoveOffsetData off).
+    #[arg(long, global = true)]
+    dont_remove_offset_data: bool,
+
+    /// The load logs `<Note: X was injected into Y>` (xEdit's -reportinjected, the default of wbReportInjected).
+    #[arg(long, global = true, conflicts_with = "no_report_injected")]
+    report_injected: bool,
+
+    /// The load logs no injection notes (xEdit's -noreportinjected).
+    #[arg(long, global = true)]
+    no_report_injected: bool,
+
+    /// Add every record of a plugin that can have an editor ID to the editor ID index (xEdit's -TrackAllEditorID, wbTrackAllEditorID).
+    #[arg(long, global = true)]
+    track_all_editor_id: bool,
+
+    /// Show more information for an unknown element (xEdit's -moreunknown, wbMoreInfoForUnknown).
+    #[arg(long, global = true)]
+    more_unknown: bool,
+
+    /// A master of a master is also a master of the plugin (xEdit's -EnforceAllMasters, wbEnforceAllMasters).
+    #[arg(long, global = true)]
+    enforce_all_masters: bool,
+
+    /// Trade memory for speed where the release does (xEdit's -speed, wbSpeedOverMemory).
+    #[arg(long, global = true, conflicts_with = "memory_over_speed")]
+    speed_over_memory: bool,
+
+    /// Trade speed for memory where the release does (xEdit's -memory).
+    #[arg(long, global = true)]
+    memory_over_speed: bool,
+
+    /// Leave the named masters out of the master list a plugin loads with, with -IKnowWhatImDoing (xEdit's -StripMasters:<name,...>, wbStripMasters).
+    #[arg(long, global = true, value_delimiter = ',')]
+    strip_masters: Option<Vec<String>>,
+
+    /// Save into the game's data folder without the GUI's question (xEdit's -AllowDirectSaves[:<name>,...], wbAllowDirectSave).
+    #[arg(long, global = true, num_args = 0.., value_delimiter = ',')]
+    allow_direct_saves: Option<Vec<String>>,
+
+    /// The code page of the general strings (xEdit's -cp-general:).
+    #[arg(long, global = true)]
+    code_page: Option<u32>,
+
+    /// The code page of the translatable strings (xEdit's -cp:/-cp-trans:).
+    #[arg(long, global = true)]
+    code_page_trans: Option<u32>,
+
+    /// The folder scripts write their temporary files to (xEdit's -T:). Default: the system's temporary folder with `<AppName>Edit` below it.
+    #[arg(long, global = true)]
+    temp_path: Option<String>,
+
+    /// The folder of the game's saves (xEdit's -G:). Default: the SLocalSavePath of the game's ini below My Games.
+    #[arg(long, global = true)]
+    save_path: Option<String>,
+
+    /// The folder a replaced plugin moves to (xEdit's -B:). Default: `<data>\<AppName>Edit Backups\`.
+    #[arg(long, global = true)]
+    backup_path: Option<String>,
+
+    /// The profile of a Mod Organizer installation (xEdit's -moprofile:); the hook that reads it is not ported.
+    #[arg(long, global = true)]
+    mo_profile: Option<String>,
+
+    /// Starfield only: unlock the save of the official modules, as xEdit's -ItJustWorksTM -ThisIsFine -GiveMeTheRedPill do (wbRedPill).
+    #[arg(long, global = true)]
+    starfield_red_pill: bool,
+}
+
+impl LoadSwitchArgs {
+    /// The settings [`xedit_session::tool_modes::apply_on_load`] applies, for
+    /// the tool mode the invocation runs.
+    fn to_load_switches(
+        &self,
+        tool_mode: xedit_core::interface::globals::ToolMode,
+        tool_source: xedit_core::interface::globals::ToolSource,
+    ) -> xedit_session::tool_modes::LoadSwitches {
+        let switches = xedit_session::tool_modes::LoadSwitches {
+            tool_mode,
+            tool_source,
+            pseudo_light: self.pseudo_light,
+            ignore_light: self.ignore_light,
+            pseudo_medium: self.pseudo_medium,
+            ignore_medium: self.ignore_medium,
+            pseudo_update: self.pseudo_update,
+            ignore_update: self.ignore_update,
+            remove_offset_data: self.dont_remove_offset_data.then_some(false),
+            report_injected: if self.report_injected {
+                Some(true)
+            } else if self.no_report_injected {
+                Some(false)
+            } else {
+                None
+            },
+            track_all_editor_id: self.track_all_editor_id,
+            more_info_for_unknown: self.more_unknown,
+            enforce_all_masters: self.enforce_all_masters,
+            speed_over_memory: if self.speed_over_memory {
+                Some(true)
+            } else if self.memory_over_speed {
+                Some(false)
+            } else {
+                None
+            },
+            strip_masters: self.strip_masters.clone().unwrap_or_default(),
+            allow_direct_saves: self.allow_direct_saves.clone(),
+            starfield_red_pill: self.starfield_red_pill,
+            code_page: self.code_page,
+            code_page_trans: self.code_page_trans,
+            ..Default::default()
+        };
+        switches
+    }
 }
 
 #[derive(Subcommand)]
@@ -712,6 +862,9 @@ enum ToolAction {
         /// The format of the export mode: RAW (the default) or UESPWIKI.
         #[arg(long)]
         format: Option<String>,
+        /// The export mode: the definitions to write, plugins (the default) or saves (xDump's -saves). The definitions of a saves source are built at load, so export runs in a session loaded with --source saves.
+        #[arg(long)]
+        source: Option<String>,
         /// Where the generateseq mode writes the .seq files; <data path>\Seq when omitted.
         #[arg(long)]
         seq_path: Option<String>,
@@ -743,6 +896,21 @@ enum SavesAction {
 enum SessionAction {
     /// Report the game, the data folder and the loaded plugins.
     Info,
+    /// Load another plugin list into the running session, or the same one with a tool mode's load settings (session.load; xeInit.pas applies them before anything loads). The plugins of a serve or MCP session are otherwise fixed at startup; a load discards unsaved changes unless --force. Needs --edit unless --dry-run.
+    Load {
+        /// Plugin to load, in load order; repeat for several. Masters load with it.
+        #[arg(long)]
+        plugin: Vec<String>,
+        /// The tool mode whose load settings apply: quickclean, quickautoclean, checkforerrors, translate, edit. None by default.
+        #[arg(long)]
+        mode: Option<String>,
+        /// Load although a loaded plugin has unsaved changes, which the load discards.
+        #[arg(long)]
+        force: bool,
+        /// Report what the load would do, but keep the session as it is.
+        #[arg(long)]
+        dry_run: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -1865,6 +2033,18 @@ fn command_of(action: Action) -> Result<(String, Value), CommandError> {
         Action::Session {
             action: SessionAction::Info,
         } => ("session.info".to_owned(), json!({})),
+        Action::Session {
+            action:
+                SessionAction::Load {
+                    plugin,
+                    mode,
+                    force,
+                    dry_run,
+                },
+        } => (
+            "session.load".to_owned(),
+            json!({ "plugins": plugin, "mode": mode, "force": force, "dry_run": dry_run }),
+        ),
         Action::Files {
             action: FilesAction::List { name_filter, regex },
         } => (
@@ -2347,6 +2527,7 @@ fn command_of(action: Action) -> Result<(String, Value), CommandError> {
                 output,
                 no_backup,
                 format,
+                source,
                 seq_path,
                 script,
                 scripts,
@@ -2354,7 +2535,7 @@ fn command_of(action: Action) -> Result<(String, Value), CommandError> {
                 "tool.run".to_owned(),
                 json!({
                     "mode": mode, "files": files, "dry_run": dry_run, "output": output,
-                    "backup": !no_backup, "format": format, "seq_path": seq_path,
+                    "backup": !no_backup, "format": format, "source": source, "seq_path": seq_path,
                     "script": script, "scripts": scripts
                 }),
             ),
@@ -2783,12 +2964,24 @@ fn legacy_command_line() -> Result<Option<xedit_session::tool_modes::LegacyRun>,
 /// to stdout. The exit code is the count of the check modes, at most 127, as
 /// upstream exits.
 fn run_legacy(run: xedit_session::tool_modes::LegacyRun) -> ExitCode {
+    use xedit_session::tool_modes::SwitchKind;
+
     xedit_session::dump::log_progress_to_stderr();
-    if let Some(path) = &run.data_path {
-        xedit_core::interface::globals::set_data_path(path);
-    }
-    for switch in &run.ignored_switches {
-        eprintln!("warning: {switch} is accepted and not acted on by this build");
+    for switch in &run.unacted_switches {
+        match switch.kind {
+            SwitchKind::NoOp => eprintln!(
+                "note: {} does nothing in the release build: {}",
+                switch.name, switch.reason
+            ),
+            SwitchKind::Presentation => eprintln!(
+                "note: {} only changes the GUI, not the loaded data: {}",
+                switch.name, switch.reason
+            ),
+            SwitchKind::Unported => eprintln!(
+                "warning: {} is not acted on by this build: {}",
+                switch.name, switch.reason
+            ),
+        }
     }
     // `-scripthost:<name>` (`xeInit.pas:1545`): `TxeScriptHost.Init` with the
     // name, `JvI` by default. An unknown name fails the initialization, which
@@ -2808,8 +3001,26 @@ fn run_legacy(run: xedit_session::tool_modes::LegacyRun) -> ExitCode {
         );
         return ExitCode::FAILURE;
     };
-    xedit_session::tool_modes::set_on_load(run.switches);
+    // `DoInitPath`: the data folder, the folders below `My Games` and the
+    // inis, the save, backup and cache folders and the folders of the
+    // program (`xeInit.pas:408`). The load reads them, and the startup lines
+    // below report them.
+    let Some(mode) = xedit_session::tool_modes::game_of_tag(game) else {
+        eprintln!("error: invalid_params: {game} is not a game this build has");
+        return ExitCode::FAILURE;
+    };
+    let program_path = std::env::current_exe()
+        .ok()
+        .and_then(|path| path.parent().map(|folder| folder.to_string_lossy().into_owned()))
+        .unwrap_or_default();
+    if let Err(error) = xedit_session::tool_modes::apply_legacy_paths(mode, &run, &program_path) {
+        eprintln!("error: {error}");
+        return ExitCode::FAILURE;
+    }
+    xedit_session::tool_modes::set_on_load(run.switches.clone());
     xedit_session::resources::set_options(run.resources.clone());
+    // `-l:` (`xeInit.pas:1312`).
+    xedit_session::commands::set_language_on_load(run.paths.language.as_deref());
     // `xeInit.pas` gives the quick clean modes their load settings (the full
     // record definitions, the PNAM fill) for `-quickclean` and
     // `-quickautoclean` alike; `xedit clean --quick` applies them too.
@@ -2834,6 +3045,10 @@ fn run_legacy(run: xedit_session::tool_modes::LegacyRun) -> ExitCode {
         "output": run.output,
         "backup": true,
         "format": run.format,
+        "source": match run.switches.tool_source {
+            xedit_core::interface::globals::ToolSource::tsSaves => "saves",
+            xedit_core::interface::globals::ToolSource::tsPlugins => "plugins",
+        },
         "script": run.script,
         "scripts": run.scripts_folder,
     });
@@ -2846,6 +3061,14 @@ fn run_legacy(run: xedit_session::tool_modes::LegacyRun) -> ExitCode {
         }
     };
     let mut log = String::new();
+    // The `Using ...` lines the main form writes before it loads the
+    // modules, which the tool mode of the run then follows
+    // (`xeMainForm.pas:5200`).
+    for line in xedit_session::tool_modes::legacy_startup_lines(&run) {
+        println!("{line}");
+        log.push_str(&line);
+        log.push_str("\r\n");
+    }
     for line in result["messages"].as_array().into_iter().flatten() {
         let line = line.as_str().unwrap_or_default();
         println!("{line}");
@@ -2860,6 +3083,15 @@ fn run_legacy(run: xedit_session::tool_modes::LegacyRun) -> ExitCode {
     }
     let code = result["exit_code"].as_u64().unwrap_or(0) as u8;
     ExitCode::from(code)
+}
+
+/// `IncludeTrailingPathDelimiter` of a folder an option names.
+fn with_trailing_separator(path: &str) -> String {
+    if path.is_empty() || path.ends_with(['\\', '/']) {
+        path.to_owned()
+    } else {
+        format!("{path}\\")
+    }
 }
 
 fn main() -> ExitCode {
@@ -2912,22 +3144,50 @@ fn real_main() -> ExitCode {
     if cli.allow_edit_game_master {
         xedit_core::interface::globals::set_allow_edit_game_master(true);
     }
+    // `DoInitPath`: the folders the switches name, else the ones the port
+    // finds (`-T:`, `-G:`, `-B:`, `-moprofile:`).
+    if let Some(path) = &cli.switches.temp_path {
+        xedit_core::interface::globals::set_temp_path(&with_trailing_separator(path));
+    }
+    if let Some(path) = &cli.switches.save_path {
+        xedit_core::interface::globals::set_save_path(&with_trailing_separator(path));
+    }
+    if let Some(path) = &cli.switches.backup_path {
+        xedit_core::interface::globals::set_backup_path(&with_trailing_separator(path));
+    }
+    if let Some(profile) = &cli.switches.mo_profile {
+        xedit_core::interface::globals::set_mo_profile(profile);
+        eprintln!(
+            "warning: -moprofile is not acted on by this build: the Mod Organizer hook (modorganizer\\hook.dll) is not ported"
+        );
+    }
     xedit_session::commands::set_quick_clean_on_load(matches!(cli.action, Action::Clean { quick: true, .. }));
     // The settings `-CheckForErrors` gives the load.
     let check = matches!(cli.action, Action::Check { .. });
     xedit_session::commands::set_check_on_load(check);
     // `xeInit.pas`: the tool mode decides what the load does, so it is set
-    // before the plugins load.
-    if let Action::Tool {
-        action: ToolAction::Run { mode, .. },
-    } = &cli.action
-        && let Some(tool_mode) = xedit_session::tool_modes::mode_of_name(mode)
-    {
-        xedit_session::tool_modes::set_on_load(xedit_session::tool_modes::LoadSwitches {
-            tool_mode,
-            ..Default::default()
-        });
-    }
+    // before the plugins load, with the load settings of the switches
+    // (`-PseudoESL` and the rest).
+    let tool_mode = match &cli.action {
+        Action::Tool {
+            action: ToolAction::Run { mode, .. },
+        } => xedit_session::tool_modes::mode_of_name(mode).unwrap_or(xedit_core::interface::globals::ToolMode::tmEdit),
+        _ => xedit_core::interface::globals::ToolMode::tmEdit,
+    };
+    // `--source saves` (xEdit's `-saves`): the save definitions rather than
+    // the plugin ones.
+    let tool_source = match cli.source.as_deref() {
+        None => xedit_core::interface::globals::ToolSource::tsPlugins,
+        Some(name) => match xedit_session::export::ExportSource::parse(name) {
+            Some(xedit_session::export::ExportSource::Plugins) => xedit_core::interface::globals::ToolSource::tsPlugins,
+            Some(xedit_session::export::ExportSource::Saves) => xedit_core::interface::globals::ToolSource::tsSaves,
+            None => {
+                eprintln!("error: invalid_params: {name} is not a tool source: use plugins or saves");
+                return ExitCode::FAILURE;
+            }
+        },
+    };
+    xedit_session::tool_modes::set_on_load(cli.switches.to_load_switches(tool_mode, tool_source));
     xedit_session::modgroups::set_file_options(cli.modgroups_file.as_deref(), cli.settings.as_deref());
     // `-skipbsa`, `-forcebsa` and the inis of `DoInitPath`.
     xedit_session::resources::set_options(xedit_session::resources::ResourceOptions {

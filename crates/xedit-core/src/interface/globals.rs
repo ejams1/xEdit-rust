@@ -372,6 +372,27 @@ string_globals! {
     my_games_the_game_path, set_my_games_the_game_path, wbMyGamesTheGamePath;
     the_game_ini_file_name, set_the_game_ini_file_name, wbTheGameIniFileName;
     custom_ini_file_name, set_custom_ini_file_name, wbCustomIniFileName;
+    /// The folder the game's saves are read from (`wbSavePath`), with a
+    /// trailing separator: `-G:`, else `Saves\` in the folder of the game's
+    /// ini, else the `SLocalSavePath` of the ini (`xeInit.pas:530`).
+    save_path, set_save_path, wbSavePath;
+    /// The folder a replaced plugin moves to (`wbBackupPath`), with a
+    /// trailing separator: `-B:`, else `<data>\<AppName>Edit Backups\`
+    /// (`xeInit.pas:595`). Empty when the run does not back up.
+    backup_path, set_backup_path, wbBackupPath;
+    /// The `Plugins.txt` the load order comes from (`wbPluginsFileName`):
+    /// `-P:`, else a `.txt` named on the command line, else the game's own
+    /// in the local application data folder (`xeInit.pas:562`).
+    plugins_file_name, set_plugins_file_name, wbPluginsFileName;
+    /// xEdit's own settings file (`xeSettingsFileName`): the one of the
+    /// program folder when it exists, else `Plugins.<app>viewsettings` next
+    /// to `Plugins.txt` (`xeInit.pas:587`).
+    settings_file_name, set_settings_file_name, xeSettingsFileName;
+    /// The Mod Organizer profile named with `-moprofile:` (`wbMOProfile`).
+    mo_profile, set_mo_profile, wbMOProfile;
+    /// The Mod Organizer hook file (`wbMOHookFile`): `modorganizer\hook.dll`
+    /// next to the data folder.
+    mo_hook_file, set_mo_hook_file, wbMOHookFile;
 }
 
 /// Game modes, ordered by release date as upstream.
@@ -563,6 +584,31 @@ pub fn clear_group_order() {
 
 static IGNORE_RECORDS: RwLock<Vec<Signature>> = RwLock::new(Vec::new());
 static OFFICIAL_DLC: RwLock<Vec<String>> = RwLock::new(Vec::new());
+static STRIP_MASTERS_FILE_NAMES: RwLock<Vec<String>> = RwLock::new(Vec::new());
+static ALLOW_DIRECT_SAVE_FOR: RwLock<Vec<String>> = RwLock::new(Vec::new());
+
+/// Upstream `wbStripMastersFileNames`: the masters `-StripMasters:` leaves out
+/// of the master list the loader reads. Only read while `wbStripMasters` is on.
+pub fn strip_masters_file_names() -> Vec<String> {
+    STRIP_MASTERS_FILE_NAMES.read().unwrap().clone()
+}
+
+/// Sets upstream `wbStripMastersFileNames`.
+pub fn set_strip_masters_file_names(value: Vec<String>) {
+    *STRIP_MASTERS_FILE_NAMES.write().unwrap() = value;
+}
+
+/// Upstream `wbAllowDirectSaveFor`: the plugins `-AllowDirectSaves:<names>`
+/// lets the GUI save into the game's data folder without asking. Empty while
+/// the switch named no plugin, which `wbAllowDirectSave` covers then.
+pub fn allow_direct_save_for() -> Vec<String> {
+    ALLOW_DIRECT_SAVE_FOR.read().unwrap().clone()
+}
+
+/// Sets upstream `wbAllowDirectSaveFor`.
+pub fn set_allow_direct_save_for(value: Vec<String>) {
+    *ALLOW_DIRECT_SAVE_FOR.write().unwrap() = value;
+}
 
 /// Upstream `wbIgnoreRecords`: the signatures of the records that are skipped.
 pub fn ignore_records() -> Vec<Signature> {
@@ -829,6 +875,8 @@ pub fn reset() {
     set_game_mode(GameMode::gmTES3);
     set_tool_mode(ToolMode::tmView);
     set_tool_source(ToolSource::tsPlugins);
+    set_strip_masters_file_names(Vec::new());
+    set_allow_direct_save_for(Vec::new());
 }
 
 /// Serializes tests that change settings. The guard resets all settings when

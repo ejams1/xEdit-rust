@@ -50,6 +50,7 @@ const MODES: &[Mode] = &[
         package: "tool run setesm {{target}}",
         counts: false,
         log_prefixes: &["Setting ESM Flag: "],
+        saves: false,
     },
     Mode {
         name: "clearesm",
@@ -57,6 +58,7 @@ const MODES: &[Mode] = &[
         package: "tool run clearesm {{target}}",
         counts: false,
         log_prefixes: &["Removing ESM Flag: "],
+        saves: false,
     },
     Mode {
         name: "masterupdate",
@@ -64,6 +66,7 @@ const MODES: &[Mode] = &[
         package: "tool run masterupdate",
         counts: false,
         log_prefixes: &["Setting ESM Flag: "],
+        saves: false,
     },
     Mode {
         name: "masterrestore",
@@ -71,6 +74,7 @@ const MODES: &[Mode] = &[
         package: "tool run masterrestore",
         counts: false,
         log_prefixes: &["Removing ESM Flag: "],
+        saves: false,
     },
     Mode {
         name: "onamupdate",
@@ -78,6 +82,7 @@ const MODES: &[Mode] = &[
         package: "tool run onamupdate",
         counts: false,
         log_prefixes: &["Updating ONAM in: "],
+        saves: false,
     },
     Mode {
         name: "sortandcleanmasters",
@@ -90,6 +95,7 @@ const MODES: &[Mode] = &[
         package: "tool run sortandcleanmasters {{target}}",
         counts: false,
         log_prefixes: &[],
+        saves: false,
     },
     Mode {
         name: "generateseq",
@@ -97,6 +103,7 @@ const MODES: &[Mode] = &[
         package: "tool run generateseq {{target}}",
         counts: false,
         log_prefixes: &["Skipped: ", "Created: "],
+        saves: false,
     },
     Mode {
         name: "checkforitm",
@@ -107,6 +114,7 @@ const MODES: &[Mode] = &[
             "[Removing \"Identical to Master\" records done]",
             "[Undeleting and Disabling References done]",
         ],
+        saves: false,
     },
     Mode {
         name: "checkfordr",
@@ -118,6 +126,7 @@ const MODES: &[Mode] = &[
             "[Undeleting and Disabling References done]",
             "Undeleting: ",
         ],
+        saves: false,
     },
 ];
 
@@ -133,6 +142,9 @@ struct Mode {
     counts: bool,
     /// The lines of the message log the mode writes, which are compared.
     log_prefixes: &'static [&'static str],
+    /// The export cases: the definitions of the saves of the game
+    /// (`xDump -saves`) rather than those of its plugins.
+    saves: bool,
 }
 
 /// Whether the release build offers the mode for the game (`_DoInit` of
@@ -351,7 +363,17 @@ pub(super) fn run_tool_modes(
             }
         }
         if options.modes.is_empty() || options.modes.iter().any(|wanted| wanted == EXPORT_MODE.name) {
-            cases.push((game, data, String::new(), &EXPORT_MODE));
+            cases.push((game, data.clone(), String::new(), &EXPORT_MODE));
+        }
+        // The save definitions of the games whose saves the release defines
+        // (`ToolSources` of `_DoInit`: Fallout 3, Oblivion and Starfield
+        // have none, and `xDump -saves` on them ends in an error).
+        if options.modes.is_empty() || options.modes.iter().any(|wanted| wanted == EXPORT_SAVES_MODE.name) {
+            if matches!(game.mode, "FNV" | "TES5" | "SSE" | "FO4" | "Enderal" | "EnderalSE") {
+                cases.push((game, data, String::new(), &EXPORT_SAVES_MODE));
+            } else {
+                println!("skipped       export-saves {}: the game has no save source", game.name);
+            }
         }
     }
     let queue = std::sync::Mutex::new(cases.into_iter().enumerate().collect::<Vec<_>>().into_iter());
@@ -431,6 +453,20 @@ const EXPORT_MODE: Mode = Mode {
     package: "tool run export --format RAW",
     counts: false,
     log_prefixes: &[],
+    saves: false,
+};
+
+/// The export of the *save* definitions of a game (`xDump.exe -<GAME>
+/// -saves -export RAW`, `ProfileChapters` and `wbFileChapters`): the file
+/// next to the program named `<APP>ExportSaves.txt` and the structure text
+/// on stdout. It loads no plugin.
+const EXPORT_SAVES_MODE: Mode = Mode {
+    name: "export-saves",
+    gui: &[],
+    package: "tool run export --format RAW --source saves",
+    counts: false,
+    log_prefixes: &[],
+    saves: true,
 };
 
 /// The plugin a case runs on, as the load list (the plugin and its
@@ -530,8 +566,8 @@ fn check(runner: &Runner, game: &'static Game, data: &Path, name: &str, mode: &M
         oracle_seconds: None,
         port_seconds: None,
     };
-    if mode.name == "export" {
-        check_export(runner, game, &mut outcome)?;
+    if mode.name.starts_with("export") {
+        check_export(runner, game, mode, &mut outcome)?;
         return Ok(outcome);
     }
     let (input, target_name) = match input_for(runner, game, data, name, mode)? {
@@ -583,6 +619,8 @@ fn check(runner: &Runner, game: &'static Game, data: &Path, name: &str, mode: &M
             expected_peak,
             max_memory: runner.max_memory,
             extra_args: Vec::new(),
+            discovery: false,
+            tool_name: "Edit".to_owned(),
         };
         // `-autoload`: the module selection of the GUI is answered by the
         // GUI itself, as the quick clean check does (the harness would
@@ -849,10 +887,11 @@ fn check(runner: &Runner, game: &'static Game, data: &Path, name: &str, mode: &M
 /// The export mode: `xDump.exe -<GAME> -export RAW` writes the profile list
 /// next to the program and the structure of the definitions to stdout; the
 /// port writes both from `tool run export` (`--output` and `text`).
-fn check_export(runner: &Runner, game: &'static Game, outcome: &mut ToolModeOutcome) -> Result<()> {
+fn check_export(runner: &Runner, game: &'static Game, mode: &Mode, outcome: &mut ToolModeOutcome) -> Result<()> {
+    let saves = mode.saves;
     let dir = runner.cache.join(format!("{}-oracle-tool-modes", game.mode));
     fs::create_dir_all(&dir)?;
-    let stem = format!("export.{}.{}", game.mode, ORACLE_RECIPE.replace(' ', "-"));
+    let stem = format!("export{saves}.{}.{}", game.mode, ORACLE_RECIPE.replace(' ', "-"));
     let profile_file = dir.join(format!("{stem}.profile.zst"));
     let text_file = dir.join(format!("{stem}.text.zst"));
     if !text_file.exists() {
@@ -869,8 +908,11 @@ fn check_export(runner: &Runner, game: &'static Game, outcome: &mut ToolModeOutc
         let started = std::time::Instant::now();
         let log = work.join("export.log");
         let mut command = std::process::Command::new(&exe);
+        command.arg(format!("-{}", game.mode));
+        if saves {
+            command.arg("-saves");
+        }
         command
-            .arg(format!("-{}", game.mode))
             .arg("-export")
             .arg("RAW")
             .current_dir(&work)
@@ -886,7 +928,11 @@ fn check_export(runner: &Runner, game: &'static Game, outcome: &mut ToolModeOutc
             "the export failed: {}",
             fs::read_to_string(&log).unwrap_or_default()
         );
-        let profile = work.join(format!("{}ExportPlugins.txt", game.mode));
+        let profile = work.join(format!(
+            "{}Export{}.txt",
+            game.mode,
+            if saves { "Saves" } else { "Plugins" }
+        ));
         ensure!(profile.is_file(), "the oracle wrote no profile file");
         keep_compressed(&profile, &profile_file)?;
         let text = work.join("export.txt");
@@ -910,10 +956,13 @@ fn check_export(runner: &Runner, game: &'static Game, outcome: &mut ToolModeOutc
     let port_log = port_dir.join(format!("{stem}.port.log"));
     let port_profile = port_dir.join(format!("{stem}.port.profile"));
     let started = std::time::Instant::now();
-    let output = std::process::Command::new(port)
-        .args([
-            "--json", "--edit", "--game", game.mode, "tool", "run", "export", "--format", "RAW", "--output",
-        ])
+    let mut command = std::process::Command::new(port);
+    command.args(["--json", "--edit", "--game", game.mode]);
+    if saves {
+        command.args(["--source", "saves"]);
+    }
+    let output = command
+        .args(["tool", "run", "export", "--format", "RAW", "--output"])
         .arg(&port_profile)
         .stdin(std::process::Stdio::null())
         .stderr(File::create(&port_log)?)
