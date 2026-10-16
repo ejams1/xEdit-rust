@@ -312,10 +312,7 @@ impl PerlRegEx {
             self.found = false;
             return Ok(false);
         }
-        let from_byte = hay
-            .char_indices()
-            .nth(from)
-            .map_or(hay.len(), |(at, _)| at);
+        let from_byte = hay.char_indices().nth(from).map_or(hay.len(), |(at, _)| at);
         let exec = ExecFlags {
             not_bol: self.state & (1 << STATE_NOT_BOL) != 0,
             not_eol: self.state & (1 << STATE_NOT_EOL) != 0,
@@ -585,9 +582,7 @@ impl PerlRegEx {
                         if cursor + 2 < chars.len() && chars[cursor + 1] == '<' {
                             let name_start = cursor + 2;
                             let mut end = name_start;
-                            while end < chars.len()
-                                && (chars[end].is_ascii_alphanumeric() || chars[end] == '_')
-                            {
+                            while end < chars.len() && (chars[end].is_ascii_alphanumeric() || chars[end] == '_') {
                                 end += 1;
                             }
                             if end < chars.len() && chars[end] == '>' {
@@ -641,14 +636,10 @@ impl PerlRegEx {
                                 .saturating_add(i64::from(chars[cursor] as u32 - '0' as u32));
                             cursor += 1;
                         }
-                    } else if cursor < chars.len()
-                        && (chars[cursor].is_ascii_alphabetic() || chars[cursor] == '_')
-                    {
+                    } else if cursor < chars.len() && (chars[cursor].is_ascii_alphabetic() || chars[cursor] == '_') {
                         let start = cursor;
                         cursor += 1;
-                        while cursor < chars.len()
-                            && (chars[cursor].is_ascii_alphanumeric() || chars[cursor] == '_')
-                        {
+                        while cursor < chars.len() && (chars[cursor].is_ascii_alphanumeric() || chars[cursor] == '_') {
                             cursor += 1;
                         }
                         if cursor < chars.len() && chars[cursor] == '}' {
@@ -788,8 +779,8 @@ impl PerlRegEx {
         let mut out = String::new();
         for ch in text.chars() {
             match ch {
-                '\\' | '[' | ']' | '^' | '$' | '.' | '|' | '?' | '*' | '+' | '-' | '(' | ')' | '{'
-                | '}' | '&' | '<' | '>' => {
+                '\\' | '[' | ']' | '^' | '$' | '.' | '|' | '?' | '*' | '+' | '-' | '(' | ')' | '{' | '}' | '&'
+                | '<' | '>' => {
                     out.push('\\');
                     out.push(ch);
                 }
@@ -805,10 +796,7 @@ impl PerlRegEx {
 fn first_cap(text: &str) -> String {
     let mut chars = text.chars();
     match chars.next() {
-        Some(first) => first
-            .to_uppercase()
-            .chain(chars.flat_map(char::to_lowercase))
-            .collect(),
+        Some(first) => first.to_uppercase().chain(chars.flat_map(char::to_lowercase)).collect(),
         None => String::new(),
     }
 }
@@ -916,10 +904,7 @@ mod tests {
         // The whole-subject replacement of a multi-byte subject appends one
         // more replacement, as the release does.
         assert_eq!(replaced(".", "a\u{e9}z", "-"), (true, "---".to_owned()));
-        assert_eq!(
-            replaced(".*", "a\u{e9}z", "-"),
-            (true, "--".to_owned())
-        );
+        assert_eq!(replaced(".*", "a\u{e9}z", "-"), (true, "--".to_owned()));
     }
 
     #[test]
@@ -988,7 +973,11 @@ mod tests {
         let mut object = regex("(a)(b)");
         object.compile().expect("a compile");
         assert_eq!(object.named_group("nope"), PCRE_ERROR_NOSUBSTRING);
-        assert_eq!(object.named_group("a"), PCRE_ERROR_NOSUBSTRING, "no name in the pattern");
+        assert_eq!(
+            object.named_group("a"),
+            PCRE_ERROR_NOSUBSTRING,
+            "no name in the pattern"
+        );
         let mut empty = PerlRegEx::new();
         assert_eq!(empty.compile().expect_err("a compile").message(), S_REGEX_MISSING);
 

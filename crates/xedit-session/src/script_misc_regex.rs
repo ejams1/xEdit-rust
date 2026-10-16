@@ -22,9 +22,8 @@
 use std::rc::Rc;
 
 use xedit_core::perl_regex::{
-    E_REGEX_CLASS, OPTION_ANCHORED, OPTION_CASE_LESS, OPTION_EXTENDED, OPTION_MULTI_LINE,
-    OPTION_NO_AUTO_CAPTURE, OPTION_SINGLE_LINE, OPTION_UN_GREEDY, PerlRegEx, RegexError,
-    STATE_NOT_BOL, STATE_NOT_EOL, STATE_NOT_EMPTY,
+    E_REGEX_CLASS, OPTION_ANCHORED, OPTION_CASE_LESS, OPTION_EXTENDED, OPTION_MULTI_LINE, OPTION_NO_AUTO_CAPTURE,
+    OPTION_SINGLE_LINE, OPTION_UN_GREEDY, PerlRegEx, RegexError, STATE_NOT_BOL, STATE_NOT_EMPTY, STATE_NOT_EOL,
 };
 use xedit_script::adapter::{Adapter, Args, PR_ARGS_NO_CHECK};
 use xedit_script::values::{ClassDef, ParamType, ScriptObject, Value, ValueError, VarType};
@@ -780,10 +779,7 @@ mod tests {
         object.regex.set_replacement("${1}\\U2".to_owned());
         assert_eq!(object.compute_replacement().unwrap(), "keyVALUE");
         object.regex.set_replacement("$0 $& $+".to_owned());
-        assert_eq!(
-            object.compute_replacement().unwrap(),
-            "key=value key=value value"
-        );
+        assert_eq!(object.compute_replacement().unwrap(), "key=value key=value value");
     }
 
     #[test]
@@ -800,10 +796,7 @@ mod tests {
 
     #[test]
     fn escape_and_named_groups() {
-        assert_eq!(
-            PerlRegExObject::escape_regex_chars("a.b(c)"),
-            "a\\.b\\(c\\)"
-        );
+        assert_eq!(PerlRegExObject::escape_regex_chars("a.b(c)"), "a\\.b\\(c\\)");
         let mut object = regex("(?P<first>a)(b)");
         object.regex.set_subject("ab".to_owned());
         assert!(object.match_().unwrap());
@@ -843,8 +836,7 @@ mod tests {
             error,
             ValueError::ExternalClass {
                 class: E_REGEX_CLASS,
-                message: "Error in regular expression at offset 6: lookbehind assertion is not fixed length"
-                    .to_owned(),
+                message: "Error in regular expression at offset 6: lookbehind assertion is not fixed length".to_owned(),
             }
         );
         let mut empty = PerlRegExObject::new(Rc::new(ClassDef {

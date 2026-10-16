@@ -92,9 +92,6 @@ mod tests {
             "Error in regular expression at offset 6: lookbehind assertion is not fixed length"
         );
         let error = PerlRegEx::new("").err().expect("an empty expression");
-        assert_eq!(
-            error.to_string(),
-            "A regular expression specified in RegEx is required"
-        );
+        assert_eq!(error.to_string(), "A regular expression specified in RegEx is required");
     }
 }
