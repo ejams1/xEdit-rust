@@ -484,6 +484,55 @@ fn float_to_text_general(value: f64, precision: usize, digits: i32) -> String {
     format_general_rec(&rec, precision, digits)
 }
 
+/// Port of `FloatToStrF(value, ffGeneral, precision, digits)`, the shape of
+/// the script `FloatToStrF` (parity #39): the general notation of
+/// [`format_general_rec`], whose exponent is padded to `digits` places when
+/// `digits` is at most 4 (`digits` of 0 pads nothing, so
+/// `FloatToStrF(1e22, ffGeneral, 17, 0)` is `1E22`).
+pub fn float_to_str_f_general(value: f64, precision: usize, digits: i32) -> String {
+    float_to_text_general(value, precision, digits)
+}
+
+/// Port of the `ffExponent` branch of `FloatToText`
+/// (`FloatToStrF(value, ffExponent, precision, digits)`): the mantissa has
+/// exactly `precision` significant digits, the first before the decimal
+/// point, and the exponent follows as `E` with an explicit sign, padded to
+/// `digits` places when `digits` is at most 4 (`FloatToStrF(1e22,
+/// ffExponent, 17, 0)` is `1.0000000000000000E+22`; the digits come from the
+/// same `FloatToDecimal` as every other format, so the last digit is the
+/// RTL's, not the correctly rounded one). A zero has no digits in the
+/// `FloatRec` and prints a zero mantissa and exponent (`0.000...E+0`).
+pub fn float_to_str_f_exponent(value: f64, precision: usize, digits: i32) -> String {
+    if let Some(special) = special_value(value) {
+        return special;
+    }
+    let precision = i32::try_from(precision).unwrap_or(i32::MAX).clamp(1, MAX_EXT_PRECISION);
+    let rec = float_to_decimal(value, precision, 9999);
+    let mut result = String::new();
+    if rec.negative {
+        result.push('-');
+    }
+    let mut source = DigitSource {
+        digits: &rec.digits,
+        position: 0,
+    };
+    result.push(source.next());
+    result.push('.');
+    for _ in 1..precision {
+        result.push(source.next());
+    }
+    result.push('E');
+    let exponent = if rec.digits.is_empty() { 0 } else { rec.exponent - 1 };
+    if exponent < 0 {
+        result.push('-');
+    } else {
+        result.push('+');
+    }
+    let min_count = if digits > 4 { 0 } else { digits.max(0) as usize };
+    result.push_str(&format!("{:0min_count$}", exponent.abs()));
+    result
+}
+
 /// Upstream `HalfMaxValue`: the bits of the largest finite half-float.
 pub const HALF_MAX_VALUE: u16 = 0x7BFF;
 /// Upstream `HalfMinValue`.
@@ -619,12 +668,9 @@ pub fn int_power_single(base: f32, exponent: i32) -> f32 {
 pub fn round_to_ex(value: f64, digit: i32) -> f64 {
     let factor = f64::from(int_power_single(10.0, digit));
     let scaled = value / factor;
-    // 2^63. NaN does not fit either.
-    let rounded = if scaled.is_nan() || scaled.abs() >= 9_223_372_036_854_775_808.0 {
-        i64::MIN
-    } else {
-        round(scaled)
-    };
+    // `cvtsd2si` gives the indefinite for a NaN or a value of 2^63 or more,
+    // which `round` reproduces.
+    let rounded = round(scaled);
     rounded as f64 * factor
 }
 
@@ -636,25 +682,160 @@ pub fn single_same_value(a: f64, b: f64) -> bool {
     (a - b).abs() <= (a.abs().min(b.abs()) * SINGLE_RESOLUTION).max(SINGLE_RESOLUTION)
 }
 
-/// Port of `SameValue` for doubles with the default epsilon.
+/// Port of `SameValue` for doubles with the RTL's default epsilon.
+///
+/// `System.Math.SameValue(A, B, Epsilon = 0)` computes
+/// `Max(Min(Abs(A), Abs(B)) * DoubleResolution, DoubleResolution)` with
+/// `DoubleResolution = 1E-15 * FuzzFactor(1000) = 1E-12` and compares
+/// `Abs(A - B) <= Epsilon` (read from the machine code of `Sniff.exe` at
+/// 0x471D00, which `nif_math` carried before it moved here). The record
+/// code of `wbInterface` (`wbFloatDef`), the `Math` helpers and the NIF
+/// code all call this overload, so 1E-15 was wrong for every one of them
+/// (parity #39).
 pub fn same_value(a: f64, b: f64) -> bool {
-    const DOUBLE_RESOLUTION: f64 = 1E-15;
-    (a - b).abs() <= (a.abs().min(b.abs()) * DOUBLE_RESOLUTION).max(DOUBLE_RESOLUTION)
+    const DOUBLE_RESOLUTION: f64 = 1E-12;
+    let epsilon = (a.abs().min(b.abs()) * DOUBLE_RESOLUTION).max(DOUBLE_RESOLUTION);
+    if a > b { (a - b) <= epsilon } else { (b - a) <= epsilon }
 }
 
-/// Port of `Round`: rounds half to even, as the default FPU rounding mode does.
+/// Port of `Round`: rounds half to even, as the default FPU rounding mode
+/// does, and gives the x64 integer indefinite `-2^63` for a NaN or a value
+/// outside the `Int64` range, which is what `cvtsd2si` returns with the
+/// floating point exceptions masked (`-2^63` and `2^63` round half to even
+/// as well; `2^63` itself is out of range).
 pub fn round(value: f64) -> i64 {
-    value.round_ties_even() as i64
+    if value.is_nan() || value >= 9_223_372_036_854_775_808.0 || value < -9_223_372_036_854_775_808.0 {
+        i64::MIN
+    } else {
+        value.round_ties_even() as i64
+    }
 }
 
-/// Port of `StrToFloat` with `.` as the decimal separator.
+/// Port of `Trunc` with the same out-of-range rule as [`round`] (`cvttsd2si`
+/// returns the same indefinite for a NaN or an out-of-range value, and the
+/// `Integer(Trunc(...))` of the script host keeps its low 32 bits).
+pub fn trunc(value: f64) -> i64 {
+    if value.is_nan() || value >= 9_223_372_036_854_775_808.0 || value < -9_223_372_036_854_775_808.0 {
+        i64::MIN
+    } else {
+        value.trunc() as i64
+    }
+}
+
+/// Port of `StrToFloat` for a double: `System.SysUtils.TextToFloat` over
+/// the RTL's `Val`, fitted at full precision against the oracle (parity
+/// #39).
+///
+/// The significant digits are accumulated into a `Double` with
+/// `value := value * 10 + digit`, the digits after the decimal point count
+/// against the exponent, the explicit exponent adds to it, and the value is
+/// scaled by the RTL's paired-table [`power10`]. That is the RTL's own
+/// rounding, which is not the correctly rounded parse: the text of the
+/// largest double gives the double one ulp below it, and the 21 digits of
+/// Pi give `0x1.921fb54442d17p+1` where a correctly rounded parse gives
+/// `...d18`.
+///
+/// The words `Inf`/`Infinity`/`NaN` are the numbers of the same name, case
+/// insensitively (`TextToFloat` reads them before `Val` runs). Blanks are
+/// skipped around the number; a malformed text, a character the scanner
+/// stops at, and a value outside the double range return `None`, which the
+/// callers report as the RTL's `EConvertError`.
 pub fn str_to_float(text: &str) -> Option<f64> {
-    let text = text.trim_matches(' ');
-    let valid = !text.is_empty()
-        && text
-            .bytes()
-            .all(|byte| byte.is_ascii_digit() || matches!(byte, b'+' | b'-' | b'.' | b'e' | b'E'));
-    if valid { text.parse().ok() } else { None }
+    let bytes = text.as_bytes();
+    let blank = |byte: u8| byte == b' ' || byte == b'\t';
+    let mut i = 0;
+    while i < bytes.len() && blank(bytes[i]) {
+        i += 1;
+    }
+    let mut negative = false;
+    let mut signed = false;
+    if i < bytes.len() && (bytes[i] == b'+' || bytes[i] == b'-') {
+        negative = bytes[i] == b'-';
+        signed = true;
+        i += 1;
+    }
+    if !signed {
+        // `TextToFloat` reads the special words without a sign.
+        let rest = &text[i..];
+        for (word, value) in [
+            ("Infinity", f64::INFINITY),
+            ("Inf", f64::INFINITY),
+            ("NaN", f64::from_bits(NAN_BITS)),
+        ] {
+            if rest.len() >= word.len() && rest[..word.len()].eq_ignore_ascii_case(word) {
+                let trailing = &rest[word.len()..];
+                if trailing.is_empty() || trailing.bytes().all(blank) {
+                    return Some(value);
+                }
+            }
+        }
+    }
+    let mut mantissa = 0.0f64;
+    let mut fraction = 0i64;
+    let mut any_digit = false;
+    while i < bytes.len() && bytes[i].is_ascii_digit() {
+        mantissa = mantissa * 10.0 + f64::from(bytes[i] - b'0');
+        any_digit = true;
+        i += 1;
+    }
+    if i < bytes.len() && bytes[i] == b'.' {
+        i += 1;
+        while i < bytes.len() && bytes[i].is_ascii_digit() {
+            mantissa = mantissa * 10.0 + f64::from(bytes[i] - b'0');
+            fraction += 1;
+            any_digit = true;
+            i += 1;
+        }
+    }
+    if !any_digit {
+        return None;
+    }
+    let mut exponent = 0i64;
+    if i < bytes.len() && (bytes[i] == b'e' || bytes[i] == b'E') {
+        i += 1;
+        let mut exponent_negative = false;
+        if i < bytes.len() && (bytes[i] == b'+' || bytes[i] == b'-') {
+            exponent_negative = bytes[i] == b'-';
+            i += 1;
+        }
+        let digits_start = i;
+        while i < bytes.len() && bytes[i].is_ascii_digit() {
+            exponent = exponent.saturating_mul(10).saturating_add(i64::from(bytes[i] - b'0'));
+            i += 1;
+        }
+        if i == digits_start {
+            return None;
+        }
+        if exponent_negative {
+            exponent = -exponent;
+        }
+    }
+    while i < bytes.len() && blank(bytes[i]) {
+        i += 1;
+    }
+    if i != bytes.len() {
+        return None;
+    }
+    let exponent = exponent.saturating_sub(fraction);
+    if exponent.unsigned_abs() >= 632 {
+        return None;
+    }
+    let value = power10(mantissa, exponent as i32);
+    if value.is_infinite() || (value == 0.0 && mantissa != 0.0) {
+        return None;
+    }
+    Some(if negative { -value } else { value })
+}
+
+/// The NaN of the RTL: the x64 real indefinite `0xFFF8...`, which the
+/// oracle gives for `SingleNaN`, for `StrToFloat('NaN')` and for the
+/// operations the FPU masks (parity #39; `f64::NAN` is `0x7FF8...` and was
+/// one such difference).
+pub const NAN_BITS: u64 = 0xFFF8_0000_0000_0000;
+
+/// The RTL's `NaN`.
+pub fn nan() -> f64 {
+    f64::from_bits(NAN_BITS)
 }
 
 #[cfg(test)]

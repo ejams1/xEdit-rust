@@ -700,6 +700,7 @@
       "note": "parity #30 fixture: the TJsonDataValue.DateTimeValue of every value kind, the ISO 8601 text with the system time zone bias on and off, the JSONToDateTime parsing surface and the daylight saving cases. The message log is compared"
     },
     {
+<<<<<<< HEAD
       "script": "probes/soun-after-load.pas",
       "master": "tests/fixtures/parity/soun-after-load-fo3.esm",
       "game": "fo3",
@@ -718,6 +719,16 @@
         "FalloutNV.esm"
       ],
       "note": "parity #40 fixture: the wbSOUNAfterLoad of wbDefinitionsFNV over the same records (New Vegas keeps its own copy of the routine; the body is the one of Fallout 3)"
+=======
+      "script": "probes/numerics.pas",
+      "master": "tests/fixtures/parity/numerics.esm",
+      "note": "parity #39 fixture: the numeric and locale edges at full precision (StrToFloat/dfStrToFloat parsing, FloatToStr/FloatToStrF printing to 17 digits, Sin/Cos/Tan/ArcTan/ArcTan2/ArcSin/ArcCos including the large-argument reduction, Round/Trunc/Int/Frac/Ceil/Floor including NaN and out-of-range values, SameValue resolutions, dfCalcHash over non-ASCII names, the locale comparisons and sorts). Every double is written both as 17-digit text in the log and as its 8 IEEE bytes into numerics-values.dat, which the harness compares byte for byte"
+    },
+    {
+      "script": "probes/numerics-parse.pas",
+      "master": "tests/fixtures/parity/numerics.esm",
+      "note": "parity #39 fixture: the RTL's `StrToFloat` over a generated corpus (17-19 digit mantissas, 1-30 digit values, exponents over the double range and past its edges, blanks, signs, malformed texts, Inf/NaN spellings). Every accepted value is written into numerics-parse.dat as its 8 IEEE bytes and as 17-digit text into the log; a refused text is logged with its exception. The harness compares the file byte for byte and the log line by line"
+>>>>>>> 53c6af6 (Parity #39 WIP: the RTL's numeric constants, the exponent printer and the probes)
     }
   ]
 }
