@@ -1,19 +1,64 @@
 {
-  "description": "The same deleted references to moveable statics with every UDR option away from the Fallout 3 defaults: the moveable static base becomes [000389C6] (UDRSetMSTTValue), the references move to the height -12345.5 (UDRSetZ on), get the scale 2 (UDRSetScale on) and no player enable parent (UDRSetXESP off).",
+  "description": "The UDR with every option away from the Fallout 3 defaults over two deleted references to moveable statics that have no scale of their own (copies of REFR 000648B1 and 00064883 of Fallout3.esm that the port builds and deletes first): the base record becomes [000389C6] (UDRSetMSTTValue), the references move to the height -12345.5 (UDRSetZ on), get the scale 2 in an XSCL of their own (UDRSetScale on) and no player enable parent (UDRSetXESP off). References without a scale keep the case clear of the upstream bug of the scale step, which writes the value into the previous reference's element when a reference has a scale (a deliberate divergence of the port).",
   "game": "fo3",
-  "load": ["Fallout3.esm"],
+  "load": [
+    "Fallout3.esm"
+  ],
   "prepare": {
     "file": "UdrMstt.esp",
     "commands": [
-      {"command": "files.new", "params": {"file": "UdrMstt"}},
-      {"command": "records.copy", "params": {"form_id": "00045026", "from": "Fallout3.esm", "to": "UdrMstt.esp"}},
-      {"command": "records.copy", "params": {"form_id": "000648B1", "from": "Fallout3.esm", "to": "UdrMstt.esp"}},
-      {"command": "records.set_deleted", "params": {"form_id": "00045026", "file": "UdrMstt.esp"}},
-      {"command": "records.set_deleted", "params": {"form_id": "000648B1", "file": "UdrMstt.esp"}}
+      {
+        "command": "files.new",
+        "params": {
+          "file": "UdrMstt"
+        }
+      },
+      {
+        "command": "records.copy",
+        "params": {
+          "form_id": "000648B1",
+          "from": "Fallout3.esm",
+          "to": "UdrMstt.esp"
+        }
+      },
+      {
+        "command": "records.copy",
+        "params": {
+          "form_id": "00064883",
+          "from": "Fallout3.esm",
+          "to": "UdrMstt.esp"
+        }
+      },
+      {
+        "command": "records.set_deleted",
+        "params": {
+          "form_id": "000648B1",
+          "file": "UdrMstt.esp"
+        }
+      },
+      {
+        "command": "records.set_deleted",
+        "params": {
+          "form_id": "00064883",
+          "file": "UdrMstt.esp"
+        }
+      }
     ]
   },
-  "select": ["UdrMstt.esp"],
+  "select": [
+    "UdrMstt.esp"
+  ],
   "udr": true,
-  "options": {"udr_xesp": false, "udr_scale": true, "udr_scale_value": 2.0, "udr_z": true, "udr_z_value": -12345.5, "udr_mstt": true, "udr_mstt_value": "000389C6"},
-  "save": ["UdrMstt.esp"]
+  "options": {
+    "udr_xesp": false,
+    "udr_scale": true,
+    "udr_scale_value": 2.0,
+    "udr_z": true,
+    "udr_z_value": -12345.5,
+    "udr_mstt": true,
+    "udr_mstt_value": "000389C6"
+  },
+  "save": [
+    "UdrMstt.esp"
+  ]
 }

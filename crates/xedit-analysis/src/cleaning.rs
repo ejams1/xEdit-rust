@@ -298,8 +298,8 @@ pub fn undelete_and_disable_references(
     check_filter(tree)?;
     let operation = if count_only { "Count" } else { "Undelet" };
     let mut report = CleanReport::default();
-    // Upstream keeps `Element` across the records, so the scale and the
-    // MSTT steps can find the element of an earlier record.
+    // Upstream keeps `Element` across the records; the scale step no longer
+    // reads it (see the UPSTREAM-BUG note there).
     let mut element: Option<ElementRef> = None;
     for &start in starts {
         report.processed += walk(tree, start, |tree, id| {
@@ -402,14 +402,23 @@ fn undelete_and_disable(
         }
     }
     if settings.set_scale {
-        if record.get_record_by_signature(Signature::new(b"XSCL")).is_none() {
-            *element = record.add("XSCL", true).ok().flatten();
+        // UPSTREAM-BUG: `if not Assigned(ElementBySignature['XSCL']) then
+        // Element := Add('XSCL', True);` assigns `Element` only for a
+        // reference without a scale, and the value then goes to whatever
+        // `Element` still holds from the reference before: its new `XSCL`,
+        // or under `UDRSetMSTT` in Fallout 3 its `NAME`, whose base record
+        // becomes the FormID of the scale (2.0 makes [00000002]); a
+        // reference that has a scale keeps it. That corrupts another
+        // record, so the port does what the step means: the reference's
+        // own `XSCL`, added when missing, gets the value (a deliberate
+        // divergence, docs/PLAN.md, parity #35).
+        let scale = record
+            .get_record_by_signature(Signature::new(b"XSCL"))
+            .or_else(|| record.add("XSCL", true).ok().flatten());
+        if let Some(scale) = scale {
+            let _ = scale.set_native_value(Variant::Float(settings.scale_value));
         }
-        // UPSTREAM-QUIRK: when the reference has a scale, the value goes to
-        // the element the last step found (`Element` is not reset).
-        if let Some(element) = element.as_ref() {
-            let _ = element.set_native_value(Variant::Float(settings.scale_value));
-        }
+        *element = None;
     }
     if settings.set_mstt && is_fallout3() {
         *element = record.get_record_by_signature(Signature::new(b"NAME"));
