@@ -8,16 +8,18 @@
 //! The steps of packing and the unpacking of an archive into a folder.
 
 use std::collections::{HashMap, HashSet, VecDeque};
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 use super::{
-    Loaded, LoadedChunk, MultiSourcePacker, PackedFile, Sources, include_trailing_path_delimiter, thread_count,
-    with_prefetch,
+    Loaded, LoadedChunk, MultiSourcePacker, PackedFile, SourceFile, Sources, include_trailing_path_delimiter,
+    thread_count, with_prefetch,
 };
 use crate::archive::write::{ChunkSlot, PackFile, Prepared};
 use crate::archive::{Archive, ArchiveError, ArchiveType, split_dir_name, texture};
 use crate::compression::CompressionType;
+use crate::dds;
 use crate::hash::{LookupHash, lookup_hash, lookup_hash_text};
 
 /// The most the pool reads ahead of the writer, in bytes.
@@ -34,6 +36,19 @@ pub(super) fn numbered_archive_name(file_name: &str, count: usize) -> String {
         chars.into_iter().collect()
     } else {
         format!("{file_name}{number}")
+    }
+}
+
+/// `TAsset.FileNameDescr`: the source path, or the archive and the name in
+/// it, for the message of a conversion that failed.
+fn file_name_descr(source: &SourceFile, archives: &[Archive]) -> String {
+    match source.source_entry {
+        Some((archive, entry)) => format!(
+            "{} -> {}",
+            archives[archive].file_name(),
+            archives[archive].files()[entry].name
+        ),
+        None => source.source_file_name.clone(),
     }
 }
 
@@ -69,6 +84,7 @@ impl MultiSourcePacker {
             share_data,
             threads,
             kind,
+            xtexconv,
             ..
         } = self;
         let archive = archives.first_mut().ok_or("The archive is not created")?;
@@ -79,6 +95,7 @@ impl MultiSourcePacker {
         let share = *share_data;
         let compression = archive.compression_type();
         let dds = kind.is_dds();
+        let xtexconv: Option<&Path> = xtexconv.as_ref().map(PathBuf::as_path);
         let texture_config = texture::TextureConfig::of(archive);
         // The entry of each file in the archive and whether it is compressed.
         let entries: Vec<(usize, bool)> = files
@@ -111,7 +128,18 @@ impl MultiSourcePacker {
 
         let prepare = |i: usize| -> Result<Unsplit, String> {
             let wrap = |message: String| format!("Error processing \"{}\": {message}", names[i]);
-            let data = sources.data(files[i].source).map_err(wrap)?;
+            let mut data = sources.data(files[i].source).map_err(wrap)?;
+            if let Some(tool) = xtexconv
+                && dds::is_dds(&data)
+                && !dds::is_xbox(&data)
+            {
+                data = crate::archive::xtexconv::dds2xbox(tool, &data).map_err(|message| {
+                    format!(
+                        "Error reading source file:\r{}\r\r{message}",
+                        file_name_descr(&source_files[files[i].source], source_archives)
+                    )
+                })?;
+            }
             if dds {
                 return texture::prepare_dds(&texture_config, data, entries[i].1, share, &|chunk, size, hash| {
                     is_shared(i, chunk, size, hash)
@@ -181,6 +209,7 @@ impl MultiSourcePacker {
             share_data,
             threads,
             kind,
+            xtexconv,
             split_size,
             compression_type,
             target,
@@ -211,10 +240,23 @@ impl MultiSourcePacker {
             compression,
         };
 
+        let xtexconv: Option<&Path> = xtexconv.as_ref().map(PathBuf::as_path);
         // The part of `LoadFile` that needs nothing of the packer's state.
         let prepare = |i: usize| -> Result<Loaded, String> {
             let wrap = |message: String| format!("Error processing \"{}\": {message}", names[i]);
-            let buf = sources.data(source_of[i]).map_err(wrap)?;
+            let mut buf = sources.data(source_of[i]).map_err(wrap)?;
+            if let Some(tool) = xtexconv
+                && kind.is_dds()
+                && dds::is_dds(&buf)
+                && !dds::is_xbox(&buf)
+            {
+                buf = crate::archive::xtexconv::dds2xbox(tool, &buf).map_err(|message| {
+                    format!(
+                        "Error reading source file:\r{}\r\r{message}",
+                        file_name_descr(&source_files[source_of[i]], source_archives)
+                    )
+                })?;
+            }
             if kind.is_dds() {
                 let (chunks, share_of) =
                     texture::chunk_dds(&texture_config, buf, compress[i], share).map_err(|error| wrap(error.0))?;

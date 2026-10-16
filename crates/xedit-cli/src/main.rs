@@ -865,6 +865,9 @@ enum ArchiveAction {
         /// Override the file flags of a BSA with this hexadecimal value.
         #[arg(long)]
         file_flags: Option<String>,
+        /// The platform of a DDS archive: pc (default) or xbox (the GUI's "XBox 360 Archive" target). An xbox archive refuses a texture that is not in the XBox format; with xtexconv.exe next to the program a PC texture is converted through it first, as BSArchPro does.
+        #[arg(long)]
+        target: Option<String>,
         /// Add the sources and report the files that would be packed, but write nothing.
         #[arg(long)]
         dry_run: bool,
@@ -1931,13 +1934,14 @@ fn command_of(action: Action) -> Result<(String, Value), CommandError> {
                 threads,
                 archive_flags,
                 file_flags,
+                target,
                 dry_run,
             } => (
                 "archive.pack".to_owned(),
                 json!({
                     "archive": archive, "sources": sources, "format": format, "compress": compress,
                     "split": split, "filters": filters, "share": !no_share, "threads": threads,
-                    "archive_flags": archive_flags, "file_flags": file_flags, "dry_run": dry_run
+                    "archive_flags": archive_flags, "file_flags": file_flags, "target": target, "dry_run": dry_run
                 }),
             ),
         },

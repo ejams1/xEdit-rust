@@ -19,9 +19,12 @@ status = "pending"
 
 [units."BSArch/frmMain.pas"]
 status = "pending"
+rust = "crates/xedit-session/src/archive.rs"
+note = "The GUI itself is not ported. Ported from it (parity #38): the packing workflow around the archive target — `TAssetsPacker.ConvertDDS2XBOX` and the `DDS2XBOX` function (`xtexconv.exe -xbox <temp file>` next to the program, the temp file read back and deleted, the three exception messages verbatim) are `crates/xedit-io/src/archive/xtexconv.rs` and the packer's `set_xtexconv`; the autopacking list format (`LoadList`, plain JSON or the zip `SaveList` writes) is read by `cargo xtask parity bsarchpro`. The GUI's own autopacking mode does not start its work when it is driven without a user, so the parity of that route is owed a run at a screen (the mode reports the finding)."
 
 [units."BSArch/frmPack.pas"]
 status = "pending"
+note = "The GUI itself is not ported. Ported from it (parity #38): the target combo of the pack dialog is the `target` of `archive.pack` (`pc` or `xbox`), whose `xbox` value sets `TwbBSArchive.ArchiveTarget` and requires XBox-format textures in a DDS archive."
 
 [units."BSArch/frmSearchReplace.pas"]
 status = "pending"
@@ -41,7 +44,7 @@ note = "The container handler, the one resource handler of the process (the stri
 [units."Core/wbBSArchive.pas"]
 status = "ported"
 rust = "crates/xedit-io/src/archive"
-note = "TwbAsset, TwbBSArchive (reading and writing every BSA, Morrowind and general BA2 version, the DX10 texture archives included: the DDS branches of Pack and Unpack and of TwbSplitPacker.LoadFile are archive/texture.rs; listing, Info and Warnings), TwbSplitPacker and TwbMultiSourcePacker (the steps of Process in upstream's single-thread order with the reading and compressing on all CPUs) are ported; the output equals BSArch.exe -mt:no for every thread count (cargo xtask parity bsarch, texture archives included). Not ported: the stream-to-stream overloads of wbCompression have no caller. DEVIATION: a texture whose data ends before its last mipmap is cut where the data ends in the route without a packer too (upstream reads past the buffer there)."
+note = "TwbAsset, TwbBSArchive (reading and writing every BSA, Morrowind and general BA2 version, the DX10 texture archives included: the DDS branches of Pack and Unpack and of TwbSplitPacker.LoadFile are archive/texture.rs; listing, Info and Warnings), TwbSplitPacker and TwbMultiSourcePacker (the steps of Process in upstream's single-thread order with the reading and compressing on all CPUs) are ported; the output equals BSArch.exe -mt:no for every thread count (cargo xtask parity bsarch, texture archives included). Not ported: the stream-to-stream overloads of wbCompression have no caller. DEVIATION: a texture whose data ends before its last mipmap is cut where the data ends in the route without a packer too (upstream reads past the buffer there). The archive target (`ArchiveTarget`, `btPC`/`btXBox`) is reachable as `archive.pack --target` since parity #38, with the release's messages for the platform checks (`DDS is not in XBox format`, `DDS is in XBox format`)."
 
 [units."Core/wbBetterStringList.pas"]
 status = "pending"
@@ -399,7 +402,7 @@ note = "Every check, the mesh ones and the texture ones (CheckDDS and CheckSSEDd
 
 [units."Sniff/Proc/ProcCollapseLinksArrays.pas"]
 status = "not-ported"
-note = "Not in the list of the main form (frmMain.pas does not use the unit), so Sniff.exe has no such operation; nfoCollapseLinkArrays of wbDataFormatNif does the same on save."
+note = "Unregistered in 4.1.5q, not missing from the port (parity #38): frmMain.pas does not name the unit (not in its uses list, no AddProc call; the list has exactly 50 AddProc titles), so the released Sniff.exe has no such operation and the port registers none; sync's ledger carries no entry for it. The unit's own title is 'Collapse link arrays' (nif, all games) and nfoCollapseLinkArrays of wbDataFormatNif does the same on save. No operation is invented for it."
 
 [units."Sniff/Proc/ProcConvertRootNode.pas"]
 status = "ported"

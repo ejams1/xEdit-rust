@@ -62,6 +62,7 @@ use xedit_io::encoding::ansi_string;
 use super::gui::visible_windows;
 use super::hidden::HiddenCommand;
 use super::nif::{archive_key, fnv, windows_path};
+use super::oracle_utf16_strings;
 use super::{GAMES, Game, cache_dir, required_var};
 
 const USAGE: &str = "usage: cargo xtask parity sniff [--case <name or name part>]... [--game <game>]... \
@@ -1428,40 +1429,6 @@ fn run_sniff_refusal(sniff: &Path, work: &Path, case: &RefusalCase) -> Result<Ve
         "Sniff wrote {written} file(s) to the output folder before refusing"
     );
     Ok(captions)
-}
-
-/// The UTF-16 strings of the oracle executable that hold `needle`: a
-/// message this build can raise is one of them (Delphi stores string
-/// constants as UTF-16 in the image). Runs of printable characters are
-/// collected from both alignments, because nothing promises the alignment
-/// of a constant.
-fn oracle_utf16_strings(exe: &Path, needle: &str) -> Result<Vec<String>> {
-    let bytes = fs::read(exe)?;
-    let mut strings = BTreeSet::new();
-    for offset in 0..2 {
-        let mut run = Vec::new();
-        for pair in bytes[offset..].chunks_exact(2) {
-            let unit = u16::from_le_bytes([pair[0], pair[1]]);
-            if (32..0xD800).contains(&unit) || (0xE000..0xFFFF).contains(&unit) {
-                run.push(unit);
-                continue;
-            }
-            if run.len() >= 8 {
-                let text = String::from_utf16_lossy(&run);
-                if text.contains(needle) {
-                    strings.insert(text);
-                }
-            }
-            run.clear();
-        }
-        if run.len() >= 8 {
-            let text = String::from_utf16_lossy(&run);
-            if text.contains(needle) {
-                strings.insert(text);
-            }
-        }
-    }
-    Ok(strings.into_iter().collect())
 }
 
 /// The message the port stops with for the same operation, over the same

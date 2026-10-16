@@ -17,6 +17,7 @@ mod asset;
 pub mod packer;
 mod texture;
 mod write;
+pub mod xtexconv;
 
 use std::collections::HashMap;
 use std::fs::File;
