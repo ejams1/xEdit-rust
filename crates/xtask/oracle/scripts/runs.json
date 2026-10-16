@@ -1,5 +1,5 @@
 {
-  "description": "The run cases of `cargo xtask parity script`: the form-free scripts of the 4.1.5q `Edit Scripts` folder (the 32 that use a form are covered by the port's form shim instead). A case names the game and the plugins to load (defaults below); `close_after` closes the GUI after the script, so `SaveChanged` writes the plugins it changed into the private data folder and their bytes are compared with the port's. A case with `build_refs` has the oracle build the reference information after loading (the script reads `ReferencedBy`); the port is told the same. Scripts classed interactive are listed for completeness and deferred unless named with --script.",
+  "description": "The run cases of `cargo xtask parity script`: the form-free scripts of the 4.1.5q `Edit Scripts` folder (the 32 that use a form are covered by the port's form shim instead). A case names the game and the plugins to load (defaults below); `close_after` closes the GUI after the script, so `SaveChanged` writes the plugins it changed into the private data folder and their bytes are compared with the port's. A case with `build_refs` has the oracle build the reference information after loading (the script reads `ReferencedBy`); the port is told the same. A case's `answers` (issue #26) records the dialogs the script shows, in order, and both sides run with them (`control` and `repeat` drive a form control by control); a `variant` names a second case of the same script. Scripts classed interactive or form without answers are listed for completeness and deferred unless named with --script.",
   "defaults": {
     "game": "sse",
     "load": [
@@ -29,7 +29,23 @@
     },
     {
       "script": "Add prefix or suffix to Editor ID.pas",
-      "note": "asks for input even without a form (InputQuery/InputBox): deferred unless named with --script"
+      "answers": [
+        {
+          "class": "#32770",
+          "title": "Confirm",
+          "button": "&No"
+        },
+        {
+          "class": "TInputQueryForm",
+          "title": "Enter",
+          "text": "_P26"
+        }
+      ],
+      "save": [
+        "Skyrim.esm"
+      ],
+      "timeout_minutes": 40,
+      "note": "issue #26: the MessageDlg (append) and the InputQuery (the suffix) answered on both sides; every EditorID of the loaded files gains the suffix and the saved master is compared"
     },
     {
       "script": "Add Prefix Plus Name To EDID.pas",
@@ -59,7 +75,15 @@
       "script": "BASH tags autodetection.pas"
     },
     {
-      "script": "Bookmark.pas"
+      "script": "Bookmark.pas",
+      "answers": [
+        {
+          "class": "#32770",
+          "title": "Information",
+          "button": "OK"
+        }
+      ],
+      "note": "issue #26: a Mode: Silent script whose Finalize shows its bookmark list (none: 'No bookmarks') in a MessageDlg, answered OK on both sides"
     },
     {
       "script": "Bookmark1.pas"
@@ -154,6 +178,20 @@
       "build_refs": true
     },
     {
+      "script": "Fallout4 - Filter for precombined statics.pas",
+      "game": "fo4",
+      "build_refs": false,
+      "variant": "norefs",
+      "answers": [
+        {
+          "class": "#32770",
+          "title": "Information",
+          "button": "OK"
+        }
+      ],
+      "note": "issue #26: without the reference build the script shows its 'References are not built' MessageDlg and ends with Result 1; the case with build_refs aborts in Format before any dialog (the oracle's EConvertError), so the dialog path has a case of its own"
+    },
+    {
       "script": "Fallout4 - Import SCLP bone weights.pas",
       "game": "fo4",
       "close_after": true,
@@ -167,7 +205,45 @@
     },
     {
       "script": "Find records.pas",
-      "note": "a form script (issue #26): with recorded answers the block list of record signatures is checked through the posted keys and the form closes through the Find button; deferred without answers"
+      "answers": [
+        {
+          "class": "TForm",
+          "title": "Find records",
+          "control": "TCheckListBox",
+          "keys": [
+            40,
+            32,
+            40,
+            32,
+            40,
+            32
+          ]
+        },
+        {
+          "class": "TForm",
+          "title": "Find records",
+          "control": "TCheckBox",
+          "keys": [
+            32
+          ],
+          "repeat": true
+        },
+        {
+          "class": "TForm",
+          "title": "Find records",
+          "control": "TLabeledEdit",
+          "text": "EDID",
+          "button": "Find all records",
+          "repeat": true
+        },
+        {
+          "class": "#32770",
+          "title": "Confirm",
+          "button": "&Yes"
+        }
+      ],
+      "timeout_minutes": 30,
+      "note": "issue #26: a form script driven control by control: the first three record signatures of the check list are checked through posted keys, the 'Has Element(s)' box is checked, the element list is EDID, the Find button closes the form, and the Confirm dialog of Finalize lists the found records in the log; the ini the script writes is compared too"
     },
     {
       "script": "FNV - Export dialogues.pas",
@@ -227,7 +303,17 @@
       "timeout_minutes": 60
     },
     {
-      "script": "LOD Statistics.pas"
+      "script": "LOD Statistics.pas",
+      "answers": [
+        {
+          "class": "#32770",
+          "title": "Save As",
+          "text": "LOD Statistics.txt",
+          "button": "&Save"
+        }
+      ],
+      "timeout_minutes": 30,
+      "note": "issue #26: the TSaveDialog of Finalize answered with the default name under the scripts folder (the dialog's InitialDir) on both sides; the statistics file and the log are compared"
     },
     {
       "script": "Make new records from overrides.pas",
@@ -242,7 +328,20 @@
       "note": "edits records: the saved bytes are compared. Update.esm carries the overrides the script converts (a load of Skyrim.esm alone has none: every record of a master is `IsMaster`), and the references they hold into the game master are reindexed to Update.esm's own records"
     },
     {
-      "script": "NIF - List blocks references.pas"
+      "script": "NIF - List blocks references.pas",
+      "synthetic_master": true,
+      "data_files": [
+        "tests/fixtures/parity/nif/LODGen_flat_lod.nif:meshes/LODGen_flat_lod.nif"
+      ],
+      "answers": [
+        {
+          "class": "#32770",
+          "title": "Open",
+          "text": "meshes\\LODGen_flat_lod.nif",
+          "button": "&Open"
+        }
+      ],
+      "note": "issue #26: the TOpenDialog of Initialize answered with a path relative to the dialog's InitialDir (wbDataPath) on both sides, over the fixture mesh the case places below Data; the block reference list in the log is compared. The script reads no record, so it loads the empty master"
     },
     {
       "script": "Oblivion - Export all scripts in xml format.pas",

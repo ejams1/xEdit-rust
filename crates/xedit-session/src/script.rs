@@ -339,9 +339,24 @@ pub struct ScriptAnswer {
     pub button: Option<String>,
     /// Text put into the dialog's edit control before the keys (`WM_SETTEXT`
     /// on the first edit, as the oracle harness does): the value an
-    /// `InputQuery`/`InputBox` returns, the file a selection dialog picks.
+    /// `InputQuery`/`InputBox` returns, the file a selection dialog picks
+    /// (a name without a drive or a root is taken under the dialog's
+    /// `InitialDir`, as the common dialog resolves it).
     #[serde(default)]
     pub text: Option<String>,
+    /// The class of the form's child control the text and the keys go to
+    /// (`TCheckListBox`, `TCheckBox`, `TLabeledEdit`) in place of the first
+    /// edit and the active control: how a form with several controls is
+    /// driven control by control, each answer naming its control and
+    /// `repeat`.
+    #[serde(default)]
+    pub control: Option<String>,
+    /// The answer goes to the same form as the answer before it: a form a
+    /// scenario drives control by control is one window with several
+    /// answers, each after the first naming `repeat` (the parity harness's
+    /// rule, so one answers file drives the oracle GUI and the port).
+    #[serde(default)]
+    pub repeat: bool,
 }
 
 /// The dialog a run stopped on, reported as `script.run`'s
@@ -1719,6 +1734,22 @@ fn register_functions(
 /// reports the undeclared identifier. The filter fields are the port's
 /// [`ScriptVariables`]; `wbOutputPath` and `dfFloatDecimalDigits` are
 /// globals, as upstream.
+/// A value error of a host hook as the interpreter error it raises (the
+/// evaluator's own `value_error`, without a position: the hook's caller
+/// sets it).
+fn hook_error(error: ValueError) -> ExecError {
+    match error {
+        ValueError::Variant => ExecError::new(IE_TYPE_MISMATCH, None, "", ""),
+        ValueError::External(message) => ExecError::external(&message),
+        ValueError::ExternalClass { class, message } => {
+            let mut exec = ExecError::external(&message);
+            exec.class_name = Some(class.to_owned());
+            exec
+        }
+        ValueError::Interp { code, name1, name2 } => ExecError::new(code, None, &name1, &name2),
+    }
+}
+
 fn set_variable(state: &Rc<RefCell<ScriptRunState>>, identifier: &str, value: &Value) -> Result<bool, ExecError> {
     // `FilterByName := Value`: Delphi coerces the variant to the field's
     // type; a variant that does not convert is `ieTypeMismatch` here.
@@ -2261,9 +2292,31 @@ pub fn run_script(
     register_functions(&mut interpreter.adapter, &state, vcl);
     crate::script_units::register_units(&mut interpreter.adapter, &state);
     {
+        // The host hooks run after the adapters: the published-property
+        // surface of the VCL model (upstream's `GetValueRTTI`/`SetValueRTTI`,
+        // which answer a control's published property whichever class the
+        // registration tables carry it on), then the script variables
+        // (`FilterByName := ...`) for a bare identifier.
         let state = state.clone();
-        interpreter.on_set_value = Some(Box::new(move |identifier, value, _args| {
+        let setter_model = model.clone();
+        interpreter.on_set_value = Some(Box::new(move |identifier, value, args| {
+            if args.obj.is_some() {
+                return setter_model
+                    .borrow_mut()
+                    .rtti_set(identifier, value, args)
+                    .map_err(hook_error);
+            }
             set_variable(&state, identifier, value)
+        }));
+        let getter_model = model.clone();
+        interpreter.on_get_value = Some(Box::new(move |identifier, value, args| {
+            if args.obj.is_none() {
+                return Ok(false);
+            }
+            getter_model
+                .borrow_mut()
+                .rtti_get(identifier, value, args)
+                .map_err(hook_error)
         }));
     }
     interpreter.on_statement = Some(Box::new(|_pos| {

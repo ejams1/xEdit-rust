@@ -1087,8 +1087,10 @@ fn a_corpus_nif_walks_through_the_data_format_adapter() {
            end;\n\
            block := nif.Blocks[0];\n\
            AddMessage('name: ' + block.EditValues['Name']);\n\
-           AddMessage('node: ' + block.IsNiObject('NiNode', True));\n\
-           AddMessage('shape: ' + nif.Blocks[1].IsNiObject('NiTriBasedGeom', True));\n\
+           if block.IsNiObject('NiNode', True) then AddMessage('node: True') else AddMessage('node: False');
+\
+           if nif.Blocks[1].IsNiObject('NiTriBasedGeom', True) then AddMessage('shape: True') else AddMessage('shape: False');
+\
            AddMessage('header magic: ' + nif.Header.EditValues['Magic']);\n\
            block := nif.Blocks[4];\n\
            el := block.Elements['Textures'];\n\
@@ -2622,8 +2624,10 @@ fn keys_toggle_a_check_list_before_the_button_closes_the_form() {
         &mut session,
         &folder,
         "Keys.pas",
-        // VK_DOWN twice with VK_SPACE after each: the cursor starts on the
-        // first entry, so entries 1 and 2 end checked.
+        // VK_DOWN then VK_SPACE, twice: a fresh list selects nothing, so
+        // the first Down lands on entry 0 and entries 0 and 1 end checked
+        // (the control's own rule, which `Find records.pas` witnesses
+        // against the oracle).
         json!({ "answers": [
             { "class": "TForm", "title": "Pick", "keys": [40, 32, 40, 32], "button": "Go" },
         ]}),
@@ -2631,9 +2635,9 @@ fn keys_toggle_a_check_list_before_the_button_closes_the_form() {
     assert_eq!(result["aborted"], false, "{result:#}");
     let lines = lines(&result);
     assert!(lines.contains(&"modal=1".to_owned()), "{lines:?}");
-    assert!(lines.contains(&"c0no".to_owned()), "{lines:?}");
+    assert!(lines.contains(&"c0".to_owned()), "{lines:?}");
     assert!(lines.contains(&"c1".to_owned()), "{lines:?}");
-    assert!(lines.contains(&"c2".to_owned()), "{lines:?}");
+    assert!(lines.contains(&"c2no".to_owned()), "{lines:?}");
     let _ = std::fs::remove_dir_all(&folder);
 }
 
