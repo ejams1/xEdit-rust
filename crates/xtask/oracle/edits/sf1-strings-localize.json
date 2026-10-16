@@ -1,5 +1,5 @@
 {
-  "description": "Localize plugin (mniNavLocalizationSwitchClick) on the oracle's delocalized plugin of sf1-strings-delocalize: every localized string becomes a new string of three new tables, with the IDs in the order the strings are gathered.",
+  "description": "Localize plugin (the GUI runs its own handler, mniNavLocalizationSwitchClick, on the file node, which closes the main form so that SaveChanged writes the plugin and the tables) on the oracle's delocalized plugin of sf1-strings-delocalize: every localized string becomes a new string of three new tables, with the IDs in the order the strings are gathered.",
   "game": "sf1",
   "strings": true,
   "inputs_from": "sf1-strings-delocalize",
@@ -10,6 +10,9 @@
   ],
   "commands": [
     {"command": "localization.localize", "params": {"file": "OracleLoc.esm"}}
+  ],
+  "answers": [
+    {"class": "TfrmLocalizePlugin", "title": "Localize plugin", "button": "Localize"}
   ],
   "save": [
     "OracleLoc.esm"
