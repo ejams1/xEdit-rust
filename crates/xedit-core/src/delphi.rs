@@ -726,12 +726,15 @@ pub fn trunc(value: f64) -> i64 {
 /// the RTL's `Val`, fitted at full precision against the oracle (parity
 /// #39; the oracle's own `maxdouble`/`pi`/30-digit results are the tests).
 ///
-/// The digits of the integer part and of the fraction are accumulated into
-/// an `Int64` while fewer than 19 digits have gone in and the next one does
-/// not overflow the accumulator; every digit after that is appended in
-/// double precision with `value := value * 10 + digit`. The digits after
-/// the decimal point count against the exponent, the explicit exponent adds
-/// to it, and the value is scaled by the RTL's paired-table [`power10`].
+/// The digits of the integer part are accumulated into an `Int64` while
+/// fewer than 19 have gone in and the next one cannot overflow it; the
+/// digits after the decimal point are appended in double precision with
+/// `value := value * 10 + digit` (the RTL converts the integer accumulator
+/// nowhere: the fraction never enters it, which the oracle's subnormal
+/// `2.2250738585072014E-308` shows, where the exact-integer conversion
+/// would be one ulp above). The fraction digits count against the exponent,
+/// the explicit exponent adds to it, and the value is scaled by the RTL's
+/// paired-table [`power10`].
 /// That mixture is the RTL's own rounding and not the correctly rounded
 /// parse: the text of the largest double gives the double one ulp below it,
 /// the 21 digits of Pi give `0x1.921fb54442d17p+1` where a correctly rounded
@@ -796,7 +799,7 @@ pub fn str_to_float(text: &str) -> Option<f64> {
     if i < bytes.len() && bytes[i] == b'.' {
         i += 1;
         while i < bytes.len() && bytes[i].is_ascii_digit() {
-            push(bytes[i]);
+            mantissa = mantissa * 10.0 + f64::from(bytes[i] - b'0');
             fraction += 1;
             any_digit = true;
             i += 1;
