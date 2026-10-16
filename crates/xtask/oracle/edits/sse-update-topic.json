@@ -1,5 +1,5 @@
 {
-  "description": "The FormIDs of a topic of Update.esm and of the head of its response chain change (mniNavChangeFormID): the group label of the topic children group, the PNAM of the responses that follow the changed one and the QNAM the responses hold are updated by the references, and the topic children group of the topic sorts its responses again (the INFO sort after a FormID change, wbSortINFO).",
+  "description": "Every record of Update.esm above FormID 000A00 is renumbered (mniNavRenumberFormIDsFromClick): the FormIDs of the topics and of their responses change, so the PNAM of the responses that follow a renamed response updates through the references, the QNAM the responses hold follows, and the topic children groups sort their responses again (the INFO sort after a FormID change, wbSortINFO).",
   "game": "sse",
   "build_refs": true,
   "load": [
@@ -8,19 +8,10 @@
   ],
   "commands": [
     {
-      "command": "formids.change",
+      "command": "formids.renumber",
       "params": {
-        "form_id": "0102B831",
         "file": "Update.esm",
-        "new_form_id": "010FFE00"
-      }
-    },
-    {
-      "command": "formids.change",
-      "params": {
-        "form_id": "0102B834",
-        "file": "Update.esm",
-        "new_form_id": "010FFE01"
+        "start": "000A00"
       }
     }
   ],
