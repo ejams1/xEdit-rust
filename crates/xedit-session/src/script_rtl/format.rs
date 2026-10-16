@@ -508,15 +508,6 @@ fn float_fixed(value: f64, digits: usize, thousand: bool) -> String {
     text
 }
 
-/// `%e`: `digits` significant digits and an exponent of at least three
-/// digits with an explicit sign (the RTL's shape: `1.23E+002`). The digits
-/// are the RTL's own `FloatToDecimal` ones (`FloatToStrF(..., ffExponent,
-/// ...)`, parity #39): Rust's correctly rounded `{:e}` differed in the last
-/// digit for values like `1e-7` and `0.1`.
-fn float_exponent(value: f64, digits: usize, exponent_digits: usize) -> String {
-    delphi::float_to_str_f_exponent(value, digits, exponent_digits.max(3) as i32)
-}
-
 /// `%m`: the currency format (symbol, grouped digits, `CurrencyDecimals`
 /// decimals).
 fn currency(value: f64, precision: Option<usize>) -> String {

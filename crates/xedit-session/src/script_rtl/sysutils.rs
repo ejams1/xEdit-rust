@@ -600,19 +600,11 @@ fn register_functions(adapter: &mut Adapter) {
         Ok(())
     });
     f(adapter, "AnsiUpperCase", &[EMPTY], |value, args| {
-<<<<<<< HEAD
         *value = text_value(upper_case(&arg_str(args, 0)?));
         Ok(())
     });
     f(adapter, "AnsiLowerCase", &[EMPTY], |value, args| {
         *value = text_value(lower_case(&arg_str(args, 0)?));
-=======
-        *value = text_value(xedit_io::encoding::ansi_upper_case(&arg_str(args, 0)));
-        Ok(())
-    });
-    f(adapter, "AnsiLowerCase", &[EMPTY], |value, args| {
-        *value = text_value(xedit_io::encoding::ansi_lower_case(&arg_str(args, 0)));
->>>>>>> a7a11d5 (Parity #39 WIP: the fitted str_to_float, the ANSI case mapping and the docs)
         Ok(())
     });
     f(adapter, "AnsiCompareStr", &[EMPTY, EMPTY], |value, args| {
@@ -734,7 +726,6 @@ fn register_functions(adapter: &mut Adapter) {
         Ok(())
     });
     f(adapter, "StrToInt", &[EMPTY], |value, args| {
-<<<<<<< HEAD
         // An object reads as `''` here (probe `x-273`).
         let text = match arg(args, 0) {
             Value::Object(_) | Value::Class(_) => String::new(),
@@ -744,10 +735,6 @@ fn register_functions(adapter: &mut Adapter) {
         *value = Value::Integer(
             format::str_to_int(&text).map_err(|message| ValueError::external_class("EConvertError", message))?,
         );
-=======
-        let text = arg_text(args, 0)?;
-        *value = Value::Integer(format::str_to_int(&text).map_err(convert_error)?);
->>>>>>> a7a11d5 (Parity #39 WIP: the fitted str_to_float, the ANSI case mapping and the docs)
         Ok(())
     });
     f(adapter, "StrToIntDef", &[EMPTY, EMPTY], |value, args| {
@@ -991,13 +978,9 @@ fn register_functions(adapter: &mut Adapter) {
     });
     f(adapter, "StrToFloat", &[EMPTY], |value, args| {
         let text = arg_text(args, 0)?;
-<<<<<<< HEAD
         *value = Value::Double(
             format::str_to_float(&text).map_err(|message| ValueError::external_class("EConvertError", message))?,
         );
-=======
-        *value = Value::Double(format::str_to_float(&text).map_err(convert_error)?);
->>>>>>> a7a11d5 (Parity #39 WIP: the fitted str_to_float, the ANSI case mapping and the docs)
         Ok(())
     });
     f(adapter, "StrToCurr", &[EMPTY], |value, args| {
@@ -1392,29 +1375,17 @@ fn register_functions(adapter: &mut Adapter) {
     });
     f(adapter, "StrToDate", &[EMPTY], |value, args| {
         let text = arg_text(args, 0)?;
-<<<<<<< HEAD
         *value = Value::Date(datetime::str_to_date(&text).map_err(external)?);
-=======
-        *value = Value::Double(datetime::str_to_date(&text).map_err(convert_error)?);
->>>>>>> a7a11d5 (Parity #39 WIP: the fitted str_to_float, the ANSI case mapping and the docs)
         Ok(())
     });
     f(adapter, "StrToTime", &[EMPTY], |value, args| {
         let text = arg_text(args, 0)?;
-<<<<<<< HEAD
         *value = Value::Date(datetime::str_to_time(&text).map_err(external)?);
-=======
-        *value = Value::Double(datetime::str_to_time(&text).map_err(convert_error)?);
->>>>>>> a7a11d5 (Parity #39 WIP: the fitted str_to_float, the ANSI case mapping and the docs)
         Ok(())
     });
     f(adapter, "StrToDateTime", &[EMPTY], |value, args| {
         let text = arg_text(args, 0)?;
-<<<<<<< HEAD
         *value = Value::Date(datetime::str_to_date_time(&text).map_err(external)?);
-=======
-        *value = Value::Double(datetime::str_to_date_time(&text).map_err(convert_error)?);
->>>>>>> a7a11d5 (Parity #39 WIP: the fitted str_to_float, the ANSI case mapping and the docs)
         Ok(())
     });
     f(adapter, "FormatDateTime", &[EMPTY, EMPTY], |value, args| {
