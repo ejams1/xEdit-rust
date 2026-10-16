@@ -2143,9 +2143,6 @@ fn port_run(
                 other => panic!("no port flag for the switch -{other}"),
             });
         }
-        if !task.answers.is_empty() {
-            command.arg("--answers").arg(&answers_file);
-        }
         command
             // `-IKnowIllBreakMyGameWithThis` on the oracle's side: without it
             // the private copy's game master is not editable and the mutating
@@ -2174,6 +2171,10 @@ fn port_run(
             .arg(dir.join(script))
             .arg("--scripts")
             .arg(&dir);
+        if !task.answers.is_empty() {
+            // The recorded answers are a `script run` option.
+            command.arg("--answers").arg(&answers_file);
+        }
         if task.build_refs {
             // The oracle's script mode builds the references at its load
             // unless `-nobuildrefs` was passed; the cases that read them say
@@ -2351,7 +2352,12 @@ fn capture_port(
                 // went in, and the same program artifacts the oracle drops.
                 let machinery = match *prefix {
                     "out" => false,
-                    "script" => lower == "port.json" || lower.ends_with(".pas") || skip.contains(&lower),
+                    "script" => {
+                        lower == "port.json"
+                            || lower == "answers.json"
+                            || lower.ends_with(".pas")
+                            || skip.contains(&lower)
+                    }
                     "program" => is_gui_artifact(&lower) || skip.contains(&lower) || is_windows_executable(&path),
                     _ => skip.contains(&lower),
                 };

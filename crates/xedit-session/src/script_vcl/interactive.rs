@@ -605,9 +605,10 @@ impl VclModel {
     fn message_dlg(&mut self, args: &Args) -> Result<i32, ValueError> {
         let message = arg_text(args, 0)?;
         let dlg_type = arg_i32(args, 1).unwrap_or(2);
+        // `V2S(Args.Values[2])`: a `[...]` argument reaches the handler as
+        // the open array of its elements (`ReadOpenArray`), each one a bit.
         let bits = match args.values.get(2) {
-            Some(Value::Set(bits)) => *bits,
-            Some(value) => xedit_script::values::to_i32(value).unwrap_or(1),
+            Some(value) => xedit_script::values::v2s(value).unwrap_or(1),
             None => 1,
         };
         let offered: Vec<&(&str, &str, i32)> = MSG_BUTTONS
@@ -736,9 +737,10 @@ impl VclModel {
     fn create_message_dialog(&mut self, args: &Args) -> Result<Value, ValueError> {
         let message = arg_text(args, 0)?;
         let dlg_type = arg_i32(args, 1).unwrap_or(2);
+        // `V2S(Args.Values[2])`: a `[...]` argument reaches the handler as
+        // the open array of its elements (`ReadOpenArray`), each one a bit.
         let bits = match args.values.get(2) {
-            Some(Value::Set(bits)) => *bits,
-            Some(value) => xedit_script::values::to_i32(value).unwrap_or(1),
+            Some(value) => xedit_script::values::v2s(value).unwrap_or(1),
             None => 1,
         };
         let value = self.create_object("TForm", None)?;
@@ -1090,10 +1092,11 @@ impl VclModel {
         let relative = !(file.contains(':') || file.starts_with('\\') || file.starts_with('/'));
         let file = match self.prop_str(object, "InitialDir") {
             Some(dir) if relative && !dir.is_empty() => {
-                let mut path = String::from_utf8_lossy(&dir).into_owned();
-                if !path.ends_with('\\') && !path.ends_with('/') {
-                    path.push('\\');
-                }
+                // One separator between the folder and the name, however
+                // many the folder ends with (the data path ends in two).
+                let dir = String::from_utf8_lossy(&dir).into_owned();
+                let mut path = dir.trim_end_matches(['\\', '/']).to_owned();
+                path.push('\\');
                 path.push_str(&file);
                 path
             }
