@@ -1216,8 +1216,13 @@ fn check(
         port_seconds: None,
     };
     // A script that needs a form or asks for input does not run headless:
-    // it is deferred unless it was named with `--script`.
-    if task.phase == "run" && task.class != Class::Headless && options.scripts.is_empty() {
+    // it is deferred unless it was named with `--script`, or unless the case
+    // carries recorded `answers` (issue #26), which both sides run with.
+    if task.phase == "run"
+        && task.class != Class::Headless
+        && options.scripts.is_empty()
+        && task.answers.is_empty()
+    {
         outcome.status = match task.class {
             Class::Form => "form",
             _ => "oracle-interactive",

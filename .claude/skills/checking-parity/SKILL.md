@@ -265,7 +265,7 @@ Finding (parity #38): the 4.1.5q `BSArchPro.exe` autopacking mode shows its prog
 | Merged patch | the patch "Create Merged Patch" writes in the GUI's script mode (`oracle/merged.pas`) | `xedit patch merged` (`parity merged`) |
 | Error checks | the message log of `-CheckForErrors` (the GUI) and of `xDump -check` | `xedit check` (`files.check`) and `xedit dump --check` |
 | Saved bytes | plugin written by a `-script:` of the GUI (`oracle/save.pas`, `oracle/edit.pas`) | `xedit save`, `xedit batch` |
-| Scripts | compile outcome of every script, and the files, log lines and saved plugins of the form-free corpus, by a `-script:` run of the GUI (`parity script`) | `xedit script check`, `xedit script run` |
+| Scripts | compile outcome of every script, and the files, log lines and saved plugins of the form-free corpus and the answered interactive cases (a case's `answers`), by a `-script:` run of the GUI (`parity script`) | `xedit script check`, `xedit script run`, `xedit script resume` |
 | Archives | `BSArch.exe pack -mt:no`, `unpack` and `-dump` output | `bsarch`, `xedit archive pack` (`parity bsarch`) |
 | Resources | the container list, resource lookups and loader lines of a `-script:` run of the GUI (`oracle/resources.pas`) or of a tool mode | the same command line of `xedit` (`parity resources`) |
 | NIF and material dumps and saves | `Sniff.exe` JSON converter and universal tweaker; the GUI's script adapter for text dumps | `cargo xtask parity nif` (in process) |
