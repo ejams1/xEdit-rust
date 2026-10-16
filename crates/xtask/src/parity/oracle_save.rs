@@ -1207,6 +1207,7 @@ fn check_edit(
                     button: answer.button.clone(),
                     text: answer.text.clone(),
                     control: answer.control.clone(),
+                    repeat: false,
                 })
                 .collect(),
             args: sequence.switches.clone(),

@@ -204,7 +204,7 @@ note = '''The whole unit: the trees LOD (TwbLodTES5Tree, TwbLodTES5TreeList, Twb
 [units."Core/wbLoadOrder.pas"]
 status = "pending"
 rust = "crates/xedit-loadorder/src/load_order.rs"
-note = "Phase 4 step 6: the part the mod groups read: TwbModuleInfo (miName, miOriginalName, miFile, miLoadOrder, mfValid, mfHasFile), wbLoadModules as far as the modules of the data folder go (the game's executable first, ghosts, the extensions, a file header), wbModuleByName (with its .ghost quirk), wbModulesByLoadOrder (the loaded modules in load order, then the others by name, where upstream sorts by the official order, Plugins.txt and the file times), GetCRC32 and HasCRC32. Pending: the load order itself (Plugins.txt, loadorder.txt, the official and Creation Club order, SimulateLoad, the module flags), which the port's sessions do not build from the modules."
+note = "Phase 4 step 6: the part the mod groups read: TwbModuleInfo (miName, miOriginalName, miFile, miLoadOrder, mfValid, mfHasFile, and since parity #36 miOfficialIndex, miCCIndex, miPluginsTxtIndex, miDateTime, mfIsESM and mfHasBlueprintFlag), wbLoadModules as far as the modules of the data folder go (the game's executable first, ghosts, the extensions, a file header whose flags are read), wbModuleByName (with its .ghost quirk), wbModulesByLoadOrder (`_ModulesLoadOrderCompare`: the official order of the game master, the game's executable, Update.esm of the Skyrim family and wbOfficialDLC, the Creation Club order, the ESM flag, Plugins.txt, the file times and the name, parity #36), GetCRC32 and HasCRC32. The Creation Club list (the game's .ccc file) is not read, and a loaded module's session load order stands in for its Plugins.txt index. Pending: the load order itself (Plugins.txt, loadorder.txt, the .ccc list, SimulateLoad, the rest of the module flags), which the port's sessions do not build from the modules."
 
 [units."Core/wbLocalization.pas"]
 status = "ported"
@@ -751,7 +751,7 @@ note = "Phase 4 step 6: the CRC32 question of ShowModal (add_current_crcs) and C
 [units."xEdit/xeModGroupSelectForm.pas"]
 status = "pending"
 rust = "crates/xedit-session/src/modgroups.rs"
-note = "Phase 4 step 6: the selection is the names, all and saved parameters of modgroups.select and of conflicts.list; MinSelect and MaxSelect are the errors of the commands. The presets (PresetLoad, PresetSave, PresetDelete in the settings file) and the form are pending."
+note = "Phase 4 step 6: the selection is the names, all and saved parameters of modgroups.select and of conflicts.list; MinSelect and MaxSelect are the errors of the commands. Parity #36: PresetLoad, PresetSave, PresetDelete, PresetsUpdate, GetPresetsSection and IsPresetDifferent are modgroups.presets, modgroups.preset_load, modgroups.preset_save and modgroups.preset_delete over the settings file (the section frmModGroupSelect_ActiveModGroups_Presets, `<Last>` for [ModGroups] Selection, the questions as confirm parameters, and the CommaText values); the form itself is pending (phase 7)."
 
 [units."xEdit/xeModuleSelectForm.pas"]
 status = "pending"

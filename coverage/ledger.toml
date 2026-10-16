@@ -2430,32 +2430,42 @@ source = "vstModGroupItemsNodeClick"
 note = "Adding, removing and moving items, their flags and CRC32s: the items parameter, each item as a line of a mod group file."
 
 [gui."xEdit/xeModGroupSelectForm.dfm:acPresetDelete:OnExecute"]
-status = "pending"
+status = "covered"
+command = "modgroups.preset_delete"
 source = "acPresetDeleteExecute"
+note = "The delete question (MessageDlg, mbYesNo, default Yes) is the confirm parameter; the settings file is written as the dialog leaves it."
 
 [gui."xEdit/xeModGroupSelectForm.dfm:acPresetDelete:OnUpdate"]
-status = "pending"
+status = "presentation"
 source = "acPresetDeleteUpdate"
+note = "The enabled state of the Delete button (Settings assigned and the preset exists); the command answers an unknown preset with unknown_preset instead."
 
 [gui."xEdit/xeModGroupSelectForm.dfm:acPresetLoad:OnExecute"]
-status = "pending"
+status = "covered"
+command = "modgroups.preset_load"
 source = "acPresetLoadExecute"
+note = "PresetLoad and the dialog confirmation that ends it (SaveModGroupsSelection and Activate); IsPresetDifferent is the response's preset_differs, the question on close is modgroups.preset_save with after_modal."
 
 [gui."xEdit/xeModGroupSelectForm.dfm:acPresetLoad:OnUpdate"]
-status = "pending"
+status = "presentation"
 source = "acPresetLoadUpdate"
+note = "The enabled state of the Load button (<Last> or an existing preset); the command answers another name with unknown_preset instead."
 
 [gui."xEdit/xeModGroupSelectForm.dfm:acPresetSave:OnExecute"]
-status = "pending"
+status = "covered"
+command = "modgroups.preset_save"
 source = "acPresetSaveExecute"
+note = "PresetSave with the current selection (SelectedModGroups, the valid groups of the saved selection); the overwrite question (default Yes) and the changed-selection question (after_modal, default No) are the confirm parameter."
 
 [gui."xEdit/xeModGroupSelectForm.dfm:acPresetSave:OnUpdate"]
-status = "pending"
+status = "presentation"
 source = "acPresetSaveUpdate"
+note = "The enabled state of the Save button (a name without = that is not <...>, a non-empty selection); the command answers with invalid_params instead."
 
 [gui."xEdit/xeModGroupSelectForm.dfm:cbPreset:OnKeyPress"]
-status = "pending"
+status = "presentation"
 source = "cbPresetKeyPress"
+note = "The combo box swallows Enter, so the form's OnKeyDown runs the preset actions."
 
 [gui."xEdit/xeModGroupSelectForm.dfm:edFilter:OnChange"]
 status = "presentation"

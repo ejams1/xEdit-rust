@@ -1,0 +1,65 @@
+{
+  "description": "Edit ModGroup on a name two files hold: the selection dialog lists both entries under one name, and the order of the mod group files decides between them. Update.esm is an official module (its `Update.esm` index puts it right after the game master, before Dawnguard.esm and the rest of the official DLC), so its file comes first although Dawnguard sorts before Update by name, and although Update.esm is not loaded: only its file is in the data folder, next to the .modgroups file the rename writes. Enter confirms the saved selection, which tags both entries of the name, and the handler edits the first of them; the second file is untouched. The reload leaves no valid group of the name (Update.esm is not loaded), so the saved selection ends empty.",
+  "game": "sse",
+  "load": [
+    "Skyrim.esm",
+    "HearthFires.esm"
+  ],
+  "unloaded": [
+    "Update.esm",
+    "Dawnguard.esm"
+  ],
+  "files": {
+    "Dawnguard.modgroups": [
+      "[AAA dup]",
+      "Skyrim.esm",
+      "Dawnguard.esm",
+      "[Untouched]",
+      "Skyrim.esm",
+      "Dawnguard.esm"
+    ],
+    "Update.modgroups": [
+      "[AAA dup]",
+      "Skyrim.esm",
+      "Update.esm"
+    ]
+  },
+  "settings": [
+    "[ModGroups]",
+    "Selection=\"AAA dup\"",
+    "[Init]",
+    "FirstStart=1"
+  ],
+  "menu": [
+    "mniNavEditModGroup"
+  ],
+  "answers": [
+    {
+      "class": "TfrmModGroupSelect",
+      "title": "edit",
+      "keys": [
+        13
+      ]
+    },
+    {
+      "class": "TfrmModGroupEdit",
+      "title": "Editing",
+      "text": "AAA renamed",
+      "button": "OK"
+    },
+    {
+      "class": "TfrmModGroupSelect",
+      "title": "Reloading",
+      "button": "OK"
+    }
+  ],
+  "port": [
+    {
+      "command": "modgroups.edit",
+      "params": {
+        "name": "AAA dup",
+        "new_name": "AAA renamed"
+      }
+    }
+  ]
+}
