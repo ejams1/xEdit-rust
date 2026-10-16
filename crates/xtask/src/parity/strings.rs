@@ -212,27 +212,39 @@ pub(super) fn stage(
 /// there), and where each ended up in the private data folder: renamed over
 /// the old file, or left under the save name when the rename was put off.
 pub(super) fn saved_tables(log: &str, data: &Path) -> Result<Vec<(String, PathBuf)>> {
-    let mut tables: Vec<(String, PathBuf)> = Vec::new();
+    saved_files(log, &data.join("Strings"), |saved| saved.strip_prefix("Strings\\"))
+}
+
+/// The plugins the GUI saved on close, as [`saved_tables`] finds the
+/// tables: `Saving: <plugin>.save.<time>` lines of the message log, the
+/// save left under its name (the rename of a memory-mapped plugin is put
+/// off to the shutdown, which the harness does not wait for) or renamed.
+pub(super) fn saved_plugins(log: &str, data: &Path) -> Result<Vec<(String, PathBuf)>> {
+    saved_files(log, data, |saved| (!saved.contains('\\')).then_some(saved))
+}
+
+/// The files `SaveChanged` logged (`] Saving: <path>`) whose path `select`
+/// takes, by name, with where each is in `dir`.
+fn saved_files(log: &str, dir: &Path, select: impl Fn(&str) -> Option<&str>) -> Result<Vec<(String, PathBuf)>> {
+    let mut files: Vec<(String, PathBuf)> = Vec::new();
     for line in log.lines() {
-        let Some(position) = line.find("Saving: Strings\\") else {
+        let Some(position) = line.find("] Saving: ") else {
             continue;
         };
-        let saved = line[position + "Saving: Strings\\".len()..].trim();
+        let Some(saved) = select(line[position + "] Saving: ".len()..].trim()) else {
+            continue;
+        };
         let name = match saved.find(".save.") {
             Some(end) => &saved[..end],
             None => saved,
         };
-        let pending = data.join("Strings").join(saved);
-        let path = if pending.is_file() {
-            pending
-        } else {
-            data.join("Strings").join(name)
-        };
+        let pending = dir.join(saved);
+        let path = if pending.is_file() { pending } else { dir.join(name) };
         anyhow::ensure!(path.is_file(), "the GUI logged the save of {saved}, which is not there");
-        tables.retain(|(known, _)| !known.eq_ignore_ascii_case(name));
-        tables.push((name.to_owned(), path));
+        files.retain(|(known, _)| !known.eq_ignore_ascii_case(name));
+        files.push((name.to_owned(), path));
     }
-    Ok(tables)
+    Ok(files)
 }
 
 /// The outcome of one table of a sequence, `<sequence>/Strings/<table>`:
@@ -294,120 +306,48 @@ fn table_count(bytes: &[u8]) -> u32 {
         .map_or(0, |count| u32::from_le_bytes(count.try_into().unwrap()))
 }
 
-/// The Pascal helpers of the localization steps, put into the script of a
+/// The Pascal helper of the localization steps, put into the script of a
 /// sequence that uses them.
 ///
-/// `mniNavLocalizationSwitchClick` is a menu handler with dialogs and the
-/// script API has neither `AddValue` nor `NoTranslate`, so the scripts do
-/// what it does through `SetEditValue`, which reaches the same code of
-/// `TwbLStringDef.FromStringNative` and `wbLocalizationHandler`:
+/// The step runs the GUI's own handler, `mniNavLocalizationSwitchClick`
+/// ("Localize plugin" / "Delocalize plugin" of the navigation tree's menu),
+/// on the file's node, as a user does: `JumpTo` the file header (which
+/// focuses its node and ends the `BeginUpdate` the script mode holds the
+/// tree in), a Left key to the tree (`Perform(WM_KEYDOWN, VK_LEFT)`: on a
+/// node without children it focuses the parent, the file), then a click of
+/// the menu item. The handler's own dialogs are answered by the harness:
+/// "Localize plugin" (`TfrmLocalizePlugin`, without translation) by its
+/// Localize button; `EditWarn` is skipped by `-IKnowWhatImDoing`. At its
+/// end the handler closes the main form ("immediately force a save changes
+/// window and quit"): `FormClose` runs `SaveChanged`, without its dialog in
+/// the script mode, so the plugin and the tables the handler changed are
+/// saved into the private data folder and named in the message log, and
+/// the GUI's file list is released. So a localization step is the last
+/// step of its sequence, the script writes no plugin of its own, and the
+/// harness takes the plugin the GUI saved (see `check_edit`). The helper
+/// checks the localized flag of the file header afterwards: a handler that
+/// returned early (the focused node not the file) changes nothing.
 ///
-/// - Localize: the localized strings are gathered (`GatherLStrings`: an
-///   element before its children, the children from the last one) and
-///   their texts read; each is set to `STRINGID:00000000` (an ID, so the
-///   element holds four bytes); the localized flag of the file header is set;
-///   then each text is set again in the gathered order, which in a
-///   localized file is `SetValue` of ID 0, so `AddValue`: the IDs and the
-///   tables come out as the handler's `AddValue` and `STRINGID:` give them.
-///   An empty text stays ID 0, as `AddValue('')` returns 0.
-/// - Delocalize: the texts are gathered, the localized flag is cleared and
-///   each text is set, which in a file that is not localized stores it in
-///   the plugin as `NoTranslate` does. An empty text is set after `-`,
-///   because ID 0 reads as an empty text once the flag is cleared and the
-///   set would do nothing. Known limit: the handler sets each text while
-///   the file is *still* localized (`NoTranslate` stores it in the plugin),
-///   so `wbDialogueTextAfterSet` leaves it alone; here the flag is cleared
-///   first, so that callback trims a response text with outer spaces
-///   (`sf1-strings-delocalize`, one `INFO`). The script API cannot do
-///   better: with the flag set a text goes into the tables, with it cleared
-///   the callback trims, and a set of the text the element already reads as
-///   (its localized state kept) is skipped (`GetEditValue <> aValue`).
-///   Parity #33 tried the element's container instead, which is the record
-///   for a subrecord value and fails (`is not a valid integer value`).
-///
-/// The script holds no element between the passes: a `TList` keeps no
-/// reference, so an element of a record the GUI released meanwhile would be
-/// another object (or none) by the time it is set. Each pass walks the file
-/// again in the same order and finds the same elements, as the edits change
-/// no element list.
-pub(super) const LOCALIZATION_HELPERS: &str = r"var
-  lvalues: TStringList;
-  lcount: Integer;
-  lpass: Integer;
-
-// The pass of GatherLStrings: 0 reads the texts, 1 sets STRINGID:00000000,
-// 2 sets the texts read, 3 sets them after '-' where they are empty.
-procedure VisitLString(el: IInterface);
-begin
-  try
-    case lpass of
-      0: lvalues.Add(GetEditValue(el));
-      1: SetEditValue(el, 'STRINGID:00000000');
-      2: SetEditValue(el, lvalues[lcount]);
-      3: begin
-        if lvalues[lcount] = '' then
-          SetEditValue(el, '-');
-        SetEditValue(el, lvalues[lcount]);
-      end;
-    end;
-  except
-    log.Add('failed: ' + FullPath(el));
-    raise;
-  end;
-  Inc(lcount);
-end;
-
-procedure GatherLStrings(el: IInterface);
-var
-  i: Integer;
-begin
-  if DefType(el) = dtLString then
-    VisitLString(el);
-  for i := Pred(ElementCount(el)) downto 0 do
-    GatherLStrings(ElementByIndex(el, i));
-end;
-
-procedure LStringPass(f: IInterface; aPass: Integer);
-begin
-  lpass := aPass;
-  lcount := 0;
-  GatherLStrings(f);
-  if lcount <> lvalues.Count then
-    raise Exception.Create('pass ' + IntToStr(aPass) + ' found ' + IntToStr(lcount) + ' localized strings, the first ' + IntToStr(lvalues.Count));
-end;
-
-procedure SetLocalizedFlag(f: IInterface; aValue: Boolean);
+/// Parity #33 replaced an emulation through `SetEditValue` that could not
+/// reproduce the handler: the handler sets each text with
+/// `wbLocalizationHandler.NoTranslate` while the file is still localized,
+/// which the script API cannot do (`sf1-strings-delocalize` differed in one
+/// `INFO` whose response text the emulation trimmed).
+pub(super) const LOCALIZATION_HELPERS: &str = r"procedure SwitchLocalization(f: IInterface; aLocalize: Boolean);
 var
   h: IInterface;
-  flags: Cardinal;
+  nav: TObject;
+  localized: Boolean;
 begin
   h := ElementByIndex(f, 0);
-  flags := GetElementNativeValues(h, 'Record Header\Record Flags');
-  if aValue then
-    flags := flags or $80
-  else
-    flags := flags and not $80;
-  SetElementNativeValues(h, 'Record Header\Record Flags', flags);
-end;
-
-procedure SwitchLocalization(f: IInterface; aLocalize: Boolean);
-begin
-  lvalues := TStringList.Create;
-  try
-    lpass := 0;
-    lcount := 0;
-    GatherLStrings(f);
-    log.Add('localizable strings: ' + IntToStr(lvalues.Count));
-    if aLocalize then
-      LStringPass(f, 1);
-    SetLocalizedFlag(f, aLocalize);
-    if aLocalize then
-      LStringPass(f, 2)
-    else
-      LStringPass(f, 3);
-  finally
-    lvalues.Free;
-  end;
+  JumpTo(h, False);
+  nav := frmMain.FindComponent('vstNav');
+  nav.Perform($0100, $25, 0);
+  log.Add('switch ' + GetFileName(f));
+  frmMain.FindComponent('mniNavLocalizationSwitch').Click;
+  localized := (GetElementNativeValues(h, 'Record Header\Record Flags') and $80) <> 0;
+  if localized <> aLocalize then
+    raise Exception.Create('the localization switch did not run on ' + GetFileName(f));
 end;
 ";
 
@@ -431,6 +371,11 @@ mod tests {
         assert_eq!(tables[0].0, "A_English.STRINGS");
         assert!(tables[0].1.ends_with("A_English.STRINGS"));
         assert!(tables[1].1.to_string_lossy().contains(".save."));
+        fs::write(dir.join("A.esp.save.2026"), b"p").unwrap();
+        let plugins = saved_plugins(log, &dir).unwrap();
+        assert_eq!(plugins.len(), 1);
+        assert_eq!(plugins[0].0, "A.esp");
+        assert!(plugins[0].1.ends_with("A.esp.save.2026"));
         let _ = fs::remove_dir_all(&dir);
     }
 }

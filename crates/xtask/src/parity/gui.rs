@@ -799,10 +799,17 @@ fn watch(
             );
             return Ok(None);
         }
+        // A script whose step closed the main form itself (the GUI's
+        // localization switch quits at its end) may let the GUI exit, or
+        // fail in what follows the script, right after its marker.
+        let marker_written = match until {
+            Until::Marker(marker) | Until::MarkerThenClose(marker) => marker.exists(),
+            _ => false,
+        };
         if let Some(code) = child.try_wait()? {
             // An auto mode the GUI closed itself (`-autoexit`, or a mode
             // that quits at its end) is done, whatever its deadline was.
-            if matches!(until, Until::Exit | Until::LogLine(_)) || closing {
+            if matches!(until, Until::Exit | Until::LogLine(_)) || closing || marker_written {
                 return Ok(Some(code));
             }
             bail!("the oracle exited (exit code: {code}) before the script finished");
@@ -853,7 +860,7 @@ fn watch(
                     // corpus script may abort at runtime: its case compares
                     // the abort as the outcome, so it is left to the end of
                     // the run above.
-                    if log.contains(SCRIPT_ABORT_LINE) && !matches!(until, Until::ScriptEnd { .. }) {
+                    if log.contains(SCRIPT_ABORT_LINE) && !matches!(until, Until::ScriptEnd { .. }) && !marker_written {
                         bail!(
                             "the oracle aborted the script; the end of the log:
 {}",

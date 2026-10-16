@@ -776,6 +776,17 @@ impl EditSequence {
     fn staged(&self) -> bool {
         self.strings || self.inputs_from.is_some() || !self.rename.is_empty() || !self.archives.is_empty()
     }
+
+    /// Whether a step runs the GUI's localization switch, which closes the
+    /// main form at its end (`strings.rs`): the plugins compared are then
+    /// the ones the GUI's `SaveChanged` wrote, not writes of the script.
+    fn closes_gui(&self) -> bool {
+        self.commands.iter().any(|command| {
+            command["command"]
+                .as_str()
+                .is_some_and(|name| name.starts_with("localization."))
+        })
+    }
 }
 
 /// The text of a JSON string parameter.
@@ -1199,8 +1210,17 @@ fn edit_script(sequence: &EditSequence) -> Result<String> {
             .map(|name| name.replace('\'', "''"))
             .unwrap_or_default(),
     );
+    // The GUI's localization switch closes the main form, which saves the
+    // changed plugins and tables and releases the GUI's file list: it is
+    // the last step, with nothing the script reads afterwards.
+    if sequence.closes_gui() {
+        ensure!(
+            sequence.commands.len() == 1 && sequence.refs.is_empty() && sequence.strings,
+            "a localization step closes the GUI: it must be the only step of a sequence with \"strings\": true and no \"refs\""
+        );
+    }
     let mut saves = String::new();
-    for name in &sequence.save {
+    for name in sequence.save.iter().filter(|_| !sequence.closes_gui()) {
         let literal = pascal_string(name);
         saves.push_str(&format!("      log.Add({});\n", pascal_string(&format!("save {name}"))));
         saves.push_str(&format!(
@@ -1435,11 +1455,23 @@ fn check_edit(
         )?;
         oracle_peak = result.peak;
         if result.status.last().is_some_and(|last| last == "done") {
+            // A sequence whose step closed the GUI has the plugins its
+            // `SaveChanged` wrote into the private data folder.
+            let gui_saves = match (&result.saved_log, sequence.closes_gui()) {
+                (Some(log), true) => super::strings::saved_plugins(log, &result.data)?,
+                _ => Vec::new(),
+            };
             for name in &sequence.save {
-                keep_compressed(
-                    &result.out.join(name),
-                    &dir.join(format!("{oracle_stem}.{name}.saved.zst")),
-                )?;
+                let source = if sequence.closes_gui() {
+                    gui_saves
+                        .iter()
+                        .find(|(saved, _)| saved.eq_ignore_ascii_case(name))
+                        .map(|(_, path)| path.clone())
+                        .with_context(|| format!("the GUI did not save {name}"))?
+                } else {
+                    result.out.join(name)
+                };
+                keep_compressed(&source, &dir.join(format!("{oracle_stem}.{name}.saved.zst")))?;
             }
             if !sequence.refs.is_empty() {
                 fs::copy(result.out.join("refs.txt"), dir.join(format!("{oracle_stem}.refs.txt")))?;
