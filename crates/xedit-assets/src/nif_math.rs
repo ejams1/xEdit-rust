@@ -17,18 +17,13 @@ use crate::data_format::{DfError, R};
 /// `TMatrix33`.
 pub type Matrix33 = [[f64; 3]; 3];
 
-/// `SameValue` of two doubles with the default epsilon, as the RTL of the
-/// release builds has it (`System.Math`, read from the machine code of
+/// `SameValue` of two doubles with the RTL's default epsilon, as the RTL of
+/// the release builds has it (`System.Math`, read from the machine code of
 /// `Sniff.exe` at 0x471D00): `DoubleResolution` is 1E-15 times the fuzz
-/// factor 1000, relative to the smaller value. (`xedit_core::delphi::
-/// same_value` uses 1E-15.)
-pub fn same_value(a: f64, b: f64) -> bool {
-    const RESOLUTION: f64 = 1e-12;
-    let smaller = if b.abs() > a.abs() { a.abs() } else { b.abs() };
-    let scaled = smaller * RESOLUTION;
-    let epsilon = if scaled > RESOLUTION { scaled } else { RESOLUTION };
-    if a > b { a - b <= epsilon } else { b - a <= epsilon }
-}
+/// factor 1000, relative to the smaller value. It lives in
+/// `xedit_core::delphi` since parity #39 (the record code needed the same
+/// resolution) and is re-exported here for the NIF code.
+pub use xedit_core::delphi::same_value;
 
 /// Delphi `RoundTo(Double, ADigit)` (`System.Math` at 0x471480): times the
 /// power of ten, rounded half to even below 2^52, times the inverse power.

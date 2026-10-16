@@ -38,14 +38,18 @@ const UNIT: &str = "Math";
 
 /// `PI` (`Math.pas`).
 const PI: f64 = std::f64::consts::PI;
-/// `MaxSingle` = `3.40e+38` (`f32::MAX`).
-const MAX_SINGLE: f64 = 3.402_823_466_385_288_6e38;
-/// `MinSingle` = `1.5e-45` (Delphi's value; the smallest subnormal is
-/// `1.4e-45`).
-const MIN_SINGLE: f64 = 1.5e-45;
-/// `MinDouble` = `5.0e-324` (`Math.pas`: the smallest positive double, not
-/// the negative max).
-const MIN_DOUBLE: f64 = 5e-324;
+/// `MaxSingle` = `3.40e+38` as the RTL's constant has it (the exact
+/// single `f32::MAX`; parity #39 checked the printed digits against the
+/// oracle).
+const MAX_SINGLE: f64 = f32::MAX as f64;
+/// `MinSingle`: the smallest *normal* single, `1.1754943508222875e-38`
+/// (the old `1.5e-45` of Math.pas is not the released 4.1.5q's; parity #39
+/// probed it).
+const MIN_SINGLE: f64 = f32::MIN_POSITIVE as f64;
+/// `MinDouble`: the smallest normal double, `2.2250738585072014e-308`
+/// (`MinExtended` on the 64-bit build is the same value; parity #39 probed
+/// both).
+const MIN_DOUBLE: f64 = f64::MIN_POSITIVE;
 /// `MaxComp`.
 const MAX_COMP: f64 = 9.223_372_036_854_776e18;
 /// `MinComp`.
@@ -72,7 +76,10 @@ pub fn register(adapter: &mut Adapter) {
     consts(adapter, "MinDouble", MIN_DOUBLE);
     consts(adapter, "MinExtended", MIN_DOUBLE);
     consts(adapter, "MinSingle", MIN_SINGLE);
-    consts(adapter, "NaN", f64::NAN);
+    // The Math NaN is the RTL's real indefinite `0xFFF8...` (parity #39);
+    // `f64::NAN` is `0x7FF8...` and showed as a byte difference in the
+    // probe's `.dat`.
+    consts(adapter, "NaN", xedit_core::delphi::nan());
     consts(adapter, "NegInfinity", f64::NEG_INFINITY);
 
     // The functions, in the registration order of the unit.
@@ -89,7 +96,18 @@ pub fn register(adapter: &mut Adapter) {
     unary(adapter, "ArcSinh", |x| (x + (x * x + 1.0).sqrt()).ln());
     binary(adapter, "ArcTan2", nif::arc_tan2);
     unary(adapter, "ArcTanh", |x| 0.5 * ((1.0 + x) / (1.0 - x)).ln());
-    unary_int(adapter, "Ceil", |x| x.ceil() as i32);
+    // `Math.Ceil`/`Floor` narrow to `Integer`: `Result := Trunc(X); if
+    // Frac(X) > 0 then Inc(Result)` (and `< 0`/`Dec` for `Floor`), so an
+    // out-of-range value gives the RTL's truncated low 32 bits (`1e19`
+    // gives 0, `1e10+0.5` gives 1410065409) and NaN gives 0 (parity #39
+    // probed every one).
+    unary_int(adapter, "Ceil", |x| {
+        let mut result = xedit_core::delphi::trunc(x) as i32;
+        if x.fract() > 0.0 {
+            result = result.wrapping_add(1);
+        }
+        result
+    });
     super::function(adapter, UNIT, "ClearExceptions", &[], |_value, _args| {
         // `Math.ClearExceptions` clears the FPU exception flags; the port
         // has no FPU exception state to clear.
@@ -110,7 +128,13 @@ pub fn register(adapter: &mut Adapter) {
     unary(adapter, "DegToCycle", |x| x / 360.0);
     unary(adapter, "DegToGrad", |x| x / 0.9);
     unary(adapter, "DegToRad", nif::deg_to_rad);
-    unary_int(adapter, "Floor", |x| x.floor() as i32);
+    unary_int(adapter, "Floor", |x| {
+        let mut result = xedit_core::delphi::trunc(x) as i32;
+        if x.fract() < 0.0 {
+            result = result.wrapping_sub(1);
+        }
+        result
+    });
     unary(adapter, "GradToCycle", |x| x / 400.0);
     unary(adapter, "GradToDeg", |x| x * 0.9);
     unary(adapter, "GradToRad", |x| x * PI / 200.0);
