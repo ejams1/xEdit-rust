@@ -20,6 +20,7 @@ use xedit_core::implementation::{FileBytes, FileImpl, wb_file_from_bytes};
 use xedit_core::interface::globals::GameMode;
 use xedit_core::interface::globals::test_lock;
 use xedit_core::interface::types::FileStates;
+use xedit_io::temp::TempDir;
 use xedit_session::{Registry, Session};
 
 fn sub_record(signature: &[u8; 4], data: &[u8]) -> Vec<u8> {
@@ -123,10 +124,8 @@ fn open_session() -> Session {
 }
 
 /// A scripts folder of its own for a test, holding the script.
-fn script_folder(name: &str, text: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("xedit-adapter-{}-{name}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
+fn script_folder(name: &str, text: &str) -> TempDir {
+    let dir = TempDir::new(format!("xedit-adapter-{}-{name}", std::process::id()));
     std::fs::write(dir.join(format!("{name}.pas")), text).unwrap();
     dir
 }
@@ -384,7 +383,6 @@ fn the_element_functions_read_the_tree() {
             "You can close this application now.",
         ]
     );
-    let _ = std::fs::remove_dir_all(&folder);
 }
 
 const CONTAINER_SCRIPT: &str = "\
@@ -421,7 +419,6 @@ fn the_container_functions_walk_an_element() {
     assert_eq!(lines[3], "indexof=2");
     assert_eq!(lines[4], "equals=True");
     assert_eq!(lines[5], "containing=fThird [GMST:00000802]");
-    let _ = std::fs::remove_dir_all(&folder);
 }
 
 //=== IwbElement: the edits, and what they save ==============================
@@ -460,7 +457,6 @@ fn the_element_setters_change_the_record() {
     let edid = sub_record_at(&saved, b"fRenamed").unwrap();
     assert_eq!(&saved[edid..edid + 8], b"fRenamed");
     assert_eq!(sub_record_at(&saved, b"fPlugin"), None, "the old editor ID is gone");
-    let _ = std::fs::remove_dir_all(&folder);
 }
 
 //=== IwbMainRecord ==========================================================
@@ -506,7 +502,6 @@ fn the_record_functions_walk_the_overrides() {
     assert_eq!(lines[2], "overrides=1");
     assert_eq!(lines[6], "ismaster=True");
     assert_eq!(lines[7], "iswinning=False");
-    let _ = std::fs::remove_dir_all(&folder);
 }
 
 const RECORD_VALUES_SCRIPT: &str = "\
@@ -536,7 +531,7 @@ end.
 #[test]
 fn the_record_functions_follow_master_and_override() {
     let _guard = test_lock();
-    let folder = script_folder("RecordValues", RECORD_VALUES_SCRIPT);
+    let _folder = script_folder("RecordValues", RECORD_VALUES_SCRIPT);
     let mut session = open_session();
     let folder_b = script_folder("RecordValuesB", RECORD_VALUES_SCRIPT);
     let result = run(&mut session, &folder_b, "RecordValuesB", json!({}));
@@ -550,8 +545,6 @@ fn the_record_functions_follow_master_and_override() {
     assert_eq!(lines[7], "persistent=False");
     assert_eq!(lines[8], "override master=[fMaster [GMST:00000800]]");
     assert_eq!(lines[9], "override masterorself=[fMaster [GMST:00000800]]");
-    let _ = std::fs::remove_dir_all(&folder);
-    let _ = std::fs::remove_dir_all(&folder_b);
 }
 
 //=== IwbFile ================================================================
@@ -663,7 +656,6 @@ fn the_file_functions_read_the_load_order() {
             "You can close this application now.",
         ]
     );
-    let _ = std::fs::remove_dir_all(&folder);
     let _ = &FILE_SCRIPT;
 }
 
@@ -744,7 +736,6 @@ fn the_resource_functions_hash_and_map() {
     assert_eq!(lines[5], "instring=0");
     assert_eq!(lines[6], "notfound=-1");
     assert_eq!(lines[7], "exists=False");
-    let _ = std::fs::remove_dir_all(&folder);
     let _ = RESOURCE_SCRIPT;
 }
 
@@ -818,9 +809,7 @@ fn the_corpus_script_that_edits_a_record() {
     // A master light, a plugin cell and a been placed reference of the light:
     // `Skyrim - Add shadow bias to lights.pas` adds the `XLIG` subrecord to
     // the reference and writes 23.76 into its shadow depth bias.
-    let dir = std::env::temp_dir().join(format!("xedit-adapter-light-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
+    let _dir = TempDir::new(format!("xedit-adapter-light-{}", std::process::id()));
     let mut session = {
         xedit_core::implementation::clear_files_map();
         xedit_core::implementation::reset_load_order_slots();
@@ -875,7 +864,6 @@ fn the_corpus_script_that_edits_a_record() {
         "the shadow depth bias 23.76 is in the record: {:02X?}",
         &saved[xlig..xlig + 28]
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// The native value of a single-precision game setting (the defect-4

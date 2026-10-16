@@ -16,6 +16,7 @@ use xedit_core::implementation::{FileImpl, wb_file};
 use xedit_core::interface::GameMode;
 use xedit_core::interface::globals::{set_data_path, test_lock};
 use xedit_core::interface::types::FileStates;
+use xedit_io::temp::TempDir;
 use xedit_session::{Registry, Session};
 
 fn sub_record(signature: &[u8; 4], data: &[u8]) -> Vec<u8> {
@@ -76,10 +77,8 @@ fn plugin(flags: u32, masters: &[&str], value: f32) -> Vec<u8> {
 
 /// A data folder with `Base.esm`, `A.esp`, `B.esp`, `C.esp` (loaded) and
 /// `D.esp` (not loaded), the mod group options pointing into it.
-fn setup(test: &str) -> (PathBuf, Session) {
-    let dir = std::env::temp_dir().join(format!("xedit-modgroups-{test}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
+fn setup(test: &str) -> (TempDir, Session) {
+    let dir = TempDir::new(format!("xedit-modgroups-{test}-{}", std::process::id()));
     std::fs::write(dir.join("Base.esm"), plugin(1, &[], 1.0)).unwrap();
     for (i, name) in ["A.esp", "B.esp", "C.esp", "D.esp"].iter().enumerate() {
         std::fs::write(dir.join(name), plugin(0, &["Base.esm"], i as f32 + 2.0)).unwrap();
@@ -162,7 +161,6 @@ fn an_active_mod_group_hides_the_records_of_its_targets() {
         .call(&mut session, "conflicts.list", json!({ "mod_groups": ["nope"] }))
         .unwrap_err();
     assert_eq!(error.code, "unknown_mod_group");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -250,7 +248,6 @@ fn validity_follows_files_crcs_and_load_order() {
     // The groups of the file of a module that is not loaded say nothing.
     assert!(!messages.iter().any(|line| line.as_str().unwrap().contains("Of D")));
     assert!(!dir.join("settings.ini").exists(), "a dry run writes nothing");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -286,7 +283,6 @@ fn the_selection_is_kept_in_the_settings_file() {
             .iter()
             .all(|group| group["selected"] == true)
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -369,7 +365,6 @@ fn create_edit_delete_and_update_crcs_write_as_xedit() {
         .call(&mut session, "modgroups.delete", json!({ "names": ["Gone"] }))
         .unwrap_err();
     assert_eq!(error.code, "unknown_mod_group");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -392,15 +387,12 @@ fn a_utf8_file_keeps_its_preamble_on_delete_but_not_on_edit() {
         std::fs::read(dir.join("B.modgroups")).unwrap(),
         b"[One]\r\nA.esp\r\n+B.esp\r\n"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// A data folder with the Skyrim SE masters on disk and only two of them
 /// loaded, the mod group options pointing into it.
-fn setup_unloaded(test: &str) -> (PathBuf, Session) {
-    let dir = std::env::temp_dir().join(format!("xedit-modgroups-{test}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
+fn setup_unloaded(test: &str) -> (TempDir, Session) {
+    let dir = TempDir::new(format!("xedit-modgroups-{test}-{}", std::process::id()));
     // `Skyrim.esm` is the game master of the mode, `Update.esm` and the
     // three DLCs are official; the two plugins are not.
     std::fs::write(dir.join("Skyrim.esm"), plugin(1, &[], 1.0)).unwrap();
@@ -479,7 +471,6 @@ fn unloaded_modules_keep_the_upstream_load_order() {
             "Alpha.modgroups"
         ]
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -517,7 +508,6 @@ fn duplicate_group_names_resolve_by_file_order() {
         std::fs::read_to_string(dir.join("Alpha.modgroups")).unwrap(),
         "[Same]\r\nSkyrim.esm\r\n+Alpha.esp\r\n"
     );
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -584,5 +574,4 @@ fn presets_load_save_and_delete_as_the_selection_dialog() {
         .call(&mut session, "modgroups.preset_load", json!({ "preset": "Other" }))
         .unwrap_err();
     assert_eq!(error.code, "unknown_preset");
-    let _ = std::fs::remove_dir_all(&dir);
 }

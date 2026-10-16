@@ -1902,8 +1902,7 @@ mod tests {
 
     #[test]
     fn difference_reports_line() {
-        let dir = std::env::temp_dir().join(format!("xtask-parity-{}", std::process::id()));
-        fs::create_dir_all(&dir).unwrap();
+        let dir = xedit_io::temp::TempDir::new(format!("xtask-parity-{}", std::process::id()));
         let (a, b) = (dir.join("a"), dir.join("b"));
         fs::write(&a, "one\r\ntwo\r\n").unwrap();
         fs::write(&b, "one\r\ntwo\r\n").unwrap();
@@ -1913,13 +1912,11 @@ mod tests {
         assert!(detail.contains("line 2") && detail.contains("- two") && detail.contains("+ 2"));
         fs::write(&b, "one\r\n").unwrap();
         assert!(diff_files(&a, &b, false).unwrap().unwrap().contains("<end of file>"));
-        fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]
     fn prefix_allows_the_port_to_continue() {
-        let dir = std::env::temp_dir().join(format!("xtask-parity-prefix-{}", std::process::id()));
-        fs::create_dir_all(&dir).unwrap();
+        let dir = xedit_io::temp::TempDir::new(format!("xtask-parity-prefix-{}", std::process::id()));
         let (oracle, port) = (dir.join("oracle"), dir.join("port"));
         // The oracle crashed in the middle of its third line.
         fs::write(&oracle, "one\r\ntwo\r\nthr").unwrap();
@@ -1928,6 +1925,5 @@ mod tests {
         assert!(diff_files(&oracle, &port, false).unwrap().is_some());
         fs::write(&port, "one\r\ntwo\r\nfour\r\n").unwrap();
         assert!(diff_files(&oracle, &port, true).unwrap().unwrap().contains("line 3"));
-        fs::remove_dir_all(&dir).unwrap();
     }
 }

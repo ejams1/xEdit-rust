@@ -737,8 +737,7 @@ mod tests {
 
     #[test]
     fn a_save_path_is_read_from_the_ini() {
-        let dir = std::env::temp_dir().join(format!("xedit-game-paths-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = xedit_io::temp::TempDir::new(format!("xedit-game-paths-{}", std::process::id()));
         let ini = dir.join("game.ini");
         std::fs::write(&ini, "[General]\r\nSLocalSavePath=MySaves\\\r\n").unwrap();
         assert_eq!(
@@ -756,6 +755,5 @@ mod tests {
             save_path(&my_games, &ini.to_string_lossy(), ""),
             format!("{my_games}Saves\\")
         );
-        std::fs::remove_dir_all(&dir).ok();
     }
 }

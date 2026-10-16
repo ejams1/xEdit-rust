@@ -23,6 +23,7 @@ use std::path::{Path, PathBuf};
 use serde_json::json;
 use xedit_core::interface::globals::GameMode;
 use xedit_core::interface::globals::test_lock;
+use xedit_io::temp::TempDir;
 use xedit_session::{Registry, Session};
 
 /// A session with the SSE mode and no files: the helpers under test do not
@@ -37,10 +38,8 @@ fn open_session() -> Session {
 }
 
 /// A scripts folder of its own for a test, holding the script.
-fn script_folder(name: &str, text: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("xedit-vcl-{}-{name}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
+fn script_folder(name: &str, text: &str) -> TempDir {
+    let dir = TempDir::new(format!("xedit-vcl-{}-{name}", std::process::id()));
     std::fs::write(dir.join(format!("{name}.pas")), text).unwrap();
     dir
 }

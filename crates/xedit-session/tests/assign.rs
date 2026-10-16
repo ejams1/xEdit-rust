@@ -15,6 +15,7 @@ use xedit_core::implementation::{FileBytes, FileImpl, ResetModified, wb_file_fro
 use xedit_core::interface::GameMode;
 use xedit_core::interface::globals::{set_data_path, test_lock};
 use xedit_core::interface::types::FileStates;
+use xedit_io::temp::TempDir;
 use xedit_session::{Registry, Session};
 
 fn sub_record(signature: &[u8; 4], data: &[u8]) -> Vec<u8> {
@@ -434,8 +435,7 @@ fn makes_a_new_file_from_a_module_template() {
     let _guard = test_lock();
     let files = load();
     let (registry, mut session) = session(&files);
-    let dir = std::env::temp_dir().join("xedit-rust-assign-test");
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = TempDir::new("xedit-rust-assign-test");
     set_data_path(&format!("{}\\", dir.display()));
     // A dry run reports the name and the extension of the template.
     let dry = registry
@@ -491,5 +491,4 @@ fn makes_a_new_file_from_a_module_template() {
         )
         .unwrap_err();
     assert_eq!(error.code, "invalid_params");
-    let _ = std::fs::remove_dir_all(&dir);
 }

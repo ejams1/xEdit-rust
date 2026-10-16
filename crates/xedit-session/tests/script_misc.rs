@@ -103,7 +103,6 @@ fn the_string_list_surface_works() {
         "{}",
         script_fixture::abort_text(&result)
     );
-    let _ = std::fs::remove_dir_all(&folder);
 }
 
 /// `xejviScriptAdapter.pas`'s own functions and records.
@@ -194,7 +193,6 @@ fn the_adapter_helpers_and_records_work() {
     assert!(xedit_core::interface::globals::force_new_header());
     xedit_core::interface::globals::set_test_write(false);
     xedit_core::interface::globals::set_force_new_header(false);
-    let _ = std::fs::remove_dir_all(&folder);
 }
 
 /// The `StrUtils`, `SysUtils`, `Math` and `Variants` registrations.
@@ -310,7 +308,6 @@ fn the_string_and_math_helpers_work() {
             "missing {expected:?} in {lines:?}"
         );
     }
-    let _ = std::fs::remove_dir_all(&folder);
 }
 
 /// The `TPerlRegEx` surface of `xejviScriptAdapterMiscRegEx.pas`.
@@ -399,7 +396,6 @@ fn the_perl_regex_surface_works() {
         "{}",
         script_fixture::abort_text(&result)
     );
-    let _ = std::fs::remove_dir_all(&folder);
 }
 
 /// The `JsonDataObjects` surface of `xejviScriptAdapterMiscJson.pas`.
@@ -457,8 +453,7 @@ fn the_json_surface_works() {
     // The run's `-O:` default is the data folder; the `TempPath` of the
     // probe's write is the application's temp folder, which the GUI would
     // have created.
-    let temp = std::env::temp_dir().join("SSEEdit");
-    std::fs::create_dir_all(&temp).unwrap();
+    let temp = AppTemp::new(std::env::temp_dir().join("SSEEdit"));
     let mut session = open_session();
     let result = run(&mut session, &folder, "Json.pas", json!({}));
     assert_eq!(result["aborted"], false, "{}", script_fixture::abort_text(&result));
@@ -510,8 +505,32 @@ fn the_json_surface_works() {
         "{\n\t\"name\": \"xedit\",\n\t\"count\": 3,\n\t\"flag\": true,\n\t\"ratio\": 0.5,\n\t\"easy\": \"yes\",\n\t\"list\": [\n\t\t1,\n\t\t\"two\",\n\t\t{\n\t\t\t\"kind\": \"child\"\n\t\t}\n\t]\n}\n",
         "{lines:?}"
     );
-    let _ = std::fs::remove_file(temp.join("xedit-script-misc-json.json"));
-    let _ = std::fs::remove_dir_all(&folder);
+    drop(temp);
+}
+
+/// The application's temp folder the GUI would have created, which a real
+/// xEdit may share: the probe's file is removed when the test ends, pass
+/// or fail, and the folder only when the test created it.
+struct AppTemp {
+    folder: std::path::PathBuf,
+    created: bool,
+}
+
+impl AppTemp {
+    fn new(folder: std::path::PathBuf) -> AppTemp {
+        let created = !folder.exists();
+        std::fs::create_dir_all(&folder).unwrap();
+        AppTemp { folder, created }
+    }
+}
+
+impl Drop for AppTemp {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(self.folder.join("xedit-script-misc-json.json"));
+        if self.created {
+            let _ = std::fs::remove_dir(&self.folder);
+        }
+    }
 }
 
 /// The corpus's `JSON - Demo.pas`, the whole run against the oracle's log:
@@ -654,5 +673,4 @@ fn the_misc_errors_name_their_delphi_class() {
         text.contains("Exception in unit ErrorsJson line 9: [EJsonCastException] Cannot cast String into Object"),
         "{text}"
     );
-    let _ = std::fs::remove_dir_all(&folder);
 }

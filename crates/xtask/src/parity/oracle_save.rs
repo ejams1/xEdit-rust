@@ -1868,12 +1868,10 @@ mod tests {
         bytes.extend_from_slice(&(data.len() as u32).to_le_bytes());
         bytes.extend_from_slice(&[0; 16]);
         bytes.extend(data);
-        let dir = std::env::temp_dir().join(format!("xtask-masters-{}", std::process::id()));
-        fs::create_dir_all(&dir).unwrap();
+        let dir = xedit_io::temp::TempDir::new(format!("xtask-masters-{}", std::process::id()));
         let path = dir.join("Test.esp");
         fs::write(&path, bytes).unwrap();
         let masters = header_masters(&path, 24).unwrap();
-        fs::remove_dir_all(&dir).unwrap();
         assert_eq!(masters, ["Fallout4.esm", "DLCRobot.esm"]);
     }
 

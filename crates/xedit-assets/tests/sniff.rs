@@ -16,6 +16,7 @@ use xedit_assets::data_format_nif::{
 use xedit_assets::sniff::main_form::{RunError, RunOptions, run};
 use xedit_assets::sniff::processor::{FileStatus, MemIniFile};
 use xedit_assets::variant::Variant;
+use xedit_io::temp::TempDir;
 
 /// The runs share the process-wide float format of the JSON converter.
 static LOCK: Mutex<()> = Mutex::new(());
@@ -64,16 +65,16 @@ fn mesh() -> Vec<u8> {
 
 /// A folder with the mesh at `meshes\a\b.nif`, a text file and an output
 /// folder.
-fn folders(name: &str) -> (PathBuf, PathBuf) {
-    let base = std::env::temp_dir().join(format!("xedit-sniff-test-{}-{name}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&base);
+/// The guard removes the folders when the test ends.
+fn folders(name: &str) -> (TempDir, PathBuf, PathBuf) {
+    let base = TempDir::new(format!("xedit-sniff-test-{}-{name}", std::process::id()));
     let input = base.join("in");
     let output = base.join("out");
     std::fs::create_dir_all(input.join("meshes").join("a")).unwrap();
     std::fs::create_dir_all(&output).unwrap();
     std::fs::write(input.join("meshes").join("a").join("b.nif"), mesh()).unwrap();
     std::fs::write(input.join("readme.txt"), "not a mesh").unwrap();
-    (input, output)
+    (base, input, output)
 }
 
 fn options(operation: &str, input: &Path, output: &Path) -> RunOptions {
@@ -95,7 +96,7 @@ fn load(path: &Path) -> NifFile {
 #[test]
 fn update_bounds_writes_the_changed_mesh() {
     let _lock = LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-    let (input, output) = folders("bounds");
+    let (_base, input, output) = folders("bounds");
     let report = run(None, &options("update BOUNDS", &input, &output)).unwrap();
     assert_eq!(report.operation, "Update bounds");
     assert_eq!(report.processed, 1);
@@ -112,7 +113,7 @@ fn update_bounds_writes_the_changed_mesh() {
 #[test]
 fn set_missing_names_names_after_the_file() {
     let _lock = LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-    let (input, output) = folders("names");
+    let (_base, input, output) = folders("names");
     let report = run(None, &options("Set missing names", &input, &output)).unwrap();
     assert_eq!(report.modified, 1);
     let mut nif = load(&output.join("meshes").join("a").join("b.nif"));
@@ -129,7 +130,7 @@ fn set_missing_names_names_after_the_file() {
 #[test]
 fn settings_dry_run_and_report_only() {
     let _lock = LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-    let (input, output) = folders("tweaker");
+    let (_base, input, output) = folders("tweaker");
     // The tweaker's defaults set the material's alpha to 0.8; the report
     // writes nothing.
     let settings = MemIniFile::from_text("[Universaltweaker]\r\nbReportOnly=1\r\n");
@@ -176,7 +177,7 @@ fn settings_dry_run_and_report_only() {
 #[test]
 fn fixer_and_checks_report_the_mesh() {
     let _lock = LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-    let (input, output) = folders("fixer");
+    let (_base, input, output) = folders("fixer");
     let log = output.join("fixer.log");
     let settings = MemIniFile::from_text(&format!(
         "[Universalfixer]\r\nbSaveLog=1\r\nsLogFile={}\r\n",
@@ -194,7 +195,7 @@ fn fixer_and_checks_report_the_mesh() {
     let mut tree = nif.tree;
     assert_eq!(blocks_count(&mut tree).unwrap(), 5);
 
-    let (input, output) = folders("checks");
+    let (_base, input, output) = folders("checks");
     let report = run(None, &options("Check for errors", &input, &output)).unwrap();
     assert_eq!(report.modified, 0);
     assert_eq!(report.messages[0], "meshes\\a\\b.nif");
@@ -210,7 +211,7 @@ fn fixer_and_checks_report_the_mesh() {
 #[test]
 fn a_failing_file_stops_or_is_skipped() {
     let _lock = LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-    let (input, output) = folders("broken");
+    let (_base, input, output) = folders("broken");
     std::fs::write(
         input.join("meshes").join("a").join("a.nif"),
         b"not a NIF file, but longer than its magic",

@@ -13,6 +13,7 @@ use std::path::{Path, PathBuf};
 use serde_json::{Value, json};
 use xedit_core::interface::globals::test_lock;
 use xedit_io::archive::{ArchiveType, PackFile};
+use xedit_io::temp::TempDir;
 use xedit_session::resources::{ResourceOptions, set_options};
 use xedit_session::{Registry, Session};
 
@@ -95,9 +96,8 @@ fn archive(path: &Path, files: &[(&str, Vec<u8>)]) {
 /// The data folder: the plugin, its tables in `Loc - Strings.bsa`, a
 /// `Loc.bsa`, an archive the game ini names and a My Games folder with that
 /// ini.
-fn setup(tag: &str) -> (PathBuf, PathBuf) {
-    let root = std::env::temp_dir().join(format!("xedit-resources-{tag}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&root);
+fn setup(tag: &str) -> (TempDir, PathBuf) {
+    let root = TempDir::new(format!("xedit-resources-{tag}-{}", std::process::id()));
     let data = root.join("Data");
     let my_games = root.join("My Games");
     std::fs::create_dir_all(&data).unwrap();
@@ -172,7 +172,6 @@ fn a_session_loads_the_archives_of_the_game_ini_and_of_its_plugins() {
         json!({"table": "Loc_English.STRINGS", "id": "00000001"}),
     );
     assert_eq!(got["text"], "From the archive");
-    std::fs::remove_dir_all(&root).ok();
 }
 
 #[test]
@@ -186,5 +185,4 @@ fn skip_bsa_names_the_archives_and_loads_the_data_folder_only() {
     );
     let files = call(&mut session, "localization.files", json!({}));
     assert_eq!(files["tables"].as_array().unwrap().len(), 0, "{files}");
-    std::fs::remove_dir_all(&root).ok();
 }

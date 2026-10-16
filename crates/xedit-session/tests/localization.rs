@@ -7,7 +7,7 @@
 //! delocalized and localized again, the localization editor's commands, and
 //! the translate mode's refusals.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::Arc;
 
 use serde_json::{Value, json};
@@ -15,6 +15,7 @@ use xedit_core::implementation::{FileBytes, FileImpl, wb_file_from_bytes};
 use xedit_core::interface::GameMode;
 use xedit_core::interface::globals::test_lock;
 use xedit_core::interface::types::FileStates;
+use xedit_io::temp::TempDir;
 use xedit_session::{Registry, Session};
 
 fn sub_record(signature: &[u8; 4], data: &[u8]) -> Vec<u8> {
@@ -99,9 +100,8 @@ fn table(entries: &[(u32, &str)], length_prefixed: bool) -> Vec<u8> {
 
 /// A data folder of its own with the tables of `Loc.esm`, set up as the
 /// session's containers, and the plugin loaded from `bytes`.
-fn load(name: &str, bytes: Vec<u8>, tables: &[(&str, Vec<u8>)]) -> (PathBuf, Arc<FileImpl>) {
-    let dir = std::env::temp_dir().join(format!("xedit-localization-{name}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
+fn load(name: &str, bytes: Vec<u8>, tables: &[(&str, Vec<u8>)]) -> (TempDir, Arc<FileImpl>) {
+    let dir = TempDir::new(format!("xedit-localization-{name}-{}", std::process::id()));
     std::fs::create_dir_all(dir.join("Strings")).unwrap();
     for (table, data) in tables {
         std::fs::write(dir.join("Strings").join(table), data).unwrap();
@@ -194,7 +194,6 @@ fn a_string_set_through_its_element_is_saved_in_its_table() {
     // Saved: the table is no longer modified.
     let (_, result) = save(&registry, &mut session, &dir);
     assert_eq!(result["strings"], json!([]));
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -228,7 +227,6 @@ fn a_new_string_takes_the_next_id_of_the_plugins_tables() {
     assert_eq!(bytes, plugin(true, &1u32.to_le_bytes(), &3u32.to_le_bytes()));
     let saved = std::fs::read(dir.join("out").join("Strings").join("Loc_English.STRINGS")).unwrap();
     assert_eq!(saved, table(&[(1, "First"), (2, "Second"), (3, "New")], false));
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -262,7 +260,6 @@ fn delocalizing_puts_the_texts_into_the_plugin() {
         .call(&mut session, "localization.delocalize", json!({ "file": "Loc.esm" }))
         .unwrap_err();
     assert_eq!(error.code, "invalid_state");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -299,7 +296,6 @@ fn localizing_makes_three_tables_with_the_ids_in_gathered_order() {
     );
     assert_eq!(strings("Loc_English.DLSTRINGS"), table(&[], true));
     assert_eq!(strings("Loc_English.ILSTRINGS"), table(&[], true));
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -406,13 +402,12 @@ fn the_localization_editor_lists_sets_and_exports_strings() {
     );
     assert_eq!(value["value"], "<Error: No strings file for lstring ID 00000002>");
     xedit_core::interface::globals::set_language("English");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
 fn the_translate_mode_edits_only_translatable_elements() {
     let _guard = test_lock();
-    let (dir, file) = load(
+    let (_dir, file) = load(
         "translate",
         plugin(true, &1u32.to_le_bytes(), &2u32.to_le_bytes()),
         &loaded_tables(),
@@ -434,5 +429,4 @@ fn the_translate_mode_edits_only_translatable_elements() {
     assert_eq!(delete.unwrap_err().code, "translate_mode");
     assert_eq!(editor_id.unwrap_err().code, "translate_mode");
     assert!(text.is_ok(), "{text:?}");
-    let _ = std::fs::remove_dir_all(&dir);
 }

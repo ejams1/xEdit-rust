@@ -9,21 +9,19 @@
 
 #![allow(dead_code)]
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::Arc;
 
 use serde_json::json;
 use xedit_core::implementation::{FileBytes, FileImpl, wb_file_from_bytes};
 use xedit_core::interface::globals::GameMode;
 use xedit_core::interface::types::FileStates;
+use xedit_io::temp::TempDir;
 use xedit_session::{Registry, Session};
 
 /// A folder of its own for a test, made fresh.
-pub fn temp_dir(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("xedit-script-misc-{name}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
-    dir
+pub fn temp_dir(name: &str) -> TempDir {
+    TempDir::new(format!("xedit-script-misc-{name}-{}", std::process::id()))
 }
 
 fn sub_record(signature: &[u8; 4], data: &[u8]) -> Vec<u8> {
@@ -112,7 +110,7 @@ pub fn open_session() -> Session {
 }
 
 /// A scripts folder of its own for a test, holding the script.
-pub fn script_folder(name: &str, file: &str, text: &str) -> PathBuf {
+pub fn script_folder(name: &str, file: &str, text: &str) -> TempDir {
     let dir = temp_dir(name);
     std::fs::write(dir.join(file), text).unwrap();
     dir

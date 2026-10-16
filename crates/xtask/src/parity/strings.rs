@@ -357,7 +357,7 @@ mod tests {
 
     #[test]
     fn the_saved_tables_are_read_from_the_log() {
-        let dir = std::env::temp_dir().join(format!("xtask-strings-{}", std::process::id()));
+        let dir = xedit_io::temp::TempDir::new(format!("xtask-strings-{}", std::process::id()));
         fs::create_dir_all(dir.join("Strings")).unwrap();
         fs::write(dir.join("Strings").join("A_English.STRINGS"), b"a").unwrap();
         fs::write(
@@ -376,6 +376,5 @@ mod tests {
         assert_eq!(plugins.len(), 1);
         assert_eq!(plugins[0].0, "A.esp");
         assert!(plugins[0].1.ends_with("A.esp.save.2026"));
-        let _ = fs::remove_dir_all(&dir);
     }
 }

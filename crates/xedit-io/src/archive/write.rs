@@ -954,10 +954,8 @@ impl Archive {
 mod tests {
     use super::*;
 
-    fn temp_dir(name: &str) -> std::path::PathBuf {
-        let dir = std::env::temp_dir().join(format!("xedit-archive-{name}-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        dir
+    fn temp_dir(name: &str) -> crate::temp::TempDir {
+        crate::temp::TempDir::new(format!("xedit-archive-{name}-{}", std::process::id()))
     }
 
     fn files(names: &[(&str, bool)]) -> Vec<PackFile> {
@@ -1010,7 +1008,6 @@ mod tests {
         for (file, data) in list.iter().zip(&contents) {
             assert_eq!(&read.unpack(&file.name).unwrap(), data, "{kind:?} {}", file.name);
         }
-        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]
@@ -1049,7 +1046,6 @@ mod tests {
             );
         }
         assert!(!std::path::Path::new(&path).exists());
-        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]
@@ -1157,7 +1153,6 @@ mod tests {
             "{text}"
         );
         drop(read);
-        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]

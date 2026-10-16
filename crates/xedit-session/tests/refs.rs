@@ -9,7 +9,6 @@
 //! deleted or copied, after a FormID change, with one thread and several,
 //! and loaded from the reference cache.
 
-use std::path::PathBuf;
 use std::sync::Arc;
 
 use serde_json::{Value, json};
@@ -18,6 +17,7 @@ use xedit_core::implementation::{FileImpl, MainRecordImpl, refcache, wb_file};
 use xedit_core::interface::globals::test_lock;
 use xedit_core::interface::types::FileStates;
 use xedit_core::interface::{Element, FormID, GameMode, MainRecord};
+use xedit_io::temp::TempDir;
 use xedit_session::{Registry, Session};
 
 fn sub_record(signature: &[u8; 4], data: &[u8]) -> Vec<u8> {
@@ -106,9 +106,8 @@ fn plugin_bytes() -> Vec<u8> {
 }
 
 /// A fresh directory with the master and the plugin, loaded.
-fn setup(test: &str) -> (PathBuf, Arc<FileImpl>, Arc<FileImpl>) {
-    let dir = std::env::temp_dir().join(format!("xedit-refs-{test}-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
+fn setup(test: &str) -> (TempDir, Arc<FileImpl>, Arc<FileImpl>) {
+    let dir = TempDir::new(format!("xedit-refs-{test}-{}", std::process::id()));
     std::fs::write(dir.join("Master.esm"), master_bytes()).unwrap();
     std::fs::write(dir.join("Plugin.esp"), plugin_bytes()).unwrap();
     xedit_core::implementation::clear_files_map();
@@ -171,7 +170,7 @@ fn no_cache() {
 fn referenced_by_lists_after_the_build() {
     let _guard = test_lock();
     no_cache();
-    let (dir, master, plugin) = setup("build");
+    let (_dir, master, plugin) = setup("build");
     let mut session = session(vec![plugin.clone()]);
     let registry = Registry::standard();
     let result = registry
@@ -218,14 +217,13 @@ fn referenced_by_lists_after_the_build() {
             .iter()
             .all(|file| file["result"] == "built")
     );
-    std::fs::remove_dir_all(dir).ok();
 }
 
 #[test]
 fn edits_keep_the_lists() {
     let _guard = test_lock();
     no_cache();
-    let (dir, master, plugin) = setup("edits");
+    let (_dir, master, plugin) = setup("edits");
     let mut session = session(vec![master.clone(), plugin.clone()]);
     session.ensure_refs().unwrap();
     let registry = Registry::standard();
@@ -269,14 +267,13 @@ fn edits_keep_the_lists() {
             format!("{new}@Plugin.esp")
         ]
     );
-    std::fs::remove_dir_all(dir).ok();
 }
 
 #[test]
 fn form_id_change_moves_the_list() {
     let _guard = test_lock();
     no_cache();
-    let (dir, _master, plugin) = setup("change");
+    let (_dir, _master, plugin) = setup("change");
     let mut session = session(vec![plugin.clone()]);
     let registry = Registry::standard();
     registry
@@ -301,7 +298,6 @@ fn form_id_change_moves_the_list() {
         .map(|reference| reference["file_form_id"].as_str().unwrap())
         .collect();
     assert_eq!(references, ["00000800", "01000A00"]);
-    std::fs::remove_dir_all(dir).ok();
 }
 
 #[test]
@@ -311,7 +307,7 @@ fn lists_do_not_depend_on_the_thread_count() {
     let mut lists = Vec::new();
     for threads in [1, 4] {
         xedit_core::threads::set_threads(threads);
-        let (dir, master, plugin) = setup(&format!("threads{threads}"));
+        let (_dir, master, plugin) = setup(&format!("threads{threads}"));
         let mut session = session(vec![plugin.clone()]);
         session.ensure_refs().unwrap();
         lists.push(
@@ -324,7 +320,6 @@ fn lists_do_not_depend_on_the_thread_count() {
             .map(referenced_by)
             .collect::<Vec<_>>(),
         );
-        std::fs::remove_dir_all(dir).ok();
     }
     xedit_core::threads::set_threads(0);
     assert_eq!(lists[0], lists[1]);
@@ -379,7 +374,6 @@ fn cache_is_saved_and_loaded() {
     assert_eq!(record(&plugin, 0x0100_0901).get_editor_id(), "ListPlugin");
     xedit_core::interface::globals::set_cache_records_threshold(500);
     no_cache();
-    std::fs::remove_dir_all(dir).ok();
 }
 
 /// A Fallout 3 condition in the old 20 byte form with the "Run On Target"
@@ -390,8 +384,7 @@ fn cache_is_saved_and_loaded() {
 fn fallout3_condition_resized_on_load_keeps_its_reference() {
     let _guard = test_lock();
     no_cache();
-    let dir = std::env::temp_dir().join(format!("xedit-refs-ctda-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = TempDir::new(format!("xedit-refs-ctda-{}", std::process::id()));
     let mut ctda = vec![0x02, 0, 0, 0];
     ctda.extend_from_slice(&1.0f32.to_le_bytes());
     ctda.extend_from_slice(&72u16.to_le_bytes()); // GetIsID
@@ -443,7 +436,6 @@ fn fallout3_condition_resized_on_load_keeps_its_reference() {
     );
     session.ensure_refs().unwrap();
     assert_eq!(referenced_by(&record(&file, 0x801)), ["00000800@Test.esm"]);
-    std::fs::remove_dir_all(dir).ok();
 }
 
 /// A master added to the plugin moves the FileIDs of its FormIDs: the
@@ -453,8 +445,7 @@ fn fallout3_condition_resized_on_load_keeps_its_reference() {
 fn masters_update_keeps_the_references() {
     let _guard = test_lock();
     no_cache();
-    let dir = std::env::temp_dir().join(format!("xedit-refs-masters-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = TempDir::new(format!("xedit-refs-masters-{}", std::process::id()));
     std::fs::write(dir.join("Master.esm"), master_bytes()).unwrap();
     std::fs::write(dir.join("Plugin.esp"), plugin_bytes()).unwrap();
     std::fs::write(dir.join("Extra.esm"), header(1, 0, 0x800, &[])).unwrap();
@@ -495,7 +486,6 @@ fn masters_update_keeps_the_references() {
         .map(|form_id| form_id.to_string(false))
         .collect();
     assert_eq!(references, ["01000800", "02000900"]);
-    std::fs::remove_dir_all(dir).ok();
 }
 
 /// An Oblivion magic effect code (`TwbChar4`) refers to the effect with the
@@ -505,8 +495,7 @@ fn masters_update_keeps_the_references() {
 fn oblivion_effect_codes_refer_to_the_effect() {
     let _guard = test_lock();
     no_cache();
-    let dir = std::env::temp_dir().join(format!("xedit-refs-tes4-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = TempDir::new(format!("xedit-refs-tes4-{}", std::process::id()));
     // Oblivion's record header has no version fields: 20 bytes.
     let record = |signature: &[u8; 4], form_id: u32, data: &[u8]| {
         let mut bytes = signature.to_vec();
@@ -552,7 +541,6 @@ fn oblivion_effect_codes_refer_to_the_effect() {
         referenced.contains(&"00000137@Oblivion.exe".to_owned()),
         "{referenced:?}"
     );
-    std::fs::remove_dir_all(dir).ok();
 }
 
 fn record_of(file: &Arc<FileImpl>, form_id: u32) -> Arc<MainRecordImpl> {

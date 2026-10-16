@@ -470,10 +470,8 @@ mod tests {
         assert_eq!(dxgi_format_name(200), "");
     }
 
-    fn temp_dir(name: &str) -> std::path::PathBuf {
-        let dir = std::env::temp_dir().join(format!("xedit-texture-{name}-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        dir
+    fn temp_dir(name: &str) -> crate::temp::TempDir {
+        crate::temp::TempDir::new(format!("xedit-texture-{name}-{}", std::process::id()))
     }
 
     /// A DDS file with generated mipmaps, the whole chain.
@@ -559,7 +557,6 @@ mod tests {
             1
         );
         drop(read);
-        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]
@@ -634,7 +631,6 @@ mod tests {
         };
         // The identical texture is found by its chunks in both routes.
         assert!(write(true) == write(false));
-        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]
@@ -667,7 +663,6 @@ mod tests {
         assert_eq!(unpacked.len(), HEADER_SIZE + 64);
         assert_eq!(&unpacked[HEADER_SIZE..HEADER_SIZE + 8], &[0, 1, 2, 0xFF, 3, 4, 5, 0xFF]);
         drop(read);
-        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]
@@ -701,7 +696,6 @@ mod tests {
             "DDS is not in XBox format"
         );
         drop(archive);
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     /// A file whose mipmaps are cut short keeps the part there is.

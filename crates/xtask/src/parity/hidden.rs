@@ -370,9 +370,7 @@ mod tests {
     #[cfg(windows)]
     #[test]
     fn a_hidden_program_sees_the_environment_overrides() {
-        let dir = std::env::temp_dir().join(format!("xedit-hidden-env-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = xedit_io::temp::TempDir::new(format!("xedit-hidden-env-{}", std::process::id()));
         let out = dir.join("env.txt");
         let mut command = HiddenCommand::new(r"C:\Windows\System32\cmd.exe");
         command
@@ -385,7 +383,6 @@ mod tests {
         assert_eq!(code, Some(0));
         let text = std::fs::read_to_string(&out).unwrap();
         assert!(text.contains(&format!("HOME={}", dir.display())), "{text}");
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[cfg(windows)]

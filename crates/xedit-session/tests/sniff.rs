@@ -10,6 +10,7 @@ use std::sync::Mutex;
 use serde_json::json;
 
 use xedit_assets::data_format_nif::{NifFile, NifVersion, add_block, block_add_child, set_nif_version};
+use xedit_io::temp::TempDir;
 use xedit_session::{Registry, Session};
 
 static LOCK: Mutex<()> = Mutex::new(());
@@ -76,8 +77,7 @@ fn list_names_every_operation() {
 #[test]
 fn run_with_options_dry_run_and_log() {
     let _lock = LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-    let base = std::env::temp_dir().join(format!("xedit-sniff-session-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&base);
+    let base = TempDir::new(format!("xedit-sniff-session-{}", std::process::id()));
     let (input, output) = (base.join("in"), base.join("out"));
     std::fs::create_dir_all(&input).unwrap();
     std::fs::create_dir_all(&output).unwrap();
@@ -138,5 +138,4 @@ fn run_with_options_dry_run_and_log() {
         error.message,
         "You are running 64 bits version of Sniff. This operation works in 32 bits (x86) Sniff only."
     );
-    let _ = std::fs::remove_dir_all(&base);
 }

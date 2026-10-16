@@ -7,20 +7,22 @@
 //! not depending on the number of threads.
 
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use serde_json::{Value, json};
+use xedit_io::temp::TempDir;
 use xedit_session::{Registry, Session};
 
-/// A folder with a few files in a temporary place of its own.
-struct Folder(PathBuf);
+/// A folder with a few files in a temporary place of its own, removed when
+/// the test ends.
+struct Folder(TempDir);
 
 impl Folder {
     fn new(name: &str) -> Self {
-        let path = std::env::temp_dir().join(format!("xedit-archive-test-{name}-{}", std::process::id()));
-        let _ = fs::remove_dir_all(&path);
-        fs::create_dir_all(&path).unwrap();
-        Folder(path)
+        Folder(TempDir::new(format!(
+            "xedit-archive-test-{name}-{}",
+            std::process::id()
+        )))
     }
 
     fn path(&self, relative: &str) -> String {
@@ -31,12 +33,6 @@ impl Folder {
         let path = self.0.join(relative);
         fs::create_dir_all(path.parent().unwrap()).unwrap();
         fs::write(path, data).unwrap();
-    }
-}
-
-impl Drop for Folder {
-    fn drop(&mut self) {
-        let _ = fs::remove_dir_all(&self.0);
     }
 }
 
