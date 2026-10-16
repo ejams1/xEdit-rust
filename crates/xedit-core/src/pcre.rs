@@ -420,6 +420,10 @@ enum BackrefRef {
 // Parser
 // ---------------------------------------------------------------------------
 
+/// A quantifier: `min`, `max` (`None` for `*` and `+`), how greedy it is and
+/// the index of its last character in the pattern.
+type Quantifier = (u32, Option<u32>, Greed, usize);
+
 struct Parser<'a> {
     pattern: &'a [u8],
     at: usize,
@@ -626,8 +630,8 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// A quantifier at the cursor: `(min, max, greed, last index)`.
-    fn parse_quantifier(&mut self) -> PResult<Option<(u32, Option<u32>, Greed, usize)>> {
+    /// A quantifier at the cursor.
+    fn parse_quantifier(&mut self) -> PResult<Option<Quantifier>> {
         let Some(byte) = self.peek() else {
             return Ok(None);
         };
@@ -1423,8 +1427,7 @@ impl<'a> Parser<'a> {
                 let mut value: u32 = 0;
                 let mut digits = 0;
                 let limit = if byte == b'x' { 2 } else { 3 };
-                loop {
-                    let Some(next) = self.peek() else { break };
+                while let Some(next) = self.peek() {
                     let digit = match next {
                         b'0'..=b'9' => u32::from(next - b'0'),
                         b'a'..=b'f' => u32::from(next - b'a') + 10,
@@ -2178,10 +2181,10 @@ impl Regex {
         }
         loop {
             let mut vm = Vm::new(self, subject, end, exec, pos);
-            if let Some(found) = vm.run(0, pos, false, None) {
-                if !exec.not_empty || found != pos {
-                    return Some(vm.captures());
-                }
+            if let Some(found) = vm.run(0, pos, false, None)
+                && (!exec.not_empty || found != pos)
+            {
+                return Some(vm.captures());
             }
             if pos >= end {
                 return None;
@@ -2528,14 +2531,10 @@ impl<'a> Vm<'a> {
                 }
             }
             // The instruction failed: backtrack.
-            match stack.pop() {
-                Some(frame) => {
-                    self.restore(frame.log_len);
-                    pc = frame.pc;
-                    pos = frame.pos;
-                }
-                None => return None,
-            }
+            let frame = stack.pop()?;
+            self.restore(frame.log_len);
+            pc = frame.pc;
+            pos = frame.pos;
         }
     }
 
