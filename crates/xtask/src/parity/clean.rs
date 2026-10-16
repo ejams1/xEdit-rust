@@ -41,7 +41,8 @@ struct CleanOutcome {
     game: &'static str,
     file: String,
     /// `equal`, `different`, `oracle-failed`, `oracle-unsupported`,
-    /// `port-failed` or `oracle-only`.
+    /// `port-failed`, `oracle-only`, or `oracle-log-lost` (the oracle saved
+    /// the plugin but its log lost the counts; the saved bytes are equal).
     status: &'static str,
     #[serde(skip_serializing_if = "Option::is_none")]
     detail: Option<String>,
@@ -343,6 +344,7 @@ fn check(runner: &Runner, game: &'static Game, data: &Path, name: &str) -> Resul
     let saved_file = dir.join(format!("{stem}.saved.zst"));
     let unchanged_file = dir.join(format!("{stem}.unchanged"));
     let log_file = dir.join(format!("{stem}.log.zst"));
+    let log_lost_file = dir.join(format!("{stem}.log-lost"));
     if !log_file.exists() {
         let exe = runner.oracle_dir.join(exe_name);
         ensure!(exe.exists(), "{} does not exist", exe.display());
@@ -386,11 +388,24 @@ fn check(runner: &Runner, game: &'static Game, data: &Path, name: &str) -> Resul
         if let Some(peak) = result.peak {
             fs::write(&peak_file, peak.to_string())?;
         }
-        ensure!(
-            result.log.contains("Quick Clean mode finished."),
-            "the quick clean mode did not finish; the end of the log:\n{}",
-            result.log.lines().rev().take(10).collect::<Vec<_>>().join("\n")
-        );
+        // A log without the mode's last line is a lost log, not a failed
+        // clean (the release's `SaveLog` swallows its errors, and NW.esm's
+        // log file keeps only DoRename's `Closing files`): the saved plugin
+        // is kept and compared, the counts are not, and the outcome says so.
+        if !result.log.contains("Quick Clean mode finished.") {
+            ensure!(
+                result.saved,
+                "the quick clean mode did not finish; the end of the log:\n{}",
+                result.log.lines().rev().take(10).collect::<Vec<_>>().join("\n")
+            );
+            fs::write(
+                &log_lost_file,
+                result.log.lines().rev().take(10).collect::<Vec<_>>().join("\n"),
+            )?;
+        }
+        if result.log_from_window {
+            fs::write(dir.join(format!("{stem}.log-from-window")), "")?;
+        }
         if result.saved {
             keep_compressed(&result.plugin, &saved_file)?;
         } else {
@@ -410,6 +425,7 @@ fn check(runner: &Runner, game: &'static Game, data: &Path, name: &str) -> Resul
             .and_then(|text| text.trim().parse().ok());
     }
     let oracle_log = String::from_utf8_lossy(&read_all(&log_file)?).into_owned();
+    let log_lost = log_lost_file.exists();
     let oracle_passes = passes_of(oracle_log.lines());
     outcome.saved = saved_file.exists();
     outcome.passes = oracle_passes
@@ -456,14 +472,15 @@ fn check(runner: &Runner, game: &'static Game, data: &Path, name: &str) -> Resul
     let port_dirty = dirty_report(messages.iter().flat_map(|message| message.split("\r\n")));
 
     let mut lines = Vec::new();
-    if port_passes.len() != oracle_passes.len() {
+    // A lost oracle log leaves the saved bytes to compare, nothing else.
+    if !log_lost && port_passes.len() != oracle_passes.len() {
         lines.push(format!(
             "  passes: oracle {}, port {}",
             oracle_passes.len(),
             port_passes.len()
         ));
     }
-    for (index, (oracle, port)) in oracle_passes.iter().zip(&port_passes).enumerate() {
+    for (index, (oracle, port)) in oracle_passes.iter().zip(&port_passes).enumerate().filter(|_| !log_lost) {
         let pass = index + 1;
         if oracle.filter != port.filter {
             lines.push(format!(
@@ -502,7 +519,7 @@ fn check(runner: &Runner, game: &'static Game, data: &Path, name: &str) -> Resul
             }
         }
     }
-    if oracle_dirty != port_dirty {
+    if !log_lost && oracle_dirty != port_dirty {
         let first = oracle_dirty
             .iter()
             .zip(&port_dirty)
@@ -539,7 +556,26 @@ fn check(runner: &Runner, game: &'static Game, data: &Path, name: &str) -> Resul
         (false, false) => {}
         (oracle, port) => lines.push(format!("  saved: oracle {oracle}, port {port}")),
     }
-    if lines.is_empty() {
+    if log_lost {
+        // The saved bytes decide only whether the clean is a difference;
+        // the counts the log would carry are not witnessed, so it is not
+        // an equal.
+        outcome.status = if lines.is_empty() {
+            "oracle-log-lost"
+        } else {
+            "different"
+        };
+        let mut detail = vec![format!(
+            "  the oracle's log lost the counts (its end: {}); the saved bytes are compared only",
+            fs::read_to_string(&log_lost_file)
+                .unwrap_or_default()
+                .lines()
+                .collect::<Vec<_>>()
+                .join(" / ")
+        )];
+        detail.extend(lines);
+        outcome.detail = Some(detail.join("\n"));
+    } else if lines.is_empty() {
         outcome.status = "equal";
         let _ = fs::remove_file(&port_saved);
     } else {
