@@ -183,9 +183,10 @@ pub(crate) fn register(adapter: &mut Adapter, state: &Rc<RefCell<ScriptRunState>
             *result = Value::Integer(0);
             if let Some(file) = file_at(args, 0) {
                 let form_id = form_id_at(args, 1);
-                if let Ok(converted) = file.load_order_form_id_to_file_form_id(form_id, true) {
-                    *result = Value::Int64(i64::from(converted.to_cardinal()));
-                }
+                // `TwbFile.LoadOrderFileIDtoFileFileID` raises for a FileID
+                // that is neither the file nor one of its masters.
+                let converted = super::refused(file.load_order_form_id_to_file_form_id(form_id, true))?;
+                *result = Value::Int64(i64::from(converted.to_cardinal()));
             }
             Ok(())
         },
