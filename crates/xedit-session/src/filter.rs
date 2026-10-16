@@ -35,7 +35,9 @@ use std::sync::Arc;
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use xedit_analysis::filter::{FilterOptions, FilterReport, NavTree, apply_filter_with};
+use xedit_analysis::filter::{
+    FilterOptions, FilterReport, NavTree, ScriptedFilter, apply_filter_scripted, node_elements_below,
+};
 use xedit_core::implementation::ElementImpl;
 use xedit_core::interface::PascalEnum;
 use xedit_core::interface::globals::{reachable_build, set_reachable_build};
@@ -129,6 +131,13 @@ pub struct FilterRequestOptions {
     /// `cbInherit`: "conflict status inherited by parent".
     #[serde(default)]
     pub inherit_conflict_by_parent: bool,
+    /// `cbScriptedFilter`: "Apply custom scripted filter" (`FilterScripted`).
+    /// The filter calls the `Filter` function of the script of the run for
+    /// every main record (a script sets the flag itself and calls
+    /// `ApplyFilter`, as `Apply custom scripted filter.pas` does). Without a
+    /// script every record is filtered out, as the GUI's nil `Script` does.
+    #[serde(default)]
+    pub scripted: bool,
 }
 
 impl FilterRequestOptions {
@@ -168,6 +177,7 @@ impl FilterRequestOptions {
             flatten_cell_childs: self.flatten_cell_childs,
             assign_pers_wrld_child: self.assign_pers_wrld_child,
             inherit_conflict_by_parent: self.inherit_conflict_by_parent,
+            scripted: self.scripted,
             ..Default::default()
         }
     }
@@ -208,6 +218,7 @@ impl FilterRequestOptions {
             flatten_cell_childs: options.flatten_cell_childs,
             assign_pers_wrld_child: options.assign_pers_wrld_child,
             inherit_conflict_by_parent: options.inherit_conflict_by_parent,
+            scripted: options.scripted,
         }
     }
 }
@@ -348,6 +359,46 @@ pub(crate) fn filter_apply(
     session: &mut Session,
     request: FilterApplyRequest,
 ) -> Result<FilterApplyResponse, CommandError> {
+    match filter_apply_scripted(session, request, None) {
+        Ok(applied) => Ok(applied.response),
+        Err(FilterApplyFailure::Command(error)) => Err(error),
+        // Unreachable without a scripted filter of a run: no callback, so
+        // `CustomScriptFilter` never raises.
+        Err(FilterApplyFailure::Scripted(error)) => Err(edit_failed(error.message)),
+    }
+}
+
+/// Why `filter.apply` stopped: the command's error, or the raised error of
+/// the scripted filter, which the run turns into its abort lines (upstream:
+/// the exception leaves `mniNavFilterApplyClick` and `ApplyScript`'s handler
+/// prints it).
+#[derive(Debug)]
+pub enum FilterApplyFailure {
+    Command(CommandError),
+    Scripted(xedit_analysis::filter::ScriptedFilterError),
+}
+
+impl From<CommandError> for FilterApplyFailure {
+    fn from(error: CommandError) -> FilterApplyFailure {
+        FilterApplyFailure::Command(error)
+    }
+}
+
+/// A filter the session ran: the counts of the response and the node
+/// elements the filtered tree keeps, in tree order, which a script run's
+/// walk reads afterwards (`ApplyScriptToSelection`).
+pub(crate) struct AppliedFilter {
+    pub response: FilterApplyResponse,
+    pub nodes: Vec<xedit_core::interface::ElementRef>,
+}
+
+/// [`filter_apply`] with the scripted filter of a `script.run`
+/// (`FilterScripted` with the script's `Filter` function).
+pub(crate) fn filter_apply_scripted(
+    session: &mut Session,
+    request: FilterApplyRequest,
+    script_filter: Option<&mut dyn ScriptedFilter>,
+) -> Result<AppliedFilter, FilterApplyFailure> {
     session.mode()?;
     let files = request_files(session, &request.files)?;
     // `FilterPreset`: the dialog does not open, the options are the request's
@@ -398,13 +449,22 @@ pub(crate) fn filter_apply(
         files.clone()
     };
     let mut tree = NavTree::new(&tree_files);
-    let mut report = apply_filter_with(&mut tree, &options, &files, active.filter.clone()).map_err(edit_failed)?;
+    let mut report = apply_filter_scripted(&mut tree, &options, &files, active.filter.clone(), script_filter)
+        .map_err(FilterApplyFailure::Scripted)?;
     report.files.retain(|file| {
         tree_files
             .iter()
             .any(|kept| kept.get_name().eq_ignore_ascii_case(&file.name))
     });
-    Ok(response_of(&tree, &options, request.list_records, report, &active))
+    let nodes = tree
+        .roots()
+        .into_iter()
+        .flat_map(|root| node_elements_below(&tree, root))
+        .collect();
+    Ok(AppliedFilter {
+        response: response_of(&tree, &options, request.list_records, report, &active),
+        nodes,
+    })
 }
 
 fn response_of(

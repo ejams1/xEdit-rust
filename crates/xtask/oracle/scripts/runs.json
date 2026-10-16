@@ -692,6 +692,22 @@
       "note": "the same with the references loaded from the reference cache a first run wrote (the master holds 603 records, above wbCacheRecordsThreshold)"
     },
     {
+      "script": "probes/filter-scripted.pas",
+      "master": "tests/fixtures/parity/filter-scripted.esm",
+      "save": [
+        "Skyrim.esm"
+      ],
+      "note": "parity #27 fixture: the scripted filter over seven records. The `f<n>:` lines pin the walk's visitation order and acceptance/rejection by EDID, call 3 renames its record (the saved bytes are compared), call 5 clears `FilterScripted` (the walk stops calling the script for the records after it, and the filter clears the flag when it ends), and the `p:` lines pin the node set the later Process walk sees"
+    },
+    {
+      "script": "probes/filter-scripted-error.pas",
+      "master": "tests/fixtures/parity/filter-scripted.esm",
+      "save": [
+        "Skyrim.esm"
+      ],
+      "note": "parity #27 fixture: the `Filter` function raises on its third call. The run aborts with the exception line and `Aborted:`, the filter prints no `Done:` line and the code after `ApplyFilter` never runs"
+    },
+    {
       "script": "probes/streams.pas",
       "note": "parity #30 fixture: the JSON stream adapters over the memory, bytes, string and file streams with their positions, the encodings and byte order marks, the TBinaryReader/TBinaryWriter round trip and buffer, the end-of-stream error and the nil stream exceptions. The files written below wbOutputPath and the message log are compared"
     },

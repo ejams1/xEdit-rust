@@ -289,7 +289,8 @@ fn single_pass(
     settings: &UdrSettings,
 ) -> Result<QuickCleanPass, CommandError> {
     let mut tree = NavTree::new(std::slice::from_ref(target));
-    let filter = apply_filter(&mut tree, &FilterOptions::for_cleaning(), files).map_err(edit_failed)?;
+    let filter =
+        apply_filter(&mut tree, &FilterOptions::for_cleaning(), files).map_err(|error| edit_failed(error.message))?;
     let start = tree
         .file_node(target)
         .ok_or_else(|| CommandError::new("internal", "the plugin has no node"))?;

@@ -2690,6 +2690,20 @@ impl Interpreter {
         self.last_error = recorded;
     }
 
+    /// A non-interpreter exception that *host* code raises while a call into
+    /// the script is on the stack (`EVariantTypeCastError` of the scripted
+    /// filter's `Boolean(...)` cast): `UpdateExceptionPos`'s external arm
+    /// records the current unit, line and message in `last_error`, which is
+    /// what `GetLastErrorLocation` reports once the exception reaches the
+    /// run's handler. The returned error keeps its own class and message.
+    pub fn raise_external(&mut self, class: &str, message: &str) -> ExecError {
+        let mut exec = ExecError::external(message);
+        exec.class_name = Some(class.to_owned());
+        exec.pos = Some(self.cur_pos as i64);
+        self.update_exception_pos(&mut exec, &self.cur_unit.clone());
+        exec
+    }
+
     /// The `except on E` arms of `ExecFunction`/`InFunction`
     /// (`UpdateExceptionPos(E, unit)` before the state is restored): the
     /// error message gains the routine's unit and line. A raised object takes

@@ -1022,6 +1022,9 @@ enum FilterAction {
         /// A record that is the only version of its FormID leaves the tree ("Filter for only one").
         #[arg(long)]
         only_one: bool,
+        /// "Apply custom scripted filter" (FilterScripted, cbScriptedFilter): the script of the run decides every record. Outside a script the flag rejects every record, as the GUI's nil Script does; a script sets the flag itself and calls ApplyFilter.
+        #[arg(long)]
+        scripted: bool,
         /// Leave the game master out of the tree (FilterNoGameMaster).
         #[arg(long)]
         no_game_master: bool,
@@ -1583,6 +1586,7 @@ fn filter_command(action: FilterAction) -> Result<(String, Value), CommandError>
             inherit_conflict_by_parent,
             conflict_only,
             only_one,
+            scripted,
             no_game_master,
             modgroups,
             all_modgroups,
@@ -1616,7 +1620,8 @@ fn filter_command(action: FilterAction) -> Result<(String, Value), CommandError>
                 || flatten_blocks
                 || flatten_cell_childs
                 || assign_pers_wrld_child
-                || inherit_conflict_by_parent.is_some();
+                || inherit_conflict_by_parent.is_some()
+                || scripted;
             let options = any_option.then(|| {
                 json!({
                     "conflict_all": (!conflict_all.is_empty()).then(|| conflict_all.clone()),
@@ -1647,6 +1652,7 @@ fn filter_command(action: FilterAction) -> Result<(String, Value), CommandError>
                     "flatten_cell_childs": flatten_cell_childs,
                     "assign_pers_wrld_child": assign_pers_wrld_child,
                     "inherit_conflict_by_parent": inherit_conflict_by_parent.unwrap_or(true),
+                    "scripted": scripted,
                 })
             });
             Ok((

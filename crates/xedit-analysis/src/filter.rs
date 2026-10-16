@@ -30,12 +30,13 @@
 //!
 //! What the port reads from the session rather than from the dialog:
 //! `ReachableBuild` ([`FilterOptions::reachable_build`], which
-//! `refs.build_reachable` sets) and the mod groups
+//! `refs.build_reachable` sets), the mod groups
 //! ([`FilterOptions::mod_groups_enabled`] with the filter the request
-//! activates). `FilterScripted` (the `Filter` function of a script), the
-//! records the user hid (`IsHidden`) and the compare-to load have no state
-//! in the port.
+//! activates) and the scripted filter ([`FilterOptions::scripted`] with the
+//! [`ScriptedFilter`] of the script a run is inside). The records the user
+//! hid (`IsHidden`) and the compare-to load have no state in the port.
 
+use std::cell::RefCell;
 use std::cmp::Ordering;
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::sync::Arc;
@@ -532,9 +533,8 @@ impl NavTree {
 /// and `cbX`) are; `by_persistent` keeps its two values in plain fields, as
 /// `FilterByPersistent` carries the first checkbox alone.
 ///
-/// Not ported: `FilterScripted` (the `Filter` function of a script, phase
-/// 6), `IsHidden` of a record (the user hid it in the GUI, which the port
-/// keeps no state for) and `fsCompareToHasSameMasters` (the compare-to
+/// Not ported: `IsHidden` of a record (the user hid it in the GUI, which the
+/// port keeps no state for) and `fsCompareToHasSameMasters` (the compare-to
 /// load).
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct FilterOptions {
@@ -595,6 +595,14 @@ pub struct FilterOptions {
     /// `FilterByRegexComparison`: the texts are Perl regular expressions,
     /// case-insensitive and multi-line.
     pub regex_comparison: bool,
+    /// `FilterScripted` (`cbScriptedFilter`): the `Filter` function of the
+    /// script of the run decides every main record the walk reaches (see
+    /// [`ScriptedFilter`]). The walk reads the flag per record, so a `Filter`
+    /// function that clears it stops the scripted checks
+    /// (`CustomScriptFilter` reads the field), and
+    /// `mniNavFilterApplyClick` clears it when the filter ends, whatever
+    /// path it exits by.
+    pub scripted: bool,
     /// `FlattenBlocks`: the block and sub-block groups (type 2 to 5) leave
     /// the tree, their records take their place.
     pub flatten_blocks: bool,
@@ -716,10 +724,13 @@ impl FilterOptions {
 /// One file of a filter ([`FilterReport::files`]).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FilteredFile {
-    /// `Files[i].Name`: the name of the plugin without its folder.
+    /// `Files[i].FileName` (`TwbFile.GetFileName` is `ExtractFileName` of the
+    /// loaded path): the name of the plugin without its folder, which the
+    /// log line shows and the `[<name>] Filtered ...` line of the GUI
+    /// carries.
     pub name: String,
-    /// `Files[i].FileName`: the path it was loaded from, which the log line
-    /// shows.
+    /// `Files[i].GetFileNameOnDisk`-style path the file was loaded from
+    /// (`flFileName`); the log line does not show it.
     pub file_name: String,
     pub load_order: i32,
     /// `RecordCount` of the file.
@@ -732,11 +743,11 @@ pub struct FilteredFile {
 
 impl FilteredFile {
     /// The line `wbProgress` writes for a partly filtered file
-    /// (`[%s] Filtered %.0n of %.0n records`).
+    /// (`[%s] Filtered %.0n of %.0n records` with `Files[i].FileName`).
     pub fn log_line(&self) -> String {
         format!(
             "[{}] Filtered {} of {} records",
-            self.file_name,
+            self.name,
             delphi_grouped(self.filtered),
             delphi_grouped(self.records)
         )
@@ -803,9 +814,46 @@ const REFERENCE_TOP_LEVEL_GROUPS: [&[u8; 4]; 14] = [
     b"PCON", b"PFLA",
 ];
 
+/// The scripted filter of a `FilterScripted` filter: `CustomScriptFilter` of
+/// `mniNavFilterApplyClick`, the `Filter` function of the script the run is
+/// inside, called for the main records the walk reaches in its own order
+/// (`Apply custom scripted filter.pas` is the corpus script of this path).
+pub trait ScriptedFilter {
+    /// `FilterScripted`, read before every record so that a `Filter` function
+    /// that clears the flag during the walk stops the scripted checks, as
+    /// upstream reads the field of the main form.
+    fn enabled(&mut self) -> bool;
+
+    /// `Assigned(Script) and Script.FunctionExists('Filter') and
+    /// Boolean(Script.CallFunction('Filter', [MainRecord]))`: `Ok(false)`
+    /// rejects the record (the node leaves the tree), `Ok(true)` accepts it.
+    /// A run whose script has no `Filter` function answers `Ok(false)`, so
+    /// every record is rejected, as upstream's `CustomScriptFilter`.
+    ///
+    /// The `Err` is the raised error of the call: upstream's exception
+    /// propagates out of the walk to the run (`ApplyScript`'s handler prints
+    /// it and aborts), so the filter stops at the record it was raised on.
+    fn filter_record(&mut self, record: &ElementRef) -> Result<bool, ScriptedFilterError>;
+}
+
+/// The raised error of a [`ScriptedFilter`] call, rendered by the host for
+/// the run's abort lines (`Exception in unit <u> line <n>: [<class>]
+/// <message>`, then `Aborted: Applying script "<name>"`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ScriptedFilterError {
+    /// `Script.GetLastErrorLocation`, the `unit <u> line <n>` of the
+    /// exception line (empty when the interpreter keeps none).
+    pub location: String,
+    /// `E.ClassName` of the exception (`EJvInterpreterError` for an
+    /// interpreter error).
+    pub class: String,
+    /// `E.Message`.
+    pub message: String,
+}
+
 /// The prelude of `mniNavFilterApplyClick`: the option fields resolved into
 /// what `CheckFilterNode` reads.
-struct FilterChecks {
+struct FilterChecks<'a> {
     /// The options with the sets and the flags the prelude changes.
     options: FilterOptions,
     /// `Assigned(Signatures)` with the list.
@@ -831,6 +879,11 @@ struct FilterChecks {
     /// `PotentiallyUnfilteredRefs`: whether records the top level groups do
     /// not cover may stay (which a base record filter needs).
     potentially_unfiltered_refs: bool,
+    /// The scripted filter of a run: `Assigned(Script)` with the script's
+    /// `Filter` function. `None` while no run is in progress, which is
+    /// upstream's nil `Script` and rejects every record (`CustomScriptFilter`
+    /// is False then).
+    script_filter: Option<RefCell<&'a mut dyn ScriptedFilter>>,
 }
 
 /// Port of `wbFindRecordDef` by a four character name.
@@ -864,9 +917,9 @@ fn shifted_grid_cell_in_bounds(cell: (i32, i32)) -> bool {
     (0..1000).contains(&x) && (0..1000).contains(&y)
 }
 
-impl FilterChecks {
+impl<'a> FilterChecks<'a> {
     /// The prelude of `mniNavFilterApplyClick` before the two passes.
-    fn new(mut options: FilterOptions) -> FilterChecks {
+    fn new(mut options: FilterOptions, script_filter: Option<&'a mut dyn ScriptedFilter>) -> FilterChecks<'a> {
         // A set that holds every value filters nothing (`FilterConflictAll
         // := False`).
         if options
@@ -1011,7 +1064,8 @@ impl FilterChecks {
             || options.by_name.is_some()
             || options.by_element_value.is_some()
             || signatures.is_some()
-            || options.deleted;
+            || options.deleted
+            || options.scripted;
         let by_status = options.by_inject_status.is_some()
             || options.by_references_injected_status.is_some()
             || options.by_not_reachable_status.is_some();
@@ -1028,23 +1082,26 @@ impl FilterChecks {
             base_signatures,
             top_level_groups,
             options,
+            script_filter: script_filter.map(RefCell::new),
         }
     }
 
     /// Port of the `CheckFilterNode` closure: only a node without children
-    /// is checked, once; `true` means the node was filtered out and deleted.
+    /// is checked, once; `Ok(true)` means the node was filtered out and
+    /// deleted. The `Err` is the raised error of the scripted filter, which
+    /// aborts the walk (`mniNavFilterApplyClick`'s exception).
     fn check_filter_node(
         &self,
         tree: &mut NavTree,
         id: NodeId,
         check_conflict: bool,
         results: &ConflictResults,
-    ) -> bool {
+    ) -> Result<bool, ScriptedFilterError> {
         if tree.child_count(id) != 0 {
-            return false;
+            return Ok(false);
         }
         if tree.data(id).flags & nav_node_flag::FILTER_CHECKED != 0 {
-            return false;
+            return Ok(false);
         }
         tree.data_mut(id).flags |= nav_node_flag::FILTER_CHECKED;
         let data = tree.data(id);
@@ -1059,90 +1116,92 @@ impl FilterChecks {
                     .conflict_this
                     .as_ref()
                     .is_some_and(|set| !set.contains(&data.conflict_this))))
-            || (self.anything_not_conflict && self.node_is_filtered(data, results));
+            || (self.anything_not_conflict && self.node_is_filtered(data, results)?);
         if filtered {
             tree.delete_node(id);
         }
-        filtered
+        Ok(filtered)
     }
 
     /// The `FilterByAnythingNotConflict` half of `CheckFilterNode`.
-    fn node_is_filtered(&self, data: &NavNodeData, results: &ConflictResults) -> bool {
+    fn node_is_filtered(&self, data: &NavNodeData, results: &ConflictResults) -> Result<bool, ScriptedFilterError> {
         let options = &self.options;
         if self.by_status {
             if let Some(wanted) = options.by_inject_status
                 && (data.flags & nav_node_flag::INJECTED != 0) != wanted
             {
-                return true;
+                return Ok(true);
             }
             if let Some(wanted) = options.by_references_injected_status
                 && (data.flags & nav_node_flag::REFERENCES_INJECTED != 0) != wanted
             {
-                return true;
+                return Ok(true);
             }
             if let Some(wanted) = options.by_not_reachable_status
                 && options.reachable_build
                 && (data.flags & nav_node_flag::NOT_REACHABLE != 0) != wanted
             {
-                return true;
+                return Ok(true);
             }
         }
         if !self.requires_main_record {
-            return false;
+            return Ok(false);
         }
         let Some(record) = data.element.as_ref().and_then(record_of) else {
-            return true;
+            return Ok(true);
         };
         if self.requires_reference && !record.def().is_some_and(|def| def.get_is_reference()) {
-            return true;
+            return Ok(true);
         }
         let base_record = self.requires_base_record.then(|| record.get_base_record());
         if self.requires_base_record && base_record.clone().flatten().is_none() {
-            return true;
+            return Ok(true);
         }
         if options.deleted && !record.get_is_deleted() {
-            return true;
+            return Ok(true);
         }
         if let Some(signatures) = &self.signatures
             && !signatures.contains(&record.get_signature().to_string())
         {
-            return true;
+            return Ok(true);
         }
         if let Some(text) = &options.by_editor_id
             && !self.text_matches(text, &record.get_editor_id())
         {
-            return true;
+            return Ok(true);
         }
         if let Some(text) = &options.by_name
             && !self.text_matches(text, &record.get_display_name(true))
         {
-            return true;
+            return Ok(true);
         }
         if let Some(text) = &options.by_element_value {
             let element: ElementRef = record.clone();
             if !self.container_holds_value(text, &element) {
-                return true;
+                return Ok(true);
             }
         }
         if !self.requires_reference {
-            return false;
+            // The `(FilterRequiresReference and (...))` group of the chain is
+            // false; only the scripted clause of the chain is left.
+            return self.scripted_filtered(data.element.as_ref());
         }
         if let Some(wanted) = options.by_vwd
             && record.get_flags().is_visible_when_distant() != wanted
         {
-            return true;
+            return Ok(true);
         }
         if let Some(wanted) = self.base_form_id
             && record.get_base_record().map(|base| base.get_load_order_form_id()) != Some(wanted)
         {
-            return true;
+            return Ok(true);
         }
         if let Some(base_signatures) = &self.base_signatures {
             let signature = record
                 .get_base_record()
                 .map_or_else(|| "NULL".to_owned(), |base| base.get_signature().to_string());
             if !base_signatures.contains(&signature) {
-                return true;
+                return Ok(true);
             }
         }
         if options.scaled_actors {
@@ -1153,7 +1212,7 @@ impl FilterChecks {
                 .map(|element| element.get_native_value());
             match scale {
                 Some(value) if !value.same_value(&Variant::Int(1)) => {}
-                _ => return true,
+                _ => return Ok(true),
             }
         }
         if self.requires_base_record {
@@ -1163,22 +1222,22 @@ impl FilterChecks {
                 && let Some(text) = &options.by_base_editor_id
                 && !self.text_matches(text, &base.map(|base| base.get_editor_id()).unwrap_or_default())
             {
-                return true;
+                return Ok(true);
             }
             if let Some(text) = &options.by_base_name
                 && !self.text_matches(text, &base.map(|base| base.get_display_name(true)).unwrap_or_default())
             {
-                return true;
+                return Ok(true);
             }
             if let Some(wanted) = options.by_has_vwd_mesh
                 && base.is_some_and(|base| base.get_has_visible_when_distant_mesh() != wanted)
             {
-                return true;
+                return Ok(true);
             }
         }
         if options.by_persistent {
             if record.get_is_persistent() != options.persistent {
-                return true;
+                return Ok(true);
             }
             if options.unnecessary_persistent
                 && (!is_unnecessary_persistent(&record)
@@ -1186,18 +1245,42 @@ impl FilterChecks {
                         && !is_master_temporary(&record)
                         && !(options.is_master && record.get_is_master())))
             {
-                return true;
+                return Ok(true);
             }
             if options.persistent_pos_changed && !is_position_changed(&record, results) {
-                return true;
+                return Ok(true);
             }
         }
         if let Some(wanted) = options.by_has_precombined_mesh
             && record.get_has_precombined_mesh() != wanted
         {
-            return true;
+            return Ok(true);
         }
-        false
+        // The last clause of the chain.
+        self.scripted_filtered(data.element.as_ref())
+    }
+
+    /// `FilterScripted and not CustomScriptFilter(MainRecord)`, the last
+    /// clause of `CheckFilterNode`'s chain: the record is filtered out when
+    /// the `Filter` function of the script rejects it. The flag is read live
+    /// (a `Filter` function may clear it, and `mniNavFilterApplyClick`
+    /// clears it in its `finally`), and without an assigned script every
+    /// record is rejected (`CustomScriptFilter` is False).
+    fn scripted_filtered(&self, element: Option<&ElementRef>) -> Result<bool, ScriptedFilterError> {
+        let Some(cell) = &self.script_filter else {
+            // `Assigned(Script)` false: the flag the request came with, and
+            // `not CustomScriptFilter` rejects every record.
+            return Ok(self.options.scripted);
+        };
+        let mut filter = cell.borrow_mut();
+        let scripted = filter.enabled();
+        if !scripted {
+            return Ok(false);
+        }
+        let Some(element) = element else {
+            return Ok(true);
+        };
+        Ok(!filter.filter_record(element)?)
     }
 
     /// `Pos(AnsiUpperCase(aText), AnsiUpperCase(aComparison)) < 1` as the
@@ -1365,7 +1448,7 @@ pub fn apply_filter(
     tree: &mut NavTree,
     options: &FilterOptions,
     files: &[Arc<FileImpl>],
-) -> Result<FilterReport, String> {
+) -> Result<FilterReport, ScriptedFilterError> {
     apply_filter_with(tree, options, files, None)
 }
 
@@ -1376,8 +1459,22 @@ pub fn apply_filter_with(
     options: &FilterOptions,
     files: &[Arc<FileImpl>],
     mod_groups: Option<Arc<dyn ModGroupFilter>>,
-) -> Result<FilterReport, String> {
-    let checks = FilterChecks::new(options.clone());
+) -> Result<FilterReport, ScriptedFilterError> {
+    apply_filter_scripted(tree, options, files, mod_groups, None)
+}
+
+/// [`apply_filter_with`] with the scripted filter of a run
+/// (`FilterScripted` with the script's `Filter` function): the walk calls it
+/// for every main record it reaches, and its raised error aborts the walk
+/// (upstream's exception out of `mniNavFilterApplyClick`).
+pub fn apply_filter_scripted(
+    tree: &mut NavTree,
+    options: &FilterOptions,
+    files: &[Arc<FileImpl>],
+    mod_groups: Option<Arc<dyn ModGroupFilter>>,
+    script_filter: Option<&mut dyn ScriptedFilter>,
+) -> Result<FilterReport, ScriptedFilterError> {
+    let checks = FilterChecks::new(options.clone(), script_filter);
     let options = &checks.options;
     let mut report = FilterReport::default();
     tree.applied = None;
@@ -1487,7 +1584,7 @@ pub fn apply_filter_with(
                 data.flags &= !nav_node_flag::FILTER_CHECKED;
             }
             if !(flatten_cell && record.get_signature().0 == *b"CELL")
-                && checks.check_filter_node(tree, id, false, &results)
+                && checks.check_filter_node(tree, id, false, &results)?
             {
                 current = next;
                 continue;
@@ -1628,7 +1725,7 @@ pub fn apply_filter_with(
             remaining.insert(id, records_of_file);
             records_of_file = 0;
         }
-        let deleted = checks.check_filter_node(tree, id, true, &results);
+        let deleted = checks.check_filter_node(tree, id, true, &results)?;
         if !deleted {
             report.unfiltered += 1;
             if !is_file
@@ -1722,6 +1819,21 @@ pub fn records_below(tree: &NavTree, start: NodeId) -> Vec<Arc<MainRecordImpl>> 
             && seen.insert(record.get_element_id())
         {
             result.push(record);
+        }
+        stack.extend(tree.children(id).into_iter().rev());
+    }
+    result
+}
+
+/// The elements of the nodes of the subtree of `start` that the tree still
+/// shows, in tree order: the node set the `ApplyScriptToSelection` walk sees
+/// after a filter, whatever `ScriptProcessElements` asks for.
+pub fn node_elements_below(tree: &NavTree, start: NodeId) -> Vec<ElementRef> {
+    let mut result = Vec::new();
+    let mut stack = vec![start];
+    while let Some(id) = stack.pop() {
+        if let Some(element) = tree.data(id).element.clone() {
+            result.push(element);
         }
         stack.extend(tree.children(id).into_iter().rev());
     }

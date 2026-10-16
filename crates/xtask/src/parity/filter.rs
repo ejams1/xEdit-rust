@@ -113,6 +113,13 @@ struct Config {
     assign_pers_wrld_child: bool,
     #[serde(default = "default_true")]
     inherit_conflict_by_parent: bool,
+    /// `cbScriptedFilter` (`FilterScripted`): the filter calls the `Filter`
+    /// function of the running script. The generated script defines none, so
+    /// every record is rejected (`CustomScriptFilter` is False), which is
+    /// what the port's `filter.apply` does with the flag and no script. A
+    /// configuration that turns it on keeps it on for the ones after it.
+    #[serde(default)]
+    scripted: bool,
 }
 
 fn default_true() -> bool {
@@ -244,6 +251,15 @@ impl Config {
             "InheritConflictByParent := {};\n      ",
             bool_value(self.inherit_conflict_by_parent)
         ));
+        // Only written when a configuration asks for it: the generated
+        // script of every other configuration stays byte-identical, so their
+        // cached oracle runs stay valid, and a scenario that turns the flag
+        // on keeps it on for the configurations after it (the variables keep
+        // their values between two filters of one session), which such a
+        // scenario orders and says.
+        if self.scripted {
+            text.push_str("FilterScripted := True;\n      ");
+        }
         text.push_str(&format!("AddMessage('[filter] {}');\n      ", self.name));
         text.push_str("ApplyFilter;\n      ");
         text
@@ -280,6 +296,7 @@ impl Config {
             "flatten_cell_childs": self.flatten_cell_childs,
             "assign_pers_wrld_child": self.assign_pers_wrld_child,
             "inherit_conflict_by_parent": self.inherit_conflict_by_parent,
+            "scripted": self.scripted,
         })
     }
 }
