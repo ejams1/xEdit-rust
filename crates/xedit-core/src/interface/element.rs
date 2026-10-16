@@ -433,6 +433,13 @@ pub trait File: Container {
     /// Upstream `LoadOrderFileID`: the slot of the file in the load order.
     fn get_load_order_file_id(&self) -> FileID;
 
+    /// Upstream `CompareToFile.FileName` of a compare load: the name of the
+    /// file this file compares to (`flCompareTo`); `None` for every other
+    /// file.
+    fn get_compare_to_name(&self) -> Option<String> {
+        None
+    }
+
     /// Upstream `MasterCount[aNew]`.
     fn get_master_count(&self, new: bool) -> i32;
 

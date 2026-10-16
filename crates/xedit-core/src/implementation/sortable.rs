@@ -16,6 +16,7 @@
 //! of `xedit-analysis`), so reading a view changes nothing in the tree.
 
 use crate::interface::element::{Element, ElementRef};
+use crate::interface::globals::compare_raw_data;
 use crate::interface::types::ElementType;
 
 use super::ElementImpl;
@@ -57,11 +58,47 @@ pub fn sortable(element: &ElementRef) -> Option<Sortable> {
     None
 }
 
-/// Port of `TwbElement.GetDisplaySortKey`: the sort key the view compares.
-/// Not ported: the raw data of `wbCompareRawData` (`GetRawDataAsString`),
-/// an option of the GUI that is off by default; the sort key is used.
+/// Port of `TwbElement.GetDisplaySortKey`: the sort key the view compares;
+/// under `wbCompareRawData` the raw data of the element instead. The
+/// release 4.1.5q never sets that flag (`wbInterface.pas:284`, nothing
+/// assigns it), so its GUI compares by sort key; the CLI's `--raw-data`
+/// turns the dormant branch on.
 pub fn display_sort_key(element: &ElementRef, extended: bool) -> String {
+    if compare_raw_data() {
+        return get_raw_data_as_string(element);
+    }
     element.get_sort_key(extended)
+}
+
+/// Port of `TwbElement.GetRawDataAsString` and
+/// `TwbDataContainer.GetRawDataAsString`: `''` for an element that is not a
+/// data container and for one without data, else the bytes of the element's
+/// data as uppercase hexadecimal pairs separated by spaces.
+pub fn get_raw_data_as_string(element: &ElementRef) -> String {
+    let Some(data) = element.as_data_container().and_then(|container| container.get_data()) else {
+        return String::new();
+    };
+    if data.is_empty() {
+        return String::new();
+    }
+    let mut result = String::with_capacity(data.len() * 3);
+    for (index, byte) in data.iter().enumerate() {
+        if index != 0 {
+            result.push(' ');
+        }
+        result.push(char::from_digit((byte >> 4) as u32, 16).unwrap_or('0').to_ascii_uppercase());
+        result.push(char::from_digit((byte & 0x0F) as u32, 16).unwrap_or('0').to_ascii_uppercase());
+    }
+    result
+}
+
+/// Port of `TwbElement.GetIsHidden` for an element reference: the elements
+/// of an element reference are always concrete, so this is the impl's
+/// lookup.
+pub fn is_hidden(element: &ElementRef) -> bool {
+    element
+        .as_element_impl()
+        .is_some_and(|element| element.element_base().is_hidden())
 }
 
 /// Port of `TwbElement.GetConflictPriorityCanChange`: from the value

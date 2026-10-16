@@ -36,6 +36,10 @@ struct Cli {
     #[arg(long, global = true)]
     load: Vec<String>,
 
+    /// Load this file as a compare load of the last --load plugin, as the navigation tree's "Compare to..." does: it takes that plugin's load order and is compared with it record by record. The file has to sit in the folder of that plugin (the GUI copies it into the data folder).
+    #[arg(long, global = true)]
+    compare_to: Option<String>,
+
     /// Allow the commands that change plugin data or files to do so. Without it they only run with --dry-run.
     #[arg(long, global = true)]
     edit: bool,
@@ -298,6 +302,9 @@ enum Action {
         /// Also list the rows the view hides (ignored members, members no record has).
         #[arg(long)]
         include_hidden: bool,
+        /// Compare the raw data of the elements instead of their values (wbCompareRawData): sorted and aligned arrays are compared entry by entry.
+        #[arg(long)]
+        raw_data: bool,
         /// Activate the valid mod group of this name, so the records it hides are left out (ctHiddenByModGroup); repeat for several.
         #[arg(long = "modgroups")]
         modgroups: Vec<String>,
@@ -325,6 +332,81 @@ enum Action {
         /// cbViewFilterKeepParentsSiblings: also keep the rows beside the parent of a matching one.
         #[arg(long)]
         keep_parents_siblings: bool,
+    },
+    /// Compare records of different FormIDs side by side, as the GUI compares the selected navigation tree nodes (records.compare_selected): the records are the columns, their members the rows.
+    CompareSelected {
+        /// Load order FormID of a record to compare, as hexadecimal digits; repeat for several (two at least), in the order of the columns.
+        #[arg(required = true)]
+        form_ids: Vec<String>,
+        /// Plugin every record is seen from; the last loaded plugin when omitted.
+        #[arg(long)]
+        file: Option<String>,
+        /// Compare only the master and the leaf overrides of each record's FormID ("Only show Master and Leafs").
+        #[arg(long)]
+        master_and_leafs: bool,
+        /// Hide the rows without a conflict ("Hide no conflict and empty rows").
+        #[arg(long)]
+        hide_no_conflict: bool,
+        /// Also list the rows the view hides (ignored members, members no record has).
+        #[arg(long)]
+        include_hidden: bool,
+        /// Compare the raw data of the elements instead of their values (wbCompareRawData).
+        #[arg(long)]
+        raw_data: bool,
+        /// Activate the valid mod group of this name, so the records it hides are left out (ctHiddenByModGroup); repeat for several.
+        #[arg(long = "modgroups")]
+        modgroups: Vec<String>,
+        /// Activate every valid mod group, as xEdit's -autoload does.
+        #[arg(long)]
+        all_modgroups: bool,
+        /// Activate the valid mod groups of the selection saved in xEdit's settings file.
+        #[arg(long)]
+        saved_modgroups: bool,
+        /// The view filter of the view tab (edViewFilterName): keep the rows whose name contains this text.
+        #[arg(long)]
+        view_filter_name: Option<String>,
+        /// edViewFilterValue: keep the rows with this text in one of their cells.
+        #[arg(long)]
+        view_filter_value: Option<String>,
+        /// A "cobViewFilter" set to Or: a row matches when the name or a value matches, instead of both.
+        #[arg(long)]
+        view_filter_or: bool,
+        /// cbViewFilterKeepChildren: also keep the rows below a matching one.
+        #[arg(long)]
+        keep_children: bool,
+        /// cbViewFilterKeepSiblings: also keep the rows beside a matching one.
+        #[arg(long)]
+        keep_siblings: bool,
+        /// cbViewFilterKeepParentsSiblings: also keep the rows beside the parent of a matching one.
+        #[arg(long)]
+        keep_parents_siblings: bool,
+    },
+    /// The conflict of two elements of two records, as the script function ConflictAllForElements reports it (conflicts.for_elements).
+    ConflictForElements {
+        /// Load order FormID of the first record as hexadecimal digits.
+        #[arg(long)]
+        form_id: String,
+        /// Path of the element inside the first record.
+        #[arg(long)]
+        path: String,
+        /// Plugin the first record is seen from; the last loaded plugin when omitted.
+        #[arg(long)]
+        file: Option<String>,
+        /// Load order FormID of the other record.
+        #[arg(long)]
+        other_form_id: String,
+        /// Path of the element inside the other record.
+        #[arg(long)]
+        other_path: String,
+        /// Plugin the other record is seen from; the last loaded plugin when omitted.
+        #[arg(long)]
+        other_file: Option<String>,
+        /// aSiblingCompare: compare the two as records of different FormIDs.
+        #[arg(long)]
+        sibling_compare: bool,
+        /// aInjected.
+        #[arg(long)]
+        injected: bool,
     },
     /// Write the element tree of a plugin as xDump prints it.
     Dump {
@@ -646,7 +728,14 @@ enum SessionAction {
 #[derive(Subcommand)]
 enum FilesAction {
     /// List the loaded files with their masters and record counts.
-    List,
+    List {
+        /// List only the files whose name contains this text, as the navigation tree's "Filter by filename" does (edFileNameFilter).
+        #[arg(long)]
+        name_filter: Option<String>,
+        /// Read --name-filter as a regular expression (case-insensitive), as the tree's RegEx check box does.
+        #[arg(long)]
+        regex: bool,
+    },
     /// Make a new empty plugin in the data folder with the game master as its master (files.new, AddNewFile); it exists in memory until saved, so use it in batch or serve. Needs --edit unless --dry-run.
     New {
         /// File name; the extension is replaced by .esp, or .esl with --light, as xEdit does.
@@ -1325,6 +1414,20 @@ enum RecordsAction {
         #[arg(long)]
         dry_run: bool,
     },
+    /// Hide a record or show it again, as the navigation tree's Hide does (records.set_hidden): comparisons, the filter and the record lists leave hidden records out.
+    SetHidden {
+        /// Load order FormID of the record as hexadecimal digits.
+        form_id: String,
+        /// Plugin the record is seen from; the last loaded plugin when omitted.
+        #[arg(long)]
+        file: Option<String>,
+        /// The record and every override of it, as the view's "Unhide all" does.
+        #[arg(long)]
+        overrides: bool,
+        /// Show a hidden record again instead of hiding it.
+        #[arg(long)]
+        show: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -1341,6 +1444,16 @@ enum ElementsAction {
         /// Levels of child elements to include; all when omitted.
         #[arg(long)]
         depth: Option<usize>,
+    },
+    /// Check one element for errors, and everything below it, as "Check for Errors" on a selected node does (elements.check, Element.Check).
+    Check {
+        /// Load order FormID of the record as hexadecimal digits.
+        form_id: String,
+        /// Path of the element inside the record, with \\ between the names.
+        path: String,
+        /// Plugin the record is seen from; the last loaded plugin when omitted.
+        #[arg(long)]
+        file: Option<String>,
     },
     /// Set the value of an element by its path (elements.set). Needs --edit unless --dry-run.
     Set {
@@ -1689,8 +1802,11 @@ fn command_of(action: Action) -> Result<(String, Value), CommandError> {
             action: SessionAction::Info,
         } => ("session.info".to_owned(), json!({})),
         Action::Files {
-            action: FilesAction::List,
-        } => ("files.list".to_owned(), json!({})),
+            action: FilesAction::List { name_filter, regex },
+        } => (
+            "files.list".to_owned(),
+            json!({ "name_filter": name_filter, "regex": regex }),
+        ),
         Action::Files {
             action:
                 FilesAction::New {
@@ -1993,6 +2109,15 @@ fn command_of(action: Action) -> Result<(String, Value), CommandError> {
                 "records.delete".to_owned(),
                 json!({ "form_id": form_id, "file": file, "dry_run": dry_run }),
             ),
+            RecordsAction::SetHidden {
+                form_id,
+                file,
+                overrides,
+                show,
+            } => (
+                "records.set_hidden".to_owned(),
+                json!({ "form_id": form_id, "file": file, "overrides": overrides, "hidden": !show }),
+            ),
             RecordsAction::CleanupInjected {
                 form_ids,
                 file,
@@ -2011,6 +2136,10 @@ fn command_of(action: Action) -> Result<(String, Value), CommandError> {
             } => (
                 "elements.get".to_owned(),
                 json!({ "form_id": form_id, "path": path, "file": file, "depth": depth }),
+            ),
+            ElementsAction::Check { form_id, path, file } => (
+                "elements.check".to_owned(),
+                json!({ "form_id": form_id, "path": path, "file": file }),
             ),
             ElementsAction::Set {
                 form_id,
@@ -2349,6 +2478,7 @@ fn command_of(action: Action) -> Result<(String, Value), CommandError> {
             master_and_leafs,
             hide_no_conflict,
             include_hidden,
+            raw_data,
             modgroups,
             all_modgroups,
             saved_modgroups,
@@ -2363,10 +2493,60 @@ fn command_of(action: Action) -> Result<(String, Value), CommandError> {
             json!({
                 "form_id": form_id, "file": file, "master_and_leafs": master_and_leafs,
                 "hide_no_conflict": hide_no_conflict, "include_hidden": include_hidden,
+                "raw_data": raw_data,
                 "mod_groups": modgroups, "all_mod_groups": all_modgroups, "saved_mod_groups": saved_modgroups,
                 "view_filter_name": view_filter_name, "view_filter_value": view_filter_value,
                 "view_filter_or": view_filter_or, "keep_children": keep_children,
                 "keep_siblings": keep_siblings, "keep_parents_siblings": keep_parents_siblings
+            }),
+        ),
+        Action::CompareSelected {
+            form_ids,
+            file,
+            master_and_leafs,
+            hide_no_conflict,
+            include_hidden,
+            raw_data,
+            modgroups,
+            all_modgroups,
+            saved_modgroups,
+            view_filter_name,
+            view_filter_value,
+            view_filter_or,
+            keep_children,
+            keep_siblings,
+            keep_parents_siblings,
+        } => (
+            "records.compare_selected".to_owned(),
+            json!({
+                "records": form_ids
+                    .iter()
+                    .map(|form_id| json!({ "form_id": form_id, "file": file }))
+                    .collect::<Vec<_>>(),
+                "master_and_leafs": master_and_leafs,
+                "hide_no_conflict": hide_no_conflict, "include_hidden": include_hidden,
+                "raw_data": raw_data,
+                "mod_groups": modgroups, "all_mod_groups": all_modgroups, "saved_mod_groups": saved_modgroups,
+                "view_filter_name": view_filter_name, "view_filter_value": view_filter_value,
+                "view_filter_or": view_filter_or, "keep_children": keep_children,
+                "keep_siblings": keep_siblings, "keep_parents_siblings": keep_parents_siblings
+            }),
+        ),
+        Action::ConflictForElements {
+            form_id,
+            path,
+            file,
+            other_form_id,
+            other_path,
+            other_file,
+            sibling_compare,
+            injected,
+        } => (
+            "conflicts.for_elements".to_owned(),
+            json!({
+                "form_id": form_id, "path": path, "file": file,
+                "other_form_id": other_form_id, "other_path": other_path, "other_file": other_file,
+                "sibling_compare": sibling_compare, "injected": injected
             }),
         ),
         Action::Call { name, params } => {
@@ -2601,6 +2781,7 @@ fn real_main() -> ExitCode {
     xedit_session::commands::set_fill_pnam_on_load(cli.fill_pnam);
     xedit_session::commands::set_language_on_load(cli.language.as_deref());
     xedit_session::commands::set_translate_on_load(cli.translate);
+    xedit_session::commands::set_compare_to_on_load(cli.compare_to.as_deref());
     // The two globals the script API reads (`ProgramPath`, and the
     // `GetIsEditable` gate of the game master): set before any load, and not
     // touched by it (the data path is derived from the loaded plugins).

@@ -44,6 +44,7 @@ use std::sync::Arc;
 use xedit_core::perl_regex::{OPTION_CASE_LESS, OPTION_MULTI_LINE, PerlRegEx};
 
 use xedit_core::implementation::form_ids::position_to_grid_cell;
+use xedit_core::implementation::sortable;
 use xedit_core::implementation::{ElementImpl, FileImpl, MainRecordImpl};
 use xedit_core::interface::constructors::find_record_def;
 use xedit_core::interface::form_id::FormID;
@@ -1562,12 +1563,24 @@ pub fn apply_filter_scripted(
             }
             if options.only_one && tree.child_count(id) == 0 {
                 let master = record.master_or_self_impl();
-                if !master.overrides().is_empty() && 1 + master.overrides().len() > 1 {
-                    // `IsHidden` (a record the user hid in the GUI) keeps no
-                    // state in the port: every version counts.
-                    tree.delete_node(id);
-                    current = next;
-                    continue;
+                if !master.overrides().is_empty() {
+                    // `IsHidden`: the records the user hid do not count, so
+                    // a FormID with two versions of which one is hidden can
+                    // be "only one".
+                    let mut count = i32::from(!sortable::is_hidden(&(master.clone() as ElementRef)));
+                    for over in master.overrides() {
+                        if !sortable::is_hidden(&(over.clone() as ElementRef)) {
+                            count += 1;
+                            if count > 1 {
+                                break;
+                            }
+                        }
+                    }
+                    if count > 1 {
+                        tree.delete_node(id);
+                        current = next;
+                        continue;
+                    }
                 }
             }
             {

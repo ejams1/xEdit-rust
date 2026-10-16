@@ -10,7 +10,7 @@ use std::sync::Arc;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use xedit_core::implementation::{FileImpl, MainRecordImpl, wb_file};
+use xedit_core::implementation::{ElementImpl, FileImpl, MainRecordImpl, wb_file};
 use xedit_core::interface::globals::{GameMode, data_path, game_name};
 use xedit_core::interface::misc::Variant;
 use xedit_core::interface::{
@@ -88,6 +88,16 @@ pub fn set_translate_on_load(value: bool) {
 /// the default of the game, for the sessions loaded afterwards.
 pub fn set_language_on_load(language: Option<&str>) {
     *LANGUAGE_ON_LOAD.lock().unwrap() = language.map(str::to_owned);
+}
+
+/// The `--compare-to` file of the next load (the GUI's "Compare to..."): the
+/// file loads as a compare load of the last plugin of `--load`, takes its
+/// load order, and is compared with it record by record.
+static COMPARE_TO_ON_LOAD: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+
+/// Sets the path of the compare load of the sessions loaded afterwards.
+pub fn set_compare_to_on_load(path: Option<&str>) {
+    *COMPARE_TO_ON_LOAD.lock().unwrap() = path.map(str::to_owned);
 }
 
 /// The `if wbTranslationMode then Exit` of the menu handlers that change
@@ -192,6 +202,30 @@ impl Session {
         for path in plugins {
             // Each plugin takes the next free slot after its masters.
             let file = wb_file(path, i32::MAX, FileStates::empty()).map_err(|error| error.to_string())?;
+            files.push(file);
+        }
+        // The `--compare-to` file (the GUI's "Compare to..."): it is loaded
+        // in the place of the last plugin of `--load`, which it takes the
+        // load order of, and compared with it. As the GUI copies the chosen
+        // file into the data folder, the compare load has to sit in the
+        // folder of that plugin, so that the masters resolve to the same
+        // files.
+        if let Some(path) = COMPARE_TO_ON_LOAD.lock().unwrap().take() {
+            let compare_to = files
+                .last()
+                .ok_or_else(|| "--compare-to needs a plugin loaded with --load".to_owned())?;
+            let data = plugins
+                .last()
+                .map(|path| xedit_core::delphi::extract_file_path(path))
+                .unwrap_or_default();
+            let folder = xedit_core::delphi::extract_file_path(&path);
+            if !folder.eq_ignore_ascii_case(&data) {
+                return Err(format!(
+                    "the --compare-to file has to sit in the folder of the plugin it compares to ({data}): {path}"
+                ));
+            }
+            let file = xedit_core::implementation::wb_file_compare_to(&path, compare_to.load_order(), &compare_to.get_name())
+                .map_err(|error| error.to_string())?;
             files.push(file);
         }
         if let (Some(file), Some(path)) = (files.last(), plugins.last()) {
@@ -313,11 +347,51 @@ pub struct FileList {
     pub files: Vec<FileInfo>,
 }
 
-fn files_list(session: &mut Session, _: NoParams) -> Result<FileList, CommandError> {
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct FilesListRequest {
+    /// `edFileNameFilter` of the navigation tree, "Filter by filename": list
+    /// only the files whose name contains this text, compared without case.
+    pub name_filter: Option<String>,
+    /// `cbRegExFilter` of that box: read the filter as a regular expression
+    /// (case-insensitive, as the GUI's `TPerlRegEx` with `preCaseLess`).
+    #[serde(default)]
+    pub regex: bool,
+}
+
+/// Whether the file name filter of the navigation tree keeps a name:
+/// `edFileNameFilterChange` (a substring without case, or the whole text as
+/// a `preCaseLess` regular expression). A bad expression fails with
+/// `invalid_params` where the GUI colours its edit box.
+fn name_filter_matches(filter: &str, regex: bool, name: &str) -> Result<bool, CommandError> {
+    if filter.is_empty() {
+        return Ok(true);
+    }
+    if regex {
+        let mut compiled = xedit_core::perl_regex::PerlRegEx::new();
+        compiled.set_regex(filter.to_owned());
+        compiled.set_options(1 << xedit_core::perl_regex::OPTION_CASE_LESS);
+        compiled.set_subject(name.to_owned());
+        compiled.match_again().map_err(|error| {
+            CommandError::new(
+                "invalid_params",
+                format!("the file name filter is not a regular expression: {}", error.message()),
+            )
+        })
+    } else {
+        Ok(name.to_lowercase().contains(&filter.to_lowercase()))
+    }
+}
+
+fn files_list(session: &mut Session, request: FilesListRequest) -> Result<FileList, CommandError> {
     session.mode()?;
-    let files = all_files(session)
-        .iter()
-        .map(|file| FileInfo {
+    let filter = request.name_filter.as_deref().unwrap_or_default();
+    let mut files = Vec::new();
+    for file in all_files(session) {
+        if !name_filter_matches(filter, request.regex, &file.get_name())? {
+            continue;
+        }
+        files.push(FileInfo {
             name: file.get_name(),
             load_order: file.get_load_order(),
             masters: (0..file.get_master_count(false))
@@ -327,9 +401,85 @@ fn files_list(session: &mut Session, _: NoParams) -> Result<FileList, CommandErr
             record_count: file.get_record_count() as usize,
             is_esm: file.get_is_esm(),
             is_localized: file.get_is_localized(),
-        })
-        .collect();
+        });
+    }
     Ok(FileList { files })
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct RecordsSetHiddenRequest {
+    /// Load order FormID of the record as hexadecimal digits.
+    pub form_id: String,
+    /// Plugin the record is seen from; the last loaded plugin when omitted.
+    pub file: Option<String>,
+    /// The record and every override of it (`overrides` on the master's
+    /// record), as the view's "Unhide all" does; without it the state of
+    /// the record version given changes only.
+    #[serde(default)]
+    pub overrides: bool,
+    /// Hide the record (`true`, `Hide`), or show it again (`false`, `Show`).
+    #[serde(default = "default_true")]
+    pub hidden: bool,
+}
+
+/// `serde` default of the `hidden` field.
+fn default_true() -> bool {
+    true
+}
+
+#[derive(Serialize, JsonSchema)]
+pub struct RecordsSetHiddenResponse {
+    /// Whether the records are hidden now.
+    pub hidden: bool,
+    /// The records whose state changed, each as `[file] Name`.
+    pub changed: Vec<String>,
+}
+
+/// Port of `mniNavHiddenClick`/`mniViewHeaderHiddenClick` (`Hide`/`Show`)
+/// and of the view's "Unhide all": the hidden state of a record is session
+/// state like the `records.compare` alignment, so this changes no plugin
+/// data and no file.
+fn records_set_hidden(
+    session: &mut Session,
+    request: RecordsSetHiddenRequest,
+) -> Result<RecordsSetHiddenResponse, CommandError> {
+    let record = session.record(&request.form_id, request.file.as_deref())?;
+    let record = record
+        .as_element_impl()
+        .and_then(ElementImpl::main_record_impl)
+        .ok_or_else(|| CommandError::new("internal", "the record is not a main record of a file"))?;
+    let mut records = Vec::new();
+    if request.overrides {
+        let master = record.master_or_self_impl();
+        records.push(master.clone());
+        records.extend(master.overrides());
+    } else {
+        records.push(record);
+    }
+    let mut changed = Vec::new();
+    for record in records {
+        let element: ElementRef = record.clone();
+        let was_hidden = xedit_core::implementation::sortable::is_hidden(&element);
+        if was_hidden == request.hidden {
+            continue;
+        }
+        let base = record.element_base();
+        if request.hidden {
+            base.hide();
+        } else {
+            base.show();
+        }
+        changed.push(format!(
+            "[{}] {}",
+            record.get_file().map(|file| file.get_name()).unwrap_or_default(),
+            record.get_name()
+        ));
+    }
+    Ok(RecordsSetHiddenResponse {
+        hidden: request.hidden,
+        changed,
+    })
 }
 
 /// A record in a list.
@@ -489,13 +639,20 @@ pub(crate) fn node_of(element: &ElementRef, depth: Option<usize>) -> ElementNode
     } else {
         String::new()
     };
-    let children = match (element.as_container(), depth) {
-        (Some(_), Some(0)) => Vec::new(),
-        (Some(container), depth) => (0..container.get_element_count())
+    // `wbFlagsAsArray`: the flags of a flags value are elements of their
+    // own in the GUI's tree and in the view (`ValueDoInit`).
+    let flags = xedit_core::implementation::flag::flags_as_array_of(element);
+    let children = match (element.as_container(), depth, flags) {
+        (Some(_), Some(0), _) => Vec::new(),
+        (Some(_), depth, Some(flags)) => flags
+            .iter()
+            .map(|flag| node_of(flag, depth.map(|depth| depth - 1)))
+            .collect(),
+        (Some(container), depth, None) => (0..container.get_element_count())
             .filter_map(|index| container.get_element(index))
             .map(|child| node_of(&child, depth.map(|depth| depth - 1)))
             .collect(),
-        (None, _) => Vec::new(),
+        (None, _, _) => Vec::new(),
     };
     ElementNode {
         display_name: (display_name != name).then_some(display_name),
@@ -744,6 +901,12 @@ pub fn register(registry: &mut Registry) {
         "Read an element of a record by path.",
         false,
         elements_get,
+    );
+    registry.register(
+        "records.set_hidden",
+        "Hide a record or show it again, as the navigation tree's Hide and the view's Unhide all do (element state esHidden); comparisons, the filter and the record lists leave hidden records out.",
+        false,
+        records_set_hidden,
     );
     registry.register(
         "elements.set",

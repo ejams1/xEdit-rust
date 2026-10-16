@@ -615,7 +615,9 @@ impl<'a> ConflictContext<'a> {
             mod_groups.filter(&mut records);
         }
 
-        // `IsHidden`: the port has no hidden records yet.
+        // `IsHidden`: the records the user hid are left out of the
+        // comparison, as the GUI's navigation tree hides them.
+        records.retain(|record| !sortable::is_hidden(&(record.clone() as ElementRef)));
         if records.is_empty() {
             records.push(record.clone());
         }
@@ -1148,6 +1150,43 @@ impl<'a> ConflictContext<'a> {
         root
     }
 
+    /// Port of the sibling comparison of `DoSetActiveRecord` (the GUI's
+    /// "Compare Selected"): the columns are the selected records of
+    /// different FormIDs themselves, and the rows are the members of the
+    /// first record's definition compared across all of them
+    /// (`ComparingSiblings`).
+    pub fn view_for_sibling_records(&mut self, records: &[Arc<MainRecordImpl>]) -> ViewNode {
+        let mut datas: Vec<ViewNodeData> = records
+            .iter()
+            .map(|record| {
+                let element: ElementRef = record.clone();
+                ViewNodeData {
+                    container: (record.get_element_count() != 0).then(|| ViewContainer::new(element.clone())),
+                    element: Some(element),
+                    ..Default::default()
+                }
+            })
+            .collect();
+        let mut root = ViewNode {
+            datas: std::mem::take(&mut datas),
+            children: Vec::new(),
+            index: 0,
+            visible: true,
+        };
+        if let Some(first) = records.first()
+            && let Some(def) = first.get_def()
+            && let Some(record_def) = def.as_record_def()
+        {
+            let count = record_def.get_member_count() + first.get_additional_element_count();
+            for index in 0..count.max(0) {
+                let child = self.build_view_node(&mut root.datas, index as usize, false);
+                root.children.push(child);
+            }
+            self.init_conflict_status(&mut root, false, true, &[]);
+        }
+        root
+    }
+
     /// A node of the view below `parent` at `index`, with its children when
     /// it has any (`vstViewInitNode`, `vstViewInitChildren`).
     fn build_view_node(&mut self, parent: &mut [ViewNodeData], index: usize, _parent_initialized: bool) -> ViewNode {
@@ -1465,12 +1504,73 @@ fn master_and_leafs(master: &Arc<MainRecordImpl>) -> Vec<Arc<MainRecordImpl>> {
 /// in a compare-to file with the same masters is unchanged against its
 /// master. The port loads no compare-to files yet
 /// (`fsCompareToHasSameMasters`), so this is never the case.
-fn is_compare_to_same(_node_datas: &[ViewNodeData]) -> bool {
-    // Upstream needs the override's file loaded as a compare-to file with
-    // the same masters (`fsCompareToHasSameMasters`), both records
-    // unmodified, the master in the file compared to, and their data equal
-    // (`ContentEquals`). The port loads no compare-to files yet.
-    false
+fn is_compare_to_same(node_datas: &[ViewNodeData]) -> bool {
+    // `TfrmMain.ConflictLevelForMainRecord`, the `IsCompareToSame` part: the
+    // override's file is a compare load with the same masters, neither
+    // record is modified, the master sits in the file the compare load
+    // compares to, and their data is equal (`ContentEquals`).
+    let [master_data, override_data] = node_datas else {
+        return false;
+    };
+    let (Some(master_element), Some(override_element)) = (&master_data.element, &override_data.element) else {
+        return false;
+    };
+    let (Some(master), Some(overridden)) = (element_as_record(master_element), element_as_record(override_element)) else {
+        return false;
+    };
+    if record_is_modified(&master) || record_is_modified(&overridden) {
+        return false;
+    }
+    let Some(file_override) = overridden.get_file() else {
+        return false;
+    };
+    if !file_override
+        .get_file_states()
+        .contains(FileState::fsCompareToHasSameMasters)
+    {
+        return false;
+    }
+    let Some(file_master) = master.get_file() else {
+        return false;
+    };
+    // `FileMaster.Equals(FileOverride.CompareToFile)`: the compare load
+    // holds the name of the file it compares to, and the masters of a
+    // session load once (`FilesMap`), so the name identifies it.
+    if !file_override
+        .get_compare_to_name()
+        .is_some_and(|name| name.eq_ignore_ascii_case(&file_master.get_name()))
+    {
+        return false;
+    }
+    content_equals(&master, &overridden)
+}
+
+/// `esModified in eStates`.
+fn record_is_modified(record: &MainRecordImpl) -> bool {
+    record
+        .element_base()
+        .has_state(xedit_core::implementation::write::ElementState::esModified)
+}
+
+/// Port of `TwbMainRecord.ContentEquals` with `TwbMainRecord.IsSameData`:
+/// both records are unmodified, their header fields are equal (signature,
+/// data size, flags, FormID) and their data is byte-identical.
+pub fn content_equals(master: &MainRecordImpl, other: &MainRecordImpl) -> bool {
+    if record_is_modified(master) || record_is_modified(other) {
+        return false;
+    }
+    let (Some(master_data), Some(other_data)) = (master.data(), other.data()) else {
+        return false;
+    };
+    if master_data.len() != other_data.len() {
+        return false;
+    }
+    let (master_struct, other_struct) = (master.mr_struct(), other.mr_struct());
+    master_struct.signature == other_struct.signature
+        && master_struct.data_size == other_struct.data_size
+        && master_struct.flags.0 == other_struct.flags.0
+        && master_struct.form_id == other_struct.form_id
+        && master_data == other_data
 }
 
 /// Port of `TfrmMain.InitNodes`: the cells of the row `index` below the

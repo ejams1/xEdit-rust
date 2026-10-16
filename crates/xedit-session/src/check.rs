@@ -165,11 +165,83 @@ pub(crate) fn files_check(session: &mut Session, request: CheckRequest) -> Resul
     })
 }
 
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ElementCheckRequest {
+    /// Load order FormID of the record as hexadecimal digits.
+    pub form_id: String,
+    /// Path of the element inside the record, with `\` between the names.
+    pub path: String,
+    /// Plugin the record is seen from; the last loaded plugin when omitted.
+    pub file: Option<String>,
+}
+
+#[derive(Serialize, JsonSchema)]
+pub struct ElementCheckResponse {
+    /// Full path of the checked element.
+    pub path: String,
+    /// `Check` of the element itself, empty when it is fine (the script
+    /// function `Check`).
+    pub check: String,
+    /// Whether the element itself has an error.
+    pub has_errors: bool,
+    /// The errors of the element and of everything below it, as
+    /// "Check for Errors" of that node reports them.
+    pub errors: Vec<ElementError>,
+    /// The records with errors below the element, in the order of the check.
+    pub records: Vec<RecordErrors>,
+}
+
+/// Port of the element method `Check` of the script API
+/// (`xejviScriptAdapterElement.pas`, `Element.Check`) together with the
+/// errors below the element, which is what "Check for Errors" on a selected
+/// node reports (`CheckForErrorsLinear`).
+fn elements_check(session: &mut Session, request: ElementCheckRequest) -> Result<ElementCheckResponse, CommandError> {
+    session.mode()?;
+    let record = session.record(&request.form_id, request.file.as_deref())?;
+    let element = record.get_element_by_path(&request.path).ok_or_else(|| {
+        CommandError::new(
+            "unknown_element",
+            format!("{} has no element at {}", record.get_name(), request.path),
+        )
+    })?;
+    if build_refs() {
+        session.ensure_refs()?;
+    }
+    // As in `files.check`: the GUI checks where editing is allowed and names
+    // the records with the shorter names.
+    let allowed = edit_allowed();
+    set_edit_allowed(true);
+    let shorter_names = display_shorter_names();
+    set_display_shorter_names(true);
+    let (check, report) = crate::clean::run_on_large_stack(|| {
+        let check = element.get_check();
+        let mut report = check::CheckReport::default();
+        check::check_for_errors_linear(&element, &mut report);
+        (check, report)
+    })?;
+    set_display_shorter_names(shorter_names);
+    set_edit_allowed(allowed);
+    Ok(ElementCheckResponse {
+        path: element.get_full_path(),
+        has_errors: !check.trim().is_empty(),
+        check,
+        errors: report.other_errors.into_iter().map(ElementError::from).collect(),
+        records: report.records.into_iter().map(RecordErrors::from).collect(),
+    })
+}
+
 pub fn register(registry: &mut Registry) {
     registry.register(
         "files.check",
         "Check files or records for errors: unresolved and wrongly typed FormIDs, missing required members, deleted or partial records with data, out of range values and the checks of the definitions (mniNavCheckForErrorsClick, CheckForErrorsLinear).",
         false,
         files_check,
+    );
+    registry.register(
+        "elements.check",
+        "Check one element of a record for errors, and everything below it, as \"Check for Errors\" on a selected node does (IwbElement.Check, CheckForErrorsLinear).",
+        false,
+        elements_check,
     );
 }
