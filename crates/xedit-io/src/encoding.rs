@@ -309,7 +309,13 @@ mod platform {
     pub fn map_case(bytes: &[u8], upper: bool) -> Vec<u8> {
         bytes
             .iter()
-            .map(|byte| if upper { byte.to_ascii_uppercase() } else { byte.to_ascii_lowercase() })
+            .map(|byte| {
+                if upper {
+                    byte.to_ascii_uppercase()
+                } else {
+                    byte.to_ascii_lowercase()
+                }
+            })
             .collect()
     }
 
