@@ -19576,11 +19576,13 @@ command = "script.run"
 source = "_wbAppName"
 
 [script."xejviScriptAdapterHost:cUnit.wbBuildAtlasFromAtlasMap:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "_wbBuildAtlasFromAtlasMap"
 
 [script."xejviScriptAdapterHost:cUnit.wbBuildAtlasFromTexturesList:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "_wbBuildAtlasFromTexturesList"
 
 [script."xejviScriptAdapterHost:cUnit.wbDataPath:function"]

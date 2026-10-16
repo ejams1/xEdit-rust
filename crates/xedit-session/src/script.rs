@@ -1102,6 +1102,140 @@ fn register_functions(
         );
     }
 
+    //=== The LOD and atlas builders (xejviScriptAdapterHost.pas) =============
+
+    /// The object of a `TStrings` argument as the LOD list the atlas
+    /// builders take: the lines with the integer their object holds (a
+    /// script builds `AddObject(name, TObject(flag))`); a nil or other
+    /// object counts as 0, as `PtrInt(nil)` does upstream.
+    fn lod_list(value: &Value) -> Option<xedit_assets::lod::StringList> {
+        let object = crate::script_rtl::classes::strings_object(value)?;
+        let borrowed = object.borrow();
+        let list = borrowed.string_list()?;
+        let mut result = xedit_assets::lod::StringList::new();
+        for (line, object) in list.lines().iter().zip(list.objects()) {
+            let flag = match object {
+                Value::Integer(flag) => u64::try_from(*flag).unwrap_or(0),
+                Value::Int64(flag) => u64::try_from(*flag).unwrap_or(0),
+                _ => 0,
+            };
+            result.items.push((xedit_io::encoding::ansi_string(line), flag));
+        }
+        Some(result)
+    }
+
+    /// The `LodEnv` of a script run. `frmMain.Settings` is
+    /// `xeSettingsFileName` (`crate::modgroups::settings_file`: the
+    /// `<AppName><ToolName>.ini` next to the program when it exists), and a
+    /// headless run of either side has none, so both read the defaults;
+    /// the Fallout 4 and Starfield overrides are the ones the GUI's
+    /// `wbLODDefaults` sets (as `lodgen.rs` applies them).
+    fn script_lod_env() -> xedit_assets::lod::LodEnv {
+        use xedit_core::interface::globals;
+        let ini = crate::modgroups::settings_file();
+        let settings = if ini.is_file() {
+            xedit_assets::sniff::processor::MemIniFile::load(&ini)
+        } else {
+            xedit_assets::sniff::processor::MemIniFile::default()
+        };
+        let mut defaults = xedit_assets::lod::LodDefaults::initial();
+        if globals::is_fallout4() || globals::is_starfield() {
+            defaults.atlas_width = 4096;
+            defaults.atlas_height = 4096;
+            defaults.uv_range = 1.1;
+            defaults.atlas_diffuse_format = xedit_assets::imaging::ImageFormat::Dxt5;
+            defaults.atlas_normal_format = xedit_assets::imaging::ImageFormat::Ati2n;
+        }
+        xedit_assets::lod::LodEnv {
+            data_path: globals::data_path(),
+            output_path: globals::output_path(),
+            scripts_path: globals::scripts_path(),
+            temp_path: globals::temp_path(),
+            settings,
+            defaults,
+        }
+    }
+
+    {
+        host_function(
+            adapter,
+            "wbBuildAtlasFromAtlasMap",
+            5,
+            vec![
+                ParamType::value(VarType::Empty),
+                ParamType::value(VarType::Empty),
+                ParamType::value(VarType::Empty),
+                ParamType::value(VarType::Empty),
+                ParamType::value(VarType::Empty),
+            ],
+            Rc::new(|_value: &mut Value, args: &mut Args| {
+                let Some(map) = lod_list(&args.values[0]) else {
+                    return Err(ValueError::interp(IE_DIRECT_INVALID_ARGUMENT));
+                };
+                let brightness = xedit_script::values::to_i32(&args.values[1])
+                    .map_err(|_| ValueError::interp(IE_DIRECT_INVALID_ARGUMENT))?;
+                let single = |value: &Value| {
+                    xedit_script::values::to_f64(value)
+                        .map(|value| value as f32)
+                        .map_err(|_| ValueError::interp(IE_DIRECT_INVALID_ARGUMENT))
+                };
+                let gamma = (
+                    single(&args.values[2])?,
+                    single(&args.values[3])?,
+                    single(&args.values[4])?,
+                );
+                let env = script_lod_env();
+                xedit_assets::lod::build_atlas_from_atlas_map(&env, &map, brightness, gamma)
+                    .map_err(|error| ValueError::external_class("Exception", error.0))?;
+                Ok(())
+            }),
+        );
+    }
+    {
+        host_function(
+            adapter,
+            "wbBuildAtlasFromTexturesList",
+            7,
+            vec![
+                ParamType::value(VarType::Empty),
+                ParamType::value(VarType::Empty),
+                ParamType::value(VarType::Empty),
+                ParamType::value(VarType::Empty),
+                ParamType::value(VarType::Empty),
+                ParamType::value(VarType::Empty),
+                ParamType::value(VarType::Empty),
+            ],
+            Rc::new(|_value: &mut Value, args: &mut Args| {
+                let Some(textures) = lod_list(&args.values[0]) else {
+                    return Err(ValueError::interp(IE_DIRECT_INVALID_ARGUMENT));
+                };
+                let integer = |value: &Value| {
+                    xedit_script::values::to_i32(value).map_err(|_| ValueError::interp(IE_DIRECT_INVALID_ARGUMENT))
+                };
+                let (max_texture_size, max_tile_size) = (integer(&args.values[1])?, integer(&args.values[2])?);
+                let (width, height) = (integer(&args.values[3])?, integer(&args.values[4])?);
+                let string = |value: &Value| match value {
+                    Value::Str(text) => xedit_io::encoding::ansi_string(text),
+                    _ => String::new(),
+                };
+                let (name, map_name) = (string(&args.values[5]), string(&args.values[6]));
+                let env = script_lod_env();
+                xedit_assets::lod::build_atlas_from_textures_list(
+                    &env,
+                    &textures,
+                    max_texture_size,
+                    max_tile_size,
+                    width,
+                    height,
+                    &name,
+                    &map_name,
+                )
+                .map_err(|error| ValueError::external_class("Exception", error.0))?;
+                Ok(())
+            }),
+        );
+    }
+
     //=== The loaded files (xejviScriptAdapterHost.pas, the `IwbFile` slice
     // of xejviScriptAdapterFile.pas and `Name` of
     // xejviScriptAdapterElement.pas) =========================================
