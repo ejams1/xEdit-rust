@@ -777,6 +777,42 @@
         "PseudoESL"
       ],
       "note": "the same with `-PseudoESL`: `wbIsPseudoLightMode` (and the ESL and small aliases) is true on both sides."
+    },
+    {
+      "script": "probes/walk-remove.pas",
+      "master": "tests/fixtures/parity/walk-churn.esm",
+      "close_after": true,
+      "save": [
+        "Skyrim.esm"
+      ],
+      "note": "parity #24 fixture: every processed record is logged and one temporary reference is removed (RemoveNode); the visitation order of the changing navigation tree, the records it re-visits after a removal and the saved bytes are compared"
+    },
+    {
+      "script": "probes/walk-move.pas",
+      "master": "tests/fixtures/parity/walk-churn.esm",
+      "close_after": true,
+      "save": [
+        "Skyrim.esm"
+      ],
+      "note": "parity #24 fixture: two temporary references move to the other cell (the contained-in relocation), so one temporary children group empties and goes and one is created while the walk runs; the visitation order and the saved bytes are compared"
+    },
+    {
+      "script": "probes/walk-cell-move.pas",
+      "master": "tests/fixtures/parity/walk-churn.esm",
+      "close_after": true,
+      "save": [
+        "Skyrim.esm"
+      ],
+      "note": "parity #24 fixture: the persistent cell moves between the worldspaces (the contained-in relocation of a cell, the block and sub-block chain of the new worldspace included) and its children follow it; the visitation order and the saved bytes are compared, and the port side reloads the save and verifies the references"
+    },
+    {
+      "script": "probes/topic-renumber.pas",
+      "master": "tests/fixtures/parity/walk-churn.esm",
+      "close_after": true,
+      "save": [
+        "Skyrim.esm"
+      ],
+      "note": "parity #24 fixture: the head of the response chain is renumbered, the PNAM of the following responses updates through the references and the topic children group sorts again; the chain order and the saved bytes are compared"
     }
   ]
 }
