@@ -1805,6 +1805,134 @@ fn parity_probe_lines(probe: &str) -> Vec<String> {
     all[start + 1..end].to_vec()
 }
 
+//=== The scripted filter (parity #27) ========================================
+
+/// A probe script of the parity fixtures run over its fixture master, the
+/// raw `script.run` response: the abort cases keep theirs (`fixture_lines`
+/// asserts a run that finished).
+fn fixture_response(probe: &str, fixture: &str) -> serde_json::Value {
+    let _guard = test_lock();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..").join("..");
+    let text = std::fs::read_to_string(root.join("crates/xtask/oracle/scripts/probes").join(probe)).unwrap();
+    let bytes = std::fs::read(root.join("tests/fixtures/parity").join(fixture)).unwrap();
+    // The fixture stands in for the game master, on disk, so the session
+    // loads it with the hardcoded records as the parity run does (`--load`).
+    let data = temp_dir(&format!("fixture-{probe}"));
+    std::fs::write(data.join("Skyrim.esm"), &bytes).unwrap();
+    xedit_core::implementation::clear_files_map();
+    xedit_core::implementation::reset_load_order_slots();
+    xedit_core::interface::clear_files();
+    let mut session = Session::load("sse", &[data.join("Skyrim.esm").display().to_string()]).unwrap();
+    xedit_core::interface::globals::set_allow_edit_game_master(true);
+    session.allow_edit(true);
+    let folder = script_folder(probe.trim_end_matches(".pas"), probe, &text);
+    let result = run(&mut session, &folder, probe, json!({}));
+    xedit_core::interface::globals::set_allow_edit_game_master(false);
+    result
+}
+
+/// The lines of a run without the `Elapsed Time: mm:ss` segment of the
+/// closing lines (the harness strips it too).
+fn without_elapsed(lines: &[String]) -> Vec<String> {
+    lines
+        .iter()
+        .map(|line| match line.find(", Elapsed Time: ") {
+            Some(at) => line[..at].to_owned(),
+            None => line.clone(),
+        })
+        .collect()
+}
+
+/// The lines the oracle wrote for the scripted filter probe (`cargo xtask
+/// parity script --phase run --script probes/filter-scripted`, 2026-10-15,
+/// equal): the walk calls `Filter` for the first five main record nodes it
+/// reaches (the hardcoded file's, whose EDIDs no `Keep` matches), the third
+/// call renames its record, the fifth clears `FilterScripted` so the calls
+/// stop there (the file's records after it are not consulted), the four
+/// rejected records leave the tree (`Filtered 4 of 23`) and the `Process`
+/// walk sees only the nodes the filter kept (the fixture's records and the
+/// hardcoded ones the filter accepted).
+#[test]
+fn the_filter_scripted_probe_gives_the_oracle_lines() {
+    let result = fixture_response("filter-scripted.pas", "filter-scripted.esm");
+    assert_eq!(result["aborted"], false, "{:?}", lines(&result));
+    assert!(result["self_terminated"].is_null(), "{:?}", lines(&result));
+    let expected: Vec<&str> = vec![
+        "Start: Applying Filter",
+        "f1: DefaultImpactDataSet [IPDS:00000276]",
+        "f2: AVDEPRECATED05 [AVIF:00000649]",
+        "f3: AVGrabbed [AVIF:00000648]",
+        "f4: AVGrabActorOffset [AVIF:00000647]",
+        "f5: AVStaminaRateMult [AVIF:00000644]",
+        "[SkyrimSE.exe] Filtered 4 of 23 records",
+        "Done: Applying Filter, [Pass 1] Processed Records: 40, [Pass 2] Processed Records: 35, Remaining unfiltered nodes: 34",
+        "applied",
+        "p: [wdKe:00000082]",
+        "p: KwdKeep2 [KYWD:00000802]",
+        "p: KwdDrop [KYWD:00000801]",
+        "p: KwdKeep [KYWD:00000800]",
+        "p: [TES4:00000000]",
+        "p: AVDestructionPowerMod [AVIF:0000063C]",
+        "p: AVTwoHandedPowerMod [AVIF:0000062F]",
+        "p: AVSmithingMod [AVIF:0000060B]",
+        "p: AVWeaponSpeedMult [AVIF:000005FC]",
+        "p: AVVariable05 [AVIF:000005EF]",
+        "p: AVVariable04 [AVIF:000005EE]",
+        "p: AVWardDeflection [AVIF:000005EA]",
+        "p: AVWardPower [AVIF:000005E6]",
+        "p: AVWaterWalking [AVIF:000005E1]",
+        "p: AVWaterBreathing [AVIF:000005E0]",
+        "p: AVVoicePoints [AVIF:000003F5]",
+        "p: PlayerBodyPartData [BPTD:0000001C]",
+        "p: ExplosionInFace [IMAD:00000166]",
+        "p: ImageSpaceConcussion [IMAD:00000164]",
+        "p: PlayerRef [PLYR:00000014]",
+        "p: eyeReanimate \"Reanimate Eyes\" [EYES:0000001A]",
+        "p: PlayCredits [GLOB:00000063]",
+        "p: NullTextureSet [TXST:00000028]",
+        "p: [TES4:00000000]",
+        "final calls=5",
+        "Done: Applying script \"filter-scripted\", Processed Records: 24",
+        "You can close this application now.",
+    ];
+    let all = lines(&result);
+    let start = all
+        .iter()
+        .position(|line| line.starts_with("Start: Applying script"))
+        .unwrap();
+    assert_eq!(without_elapsed(&all[start + 1..]), expected);
+}
+
+/// The lines the oracle wrote for the raising probe (`cargo xtask parity
+/// script --phase run --script probes/filter-scripted-error`, 2026-10-15,
+/// equal): the raise on the third call aborts the filter walk, so
+/// `PerformLongAction`'s handler of the filter's action prints `Error during
+/// Applying Filter: ...`, the run prints the exception with the location the
+/// interpreter recorded and `Aborted:` -- and the statements after the
+/// `ApplyFilter` call never run (no `after the filter` line).
+#[test]
+fn the_filter_scripted_error_probe_gives_the_oracle_lines() {
+    let result = fixture_response("filter-scripted-error.pas", "filter-scripted.esm");
+    assert_eq!(result["aborted"], true, "{:?}", lines(&result));
+    assert_eq!(result["error"], "scripted filter raises");
+    assert_eq!(result["error_location"], "unit FilterScriptedError line 20");
+    let expected: Vec<&str> = vec![
+        "Start: Applying Filter",
+        "f1: DefaultImpactDataSet [IPDS:00000276]",
+        "f2: AVDEPRECATED05 [AVIF:00000649]",
+        "f3: AVGrabbed [AVIF:00000648]",
+        "Error during Applying Filter: scripted filter raises",
+        "Exception in unit FilterScriptedError line 20: [Exception] scripted filter raises",
+        "Aborted: Applying script \"filter-scripted-error\"",
+    ];
+    let all = lines(&result);
+    let start = all
+        .iter()
+        .position(|line| line.starts_with("Start: Applying script"))
+        .unwrap();
+    assert_eq!(without_elapsed(&all[start + 1..]), expected);
+}
+
 /// The lines the oracle wrote for the streams probe (`cargo xtask parity
 /// script --phase run --script probes/streams`, 2026-10-15, equal): the JSON
 /// round trips over the memory, bytes, string and file streams with the
