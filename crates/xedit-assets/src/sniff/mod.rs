@@ -46,6 +46,7 @@ pub mod proc_jam_anim;
 pub mod proc_json_converter;
 pub mod proc_merge_properties;
 pub mod proc_merge_shapes;
+pub mod proc_mopp_update;
 pub mod proc_optimize;
 pub mod proc_optimize_kf;
 pub mod proc_ragdoll_constraint_update;

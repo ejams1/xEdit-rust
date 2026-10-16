@@ -59,6 +59,7 @@ use xedit_assets::sniff::procs::PROCS;
 use xedit_io::archive::Archive;
 use xedit_io::encoding::ansi_string;
 
+use super::gui::visible_windows;
 use super::hidden::HiddenCommand;
 use super::nif::{archive_key, fnv, windows_path};
 use super::{GAMES, Game, cache_dir, required_var};
@@ -153,6 +154,25 @@ impl Prep {
         })
     }
 }
+
+/// An operation the released build refuses at its start, before it reads a
+/// file: the oracle shows a message dialog and stays up (its automation
+/// mode closes only at the end of a run), and the port stops with the same
+/// message. One check per case, not per archive.
+struct RefusalCase {
+    /// The name of the case on the command line and in the report.
+    name: &'static str,
+    /// The title of the operation (`-OP:`).
+    operation: &'static str,
+}
+
+/// `Update MOPP code`: the released 64-bit `Sniff.exe` raises in
+/// `LoadMoppDll` before it looks for NifMopp.dll, and shows the message in
+/// a task dialog. The port reproduces the refusal (parity #38).
+const REFUSALS: &[RefusalCase] = &[RefusalCase {
+    name: "mopp-update",
+    operation: "Update MOPP code",
+}];
 
 /// The cases of the check: every ported operation with its defaults, and
 /// with the settings that take other paths through it.
@@ -1344,6 +1364,134 @@ fn run_port(
     Ok(results)
 }
 
+/// Runs the oracle with an operation that refuses at its start: it shows a
+/// message dialog and processes nothing. `SniffMessage` waits in the
+/// dialog, because the automation close only runs at the end of a
+/// processing run, so the dialog's caption is read and the process is
+/// ended through its own handle (never by image name). The dialog body is
+/// drawn by DirectUI and no window holds its text; the message the release
+/// raises is compared with the executable's own UTF-16 strings instead.
+fn run_sniff_refusal(sniff: &Path, work: &Path, case: &RefusalCase) -> Result<Vec<String>> {
+    fs::create_dir_all(work)?;
+    let exe = work.join("Sniff.exe");
+    if !exe.exists() {
+        fs::copy(sniff, &exe)?;
+    }
+    // Valid input and output folders: an empty input folder would stop the
+    // run on its own dialog ("Input directory/archive not found or
+    // invalid") before `OnStart`.
+    let input = work.join("refusal-in");
+    let output = work.join("refusal-out");
+    let _ = fs::remove_dir_all(&output);
+    fs::create_dir_all(&input)?;
+    fs::create_dir_all(&output)?;
+    let mut command = HiddenCommand::new(&exe);
+    command
+        .current_dir(work)
+        .arg(format!("-OP:{}", case.operation))
+        .arg(format!("-I:{}", windows_path(&input)))
+        .arg(format!("-O:{}", windows_path(&output)))
+        .arg("-skip:yes")
+        .arg("-all:no")
+        .arg("-subdir:yes")
+        .arg("-threads:1");
+    let mut child = command.spawn().context("starting Sniff")?;
+    let start = Instant::now();
+    let mut captions = Vec::new();
+    loop {
+        if let Some(code) = child.try_wait()? {
+            bail!("Sniff exited (exit code {code:#x}) without the refusal dialog");
+        }
+        for window in visible_windows(child.id()) {
+            // The task dialog `SniffMessage` shows: class `#32770`, its
+            // caption the application title with the operation in front.
+            if window.class == "#32770" && window.title.contains(case.operation) {
+                captions.push(window.title.clone());
+                break;
+            }
+        }
+        if !captions.is_empty() {
+            break;
+        }
+        if start.elapsed() > Duration::from_secs(60) {
+            child.kill();
+            bail!("Sniff showed no refusal dialog within 60 s");
+        }
+        std::thread::sleep(Duration::from_millis(200));
+    }
+    // The refusal happens before any file: the output folder stays empty.
+    std::thread::sleep(Duration::from_millis(500));
+    let written = fs::read_dir(&output)?.count();
+    child.kill();
+    ensure!(
+        written == 0,
+        "Sniff wrote {written} file(s) to the output folder before refusing"
+    );
+    Ok(captions)
+}
+
+/// The UTF-16 strings of the oracle executable that hold `needle`: a
+/// message this build can raise is one of them (Delphi stores string
+/// constants as UTF-16 in the image). Runs of printable characters are
+/// collected from both alignments, because nothing promises the alignment
+/// of a constant.
+fn oracle_utf16_strings(exe: &Path, needle: &str) -> Result<Vec<String>> {
+    let bytes = fs::read(exe)?;
+    let mut strings = BTreeSet::new();
+    for offset in 0..2 {
+        let mut run = Vec::new();
+        for pair in bytes[offset..].chunks_exact(2) {
+            let unit = u16::from_le_bytes([pair[0], pair[1]]);
+            if (32..0xD800).contains(&unit) || (0xE000..0xFFFF).contains(&unit) {
+                run.push(unit);
+                continue;
+            }
+            if run.len() >= 8 {
+                let text = String::from_utf16_lossy(&run);
+                if text.contains(needle) {
+                    strings.insert(text);
+                }
+            }
+            run.clear();
+        }
+        if run.len() >= 8 {
+            let text = String::from_utf16_lossy(&run);
+            if text.contains(needle) {
+                strings.insert(text);
+            }
+        }
+    }
+    Ok(strings.into_iter().collect())
+}
+
+/// The message the port stops with for the same operation, over the same
+/// empty folder.
+fn port_refusal(work: &Path, case: &RefusalCase) -> Result<String> {
+    let input = work.join("refusal-in");
+    let output = work.join("refusal-out");
+    let options = RunOptions {
+        operation: case.operation.to_owned(),
+        input: windows_path(&input),
+        output: windows_path(&output),
+        path_contains: Some(String::new()),
+        subdir: Some(true),
+        skip_on_errors: Some(true),
+        copy_all: Some(false),
+        threads: Some(1),
+        dry_run: false,
+        sink: None,
+    };
+    match port_run(None, &options) {
+        Err(RunError::Message(message)) => Ok(message),
+        Ok(report) => bail!(
+            "the port ran {} and processed {} files instead of refusing",
+            case.operation,
+            report.processed
+        ),
+        Err(error) => Err(anyhow::anyhow!("the port did not refuse: {error}")),
+    }
+}
+
 /// The outcome of a file.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 enum Outcome {
@@ -1494,6 +1642,9 @@ pub fn run(tag: &str, args: &[&str]) -> Result<()> {
     if options.list {
         for case in CASES {
             println!("{:<24} {}", case.name, case.operation);
+        }
+        for case in REFUSALS {
+            println!("{:<24} {} (refused at its start)", case.name, case.operation);
         }
         return Ok(());
     }
@@ -1809,6 +1960,69 @@ pub fn run(tag: &str, args: &[&str]) -> Result<()> {
                 }
             }
         }
+    }
+    for case in REFUSALS {
+        // The same selection rule as the cases: a full name selects that
+        // case, another text every case whose name holds it.
+        let selects = |part: &String| {
+            case.name == part.as_str()
+                || (!CASES.iter().any(|other| other.name == part.as_str())
+                    && !REFUSALS.iter().any(|other| other.name == part.as_str())
+                    && case.name.contains(part.as_str()))
+        };
+        if !options.cases.is_empty() && !options.cases.iter().any(selects) {
+            continue;
+        }
+        let work = scratch.join("sniff-work").join(case.name);
+        let cached = cache.join(case.name).join("refusal.json");
+        let start = Instant::now();
+        let captions = if cached.exists() && !options.refresh_oracle {
+            serde_json::from_slice::<Vec<String>>(&fs::read(&cached)?)?
+        } else {
+            let captions = run_sniff_refusal(&sniff, &work, case)?;
+            fs::create_dir_all(cached.parent().unwrap())?;
+            fs::write(&cached, serde_json::to_vec(&captions)?)?;
+            say(
+                format!(
+                    "oracle        {} (refusal dialog {:?}, {:.0} s)",
+                    case.name,
+                    captions.first().map(String::as_str).unwrap_or(""),
+                    start.elapsed().as_secs_f64()
+                ),
+                &mut report,
+            );
+            captions
+        };
+        let message = match port_refusal(&work, case) {
+            Ok(message) => message,
+            Err(error) => {
+                say(format!("port failed   {}: {error:#}", case.name), &mut report);
+                *totals.entry(Outcome::PortFailed).or_default() += 1;
+                continue;
+            }
+        };
+        // The dialog's body is drawn by DirectUI and holds no readable
+        // text; the message the oracle raises is the UTF-16 constant in its
+        // executable, and the port's message has to be exactly one of the
+        // strings of the oracle binary that names the refusal.
+        let messages = oracle_utf16_strings(&sniff, "bits version of Sniff")?;
+        let outcome = if !captions.is_empty() && messages.iter().any(|text| text == &message) {
+            Outcome::Equal
+        } else {
+            Outcome::ErrorDifferent
+        };
+        *totals.entry(outcome).or_default() += 1;
+        say(
+            format!(
+                "{:<22} refusal: {}; dialog {:?}; oracle message(s) {:?}; port message {:?}",
+                case.name,
+                outcome.name(),
+                captions.first().map(String::as_str).unwrap_or(""),
+                messages,
+                message
+            ),
+            &mut report,
+        );
     }
     let summary: Vec<String> = totals
         .iter()

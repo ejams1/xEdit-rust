@@ -487,8 +487,9 @@ rust = "crates/xedit-assets/src/sniff/proc_merge_shapes.rs"
 note = "The frame is the processor's fields with the .dfm defaults (on_show); checked by cargo xtask parity sniff."
 
 [units."Sniff/Proc/ProcMoppUpdate.pas"]
-status = "not-ported"
-note = "Calls NifMopp.dll, Havok's MOPP builder, which is not part of the source and is not redistributable."
+status = "ported"
+rust = "crates/xedit-assets/src/sniff/proc_mopp_update.rs"
+note = "The operation, its games, extensions and the thread cap of 1, and both of LoadMoppDll's failures with their exact messages: the released 4.1.5q Sniff.exe is 64-bit, so OnStart raises 'You are running 64 bits version of Sniff. This operation works in 32 bits (x86) Sniff only.' before it looks for NifMopp.dll, which is Havok's library and is not part of the source, not in the release archive and not redistributable; a build that reached the loader gives 'Unable to load NifMopp.dll' as upstream does. The DLL-backed body of ProcessFile is not ported: no released binary can reach it, so there is no oracle (parity #38, cargo xtask parity sniff --case mopp-update)."
 
 [units."Sniff/Proc/ProcOptimize.pas"]
 status = "ported"
