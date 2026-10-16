@@ -2512,15 +2512,14 @@ pub fn run_script(
     if last_error.is_none()
         && let Some(answer) = model.borrow().leftover()
     {
-        last_error = Some(ExecError::new(
-            xedit_script::error::IE_UNKNOWN_IDENTIFIER,
-            None,
-            "",
-            &format!(
-                "the run never showed the dialog the recorded answer names ([{}] \"{}\")",
-                answer.class, answer.title
-            ),
+        // A non-interpreter failure carrying the port's own text; the
+        // distinct class names it in the log line.
+        let mut error = ExecError::external(&format!(
+            "the run never showed the dialog the recorded answer names ([{}] \"{}\")",
+            answer.class, answer.title
         ));
+        error.class_name = Some("EVclUnusedAnswers".to_owned());
+        last_error = Some(error);
     }
 
     {

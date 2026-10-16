@@ -2476,11 +2476,23 @@ fn a_dialog_without_an_answer_stops_the_run_with_the_question() {
     assert_eq!(pending["class"], "TInputQueryForm");
     assert_eq!(pending["title"], "Enter");
     assert_eq!(pending["text"], "Name");
+    // The raw message is the response's `error`; the raised class appears in
+    // the log line, as for every runtime error.
     let error = result["error"].as_str().unwrap_or_default();
-    assert!(error.contains("EVclInteractionRequired"), "{error}");
+    assert!(error.contains("needs an answer"), "{error}");
     let lines = lines(&result);
-    assert!(lines.iter().any(|line| line.contains("needs an answer")), "{lines:?}");
-    assert!(lines.iter().any(|line| line.contains("Aborted: Applying script \"Dialogs\"")), "{lines:?}");
+    assert!(
+        lines
+            .iter()
+            .any(|line| line.contains("[EVclInteractionRequired]") && line.contains("needs an answer")),
+        "{lines:?}"
+    );
+    assert!(
+        lines
+            .iter()
+            .any(|line| line.contains("Aborted: Applying script \"Dialogs\"")),
+        "{lines:?}"
+    );
     let _ = std::fs::remove_dir_all(&folder);
 }
 
@@ -2528,6 +2540,8 @@ fn a_form_closes_through_the_clicked_button_and_stores_its_events() {
     let folder = script_folder(
         "vcl-form",
         "FormModal.pas",
+        // The corpus shape: the work runs from `Initialize` (the compile
+        // front end does not accept a unit main block).
         "unit FormModal;\n\
          var\n\
            frm: TForm;\n\
@@ -2536,6 +2550,7 @@ fn a_form_closes_through_the_clicked_button_and_stores_its_events() {
          begin\n\
            AddMessage('fired');\n\
          end;\n\
+         function Initialize: Integer;\n\
          begin\n\
            frm := TForm.Create(nil);\n\
            frm.Caption := 'Pick';\n\
@@ -2546,6 +2561,8 @@ fn a_form_closes_through_the_clicked_button_and_stores_its_events() {
            btn.OnClick := OnGo;\n\
            AddMessage('modal=' + IntToStr(frm.ShowModal));\n\
            frm.Free;\n\
+           Result := 1;\n\
+         end;\n\
          end.\n",
     );
     let mut session = open_session();
@@ -2578,6 +2595,7 @@ fn keys_toggle_a_check_list_before_the_button_closes_the_form() {
            frm: TForm;\n\
            lb: TCheckListBox;\n\
            btn: TButton;\n\
+         function Initialize: Integer;\n\
          begin\n\
            frm := TForm.Create(nil);\n\
            frm.Caption := 'Pick';\n\
@@ -2595,6 +2613,8 @@ fn keys_toggle_a_check_list_before_the_button_closes_the_form() {
            if lb.Checked[1] then AddMessage('c1') else AddMessage('c1no');\n\
            if lb.Checked[2] then AddMessage('c2') else AddMessage('c2no');\n\
            frm.Free;\n\
+           Result := 1;\n\
+         end;\n\
          end.\n",
     );
     let mut session = open_session();

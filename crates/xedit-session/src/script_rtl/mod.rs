@@ -173,10 +173,10 @@ pub trait Vcl {
 
     /// One member of a registered VCL class: a property read or write, a
     /// method, or a constructor (a `Get` named `Create`, whose receiver is
-    /// nil and whose value is the new object). `value` is the result for a
-    /// read and the assigned value for a write; a method without a result
-    /// leaves it untouched. `args` carries the call's arguments (the index
-    /// first for an indexed property).
+    /// the class value or nil and whose value is the new object). `value` is
+    /// the result for a read and the assigned value for a write; a method
+    /// without a result leaves it untouched. `args` carries the call's
+    /// arguments (the index first for an indexed property).
     fn member(
         &mut self,
         class: &str,
