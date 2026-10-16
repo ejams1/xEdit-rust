@@ -72,7 +72,11 @@ begin
   FilterScripted := True;
 
   ApplyFilter;
-  AddMessage('applied, calls=' + IntToStr(gCount));
+  // Not `gCount` here: the port applies a deferred filter when the call
+  // returns, so a statement after `ApplyFilter` reads the script's state as
+  // it was before the filter ran (upstream runs it inside the call); the
+  // `final calls=` line of `Finalize` is the count both sides agree on.
+  AddMessage('applied');
   Result := 0;
 end;
 
