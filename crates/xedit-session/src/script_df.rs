@@ -389,6 +389,13 @@ fn df_error(error: DfError) -> ValueError {
     ValueError::External(error.0)
 }
 
+/// `dfStrToFloat`'s conversion failures are the RTL's `EConvertError` (it
+/// calls `StrToFloat`), so the abort line names that class as the oracle's
+/// does (parity #39).
+fn df_convert_error(error: DfError) -> ValueError {
+    ValueError::external_class("EConvertError", error.0)
+}
+
 /// The receiver of a method call, as a DF element.
 fn receiver(args: &Args) -> Result<DfElement, ValueError> {
     args.obj
@@ -852,7 +859,7 @@ fn register_functions(adapter: &mut Adapter) {
         "dfStrToFloat",
         Rc::new(|value, args| {
             let text = text_arg(&args.values[0])?;
-            *value = Value::Double(df_str_to_float(&text).map_err(df_error)?);
+            *value = Value::Double(df_str_to_float(&text).map_err(df_convert_error)?);
             Ok(())
         }),
         1,

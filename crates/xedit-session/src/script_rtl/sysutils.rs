@@ -66,6 +66,13 @@ fn external(message: impl Into<String>) -> ValueError {
     ValueError::External(message.into())
 }
 
+/// A conversion the RTL reports as an `EConvertError` (`StrToFloat`,
+/// `StrToInt`, the date parsers): the abort line names the class
+/// (`Exception in unit ...: [EConvertError] ...`), as the oracle's does.
+fn convert_error(message: impl Into<String>) -> ValueError {
+    ValueError::external_class("EConvertError", message.into())
+}
+
 //=== Exception objects =======================================================
 
 /// The object `Exception.Create`/`CreateHelp` produce: the registered class
@@ -593,11 +600,19 @@ fn register_functions(adapter: &mut Adapter) {
         Ok(())
     });
     f(adapter, "AnsiUpperCase", &[EMPTY], |value, args| {
+<<<<<<< HEAD
         *value = text_value(upper_case(&arg_str(args, 0)?));
         Ok(())
     });
     f(adapter, "AnsiLowerCase", &[EMPTY], |value, args| {
         *value = text_value(lower_case(&arg_str(args, 0)?));
+=======
+        *value = text_value(xedit_io::encoding::ansi_upper_case(&arg_str(args, 0)));
+        Ok(())
+    });
+    f(adapter, "AnsiLowerCase", &[EMPTY], |value, args| {
+        *value = text_value(xedit_io::encoding::ansi_lower_case(&arg_str(args, 0)));
+>>>>>>> a7a11d5 (Parity #39 WIP: the fitted str_to_float, the ANSI case mapping and the docs)
         Ok(())
     });
     f(adapter, "AnsiCompareStr", &[EMPTY, EMPTY], |value, args| {
@@ -719,6 +734,7 @@ fn register_functions(adapter: &mut Adapter) {
         Ok(())
     });
     f(adapter, "StrToInt", &[EMPTY], |value, args| {
+<<<<<<< HEAD
         // An object reads as `''` here (probe `x-273`).
         let text = match arg(args, 0) {
             Value::Object(_) | Value::Class(_) => String::new(),
@@ -728,6 +744,10 @@ fn register_functions(adapter: &mut Adapter) {
         *value = Value::Integer(
             format::str_to_int(&text).map_err(|message| ValueError::external_class("EConvertError", message))?,
         );
+=======
+        let text = arg_text(args, 0)?;
+        *value = Value::Integer(format::str_to_int(&text).map_err(convert_error)?);
+>>>>>>> a7a11d5 (Parity #39 WIP: the fitted str_to_float, the ANSI case mapping and the docs)
         Ok(())
     });
     f(adapter, "StrToIntDef", &[EMPTY, EMPTY], |value, args| {
@@ -971,14 +991,18 @@ fn register_functions(adapter: &mut Adapter) {
     });
     f(adapter, "StrToFloat", &[EMPTY], |value, args| {
         let text = arg_text(args, 0)?;
+<<<<<<< HEAD
         *value = Value::Double(
             format::str_to_float(&text).map_err(|message| ValueError::external_class("EConvertError", message))?,
         );
+=======
+        *value = Value::Double(format::str_to_float(&text).map_err(convert_error)?);
+>>>>>>> a7a11d5 (Parity #39 WIP: the fitted str_to_float, the ANSI case mapping and the docs)
         Ok(())
     });
     f(adapter, "StrToCurr", &[EMPTY], |value, args| {
         let text = arg_text(args, 0)?;
-        *value = Value::Double(format::str_to_float(&text).map_err(external)?);
+        *value = Value::Double(format::str_to_float(&text).map_err(convert_error)?);
         Ok(())
     });
 
@@ -1368,17 +1392,29 @@ fn register_functions(adapter: &mut Adapter) {
     });
     f(adapter, "StrToDate", &[EMPTY], |value, args| {
         let text = arg_text(args, 0)?;
+<<<<<<< HEAD
         *value = Value::Date(datetime::str_to_date(&text).map_err(external)?);
+=======
+        *value = Value::Double(datetime::str_to_date(&text).map_err(convert_error)?);
+>>>>>>> a7a11d5 (Parity #39 WIP: the fitted str_to_float, the ANSI case mapping and the docs)
         Ok(())
     });
     f(adapter, "StrToTime", &[EMPTY], |value, args| {
         let text = arg_text(args, 0)?;
+<<<<<<< HEAD
         *value = Value::Date(datetime::str_to_time(&text).map_err(external)?);
+=======
+        *value = Value::Double(datetime::str_to_time(&text).map_err(convert_error)?);
+>>>>>>> a7a11d5 (Parity #39 WIP: the fitted str_to_float, the ANSI case mapping and the docs)
         Ok(())
     });
     f(adapter, "StrToDateTime", &[EMPTY], |value, args| {
         let text = arg_text(args, 0)?;
+<<<<<<< HEAD
         *value = Value::Date(datetime::str_to_date_time(&text).map_err(external)?);
+=======
+        *value = Value::Double(datetime::str_to_date_time(&text).map_err(convert_error)?);
+>>>>>>> a7a11d5 (Parity #39 WIP: the fitted str_to_float, the ANSI case mapping and the docs)
         Ok(())
     });
     f(adapter, "FormatDateTime", &[EMPTY, EMPTY], |value, args| {
@@ -1656,8 +1692,11 @@ fn values_payload(value: &Value) -> Vec<u8> {
     }
 }
 
-/// `AnsiUpperCase`/`UpperCase`: the ASCII fold (the en-US locale's
-/// single-byte tables map A-Z and leave the rest).
+/// `UpperCase` (the Unicode string one): the RTL maps only the ASCII
+/// letters; the parity #39 probe showed `UpperCase(#228 + 'abc')` is
+/// `#228ABC` in the oracle, where the ANSI variants map the code page's
+/// high bytes too (`AnsiUpperCase` of `#228` is `#196`, through
+/// `LCMapStringA`).
 fn upper_case(text: &[u8]) -> Vec<u8> {
     text.iter().map(|byte| byte.to_ascii_uppercase()).collect()
 }

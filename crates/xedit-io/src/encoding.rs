@@ -142,6 +142,19 @@ pub fn oem_string(bytes: &[u8]) -> String {
     platform::get_string(1, bytes).unwrap_or_else(|_| String::from_utf8_lossy(bytes).into_owned())
 }
 
+/// Delphi `AnsiLowerCase(S: AnsiString)`: `LCMapStringA` with
+/// `LCMAP_LOWERCASE` over the system code page, the same call the RTL
+/// makes, so a byte the code page maps (`0xC0` is `0xE0`) lowercases and
+/// one it does not stays as it is.
+pub fn ansi_lower_case(bytes: &[u8]) -> Vec<u8> {
+    platform::map_case(bytes, false)
+}
+
+/// Delphi `AnsiUpperCase(S: AnsiString)`, as [`ansi_lower_case`].
+pub fn ansi_upper_case(bytes: &[u8]) -> Vec<u8> {
+    platform::map_case(bytes, true)
+}
+
 /// Delphi `AnsiCompareText` (and the order of `TStringList.Sort`): the
 /// comparison of the user's locale, ignoring case (`CompareString` with
 /// `NORM_IGNORECASE`); elsewhere the upper case strings by code unit.
@@ -172,6 +185,29 @@ mod platform {
             .position(|&unit| unit == 0)
             .unwrap_or(info.CodePageName.len());
         Some(String::from_utf16_lossy(&info.CodePageName[..length]))
+    }
+
+    /// `LCMapStringA` over the system code page (`CP_ACP`).
+    pub fn map_case(bytes: &[u8], upper: bool) -> Vec<u8> {
+        use windows_sys::Win32::Globalization::{LCMAP_LOWERCASE, LCMAP_UPPERCASE, LCMapStringA};
+        let flags = if upper { LCMAP_UPPERCASE } else { LCMAP_LOWERCASE };
+        let Ok(length) = i32::try_from(bytes.len()) else {
+            return bytes.to_vec();
+        };
+        if length == 0 {
+            return Vec::new();
+        }
+        // SAFETY: `bytes` is valid for `length` bytes; a null destination
+        // with size 0 asks for the required size.
+        let size = unsafe { LCMapStringA(0x0400, flags, bytes.as_ptr(), length, std::ptr::null_mut(), 0) };
+        if size <= 0 {
+            return bytes.to_vec();
+        }
+        let mut mapped = vec![0u8; size as usize];
+        // SAFETY: `mapped` is valid for `size` bytes and `bytes` for `length`.
+        let written = unsafe { LCMapStringA(0x0400, flags, bytes.as_ptr(), length, mapped.as_mut_ptr(), size) };
+        mapped.truncate(written.max(0) as usize);
+        mapped
     }
 
     pub fn compare_text(a: &str, b: &str) -> std::cmp::Ordering {
@@ -267,6 +303,14 @@ mod platform {
     /// back to `Windows-<code page>`.
     pub fn code_page_name(_code_page: u32) -> Option<String> {
         None
+    }
+
+    /// No `LCMapStringA` outside Windows: the ASCII fold.
+    pub fn map_case(bytes: &[u8], upper: bool) -> Vec<u8> {
+        bytes
+            .iter()
+            .map(|byte| if upper { byte.to_ascii_uppercase() } else { byte.to_ascii_lowercase() })
+            .collect()
     }
 
     pub fn compare_text(a: &str, b: &str) -> std::cmp::Ordering {

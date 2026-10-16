@@ -370,7 +370,7 @@ end;
 procedure Hash;
 var
   i: Integer;
-  s: string;
+  s, c: string;
 begin
   for i := 1 to 255 do
     Log('hash', 'c' + IntToStr(i) + '=' + IntToStr(dfCalcHash(Chr(i))));
@@ -378,30 +378,29 @@ begin
   Log('hash', 'a=' + IntToStr(dfCalcHash('a')));
   Log('hash', 'Aeble=' + IntToStr(dfCalcHash('Aeble')));
   Log('hash', 'numblocks=' + IntToStr(dfCalcHash('Num Blocks')));
-  s := 'Name' + Chr(195) + 'rger';
+  s := 'Name' + #195 + 'rger';
   Log('hash', 'Name-ar=' + IntToStr(dfCalcHash(s)));
-  s := 'a' + Chr(196) + 'b' + Chr(214) + 'c' + Chr(220) + 'd' + Chr(223);
+  s := 'a' + #196 + 'b' + #214 + 'c' + #220 + 'd' + #223;
   Log('hash', 'aAdbOcdUes=' + IntToStr(dfCalcHash(s)));
   Log('hash', 'length=' + IntToStr(dfCalcHash(s)));
   // The multi-byte probes solve the bytes the hash runs over: an ASCII
   // anchor before and after a character tells whether it converts to one
-  // byte, drops, or expands.
+  // byte, drops, or expands. `Chr` cannot be concatenated (`'x' + Chr(5)`
+  // is a Type mismatch in both dialects), so the characters come from a
+  // literal string by `Copy`, and every mapped character is logged as its
+  // `Ord` so the log stays ASCII.
+  s := #192 + #193 + #194 + #195 + #196 + #197 + #198 + #199 + #200 + #201 + #202 + #203 + #204 + #205 + #206 + #207 + #208 + #209 + #210 + #211 + #212 + #213 + #214 + #215 + #216 + #217 + #218 + #219 + #220 + #221 + #222 + #223 + #224 + #225 + #226 + #227 + #228 + #229 + #230 + #231 + #232 + #233 + #234 + #235 + #236 + #237 + #238 + #239 + #240 + #241 + #242 + #243 + #244 + #245 + #246 + #247 + #248 + #249 + #250 + #251 + #252 + #253 + #254 + #255;
   for i := 192 to 255 do begin
-    s := Chr(i);
-    Log('mb', 'one' + IntToStr(i) + '=' + IntToStr(dfCalcHash(s)));
-    Log('mb', 'a-one' + IntToStr(i) + '=' + IntToStr(dfCalcHash('a' + s)));
-    Log('mb', 'one-a' + IntToStr(i) + '=' + IntToStr(dfCalcHash(s + 'a')));
-    Log('mb', 'lower' + IntToStr(i) + '=' + IntToStr(Ord(LowerCase(s)[1])) + ':' + IntToStr(Length(LowerCase(s))));
-    Log('mb', 'upper' + IntToStr(i) + '=' + IntToStr(Ord(UpperCase(s)[1])) + ':' + IntToStr(Length(UpperCase(s))));
-    Log('mb', 'ansilower' + IntToStr(i) + '=' + IntToStr(Ord(AnsiLowerCase(s)[1])));
-    Log('mb', 'ansiupper' + IntToStr(i) + '=' + IntToStr(Ord(AnsiUpperCase(s)[1])));
+    c := Copy(s, i - 191, 1);
+    Log('mb', 'one' + IntToStr(i) + '=' + IntToStr(dfCalcHash(c)));
+    Log('mb', 'a-one' + IntToStr(i) + '=' + IntToStr(dfCalcHash('a' + c)));
+    Log('mb', 'one-a' + IntToStr(i) + '=' + IntToStr(dfCalcHash(c + 'a')));
+    Log('mb', 'lower' + IntToStr(i) + '=' + IntToStr(Ord(Copy(LowerCase(c), 1, 1))));
+    Log('mb', 'upper' + IntToStr(i) + '=' + IntToStr(Ord(Copy(UpperCase(c), 1, 1))));
+    Log('mb', 'ansilower' + IntToStr(i) + '=' + IntToStr(Ord(Copy(AnsiLowerCase(c), 1, 1))));
+    Log('mb', 'ansiupper' + IntToStr(i) + '=' + IntToStr(Ord(Copy(AnsiUpperCase(c), 1, 1))));
   end;
-  Log('mb', 'minuscule=' + IntToStr(Ord(LowerCase(Chr(73))[1])));
-  Log('mb', 'sharp=' + IntToStr(Ord(UpperCase(Chr(223))[1])) + ':' + IntToStr(Length(UpperCase(Chr(223)))));
-  Log('mb', 'idot=' + IntToStr(Ord(LowerCase(Chr(304))[1])) + ':' + IntToStr(Length(LowerCase(Chr(304)))));
-  Log('mb', 'greek=' + IntToStr(Ord(LowerCase(Chr(914))[1])) + ':' + IntToStr(Ord(UpperCase(Chr(946))[1])));
-  Log('mb', 'cyr=' + IntToStr(Ord(LowerCase(Chr(1044))[1])) + ':' + IntToStr(Ord(UpperCase(Chr(1076))[1])));
-  Log('mb', 'longs=' + IntToStr(Ord(LowerCase(Chr(383))[1])));
+  Log('mb', 'longs=' + IntToStr(Ord(Copy(LowerCase(#383), 1, 1))));
 end;
 
 procedure Locale;
@@ -422,10 +421,12 @@ begin
   Log('locale', 'CompareStr(a,A)=' + IntToStr(CompareStr('a', 'A')));
   Log('locale', 'SameText(abc,ABC)=' + IsTrue(SameText('abc', 'ABC')));
   Log('locale', 'SameText(a,B)=' + IsTrue(SameText('a', 'B')));
-  Log('locale', 'Lower(' + Chr(196) + ')=[' + LowerCase(Chr(196) + 'ABC') + ']');
-  Log('locale', 'Upper(' + Chr(228) + ')=[' + UpperCase(Chr(228) + 'abc') + ']');
-  Log('locale', 'AnsiLower=' + AnsiLowerCase(Chr(196) + Chr(214) + 'ABC'));
-  Log('locale', 'AnsiUpper=' + AnsiUpperCase(Chr(228) + Chr(246) + 'abc'));
+  Log('locale', 'Lower196=' + IntToStr(Ord(Copy(LowerCase(#196 + 'ABC'), 1, 1))));
+  Log('locale', 'Upper228=' + IntToStr(Ord(Copy(UpperCase(#228 + 'abc'), 1, 1))));
+  Log('locale', 'AnsiLower=' + IntToStr(Ord(Copy(AnsiLowerCase(#196 + #214 + 'ABC'), 1, 1)))
+    + ',' + IntToStr(Ord(Copy(AnsiLowerCase(#196 + #214 + 'ABC'), 2, 1))));
+  Log('locale', 'AnsiUpper=' + IntToStr(Ord(Copy(AnsiUpperCase(#228 + #246 + 'abc'), 1, 1)))
+    + ',' + IntToStr(Ord(Copy(AnsiUpperCase(#228 + #246 + 'abc'), 2, 1))));
   list := TStringList.Create;
   list.Add('delta');
   list.Add('Charlie');
@@ -438,17 +439,21 @@ begin
     s := s + list[i] + '|';
   Log('locale', 'sort-basic=' + s);
   list.Clear;
-  list.Add(Chr(233) + 'clair');
+  list.Add(#233 + 'clair');
   list.Add('eclair');
   list.Add('Eclair');
-  list.Add(Chr(196) + 'rger');
+  list.Add(#196 + 'rger');
   list.Add('zebra');
   list.Add('Zebra');
   list.Sort;
   s := '';
   for i := 0 to list.Count - 1 do
     s := s + list[i] + '|';
-  Log('locale', 'sort-accent=' + s);
+  // The characters of the sorted list as their first bytes, so the log line
+  // stays ASCII (the port's strings are bytes, the oracle's UTF-16 units).
+  Log('locale', 'sort-accent=' + IntToStr(Ord(Copy(s, 1, 1))) + ',' + IntToStr(Ord(Copy(s, 7, 1)))
+    + ',' + IntToStr(Ord(Copy(s, 15, 1))) + ',' + IntToStr(Ord(Copy(s, 21, 1)))
+    + ',' + IntToStr(Ord(Copy(s, 27, 1))) + ',' + IntToStr(Ord(Copy(s, 33, 1))));
   Log('locale', 'indexof=' + IntToStr(list.IndexOf('Eclair')));
   list.Free;
 end;

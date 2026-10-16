@@ -724,22 +724,27 @@ pub fn trunc(value: f64) -> i64 {
 
 /// Port of `StrToFloat` for a double: `System.SysUtils.TextToFloat` over
 /// the RTL's `Val`, fitted at full precision against the oracle (parity
-/// #39).
+/// #39; the oracle's own `maxdouble`/`pi`/30-digit results are the tests).
 ///
-/// The significant digits are accumulated into a `Double` with
-/// `value := value * 10 + digit`, the digits after the decimal point count
-/// against the exponent, the explicit exponent adds to it, and the value is
-/// scaled by the RTL's paired-table [`power10`]. That is the RTL's own
-/// rounding, which is not the correctly rounded parse: the text of the
-/// largest double gives the double one ulp below it, and the 21 digits of
-/// Pi give `0x1.921fb54442d17p+1` where a correctly rounded parse gives
-/// `...d18`.
+/// The digits of the integer part and of the fraction are accumulated into
+/// an `Int64` while fewer than 19 digits have gone in and the next one does
+/// not overflow the accumulator; every digit after that is appended in
+/// double precision with `value := value * 10 + digit`. The digits after
+/// the decimal point count against the exponent, the explicit exponent adds
+/// to it, and the value is scaled by the RTL's paired-table [`power10`].
+/// That mixture is the RTL's own rounding and not the correctly rounded
+/// parse: the text of the largest double gives the double one ulp below it,
+/// the 21 digits of Pi give `0x1.921fb54442d17p+1` where a correctly rounded
+/// parse gives `...d18`, and `182222222222222222` gives the exact integer
+/// while `123456789012345678901234567890` gives `0x1.8ee90ff6c373dp+96`.
 ///
-/// The words `Inf`/`Infinity`/`NaN` are the numbers of the same name, case
-/// insensitively (`TextToFloat` reads them before `Val` runs). Blanks are
-/// skipped around the number; a malformed text, a character the scanner
-/// stops at, and a value outside the double range return `None`, which the
-/// callers report as the RTL's `EConvertError`.
+/// `TextToFloat` reads the words before `Val` runs: `Inf` with or without a
+/// sign and `NaN` without one, case insensitively (the oracle refuses
+/// `Infinity`). Blanks are skipped around the number. A malformed text, a
+/// character the scanner stops at, an exponent of 632 or more in either
+/// direction, and a result that overflows to infinity return `None`, which
+/// the callers report as the RTL's `EConvertError`; an underflow to zero is
+/// a value (`1e-400` is `0.0`).
 pub fn str_to_float(text: &str) -> Option<f64> {
     let bytes = text.as_bytes();
     let blank = |byte: u8| byte == b' ' || byte == b'\t';
@@ -754,36 +759,44 @@ pub fn str_to_float(text: &str) -> Option<f64> {
         signed = true;
         i += 1;
     }
-    if !signed {
-        // `TextToFloat` reads the special words without a sign.
+    {
         let rest = &text[i..];
-        for (word, value) in [
-            ("Infinity", f64::INFINITY),
-            ("Inf", f64::INFINITY),
-            ("NaN", f64::from_bits(NAN_BITS)),
-        ] {
-            if let Some(head) = rest.get(..word.len())
-                && head.eq_ignore_ascii_case(word)
-            {
-                let trailing = &rest[word.len()..];
-                if trailing.is_empty() || trailing.bytes().all(blank) {
-                    return Some(value);
-                }
-            }
+        let word = |word: &str| {
+            rest.get(..word.len()).is_some_and(|head| head.eq_ignore_ascii_case(word))
+                && rest[word.len()..].bytes().all(blank)
+        };
+        if word("Inf") {
+            return Some(if negative { f64::NEG_INFINITY } else { f64::INFINITY });
+        }
+        if !signed && word("NaN") {
+            return Some(f64::from_bits(NAN_BITS));
         }
     }
+    let mut acc: i64 = 0;
+    let mut exact = 0usize;
     let mut mantissa = 0.0f64;
-    let mut fraction = 0i64;
+    let mut push = |digit: u8| {
+        let digit = i64::from(digit - b'0');
+        let next = acc.checked_mul(10).and_then(|scaled| scaled.checked_add(digit));
+        if exact < 19 && let Some(next) = next {
+            acc = next;
+            exact += 1;
+            mantissa = acc as f64;
+        } else {
+            mantissa = mantissa * 10.0 + digit as f64;
+        }
+    };
     let mut any_digit = false;
     while i < bytes.len() && bytes[i].is_ascii_digit() {
-        mantissa = mantissa * 10.0 + f64::from(bytes[i] - b'0');
+        push(bytes[i]);
         any_digit = true;
         i += 1;
     }
+    let mut fraction = 0i64;
     if i < bytes.len() && bytes[i] == b'.' {
         i += 1;
         while i < bytes.len() && bytes[i].is_ascii_digit() {
-            mantissa = mantissa * 10.0 + f64::from(bytes[i] - b'0');
+            push(bytes[i]);
             fraction += 1;
             any_digit = true;
             i += 1;
@@ -823,7 +836,7 @@ pub fn str_to_float(text: &str) -> Option<f64> {
         return None;
     }
     let value = power10(mantissa, exponent as i32);
-    if value.is_infinite() || (value == 0.0 && mantissa != 0.0) {
+    if value.is_infinite() {
         return None;
     }
     Some(if negative { -value } else { value })
@@ -843,6 +856,38 @@ pub fn nan() -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The bits the oracle's `StrToFloat` produced (parity #39,
+    /// `probes/numerics.pas` and the generated `probes/numerics-parse.pas`
+    /// corpus): the accumulator is the RTL's `Int64`-then-double mixture
+    /// and the scale its paired-table `Power10`, which is not the correctly
+    /// rounded parse.
+    #[test]
+    fn str_to_float_is_the_rtls_val() {
+        for (text, bits) in [
+            ("0.1", 0x3FB999999999999A),
+            ("1.2345678901234567", 0x3FF3C0CA428C59FB),
+            ("1E23", 0x44B52D02C7E14AF6),
+            ("2.2250738585072014E-308", 0x0010000000000000),
+            ("5E-324", 0x0000000000000001),
+            ("1.7976931348623157E308", 0x7FEFFFFFFFFFFFFE),
+            ("3.14159265358979323846", 0x400921FB54442D17),
+            ("123456789012345678901234567890", 0x45F8EE90FF6C373D),
+            ("182222222222222222", 0x43843B112A4DE71C),
+            ("1e-400", 0x0000000000000000),
+            ("-0.0", 0x8000000000000000),
+        ] {
+            assert_eq!(str_to_float(text).map(f64::to_bits), Some(bits), "{text}");
+        }
+        for text in ["1e400", "1.5E999999", "1.5E-999999", "Infinity", "infinityx", "1e", "1.2.3", "1,5", "-NaN", "--1.5", "1 5"] {
+            assert_eq!(str_to_float(text), None, "{text}");
+        }
+        assert_eq!(str_to_float("Inf").map(f64::to_bits), Some(f64::INFINITY.to_bits()));
+        assert_eq!(str_to_float("-Inf").map(f64::to_bits), Some(f64::NEG_INFINITY.to_bits()));
+        assert_eq!(str_to_float("+Inf").map(f64::to_bits), Some(f64::INFINITY.to_bits()));
+        assert_eq!(str_to_float("nAn").map(f64::to_bits), Some(NAN_BITS));
+        assert_eq!(str_to_float("  1.5  ").map(f64::to_bits), Some(1.5f64.to_bits()));
+    }
 
     #[test]
     fn power10_rounds_as_the_rtl() {
@@ -976,6 +1021,9 @@ mod tests {
         assert_eq!(round(-2.5), -2);
         assert_eq!(str_to_float("1.25"), Some(1.25));
         assert_eq!(str_to_float("abc"), None);
-        assert_eq!(str_to_float("inf"), None);
+        // `TextToFloat` reads the words: the oracle's `StrToFloat('inf')` is
+        // `INF` and `'Infinity'` is an `EConvertError` (parity #39).
+        assert_eq!(str_to_float("inf"), Some(f64::INFINITY));
+        assert_eq!(str_to_float("Infinity"), None);
     }
 }

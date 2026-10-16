@@ -64,7 +64,7 @@ note = "TwbDDS (IsDDS, IsXBOX, IsCubeMap, HasAlpha, IsCompressed, HeaderDX10, He
 [units."Core/wbDataFormat.pas"]
 status = "ported"
 rust = "crates/xedit-assets/src/data_format.rs"
-note = "The element tree is an arena (Tree, El); exceptions are DfError. JSON as JsonDataObjects writes it in json.rs, the Variant semantics in variant.rs. `dfStrToFloat` maps NaN/Inf/Max/Min/-0.0/empty as upstream and parses with `xedit_core::delphi::str_to_float` (the RTL's own `Val`, fitted at full precision); `dfCalcHash` lowers ANSI bytes as `HashName` does (parity #39 probed every byte against the oracle)."
+note = "The element tree is an arena (Tree, El); exceptions are DfError. JSON as JsonDataObjects writes it in json.rs, the Variant semantics in variant.rs. `dfStrToFloat` maps NaN/Inf/Max/Min/-0.0/empty as upstream and parses with `xedit_core::delphi::str_to_float` (the RTL's own `Val`, fitted at full precision); `dfCalcHash` lowers ANSI bytes as `HashName` does (parity #39 probed every byte; the ASCII half matches, the non-ASCII table is owed -- see docs/PLAN.md)."
 
 [units."Core/wbDataFormatMaterial.pas"]
 status = "ported"
