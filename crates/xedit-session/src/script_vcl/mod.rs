@@ -44,9 +44,13 @@
 //! ordinary files, not windows. Everything else refuses through the seam.
 //!
 //! **The one registration the tables do not carry**: `TBinaryReader`,
-//! `TBinaryWriter` and `TBytesStream` wrap the stream objects of the JVCL
-//! `Classes` unit (phase 6 step 8); while their object model is that step's,
-//! the members refuse through the seam like any other object member.
+//! `TBinaryWriter` and `TBytesStream` are `xejviScriptAdapterMiscVcl.pas`
+//! registrations over the stream objects of the JVCL `Classes` unit (phase 6
+//! step 8). They need no window: their constructors and members are bound
+//! with that unit's stream object model
+//! (`crate::script_rtl::classes::register_binary_streams`), not through the
+//! seam, and the `streams.pas` probe witnesses every typed read and write
+//! against the oracle; [`misc_vcl::ledger_keys`] carries their ledger keys.
 
 pub mod helpers;
 pub mod interactive;

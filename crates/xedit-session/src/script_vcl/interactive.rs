@@ -525,7 +525,9 @@ impl VclModel {
             self.create_child(id, "TMenuItem")?
         } else {
             let class = self.class_of("TStringList")?;
-            Value::Object(Rc::new(RefCell::new(crate::script_strings::StringListObject::new(class))))
+            Value::Object(Rc::new(RefCell::new(crate::script_strings::StringListObject::new(
+                class,
+            ))))
         };
         self.set_prop(object, "Items", value.clone());
         Ok(value)
