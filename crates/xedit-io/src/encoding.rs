@@ -91,11 +91,15 @@ const ANSI_CODE_PAGE: u32 = 1252;
 pub struct EncodingError;
 
 impl Encoding {
-    /// Delphi `EncodingName`: `UTF-8` or the Windows name of the code page.
+    /// Delphi `EncodingName`: `UTF-8`, else the name the system gives the
+    /// code page (`TMBCSEncoding.EncodingName` is `GetCPInfoEx`'s
+    /// `CodePageName`: `1252  (ANSI - Latin I)`), else `Windows-<code page>`.
     pub fn name(self) -> String {
         match self {
             Encoding::Utf8 => "UTF-8".to_owned(),
-            Encoding::Mbcs(code_page) => format!("Windows-{code_page}"),
+            Encoding::Mbcs(code_page) => {
+                platform::code_page_name(code_page).unwrap_or_else(|| format!("Windows-{code_page}"))
+            }
         }
     }
 
@@ -138,10 +142,27 @@ pub fn ansi_compare_text(a: &str, b: &str) -> std::cmp::Ordering {
 #[cfg(windows)]
 mod platform {
     use windows_sys::Win32::Globalization::{
-        CompareStringW, LOCALE_USER_DEFAULT, MultiByteToWideChar, NORM_IGNORECASE, WideCharToMultiByte,
+        CPINFOEXW, CompareStringW, GetCPInfoExW, LOCALE_USER_DEFAULT, MultiByteToWideChar, NORM_IGNORECASE,
+        WideCharToMultiByte,
     };
 
     use super::EncodingError;
+
+    /// The name the system gives a code page, as Delphi's
+    /// `TMBCSEncoding.EncodingName` reads it (`1252  (ANSI - Latin I)`).
+    pub fn code_page_name(code_page: u32) -> Option<String> {
+        let mut info = CPINFOEXW::default();
+        // SAFETY: `info` is a valid `CPINFOEXW` for the call to write into.
+        if unsafe { GetCPInfoExW(code_page, 0, &raw mut info) } == 0 {
+            return None;
+        }
+        let length = info
+            .CodePageName
+            .iter()
+            .position(|&unit| unit == 0)
+            .unwrap_or(info.CodePageName.len());
+        Some(String::from_utf16_lossy(&info.CodePageName[..length]))
+    }
 
     pub fn compare_text(a: &str, b: &str) -> std::cmp::Ordering {
         let a: Vec<u16> = a.encode_utf16().collect();
@@ -232,6 +253,12 @@ mod platform {
 mod platform {
     use super::EncodingError;
 
+    /// No `GetCPInfoEx` outside Windows: [`super::Encoding::name`] falls
+    /// back to `Windows-<code page>`.
+    pub fn code_page_name(_code_page: u32) -> Option<String> {
+        None
+    }
+
     pub fn compare_text(a: &str, b: &str) -> std::cmp::Ordering {
         let a: Vec<u16> = a.to_uppercase().encode_utf16().collect();
         let b: Vec<u16> = b.to_uppercase().encode_utf16().collect();
@@ -285,6 +312,17 @@ mod platform {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The frames of `TMBCSEncoding.EncodingName` as the oracle prints it
+    /// (`1252  (ANSI - Latin I)`); the description inside the parentheses is
+    /// the machine's, so only the frame is asserted.
+    #[test]
+    #[cfg(windows)]
+    fn the_code_page_name_is_the_system_name() {
+        let name = Encoding::Mbcs(1252).name();
+        assert!(name.starts_with("1252  ("), "{name}");
+        assert_eq!(Encoding::Utf8.name(), "UTF-8");
+    }
 
     #[test]
     fn code_page_1252_round_trip() {

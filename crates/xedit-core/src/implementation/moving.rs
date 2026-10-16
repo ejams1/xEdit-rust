@@ -178,8 +178,8 @@ pub fn insert_element(container: &ElementRef, position: i32, element: &ElementRe
         return Err(format!("{} can not be inserted", element.get_name()));
     };
     // `TwbContainer.RemoveElement` clears the container of the element it
-    // removes; the port's removal leaves the reference, so an element counts
-    // as without a container once its container no longer holds it.
+    // removes (`SetContainer(nil)`, `edit::container_remove_child`); the
+    // check also holds for a container that still names the element.
     let id = element.get_element_id();
     let held = element_impl.element_base().container().is_some_and(|owner| {
         owner

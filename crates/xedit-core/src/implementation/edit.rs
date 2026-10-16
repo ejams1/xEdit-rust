@@ -247,9 +247,86 @@ pub(crate) fn invalidate_storage(element: &dyn ElementImpl) {
     invalidate_parent_storage(element);
 }
 
+/// Port of `TwbContainer.UpdateMemoryOrder`: the elements in the order of
+/// their memory orders (the positions they had in the data), or `None` when
+/// they are in it already or the container's type keeps no memory order
+/// (`SortedElementTypes`). `MergeStorageInternal` builds the data in the
+/// order this gives, so a container the view sorted (an array of a
+/// structure with a sort key) is written back in the order its data had.
+fn memory_order_elements(element: &dyn ElementImpl) -> Option<Vec<ElementRef>> {
+    /// `SortedElementTypes` of `wbInterface.pas`.
+    const SORTED: [ElementType; 6] = [
+        ElementType::etFile,
+        ElementType::etMainRecord,
+        ElementType::etGroupRecord,
+        ElementType::etSubRecord,
+        ElementType::etSubRecordArray,
+        ElementType::etArray,
+    ];
+    let base = element.container_base()?;
+    let elements = base.elements();
+    if elements.is_empty() || !SORTED.contains(&element.get_element_type()) {
+        return None;
+    }
+    let mut highest = i32::MIN;
+    let mut needs_sort = false;
+    let mut first_missing: Option<usize> = None;
+    let mut last_missing: Option<usize> = None;
+    let mut terminators: Vec<usize> = Vec::new();
+    for (index, child) in elements.iter().enumerate() {
+        if child.get_element_type() == ElementType::etStringListTerminator {
+            terminators.push(index);
+            continue;
+        }
+        let order = child.get_memory_order();
+        if order > highest {
+            highest = order;
+        } else {
+            needs_sort = true;
+            if order == i32::MIN {
+                if first_missing.is_none() {
+                    first_missing = Some(index);
+                }
+                last_missing = Some(index);
+            }
+        }
+    }
+    if highest == i32::MIN {
+        highest = -1;
+    }
+    if let (Some(first), Some(last)) = (first_missing, last_missing) {
+        for child in &elements[first..=last] {
+            if child.get_memory_order() == i32::MIN {
+                highest += 1;
+                child.set_memory_order(highest);
+            }
+        }
+    }
+    for index in terminators {
+        highest += 1;
+        let child = &elements[index];
+        if child.get_memory_order() != highest {
+            needs_sort = true;
+        }
+        child.set_memory_order(highest);
+    }
+    if elements.len() < 2 {
+        needs_sort = false;
+    }
+    if !needs_sort {
+        return None;
+    }
+    // `wbMergeSortPtr(..., CompareMemoryOrder)`: the memory order, equal
+    // ones in the order they had (Rust's `sort_by_key` is stable).
+    let mut ordered = elements;
+    ordered.sort_by_key(|child| child.get_memory_order());
+    Some(ordered)
+}
+
 /// Port of `TwbDataContainer.UpdateStorageFromElements`: the data of an
 /// element whose storage is stale is built again from the data of its
-/// elements, after the prefix it keeps.
+/// elements, after the prefix it keeps, in the memory order of the elements
+/// (`MergeStorageInternal`).
 pub(crate) fn update_storage_from_elements(element: &dyn ElementImpl) {
     let Some(storage) = element.storage() else { return };
     if !storage.is_invalid() {
@@ -269,7 +346,8 @@ pub(crate) fn update_storage_from_elements(element: &dyn ElementImpl) {
         new_storage.extend_from_slice(&data[..prefix.min(data.len())]);
     }
     new_storage.resize(prefix, 0);
-    for child in &children {
+    let ordered = memory_order_elements(element);
+    for child in ordered.as_ref().unwrap_or(&children) {
         let Some(child_impl) = child.as_element_impl() else {
             continue;
         };
@@ -280,7 +358,7 @@ pub(crate) fn update_storage_from_elements(element: &dyn ElementImpl) {
             new_storage.push(0);
             continue;
         }
-        if let Some(data) = child.as_data_container().and_then(|data| data.get_data()) {
+        if let Some(data) = child_impl.as_data_container().and_then(|data| data.get_data()) {
             new_storage.extend_from_slice(data);
         }
     }
@@ -532,7 +610,20 @@ pub(crate) fn container_remove_child(
         container.set_modified(true);
         container.invalidate_storage();
     }
+    let index = base
+        .elements()
+        .iter()
+        .position(|candidate| Arc::ptr_eq(candidate, child))?;
     let removed = base.remove_element_by_identity(child)?;
+    // `TwbContainer.RemoveElement(aPos)`: the element leaves its container
+    // (`SetContainer(nil)`, which an element removed by a copy no longer
+    // holding a container tells apart from a copy), and the elements that
+    // move up take their positions as their memory orders
+    // (`ResetMemoryOrder`).
+    if let Some(removed_impl) = removed.as_element_impl() {
+        *removed_impl.element_base().e_container.write().unwrap() = None;
+    }
+    container.reset_memory_order(index, usize::MAX);
     container.notify_changed();
     Some(removed)
 }
