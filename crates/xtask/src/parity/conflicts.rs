@@ -205,7 +205,12 @@ pub(super) fn private_data(dir: &Path, plugins: &[PathBuf]) -> Result<PathBuf> {
         let path = entry?.path();
         let name = path.file_name().map(|name| name.to_string_lossy().to_lowercase());
         if name.is_none_or(|name| !wanted.contains(&name)) {
-            fs::remove_file(&path)?;
+            // A folder a port run left (its reference cache) goes too.
+            if path.is_dir() {
+                fs::remove_dir_all(&path)?;
+            } else {
+                fs::remove_file(&path)?;
+            }
         }
     }
     for plugin in plugins {
