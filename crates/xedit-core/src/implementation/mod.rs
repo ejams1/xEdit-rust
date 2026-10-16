@@ -1939,11 +1939,7 @@ pub fn wb_file_from_bytes(
 /// from disk as a compare load of `compare_to`, which it takes the load
 /// order of (the GUI's "Compare to...", which copies the chosen file into
 /// the data folder and loads it there).
-pub fn wb_file_compare_to(
-    file_name: &str,
-    load_order: i32,
-    compare_to: &str,
-) -> Result<Arc<FileImpl>, LoadError> {
+pub fn wb_file_compare_to(file_name: &str, load_order: i32, compare_to: &str) -> Result<Arc<FileImpl>, LoadError> {
     if find_in_files_map(file_name).is_some() {
         return Err(LoadError(format!(
             "{file_name} is loaded already: a compare load is another file"

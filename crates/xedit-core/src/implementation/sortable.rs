@@ -86,8 +86,16 @@ pub fn get_raw_data_as_string(element: &ElementRef) -> String {
         if index != 0 {
             result.push(' ');
         }
-        result.push(char::from_digit((byte >> 4) as u32, 16).unwrap_or('0').to_ascii_uppercase());
-        result.push(char::from_digit((byte & 0x0F) as u32, 16).unwrap_or('0').to_ascii_uppercase());
+        result.push(
+            char::from_digit((byte >> 4) as u32, 16)
+                .unwrap_or('0')
+                .to_ascii_uppercase(),
+        );
+        result.push(
+            char::from_digit((byte & 0x0F) as u32, 16)
+                .unwrap_or('0')
+                .to_ascii_uppercase(),
+        );
     }
     result
 }

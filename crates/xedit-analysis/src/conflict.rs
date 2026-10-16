@@ -460,6 +460,37 @@ impl<'a> ConflictContext<'a> {
         result
     }
 
+    /// Port of `ConflictAllForElements(a, b, aSiblingCompare, aInjected)`
+    /// (`xejviScriptAdapterHost.pas`): the conflict of two elements, of
+    /// their whole containers when the first is a container
+    /// (`ConflictLevelForChildNodeDatas`), else of the pair
+    /// (`ConflictLevelForNodeDatas`).
+    pub fn conflict_level_for_pair(
+        &mut self,
+        a: &ElementRef,
+        b: &ElementRef,
+        sibling_compare: bool,
+        injected: bool,
+    ) -> ConflictAll {
+        let mut datas: Vec<ViewNodeData> = Vec::new();
+        for element in [a, b] {
+            let container = element
+                .as_container()
+                .filter(|container| container.get_element_count() > 0)
+                .map(|_| ViewContainer::new(element.clone()));
+            datas.push(ViewNodeData {
+                container,
+                element: Some(element.clone()),
+                ..Default::default()
+            });
+        }
+        if datas[0].container.is_some() {
+            self.conflict_level_for_child_node_datas(&mut datas, sibling_compare, injected)
+        } else {
+            conflict_level_for_node_datas(&mut datas, sibling_compare, injected)
+        }
+    }
+
     /// Port of `TfrmMain.ConflictLevelForContainer`: a main record as
     /// `ConflictLevelForMainRecord`, any other container compared with the
     /// element at its path in every other file.
@@ -1515,7 +1546,8 @@ fn is_compare_to_same(node_datas: &[ViewNodeData]) -> bool {
     let (Some(master_element), Some(override_element)) = (&master_data.element, &override_data.element) else {
         return false;
     };
-    let (Some(master), Some(overridden)) = (element_as_record(master_element), element_as_record(override_element)) else {
+    let (Some(master), Some(overridden)) = (element_as_record(master_element), element_as_record(override_element))
+    else {
         return false;
     };
     if record_is_modified(&master) || record_is_modified(&overridden) {

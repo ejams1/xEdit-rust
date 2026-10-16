@@ -21,7 +21,7 @@ use xedit_analysis::conflict::{
 };
 use xedit_core::implementation::{ElementImpl, FileImpl, MainRecordImpl};
 use xedit_core::interface::types::{ConflictAll, ConflictThis, PascalEnum};
-use xedit_core::interface::{Element, MainRecord};
+use xedit_core::interface::{Container, Element, ElementRef, MainRecord};
 
 use crate::modgroups::{ModGroupChoice, ModGroupHides};
 use crate::{CommandError, Registry, Session};
@@ -946,13 +946,20 @@ pub struct ForElementsResponse {
 /// of their whole containers when both are containers
 /// (`ConflictLevelForChildNodeDatas`), else of the pair
 /// (`ConflictLevelForNodeDatas`).
-fn conflicts_for_elements(session: &mut Session, request: ForElementsRequest) -> Result<ForElementsResponse, CommandError> {
+fn conflicts_for_elements(
+    session: &mut Session,
+    request: ForElementsRequest,
+) -> Result<ForElementsResponse, CommandError> {
     let files = session_files(session)?;
-    let mut datas = Vec::new();
+    let mut elements = Vec::new();
     let mut paths = Vec::new();
     for (form_id, path, file) in [
         (&request.form_id, &request.path, request.file.as_deref()),
-        (&request.other_form_id, &request.other_path, request.other_file.as_deref()),
+        (
+            &request.other_form_id,
+            &request.other_path,
+            request.other_file.as_deref(),
+        ),
     ] {
         let record = session.record(form_id, file)?;
         let element = record.get_element_by_path(path).ok_or_else(|| {
@@ -962,28 +969,237 @@ fn conflicts_for_elements(session: &mut Session, request: ForElementsRequest) ->
             )
         })?;
         paths.push(element.get_full_path());
-        let container = element
-            .as_container()
-            .filter(|container| container.get_element_count() > 0)
-            .map(|_| xedit_analysis::conflict::ViewContainer::new(element.clone()));
-        datas.push(xedit_analysis::conflict::ViewNodeData {
-            container,
-            element: Some(element),
-            ..Default::default()
-        });
+        elements.push(element);
     }
     let options = ConflictOptions::default();
     let mut context = ConflictContext::new(&options, &files);
-    let conflict_all = if datas[0].container.is_some() {
-        context.conflict_level_for_child_node_datas(&mut datas, request.sibling_compare, request.injected)
-    } else {
-        conflict::conflict_level_for_node_datas(&mut datas, request.sibling_compare, request.injected)
-    };
+    let conflict_all =
+        context.conflict_level_for_pair(&elements[0], &elements[1], request.sibling_compare, request.injected);
     Ok(ForElementsResponse {
         conflict_all: conflict_all.into(),
         path: paths[0].clone(),
         other_path: paths[1].clone(),
     })
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ProbeRequest {
+    /// Load order FormIDs of the records to report, as hexadecimal digits.
+    pub records: Vec<String>,
+    /// Plugin the records are seen from; the last loaded plugin when omitted.
+    pub file: Option<String>,
+    /// Load order FormIDs of records whose `esHidden` state is set before
+    /// the probe reports (the oracle's `SetElementState(el, 'esHidden')`).
+    #[serde(default)]
+    pub hidden: Vec<String>,
+}
+
+#[derive(Serialize, JsonSchema)]
+pub struct ProbeElement {
+    /// Index path of the element from the record, as the oracle's walk
+    /// names it (`0\2\1`).
+    pub path: String,
+    /// `DisplayName(el)`, the name with its suffix.
+    pub display_name: String,
+    /// `Name(el)`.
+    pub name: String,
+    /// `ConflictAllForElements(me, oe, False, False)` as the ordinal of
+    /// `TConflictAll`, `-1` when only one side has the element.
+    pub conflict_all: i32,
+    /// `SortKey(el, True)` of the master's element, `<none>` without one.
+    pub sort_key_master: String,
+    /// `SortKey(el, True)` of the override's element.
+    pub sort_key_override: String,
+    /// `Check(el)` when the element has an error.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub check: Option<String>,
+}
+
+/// The status of a record of the probe, as the ordinals of `TConflictAll`
+/// and `TConflictThis` that the oracle's script prints.
+#[derive(Serialize, JsonSchema)]
+pub struct ProbeStatus {
+    pub conflict_all: i32,
+    pub conflict_this: i32,
+    /// `ConflictAllForElements(master, override, False, False)`.
+    pub pair: i32,
+}
+
+#[derive(Serialize, JsonSchema)]
+pub struct ProbeRecord {
+    /// Load order FormID as eight hexadecimal digits.
+    pub form_id: String,
+    /// `Name` of the master or self.
+    pub name: String,
+    pub conflict_all: i32,
+    pub conflict_this: i32,
+    /// `OverrideCount` of the master.
+    pub overrides: usize,
+    /// The file of the first override of the master, when it has one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub override_file: Option<String>,
+    /// The status of that override and of the pair.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub override_status: Option<ProbeStatus>,
+    /// The elements of the master and of the first override walked side by
+    /// side by index, down to depth 8.
+    pub elements: Vec<ProbeElement>,
+}
+
+#[derive(Serialize, JsonSchema)]
+pub struct ProbeResponse {
+    pub records: Vec<ProbeRecord>,
+}
+
+/// Port of `crates/xtask/oracle/conflicts-probe.pas` on the port's side: for
+/// every record the master's status and its first override's, the pair's
+/// `ConflictAllForElements`, and the two walked side by side by index with
+/// their display names, names, extended sort keys and element checks. The
+/// parity harness compares this with the oracle's `probe.txt` line by line.
+fn conflicts_probe(session: &mut Session, request: ProbeRequest) -> Result<ProbeResponse, CommandError> {
+    let files = session_files(session)?;
+    for form_id in &request.hidden {
+        let record = session.record(form_id, request.file.as_deref())?;
+        if let Some(record) = record.as_element_impl().and_then(ElementImpl::main_record_impl) {
+            record.element_base().hide();
+        }
+    }
+    let options = ConflictOptions::default();
+    let mut context = ConflictContext::new(&options, &files);
+    let mut probe_records = Vec::new();
+    for form_id in &request.records {
+        let record = session.record(form_id, request.file.as_deref())?;
+        let record = record
+            .as_element_impl()
+            .and_then(ElementImpl::main_record_impl)
+            .ok_or_else(|| CommandError::new("internal", "the record is not a main record of a file"))?;
+        let master = record.master_or_self_impl();
+        let status = context.conflict_level_for_main_record(&master);
+        let mut elements = Vec::new();
+        let first_override = master.overrides().first().cloned();
+        let mut override_file = None;
+        let mut override_status = None;
+        if let Some(overridden) = &first_override {
+            let status = context.conflict_level_for_main_record(overridden);
+            let pair = context.conflict_level_for_pair(
+                &(master.clone() as ElementRef),
+                &(overridden.clone() as ElementRef),
+                false,
+                false,
+            );
+            override_file = Some(overridden.get_file().map(|file| file.get_name()).unwrap_or_default());
+            override_status = Some(ProbeStatus {
+                conflict_all: status.all as i32,
+                conflict_this: status.this as i32,
+                pair: pair as i32,
+            });
+        }
+        // The oracle walks only a record with an override.
+        let master_element = first_override
+            .is_some()
+            .then(|| master.clone() as ElementRef)
+            .filter(|_| master.get_element_count() > 0);
+        if let Some(master_element) = master_element {
+            let override_element = first_override.map(|record| record.clone() as ElementRef);
+            walk_probe(
+                &mut context,
+                Some(&master_element),
+                override_element.as_ref(),
+                String::new(),
+                0,
+                &mut elements,
+            );
+        }
+        probe_records.push(ProbeRecord {
+            form_id: master.get_load_order_form_id().to_string(false),
+            name: master.get_name(),
+            conflict_all: status.all as i32,
+            conflict_this: status.this as i32,
+            overrides: master.overrides().len(),
+            override_file,
+            override_status,
+            elements,
+        });
+    }
+    Ok(ProbeResponse { records: probe_records })
+}
+
+/// The elements of a container as `ElementCount`/`ElementByIndex` number
+/// them: a flags value holds its flags as elements of their own
+/// (`wbFlagsAsArray`), which the port builds on demand and the view reads
+/// through `view_elements`; every other container holds its own elements.
+fn probe_elements(element: Option<&ElementRef>) -> Vec<ElementRef> {
+    let Some(element) = element else {
+        return Vec::new();
+    };
+    if let Some(flags) = xedit_core::implementation::flag::flags_as_array_of(element) {
+        return flags;
+    }
+    element
+        .as_container()
+        .map(|container| {
+            (0..container.get_element_count())
+                .filter_map(|index| container.get_element(index))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// The sort key the probe prints for one side: `<none>` without an element;
+/// `<flag>` for a flag, whose extended sort key embeds the runtime
+/// definition id of its flags definition, a number that differs between the
+/// oracle's build and the port's (the oracle script masks it the same way).
+fn probe_sort_key(element: Option<&ElementRef>) -> String {
+    let Some(element) = element else {
+        return "<none>".to_owned();
+    };
+    if element.get_element_type() == xedit_core::interface::types::ElementType::etFlag {
+        return "<flag>".to_owned();
+    }
+    element.get_sort_key(true)
+}
+
+/// The walk of `conflicts-probe.pas`: the elements of the two records by
+/// index, recursively down to depth 8. A missing side walks as upstream's
+/// nil element does: the other side's elements are reported with `-1` and
+/// the walk continues below them.
+fn walk_probe(
+    context: &mut ConflictContext<'_>,
+    master: Option<&ElementRef>,
+    overridden: Option<&ElementRef>,
+    path: String,
+    depth: i32,
+    elements: &mut Vec<ProbeElement>,
+) {
+    let master_elements = probe_elements(master);
+    let override_elements = probe_elements(overridden);
+    let n = master_elements.len().max(override_elements.len());
+    for index in 0..n {
+        let me = master_elements.get(index).cloned();
+        let oe = override_elements.get(index).cloned();
+        let element_path = format!("{path}\\{index}");
+        let Some(named) = me.as_ref().or(oe.as_ref()) else {
+            continue;
+        };
+        let conflict_all = match (&me, &oe) {
+            (Some(me), Some(oe)) => context.conflict_level_for_pair(me, oe, false, false) as i32,
+            _ => -1,
+        };
+        let check = named.get_check();
+        elements.push(ProbeElement {
+            path: element_path.clone(),
+            display_name: named.get_display_name(true),
+            name: named.get_name(),
+            conflict_all,
+            sort_key_master: probe_sort_key(me.as_ref()),
+            sort_key_override: probe_sort_key(oe.as_ref()),
+            check: (!check.trim().is_empty()).then_some(check),
+        });
+        if depth < 8 && (me.is_some() || oe.is_some()) {
+            walk_probe(context, me.as_ref(), oe.as_ref(), element_path, depth + 1, elements);
+        }
+    }
 }
 
 pub fn register(registry: &mut Registry) {
@@ -1010,5 +1226,11 @@ pub fn register(registry: &mut Registry) {
         "The conflict of two elements of two records, as the script function ConflictAllForElements reports it (ConflictLevelForNodeDatas, ConflictLevelForChildNodeDatas).",
         false,
         conflicts_for_elements,
+    );
+    registry.register(
+        "conflicts.probe",
+        "Report the comparison of records for the parity probe: the master's and first override's statuses, their pair, and the two walked side by side by index with display names, extended sort keys and element checks (the port's side of xtask/oracle/conflicts-probe.pas).",
+        false,
+        conflicts_probe,
     );
 }

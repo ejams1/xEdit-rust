@@ -120,6 +120,18 @@ struct Config {
     /// configuration that turns it on keeps it on for the ones after it.
     #[serde(default)]
     scripted: bool,
+    /// `FilterOnlyOne` of `mniNavFilterForOnlyOneClick`: "Filter for only
+    /// one". Not a script variable, so the oracle gets it by the click.
+    #[serde(default)]
+    only_one: bool,
+    /// `FilterConflictOnly` of `xeVeryQuickShowConflicts`
+    /// (`mniNavFilterForConflictsClick` with `-veryquickshowconflicts`).
+    #[serde(default)]
+    conflict_only: bool,
+    /// `FilterNoGameMaster` of the same handler: the game master and the
+    /// hardcoded file leave the tree (`ReInitTree`).
+    #[serde(default)]
+    no_game_master: bool,
 }
 
 fn default_true() -> bool {
@@ -659,7 +671,13 @@ fn check(
     for config in &scenario.configs {
         commands.push(json!({
             "command": "filter.apply",
-            "params": { "options": config.options(), "list_records": false },
+            "params": {
+                "options": config.options(),
+                "list_records": false,
+                "only_one": config.only_one,
+                "conflict_only": config.conflict_only,
+                "no_game_master": config.no_game_master,
+            },
         }));
     }
     let batch_file = port_dir.join(format!("{file_stem}.batch.json"));

@@ -5,11 +5,15 @@
 // The oracle side of `cargo xtask parity conflicts --record <FormID>`: for
 // each record named in the RECORDS placeholder (load order FormIDs), the
 // conflict status of the record and its first override, and the elements
-// of the two walked side by side by index with their extended sort keys
-// and the ConflictAll of the pair (ConflictAllForElements, which runs
+// of the two walked side by side by index with their display names, names,
+// extended sort keys and element checks (ConflictAllForElements, which runs
 // ConflictLevelForChildNodeDatas or ConflictLevelForNodeDatas on the two).
-// A tool to find where the port's comparison parts from the oracle's; the
-// harness prints out\probe.txt.
+// The records named in the HIDDEN placeholder are hidden first
+// (SetElementState(..., 'esHidden')), as the port's `records.set_hidden`
+// does, so that a hidden record's effect on the comparison is compared
+// too. The harness runs the port's `conflicts.probe` with the same records
+// and diffs the two texts; this file's output shape is what
+// `crates/xtask/src/parity/conflicts.rs` formats the port's response into.
 unit OracleConflictsProbe;
 
 var
@@ -17,9 +21,15 @@ var
 
 function Text(el: IInterface; extended: Boolean): string;
 begin
-  if Assigned(el) then
-    Result := SortKey(el, extended)
-  else
+  if Assigned(el) then begin
+    // The extended sort key of a flag embeds the definition id of its
+    // flags definition, a runtime number that differs between the two
+    // builds, so the flag's own key is not compared.
+    if ElementType(el) = etFlag then
+      Result := '<flag>'
+    else
+      Result := SortKey(el, extended);
+  end else
     Result := '<none>';
 end;
 
@@ -28,6 +38,7 @@ var
   i, n: Integer;
   me, oe, named: IInterface;
   ca: Integer;
+  ck: string;
 begin
   n := 0;
   if Assigned(m) then
@@ -49,6 +60,10 @@ begin
     else
       ca := -1;
     outList.Add(aPath + '\' + IntToStr(i) + ' ' + DisplayName(named) + #9 + IntToStr(ca) + #9 + Text(me, True) + #9 + Text(oe, True));
+    outList.Add(aPath + '\' + IntToStr(i) + ' name ' + Name(named));
+    ck := Check(named);
+    if Trim(ck) <> '' then
+      outList.Add(aPath + '\' + IntToStr(i) + ' check ' + ck);
     if (Assigned(me) or Assigned(oe)) and (depth < 8) then
       Walk(me, oe, aPath + '\' + IntToStr(i), depth + 1);
   end;
@@ -68,6 +83,15 @@ begin
   try
     try
       ids.Delimiter := ',';
+      ids.DelimitedText := '{{HIDDEN}}';
+      for i := 0 to Pred(ids.Count) do begin
+        r := RecordByFormID(FileByIndex(Pred(FileCount)), StrToInt('$' + ids[i]), True);
+        // `SetElementState` takes the ordinal of TwbElementState, and a
+        // failure of the conversion is swallowed by the adapter's empty
+        // except, so `esHidden` is the ordinal 5 here.
+        if Assigned(r) then
+          SetElementState(r, 5);
+      end;
       ids.DelimitedText := '{{RECORDS}}';
       for i := 0 to Pred(ids.Count) do begin
         r := RecordByFormID(FileByIndex(Pred(FileCount)), StrToInt('$' + ids[i]), True);
