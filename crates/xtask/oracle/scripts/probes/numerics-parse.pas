@@ -27,7 +27,10 @@ end;
   breaks it at a `#10`/`#13`, and the harness reads the memo's text up to
   its first zero, so the raw `#0` cases left the oracle's run without its
   closing line (it was stopped as a hang after ten minutes). The `.dat`
-  keeps the raw text. }
+  keeps the raw text. The characters are compared, not indexed: a `string`
+  parameter is not indexable upstream (`Array type required`,
+  `e-ordidx-*.pas`), and `Ord` of a one-character string is the variant's
+  integer conversion (`Ord('7')` is 7). }
 function Shown(const aText: string): string;
 var
   i, k: Integer;
@@ -55,20 +58,12 @@ end;
 procedure ParseOne(const aText: string);
 var
   v: Double;
-  m: string;
 begin
   try
     v := StrToFloat(aText);
     Value(aText, v);
-  except on E: Exception do begin
-    { A script function called with `E.Message` inside the handler's call
-      does not compile in the oracle (`e-proparg-*.pas`), so the message
-      goes through a local first; `Ord` of a one-character string is the
-      variant's integer conversion for a digit, so `Shown` compares
-      characters instead. }
-    m := E.Message;
-    Log('py[' + Shown(aText) + ']', 'exc=' + E.ClassName + ' ' + Shown(m));
-  end;
+  except on E: Exception do
+    Log('py[' + Shown(aText) + ']', 'exc=' + E.ClassName + ' ' + Shown(E.Message));
   end;
 end;
 
