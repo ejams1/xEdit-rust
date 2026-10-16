@@ -18,7 +18,7 @@
 //! of the data of each file are decided in that order.
 
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::{Condvar, Mutex};
 
 use super::asset::{do_not_compress, do_not_pack, extract_file_name, get_asset_name, include_trailing_path_delimiter};
@@ -335,6 +335,7 @@ fn with_prefetch<T: Send, R>(
 pub struct MultiSourcePacker {
     kind: ArchiveType,
     target: Target,
+    xtexconv: Option<PathBuf>,
     file_name: String,
     compression_type: CompressionType,
     share_data: bool,
@@ -368,6 +369,7 @@ impl MultiSourcePacker {
         Self {
             kind: ArchiveType::None,
             target: Target::Pc,
+            xtexconv: None,
             file_name: String::new(),
             compression_type: CompressionType::None,
             share_data: false,
@@ -433,6 +435,14 @@ impl MultiSourcePacker {
 
     pub fn set_target(&mut self, target: Target) {
         self.target = target;
+    }
+
+    /// `TAssetsPacker.ConvertDDS2XBOX`: the `xtexconv.exe` of the program
+    /// folder, when it is there. A non-XBox DDS of a DDS archive is
+    /// converted through it before packing; without it the target's own
+    /// check refuses such a file (`DDS is not in XBox format`).
+    pub fn set_xtexconv(&mut self, tool: Option<PathBuf>) {
+        self.xtexconv = tool;
     }
 
     /// The threads that read and compress: 1 for upstream's `-mt:no`, 0 for

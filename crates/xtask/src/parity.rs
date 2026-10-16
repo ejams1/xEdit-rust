@@ -57,6 +57,7 @@ use serde::Serialize;
 use crate::memory::{self, Budget, GIB, Limit};
 
 mod bsarch;
+mod bsarchpro;
 mod check;
 mod clean;
 mod conflicts;
@@ -78,6 +79,43 @@ mod tool_modes;
 /// `parity check-dump`: the dump check runs `xDump -check` and
 /// `xedit dump --check` in place of the dumps, cached apart (`<MODE>-check`).
 static CHECK_DUMP: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// The UTF-16 strings of an oracle executable that hold `needle`: a
+/// message the build can raise is one of them (Delphi stores string
+/// constants as UTF-16 in the image). Runs of printable characters are
+/// collected from both alignments, because nothing promises the alignment
+/// of a constant. A message dialog's body is drawn by DirectUI and holds no
+/// readable text, so the refusal checks of `sniff` and `bsarchpro` compare
+/// the port's message with the oracle's own strings.
+fn oracle_utf16_strings(exe: &Path, needle: &str) -> Result<Vec<String>> {
+    use std::collections::BTreeSet;
+    let bytes = fs::read(exe)?;
+    let mut strings = BTreeSet::new();
+    for offset in 0..2 {
+        let mut run = Vec::new();
+        for pair in bytes[offset..].as_chunks::<2>().0 {
+            let unit = u16::from_le_bytes(*pair);
+            if (32..0xD800).contains(&unit) || (0xE000..0xFFFF).contains(&unit) {
+                run.push(unit);
+                continue;
+            }
+            if run.len() >= 8 {
+                let text = String::from_utf16_lossy(&run);
+                if text.contains(needle) {
+                    strings.insert(text);
+                }
+            }
+            run.clear();
+        }
+        if run.len() >= 8 {
+            let text = String::from_utf16_lossy(&run);
+            if text.contains(needle) {
+                strings.insert(text);
+            }
+        }
+    }
+    Ok(strings.into_iter().collect())
+}
 
 fn check_dump() -> bool {
     CHECK_DUMP.load(Ordering::Relaxed)
@@ -343,6 +381,11 @@ pub fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
     // `parity bsarch` has its own options and cases: the archive tool against BSArch.exe.
     if let Some((&"bsarch", rest)) = args.split_first() {
         return bsarch::run(root, tag, rest);
+    }
+    // `parity bsarchpro` runs the GUI tool's packing workflow (the XBox
+    // target and the xtexconv.exe conversion).
+    if let Some((&"bsarchpro", rest)) = args.split_first() {
+        return bsarchpro::run(root, tag, rest);
     }
     if let Some((&"nif", rest)) = args.split_first() {
         return nif::run(root, tag, rest);

@@ -2,6 +2,7 @@
 name = "xtask"
 version = "0.1.0"
 description = "Repository maintenance tasks: header check, upstream map, coverage ledger"
+default-run = "xtask"
 edition.workspace = true
 license.workspace = true
 publish = false

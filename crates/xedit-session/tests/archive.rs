@@ -409,3 +409,89 @@ fn bad_requests_have_stable_errors() {
     assert_eq!(error.code, "archive_failed");
     assert!(error.message.starts_with("Cannot open file"), "{}", error.message);
 }
+
+/// The XBox 360 target of `archive.pack` (`BSArchPro`'s "XBox 360
+/// Archive"): a DDS archive refuses the textures of the other platform,
+/// and a PC texture converts only through the `xtexconv.exe` the release
+/// does not ship.
+#[test]
+fn the_xbox_target_refuses_the_other_platforms_textures() {
+    use xedit_io::dds::{self, Dxgi};
+    let source = Folder::new("source-xbox");
+    let pc = dds_file(Dxgi::BC1_UNORM, 64, 1, 11);
+    source.write("textures/t/pc.dds", &pc);
+    let mut xbox = vec![0u8; dds::MAX_HEADER_SIZE];
+    dds::set_up_header(&mut xbox, Dxgi::BC1_UNORM, 64, 64, 1, false, true);
+    xbox.truncate(dds::header_size(&xbox));
+    xbox.extend(&pc[dds::HEADER_SIZE + dds::HEADER_DX10_SIZE..]);
+    let xbox_source = Folder::new("source-xbox-file");
+    xbox_source.write("textures/t/xbox.dds", &xbox);
+
+    let pack = |folder: &Folder, target: &str| -> Result<Value, xedit_session::CommandError> {
+        call(
+            true,
+            "archive.pack",
+            json!({
+                "archive": folder.path("out.ba2"),
+                "sources": [folder.path("textures")],
+                "format": "fo4dds",
+                "compress": "default",
+                "target": target,
+                "threads": 1,
+            }),
+        )
+    };
+
+    // A PC archive refuses the XBox texture, an XBox archive the PC one.
+    let error = pack(&source, "xbox").unwrap_err();
+    assert_eq!(error.code, "archive_failed");
+    assert!(error.message.contains("DDS is not in XBox format"), "{}", error.message);
+    let error = pack(&xbox_source, "pc").unwrap_err();
+    assert!(error.message.contains("DDS is in XBox format"), "{}", error.message);
+    // An unknown target.
+    let error = pack(&source, "wii").unwrap_err();
+    assert_eq!(error.code, "invalid_params");
+    assert!(error.message.contains("unknown target wii"), "{}", error.message);
+
+    // The matching target packs, and the default is the PC.
+    assert!(pack(&source, "pc").is_ok());
+    let packed = pack(&xbox_source, "xbox").unwrap();
+    assert_eq!(packed["archives"][0]["files"], 1);
+    let _ = fs::remove_file(source.path("out.ba2"));
+    let _ = fs::remove_file(xbox_source.path("out.ba2"));
+}
+
+/// `dds2xbox` (`DDS2XBOX` of the GUI packer): the messages of a tool that
+/// does not start and of one that fails. The workflow with a tool is
+/// `cargo xtask parity bsarchpro` (the stub stands in for the real
+/// `xtexconv.exe`, which is not in the release archive).
+#[test]
+fn dds2xbox_gives_upstream_messages() {
+    use xedit_io::archive::xtexconv;
+    use xedit_io::dds::Dxgi;
+    let data = dds_file(Dxgi::BC1_UNORM, 64, 1, 12);
+    let missing = std::env::temp_dir().join("xtexconv-that-is-not-there-1338.exe");
+    let error = xtexconv::dds2xbox(&missing, &data).unwrap_err();
+    assert_eq!(error, "Unable to start xtexconv.exe");
+    // A tool that fails gives its exit code as eight hex digits, as
+    // `ErrCode.ToHexString(8)` does.
+    let fail = Folder::new("source-xtexconv-fail");
+    fail.write("tool.cmd", b"@exit /b 3\r\n");
+    let tool = std::path::PathBuf::from(fail.path("tool.cmd"));
+    if let Err(error) = xtexconv::dds2xbox(&tool, &data) {
+        assert_eq!(error, "xtexconv.exe error code 00000003");
+    }
+    // Nothing of the temporary file is left behind.
+    let leftovers = fs::read_dir(std::env::temp_dir())
+        .unwrap()
+        .filter_map(|entry| entry.ok())
+        .filter(|entry| entry.file_name().to_string_lossy().starts_with("xtexconv-"))
+        .filter(|entry| {
+            entry
+                .file_name()
+                .to_string_lossy()
+                .contains(&std::process::id().to_string())
+        })
+        .count();
+    assert_eq!(leftovers, 0);
+}

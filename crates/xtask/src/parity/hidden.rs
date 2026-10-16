@@ -62,6 +62,7 @@ pub struct HiddenCommand {
     program: PathBuf,
     args: Vec<String>,
     dir: Option<PathBuf>,
+    env: Vec<(std::ffi::OsString, std::ffi::OsString)>,
 }
 
 impl HiddenCommand {
@@ -70,6 +71,7 @@ impl HiddenCommand {
             program: program.as_ref().to_path_buf(),
             args: Vec::new(),
             dir: None,
+            env: Vec::new(),
         }
     }
 
@@ -81,6 +83,46 @@ impl HiddenCommand {
     pub fn current_dir(&mut self, dir: impl AsRef<Path>) -> &mut HiddenCommand {
         self.dir = Some(dir.as_ref().to_path_buf());
         self
+    }
+
+    /// Sets an environment variable of the child over the inherited
+    /// environment (`BSArchPro` asks `TPath.GetHomePath` where its settings
+    /// folder goes, and the harness keeps that folder inside its work
+    /// directory).
+    pub fn env(
+        &mut self,
+        name: impl Into<std::ffi::OsString>,
+        value: impl AsRef<std::ffi::OsStr>,
+    ) -> &mut HiddenCommand {
+        self.env.push((name.into(), value.as_ref().to_os_string()));
+        self
+    }
+
+    /// The child's environment: the inherited one with [`HiddenCommand::env`]
+    /// overrides, as `CreateProcessW` takes it.
+    #[cfg(windows)]
+    fn environment_block(&self) -> Vec<u16> {
+        use std::os::windows::ffi::OsStrExt;
+        let mut entries: Vec<(std::ffi::OsString, std::ffi::OsString)> = std::env::vars_os().collect();
+        for (name, value) in &self.env {
+            let upper = name.to_string_lossy().to_uppercase();
+            entries.retain(|(key, _)| key.to_string_lossy().to_uppercase() != upper);
+            entries.push((name.clone(), value.clone()));
+        }
+        // The block requires the names sorted case-insensitively.
+        entries.sort_by_key(|(name, _)| name.to_string_lossy().to_uppercase());
+        let mut block = Vec::new();
+        for (name, value) in entries {
+            let mut entry: Vec<u16> = std::os::windows::ffi::OsStrExt::encode_wide(name.as_os_str()).collect();
+            entry.push('=' as u16);
+            entry.extend(value.encode_wide());
+            block.extend(entry);
+            block.push(0);
+        }
+        if !block.is_empty() {
+            block.push(0);
+        }
+        block
     }
 
     /// The command line as `CreateProcessW` takes it: the program and each
@@ -98,7 +140,7 @@ impl HiddenCommand {
     pub fn spawn(&self) -> Result<HiddenChild> {
         use std::os::windows::ffi::OsStrExt;
         use windows_sys::Win32::System::Threading::{
-            CreateProcessW, PROCESS_INFORMATION, STARTF_USESHOWWINDOW, STARTUPINFOW,
+            CREATE_UNICODE_ENVIRONMENT, CreateProcessW, PROCESS_INFORMATION, STARTF_USESHOWWINDOW, STARTUPINFOW,
         };
         use windows_sys::Win32::UI::WindowsAndMessaging::SW_HIDE;
 
@@ -106,6 +148,7 @@ impl HiddenCommand {
         let program = wide(self.program.as_os_str());
         let mut line = wide(std::ffi::OsStr::new(&self.command_line()));
         let dir = self.dir.as_ref().map(|dir| wide(dir.as_os_str()));
+        let mut environment = self.environment_block();
         let mut desktop_name: Vec<u16> = desktop_name().encode_utf16().chain([0]).collect();
         // SAFETY: plain data structures, zero is a valid value of each field.
         let mut startup: STARTUPINFOW = unsafe { std::mem::zeroed() };
@@ -116,6 +159,13 @@ impl HiddenCommand {
             startup.lpDesktop = desktop_name.as_mut_ptr();
         }
         let mut info: PROCESS_INFORMATION = unsafe { std::mem::zeroed() };
+        // A Unicode environment block needs `CREATE_UNICODE_ENVIRONMENT`,
+        // without which `CreateProcessW` refuses the call.
+        let flags = if environment.is_empty() {
+            0
+        } else {
+            CREATE_UNICODE_ENVIRONMENT
+        };
         // SAFETY: the strings are NUL-terminated and outlive the call; the
         // command line buffer is mutable as the function requires.
         let ok = unsafe {
@@ -125,8 +175,12 @@ impl HiddenCommand {
                 std::ptr::null(),
                 std::ptr::null(),
                 0,
-                0,
-                std::ptr::null(),
+                flags,
+                if environment.is_empty() {
+                    std::ptr::null()
+                } else {
+                    environment.as_mut_ptr() as *const std::ffi::c_void
+                },
                 dir.as_ref().map_or(std::ptr::null(), |dir| dir.as_ptr()),
                 &startup,
                 &mut info,
@@ -144,6 +198,7 @@ impl HiddenCommand {
     pub fn spawn(&self) -> Result<HiddenChild> {
         let mut command = std::process::Command::new(&self.program);
         command.args(&self.args);
+        command.envs(self.env.iter().map(|(name, value)| (name, value)));
         if let Some(dir) = &self.dir {
             command.current_dir(dir);
         }
@@ -310,6 +365,27 @@ mod tests {
             std::thread::sleep(Duration::from_millis(50));
         };
         assert_eq!(code, 3);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_hidden_program_sees_the_environment_overrides() {
+        let dir = std::env::temp_dir().join(format!("xedit-hidden-env-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let out = dir.join("env.txt");
+        let mut command = HiddenCommand::new(r"C:\Windows\System32\cmd.exe");
+        command
+            .arg("/c")
+            .arg(format!("set > {}", out.display()))
+            .env("HOME", dir.as_os_str())
+            .env("USERPROFILE", dir.as_os_str());
+        let mut child = command.spawn().unwrap();
+        let code = child.wait_timeout(Duration::from_secs(30)).unwrap();
+        assert_eq!(code, Some(0));
+        let text = std::fs::read_to_string(&out).unwrap();
+        assert!(text.contains(&format!("HOME={}", dir.display())), "{text}");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[cfg(windows)]

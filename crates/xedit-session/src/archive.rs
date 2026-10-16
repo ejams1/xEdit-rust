@@ -14,7 +14,7 @@ use std::path::Path;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use xedit_io::archive::packer::unpack_archive;
-use xedit_io::archive::{ArchiveType, BSA_MAX_OFFSET, FileEntry, format_size};
+use xedit_io::archive::{ArchiveType, BSA_MAX_OFFSET, FileEntry, Target, format_size};
 use xedit_io::{Archive, CompressionType, MultiSourcePacker};
 
 use crate::{CommandError, Registry, Session};
@@ -309,6 +309,13 @@ pub struct ArchivePackRequest {
     /// archives are the same for every count.
     #[serde(default)]
     pub threads: usize,
+    /// The platform of the archive, `pc` or `xbox` (the GUI's
+    /// "XBox 360 Archive" target of a DDS archive): an `xbox` archive
+    /// refuses a texture that is not already in the XBox format, and a
+    /// `pc` archive refuses one that is. With the target `xbox` and
+    /// `xtexconv.exe` next to the program, a PC texture is converted
+    /// through it first, as `BSArchPro` does (`DDS2XBOX`).
+    pub target: Option<String>,
     /// Override the archive flags of a BSA with this hexadecimal value.
     pub archive_flags: Option<String>,
     /// Override the file flags of a BSA with this hexadecimal value.
@@ -427,6 +434,31 @@ fn archive_pack(_: &mut Session, request: ArchivePackRequest) -> Result<ArchiveP
     packer.set_filters(&request.filters);
     packer.set_share_data(request.share);
     packer.set_threads(request.threads);
+    let xbox = match request.target.as_deref() {
+        None => false,
+        Some(target) if target.eq_ignore_ascii_case("pc") => false,
+        Some(target) if target.eq_ignore_ascii_case("xbox") => true,
+        Some(target) => {
+            return Err(CommandError::new(
+                "invalid_params",
+                format!("unknown target {target}; the targets are pc and xbox"),
+            ));
+        }
+    };
+    if xbox {
+        packer.set_target(Target::XBox);
+        // `TAssetsPacker.ConvertDDS2XBOX`: the conversion needs the tool
+        // the release does not ship, and only a DDS archive uses it.
+        if kind.is_dds() {
+            let tool = std::path::PathBuf::from(format!(
+                "{}xtexconv.exe",
+                xedit_core::interface::globals::program_path()
+            ));
+            if tool.is_file() {
+                packer.set_xtexconv(Some(tool));
+            }
+        }
+    }
     if let Some(flags) = &request.archive_flags {
         packer.set_archive_flags(hex_value(flags)?);
     }
