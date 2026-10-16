@@ -1312,7 +1312,6 @@ fn script_and_units(scripts: &Path, name: &str) -> Result<(String, Vec<(String, 
     Ok((text, units))
 }
 
-
 /// `text` without its comments (`//`, `{ }` and `(* *)`), so that a `uses`
 /// in one does not name a unit. String literals are kept.
 fn without_comments(text: &str) -> String {
