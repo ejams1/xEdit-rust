@@ -2693,16 +2693,28 @@ impl MainRecordImpl {
     /// contained-in element and leaves as soon as a subrecord past
     /// `QuickInitLimit` is reached; the port builds every subrecord (the
     /// values are read lazily, so only the names are read) and stops at the
-    /// same point. UPSTREAM-QUIRK (reproduced): a record whose subrecords
-    /// all lie before the limit runs the whole tail of `Init` in the quick
-    /// init, so its `AfterLoad` and its missing required members change it
-    /// as an internal edit, which invalidates its storage; the elements are
-    /// then released, and the next init collapses the invalidated storage
+    /// same point. A record whose subrecords all lie before the limit runs
+    /// the whole tail of `Init` in the quick init, so its `AfterLoad` and
+    /// its missing required members change it as an internal edit, which
+    /// invalidates its storage.
+    ///
+    /// UPSTREAM-BUG (not reproduced, user decision 2026-10-16): upstream's
+    /// `DoReset(True)` then releases the elements with the storage still
+    /// invalid, and the next init's `GetDataBasePtr` collapses the storage
     /// from the elements it has (none) before it reads the data, so the
-    /// record is left with no subrecords at all (see `build`). A keyword
-    /// without its colour or an activator with bounds alone loses its
-    /// subrecords that way in the GUI when its name is read before anything
-    /// else, which `Add Prefix Plus Name To EDID.pas` does to every record.
+    /// record is left with no subrecords at all: a keyword without its
+    /// colour or an activator without its marker colour (`ACTI` 0005307A of
+    /// Skyrim.esm, `EDID`, `VMAD`, `OBND`) loses every subrecord, and with
+    /// them the references its `VMAD` holds, when its name is read before
+    /// anything else, which `Add Prefix Plus Name To EDID.pas` does to
+    /// every record and a filter on the base record's name does to every
+    /// base record. The GUI masks it by building the references at load
+    /// (every record's first init is a full one). The port collapses the
+    /// invalidated storage from the elements the quick init built
+    /// (`collapse_storage_after_quick_init`) before it releases them, so
+    /// the next init reads the record with its required members, as a
+    /// record read through `ElementByName` first does on both sides. The
+    /// divergence is recorded in `docs/PLAN.md` and the scripts skill.
     ///
     /// The subrecords are released before the build counts as done
     /// (`InitOnce::run_then`), so no other thread sees them: a thread that
@@ -2720,12 +2732,42 @@ impl MainRecordImpl {
                 QUICK_INIT.with(|quick| quick.set(outer));
             },
             || {
+                // A storage the quick init's edits invalidated is collapsed
+                // from the elements while they are still here (see the
+                // UPSTREAM-BUG note above).
+                if self.mr_storage_invalid.load(Ordering::Relaxed) {
+                    self.collapse_storage_after_quick_init();
+                }
                 // `DoReset(True)`: forced, whatever the quick init changed.
                 self.container.release_elements();
                 self.release_data();
                 true
             },
         );
+    }
+
+    /// The `CollapseStorage` of a record the quick init changed, run before
+    /// its elements are released: the keys and the references are updated
+    /// from the elements (the referenced-by lists of the records a `VMAD`
+    /// or a `NAME` points to stay as they are), the elements are written,
+    /// and their bytes become the data of the record (`CollapsedData`), which
+    /// the next init reads. The record stays modified as the edits left it
+    /// (internally, for the required members and `AfterLoad`), and the
+    /// parent's storage is invalidated as `CollapseStorage` does. Without
+    /// elements there is nothing to write, and the storage stays as it is.
+    fn collapse_storage_after_quick_init(self: &Arc<Self>) {
+        if !self.base.has_state(ElementState::esModified) || self.container.elements().is_empty() {
+            return;
+        }
+        self.update_keys();
+        self.update_refs();
+        let mut data = Vec::new();
+        if write::container_write_to_stream(&**self, &mut data, ResetModified::rmNo).is_err() {
+            return;
+        }
+        self.mr_collapsed.set(data);
+        self.mr_storage_invalid.store(false, Ordering::Relaxed);
+        edit::invalidate_parent_storage(&**self);
     }
 
     /// Whether the quick init of this record runs on this thread
@@ -3187,7 +3229,10 @@ impl MainRecordImpl {
     /// (internally when the change was internal). `PrepareSave` of the
     /// record, which upstream runs between the updates, checks the record's
     /// place in its group and has nothing to do for a record without
-    /// elements.
+    /// elements. The quick init collapses its own edits while the elements
+    /// are still here (`collapse_storage_after_quick_init`), so this path,
+    /// which empties the record as upstream does, is left for a storage
+    /// some other release left invalid.
     pub(crate) fn collapse_storage_in_init(self: &Arc<Self>) {
         if !self.base.has_state(ElementState::esModified) {
             return;
