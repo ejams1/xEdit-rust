@@ -261,6 +261,7 @@ impl Session {
             game: Some(mode),
             files,
             edit_allowed: false,
+            dirty_info: Vec::new(),
         })
     }
 

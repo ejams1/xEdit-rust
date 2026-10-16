@@ -23,11 +23,11 @@
 //! is judged by its own (inherited) status. The count of removed records
 //! includes those groups, as upstream counts them.
 //!
-//! Not ported: `wbAllowMakePartial` (the partial forms that `-AllowMakePartial`
-//! makes of a cell or worldspace with children; `MakePartialForm` is owed
-//! from phase 3), so a record with children is never removed or made
-//! partial. The dirty information for LOOT (`LOOTPluginInfos`) is the
-//! counts of the reports.
+//! With `wbAllowMakePartial` (`-AllowMakePartial`) the ITM removal makes a
+//! cell or worldspace with children that is identical to its master a
+//! partial form and removes a partial form whose child group is empty. Each
+//! report carries the `Plugin` and `PluginCRC32` the handler stores its
+//! dirty information under (`LOOTPluginInfos`, kept by the session).
 
 use std::sync::Arc;
 
@@ -114,6 +114,18 @@ pub struct CleanReport {
     pub skipped: Vec<CleanedElement>,
     /// The lines the GUI adds to its message log, without the times.
     pub messages: Vec<String>,
+    /// `Plugin` and `PluginCRC32` of the handler: the `FileName` and the
+    /// `CRC32` of the file of the last node the walk stored them for (every
+    /// main record for the UDR, every node it removes or counts for the
+    /// ITM), which the dirty information is stored under. `None` when no
+    /// node set them (`Plugin = ''`: nothing is stored).
+    pub plugin: Option<(String, u32)>,
+}
+
+/// `Plugin := _File.FileName; PluginCRC32 := _File.CRC32` for `element`.
+fn plugin_of(element: &ElementRef) -> Option<(String, u32)> {
+    let file = element.as_element_impl()?.file_impl()?;
+    Some((file.file_name().to_owned(), file.crc32()))
 }
 
 fn cleaned_element(element: &ElementRef) -> CleanedElement {
@@ -156,59 +168,103 @@ fn check_filter(tree: &NavTree) -> Result<(), String> {
     }
 }
 
-/// Port of `mniNavRemoveIdenticalToMasterClick` on the selected node
-/// `start` (the file node in the quick clean mode). `count_only` is the
+/// Port of `mniNavRemoveIdenticalToMasterClick` on the selected nodes
+/// `starts` (`GetSortedSelection(True)`: the file node in the quick clean
+/// mode), each walked from its last node back. `count_only` is the
 /// `tmCheckForITM` mode: the records are counted, not removed.
-pub fn remove_identical_to_master(tree: &mut NavTree, start: NodeId, count_only: bool) -> Result<CleanReport, String> {
+/// `allow_make_partial` is `wbAllowMakePartial` (`-IKnowWhatImDoing`
+/// `-AllowMakePartial`): a record identical to its master that has children
+/// (a cell or worldspace) is not removed but made a partial form
+/// (`MakePartialForm`), and an existing partial form whose child group is
+/// empty is removed.
+pub fn remove_identical_to_master(
+    tree: &mut NavTree,
+    starts: &[NodeId],
+    count_only: bool,
+    allow_make_partial: bool,
+) -> Result<CleanReport, String> {
     if translation_mode() {
         return Ok(CleanReport::default());
     }
     check_filter(tree)?;
     let operation = if count_only { "Count" } else { "Remov" };
     let mut report = CleanReport::default();
-    report.processed = walk(tree, start, |tree, id| {
-        let Some(element) = tree.data(id).element.clone() else {
-            return;
-        };
-        let record = record_of(&element);
-        let data = tree.data(id);
-        let is_group =
-            record.is_none() && element.get_element_type() == xedit_core::interface::types::ElementType::etGroupRecord;
-        let identical = data.conflict_this == ConflictThis::ctIdenticalToMaster
-            || (data.conflict_this == ConflictThis::ctConflictBenign
-                && record
-                    .as_ref()
-                    .is_some_and(|record| record.get_signature() == Signature::new(b"NAVM")))
-            || is_group;
-        // UPSTREAM-QUIRK: without `wbAllowMakePartial` only a node without
-        // children is removed; a group counts whatever its status.
-        if tree.child_count(id) != 0 || !identical {
-            return;
-        }
-        if record
-            .as_ref()
-            .is_some_and(|record| master_or_self(record).is_injected())
-        {
-            return;
-        }
-        if !element.get_is_removable() {
-            report.messages.push(format!("Can't remove: {}", element.get_name()));
-            report.skipped.push(cleaned_element(&element));
-            return;
-        }
-        let cleaned = cleaned_element(&element);
-        report.messages.push(format!("{operation}ing: {}", cleaned.name));
-        if !count_only {
-            if let Some(container) = tree.data(id).container.clone()
-                && container.get_element_id() != element.get_element_id()
-            {
-                container.remove();
+    for &start in starts {
+        report.processed += walk(tree, start, |tree, id| {
+            let Some(element) = tree.data(id).element.clone() else {
+                return;
+            };
+            let record = record_of(&element);
+            let data = tree.data(id);
+            let is_group = record.is_none()
+                && element.get_element_type() == xedit_core::interface::types::ElementType::etGroupRecord;
+            let child_count = tree.child_count(id);
+            let is_partial_form = record.as_ref().is_some_and(|record| record.get_is_partial_form());
+            let can_be_partial = record.as_ref().is_some_and(|record| record.get_can_be_partial());
+            // `(Node.ChildCount = 0) or (wbAllowMakePartial and MainRecord and
+            // not IsPartialForm and CanBePartial)`.
+            if child_count != 0 && !(allow_make_partial && record.is_some() && !is_partial_form && can_be_partial) {
+                return;
             }
-            element.remove();
-            tree.delete_node(id);
-        }
-        report.cleaned.push(cleaned);
-    });
+            let identical = data.conflict_this == ConflictThis::ctIdenticalToMaster
+                || (data.conflict_this == ConflictThis::ctConflictBenign
+                    && record
+                        .as_ref()
+                        .is_some_and(|record| record.get_signature() == Signature::new(b"NAVM")))
+                || (data.org_conflict_this == ConflictThis::ctIdenticalToMaster
+                    && allow_make_partial
+                    && child_count > 0)
+                || is_group
+                || (child_count == 0
+                    && allow_make_partial
+                    && is_partial_form
+                    && record
+                        .as_ref()
+                        .is_some_and(|record| record.child_group().is_none_or(|group| group.get_element_count() == 0)));
+            if !identical {
+                return;
+            }
+            if record
+                .as_ref()
+                .is_some_and(|record| master_or_self(record).is_injected())
+            {
+                return;
+            }
+            if let Some(plugin) = plugin_of(&element) {
+                report.plugin = Some(plugin);
+            }
+            if !element.get_is_removable() {
+                report.messages.push(format!("Can't remove: {}", element.get_name()));
+                report.skipped.push(cleaned_element(&element));
+                return;
+            }
+            let cleaned = cleaned_element(&element);
+            if !count_only {
+                if child_count != 0 {
+                    // `Node.ChildCount > 0`: a cell or worldspace with children
+                    // becomes a partial form when `wbAllowMakePartial` is on.
+                    if allow_make_partial && let Some(record) = &record {
+                        report.messages.push(format!("Making Partial Form: {}", cleaned.name));
+                        record.make_partial_form();
+                    }
+                } else {
+                    report.messages.push(format!("{operation}ing: {}", cleaned.name));
+                    if let Some(container) = tree.data(id).container.clone()
+                        && container.get_element_id() != element.get_element_id()
+                    {
+                        container.remove();
+                    }
+                    element.remove();
+                    tree.delete_node(id);
+                }
+            } else {
+                report.messages.push(format!("{operation}ing: {}", cleaned.name));
+            }
+            // A record that was not removed counts as removed (`Inc(RemovedCount)`
+            // runs for the partial form and the count-only message too).
+            report.cleaned.push(cleaned);
+        });
+    }
     report.messages.push(format!(
         "[{operation}ing \"Identical to Master\" records done]  Processed Records: {}, {operation}ed Records: {}",
         report.processed,
@@ -226,12 +282,12 @@ const UNDELETED: [&[u8; 4]; 12] = [
     b"REFR", b"PGRE", b"PMIS", b"ACHR", b"ACRE", b"NAVM", b"PARW", b"PBAR", b"PBEA", b"PCON", b"PFLA", b"PHZD",
 ];
 
-/// Port of `mniNavUndeleteAndDisableReferencesClick` on the selected node
-/// `start`. `count_only` is the `tmCheckForDR` mode: the references are
-/// counted, not changed.
+/// Port of `mniNavUndeleteAndDisableReferencesClick` on the selected nodes
+/// `starts`, each walked from its last node back. `count_only` is the
+/// `tmCheckForDR` mode: the references are counted, not changed.
 pub fn undelete_and_disable_references(
     tree: &mut NavTree,
-    start: NodeId,
+    starts: &[NodeId],
     count_only: bool,
     settings: &UdrSettings,
 ) -> Result<CleanReport, String> {
@@ -244,50 +300,55 @@ pub fn undelete_and_disable_references(
     // Upstream keeps `Element` across the records, so the scale and the
     // MSTT steps can find the element of an earlier record.
     let mut element: Option<ElementRef> = None;
-    report.processed = walk(tree, start, |tree, id| {
-        let Some(record) = tree.data(id).element.as_ref().and_then(record_of) else {
-            return;
-        };
-        let signature = record.get_signature();
-        if !(record.get_is_editable()
-            && record.get_is_deleted()
-            && UNDELETED.iter().any(|expected| signature == Signature::new(expected)))
-        {
-            return;
-        }
-        let name = record.get_name();
-        // `canUndelete`.
-        let links_to = master_or_self(&record).get_base_record();
-        let can_undelete = if signature == Signature::new(b"NAVM") {
-            report.deleted_navmeshes += 1;
-            false
-        } else if record.is_injected()
+    for &start in starts {
+        report.processed += walk(tree, start, |tree, id| {
+            let Some(record) = tree.data(id).element.as_ref().and_then(record_of) else {
+                return;
+            };
+            let self_element: ElementRef = record.clone();
+            if let Some(plugin) = plugin_of(&self_element) {
+                report.plugin = Some(plugin);
+            }
+            let signature = record.get_signature();
+            if !(record.get_is_editable()
+                && record.get_is_deleted()
+                && UNDELETED.iter().any(|expected| signature == Signature::new(expected)))
+            {
+                return;
+            }
+            let name = record.get_name();
+            // `canUndelete`.
+            let links_to = master_or_self(&record).get_base_record();
+            let can_undelete = if signature == Signature::new(b"NAVM") {
+                report.deleted_navmeshes += 1;
+                false
+            } else if record.is_injected()
             || links_to.is_none()
             // A tree with LOD in New Vegas.
             || (game_mode() == GameMode::gmFNV
                 && links_to.as_ref().is_some_and(|base| {
                     base.get_signature() == Signature::new(b"TREE") && base.get_flags().0 & 0x40 != 0
                 }))
-        {
-            report.not_undeleted += 1;
-            false
-        } else {
-            true
-        };
-        if !can_undelete {
-            report.messages.push(format!("Skipping: {name}"));
-            let element: ElementRef = record.clone();
-            report.skipped.push(cleaned_element(&element));
-            return;
-        }
-        report.messages.push(format!("{operation}ing: {name}"));
-        let self_element: ElementRef = record.clone();
-        let cleaned = cleaned_element(&self_element);
-        if !count_only {
-            undelete_and_disable(&record, settings, &mut element, &mut report.messages);
-        }
-        report.cleaned.push(cleaned);
-    });
+            {
+                report.not_undeleted += 1;
+                false
+            } else {
+                true
+            };
+            if !can_undelete {
+                report.messages.push(format!("Skipping: {name}"));
+                let element: ElementRef = record.clone();
+                report.skipped.push(cleaned_element(&element));
+                return;
+            }
+            report.messages.push(format!("{operation}ing: {name}"));
+            let cleaned = cleaned_element(&self_element);
+            if !count_only {
+                undelete_and_disable(&record, settings, &mut element, &mut report.messages);
+            }
+            report.cleaned.push(cleaned);
+        });
+    }
     report.messages.push(format!(
         "[{operation}ing and Disabling References done]  Processed Records: {}, {operation}ed Records: {}",
         report.processed,
@@ -381,6 +442,7 @@ pub fn quick_clean_pass(
     files: &[Arc<FileImpl>],
     count_only: bool,
     settings: &UdrSettings,
+    allow_make_partial: bool,
 ) -> Result<QuickCleanPass, String> {
     let mut tree = NavTree::new(std::slice::from_ref(target));
     let filter = apply_filter(&mut tree, &FilterOptions::for_cleaning(), files).map_err(|error| error.message)?;
@@ -390,8 +452,8 @@ pub fn quick_clean_pass(
     // The GUI selects the file node (`JumpTo` its header expands it, and
     // the tree sorts the children of an expanded node, `toAutoSort`).
     tree.sort_children(start);
-    let udr = undelete_and_disable_references(&mut tree, start, count_only, settings)?;
-    let itm = remove_identical_to_master(&mut tree, start, count_only)?;
+    let udr = undelete_and_disable_references(&mut tree, &[start], count_only, settings)?;
+    let itm = remove_identical_to_master(&mut tree, &[start], count_only, allow_make_partial)?;
     Ok(QuickCleanPass { filter, udr, itm })
 }
 
