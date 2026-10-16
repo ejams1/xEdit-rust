@@ -4577,8 +4577,8 @@ impl File for FileImpl {
     fn load_order_form_id_to_file_form_id(&self, form_id: FormID, _new: bool) -> Result<FormID, String> {
         FileImpl::load_order_form_id_to_file_form_id(self, form_id).ok_or_else(|| {
             format!(
-                "FormID [{}] can not be mapped to file FormID for file \"{}\"",
-                form_id.to_string(true),
+                "Load order FileID [{}] can not be mapped to file FileID for file \"{}\"",
+                form_id.file_id(),
                 self.get_name()
             )
         })

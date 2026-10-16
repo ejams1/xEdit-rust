@@ -1964,8 +1964,8 @@ pub fn split_tree_lod(env: &LodEnv, worldspace: &MainRecordRef, files: &[Arc<Fil
                 };
                 let file_form_id = file.load_order_form_id_to_file_form_id(ref_form_id).ok_or_else(|| {
                     LodError::new(format!(
-                        "FormID [{}] can not be mapped to file FormID for file \"{}\"",
-                        ref_form_id.to_string(true),
+                        "Load order FileID [{}] can not be mapped to file FileID for file \"{}\"",
+                        ref_form_id.file_id(),
                         file.get_name()
                     ))
                 })?;
