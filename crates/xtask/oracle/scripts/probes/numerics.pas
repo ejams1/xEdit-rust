@@ -195,12 +195,11 @@ begin
   Log('text', 'FloatToStrF(1e22built,1,17,0)=' + FloatToStrF(a, 1, 17, 0));
   Log('text', 'FloatToStrF(1e22built,1,15,0)=' + FloatToStrF(a, 1, 15, 0));
   Log('text', 'FloatToStrF(1e22built,0,17,0)=' + FloatToStrF(a, 0, 17, 0));
-  Log('text', 'Format(%)g=' + Format('%g', [a]));
-  Log('text', 'Format(%.5g)=' + Format('%.5g', [a]));
-  Log('text', 'Format(%.17g)=' + Format('%.17g', [a]));
-  Log('text', 'Format(%)e=' + Format('%e', [a]));
-  Log('text', 'Format(%.17e)=' + Format('%.17e', [a]));
-  Log('text', 'Format(%.2f)=' + Format('%.2f', [1.0 / 3.0]));
+  // `Format('%g', [a])` is a Type mismatch in both dialects (the oracle
+  // aborts on it as well), so the pictures go through `FormatFloat`.
+  Log('text', 'FormatFloat(0.#####)=' + FormatFloat('0.#####', a));
+  Log('text', 'FormatFloat(0.00E+00)=' + FormatFloat('0.00E+00', a));
+  Log('text', 'FormatFloat(0.00)=' + FormatFloat('0.00', 1.0 / 3.0));
 end;
 
 procedure Trig;

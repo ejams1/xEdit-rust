@@ -785,19 +785,13 @@ pub fn curr_to_str(value: f64) -> String {
 }
 
 /// `StrToFloat`, with the RTL's `EConvertError` text on a bad value.
+///
+/// The whole conversion is `delphi::str_to_float` since parity #39: it
+/// reads the `INF`/`NAN` spellings itself (probes `x-149`, `x-150` of #28
+/// are its cases), with the RTL's NaN bits `0xFFF8...` where the wrapper
+/// here answered `f64::NAN` (`0x7FF8...`, which the probe's `.dat` showed
+/// as a byte difference) and the RTL's parse for everything else.
 pub fn str_to_float(text: &str) -> Result<f64, String> {
-    // `TextToFloat` reads the RTL's own `INF`/`NAN` spellings (probes
-    // `x-149`, `x-150`).
-    let trimmed = text.trim();
-    if trimmed.eq_ignore_ascii_case("inf") || trimmed.eq_ignore_ascii_case("+inf") {
-        return Ok(f64::INFINITY);
-    }
-    if trimmed.eq_ignore_ascii_case("-inf") {
-        return Ok(f64::NEG_INFINITY);
-    }
-    if trimmed.eq_ignore_ascii_case("nan") {
-        return Ok(f64::NAN);
-    }
     delphi::str_to_float(text).ok_or_else(|| format!("'{text}' is not a valid floating point value"))
 }
 
