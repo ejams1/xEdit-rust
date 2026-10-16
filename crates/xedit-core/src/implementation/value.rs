@@ -1375,6 +1375,18 @@ impl ElementImpl for ValueImpl {
     /// follow the element count.
     fn do_after_set(&self, old: &Variant, new: &Variant) {
         edit::do_after_set(self, old, new);
+        // `TwbContainedInElement.DoAfterSet`: the value of the element is
+        // the record's owner (its cell, worldspace, topic or quest).
+        if self.vb.contained_in.load(Ordering::Relaxed)
+            && let Some(record) = self
+                .vb
+                .base
+                .container()
+                .and_then(|container| container.as_element_impl()?.main_record_impl())
+        {
+            let element = self.element_ref();
+            super::undelete::contained_in_do_after_set(&record, &element, old, new);
+        }
         if self.kind == ValueKind::Array {
             edit::update_count_via_path(self, Some(&self.vb.vb_value_def));
         }

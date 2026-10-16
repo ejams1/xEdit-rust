@@ -902,9 +902,19 @@ fn clear_sort_invalid(element: &dyn ElementImpl) {
 /// the label of a group whose label is a FormID.
 fn group_masters_updated(group: &Arc<GroupRecordImpl>, update: &MastersUpdate) -> Result<bool, EditError> {
     with_update(&**group, || {
-        let mut result = container_masters_updated(&**group, update)?;
-        // Upstream sorts the INFOs of a topic group (type 7) again here;
-        // `TwbGroupRecord.Sort` of a topic group is not ported.
+        // `Include(grStates, gsSorting)` around the walk: the members'
+        // updates do not clear the sort state of the group while it
+        // updates.
+        group.gr_sorting.store(true, std::sync::atomic::Ordering::Relaxed);
+        let walk = container_masters_updated(&**group, update);
+        group.gr_sorting.store(false, std::sync::atomic::Ordering::Relaxed);
+        let mut result = walk?;
+        // `// sort INFOs afterwards if group is a DIAL children`: the
+        // FormIDs of the responses changed, so a topic group sorts again;
+        // inside this update the sort is postponed to its `EndUpdate`.
+        if group.group_type() == 7 {
+            group.sort();
+        }
         let changed = with_internal_edit(|| {
             if !matches!(group.group_type(), 1 | 6..=10) {
                 return false;

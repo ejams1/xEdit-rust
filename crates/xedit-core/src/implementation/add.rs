@@ -110,6 +110,8 @@ impl GroupRecordImpl {
             dc_end: 0,
             gr_sorted: std::sync::atomic::AtomicBool::new(false),
             gr_sorting: std::sync::atomic::AtomicBool::new(false),
+            gr_sort_postponed: std::sync::atomic::AtomicBool::new(false),
+            gr_sort_forced_postponed: std::sync::atomic::AtomicBool::new(false),
         });
         if group_type == 0 {
             let order = wb_get_group_order(Signature::new(&label.to_le_bytes()));
@@ -492,6 +494,7 @@ impl MainRecordImpl {
             mr_precombined: std::sync::OnceLock::new(),
             mr_has_vwd_mesh: std::sync::OnceLock::new(),
             mr_ofst_removed: std::sync::atomic::AtomicBool::new(false),
+            mr_position_generation: std::sync::atomic::AtomicI32::new(0),
             mr_storage_invalid: std::sync::atomic::AtomicBool::new(true),
             mr_collapsed: super::CollapsedData::default(),
             mr_duplicate: std::sync::atomic::AtomicBool::new(false),
@@ -955,6 +958,52 @@ impl MainRecordImpl {
         self.take_referenced_by();
         self.clear_fixed_form_id();
         Ok(())
+    }
+
+    /// Port of `TwbMainRecord.Delete`: the record keeps its place, its child
+    /// group and its references; it loses its contents, gains a fresh
+    /// header and the contained-in element again, and is marked deleted.
+    /// No port front end runs it yet: upstream calls it from `DeleteInto`
+    /// only, and the GUI's Delete action is the first caller a front end
+    /// gets.
+    #[allow(dead_code)]
+    pub(crate) fn delete(self: &Arc<Self>) {
+        self.begin_update();
+        let base_record = self.get_base_record();
+        self.set_modified(true);
+        self.invalidate_storage();
+        self.container.release_elements();
+        let can_be_partial = self.mr_def.as_ref().is_some_and(|def| def.get_can_be_partial());
+        self.make_header_writeable(|header| {
+            header.flags.set_deleted(true);
+            if can_be_partial {
+                header.flags.set_partial_form(false);
+            }
+            header.flags.set_compressed(false);
+        });
+        // `TwbContainedInElement.Create` and `TwbRecordHeaderStruct.Create`
+        // (the header element exists again after the init of
+        // `MakeHeaderWriteable`, with `dcfDontSave`, sort order -1 and
+        // memory order `Low(Integer)`).
+        self.create_contained_in();
+        if game_mode() >= GameMode::gmFO4
+            && let Some(base_record) = base_record
+            && let Some(mr_def) = &self.mr_def
+        {
+            let index = mr_def.get_known_sub_record_member_index(KnownSubRecord::ksrBaseRecord);
+            if index >= 0
+                && let Some(element) = self.assign(index, None, false)
+                && let Some(element) = element.as_element_impl()
+            {
+                let _ = element.set_native_value_impl(Variant::UInt(u64::from(
+                    base_record.get_load_order_form_id().to_cardinal(),
+                )));
+            }
+        }
+        // `CollapseStorage(nil, True)`: the record's storage becomes what
+        // its elements write.
+        self.collapse_storage_in_init();
+        self.end_update();
     }
 
     /// Port of `TwbMainRecord.CanAssignInternal`.

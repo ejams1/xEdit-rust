@@ -67,6 +67,9 @@ pub enum ElementState {
     /// Port of `esParentHiddenChecked`: whether `esParentHidden` was looked
     /// up since the element was created.
     esParentHiddenChecked = 2048,
+    /// Port of `esEndingUpdate`: the last `EndUpdate` runs `UpdateEnded`
+    /// (a group sort postponed by the update runs now).
+    esEndingUpdate = 4096,
 }
 
 /// Port of `TwbResetModified`: what a save does to the modified states.
@@ -197,6 +200,9 @@ pub(crate) fn element_set_modified(element: &dyn ElementImpl, value: bool) {
         base.include_state(ElementState::esUnsaved);
     }
     base.include_state(ElementState::esModified);
+    // `Inc(eGeneration)`: the element changed (`TwbMainRecord.DoAfterSet`
+    // reads the generation of the position element).
+    base.e_generation.fetch_add(1, Ordering::Relaxed);
     // `Inc(eGeneration)`: the references of a record are out of date.
     if element.get_element_type() == ElementType::etMainRecord
         && let Some(record) = element.main_record_impl()

@@ -126,11 +126,15 @@ pub(crate) fn begin_update(element: &dyn ElementImpl) {
 }
 
 /// Port of `TwbElement.EndUpdate`: the last `EndUpdate` runs the deferred
-/// notifications.
+/// notifications, with `esEndingUpdate` set so a postponed group sort runs
+/// now (`TwbGroupRecord.UpdateEnded`).
 pub(crate) fn end_update(element: &dyn ElementImpl) {
-    let count = element.element_base().e_update_count.fetch_sub(1, Ordering::AcqRel) - 1;
+    let base = element.element_base();
+    let count = base.e_update_count.fetch_sub(1, Ordering::AcqRel) - 1;
     if count == 0 {
+        base.include_state(ElementState::esEndingUpdate);
         element.update_ended();
+        base.exclude_state(ElementState::esEndingUpdate);
     }
 }
 

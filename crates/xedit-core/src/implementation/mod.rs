@@ -511,6 +511,10 @@ pub struct ElementBase {
     /// Port of `eUpdateCount`: while above zero, change notifications and
     /// the modified state of the parent are deferred to `EndUpdate`.
     pub(crate) e_update_count: AtomicI32,
+    /// Port of `eGeneration`: bumped whenever the element is marked
+    /// modified, so a reader can tell whether an element changed since it
+    /// last looked (`TwbMainRecord.DoAfterSet`'s position generation).
+    pub(crate) e_generation: AtomicI32,
     /// Port of `eReportMastersGen`: the generation of the last
     /// `ReportRequiredMasters`, with the top bit for a recursive one.
     pub(crate) e_report_masters_gen: std::sync::atomic::AtomicU32,
@@ -526,8 +530,14 @@ impl ElementBase {
             e_name_suffix: RwLock::new(String::new()),
             e_states: std::sync::atomic::AtomicU32::new(0),
             e_update_count: AtomicI32::new(0),
+            e_generation: AtomicI32::new(1),
             e_report_masters_gen: std::sync::atomic::AtomicU32::new(0),
         }
+    }
+
+    /// Port of `TwbElement.GetElementGeneration`.
+    pub(crate) fn element_generation(&self) -> i32 {
+        self.e_generation.load(std::sync::atomic::Ordering::Relaxed)
     }
 
     pub(crate) fn name_suffix(&self) -> String {
@@ -2139,6 +2149,12 @@ pub struct GroupRecordImpl {
     gr_sorted: AtomicBool,
     /// Port of `gsSorting`: the group sorts now.
     gr_sorting: AtomicBool,
+    /// Port of `gsSortPostponed`: a sort asked for inside an update runs at
+    /// `UpdateEnded`.
+    gr_sort_postponed: AtomicBool,
+    /// Port of `gsSortForcedPostponed`: one of the postponed asks was
+    /// forced.
+    gr_sort_forced_postponed: AtomicBool,
 }
 
 impl GroupRecordImpl {
@@ -2170,6 +2186,8 @@ impl GroupRecordImpl {
             dc_end,
             gr_sorted: AtomicBool::new(false),
             gr_sorting: AtomicBool::new(false),
+            gr_sort_postponed: AtomicBool::new(false),
+            gr_sort_forced_postponed: AtomicBool::new(false),
         });
         if gr_struct.group_type == 0 {
             let order = wb_get_group_order(gr_struct.label_signature());
@@ -2234,21 +2252,38 @@ impl GroupRecordImpl {
         None
     }
 
-    /// Port of `TwbGroupRecord.Sort` without `aForce`, for the groups that
-    /// sort by `CompareGroupContents`. A topic group (type 7) of a game that
-    /// sorts its responses (`wbCanSortINFO`) sorts them by their links
-    /// instead (`sort_topic`); in the other games (Fallout 4 and later) it
-    /// sorts by `CompareGroupContents` like any group.
+    /// Port of `TwbGroupRecord.Sort` without `aForce`. A topic group
+    /// (type 7) of a game that sorts its responses (`wbCanSortINFO`) sorts
+    /// them by their links instead (`sort_topic`); in the other games
+    /// (Fallout 4 and later) it sorts by `CompareGroupContents` like any
+    /// group.
     /// UPSTREAM-QUIRK: the merge of a duplicated top level group adds the
     /// records without clearing `gsSorted`, so a group that two duplicates
     /// merge into is sorted only after the first of them.
     pub(crate) fn sort(&self) {
+        self.sort_with_force(false);
+    }
+
+    /// Port of `TwbGroupRecord.Sort(aForce)`: the `gsSorting` and `gsSorted`
+    /// early exits, the postponed sort of a group inside an update
+    /// (`gsSortPostponed`, run by `UpdateEnded`), and the sort itself.
+    pub(crate) fn sort_with_force(&self, force: bool) {
         // The responses of a topic, in a game that sorts them by their
         // `PNAM` (`wbCanSortINFO`).
-        if self.sort_topic(false) {
+        if self.sort_topic(force) {
             return;
         }
-        if self.gr_sorted.load(Ordering::Relaxed) {
+        if self.gr_sorting.load(Ordering::Relaxed) {
+            return;
+        }
+        if !force && self.gr_sorted.load(Ordering::Relaxed) {
+            return;
+        }
+        if !self.base.has_state(ElementState::esEndingUpdate) && self.base.e_update_count.load(Ordering::Relaxed) > 0 {
+            self.gr_sort_postponed.store(true, Ordering::Relaxed);
+            if force {
+                self.gr_sort_forced_postponed.store(true, Ordering::Relaxed);
+            }
             return;
         }
         self.container.sort_by(compare_group_contents);
@@ -2442,6 +2477,9 @@ pub struct MainRecordImpl {
     /// Port of `mrsOFSTRemoved` in `mrStates`: the init dropped the offsets
     /// of a worldspace, and `PrepareSave` marks its children modified.
     mr_ofst_removed: AtomicBool,
+    /// Port of `mrPositionGeneration`: the generation of the `Position`
+    /// element at the last `UpdateCellChildGroup` of a moved reference.
+    mr_position_generation: AtomicI32,
     /// Port of `dcfStorageInvalid` of the record: an element of the record
     /// changed its data (`InvalidateParentStorage`), so a modified record is
     /// written from its elements. A record that is only marked modified
@@ -2526,6 +2564,7 @@ impl MainRecordImpl {
             mr_has_vwd_mesh: OnceLock::new(),
             mr_ofst_removed: AtomicBool::new(false),
             mr_storage_invalid: AtomicBool::new(false),
+            mr_position_generation: AtomicI32::new(0),
             mr_collapsed: CollapsedData::default(),
             mr_duplicate: AtomicBool::new(duplicate),
             mr_index_keys: std::sync::Mutex::new(None),
@@ -3120,7 +3159,7 @@ impl MainRecordImpl {
     /// record, which upstream runs between the updates, checks the record's
     /// place in its group and has nothing to do for a record without
     /// elements.
-    fn collapse_storage_in_init(self: &Arc<Self>) {
+    pub(crate) fn collapse_storage_in_init(self: &Arc<Self>) {
         if !self.base.has_state(ElementState::esModified) {
             return;
         }
@@ -3155,10 +3194,11 @@ impl MainRecordImpl {
         }
     }
 
-    /// Port of the `TwbContainedInElement` creation in `TwbMainRecord.Init`:
-    /// a record in a worldspace, cell or topic group gets an element that
-    /// holds the FormID of the parent record.
-    fn create_contained_in(self: &Arc<Self>) {
+    /// Port of the `TwbContainedInElement` creation in `TwbMainRecord.Init`
+    /// (and of the one in `TwbMainRecord.Delete`): a record in a worldspace,
+    /// cell or topic group gets an element that holds the FormID of the
+    /// parent record.
+    pub(crate) fn create_contained_in(self: &Arc<Self>) {
         if !create_contained_in() {
             return;
         }
@@ -4399,6 +4439,31 @@ impl ElementImpl for GroupRecordImpl {
     fn is_element_removable(&self, element: &ElementRef) -> bool {
         self.is_element_editable(Some(element))
     }
+
+    /// Port of `TwbGroupRecord.NotifyChangedInternal`: a notification while
+    /// the group sorts is ignored, and a change of the members of a topic
+    /// group makes its order stale. The membership changes of the other
+    /// groups clear the state through `resort` at the mutation sites.
+    fn notify_changed_internal(&self) {
+        if self.gr_sorting.load(Ordering::Relaxed) {
+            return;
+        }
+        edit::notify_changed_internal(self.as_this());
+        if self.group_type() == 7 && crate::interface::globals::sort_info() {
+            self.gr_sorted.store(false, Ordering::Relaxed);
+        }
+    }
+
+    /// Port of `TwbGroupRecord.UpdateEnded`: a sort postponed by an update
+    /// runs now, forced when one of the asks was.
+    fn update_ended(&self) {
+        if self.gr_sort_postponed.load(Ordering::Relaxed) {
+            self.gr_sort_postponed.store(false, Ordering::Relaxed);
+            let force = self.gr_sort_forced_postponed.swap(false, Ordering::Relaxed);
+            self.sort_with_force(force);
+        }
+        edit::update_ended(self.as_this());
+    }
 }
 
 impl Container for GroupRecordImpl {
@@ -4679,11 +4744,41 @@ impl ElementImpl for MainRecordImpl {
         self.self_arc().update_keys();
     }
 
-    /// Port of `TwbMainRecord.DoAfterSet` without the cell child group
-    /// update of a moved reference.
+    /// Port of `TwbMainRecord.DoAfterSet`: after the `AfterSet` callbacks, a
+    /// placed record whose position element changed moves to the children
+    /// group of its cell (`UpdateCellChildGroup`, guarded by the generation
+    /// of the position element).
     fn do_after_set(&self, old: &Variant, new: &Variant) {
         self.self_arc().do_init();
         edit::do_after_set(self, old, new);
+        let arc = self.self_arc();
+        if !arc.check_child_of_cell() {
+            return;
+        }
+        let Some(data) = arc.get_record_by_signature(Signature::new(b"DATA")) else {
+            return;
+        };
+        let Some(container) = data.as_container() else {
+            return;
+        };
+        if container.get_element_count() != 2 {
+            return;
+        }
+        let Some(position) = container.get_element(0) else {
+            return;
+        };
+        let Some(position) = position.as_element_impl() else {
+            return;
+        };
+        if !position.element_base().has_state(ElementState::esModified) {
+            return;
+        }
+        let generation = position.element_base().element_generation();
+        if generation == self.mr_position_generation.load(Ordering::Relaxed) {
+            return;
+        }
+        arc.update_cell_child_group();
+        self.mr_position_generation.store(generation, Ordering::Relaxed);
     }
 
     /// Port of `TwbMainRecord.RemoveElement(aPos, aMarkModified)`: the
