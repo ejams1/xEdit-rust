@@ -899,8 +899,8 @@ mod tests {
         let _lock = globals::test_lock();
         let app = globals::app_name();
         let url = globals::nexus_mods_url();
-        globals::set_app_name("FO3".to_owned());
-        globals::set_nexus_mods_url("https://www.nexusmods.com/fallout3/mods/637".to_owned());
+        globals::set_app_name("FO3");
+        globals::set_nexus_mods_url("https://www.nexusmods.com/fallout3/mods/637");
         let infos = [
             DirtyInfo {
                 plugin: "Anchorage.esm".to_owned(),
@@ -925,8 +925,8 @@ mod tests {
             },
         ];
         let lines = dirty_info_lines(&infos);
-        globals::set_app_name(app);
-        globals::set_nexus_mods_url(url);
+        globals::set_app_name(&app);
+        globals::set_nexus_mods_url(&url);
         let expected = [
             "",
             "LOOT Masterlist Entries",
