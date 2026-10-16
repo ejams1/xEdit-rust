@@ -261,6 +261,14 @@ pub fn register(adapter: &mut Adapter, state: &Rc<RefCell<ScriptRunState>>, vcl:
     for (unit, name, _) in tables::CLASSES {
         classes.insert((*name).to_owned(), class_of(adapter, unit, name));
     }
+    // The control classes `xejviScriptAdapterMiscVcl.pas` adds (`TCheckListBox`,
+    // `TLabeledEdit` and their parents), built through the seam like the
+    // ten units' classes.
+    for name in misc_vcl::CONTROL_CLASSES {
+        if let Some(found) = adapter.find_class(name.as_bytes()) {
+            classes.insert((*name).to_owned(), found);
+        }
+    }
     for anchor in [
         "TObject",
         "TPersistent",

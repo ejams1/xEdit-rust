@@ -659,6 +659,11 @@ struct RunCase {
     /// fails the case.
     #[serde(default)]
     switches: Vec<String>,
+    /// A second case of the same script (the `MessageDlg` path of a script
+    /// whose other case builds the references): appended to the case's
+    /// stem, so the two runs keep separate folders and report lines.
+    #[serde(default)]
+    variant: Option<String>,
     /// What the case is for, when it is not obvious.
     #[serde(default)]
     #[allow(dead_code, reason = "documentation in the file")]
@@ -978,6 +983,10 @@ pub(super) fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
                     if !case.switches.is_empty() {
                         stem.push('-');
                         stem.push_str(&case.switches.join("-"));
+                    }
+                    if let Some(variant) = &case.variant {
+                        stem.push('-');
+                        stem.push_str(variant);
                     }
                     stem
                 },

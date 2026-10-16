@@ -30,6 +30,10 @@ use crate::script::ScriptRunState;
 use crate::script_strings::StringListObject;
 use crate::script_units::{strings_add, strings_at};
 
+/// The control classes this unit registers (the ini-file and string-list
+/// classes are answered here, not by the object model).
+pub(crate) const CONTROL_CLASSES: &[&str] = &["TBoundLabel", "TCustomLabeledEdit", "TLabeledEdit", "TCheckListBox"];
+
 /// Registers the unit: the twelve classes, the five constants, the `IOUtils`
 /// record types with their methods, the `IniFiles` classes and the members
 /// that go through the seam.

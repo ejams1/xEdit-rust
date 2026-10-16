@@ -263,6 +263,66 @@ impl VclModel {
         self.answers.front().cloned()
     }
 
+    /// The published-property surface upstream reads before its registration
+    /// tables: `TJvInterpreterAdapter.GetValue` tries `GetValueRTTI`
+    /// (`JvInterpreter.pas:3949`, `:5115`) first, which answers any
+    /// published property of the receiver's real class by name (`GetPropInfo`),
+    /// whichever class the tables registered it on -- `btn.ModalResult`
+    /// reads `TControl`'s published property although the tables carry
+    /// `ModalResult` for `TCustomForm` alone. The interpreter calls this once
+    /// the adapters answered nothing for an object member without
+    /// arguments; a name that is no published property of the model
+    /// (`published_name`) falls through to the undeclared-identifier error,
+    /// as a nil `PropInfo` does upstream. Returns `false` for a receiver
+    /// that is not one of the model's objects.
+    pub fn rtti_get(&mut self, identifier: &str, value: &mut Value, args: &Args) -> Result<bool, ValueError> {
+        if !args.values.is_empty() || args.indexed {
+            return Ok(false);
+        }
+        let Some(object) = self.model_receiver(args) else {
+            return Ok(false);
+        };
+        let Some(name) = published_name(identifier) else {
+            return Ok(false);
+        };
+        // Events are `tkMethod` properties, which `GetValueRTTI` does not
+        // read (its `case` has no arm for them).
+        if is_event_name(name) {
+            return Ok(false);
+        }
+        self.dispatch_get(&object, name, value)?;
+        Ok(true)
+    }
+
+    /// `SetValueRTTI` (`JvInterpreter.pas:4586`, `:5156`): the write half of
+    /// [`Self::rtti_get`]. The event (`tkMethod`) branch is the evaluator's
+    /// own (`ScriptObject::set_event`), reached before this.
+    pub fn rtti_set(&mut self, identifier: &str, value: &Value, args: &Args) -> Result<bool, ValueError> {
+        if !args.values.is_empty() || args.indexed {
+            return Ok(false);
+        }
+        let Some(object) = self.model_receiver(args) else {
+            return Ok(false);
+        };
+        let Some(name) = published_name(identifier) else {
+            return Ok(false);
+        };
+        if is_event_name(name) {
+            return Ok(false);
+        }
+        self.dispatch_set(&object, name, value)?;
+        Ok(true)
+    }
+
+    /// The receiver of `args` when it is one of the model's live objects.
+    fn model_receiver(&self, args: &Args) -> Option<Rc<RefCell<VclObject>>> {
+        let Some(Value::Object(object)) = &args.obj else {
+            return None;
+        };
+        let id = object.borrow().as_any().downcast_ref::<VclObject>().map(|vcl| vcl.id)?;
+        self.objects.get(&id).cloned()
+    }
+
     //=== Registry helpers ====================================================
 
     fn object(&self, id: i64) -> Result<Rc<RefCell<VclObject>>, ValueError> {
@@ -452,13 +512,21 @@ impl VclModel {
         })
     }
 
-    /// The lazily created `Items`/`Lines` `TStrings` value of a control.
+    /// The lazily created `Items`/`Lines` value of a control: the `Classes`
+    /// unit's `TStringList` object (the one the host's `TStrings` members
+    /// and `GetRecordDefNames` fill and read), or for a menu the root
+    /// `TMenuItem` the menu items are added under.
     fn items_of(&mut self, object: &Rc<RefCell<VclObject>>) -> Result<Value, ValueError> {
         if let Some(value) = object.borrow().props.get("Items").cloned() {
             return Ok(value);
         }
-        let class = self.class_of("TStringList")?;
-        let value = xedit_script::strings::string_list_value(class);
+        let value = if self.is_a(object, "TMenu") {
+            let id = object.borrow().id;
+            self.create_child(id, "TMenuItem")?
+        } else {
+            let class = self.class_of("TStringList")?;
+            Value::Object(Rc::new(RefCell::new(crate::script_strings::StringListObject::new(class))))
+        };
         self.set_prop(object, "Items", value.clone());
         Ok(value)
     }
@@ -735,13 +803,24 @@ impl VclModel {
         let answer = self.ask(&class_name, &title, text, Vec::new(), None, "form")?;
         self.modal_stack.push(form_id);
         self.apply_answer(form_id, &answer)?;
-        let result = {
-            let borrowed = form.borrow();
-            match borrowed.props.get("ModalResult") {
-                Some(Value::Integer(value)) => *value,
-                _ => 0,
-            }
+        let modal_result = |form: &Rc<RefCell<VclObject>>| match form.borrow().props.get("ModalResult") {
+            Some(Value::Integer(value)) => *value,
+            _ => 0,
         };
+        // A form a scenario drives control by control is one window with
+        // several answers (the harness's `repeat`): while the form stays
+        // open and the next recorded answer names it again, that answer is
+        // applied too.
+        while modal_result(&form) == 0
+            && self
+                .answers
+                .front()
+                .is_some_and(|next| next.repeat && next.class == class_name && title.contains(next.title.as_str()))
+        {
+            let next = self.answers.pop_front().expect("checked above");
+            self.apply_answer(form_id, &next)?;
+        }
+        let result = modal_result(&form);
         if self.modal_stack.last() == Some(&form_id) {
             self.modal_stack.pop();
         }
@@ -769,15 +848,28 @@ impl VclModel {
 
     /// One recorded answer applied to an open form: text into the first edit
     /// control, keys to the active control, then the button click (the order
-    /// the oracle harness uses).
+    /// the oracle harness uses). An answer's `control` names the class of
+    /// the child the text and the keys go to instead (the harness posts to
+    /// that child: a form on its desktop has no focused control).
     fn apply_answer(&mut self, form_id: i64, answer: &ScriptAnswer) -> Result<(), ValueError> {
+        let target = match &answer.control {
+            Some(class) => {
+                let Some(control) = self.first_child_of_class(form_id, class) else {
+                    let form = self.object(form_id)?;
+                    let title = self.caption_of(&form);
+                    return Err(self.model_error(format!("the form \"{title}\" has no {class} control")));
+                };
+                Some(control)
+            }
+            None => None,
+        };
         if let Some(text) = &answer.text
-            && let Some(edit) = self.first_edit_child(form_id)
+            && let Some(edit) = target.clone().or_else(|| self.first_edit_child(form_id))
         {
             self.set_prop(&edit, "Text", Value::Str(text.clone().into_bytes()));
         }
         for &key in &answer.keys {
-            self.apply_key(form_id, key)?;
+            self.apply_key(form_id, key, target.clone())?;
         }
         if let Some(button) = &answer.button {
             self.click_button(form_id, button)?;
@@ -799,27 +891,41 @@ impl VclModel {
         })
     }
 
-    /// One virtual key on a form's active control.
-    fn apply_key(&mut self, form_id: i64, key: u16) -> Result<(), ValueError> {
-        let active = self
-            .active_control(form_id)
-            .ok_or_else(|| self.model_error("the form has no focused control".to_owned()))?;
+    /// One virtual key on a form's control: `target` when the answer named
+    /// one, else the active control.
+    fn apply_key(&mut self, form_id: i64, key: u16, target: Option<Rc<RefCell<VclObject>>>) -> Result<(), ValueError> {
+        let active = match target {
+            Some(control) => control,
+            None => self
+                .active_control(form_id)
+                .ok_or_else(|| self.model_error("the form has no focused control".to_owned()))?,
+        };
         match key {
             VK_DOWN | VK_UP => {
                 if self.is_list(&active) {
+                    // A list with nothing selected (-1, the control's start)
+                    // selects its first entry on Down; the count bounds the
+                    // cursor as the control does.
                     let step = if key == VK_DOWN { 1 } else { -1 };
-                    let index = self.prop_i32(&active, "ItemIndex", 0) + step;
-                    self.set_prop(&active, "ItemIndex", Value::Integer(index.max(0)));
+                    let count = self.list_count(&active);
+                    let index = (self.prop_i32(&active, "ItemIndex", -1) + step).max(0);
+                    let index = if count > 0 { index.min(count - 1) } else { index };
+                    self.set_prop(&active, "ItemIndex", Value::Integer(index));
                 }
             }
             VK_SPACE => {
                 if self.is_a(&active, "TCheckListBox") {
-                    let index = self.prop_i32(&active, "ItemIndex", 0).max(0) as usize;
-                    let mut borrowed = active.borrow_mut();
-                    if borrowed.checks.len() <= index {
-                        borrowed.checks.resize(index + 1, false);
+                    // `TCheckListBox.KeyPress` toggles the entry at
+                    // `ItemIndex`; nothing happens while nothing is selected.
+                    let index = self.prop_i32(&active, "ItemIndex", -1);
+                    if index >= 0 {
+                        let index = index as usize;
+                        let mut borrowed = active.borrow_mut();
+                        if borrowed.checks.len() <= index {
+                            borrowed.checks.resize(index + 1, false);
+                        }
+                        borrowed.checks[index] = !borrowed.checks[index];
                     }
-                    borrowed.checks[index] = !borrowed.checks[index];
                 } else if self.is_a(&active, "TCheckBox") {
                     let checked = self.prop_bool(&active, "Checked", false);
                     self.set_prop(&active, "Checked", Value::Bool(!checked));
@@ -857,6 +963,16 @@ impl VclModel {
         self.is_a(object, "TCustomListBox")
             || self.is_a(object, "TCheckListBox")
             || self.is_a(object, "TCustomComboBox")
+    }
+
+    /// The entry count of a list control's `Items` (0 before any was added).
+    fn list_count(&self, object: &Rc<RefCell<VclObject>>) -> i32 {
+        let Some(items) = object.borrow().props.get("Items").cloned() else {
+            return 0;
+        };
+        crate::script_strings::list_of(&items)
+            .map(|list| crate::script_strings::borrow_list(&list).count() as i32)
+            .unwrap_or(0)
     }
 
     fn button_children(&self, form_id: i64) -> Vec<Rc<RefCell<VclObject>>> {
@@ -949,11 +1065,12 @@ impl VclModel {
             .prop_str(object, "FileName")
             .map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
             .unwrap_or_default();
+        let accept = if class_name == "TSaveDialog" { "&Save" } else { "&Open" };
         let answer = self.ask(
             "#32770",
             &title,
             default,
-            vec!["&Open".to_owned(), "Cancel".to_owned()],
+            vec![accept.to_owned(), "Cancel".to_owned()],
             None,
             "file",
         )?;
@@ -964,6 +1081,21 @@ impl VclModel {
             return Err(self.model_error(format!(
                 "the recorded answer for the file dialog \"{title}\" carries no text (the file name)"
             )));
+        };
+        // The common dialog resolves a name typed without a drive or a root
+        // against its folder (`InitialDir`), and `FileName` is the full
+        // path.
+        let relative = !(file.contains(':') || file.starts_with('\\') || file.starts_with('/'));
+        let file = match self.prop_str(object, "InitialDir") {
+            Some(dir) if relative && !dir.is_empty() => {
+                let mut path = String::from_utf8_lossy(&dir).into_owned();
+                if !path.ends_with('\\') && !path.ends_with('/') {
+                    path.push('\\');
+                }
+                path.push_str(&file);
+                path
+            }
+            _ => file,
         };
         self.set_prop(object, "FileName", Value::Str(file.into_bytes()));
         Ok(true)
@@ -1072,11 +1204,17 @@ impl VclModel {
                 }
                 if member == "EditLabel" {
                     let id = object.borrow().id;
-                    if let Some(label) = self.first_child_of_class(id, "TLabel") {
+                    if let Some(label) = self.first_child_of_class(id, "TBoundLabel") {
                         *value = Value::Object(label);
                     } else {
-                        *value = self.create_child(id, "TLabel")?;
+                        *value = self.create_child(id, "TBoundLabel")?;
                     }
+                    return Ok(());
+                }
+                if member == "ItemIndex" && self.is_list(object) {
+                    // A fresh list box or combo box selects nothing (-1); the
+                    // model's lists start as the control does.
+                    *value = Value::Integer(-1);
                     return Ok(());
                 }
                 if STRING_PROPS.contains(&member) {
@@ -1275,7 +1413,93 @@ const BOOL_PROPS: &[&str] = &[
     "ReadOnly",
     "Multiline",
     "Scaled",
+    "DoubleBuffered",
+    "ParentBackground",
+    "Proportional",
+    "Stretch",
+    "Center",
+    "Transparent",
+    "TabStop",
+    "Cancel",
+    "HotTrack",
+    "RightClickSelect",
+    "RowSelect",
+    "ShowLines",
+    "ToolTips",
+    "OwnerData",
+    "SimplePanel",
+    "AutoHotkeys",
+    "Tracking",
+    "Beveled",
+    "Flat",
+    "Down",
+    "Expanded",
 ];
+/// The published properties that hold an object or a set/enum the model
+/// keeps as the assigned value, with no typed default (an unset read is
+/// `Unassigned`, as a nil reference reads upstream).
+const OTHER_PROPS: &[&str] = &[
+    "Items",
+    "Lines",
+    "Font",
+    "EditLabel",
+    "Parent",
+    "PopupMenu",
+    "ActiveControl",
+    "Align",
+    "Alignment",
+    "Anchors",
+    "BevelOuter",
+    "DragMode",
+    "Duplicates",
+    "LabelSpacing",
+    "Options",
+    "PageControl",
+    "Picture",
+    "PixelFormat",
+    "PopupMode",
+    "ScrollBars",
+    "Style",
+    "StyleElements",
+    "ViewStyle",
+    "SimpleText",
+    "ShortCut",
+    "Selected",
+    "Increment",
+    "MinSize",
+    "Size",
+    "TransparentColor",
+    "Subject",
+    "Columns",
+    "Count",
+    "ImageIndex",
+    "Spacing",
+    "Margin",
+    "Layout",
+    "Kind",
+    "GroupIndex",
+    "Min",
+    "Max",
+    "Frequency",
+    "Step",
+    "Smooth",
+    "Value",
+    "MaxValue",
+    "MinValue",
+    "Interval",
+];
+
+/// The canonical spelling of a published property the model answers through
+/// the RTTI-shaped fallback, matched case-insensitively as Delphi's
+/// `GetPropInfo` matches (`Wordwrap` in `NIF - Batch processing.pas` is
+/// `WordWrap`); `None` for a name that is no published property.
+fn published_name(identifier: &str) -> Option<&'static str> {
+    [STRING_PROPS, INT_PROPS, BOOL_PROPS, OTHER_PROPS]
+        .into_iter()
+        .flatten()
+        .copied()
+        .find(|name| name.eq_ignore_ascii_case(identifier))
+}
 
 impl Vcl for VclModel {
     fn make_form(&mut self, _file_name: &str) -> Result<Value, ValueError> {
