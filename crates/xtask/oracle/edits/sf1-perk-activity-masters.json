@@ -1,0 +1,58 @@
+{
+  "description": "A masters update rewrites a FormID of a perk activity's Stream: Constellation.esm loaded as Sf33Light.esm (editable, light slot FE001 after OldMars.esm) takes an override of Skill_Rejuvenation, the Stream FormID of its rank 0 is set (twice, see sf1-perk-activity-edit) to one of the file's own records (the native value is the file FormID 01000002, FE001002 in load order, 16777218 in the ATAV JSON text), and the light module OldMars.esm is added as a master and the masters sorted, so the file's own records move from file index 1 to 2. Upstream rewrites the JSON text through wbVirtualPerkStreamIDAfterSet (dfAfterSetOnIDUpdate, fsMastersUpdating) to the new file FormID.",
+  "game": "sf1",
+  "rename": {
+    "Sf33Light.esm": "Constellation.esm"
+  },
+  "load": [
+    "Starfield.esm",
+    "OldMars.esm",
+    "Sf33Light.esm"
+  ],
+  "commands": [
+    {
+      "command": "records.copy",
+      "params": {
+        "form_id": "0028AE13",
+        "from": "Starfield.esm",
+        "to": "Sf33Light.esm"
+      }
+    },
+    {
+      "command": "elements.set",
+      "params": {
+        "form_id": "0028AE13",
+        "file": "Sf33Light.esm",
+        "path": "Ranks\\[0]\\Activity Tracker\\Activities\\[0]\\Progression Configuration\\NULL - Activity Data\\Actor Value Activity\\Stream\\[0]",
+        "value": 16777218
+      }
+    },
+    {
+      "command": "elements.set",
+      "params": {
+        "form_id": "0028AE13",
+        "file": "Sf33Light.esm",
+        "path": "Ranks\\[0]\\Activity Tracker\\Activities\\[0]\\Progression Configuration\\NULL - Activity Data\\Actor Value Activity\\Stream\\[0]",
+        "value": 16777218
+      }
+    },
+    {
+      "command": "masters.add",
+      "params": {
+        "file": "Sf33Light.esm",
+        "masters": [
+          "OldMars.esm"
+        ]
+      }
+    },
+    {
+      "command": "masters.sort",
+      "params": {
+        "file": "Sf33Light.esm"
+      }
+    }
+  ],
+  "save": [
+    "Sf33Light.esm"
+  ]
+}

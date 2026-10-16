@@ -610,6 +610,150 @@ struct EditSequence {
     /// lacks it becomes a partial form.
     #[serde(default)]
     allow_make_partial: bool,
+    /// Records whose referenced-by lists (`ReferencedBy` of the master) are
+    /// compared after the steps: the oracle writes them from the reference
+    /// information it built at load and kept through the edits
+    /// (`build_refs` is required); the port builds its index before the
+    /// steps (`refs.build`), keeps it through them and reads the lists with
+    /// `refs.get`. Reported as `<sequence>/refs`.
+    #[serde(default)]
+    refs: Vec<RefsQuery>,
+}
+
+/// A record of [`EditSequence::refs`]: its load order FormID as the named
+/// file sees it.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RefsQuery {
+    form_id: String,
+    file: String,
+}
+
+/// The oracle's helper for [`EditSequence::refs`]: the referenced-by list
+/// of the master of a record as lines `R <FormID>@<file> <count>` and
+/// `|<FormID>@<file>` per entry (`Hex` in halves, as `refs.pas` writes a
+/// FormID above `$7FFFFFFF`).
+const REFS_HELPERS: &str = r"function RefsHex(aValue: Variant): string;
+begin
+  Result := IntToHex(aValue div 65536, 4) + IntToHex(aValue mod 65536, 4);
+end;
+
+procedure DumpRefs(aLines: TStringList; aFileName, aHex: string);
+var
+  m, e: IInterface;
+  i: Integer;
+begin
+  m := MasterOrSelf(RecordIn(aFileName, aHex));
+  aLines.Add('R ' + RefsHex(GetLoadOrderFormID(m)) + '@' + GetFileName(GetFile(m)) + ' ' + IntToStr(ReferencedByCount(m)));
+  for i := 0 to Pred(ReferencedByCount(m)) do begin
+    e := ReferencedByIndex(m, i);
+    aLines.Add('|' + RefsHex(GetLoadOrderFormID(e)) + '@' + GetFileName(GetFile(e)));
+  end;
+end;
+";
+
+/// `Renumber` of `edit.pas` on the complex FileIDs of Starfield
+/// (`wbComplexFileFileID`): `GetLoadOrderFileID` of a file in a light or
+/// medium slot is `FE 001` or `FD 01`, which the plain helper can not turn
+/// into a FormID, and the script's integers are signed, so this one works
+/// on the FormIDs as text (`IntToHex` in halves, as `refs.pas` writes a
+/// FormID above `$7FFFFFFF`, and `StrToInt('$...')` back, as the
+/// `formids.change` step passes one): the file's prefix is its FileID
+/// without the space (`FE001`, `FD01`, `05`) and the module specific part
+/// is the rest (3, 4 or 6 digits), as `mniNavRenumberFormIDsFromClick`
+/// does with `TwbFormID` for a file renumbered into itself. The new
+/// records (`LoadOrderFormID.FileID = LoadOrderFileID`) in FormID order
+/// take the IDs from the start, keeping the ones already in
+/// `[start, start + count]`, and the next object ID becomes
+/// `start + count + 1` (`Inc(HighFormID)`, `HighFormID.ObjectID`).
+const RENUMBER_COMPLEX: &str = r"function ComplexHex(aValue: Variant): string;
+begin
+  Result := IntToHex(aValue div 65536, 4) + IntToHex(aValue mod 65536, 4);
+end;
+
+procedure RenumberComplex(aFileName: string; aStart: Integer);
+var
+  f, r: IInterface;
+  prefix: string;
+  len, mask, oldObj, startObj, endObj, i, j, k: Integer;
+  records, taken: TList;
+  targets: TStringList;
+begin
+  f := FileNamed(aFileName);
+  prefix := GetLoadOrderFileID(f);
+  k := Pos(' ', prefix);
+  if k > 0 then
+    prefix := Copy(prefix, 1, k - 1) + Copy(prefix, k + 1, Length(prefix));
+  len := 8 - Length(prefix);
+  if len = 3 then
+    mask := $FFF
+  else if len = 4 then
+    mask := $FFFF
+  else
+    mask := $FFFFFF;
+  records := TList.Create;
+  taken := TList.Create;
+  targets := TStringList.Create;
+  try
+    for i := 0 to Pred(RecordCount(f)) do begin
+      r := RecordByIndex(f, i);
+      if Copy(ComplexHex(GetLoadOrderFormID(r)), 1, 8 - len) = prefix then
+        records.Add(r);
+    end;
+    if records.Count = 0 then
+      Exit;
+    startObj := aStart;
+    if startObj > mask then
+      startObj := startObj mod (mask + 1);
+    endObj := startObj + records.Count;
+    for i := 0 to records.Count do
+      taken.Add(nil);
+    for i := 0 to Pred(records.Count) do begin
+      oldObj := StrToInt('$' + Copy(ComplexHex(GetLoadOrderFormID(ObjectToElement(records[i]))), 9 - len, len));
+      if (oldObj >= startObj) and (oldObj <= endObj) then
+        taken[oldObj - startObj] := records[i];
+    end;
+    j := 0;
+    for i := 0 to Pred(records.Count) do begin
+      oldObj := StrToInt('$' + Copy(ComplexHex(GetLoadOrderFormID(ObjectToElement(records[i]))), 9 - len, len));
+      if (oldObj >= startObj) and (oldObj <= endObj) then
+        targets.Add('')
+      else begin
+        while (j < taken.Count) and Assigned(taken[j]) do
+          Inc(j);
+        targets.Add(prefix + IntToHex(startObj + j, len));
+        Inc(j);
+      end;
+    end;
+    for i := 0 to Pred(records.Count) do
+      if targets[i] <> '' then
+        ChangeFormID(ObjectToElement(records[i]), StrToInt('$' + targets[i]), True);
+    SetElementNativeValues(ElementByIndex(f, 0), 'HEDR\Next Object ID', endObj + 1);
+  finally
+    records.Free;
+    taken.Free;
+    targets.Free;
+  end;
+end;
+";
+
+/// The port's side of [`EditSequence::refs`]: a `refs.get` response in the
+/// lines of [`REFS_HELPERS`].
+fn port_refs_lines(response: &Value, lines: &mut String) {
+    let master = &response["master"];
+    lines.push_str(&format!(
+        "R {}@{} {}\n",
+        master["form_id"].as_str().unwrap_or(""),
+        master["file"].as_str().unwrap_or(""),
+        response["referenced_by_count"]
+    ));
+    for entry in response["referenced_by"].as_array().into_iter().flatten() {
+        lines.push_str(&format!(
+            "|{}@{}\n",
+            entry["form_id"].as_str().unwrap_or(""),
+            entry["file"].as_str().unwrap_or("")
+        ));
+    }
 }
 
 /// A dialog an edit sequence answers (see [`gui::Answer`]).
@@ -1030,6 +1174,22 @@ fn edit_script(sequence: &EditSequence) -> Result<String> {
         );
         steps.push_str(&edit_step(index, command)?);
     }
+    if !sequence.refs.is_empty() {
+        ensure!(
+            sequence.build_refs,
+            "the referenced-by lists of \"refs\" need the reference information (\"build_refs\": true)"
+        );
+        steps.push_str("      log.Add('refs');\n      sl := TStringList.Create;\n      try\n");
+        for query in &sequence.refs {
+            steps.push_str(&format!(
+                "        DumpRefs(sl, {}, {});\n",
+                pascal_string(&query.file),
+                pascal_string(&query.form_id)
+            ));
+        }
+        steps
+            .push_str("        sl.SaveToFile('{{WORK}}out\\refs.txt');\n      finally\n        sl.Free;\n      end;\n");
+    }
     // The game master is the first plugin a sequence loads.
     let steps = steps.replace(
         "{{GAME_MASTER}}",
@@ -1061,8 +1221,39 @@ fn edit_script(sequence: &EditSequence) -> Result<String> {
     } else {
         String::new()
     };
-    Ok(TEMPLATE
-        .replace("\r\n", "\n")
+    // The helpers that use the template's functions (`RecordIn`,
+    // `ChangeFormID`) go in front of `Initialize`; a sequence without them
+    // keeps the template's text, and so its cache key.
+    let mut late = String::new();
+    if !sequence.refs.is_empty() {
+        late.push_str(REFS_HELPERS);
+        late.push('\n');
+    }
+    // A Starfield renumber runs on the complex FileIDs (see
+    // `RENUMBER_COMPLEX`).
+    let complex = sequence.game == "sf1"
+        && sequence
+            .commands
+            .iter()
+            .any(|command| command["command"] == "formids.renumber");
+    let steps = if complex {
+        late.push_str(RENUMBER_COMPLEX);
+        late.push('\n');
+        steps.replace("      Renumber(", "      RenumberComplex(")
+    } else {
+        steps
+    };
+    let template = TEMPLATE.replace("\r\n", "\n");
+    let template = if late.is_empty() {
+        template
+    } else {
+        template.replacen(
+            "function Initialize: Integer;",
+            &format!("{late}function Initialize: Integer;"),
+            1,
+        )
+    };
+    Ok(template
         .replace("{{HELPERS}}\n", &helpers)
         .replace("{{STEPS}}\n", &steps)
         .replace("{{SAVES}}\n", &saves))
@@ -1250,6 +1441,9 @@ fn check_edit(
                     &dir.join(format!("{oracle_stem}.{name}.saved.zst")),
                 )?;
             }
+            if !sequence.refs.is_empty() {
+                fs::copy(result.out.join("refs.txt"), dir.join(format!("{oracle_stem}.refs.txt")))?;
+            }
             if let Some(log) = &result.saved_log {
                 let mut names = String::new();
                 for (name, path) in super::strings::saved_tables(log, &result.data)? {
@@ -1278,6 +1472,18 @@ fn check_edit(
             port_peak: None,
         })
         .collect();
+    if !sequence.refs.is_empty() {
+        outcomes.push(Outcome {
+            game: game.name,
+            file: format!("{stem}/refs"),
+            status: "oracle-only",
+            detail: None,
+            oracle_bytes: 0,
+            port_bytes: 0,
+            oracle_peak,
+            port_peak: None,
+        });
+    }
     if status.last().is_none_or(|last| last != "done") {
         for outcome in &mut outcomes {
             outcome.status = "oracle-failed";
@@ -1291,6 +1497,18 @@ fn check_edit(
     let port_dir = runner.scratch.join(format!("{}-oracle-edit", game.mode));
     fs::create_dir_all(&port_dir)?;
     let mut batch = sequence.commands.clone();
+    // The referenced-by lists: the index built before the steps (the
+    // oracle's script mode builds it at load) and read after them.
+    if !sequence.refs.is_empty() {
+        batch.insert(0, serde_json::json!({"command": "refs.build", "params": {}}));
+    }
+    for query in &sequence.refs {
+        batch.push(serde_json::json!({
+            "command": "refs.get",
+            "params": {"form_id": query.form_id, "file": query.file},
+        }));
+    }
+    let saves_start = batch.len();
     // A staged sequence saves into a folder of its own, with the string
     // tables in `Strings` next to the plugins.
     let out_dir = port_dir.join(stem).join("out");
@@ -1401,10 +1619,44 @@ fn check_edit(
             fs::remove_file(path)?;
         }
     }
+    if !sequence.refs.is_empty() {
+        let oracle_text = fs::read_to_string(dir.join(format!("{oracle_stem}.refs.txt")))?.replace(
+            "
+", "
+",
+        );
+        let mut port_text = String::new();
+        for step in &steps[saves_start - sequence.refs.len()..saves_start] {
+            port_refs_lines(&step["result"], &mut port_text);
+        }
+        let outcome = &mut outcomes[sequence.save.len()];
+        outcome.oracle_bytes = oracle_text.len() as u64;
+        outcome.port_bytes = port_text.len() as u64;
+        let entries = oracle_text.lines().filter(|line| line.starts_with('|')).count();
+        let lists = oracle_text.lines().filter(|line| line.starts_with('R')).count();
+        if oracle_text == port_text {
+            outcome.status = "equal";
+            outcome.detail = Some(format!("  {lists} referenced-by lists with {entries} entries equal"));
+        } else {
+            outcome.status = "different";
+            let line = oracle_text
+                .lines()
+                .zip(port_text.lines())
+                .position(|(oracle, port)| oracle != port)
+                .unwrap_or_else(|| oracle_text.lines().count().min(port_text.lines().count()));
+            outcome.detail = Some(format!(
+                "  first difference at line {}: oracle {:?}, port {:?}",
+                line + 1,
+                oracle_text.lines().nth(line).unwrap_or("-"),
+                port_text.lines().nth(line).unwrap_or("-")
+            ));
+            fs::write(port_dir.join(format!("{stem}.refs.port.txt")), &port_text)?;
+        }
+    }
     if sequence.strings {
         // The tables the port wrote, from the responses of its saves.
         let mut port_tables: Vec<(String, PathBuf)> = Vec::new();
-        for step in &steps[sequence.commands.len()..] {
+        for step in &steps[saves_start..] {
             for table in step["result"]["strings"].as_array().into_iter().flatten() {
                 if let (Some(name), Some(output)) = (table["table"].as_str(), table["output"].as_str()) {
                     port_tables.push((name.to_owned(), PathBuf::from(output)));
@@ -1605,6 +1857,60 @@ mod tests {
         let renumber =
             step(serde_json::json!({"command": "formids.renumber", "params": {"file": "B.esp", "start": "000A00"}}));
         assert!(renumber.contains("Renumber('B.esp', StrToInt('$000A00'));"));
+    }
+
+    #[test]
+    fn referenced_by_lists_are_written_after_the_steps() {
+        let sequence = |extra: &str| -> EditSequence {
+            serde_json::from_str(&format!(
+                r#"{{"description": "", "game": "sf1", "load": ["A.esm"], "save": ["A.esm"]{extra},
+                    "commands": [{{"command": "elements.set", "params":
+                        {{"form_id": "00000800", "file": "A.esm", "path": "FLTV", "value": 1}}}}]}}"#
+            ))
+            .unwrap()
+        };
+        let plain = edit_script(&sequence("")).unwrap();
+        assert!(!plain.contains("DumpRefs"));
+        let with_refs = edit_script(&sequence(
+            r#", "build_refs": true, "refs": [{"form_id": "000002D4", "file": "A.esm"}]"#,
+        ))
+        .unwrap();
+        // The helper sits after `RecordIn`, the dump after the steps and
+        // before the saves.
+        let helper = with_refs.find("procedure DumpRefs").unwrap();
+        assert!(with_refs.find("function RecordIn").unwrap() < helper);
+        assert!(helper < with_refs.find("function Initialize").unwrap());
+        let dump = with_refs.find("DumpRefs(sl, 'A.esm', '000002D4');").unwrap();
+        assert!(with_refs.find("SetElementNativeValues").unwrap() < dump);
+        assert!(dump < with_refs.find("save A.esm").unwrap());
+        // Without the reference information there are no lists to compare.
+        assert!(edit_script(&sequence(r#", "refs": [{"form_id": "000002D4", "file": "A.esm"}]"#)).is_err());
+        let mut port = String::new();
+        port_refs_lines(
+            &serde_json::json!({"master": {"form_id": "000002D4", "file": "A.esm"}, "referenced_by_count": 2,
+                "referenced_by": [{"form_id": "0028AE13", "file": "A.esm"}, {"form_id": "FE000800", "file": "B.esm"}]}),
+            &mut port,
+        );
+        assert_eq!(port, "R 000002D4@A.esm 2\n|0028AE13@A.esm\n|FE000800@B.esm\n");
+    }
+
+    #[test]
+    fn a_starfield_renumber_runs_on_the_complex_file_ids() {
+        let sequence = |game: &str| -> EditSequence {
+            serde_json::from_str(&format!(
+                r#"{{"description": "", "game": "{game}", "build_refs": true, "load": ["A.esm"], "save": ["A.esm"],
+                    "commands": [{{"command": "formids.renumber", "params": {{"file": "A.esm", "start": "000800"}}}}]}}"#
+            ))
+            .unwrap()
+        };
+        let sf1 = edit_script(&sequence("sf1")).unwrap();
+        let helper = sf1.find("procedure RenumberComplex").unwrap();
+        assert!(sf1.find("procedure ChangeFormID").unwrap() < helper);
+        assert!(helper < sf1.find("function Initialize").unwrap());
+        assert!(sf1.contains("RenumberComplex('A.esm', StrToInt('$000800'));"));
+        let fo4 = edit_script(&sequence("fo4")).unwrap();
+        assert!(!fo4.contains("RenumberComplex"));
+        assert!(fo4.contains("      Renumber('A.esm', StrToInt('$000800'));"));
     }
 
     #[test]

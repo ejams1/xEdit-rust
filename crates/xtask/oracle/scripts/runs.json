@@ -800,6 +800,25 @@
       "note": "the same with the references loaded from the reference cache a first run wrote (the master holds 603 records, above wbCacheRecordsThreshold)"
     },
     {
+      "script": "probes/perk-activity.pas",
+      "game": "sf1",
+      "load": [
+        "Starfield.esm"
+      ],
+      "timeout_minutes": 30,
+      "note": "parity #33: the virtual perk activity tree of Skill_Rejuvenation [PERK:0028AE13] and its ATAV JSON text through a copy into a new file (as an override and as a new record), an edit of a Stream FormID and of a Data value in the tree and a set of the ATAV text; every step writes the ATAV text and the tree to the log"
+    },
+    {
+      "script": "probes/perk-activity-masters.pas",
+      "game": "sf1",
+      "load": [
+        "Starfield.esm",
+        "OldMars.esm"
+      ],
+      "timeout_minutes": 30,
+      "note": "parity #33: the ATAV JSON text and the virtual perk activity tree of Skill_Rejuvenation [PERK:0028AE13] copied into a new file as an override and as a new record, through the addition of the light module OldMars.esm as a master, the sort and the clean of the masters"
+    },
+    {
       "script": "probes/filter-scripted.pas",
       "master": "tests/fixtures/parity/filter-scripted.esm",
       "save": [

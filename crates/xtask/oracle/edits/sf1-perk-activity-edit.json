@@ -1,0 +1,98 @@
+{
+  "description": "Edits of the virtual perk activity tree of a Starfield PERK, written back into its ATAV JSON text: Constellation.esm loaded as Sf33Light.esm (editable) takes an override of Skill_Rejuvenation (a PERK whose four ranks carry an Actor Value activity). The Stream FormID of rank 0 and the Repetitions of rank 1 are set in the virtual NULL tree, whose change notification (wbVirtualPerkActivityAfterSet) serializes the tree (SerializeElementToJson) into the ATAV text; the ATAV text of rank 2 is set directly, whose AfterSet (wbPerkActivityAfterSet) loads it into the virtual tree again, and the Stream FormID of that rank is then set through the reloaded tree. Every edit of the tree is made twice: upstream loses the first edit of a rank's tree after the copy (the tree is built again from the ATAV text under the element being set, and the JSON is written from the rebuilt tree; the probe perk-activity of the script runs shows it), which the port does not reproduce (see the PR's Needs a decision). With the reference information built, the referenced-by lists of the two actor values (Health, 000002D4, which ranks 1 and 3 still name, and 000002E1, which ranks 0 and 2 name after the edits) are compared after the steps.",
+  "game": "sf1",
+  "build_refs": true,
+  "rename": {
+    "Sf33Light.esm": "Constellation.esm"
+  },
+  "load": [
+    "Starfield.esm",
+    "Sf33Light.esm"
+  ],
+  "commands": [
+    {
+      "command": "records.copy",
+      "params": {
+        "form_id": "0028AE13",
+        "from": "Starfield.esm",
+        "to": "Sf33Light.esm"
+      }
+    },
+    {
+      "command": "elements.set",
+      "params": {
+        "form_id": "0028AE13",
+        "file": "Sf33Light.esm",
+        "path": "Ranks\\[0]\\Activity Tracker\\Activities\\[0]\\Progression Configuration\\NULL - Activity Data\\Actor Value Activity\\Stream\\[0]",
+        "value": 737
+      }
+    },
+    {
+      "command": "elements.set",
+      "params": {
+        "form_id": "0028AE13",
+        "file": "Sf33Light.esm",
+        "path": "Ranks\\[0]\\Activity Tracker\\Activities\\[0]\\Progression Configuration\\NULL - Activity Data\\Actor Value Activity\\Stream\\[0]",
+        "value": 737
+      }
+    },
+    {
+      "command": "elements.set",
+      "params": {
+        "form_id": "0028AE13",
+        "file": "Sf33Light.esm",
+        "path": "Ranks\\[1]\\Activity Tracker\\Activities\\[0]\\Progression Configuration\\NULL - Activity Data\\Actor Value Activity\\Data\\Repetitions",
+        "value": "5"
+      }
+    },
+    {
+      "command": "elements.set",
+      "params": {
+        "form_id": "0028AE13",
+        "file": "Sf33Light.esm",
+        "path": "Ranks\\[1]\\Activity Tracker\\Activities\\[0]\\Progression Configuration\\NULL - Activity Data\\Actor Value Activity\\Data\\Repetitions",
+        "value": "5"
+      }
+    },
+    {
+      "command": "elements.set",
+      "params": {
+        "form_id": "0028AE13",
+        "file": "Sf33Light.esm",
+        "path": "Ranks\\[2]\\Activity Tracker\\Activities\\[0]\\Progression Configuration\\ATAV - Configuration",
+        "value": "{\"Data\":{\"AccumulateDelta\":\"Positive\",\"ComparisonOperator\":\"GreaterEquals\",\"ComparisonTarget\":\"TotalValue\",\"IncrementByDelta\":\"false\",\"Repetitions\":\"20\",\"RequiresReset\":\"true\",\"ResetAccumulateDelta\":\"Negative\",\"ResetComparisonOperator\":\"LesserEqual\",\"ResetComparisonTarget\":\"TotalValue\",\"ResetTargetValue\":\"0.25\",\"TargetValue\":\"0.99\",\"TrackDamageModifier\":\"false\",\"TrackOnControlledRef\":\"false\",\"TrackOnOwner\":\"true\",\"UsePercentage\":\"true\",\"pTrackedActorValue\":null},\"Stream\":[\"724\"],\"Type\":\"BGSActorValueActivity\"}"
+      }
+    },
+    {
+      "command": "elements.set",
+      "params": {
+        "form_id": "0028AE13",
+        "file": "Sf33Light.esm",
+        "path": "Ranks\\[2]\\Activity Tracker\\Activities\\[0]\\Progression Configuration\\NULL - Activity Data\\Actor Value Activity\\Stream\\[0]",
+        "value": 737
+      }
+    },
+    {
+      "command": "elements.set",
+      "params": {
+        "form_id": "0028AE13",
+        "file": "Sf33Light.esm",
+        "path": "Ranks\\[2]\\Activity Tracker\\Activities\\[0]\\Progression Configuration\\NULL - Activity Data\\Actor Value Activity\\Stream\\[0]",
+        "value": 737
+      }
+    }
+  ],
+  "save": [
+    "Sf33Light.esm"
+  ],
+  "refs": [
+    {
+      "form_id": "000002D4",
+      "file": "Sf33Light.esm"
+    },
+    {
+      "form_id": "000002E1",
+      "file": "Sf33Light.esm"
+    }
+  ]
+}

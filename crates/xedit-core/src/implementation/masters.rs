@@ -687,7 +687,14 @@ impl FileImpl {
     /// every element of the file rewrites its FormIDs. Returns whether
     /// anything changed.
     pub fn masters_updated(self: &Arc<Self>, update: &MastersUpdate) -> Result<bool, EditError> {
+        // `Include(flStates, fsMastersUpdating)` around the walk: the
+        // Starfield perk activity writes its JSON from the Stream FormIDs
+        // the update rewrites (`wbVirtualPerkStreamIDAfterSet`) and its root
+        // leaves the update alone. The two views of the masters it also
+        // switches (`flOldMasters`) are not ported (see the module notes).
+        self.fl_states.write().unwrap().include(FileState::fsMastersUpdating);
         let result = with_update(&**self, || container_masters_updated(&**self, update));
+        self.fl_states.write().unwrap().exclude(FileState::fsMastersUpdating);
         // The fixed FormIDs of the records depend on the master count.
         for record in self.records() {
             record.clear_fixed_form_id();
@@ -862,6 +869,28 @@ fn main_record_masters_updated(record: &Arc<MainRecordImpl>, update: &MastersUpd
         // of the elements are cleared instead.
         base.include_state(ElementState::esInternalModified);
         clear_sort_invalid(&**record);
+        // The elements upstream builds again over the collapsed data are
+        // those of a modified record, which `Init` sorts by
+        // `CompareSubRecords` (`wbSortSubRecords and (AllowUnordered or
+        // esModified)`): a subrecord the definition does not know (no sort
+        // order) goes to the end, as the Starfield `FLLD` of `ARMO` and
+        // `ARMA` records after a masters update (parity #33,
+        // `sf1-medium-masters`).
+        let order = |record: &Arc<MainRecordImpl>| -> Vec<usize> {
+            record
+                .container
+                .elements()
+                .iter()
+                .map(|element| Arc::as_ptr(element) as *const () as usize)
+                .collect()
+        };
+        let before = order(record);
+        super::edit::sort_sub_records_of(&**record);
+        if order(record) != before {
+            record
+                .mr_storage_invalid
+                .store(true, std::sync::atomic::Ordering::Relaxed);
+        }
     }
     if base.has_state(ElementState::esModified) && record.mr_storage_invalid.load(std::sync::atomic::Ordering::Relaxed)
     {

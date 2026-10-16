@@ -1178,6 +1178,14 @@ impl MainRecordImpl {
                     }
                 }
             }
+            // `CollapseStorage(nil, True)`: the copied record's storage
+            // becomes what its elements write and the elements are built
+            // again from it when they are next read, so the `AfterLoad` of
+            // its members runs again then (the Starfield perk activity
+            // builds its virtual tree over the copied `ATAV` text, inside
+            // a later masters update when that is what reads it first;
+            // parity #33).
+            self.collapse_storage_in_init();
         } else if index >= 0 && index < mr_def.get_member_count() {
             let mut member = mr_def.get_member(index as usize);
             let source_def = source.and_then(|source| source.get_def());
