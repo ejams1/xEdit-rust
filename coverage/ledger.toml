@@ -3057,7 +3057,7 @@ note = "Accepted by the legacy command line; the CLI loads what --load and -P: n
 status = "covered"
 command = "files.save"
 source = "xEdit/xeInit.pas"
-note = "wbBackupPath: -B: names the folder a replaced file moves to; without it (legacy) `<data>\<AppName>Edit Backups\`, else the folder of the plugin."
+note = "wbBackupPath: -B: names the folder a replaced file moves to; without it (legacy) the data folder's <AppName>Edit Backups, else the folder of the plugin."
 
 [switch.border]
 status = "pending"
@@ -3099,21 +3099,18 @@ source = "Tools/TreeLodBillboardCreator/treelod.dpr"
 status = "covered"
 source = "xDump.dpr"
 command = "tool.run"
-source = "xEdit/xeInit.pas"
 note = "wbEncodingTrans for the translatable strings (`apply_on_load`); a CLI run sets it with --code-page-trans."
 
 [switch.cp-general]
 status = "covered"
 source = "xDump.dpr"
 command = "tool.run"
-source = "xEdit/xeInit.pas"
 note = "wbEncoding for the general strings (`apply_on_load`); a CLI run sets it with --code-page."
 
 [switch.cp-trans]
 status = "covered"
 source = "xDump.dpr"
 command = "tool.run"
-source = "xEdit/xeInit.pas"
 note = "As -cp:."
 
 [switch.customini]
@@ -3410,7 +3407,7 @@ source = "Tools/TreeLodBillboardCreator/treelod.dpr"
 [switch.moprofile]
 status = "pending"
 source = "xEdit/xeInit.pas"
-note = "Read and classified by parse_legacy of tool_modes.rs (SwitchKind::Unported, named on stderr); the Mod Organizer hook (modorganizer\hook.dll) is not ported, so no profile is loaded."
+note = "Read and classified by parse_legacy of tool_modes.rs (SwitchKind::Unported, named on stderr); the Mod Organizer hook (modorganizer\\hook.dll) is not ported, so no profile is loaded."
 
 [switch.more]
 status = "pending"
