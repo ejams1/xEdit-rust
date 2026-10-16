@@ -892,7 +892,14 @@ pub fn register(adapter: &mut Adapter, classes: &ScriptClasses) {
         1,
         Rc::new(|value, args| {
             let number = xedit_script::values::to_f64(&args.values[0])?;
-            *value = Value::Double(f64::from((number.fract()) as f32));
+            // UPSTREAM-QUIRK (parity #39, probes/numerics.pas): the oracle's
+            // `Frac` of NaN, INF and -INF prints `0.0000000000000000E+0`,
+            // where `Int` of the same values prints NAN and INF.
+            *value = Value::Double(if number.is_finite() {
+                f64::from((number.fract()) as f32)
+            } else {
+                0.0
+            });
             Ok(())
         }),
     );
