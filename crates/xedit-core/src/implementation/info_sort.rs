@@ -23,8 +23,8 @@
 //! and the sort gives every such response of the group the `PNAM` of the
 //! response it follows (an internal edit).
 //!
-//! Not ported: the postponed sort of a group inside an update
-//! (`gsSortPostponed`).
+//! Not ported from the sort: nothing; a sort asked for inside an update is
+//! postponed to the `UpdateEnded` of the group (`gsSortPostponed`).
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -361,6 +361,17 @@ impl GroupRecordImpl {
             return Ok(());
         }
         if !force && self.gr_sorted.load(Ordering::Relaxed) {
+            return Ok(());
+        }
+        // `gsSortPostponed`: a sort asked for inside an update runs at
+        // `UpdateEnded` (`TwbGroupRecord.UpdateEnded`).
+        if !self.base.has_state(super::write::ElementState::esEndingUpdate)
+            && self.base.e_update_count.load(Ordering::Relaxed) > 0
+        {
+            self.gr_sort_postponed.store(true, Ordering::Relaxed);
+            if force {
+                self.gr_sort_forced_postponed.store(true, Ordering::Relaxed);
+            }
             return Ok(());
         }
         if self
