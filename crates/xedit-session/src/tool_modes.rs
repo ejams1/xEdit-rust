@@ -1962,13 +1962,23 @@ pub fn parse_legacy(params: &[String], exe_name: &str) -> Result<Option<LegacyRu
     }
     let detected = detect_app_mode(params, exe_name);
     let unacted = unacted_switches(params);
-    let data_path = find_cmd_line_param_switch(params, "D").map(|path| {
-        if path.ends_with(['\\', '/']) {
-            path
-        } else {
-            format!("{path}\\")
-        }
-    });
+    // `wbDataPath`: `-D:`, else what `DoInitPath` finds (the folder of the
+    // program, the Steam library, the registry). The modules of `-P:` and
+    // the parameters resolve against it, so it is found here, before the
+    // plugin list is read.
+    let data_path = find_cmd_line_param_switch(params, "D")
+        .map(|path| {
+            if path.ends_with(['\\', '/']) {
+                path
+            } else {
+                format!("{path}\\")
+            }
+        })
+        .or_else(|| {
+            let game = detected.game?;
+            let path = crate::game_paths::data_path_of(&crate::game_paths::discover_game_folder(game), game);
+            (!path.is_empty()).then_some(path)
+        });
     let names = parameter_names(params);
     // `xeFindNextValidCmdLineModule`: the parameters that name a module, of
     // which a plugin mode needs one.
@@ -2285,6 +2295,16 @@ pub fn apply_legacy_paths(mode: GameMode, run: &LegacyRun, program_path: &str) -
     if let Some(plugins) = &run.paths.plugins_file {
         g::set_plugins_file_name(plugins);
     }
+    // `xeSettingsFileName`: `<program><AppName><ToolName>.ini` when that file
+    // exists, else `Plugins.<app>viewsettings` next to the plugin list
+    // (`xeInit.pas:587`).
+    let settings = crate::game_paths::settings_file_name(
+        crate::game_paths::app_name(mode),
+        tool_name(run.tool_mode),
+        &g::program_path(),
+        &g::plugins_file_name(),
+    );
+    g::set_settings_file_name(&settings);
     Ok(())
 }
 

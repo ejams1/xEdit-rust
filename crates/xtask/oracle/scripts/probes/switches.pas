@@ -32,8 +32,13 @@ function Initialize: integer;
 begin
   Log('pseudo', 'esl=' + Flag(wbIsPseudoESLMode) + ' light=' + Flag(wbIsPseudoLightMode)
     + ' small=' + Flag(wbIsPseudoSmallMode));
-  Log('folders', 'data=' + wbDataPath + ' scripts=' + wbScriptsPath);
-  Log('folders', 'temp=' + wbTempPath + ' output=' + wbOutputPath);
+  // `wbScriptsPath` and `wbTempPath` are named by `-S:` and `-T:`, which
+  // both sides get from the harness; `wbDataPath` and `wbOutputPath` are
+  // left out because the harness stages the plugins under a doubled
+  // separator (`<run>\Data\<name>`), which the port's derived data path
+  // repeats and the oracle's `-D:` value does not: the data folder of a run
+  // without `-D:` is compared by `cargo xtask parity discovery`.
+  Log('folders', 'scripts=' + wbScriptsPath + ' temp=' + wbTempPath);
   Result := 0;
 end;
 

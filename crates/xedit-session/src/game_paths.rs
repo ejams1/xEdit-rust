@@ -256,6 +256,10 @@ fn registry_string(root: RegistryRoot, key: &str, name: &str) -> String {
         RegistryRoot::CurrentUser => HKEY_CURRENT_USER,
     };
     let wide = |text: &str| text.encode_utf16().chain(std::iter::once(0)).collect::<Vec<u16>>();
+    // `TRegistry.OpenKey` takes a leading backslash, `RegOpenKeyExW` refuses
+    // it (ERROR_BAD_PATHNAME), as the constants of `DoInitPath` carry one
+    // (`\SOFTWARE\Bethesda Softworks\...`).
+    let key = key.trim_start_matches('\\');
     let key_wide = wide(key);
     let name_wide = wide(name);
     for view in [KEY_WOW64_32KEY, KEY_WOW64_64KEY] {
@@ -689,6 +693,7 @@ pub fn ini_value(path: &str, section: &str, key: &str) -> Option<String> {
     }
     None
 }
+
 
 #[cfg(test)]
 mod tests {

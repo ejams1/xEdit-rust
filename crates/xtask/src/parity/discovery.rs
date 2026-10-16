@@ -100,6 +100,7 @@ fn compared_lines(log: &str, work: &Path) -> Vec<String> {
         let line = line.trim_end();
         let line = line.replace(&work_text, "<root>");
         let line = line.replace(&work_text.replace('\\', "/"), "<root>");
+        let line = line.replace(&work_text.replace('/', "\\"), "<root>");
         if PREFIXES.iter().any(|prefix| line.starts_with(prefix)) {
             lines.push(line);
         }
@@ -275,7 +276,10 @@ fn check(runner: DiscoveryRunner, game: &'static Game, options: &Options) -> Res
         discovery: true,
         tool_name: "CheckForITM".to_owned(),
     };
-    let result = run.run_tool_mode(&["-CheckForITM", &master, "-autoexit"])?;
+    // `-autoload`: the module selection of the GUI is answered by the GUI
+    // itself, as the tool-modes check does (a dialog a hidden desktop cannot
+    // answer ends the run instead).
+    let result = run.run_tool_mode(&["-autoload", "-CheckForITM", &master, "-autoexit"])?;
     outcome.oracle_exit_code = result.exit_code;
     let oracle_lines = compared_lines(&result.log, &oracle_work);
     let Some(port) = &runner.port else {
@@ -329,12 +333,10 @@ fn check(runner: DiscoveryRunner, game: &'static Game, options: &Options) -> Res
             differences.push(format!("  only the port: {line}"));
         }
     }
-    if outcome.oracle_exit_code != outcome.port_exit_code {
-        differences.push(format!(
-            "  exit code: oracle {:?}, port {:?}",
-            outcome.oracle_exit_code, outcome.port_exit_code
-        ));
-    }
+    // The exit code is not compared: the harness ends the GUI at its own
+    // `--= All Done =--` line, so what it reads there is not the mode's own
+    // exit code (`ExitCode := CheckResult`). `parity tool-modes` compares
+    // the count of the check modes where the oracle exits by itself.
     outcome.lines = oracle_lines;
     if differences.is_empty() {
         outcome.status = "equal";
