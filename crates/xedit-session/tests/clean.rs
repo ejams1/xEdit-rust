@@ -14,6 +14,7 @@ use xedit_core::implementation::{FileBytes, FileImpl, ResetModified, wb_file_fro
 use xedit_core::interface::globals::test_lock;
 use xedit_core::interface::types::FileStates;
 use xedit_core::interface::{Container, File, GameMode};
+use xedit_io::temp::TempDir;
 use xedit_session::{Registry, Session};
 
 fn sub_record(signature: &[u8; 4], data: &[u8]) -> Vec<u8> {
@@ -299,8 +300,7 @@ fn the_quick_mode_saves_and_cleans_again() {
     let _guard = test_lock();
     let (_files, mut session) = load(dirty_bytes());
     let registry = Registry::standard();
-    let dir = std::env::temp_dir().join(format!("xedit-clean-test-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = TempDir::new(format!("xedit-clean-test-{}", std::process::id()));
     let output = dir.join("Plugin.esp");
     let result = registry
         .call(
@@ -323,7 +323,6 @@ fn the_quick_mode_saves_and_cleans_again() {
     let saved = std::fs::read(&output).unwrap();
     let ids: Vec<u32> = records_in(&saved).iter().map(|(_, id, _)| *id).collect();
     assert_eq!(ids, [0, 0x801, 0x803, 0x805]);
-    std::fs::remove_dir_all(&dir).unwrap();
 }
 
 #[test]

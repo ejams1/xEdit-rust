@@ -1089,6 +1089,7 @@ dependencies = [
  "serde_json",
  "windows-sys",
  "xedit-core",
+ "xedit-io",
  "xedit-script",
  "xedit-session",
 ]

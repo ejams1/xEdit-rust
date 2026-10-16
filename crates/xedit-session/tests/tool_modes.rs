@@ -14,6 +14,7 @@ use serde_json::json;
 use xedit_core::implementation::{FileBytes, FileImpl, wb_file_from_bytes};
 use xedit_core::interface::globals::test_lock;
 use xedit_core::interface::{Element, File, FileStates, GameMode};
+use xedit_io::temp::TempDir;
 use xedit_session::tool_modes::{self, LegacyRun};
 use xedit_session::{Registry, Session};
 
@@ -128,10 +129,8 @@ fn call(session: &mut Session, params: serde_json::Value) -> serde_json::Value {
         .unwrap_or_else(|error| panic!("{error}"))
 }
 
-fn scratch(name: &str) -> std::path::PathBuf {
-    let dir = std::env::temp_dir().join(format!("xedit-tool-modes-{}-{name}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
-    dir
+fn scratch(name: &str) -> TempDir {
+    TempDir::new(format!("xedit-tool-modes-{}-{name}", std::process::id()))
 }
 
 #[test]
@@ -216,7 +215,6 @@ fn the_quick_clean_switches_differ_in_their_save() {
         assert_eq!(result["changed"], true, "{mode}: {result}");
         assert_eq!(result["files"][0]["saved"], saves, "{mode}: {result}");
         assert_eq!(output.exists(), saves, "{mode}: the save writes the plugin or nothing");
-        let _ = std::fs::remove_dir_all(&dir);
     }
 }
 

@@ -45,14 +45,12 @@ mod tests {
 
     #[test]
     fn maps_content_and_empty_files() {
-        let dir = std::env::temp_dir().join(format!("xedit-io-map-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = crate::temp::TempDir::new(format!("xedit-io-map-{}", std::process::id()));
         let path = dir.join("data.bin");
         std::fs::write(&path, b"TES4").unwrap();
         assert_eq!(&*MappedFile::open(&path).unwrap(), b"TES4");
         std::fs::write(&path, b"").unwrap();
         assert!(MappedFile::open(&path).unwrap().is_empty());
         assert!(MappedFile::open(&dir.join("missing")).is_err());
-        std::fs::remove_dir_all(&dir).unwrap();
     }
 }

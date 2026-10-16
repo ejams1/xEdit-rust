@@ -13,6 +13,7 @@ pub mod fpu;
 pub mod hash;
 pub mod mapped_file;
 pub mod simd;
+pub mod temp;
 
 pub use archive::{Archive, ArchiveError, ArchiveType, MultiSourcePacker};
 pub use compression::{CompressionError, CompressionType};

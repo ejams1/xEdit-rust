@@ -54,8 +54,7 @@ fn one_thread_and_eight_give_the_same_dump() {
 
 #[test]
 fn one_thread_and_eight_save_the_same_bytes() {
-    let dir = std::env::temp_dir().join(format!("xedit-threads-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = xedit_io::temp::TempDir::new(format!("xedit-threads-{}", std::process::id()));
     for (game, path) in corpus() {
         let mut saved = Vec::new();
         for threads in [1, 8] {
@@ -82,5 +81,4 @@ fn one_thread_and_eight_save_the_same_bytes() {
             path.display()
         );
     }
-    std::fs::remove_dir_all(&dir).ok();
 }

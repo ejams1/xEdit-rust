@@ -10,19 +10,18 @@
 //! scan accepts, `CallFunction` with `VResult`, and the `TxeScriptHost` name
 //! registry.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::rc::Rc;
 
+use xedit_io::temp::TempDir;
 use xedit_script::Interpreter;
 use xedit_script::adapter::Args;
 use xedit_script::host::{self, Script};
 use xedit_script::values::{ParamType, Value, VarType};
 
 /// A folder of its own for a test, holding the given files.
-fn folder(name: &str, files: &[(&str, &str)]) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("xedit-script-host-{}-{name}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
+fn folder(name: &str, files: &[(&str, &str)]) -> TempDir {
+    let dir = TempDir::new(format!("xedit-script-host-{}-{name}", std::process::id()));
     for (file, text) in files {
         std::fs::write(dir.join(file), text).unwrap();
     }
@@ -83,7 +82,6 @@ fn the_namespaces_of_the_uses_clause_are_stripped() {
     assert!(source.contains("uses SysUtils, Graphics, Helper;"), "{source}");
     assert!(!source.contains("System.") && !source.contains("Vcl."), "{source}");
     assert_eq!(script.call_function("Main", &[]).unwrap(), Value::Integer(7));
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -115,7 +113,6 @@ fn a_unit_without_a_file_is_the_host_stub_and_one_with_neither_is_not_found() {
         &std::fs::read_to_string(dir.join("Missing.pas")).unwrap(),
     );
     assert_eq!(error, "Error in unit 'Missing' on line 1 : Unit 'NoSuchUnit' not found");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -174,7 +171,6 @@ fn function_is_empty_takes_the_six_bodies_of_the_source_scan() {
     let script = create(&dir, "Absent", "unit Absent;\nend.\n").unwrap();
     assert!(!script.function_exists("Probe"), "nothing is defined");
     assert!(!script.function_is_empty("Probe"), "a missing routine is not empty");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -214,7 +210,6 @@ fn call_function_answers_the_result_and_reports_the_error_location() {
     // the recorded location stays the cleared `unit  line -1`.
     assert_eq!(script.last_error_location(), "unit  line -1");
     assert_eq!(script.last_error().unit_name, "");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -238,7 +233,6 @@ fn the_host_registers_the_script_of_its_name_registry() {
         Err(error) => error,
     };
     assert_eq!(error, "TxeScriptHost has not been initialized");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -283,5 +277,4 @@ fn an_adapter_function_can_hold_the_interpreter_of_a_hosted_script() {
     .unwrap();
     assert_eq!(script.call_function("Initialize", &[]).unwrap(), Value::Integer(0));
     assert_eq!(*written.borrow(), ["hello"]);
-    let _ = std::fs::remove_dir_all(&dir);
 }

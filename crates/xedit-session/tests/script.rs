@@ -18,14 +18,12 @@ use xedit_core::implementation::{FileBytes, FileImpl, wb_file_from_bytes};
 use xedit_core::interface::globals::GameMode;
 use xedit_core::interface::globals::test_lock;
 use xedit_core::interface::types::FileStates;
+use xedit_io::temp::TempDir;
 use xedit_session::{Registry, Session};
 
 /// A folder of its own for a test, made fresh.
-fn temp_dir(name: &str) -> std::path::PathBuf {
-    let dir = std::env::temp_dir().join(format!("xedit-script-{name}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
-    dir
+fn temp_dir(name: &str) -> TempDir {
+    TempDir::new(format!("xedit-script-{name}-{}", std::process::id()))
 }
 
 #[test]
@@ -60,10 +58,8 @@ fn list_reports_the_pas_scripts_of_the_folder() {
     // tested together, since the tests share the process).
     assert_eq!(
         xedit_session::script::scripts_folder(Some(&dir.display().to_string())),
-        dir
+        dir.path()
     );
-
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -183,10 +179,8 @@ fn open_session() -> Session {
 }
 
 /// A scripts folder of its own for a test, holding the script.
-fn script_folder(name: &str, file: &str, text: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("xedit-script-run-{}-{name}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
+fn script_folder(name: &str, file: &str, text: &str) -> TempDir {
+    let dir = TempDir::new(format!("xedit-script-run-{}-{name}", std::process::id()));
     std::fs::write(dir.join(file), text).unwrap();
     dir
 }
@@ -276,7 +270,6 @@ fn the_loop_runs_initialize_process_and_finalize() {
         "Done: Applying script \"Loop\", Processed Records: 6, Elapsed Time: 00:00"
     );
     assert_eq!(lines[10], "You can close this application now.");
-    let _ = std::fs::remove_dir_all(&folder);
 }
 
 #[test]
@@ -311,7 +304,6 @@ fn a_routine_of_only_result_zero_is_empty_and_skipped() {
     // `wbCurrentProgress` was never set and the closing line carries no
     // `Processed Records` segment (`xeMainForm.pas:15298-15300`).
     assert_eq!(lines[1], "Done: Applying script \"Empty\", Elapsed Time: 00:00");
-    let _ = std::fs::remove_dir_all(&folder);
 }
 
 #[test]
@@ -342,7 +334,6 @@ fn a_self_terminated_initialize_stops_the_run_with_the_upstream_message() {
     // The run finished (the `Exit` of the anonymous method), so the closing
     // line of `DoRunScript` follows.
     assert_eq!(lines[4], "You can close this application now.");
-    let _ = std::fs::remove_dir_all(&folder);
 }
 
 #[test]
@@ -379,7 +370,6 @@ fn an_error_aborts_the_script_with_the_upstream_text() {
     );
     assert_eq!(lines[3], "Aborted: Applying script \"Planted\"");
     assert_eq!(lines.len(), 4, "an aborted run never reaches the closing line");
-    let _ = std::fs::remove_dir_all(&folder);
 }
 
 /// The review's runaway-recursion probe: the interpreter's call-depth guard
@@ -431,7 +421,6 @@ fn runaway_recursion_body() {
     // The session survives the abort, as the oracle's GUI does.
     let result = run(&mut session, &folder, "Rec.pas", json!({}));
     assert_eq!(result["aborted"], true);
-    let _ = std::fs::remove_dir_all(&folder);
 }
 
 /// A refused edit aborts, as upstream's `ElementEditValues[...] := value`
@@ -465,7 +454,6 @@ fn a_refused_edit_aborts_with_the_upstream_message() {
         "Exception in unit Refuse line 5: [Exception] DATA - Value can not be edited"
     );
     assert_eq!(lines[2], "Aborted: Applying script \"Refuse\"");
-    let _ = std::fs::remove_dir_all(&folder);
 }
 
 /// The legitimate set still writes: the same surface over the plugin's own
@@ -494,7 +482,6 @@ fn a_legitimate_set_writes() {
         "{:?}",
         lines(&result)
     );
-    let _ = std::fs::remove_dir_all(&folder);
 }
 
 #[test]
@@ -520,7 +507,6 @@ fn the_script_process_elements_hook_selects_the_files() {
     let lines = lines(&result);
     assert_eq!(lines[1], "[00] Master.esm");
     assert_eq!(lines[2], "[01] Plugin.esp");
-    let _ = std::fs::remove_dir_all(&folder);
 }
 
 #[test]
@@ -545,7 +531,6 @@ fn the_script_process_signatures_hook_filters_the_records() {
     let mut session = open_session();
     let result = run(&mut session, &folder, "Signatures.pas", json!({}));
     assert_eq!(result["processed"], 4, "every record is a GMST");
-    let _ = std::fs::remove_dir_all(&folder);
 
     let folder = script_folder(
         "signatures-none",
@@ -564,7 +549,6 @@ fn the_script_process_signatures_hook_filters_the_records() {
     let mut session = open_session();
     let result = run(&mut session, &folder, "Signatures.pas", json!({}));
     assert_eq!(result["processed"], 0, "no record has that signature");
-    let _ = std::fs::remove_dir_all(&folder);
 }
 
 /// A main record's node children are its child group alone, never its own
@@ -605,7 +589,6 @@ fn a_subrecord_selection_processes_nothing() {
     assert_eq!(lines[1], "subrecords=0");
     // `Process` never fired: the closing line has no `Processed Records`.
     assert_eq!(lines[2], "Done: Applying script \"Subrecords\", Elapsed Time: 00:00");
-    let _ = std::fs::remove_dir_all(&folder);
 }
 
 #[test]
@@ -633,7 +616,6 @@ fn a_signature_that_is_not_four_characters_is_an_interpreter_error() {
         error.contains("Invalid type of argument in call to function"),
         "{error}"
     );
-    let _ = std::fs::remove_dir_all(&folder);
 }
 
 #[test]
@@ -659,7 +641,6 @@ fn the_filter_variables_are_recorded_and_apply_filter_runs() {
     let lines = lines(&result);
     assert!(lines.contains(&"applied".to_owned()), "{lines:?}");
     assert_eq!(result["aborted"], false);
-    let _ = std::fs::remove_dir_all(&folder);
 }
 
 #[test]
@@ -736,8 +717,6 @@ fn the_tool_mode_and_the_legacy_switch_run_the_same_script() {
         legacy.scripts_folder.as_deref(),
         Some(dir.display().to_string().as_str())
     );
-    let _ = std::fs::remove_dir_all(&folder);
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -768,7 +747,6 @@ fn a_dry_run_runs_the_script_and_writes_nothing() {
         .call(&mut Session::default(), "script.run", json!({ "file": "Dry.pas" }))
         .unwrap_err();
     assert_eq!(error.code, "edit_required");
-    let _ = std::fs::remove_dir_all(&folder);
 }
 
 #[test]
@@ -802,7 +780,6 @@ fn a_script_that_does_not_compile_reports_the_interpreter_error() {
         .unwrap_err();
     assert_eq!(error.code, "io");
     assert!(error.message.starts_with("Could not open script:"), "{}", error.message);
-    let _ = std::fs::remove_dir_all(&folder);
 }
 
 #[test]
@@ -838,7 +815,6 @@ fn a_script_that_uses_another_script_runs_it() {
     assert_eq!(result["aborted"], false, "{:?}", result["error"]);
     let lines = lines(&result);
     assert_eq!(lines[1], "hello from the unit");
-    let _ = std::fs::remove_dir_all(&folder);
 }
 
 /// The corpus scripts that need no element API, run end to end: the oracle's
@@ -1051,11 +1027,6 @@ fn a_script_builds_a_nif_through_the_data_format_adapter() {
         error.contains("Resource not found (File \"no\\such\\mesh.nif\")"),
         "{error}"
     );
-
-    let _ = std::fs::remove_dir_all(&dir);
-    let _ = std::fs::remove_dir_all(&folder);
-    let _ = std::fs::remove_dir_all(&resource);
-    let _ = std::fs::remove_dir_all(&missing);
 }
 
 /// The corpus NIF of the oracle's `Edit Scripts` (`LODGen_flat_lod.nif`, a
@@ -1124,7 +1095,6 @@ fn a_corpus_nif_walks_through_the_data_format_adapter() {
     ] {
         assert!(lines.contains(&line.to_owned()), "{line} missing of {lines:?}");
     }
-    let _ = std::fs::remove_dir_all(&folder);
 }
 
 //=== The JVCL RTL units (phase 6 step 8) ====================================
@@ -1432,7 +1402,6 @@ fn a_child_group_is_walked_through_its_record_once() {
             "You can close this application now."
         ]
     );
-    let _ = std::fs::remove_dir_all(&folder);
 }
 
 /// `RemoveNode` (`xejviScriptAdapterHost.pas:330`): the element -- a main
@@ -1488,8 +1457,6 @@ fn remove_node_takes_the_element_out_of_its_container() {
             "You can close this application now."
         ]
     );
-    let _ = std::fs::remove_dir_all(&remove_folder);
-    let _ = std::fs::remove_dir_all(&remaining_folder);
 }
 
 /// `Randomize` and `Beep` take no parameters (upstream registers them
@@ -1515,7 +1482,6 @@ fn the_zero_argument_rtl_functions_run() {
     let result = run(&mut session, &folder, "ZeroArgs.pas", json!({}));
     assert_eq!(result["aborted"], false, "{:?}", lines(&result));
     assert!(lines(&result).iter().any(|line| line == "ok"), "{:?}", lines(&result));
-    let _ = std::fs::remove_dir_all(&folder);
 }
 
 /// `Skyrim - Convert BOOK to SCRL.pas` line 16: `if not
@@ -1555,7 +1521,6 @@ fn a_script_variable_wins_over_a_case_matching_function() {
     let lines = lines(&result);
     assert!(lines.iter().any(|line| line == "can not find base record"), "{lines:?}");
     assert!(!lines.iter().any(|line| line == "found"), "{lines:?}");
-    let _ = std::fs::remove_dir_all(&folder);
 }
 
 /// A probe script of the parity-23 fixtures
@@ -2564,7 +2529,6 @@ fn the_vcl_dialogs_are_answered_from_the_recorded_answers() {
     let lines = lines(&result);
     assert!(lines.contains(&"yes".to_owned()), "{lines:?}");
     assert!(lines.contains(&"name=zz".to_owned()), "{lines:?}");
-    let _ = std::fs::remove_dir_all(&folder);
 }
 
 #[test]
@@ -2603,7 +2567,6 @@ fn a_dialog_without_an_answer_stops_the_run_with_the_question() {
             .any(|line| line.contains("Aborted: Applying script \"Dialogs\"")),
         "{lines:?}"
     );
-    let _ = std::fs::remove_dir_all(&folder);
 }
 
 #[test]
@@ -2641,7 +2604,6 @@ fn script_resume_completes_the_workflow() {
     let lines = lines(&result);
     assert!(lines.contains(&"yes".to_owned()), "{lines:?}");
     assert!(lines.contains(&"name=zz".to_owned()), "{lines:?}");
-    let _ = std::fs::remove_dir_all(&folder);
 }
 
 #[test]
@@ -2691,7 +2653,6 @@ fn a_form_closes_through_the_clicked_button_and_stores_its_events() {
     // headless; the module documents this, and no chosen corpus case
     // depends on a fired handler.
     assert!(!lines.contains(&"fired".to_owned()), "{lines:?}");
-    let _ = std::fs::remove_dir_all(&folder);
 }
 
 #[test]
@@ -2746,7 +2707,6 @@ fn keys_toggle_a_check_list_before_the_button_closes_the_form() {
     assert!(lines.contains(&"c0".to_owned()), "{lines:?}");
     assert!(lines.contains(&"c1".to_owned()), "{lines:?}");
     assert!(lines.contains(&"c2no".to_owned()), "{lines:?}");
-    let _ = std::fs::remove_dir_all(&folder);
 }
 
 #[test]
@@ -2812,7 +2772,6 @@ fn control_answers_drive_a_form_control_by_control() {
     for line in ["modal=1", "c0no", "c1", "chk", "wrap", "ed=EDID"] {
         assert!(lines.contains(&line.to_owned()), "{line} missing of {lines:?}");
     }
-    let _ = std::fs::remove_dir_all(&folder);
 }
 
 #[test]
@@ -2833,5 +2792,4 @@ fn a_recorded_answer_the_run_never_shows_fails_it() {
     assert_eq!(result["aborted"], true, "{result:#}");
     let error = result["error"].as_str().unwrap_or_default();
     assert!(error.contains("never showed the dialog"), "{error}");
-    let _ = std::fs::remove_dir_all(&folder);
 }

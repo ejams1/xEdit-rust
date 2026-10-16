@@ -498,10 +498,21 @@ mod tests {
     use crate::interface::globals::{set_game_mode, set_game_name, test_lock};
     use xedit_io::archive::{ArchiveType, PackFile};
 
+    /// The test's folder: the containers are cleared (closing the archive)
+    /// before the folder is removed, when the test ends, pass or fail.
+    struct Folder {
+        _root: xedit_io::temp::TempDir,
+    }
+
+    impl Drop for Folder {
+        fn drop(&mut self) {
+            clear_containers();
+        }
+    }
+
     /// A data folder in the temporary directory with a few files, and a BSA.
-    fn setup(tag: &str) -> (PathBuf, PathBuf) {
-        let root = std::env::temp_dir().join(format!("xedit-containers-{tag}-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&root);
+    fn setup(tag: &str) -> (Folder, PathBuf, PathBuf) {
+        let root = xedit_io::temp::TempDir::new(format!("xedit-containers-{tag}-{}", std::process::id()));
         let data = root.join("Data");
         for (name, text) in [
             ("Meshes/Loose/a.nif", "loose a"),
@@ -528,13 +539,13 @@ mod tests {
         bsa.pack("meshes\\b.nif", b"packed b").unwrap();
         bsa.pack("meshes\\packed\\c.nif", b"packed c").unwrap();
         bsa.save().unwrap();
-        (data, archive)
+        (Folder { _root: root }, data, archive)
     }
 
     #[test]
     fn lists_counts_and_copies_resources() {
         let _lock = test_lock();
-        let (data, archive) = setup("listing");
+        let (_folder, data, archive) = setup("listing");
         clear_containers();
         add_folder(&data);
         add_archive(&archive).unwrap();
@@ -593,14 +604,12 @@ mod tests {
             resource_copy("", "meshes\\b.nif", "").unwrap_err().0,
             "Destination path is not specified"
         );
-        clear_containers();
-        std::fs::remove_dir_all(data.parent().unwrap()).unwrap();
     }
 
     #[test]
     fn resolves_the_names_of_file_and_folder_hashes() {
         let _lock = test_lock();
-        let (data, archive) = setup("hashes");
+        let (_folder, data, archive) = setup("hashes");
         clear_containers();
         add_folder(&data);
         add_archive(&archive).unwrap();
@@ -621,7 +630,5 @@ mod tests {
         assert_eq!(resolve_file_hash(xedit_io::hash::tes4("t.ddx", true) as i64), "t.ddx");
         assert_eq!(resolve_file_hash(xedit_io::hash::tes4("t.dds", true) as i64), "t.dds");
         assert!(!loader_done());
-        clear_containers();
-        std::fs::remove_dir_all(data.parent().unwrap()).unwrap();
     }
 }

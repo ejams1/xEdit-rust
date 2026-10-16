@@ -2415,8 +2415,7 @@ mod tests {
 
     #[test]
     fn the_script_extension_forces_the_game_and_the_script_mode() {
-        let dir = std::env::temp_dir().join(format!("xedit-tool-modes-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = xedit_io::temp::TempDir::new(format!("xedit-tool-modes-{}", std::process::id()));
         // `Pos(s, wbForcedModes)` is case sensitive, so the extension has to
         // be written as the game mode names it (`fnv`, not `FNV`).
         let script = dir.join("MyScript.fnvpas");
@@ -2424,7 +2423,6 @@ mod tests {
         let detected = detect_app_mode(&params(&[&script.to_string_lossy()]), "xedit.exe");
         assert_eq!(detected.tool_mode, ToolMode::tmScript);
         assert_eq!(detected.game, Some(GameMode::gmFNV));
-        std::fs::remove_dir_all(&dir).ok();
     }
 
     #[test]

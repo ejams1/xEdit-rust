@@ -10,7 +10,6 @@
 //! an interior cell moves to the block of its new object ID, and
 //! `files.flags` sets the ESL flag.
 
-use std::path::PathBuf;
 use std::sync::Arc;
 
 use serde_json::json;
@@ -18,6 +17,7 @@ use xedit_core::implementation::{FileImpl, ResetModified, wb_file};
 use xedit_core::interface::globals::test_lock;
 use xedit_core::interface::types::FileStates;
 use xedit_core::interface::{Element, FormID, GameMode, MainRecord};
+use xedit_io::temp::TempDir;
 use xedit_session::{Registry, Session};
 
 fn sub_record(signature: &[u8; 4], data: &[u8]) -> Vec<u8> {
@@ -106,9 +106,8 @@ fn plugin_bytes() -> Vec<u8> {
 }
 
 /// A fresh directory with the master and the plugin, loaded.
-fn setup(test: &str) -> (PathBuf, Arc<FileImpl>, Arc<FileImpl>) {
-    let dir = std::env::temp_dir().join(format!("xedit-formids-{test}-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
+fn setup(test: &str) -> (TempDir, Arc<FileImpl>, Arc<FileImpl>) {
+    let dir = TempDir::new(format!("xedit-formids-{test}-{}", std::process::id()));
     std::fs::write(dir.join("Master.esm"), master_bytes()).unwrap();
     std::fs::write(dir.join("Plugin.esp"), plugin_bytes()).unwrap();
     xedit_core::implementation::clear_files_map();
@@ -218,13 +217,12 @@ fn change_moves_the_record_and_updates_the_references() {
             .is_some()
     );
     assert_eq!(ids(&lnam(&reloaded, 0x0100_0901)), ["01000A00", "00000800"]);
-    std::fs::remove_dir_all(dir).ok();
 }
 
 #[test]
 fn change_of_a_master_record_takes_its_overrides_along() {
     let _guard = test_lock();
-    let (dir, master, plugin) = setup("master");
+    let (_dir, master, plugin) = setup("master");
     let mut session = session(vec![master.clone(), plugin.clone()]);
     let registry = Registry::standard();
     let result = registry
@@ -241,13 +239,12 @@ fn change_of_a_master_record_takes_its_overrides_along() {
     let overrides = record.overrides();
     assert_eq!(overrides.len(), 1);
     assert_eq!(overrides[0].get_file().unwrap().get_name(), "Plugin.esp");
-    std::fs::remove_dir_all(dir).ok();
 }
 
 #[test]
 fn change_to_a_taken_form_id_fails() {
     let _guard = test_lock();
-    let (dir, _master, plugin) = setup("taken");
+    let (_dir, _master, plugin) = setup("taken");
     let mut session = session(vec![plugin]);
     let error = Registry::standard()
         .call(
@@ -262,13 +259,12 @@ fn change_to_a_taken_form_id_fails() {
         "{}",
         error.message
     );
-    std::fs::remove_dir_all(dir).ok();
 }
 
 #[test]
 fn renumber_from_a_start_form_id() {
     let _guard = test_lock();
-    let (dir, master, plugin) = setup("renumber");
+    let (_dir, master, plugin) = setup("renumber");
     let mut session = session(vec![plugin.clone()]);
     let registry = Registry::standard();
     let dry = registry
@@ -313,13 +309,12 @@ fn renumber_from_a_start_form_id() {
     assert_eq!(ids(&lnam(&plugin, 0x0000_0801)), ["00000800", "01000D00"]);
     assert_eq!(ids(&lnam(&master, 0x0000_0801)), ["00000800"]);
     assert_eq!(plugin.get_next_object_id(), 0xD04);
-    std::fs::remove_dir_all(dir).ok();
 }
 
 #[test]
 fn interior_cell_moves_to_the_block_of_its_object_id() {
     let _guard = test_lock();
-    let (dir, _master, plugin) = setup("cell");
+    let (_dir, _master, plugin) = setup("cell");
     xedit_core::interface::globals::set_edit_allowed(true);
     let cell = plugin
         .contained_record_by_load_order_form_id(FormID::from_cardinal(0x0100_0910))
@@ -340,7 +335,6 @@ fn interior_cell_moves_to_the_block_of_its_object_id() {
     assert_eq!(u32::from_le_bytes(sub_block[12..16].try_into().unwrap()), 3);
     assert_eq!(&sub_block[24..28], b"CELL");
     assert_eq!(u32::from_le_bytes(sub_block[36..40].try_into().unwrap()), 0x0100_0911);
-    std::fs::remove_dir_all(dir).ok();
 }
 
 /// The offset of the top level group with the label.
@@ -360,7 +354,7 @@ fn find_top_group(bytes: &[u8], label: &[u8; 4]) -> Option<usize> {
 #[test]
 fn flags_set_the_light_flag() {
     let _guard = test_lock();
-    let (dir, _master, plugin) = setup("flags");
+    let (_dir, _master, plugin) = setup("flags");
     let mut session = session(vec![plugin.clone()]);
     let registry = Registry::standard();
     let dry = registry
@@ -383,13 +377,12 @@ fn flags_set_the_light_flag() {
         .unwrap();
     assert_eq!(result["changed"], false);
     assert_eq!(result["supported"], json!(["esm", "localized", "light"]));
-    std::fs::remove_dir_all(dir).ok();
 }
 
 #[test]
 fn renumber_needs_the_edit_flag() {
     let _guard = test_lock();
-    let (dir, _master, plugin) = setup("gate");
+    let (_dir, _master, plugin) = setup("gate");
     let mut session = Session::with_files(GameMode::gmSSE, vec![plugin]);
     let error = Registry::standard()
         .call(&mut session, "formids.renumber", json!({ "start": "000D00" }))
@@ -405,14 +398,12 @@ fn renumber_needs_the_edit_flag() {
         .unwrap();
     assert_eq!(dry["changes"].as_array().unwrap().len(), 3);
     assert!(!xedit_core::interface::globals::edit_allowed());
-    std::fs::remove_dir_all(dir).ok();
 }
 
 #[test]
 fn change_into_a_file_that_is_not_a_master_adds_it() {
     let _guard = test_lock();
-    let dir = std::env::temp_dir().join(format!("xedit-formids-addmaster-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = TempDir::new(format!("xedit-formids-addmaster-{}", std::process::id()));
     let mut other = header(1, 2, 0x801, &[]);
     other.extend(group(b"KYWD", &keyword(0x800, b"KwOther\0")));
     std::fs::write(dir.join("Other.esm"), other).unwrap();
@@ -442,5 +433,4 @@ fn change_into_a_file_that_is_not_a_master_adds_it() {
     assert_eq!(record.get_editor_id(), "KwPlugin");
     // The plugin's list refers to the keyword by its new FormID.
     assert_eq!(ids(&lnam(&plugin, 0x0200_0901)), ["00000A00", "01000800"]);
-    std::fs::remove_dir_all(dir).ok();
 }

@@ -14,6 +14,7 @@ use xedit_core::implementation::{FileBytes, FileImpl, wb_file_from_bytes};
 use xedit_core::interface::globals::{set_data_path, test_lock};
 use xedit_core::interface::types::FileStates;
 use xedit_core::interface::{Container, GameMode, Variant};
+use xedit_io::temp::TempDir;
 use xedit_session::{Registry, Session};
 
 fn sub_record(signature: &[u8; 4], data: &[u8]) -> Vec<u8> {
@@ -87,14 +88,14 @@ fn plugin(flags: u32, masters: &[&str], entries: &[(u16, u32)]) -> Vec<u8> {
     bytes
 }
 
-fn load() -> (Vec<Arc<FileImpl>>, Session) {
+/// The data folder's guard comes first so that it is dropped last.
+fn load() -> (TempDir, Vec<Arc<FileImpl>>, Session) {
     xedit_core::implementation::clear_files_map();
     xedit_core::implementation::reset_load_order_slots();
     xedit_core::interface::clear_files();
     xedit_session::dump::setup_game_for_edit("sse").unwrap();
     xedit_session::save::apply_edit_settings(GameMode::gmSSE);
-    let folder = std::env::temp_dir().join(format!("xedit-patch-test-{}", std::process::id()));
-    std::fs::create_dir_all(&folder).unwrap();
+    let folder = TempDir::new(format!("xedit-patch-test-{}", std::process::id()));
     set_data_path(&format!("{}\\", folder.display()));
     let master = plugin(1, &[], &[(1, 0xA01), (1, 0xA02), (5, 0xA03)]);
     // The first plugin removes A01 and adds A04, the second adds A05.
@@ -106,7 +107,7 @@ fn load() -> (Vec<Arc<FileImpl>>, Session) {
     }
     let mut session = Session::with_files(GameMode::gmSSE, files.clone());
     session.allow_edit(true);
-    (files, session)
+    (folder, files, session)
 }
 
 /// The references of the entries of the patch's leveled list.
@@ -140,7 +141,7 @@ fn patch_entries(session: &mut Session) -> Vec<u64> {
 #[test]
 fn the_patch_keeps_the_changes_of_both_plugins() {
     let _lock = test_lock();
-    let (_files, mut session) = load();
+    let (_folder, _files, mut session) = load();
     let registry = Registry::standard();
 
     let dry = registry
@@ -183,7 +184,7 @@ fn the_patch_keeps_the_changes_of_both_plugins() {
 #[test]
 fn a_dry_run_needs_no_edit_flag_and_the_name_is_checked() {
     let _lock = test_lock();
-    let (_files, mut session) = load();
+    let (_folder, _files, mut session) = load();
     session.allow_edit(false);
     let registry = Registry::standard();
     let error = registry

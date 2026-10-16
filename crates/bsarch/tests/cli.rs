@@ -6,8 +6,10 @@
 //! `BSArch.exe`.
 
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Command;
+
+use xedit_io::temp::TempDir;
 
 fn bsarch(args: &[&str]) -> (String, Option<i32>) {
     let output = Command::new(env!("CARGO_BIN_EXE_bsarch"))
@@ -20,11 +22,8 @@ fn bsarch(args: &[&str]) -> (String, Option<i32>) {
     )
 }
 
-fn folder(name: &str) -> PathBuf {
-    let path = std::env::temp_dir().join(format!("bsarch-test-{name}-{}", std::process::id()));
-    let _ = fs::remove_dir_all(&path);
-    fs::create_dir_all(&path).unwrap();
-    path
+fn folder(name: &str) -> TempDir {
+    TempDir::new(format!("bsarch-test-{name}-{}", std::process::id()))
 }
 
 fn text(path: &Path) -> &str {
@@ -136,7 +135,6 @@ fn packs_lists_and_unpacks() {
             "{threads} threads"
         );
     }
-    fs::remove_dir_all(&root).unwrap();
 }
 
 #[test]
@@ -145,5 +143,4 @@ fn a_missing_folder_to_unpack_into_is_reported() {
     let (out, code) = bsarch(&["unpack", "x.bsa", text(&root.join("nowhere"))]);
     assert_eq!(code, Some(1));
     assert!(out.contains("EInvalidArguments: Folder does not exist: "), "{out}");
-    fs::remove_dir_all(&root).unwrap();
 }

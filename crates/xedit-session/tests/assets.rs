@@ -6,8 +6,6 @@
 //! the dumps, the block list, a save, an edit and its save, and a file
 //! built back from its JSON dump.
 
-use std::path::PathBuf;
-
 use serde_json::{Value, json};
 
 use xedit_assets::data_format_material::MaterialFile;
@@ -17,13 +15,11 @@ use xedit_assets::data_format_nif::{
 };
 use xedit_assets::nif_math::stripify_triangles;
 use xedit_assets::variant::Variant;
+use xedit_io::temp::TempDir;
 use xedit_session::{Registry, Session};
 
-fn temp_dir(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("xedit-assets-test-{}-{name}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
-    dir
+fn temp_dir(name: &str) -> TempDir {
+    TempDir::new(format!("xedit-assets-test-{}-{name}", std::process::id()))
 }
 
 /// A small Fallout 4 NIF: a root node with an extra data block and a child
@@ -130,7 +126,6 @@ fn nif_dump_blocks_save_set_and_json() {
         json!({ "file": json_file.to_string_lossy(), "output": rebuilt }),
     );
     assert_eq!(std::fs::read(&rebuilt).unwrap(), bytes);
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -164,7 +159,6 @@ fn material_dump_and_save() {
         json!({ "file": file, "output": "unused.bgsm", "dry_run": true }),
     );
     assert_eq!(saved["equal_to_input"], true);
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -314,5 +308,4 @@ fn optimize_runs_the_mesh_spells() {
         .unwrap_err();
     assert_eq!(error.code, "invalid_params");
     assert!(error.message.contains("unknown optimization sort"));
-    let _ = std::fs::remove_dir_all(&dir);
 }

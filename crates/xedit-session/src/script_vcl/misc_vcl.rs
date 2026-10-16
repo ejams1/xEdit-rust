@@ -1154,8 +1154,7 @@ mod tests {
     /// subdirectories' and nothing when the `soTopDirectoryOnly` option is 0.
     #[test]
     fn the_directory_walk_matches_delphi_s() {
-        let folder = std::env::temp_dir().join(format!("xedit-vcl-walk-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&folder);
+        let folder = xedit_io::temp::TempDir::new(format!("xedit-vcl-walk-{}", std::process::id()));
         std::fs::create_dir_all(folder.join("sub").join("deep")).unwrap();
         std::fs::write(folder.join("a.pas"), "a").unwrap();
         std::fs::write(folder.join("b.txt"), "b").unwrap();
@@ -1195,6 +1194,5 @@ mod tests {
             ]
         );
         assert!(files(&folder.join("missing").to_string_lossy(), "*", true).is_empty());
-        let _ = std::fs::remove_dir_all(&folder);
     }
 }

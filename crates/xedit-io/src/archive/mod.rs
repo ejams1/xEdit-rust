@@ -1427,8 +1427,7 @@ mod tests {
 
     #[test]
     fn rejects_text_that_is_not_an_archive() {
-        let dir = std::env::temp_dir().join(format!("xedit-archive-bad-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = crate::temp::TempDir::new(format!("xedit-archive-bad-{}", std::process::id()));
         let path = dir.join("bad.bsa");
         std::fs::write(&path, b"NOPE1234").unwrap();
         assert_eq!(
@@ -1440,6 +1439,5 @@ mod tests {
             Archive::open(&path).err().map(|error| error.0),
             Some("Unknown archive version 0x00000066".to_owned())
         );
-        std::fs::remove_dir_all(&dir).unwrap();
     }
 }

@@ -19,6 +19,7 @@ use xedit_core::implementation::{FileImpl, wb_file};
 use xedit_core::interface::globals::{set_data_path, test_lock};
 use xedit_core::interface::types::FileStates;
 use xedit_core::interface::{Element, GameMode, MainRecord};
+use xedit_io::temp::TempDir;
 use xedit_session::{Registry, Session};
 
 fn sub_record(signature: &[u8; 4], data: &[u8]) -> Vec<u8> {
@@ -113,10 +114,8 @@ struct Files {
 
 /// A data folder with a settings file of its own, so the presets do not
 /// touch the user's.
-fn data_dir(test: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("xedit-filter-{test}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
+fn data_dir(test: &str) -> TempDir {
+    let dir = TempDir::new(format!("xedit-filter-{test}-{}", std::process::id()));
     set_data_path(&dir.to_string_lossy());
     xedit_session::modgroups::set_file_options(None, Some(&dir.join("xedit.ini").to_string_lossy()));
     dir
@@ -213,7 +212,6 @@ fn filters_by_signature_and_editor_id() {
     // The game setting and its override.
     assert_eq!(kept.len(), 2, "{kept:?}");
     assert_eq!(is_form_id(&kept, "00000800").len(), 2, "{kept:?}");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -256,7 +254,6 @@ fn signature_names_are_matched_without_case() {
     assert_eq!(typed["pass1"], wanted["pass1"]);
     assert_eq!(typed["pass2"], wanted["pass2"]);
     assert_eq!(typed["unfiltered"], wanted["unfiltered"]);
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -291,7 +288,6 @@ fn the_default_options_keep_everything() {
         )
         .unwrap();
     assert_eq!(result["unfiltered"], 0);
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -337,7 +333,6 @@ fn only_one_and_conflict_only_keep_the_overridden_record() {
         )
         .unwrap();
     assert_eq!(result["pass1"], result["pass2"]);
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -383,7 +378,6 @@ fn the_reachable_filter_needs_the_reachable_information() {
     let kept = records_of(&result);
     assert_eq!(kept.len(), 1, "{kept:?}");
     assert_eq!(is_form_id(&kept, "00000801").len(), 1, "{kept:?}");
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -428,7 +422,6 @@ fn a_preset_is_saved_listed_loaded_and_deleted() {
     assert_eq!(deleted["erased"], true);
     let listed = registry.call(&mut session, "filter.presets", json!({})).unwrap();
     assert_eq!(listed["presets"], json!([""]));
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -448,7 +441,6 @@ fn removing_the_filter_lists_the_files() {
     assert_eq!(names, ["Master.esm", "Plugin.esp"]);
     assert_eq!(result["files"][0]["records"], 2);
     assert_eq!(result["files"][1]["records"], 2);
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -496,7 +488,6 @@ fn the_view_filter_keeps_the_rows() {
         let lower = name.to_lowercase();
         assert!(lower.contains("editor") || lower.contains("edid"), "{name}");
     }
-    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -505,7 +496,7 @@ fn the_referenced_by_filter_keeps_matching_records() {
     let Some(data) = std::env::var_os("XEDIT_SSE_DATA").map(PathBuf::from) else {
         return;
     };
-    let dir = data_dir("refby");
+    let _dir = data_dir("refby");
     xedit_core::implementation::clear_files_map();
     xedit_core::implementation::reset_load_order_slots();
     xedit_core::interface::clear_files();
@@ -565,5 +556,4 @@ fn the_referenced_by_filter_keeps_matching_records() {
         )
         .unwrap();
     assert_eq!(none["filtered_count"], 0);
-    let _ = std::fs::remove_dir_all(&dir);
 }

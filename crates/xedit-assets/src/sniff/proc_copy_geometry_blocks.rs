@@ -329,9 +329,7 @@ mod tests {
     /// hangs in this mode, so a unit test stands in for the parity case.
     #[test]
     fn the_single_file_mode_copies_the_transform() {
-        let dir = std::env::temp_dir().join(format!("xedit-copy-geometry-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = xedit_io::temp::TempDir::new(format!("xedit-copy-geometry-{}", std::process::id()));
         let source = dir.join("source.nif");
         std::fs::write(&source, mesh("1 2 3")).unwrap();
         std::fs::write(dir.join("target.nif"), mesh("0 0 0")).unwrap();
@@ -367,7 +365,6 @@ mod tests {
             tree.edit_values(child, "Transform\\Translation").unwrap(),
             "1.000000 2.000000 3.000000"
         );
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -377,8 +374,7 @@ mod tests {
         proc.on_show(&Storage::new("Copygeometryblocks".to_owned(), None));
         assert_eq!(proc.on_start().unwrap_err().0, "Source directory not found");
         assert!(proc.copy_geom && !proc.copy_transform && !proc.copy_shader && proc.matching_files_checked);
-        let dir = std::env::temp_dir().join(format!("xedit-copy-geometry-dir-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = xedit_io::temp::TempDir::new(format!("xedit-copy-geometry-dir-{}", std::process::id()));
         proc.source_text = dir.display().to_string();
         proc.on_start().unwrap();
         assert!(proc.source_directory.ends_with('\\'));
@@ -391,6 +387,5 @@ mod tests {
         proc.copy_shader_checked = false;
         proc.copy_transform_checked = false;
         assert_eq!(proc.on_start().unwrap_err().0, "Nothing to copy");
-        let _ = std::fs::remove_dir_all(&dir);
     }
 }

@@ -8,6 +8,7 @@
 //! associativity, adjacent string constants, sets, argument lists, and the
 //! syntax errors with their interpreter codes.
 
+use xedit_io::temp::TempDir;
 use xedit_script::ast::*;
 use xedit_script::parse;
 
@@ -685,9 +686,7 @@ fn strip_namespaces_removes_delphi_prefixes() {
 
 #[test]
 fn check_resolves_used_units_from_the_folder() {
-    let dir = std::env::temp_dir().join(format!("xedit-script-check-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = TempDir::new(format!("xedit-script-check-{}", std::process::id()));
     std::fs::write(
         dir.join("Helper.pas"),
         "unit Helper;\nprocedure Help;\nbegin\nend;\nend.\n",
@@ -709,5 +708,4 @@ fn check_resolves_used_units_from_the_folder() {
     assert!(good.ok(), "{:?}", good.errors);
     let bad = xedit_script::check::check_file(&dir.join("Bad.pas"), &dir);
     assert!(!bad.ok());
-    let _ = std::fs::remove_dir_all(&dir);
 }
