@@ -1401,7 +1401,14 @@ fn check_edit(
     let status_file = dir.join(format!("{oracle_stem}.oracle.log"));
     let strings_file = dir.join(format!("{oracle_stem}.strings.txt"));
     let mut oracle_peak = None;
-    if !status_file.exists() {
+    // A cached run whose script stopped is run again rather than replayed:
+    // the stop can come from the harness's own recipe, which the key does
+    // not hash (`fnv-caravanpack` stopped on `Load order FileID [02] can not
+    // be mapped` while the GUI's copies kept the data folder's file times,
+    // and that stop was replayed after #33 fixed the copies; issue #73).
+    let cached_done = fs::read_to_string(&status_file)
+        .is_ok_and(|status| status.lines().last().is_some_and(|last| last == "done"));
+    if !cached_done {
         let work = runner
             .scratch
             .join("oracle-work")
