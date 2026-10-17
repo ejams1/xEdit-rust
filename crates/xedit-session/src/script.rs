@@ -1010,6 +1010,12 @@ pub struct ScriptRunState {
     /// nodes the filter kept (`RemoveFilter`'s `ReInitTree` returns to
     /// `None`).
     pub filtered_nodes: Option<std::collections::HashSet<usize>>,
+    /// The `Process` walk of the filtered tree, by the identity of each
+    /// root's element, while a filter is on the tree
+    /// ([`crate::filter::AppliedFilter::walk`]): the walk follows the nodes
+    /// the filter bound, which keep a topic's responses in the order the
+    /// filter's walk found them.
+    pub filtered_walk: Option<std::collections::HashMap<usize, Vec<ElementRef>>>,
     /// The filter call the script asked for; the run loop runs it with the
     /// session when the call that asked returns (see [`PendingFilter`]). A
     /// second call replaces the first: what a filter leaves on the tree is
@@ -1067,6 +1073,7 @@ impl ScriptRunState {
             show_start_time: 0,
             filter_applied: false,
             filtered_nodes: None,
+            filtered_walk: None,
             pending_filter: None,
             started: progress_start(),
             action_started: std::time::Instant::now(),
@@ -2128,6 +2135,7 @@ fn apply_pending_filters(
                         let mut state = state.borrow_mut();
                         state.filter_applied = true;
                         state.filtered_nodes = Some(applied.nodes.iter().map(|node| node.get_element_id()).collect());
+                        state.filtered_walk = Some(applied.walk.into_iter().collect());
                         // `ReInitTree` drops the old nodes and the filter
                         // classifies the new ones: what `ConflictAllForNode`
                         // reads afterwards.
@@ -2186,6 +2194,7 @@ fn apply_pending_filters(
                 state.filter_applied = false;
                 // `ReInitTree`: the tree holds every node again, unclassified.
                 state.filtered_nodes = None;
+                state.filtered_walk = None;
                 state.host.node_conflicts.clear();
             }
         }
@@ -2473,7 +2482,26 @@ pub fn run_script(
                 // what the walk reaches next (a record moved to a place the
                 // walk has not passed is visited again).
                 'roots: for root in &order {
-                    let mut node = last_node(root);
+                    // With a filter on the tree the walk follows the nodes
+                    // of the filtered tree with the elements they were
+                    // bound to: a topic's responses keep the order the
+                    // filter's walk bound them in, also when a check of the
+                    // walk sorted the topic's group afterwards (parity #41,
+                    // `filter-topic-bind.pas`). A root the filter's tree
+                    // does not hold has nothing to walk.
+                    let filtered = state
+                        .borrow()
+                        .filtered_walk
+                        .as_ref()
+                        .map(|walk| walk.get(&root.get_element_id()).cloned().unwrap_or_default());
+                    let mut position = 0usize;
+                    let mut node = match &filtered {
+                        Some(nodes) => match nodes.first() {
+                            Some(first) => first.clone(),
+                            None => continue,
+                        },
+                        None => last_node(root),
+                    };
                     // The predecessor of `next` when it was read: the walk
                     // continues from it when a `Process` removed the node
                     // the walk had stepped to (upstream's freed node reads
@@ -2481,27 +2509,37 @@ pub fn run_script(
                     // predecessor).
                     let mut fallback: Option<ElementRef> = None;
                     loop {
-                        let at_root = node.get_element_id() == root.get_element_id();
-                        let prev = if at_root { None } else { previous_node(&node) };
-                        if !at_root && prev.is_none() {
-                            // The node left the tree: nothing to process
-                            // (`NodeData.Element := nil` in `_RemoveNode`).
-                            match fallback.take() {
-                                Some(next) => {
-                                    node = next;
-                                    continue;
+                        let (at_root, next) = if let Some(nodes) = &filtered {
+                            (position + 1 >= nodes.len(), nodes.get(position + 1).cloned())
+                        } else {
+                            let at_root = node.get_element_id() == root.get_element_id();
+                            let prev = if at_root { None } else { previous_node(&node) };
+                            if !at_root && prev.is_none() {
+                                // The node left the tree: nothing to process
+                                // (`NodeData.Element := nil` in `_RemoveNode`).
+                                match fallback.take() {
+                                    Some(next) => {
+                                        node = next;
+                                        continue;
+                                    }
+                                    None => break,
                                 }
-                                None => break,
                             }
-                        }
-                        let next = prev;
-                        fallback = next
-                            .as_ref()
-                            .filter(|next| next.get_element_id() != root.get_element_id())
-                            .and_then(previous_node);
+                            fallback = prev
+                                .as_ref()
+                                .filter(|next| next.get_element_id() != root.get_element_id())
+                                .and_then(previous_node);
+                            (at_root, prev)
+                        };
+                        // A node of the filtered tree whose element an
+                        // earlier `Process` removed is deleted with it
+                        // (`_RemoveNode`): nothing to process.
+                        let removed = filtered.is_some()
+                            && node.get_element_id() != root.get_element_id()
+                            && tree_parent(&node).is_none();
                         // `ApplyScriptToSelection` walks the live tree: a
                         // node a filter took out is not visited.
-                        if !state.borrow().is_filtered_out(&node) && state.borrow().can_process(&node) {
+                        if !removed && !state.borrow().is_filtered_out(&node) && state.borrow().can_process(&node) {
                             let params = {
                                 let state = state.borrow();
                                 [state.element_value(&node)]
@@ -2550,7 +2588,10 @@ pub fn run_script(
                             break;
                         }
                         match next {
-                            Some(next) => node = next,
+                            Some(next) => {
+                                node = next;
+                                position += 1;
+                            }
                             // The node left the tree; upstream reads a
                             // dangling node here, the walk ends instead.
                             None => break,

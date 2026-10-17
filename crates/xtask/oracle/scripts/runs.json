@@ -1047,6 +1047,24 @@
         "BrokenSteel.esm"
       ],
       "note": "parity #35 probe: the order the sort of the HELLO topic's responses gives in each file and the INOM and INOA lists it gives the topic"
+    },
+    {
+      "script": "probes/filter-topic-bind.pas",
+      "game": "fo3",
+      "load": [
+        "Fallout3.esm",
+        "BrokenSteel.esm"
+      ],
+      "note": "parity #41 probe: the filter for cleaning in an editing session (the INOM and INOA fills on), whose pass 1 asks for the conflict status of every record it reaches and so builds topics, whose Init sorts their responses, while the walk binds the response nodes; the Process walk logs the responses of BrokenSteel.esm in the filtered tree's order"
+    },
+    {
+      "script": "probes/topic-walk-order.pas",
+      "game": "fo3",
+      "load": [
+        "Fallout3.esm",
+        "BrokenSteel.esm"
+      ],
+      "note": "parity #41 probe: the control of filter-topic-bind.pas, the same Process walk without a filter"
     }
   ]
 }
