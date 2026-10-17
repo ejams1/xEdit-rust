@@ -406,6 +406,32 @@ fn the_legacy_command_line_of_a_mod_manager_is_read() {
         .collect();
     assert!(tool_modes::parse_legacy(&params, "xedit.exe").unwrap().is_none());
 
+    // A plugin mode loads the plugin it names with its masters whatever the
+    // plugin list says (`Modules.DeactivateAll` of the plugin modes, parity
+    // #41): a list with nothing active, as the game's own `Plugins.txt` of
+    // Fallout 4 is, and a list that names another plugin both leave the
+    // named one.
+    std::fs::write(dir.join("Other.esp"), b"").unwrap();
+    for list in ["# no active plugin\r\n", "*Other.esp\r\n"] {
+        std::fs::write(dir.join("plugins.txt"), list).unwrap();
+        let params: Vec<String> = [
+            "-FO4",
+            &format!("-D:{}", dir.display()),
+            &format!("-P:{}", dir.join("plugins.txt").display()),
+            "-checkforitm",
+            "MyMod.esp",
+            "-autoexit",
+        ]
+        .iter()
+        .map(|arg| (*arg).to_owned())
+        .collect();
+        let run: LegacyRun = tool_modes::parse_legacy(&params, "xedit.exe")
+            .unwrap()
+            .expect("a legacy command line");
+        assert_eq!(run.plugins.len(), 1, "{list:?}: {:?}", run.plugins);
+        assert!(run.plugins[0].ends_with("MyMod.esp"), "{list:?}: {:?}", run.plugins);
+    }
+
     // `-setesm` is a plugin mode: without a plugin it is refused.
     let params: Vec<String> = ["-SSE", "-setesm"].iter().map(|arg| (*arg).to_owned()).collect();
     let error = tool_modes::parse_legacy(&params, "xedit.exe").unwrap_err();
