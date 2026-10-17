@@ -206,10 +206,7 @@ fn a_new_string_takes_the_next_id_of_the_plugins_tables() {
     );
     let (registry, mut session) = session(&file);
     // The tables of a plugin load on the first lookup of a string with an
-    // ID. ID 0 is no lookup, and `AddValue` makes new, empty tables for a
-    // plugin whose tables are not loaded (an upstream quirk: saving them
-    // would replace the plugin's tables), so a string is read first, as the
-    // GUI reads the names of the records it lists.
+    // ID, as the GUI reads the names of the records it lists.
     call(
         &registry,
         &mut session,
@@ -225,6 +222,39 @@ fn a_new_string_takes_the_next_id_of_the_plugins_tables() {
     );
     let (bytes, _) = save(&registry, &mut session, &dir);
     assert_eq!(bytes, plugin(true, &1u32.to_le_bytes(), &3u32.to_le_bytes()));
+    let saved = std::fs::read(dir.join("out").join("Strings").join("Loc_English.STRINGS")).unwrap();
+    assert_eq!(saved, table(&[(1, "First"), (2, "Second"), (3, "New")], false));
+}
+
+/// UPSTREAM-BUG (issue #75, not reproduced): a new string for a localized
+/// plugin none of whose strings was read yet. Upstream's `AddValue` makes
+/// three new, empty tables then, gives the string ID 1 and the save writes
+/// those tables over the plugin's; the port loads the plugin's tables
+/// first, so the string takes the next ID and the table keeps the plugin's
+/// strings, as when a name was read before.
+#[test]
+fn a_new_string_keeps_the_tables_of_a_plugin_not_read_yet() {
+    let _guard = test_lock();
+    let (dir, file) = load(
+        "add-unread",
+        plugin(true, &1u32.to_le_bytes(), &0u32.to_le_bytes()),
+        &loaded_tables(),
+    );
+    let (registry, mut session) = session(&file);
+    let tables = call(&registry, &mut session, "localization.files", json!({ "load": false }));
+    assert_eq!(tables["tables"], json!([]), "nothing read yet");
+    call(
+        &registry,
+        &mut session,
+        "elements.set",
+        json!({ "form_id": "01000801", "path": "DATA\\Name", "value": "New" }),
+    );
+    let (bytes, result) = save(&registry, &mut session, &dir);
+    assert_eq!(bytes, plugin(true, &1u32.to_le_bytes(), &3u32.to_le_bytes()));
+    // Only the table the string went into is modified and saved.
+    let strings = result["strings"].as_array().unwrap();
+    assert_eq!(strings.len(), 1, "{result}");
+    assert_eq!(strings[0]["table"], "Loc_English.STRINGS");
     let saved = std::fs::read(dir.join("out").join("Strings").join("Loc_English.STRINGS")).unwrap();
     assert_eq!(saved, table(&[(1, "First"), (2, "Second"), (3, "New")], false));
 }
