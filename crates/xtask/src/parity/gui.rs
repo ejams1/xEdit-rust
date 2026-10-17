@@ -758,7 +758,9 @@ fn watch(
                 std::thread::sleep(Duration::from_millis(500));
                 if let Some(handle) = main_form {
                     let log = main_form_log(handle);
-                    if !log.is_empty() {
+                    // A read that came back short (a message to the memo
+                    // timed out) does not replace the one that held the end.
+                    if !log.is_empty() && log.len() >= log_out.len() {
                         *log_out = log;
                     }
                 }
@@ -1555,6 +1557,17 @@ fn post_key(_window: &Window, _control: Option<&str>, _key: u16) {}
 
 /// The text of the message log of the main form: the first memo below
 /// it. Read with a timeout, as the GUI thread may be busy loading.
+///
+/// The memo is SynEdit's (`TMemo = class(TSynMemo)`, `xeMainForm.pas:58`),
+/// which keeps each line as a Delphi string, so a line a script logged
+/// with a `#0` in it holds the NUL. Its `WM_GETTEXT` copies the text only up
+/// to the first NUL (`WM_GETTEXTLENGTH` gives the whole length), so the
+/// lines after it, the closing line among them, were never read and the
+/// run waited for its deadline. When the copy is short, the text is read
+/// again line by line with `EM_GETLINE` ([`memo_lines`]), which SynEdit
+/// answers with each line up to a NUL of its own: every line is read, and
+/// a line that holds a NUL is what the memo gives of it, the part before
+/// the NUL.
 #[cfg(windows)]
 pub(super) fn main_form_log(handle: isize) -> String {
     use windows_sys::Win32::Foundation::HWND;
@@ -1590,7 +1603,108 @@ pub(super) fn main_form_log(handle: isize) -> String {
     if sent == 0 {
         return String::new();
     }
-    decode_memo_text(&buffer[..copied.min(len)])
+    let copied = copied.min(len);
+    let packed = is_packed_ansi(&buffer[..copied]);
+    let mut text = MemoText::new(&buffer, copied, packed);
+    if copied < len
+        && let Some(lines) = memo_lines(memo, packed)
+    {
+        text = lines;
+    }
+    text.decode()
+}
+
+/// The text of the memo as its window messages give it: UTF-16 units, or
+/// the bytes of the ANSI text the 4.1.5q GUI answers with, two to each
+/// unit ([`decode_memo_text`]).
+enum MemoText {
+    Units(Vec<u16>),
+    Bytes(Vec<u8>),
+}
+
+impl MemoText {
+    /// The first `count` characters of a message's buffer.
+    fn new(buffer: &[u16], count: usize, packed: bool) -> Self {
+        if packed {
+            MemoText::Bytes(buffer.iter().flat_map(|unit| unit.to_le_bytes()).take(count).collect())
+        } else {
+            MemoText::Units(buffer[..count.min(buffer.len())].to_vec())
+        }
+    }
+
+    /// Units of the memo's own UTF-16 buffer in the form `WM_GETTEXT`
+    /// gives them (the ANSI bytes of a packed answer).
+    fn from_units(units: &[u16], packed: bool) -> Self {
+        if packed {
+            MemoText::Bytes(xedit_io::encoding::ansi_bytes(&String::from_utf16_lossy(units)))
+        } else {
+            MemoText::Units(units.to_vec())
+        }
+    }
+
+    fn decode(&self) -> String {
+        match self {
+            // Windows-1252 read as Latin-1 (the bytes 0x80 to 0x9F), as
+            // the log has always been read.
+            MemoText::Bytes(bytes) => bytes.iter().map(|&byte| char::from(byte)).collect(),
+            MemoText::Units(units) => decode_window_text(units),
+        }
+    }
+}
+
+/// The lines of the memo as `EM_GETLINE` copies them, joined by `CRLF` as
+/// its text joins them: each line only up to a NUL in it, but every line,
+/// so the lines after a NUL are read.
+#[cfg(windows)]
+fn memo_lines(memo: windows_sys::Win32::Foundation::HWND, packed: bool) -> Option<MemoText> {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{SMTO_ABORTIFHUNG, SendMessageTimeoutW};
+    const EM_GETLINECOUNT: u32 = 0x00BA;
+    const EM_GETLINE: u32 = 0x00C4;
+    const CAPACITY: usize = 0x7FFF;
+    let send = |message: u32, wparam: usize, lparam: isize| -> Option<usize> {
+        let mut answer = 0usize;
+        // SAFETY: EM_GETLINECOUNT takes no pointers; EM_GETLINE a buffer
+        // whose first word is its size in characters.
+        let sent =
+            unsafe { SendMessageTimeoutW(memo, message, wparam, lparam, SMTO_ABORTIFHUNG, 1000, &raw mut answer) };
+        (sent != 0).then_some(answer)
+    };
+    let lines = send(EM_GETLINECOUNT, 0, 0)?;
+    let mut units = Vec::new();
+    let mut buffer = vec![0u16; CAPACITY + 1];
+    for line in 0..lines {
+        if line > 0 {
+            units.extend_from_slice(&[u16::from(b'\r'), u16::from(b'\n')]);
+        }
+        // A busy GUI thread lets a call time out; a line is asked again
+        // before the read gives up.
+        let mut copied = None;
+        for _ in 0..3 {
+            buffer[0] = CAPACITY as u16;
+            copied = send(EM_GETLINE, line, buffer.as_mut_ptr() as isize);
+            if copied.is_some() {
+                break;
+            }
+        }
+        let copied = copied?.min(CAPACITY);
+        units.extend_from_slice(&buffer[..copied]);
+    }
+    Some(MemoText::from_units(&units, packed))
+}
+
+/// Whether a `WM_GETTEXT` buffer holds ANSI bytes two to a unit (see
+/// [`decode_memo_text`]).
+fn is_packed_ansi(units: &[u16]) -> bool {
+    let packed = units
+        .iter()
+        .take(64)
+        .filter(|&&unit| {
+            let [low, high] = unit.to_le_bytes();
+            (low.is_ascii_graphic() || low.is_ascii_whitespace())
+                && (high.is_ascii_graphic() || high.is_ascii_whitespace())
+        })
+        .count();
+    !units.is_empty() && packed * 4 >= units.len().min(64) * 3
 }
 
 /// The text of a window message: UTF-16, where a run of ANSI bytes read
@@ -1614,32 +1728,17 @@ pub(super) fn decode_window_text(units: &[u16]) -> String {
     text
 }
 
-/// The text `WM_GETTEXT` gave for the message log. The memo of the 4.1.5q
-/// GUI answers with its text in the ANSI code page, two bytes to each
-/// UTF-16 unit of the buffer, so read that way it is noise; such a buffer
-/// is unpacked to its bytes (up to the terminating zero) and read as
-/// Windows-1252 (Latin-1 for the bytes 0x80 to 0x9F). A buffer that is not
-/// packed that way is read by [`decode_window_text`], which takes runs of
-/// ANSI bytes read as UTF-16 (the LODGen header) as the bytes they are.
-fn decode_memo_text(units: &[u16]) -> String {
-    let packed = units
-        .iter()
-        .take(64)
-        .filter(|&&unit| {
-            let [low, high] = unit.to_le_bytes();
-            (low.is_ascii_graphic() || low.is_ascii_whitespace())
-                && (high.is_ascii_graphic() || high.is_ascii_whitespace())
-        })
-        .count();
-    if units.is_empty() || packed * 4 < units.len().min(64) * 3 {
-        return decode_window_text(units);
-    }
-    units
-        .iter()
-        .flat_map(|unit| unit.to_le_bytes())
-        .take_while(|&byte| byte != 0)
-        .map(char::from)
-        .collect()
+/// The text `WM_GETTEXT` gave for the message log, `count` characters. The
+/// memo of the 4.1.5q GUI answers with its text in the ANSI code page, two
+/// bytes to each UTF-16 unit of the buffer (and `count` in bytes), so read
+/// that way it is noise; such a buffer is unpacked to its first `count`
+/// bytes, NULs included, and read as Windows-1252 (Latin-1 for the bytes
+/// 0x80 to 0x9F). A buffer that is not packed that way is read by
+/// [`decode_window_text`], which takes runs of ANSI bytes read as UTF-16
+/// (the LODGen header) as the bytes they are.
+#[cfg(test)]
+fn decode_memo_text(units: &[u16], count: usize) -> String {
+    MemoText::new(units, count, is_packed_ansi(&units[..count.min(units.len())])).decode()
 }
 
 #[cfg(not(windows))]
@@ -1684,9 +1783,15 @@ mod tests {
             .chunks(2)
             .map(|pair| u16::from_le_bytes([pair[0], pair[1]]))
             .collect();
-        assert_eq!(decode_memo_text(&ansi), "Fatal: x\r\nok");
+        assert_eq!(decode_memo_text(&ansi, 12), "Fatal: x\r\nok");
         let wide: Vec<u16> = "Fatal: x\r\nok".encode_utf16().collect();
-        assert_eq!(decode_memo_text(&wide), "Fatal: x\r\nok");
+        assert_eq!(decode_memo_text(&wide, wide.len()), "Fatal: x\r\nok");
+        // A NUL inside the counted text is kept (issue #69).
+        let nul: Vec<u16> = b"Fatal: x\r\nnul | a\0b\r\n\0\0\0"
+            .chunks(2)
+            .map(|pair| u16::from_le_bytes([pair[0], pair[1]]))
+            .collect();
+        assert_eq!(decode_memo_text(&nul, 21), "Fatal: x\r\nnul | a\0b\r\n");
     }
 
     #[test]
