@@ -832,11 +832,6 @@ static GENERATION: AtomicI32 = AtomicI32::new(0);
 
 /// Creates the handler and registers it as `wbLocalizationHandler`.
 pub fn install_localization_handler() -> Arc<LocalizationHandlerImpl> {
-    // The port's session sets the handler after its modules are loaded
-    // (the release has it, with the tables of the loaded archives, before
-    // the first module): the generation counts up, so the records of a
-    // localized file read the full names their load left empty again.
-    GENERATION.fetch_add(1, Ordering::Relaxed);
     let handler = Arc::new(LocalizationHandlerImpl::default());
     set_localization_handler(Some(handler.clone()));
     *HANDLER.write().unwrap() = Some(handler.clone());

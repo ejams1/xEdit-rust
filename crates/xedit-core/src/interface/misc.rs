@@ -166,14 +166,6 @@ pub fn set_localization_handler(handler: Option<Arc<dyn LocalizationHandler>>) {
 /// without it the `Skyrim.esm` reference cache named the cells and
 /// references in Tamriel without the worldspace's full name, which a load
 /// note had cached in Tamriel's `mrName` before the handler was there).
-
-/// Whether a localization handler is set (the session's resources are
-/// loaded).
-pub fn localization_handler_set() -> bool {
-    LOCALIZATION_HANDLER.read().unwrap().is_some()
-}
-
-/// `wbLocalizationHandler.GetValue`. Nothing is found while no handler is set.
 pub fn localization_get_value(id: u32, element: ElementArg) -> (bool, String) {
     let handler = LOCALIZATION_HANDLER.read().unwrap().clone();
     match handler {
