@@ -1183,15 +1183,14 @@
     },
     {
       "script": "Merge overrides into master.pas",
-      "game": "fo3",
-      "load": ["Fallout3.esm", "Anchorage.esm"],
+      "master": "tests/fixtures/parity/refs-edit.esm",
+      "plugins": ["tests/fixtures/parity/merge-overrides.esp"],
       "close_after": true,
-      "save": ["Fallout3.esm"],
-      "timeout_minutes": 60,
+      "save": ["Skyrim.esm"],
       "answers": [
         {"class": "TfrmFileSelect", "title": "Select plugin(s) to merge into", "button": "OK"}
       ],
-      "note": "parity #41, a form script: frmFileSelect answered OK with nothing checked (merge into the masters only), so every override of Anchorage.esm is merged into its Fallout3.esm master (ConflictAllForElements, ElementAssign, Add and Remove of elements); the saved Fallout3.esm is compared (over Skyrim.esm and Update.esm the release ran past 60 minutes)"
+      "note": "parity #41, a form script: frmFileSelect answered OK with nothing checked (merge into the masters only), so every override of the merge-overrides.esp fixture is merged into its master, the refs-edit fixture (ConflictAllForElements, ElementAssign of a changed game setting, keyword colour and activator name and keywords, SetElementNativeValues of the record flags, Add and ElementAssign of the name, keywords and marker colour an activator of the master lacks, Remove of the marker colour the override drops); the saved master is compared. Over real masters the release ran past 60 minutes (Fallout 3 with Anchorage.esm, Skyrim SE with Update.esm), hence the fixtures"
     }
   ]
 }
