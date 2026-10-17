@@ -53,11 +53,10 @@ The response has one entry per pass in `passes` (the filter's node counts `pass1
 
 ## The oracle and its known differences
 
-`cargo xtask parity clean` runs the GUI's own quick auto clean mode headlessly on every corpus plugin that has masters and compares the saved bytes, per pass the filter's counts, the UDR and ITM counts, the cleaned record lines of the log and the LOOT dirty report. Results (2026-10-16, parity #35): 233 of 238 equal, 2 `oracle-unsupported` (the Morrowind masters, which the 4.1.5q GUI does not edit), 1 `oracle-log-lost` and 2 `different`:
+`cargo xtask parity clean` runs the GUI's own quick auto clean mode headlessly on every corpus plugin that has masters and compares the saved bytes, per pass the filter's counts, the UDR and ITM counts, the cleaned record lines of the log and the LOOT dirty report. Results (2026-10-17, parity #35): 234 of 238 equal, 2 `oracle-unsupported` (the Morrowind masters, which the 4.1.5q GUI does not edit), 1 `oracle-log-lost` and 1 `different`:
 
 - `NW.esm` (Fallout 76): the saved bytes equal the release's, but the release's log file keeps only `Closing files`, so its counts are not witnessed.
-- `BrokenSteel.esm` (Fallout 3): two `GREETING` responses the release writes as loaded and the port trims (`wbDialogueTextAfterLoad`).
-- `Knights.esp` (Oblivion): two `PGRI` arrays written in another order (a storage-merge regression, owed).
+- `BrokenSteel.esm` (Fallout 3): two `GREETING` responses the release writes as loaded and the port trims (`wbDialogueTextAfterLoad`); the release trims them with `-nosortinfo`, so the trim is lost in the quick clean's response sort with the PNAM fill (owed, see `docs/PLAN.md` bug 6).
 
 `cargo xtask parity clean-scenarios` drives the GUI's own menu items over selections of plugins with the Cleaning tab's options, `-AllowMakePartial` and plugins the port prepares first (`crates/xtask/oracle/cleaning/*.json`); see `checking-parity`.
 
