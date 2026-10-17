@@ -1406,8 +1406,8 @@ fn check_edit(
     // not hash (`fnv-caravanpack` stopped on `Load order FileID [02] can not
     // be mapped` while the GUI's copies kept the data folder's file times,
     // and that stop was replayed after #33 fixed the copies; issue #73).
-    let cached_done = fs::read_to_string(&status_file)
-        .is_ok_and(|status| status.lines().last().is_some_and(|last| last == "done"));
+    let cached_done =
+        fs::read_to_string(&status_file).is_ok_and(|status| status.lines().last().is_some_and(|last| last == "done"));
     if !cached_done {
         let work = runner
             .scratch
