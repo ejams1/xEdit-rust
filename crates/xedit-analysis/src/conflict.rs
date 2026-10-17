@@ -472,8 +472,23 @@ impl<'a> ConflictContext<'a> {
         sibling_compare: bool,
         injected: bool,
     ) -> ConflictAll {
+        self.conflict_level_for_elements(&[a.clone(), b.clone()], sibling_compare, injected)
+    }
+
+    /// The body of `_ConflictAllForElements` over any number of elements (the
+    /// `TList` form of the script function passes a list): one node data
+    /// per element, with its container when it has elements; no element is
+    /// `caUnknown`, else the containers' children are compared when the
+    /// first element is a container (`ConflictLevelForChildNodeDatas`), the
+    /// elements themselves otherwise (`ConflictLevelForNodeDatas`).
+    pub fn conflict_level_for_elements(
+        &mut self,
+        elements: &[ElementRef],
+        sibling_compare: bool,
+        injected: bool,
+    ) -> ConflictAll {
         let mut datas: Vec<ViewNodeData> = Vec::new();
-        for element in [a, b] {
+        for element in elements {
             let container = element
                 .as_container()
                 .filter(|container| container.get_element_count() > 0)
@@ -483,6 +498,9 @@ impl<'a> ConflictContext<'a> {
                 element: Some(element.clone()),
                 ..Default::default()
             });
+        }
+        if datas.is_empty() {
+            return ConflictAll::caUnknown;
         }
         if datas[0].container.is_some() {
             self.conflict_level_for_child_node_datas(&mut datas, sibling_compare, injected)

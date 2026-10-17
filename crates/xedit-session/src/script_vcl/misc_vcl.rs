@@ -707,6 +707,26 @@ pub struct IniFileState {
     auto_write: bool,
 }
 
+/// A `TMemIniFile.Create(path)` value, for the host's `wbSettings`
+/// (`frmMain.Settings`, issue #25): the file's sections in memory, written
+/// only by `UpdateFile`.
+pub(crate) fn mem_ini_file_value(class: Rc<ClassDef>, path: String) -> Value {
+    let object = IniFileRef::load(class, path, false);
+    Value::Object(Rc::new(RefCell::new(object)) as Rc<RefCell<dyn ScriptObject>>)
+}
+
+/// The text of the sections an ini object holds in memory (what
+/// `UpdateFile` would write), `None` for a value that is no ini object.
+pub(crate) fn ini_text_of(value: &Value) -> Option<String> {
+    let state = ini_object(&Some(value.clone())).ok()?;
+    let lines = state.borrow().to_lines();
+    Some(lines.join(
+        "
+
+",
+    ))
+}
+
 /// The script-visible object: `TCustomIniFile` and its descendants hold an
 /// [`IniFileState`] behind a shared handle, so the members can borrow it.
 struct IniFileRef {

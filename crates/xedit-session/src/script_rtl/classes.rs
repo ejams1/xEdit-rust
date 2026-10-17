@@ -193,6 +193,70 @@ pub struct ComponentState {
     pub components: Vec<Rc<RefCell<ComponentState>>>,
     pub component_index: i32,
     pub design_info: i32,
+    /// The script object that carries this state when it is not a plain
+    /// [`ComponentObject`] (a form or control of the VCL model, issue #25):
+    /// `FindComponent`, `Components[i]` and `Owner` hand that very object
+    /// back, as upstream returns the component itself.
+    pub object: Option<std::rc::Weak<RefCell<dyn ScriptObject>>>,
+}
+
+impl ComponentState {
+    /// A fresh component without owner (`TComponent.Create(nil)`).
+    pub fn new() -> ComponentState {
+        ComponentState {
+            name: String::new(),
+            tag: 0,
+            owner: None,
+            components: Vec::new(),
+            component_index: -1,
+            design_info: 0,
+            object: None,
+        }
+    }
+}
+
+impl Default for ComponentState {
+    fn default() -> Self {
+        ComponentState::new()
+    }
+}
+
+/// `Owner.InsertComponent(child)`: the child joins the owner's components.
+pub fn insert_component(owner: &Rc<RefCell<ComponentState>>, child: &Rc<RefCell<ComponentState>>) {
+    let index = {
+        let mut borrowed = owner.borrow_mut();
+        let index = borrowed.components.len() as i32;
+        borrowed.components.push(child.clone());
+        index
+    };
+    let mut child_state = child.borrow_mut();
+    child_state.owner = Some(owner.clone());
+    child_state.component_index = index;
+}
+
+/// `Owner.RemoveComponent(child)` (the `Free` of a component).
+pub fn remove_component(child: &Rc<RefCell<ComponentState>>) {
+    let owner = child.borrow_mut().owner.take();
+    if let Some(owner) = owner {
+        let mut borrowed = owner.borrow_mut();
+        borrowed.components.retain(|entry| !Rc::ptr_eq(entry, child));
+        for (index, entry) in borrowed.components.iter().enumerate() {
+            entry.borrow_mut().component_index = index as i32;
+        }
+    }
+}
+
+/// The script value of a component state: the object that carries it
+/// (a VCL model object) while it lives, else a `TComponent` value over it.
+fn component_value(state: Rc<RefCell<ComponentState>>, class: &Rc<ClassDef>) -> Value {
+    let object = state.borrow().object.as_ref().and_then(std::rc::Weak::upgrade);
+    match object {
+        Some(object) => Value::Object(object),
+        None => Value::Object(Rc::new(RefCell::new(ComponentObject {
+            class: class.clone(),
+            state,
+        }))),
+    }
 }
 
 pub struct ComponentObject {
@@ -216,10 +280,15 @@ impl ScriptObject for ComponentObject {
 pub fn component_of(value: &Value) -> Option<Rc<RefCell<ComponentState>>> {
     let object = value.as_object()?;
     let borrowed = object.borrow();
+    if let Some(component) = borrowed.as_any().downcast_ref::<ComponentObject>() {
+        return Some(component.state.clone());
+    }
+    // A form or control of the VCL model is a `TComponent` too: its name,
+    // tag, owner and owned components are this same state.
     borrowed
         .as_any()
-        .downcast_ref::<ComponentObject>()
-        .map(|component| component.state.clone())
+        .downcast_ref::<crate::script_vcl::interactive::VclObject>()
+        .map(|object| object.component.clone())
 }
 
 pub struct CollectionState {
@@ -2120,20 +2189,9 @@ fn register_component(adapter: &mut Adapter, classes: &Classes) {
         let class = classes.t_component.clone();
         method(adapter, &classes.t_component, "Create", &[EMPTY], move |value, args| {
             let owner = component_of(arg(args, 0));
-            let state = Rc::new(RefCell::new(ComponentState {
-                name: String::new(),
-                tag: 0,
-                owner: owner.clone(),
-                components: Vec::new(),
-                component_index: -1,
-                design_info: 0,
-            }));
+            let state = Rc::new(RefCell::new(ComponentState::new()));
             if let Some(owner) = owner {
-                let mut owner = owner.borrow_mut();
-                let index = owner.components.len() as i32;
-                owner.components.push(state.clone());
-                drop(owner);
-                state.borrow_mut().component_index = index;
+                insert_component(&owner, &state);
             }
             *value = Value::Object(Rc::new(RefCell::new(ComponentObject {
                 class: class.clone(),
@@ -2174,10 +2232,7 @@ fn register_component(adapter: &mut Adapter, classes: &Classes) {
                     .find(|child| child.borrow().name.eq_ignore_ascii_case(&name))
                     .cloned();
                 *value = match found {
-                    Some(state) => Value::Object(Rc::new(RefCell::new(ComponentObject {
-                        class: class.clone(),
-                        state,
-                    }))),
+                    Some(state) => component_value(state, &class),
                     None => Value::Null,
                 };
                 Ok(())
@@ -2268,10 +2323,7 @@ fn register_component(adapter: &mut Adapter, classes: &Classes) {
                 let index = arg_i32(args, 0)?.max(0) as usize;
                 let child = component.borrow().components.get(index).cloned();
                 *value = match child {
-                    Some(state) => Value::Object(Rc::new(RefCell::new(ComponentObject {
-                        class: class.clone(),
-                        state,
-                    }))),
+                    Some(state) => component_value(state, &class),
                     None => Value::Null,
                 };
                 Ok(())
@@ -2316,10 +2368,7 @@ fn register_component(adapter: &mut Adapter, classes: &Classes) {
         method(adapter, &classes.t_component, "Owner", &[], move |value, args| {
             let owner = component_arg(args)?.borrow().owner.clone();
             *value = match owner {
-                Some(state) => Value::Object(Rc::new(RefCell::new(ComponentObject {
-                    class: class.clone(),
-                    state,
-                }))),
+                Some(state) => component_value(state, &class),
                 None => Value::Null,
             };
             Ok(())

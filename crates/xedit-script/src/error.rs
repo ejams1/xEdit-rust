@@ -83,6 +83,18 @@ pub const IE_TOO_MANY_PARAMS: i32 = 181;
 pub const IE_NOT_ENOUGH_PARAMS: i32 = 182;
 /// `ieIncompatibleTypes` -- declared upstream, never raised.
 pub const IE_INCOMPATIBLE_TYPES: i32 = 183;
+/// `ieDllErrorLoadLibrary` (`CallDll`, `JvInterpreter.pas:2044`): the
+/// library of an `external` function does not load.
+pub const IE_DLL_ERROR_LOAD_LIBRARY: i32 = 184;
+/// `ieDllInvalidArgument` (`CallDllIns`, `:1961`): an argument type the
+/// call cannot pass.
+pub const IE_DLL_INVALID_ARGUMENT: i32 = 185;
+/// `ieDllInvalidResult` (`CallDllIns`, `:2018`): a result type the call
+/// cannot read.
+pub const IE_DLL_INVALID_RESULT: i32 = 186;
+/// `ieDllFunctionNotFound` (`CallDllIns`, `:2032`): `GetProcAddress` found
+/// no function of the declared name.
+pub const IE_DLL_FUNCTION_NOT_FOUND: i32 = 187;
 /// `ieDirectInvalidArgument` (`ieFunctionBase + 8`, `JvInterpreter.pas:1283`):
 /// the code an adapter raises for an argument of the wrong type, whose text
 /// the `%s` of the message carries, as `_AddMessage` and the
