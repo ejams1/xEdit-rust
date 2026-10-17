@@ -551,7 +551,7 @@ impl GroupRecordImpl {
         }
 
         if only_masters {
-            let mut elements = self.container.cnt_elements.write().unwrap();
+            let mut elements = self.container.write_elements();
             *elements = new_elements;
         }
         Ok(())

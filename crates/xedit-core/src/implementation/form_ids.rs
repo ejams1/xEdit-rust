@@ -196,9 +196,11 @@ impl MainRecordImpl {
         self.master().unwrap_or_else(|| self.clone())
     }
 
-    /// Port of `TwbMainRecord.ContainerChanged` for the contained-in
-    /// element: it takes the label of the group again.
+    /// Port of `TwbMainRecord.ContainerChanged`: the name cache is
+    /// invalidated (`mrInvalidateNameCache`) and the contained-in element
+    /// takes the label of the group again.
     pub(crate) fn container_changed(&self) {
+        self.invalidate_name_cache();
         let contained_in = self
             .container
             .elements()
