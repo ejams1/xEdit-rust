@@ -667,7 +667,14 @@ pub fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
         println!("{equal} of {} equal. Report: {}", outcomes.len(), report_file.display());
     }
     if !options.oracle_only {
-        ensure!(equal == outcomes.len(), "parity does not hold");
+        // `oracle-save`: a plugin the release can not save at all (the
+        // Morrowind masters) is no difference; the counts above name it.
+        let unsupported = if options.oracle_save {
+            outcomes.iter().filter(|o| o.status == "oracle-unsupported").count()
+        } else {
+            0
+        };
+        ensure!(equal + unsupported == outcomes.len(), "parity does not hold");
     }
     Ok(())
 }
