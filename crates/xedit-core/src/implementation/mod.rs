@@ -4774,18 +4774,12 @@ impl Container for GroupRecordImpl {
 }
 
 /// `fsIsOfficial in GetFile.FileStates`: the records of official files
-/// cache their names (`mrName`, `mrShortName`). The port caches them only
-/// once the localization handler exists: the release loads the resources
-/// and so has its string tables before it loads a module (`TLoaderThread`),
-/// while the port's session loads the resources after the modules, so a
-/// name built during the load (the note of an injected record) would keep
-/// the empty full name of a localized record for good.
+/// cache their names (`mrName`, `mrShortName`).
 fn is_official_file(record: &MainRecordImpl) -> bool {
-    crate::interface::misc::localization_handler_set()
-        && record.file_impl().is_some_and(|file| {
-            file.get_file_states()
-                .contains(crate::interface::types::FileState::fsIsOfficial)
-        })
+    record.file_impl().is_some_and(|file| {
+        file.get_file_states()
+            .contains(crate::interface::types::FileState::fsIsOfficial)
+    })
 }
 
 impl Element for MainRecordImpl {
