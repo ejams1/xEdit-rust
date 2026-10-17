@@ -1194,8 +1194,7 @@ pub(crate) fn register(adapter: &mut Adapter, state: &Rc<RefCell<ScriptRunState>
         -1,
         Rc::new(|value: &mut Value, args: &mut Args| {
             let mut elements: Vec<ElementRef> = Vec::new();
-            let flags_at;
-            match args.values.len() {
+            let flags_at = match args.values.len() {
                 3 => {
                     if let Some(list) = list_at(args, 0) {
                         let borrowed = list.borrow();
@@ -1207,7 +1206,7 @@ pub(crate) fn register(adapter: &mut Adapter, state: &Rc<RefCell<ScriptRunState>
                             }
                         }
                     }
-                    flags_at = 1;
+                    1
                 }
                 4 => {
                     for index in 0..2 {
@@ -1215,10 +1214,10 @@ pub(crate) fn register(adapter: &mut Adapter, state: &Rc<RefCell<ScriptRunState>
                             elements.push(element);
                         }
                     }
-                    flags_at = 2;
+                    2
                 }
-                _ => flags_at = 1,
-            }
+                _ => 1,
+            };
             *value = Value::Integer(ConflictAll::caUnknown.ord() as i32);
             if elements.is_empty() {
                 return Ok(());
@@ -1474,4 +1473,61 @@ pub(crate) fn register(adapter: &mut Adapter, state: &Rc<RefCell<ScriptRunState>
             outcome.map_err(|error| exception(error.0))
         }),
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use std::cell::RefCell;
+    use std::collections::BTreeSet;
+    use std::rc::Rc;
+
+    use xedit_script::Interpreter;
+
+    use crate::script::{C_UNIT, ScriptRunState};
+
+    /// Every `xejviScriptAdapterHost.pas` function the ledger lists as
+    /// covered is a registration of a script run's adapter: a ledger entry
+    /// covered by a CLI command while the script function itself was missing
+    /// (`AddRequiredElementMasters`, the two `...ForMainRecord` and
+    /// `ConflictAllForElements` before issue #25) fails here.
+    #[test]
+    fn every_covered_host_function_of_the_ledger_is_registered() {
+        let ledger = include_str!("../../../coverage/ledger.toml");
+        let mut expected: BTreeSet<String> = BTreeSet::new();
+        let mut current: Option<String> = None;
+        for line in ledger.lines() {
+            if let Some(rest) = line.strip_prefix("[script.\"xejviScriptAdapterHost:cUnit.") {
+                current = rest.strip_suffix(":function\"]").map(str::to_owned);
+                continue;
+            }
+            if line.starts_with('[') {
+                current = None;
+                continue;
+            }
+            if line == "status = \"covered\""
+                && let Some(name) = current.take()
+            {
+                expected.insert(name.to_lowercase());
+            }
+        }
+        assert_eq!(expected.len(), 56, "the ledger's host entries were not read");
+
+        let mut interpreter = Interpreter::new();
+        let class = interpreter.adapter.add_class(C_UNIT, "IwbElement", None);
+        let state = Rc::new(RefCell::new(ScriptRunState::new(Vec::new(), class)));
+        let model: Rc<RefCell<dyn crate::script_rtl::Vcl>> = Rc::new(RefCell::new(
+            crate::script_vcl::interactive::VclModel::new("test", Vec::new()),
+        ));
+        crate::script::register_functions(&mut interpreter.adapter, &state, model);
+        crate::script_units::register_units(&mut interpreter.adapter, &state);
+        let registered: BTreeSet<String> = interpreter
+            .adapter
+            .registrations()
+            .iter()
+            .filter(|entry| entry.kind == "function")
+            .filter_map(|entry| entry.identifier.as_ref().map(|name| name.to_lowercase()))
+            .collect();
+        let missing: Vec<&String> = expected.difference(&registered).collect();
+        assert!(missing.is_empty(), "covered host functions not registered: {missing:?}");
+    }
 }

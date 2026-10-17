@@ -1306,7 +1306,7 @@ pub(crate) const C_UNIT: &str = "";
 /// [`crate::script_vcl::interactive::VclModel`] (issue #26); the callers
 /// without a model (tests, standalone registrations) pass
 /// [`crate::script_rtl::NoVcl`].
-fn register_functions(
+pub(crate) fn register_functions(
     adapter: &mut Adapter,
     state: &Rc<RefCell<ScriptRunState>>,
     vcl: Rc<RefCell<dyn crate::script_rtl::Vcl>>,

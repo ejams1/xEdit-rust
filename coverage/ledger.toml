@@ -3957,8 +3957,10 @@ command = "tool.run"
 source = "Core/wbInterface.pas"
 
 [script."JvInterpreter:FCurUnitName.FIdentifier:extfun"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "External/jvcl/jvcl/run/JvInterpreter.pas"
+note = "A function a script declares external is called in its library (CallDll, CallDllIns): integer, boolean and small integer arguments and results, string and var arguments, procedures; the other types are refused with ieDllInvalidArgument/ieDllInvalidResult where the release faults re-raising a freed exception (probes host-extfun, host-extfun-double, host-extfun-result)."
 
 [script."JvInterpreterFm:cJvInterpreterFm.JvInterpreterMakeForm:function"]
 status = "covered"
@@ -20562,17 +20564,22 @@ command = "script.run"
 source = "_AddMessage"
 
 [script."xejviScriptAdapterHost:cUnit.AddNewFile:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "_AddNewFile"
+note = "Its InputQuery answered through the VCL model (run case host-dialogs)."
 
 [script."xejviScriptAdapterHost:cUnit.AddNewFileName:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "_AddNewFileName"
+note = "Probe host-newfile, run case host-dialogs."
 
 [script."xejviScriptAdapterHost:cUnit.AddRequiredElementMasters:function"]
 status = "covered"
-command = "records.copy"
+command = "script.run"
 source = "_AddRequiredElementMasters"
+note = "Its confirmation answered through the VCL model (run case host-dialogs); the copy commands use the same masters logic (records.copy)."
 
 [script."xejviScriptAdapterHost:cUnit.ApplyFilter:function"]
 status = "covered"
@@ -20587,29 +20594,33 @@ source = "_ClearMessages"
 
 [script."xejviScriptAdapterHost:cUnit.ConflictAllForElements:function"]
 status = "covered"
-command = "conflicts.for_elements"
+command = "script.run"
 source = "_ConflictAllForElements"
-note = "The command reports the same TConflictAll of two elements; the script registration itself is the host batch #25."
+note = "The pair and the TList forms (probe host-conflicts, run case host-dialogs); conflicts.for_elements reports the pair form."
 
 [script."xejviScriptAdapterHost:cUnit.ConflictAllForMainRecord:function"]
 status = "covered"
-command = "conflicts.list"
+command = "script.run"
 source = "_ConflictAllForMainRecord"
-note = "The conflict_all of each record of the loaded files."
+note = "Run case host-dialogs; conflicts.list reports the same status."
 
 [script."xejviScriptAdapterHost:cUnit.ConflictAllForNode:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "_ConflictAllForNode"
+note = "The status the navigation tree's nodes hold: classified by the filter, by JumpTo's painted rows and reset by RemoveFilter (probes host-conflicts, host-paint, run case host-dialogs)."
 
 [script."xejviScriptAdapterHost:cUnit.ConflictThisForMainRecord:function"]
 status = "covered"
-command = "conflicts.list"
+command = "script.run"
 source = "_ConflictThisForMainRecord"
-note = "The conflict_this of each record of the loaded files."
+note = "Run case host-dialogs; conflicts.list reports the same status."
 
 [script."xejviScriptAdapterHost:cUnit.ConflictThisForNode:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "_ConflictThisForNode"
+note = "The status the navigation tree's nodes hold (probes host-conflicts, host-paint, run case host-dialogs)."
 
 [script."xejviScriptAdapterHost:cUnit.DataPath:function"]
 status = "covered"
@@ -20617,8 +20628,10 @@ command = "script.run"
 source = "_wbDataPath"
 
 [script."xejviScriptAdapterHost:cUnit.ExecuteCaptureConsoleOutput:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "_ExecuteCaptureConsoleOutput"
+note = "The command line runs hidden, its output logged per pipe read; the exit code is a Cardinal the port carries as an Int64 (probe host-console)."
 
 [script."xejviScriptAdapterHost:cUnit.FileByIndex:function"]
 status = "covered"
@@ -20626,12 +20639,16 @@ command = "script.run"
 source = "_FileByIndex"
 
 [script."xejviScriptAdapterHost:cUnit.FileByLoadOrder:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "_FileByLoadOrder"
+note = "Probe host-files."
 
 [script."xejviScriptAdapterHost:cUnit.FileByLoadOrderFileID:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "_FileByLoadOrderFileID"
+note = "Probe host-files."
 
 [script."xejviScriptAdapterHost:cUnit.FileByName:function"]
 status = "covered"
@@ -20649,24 +20666,34 @@ command = "script.run"
 source = "_FilterApplied"
 
 [script."xejviScriptAdapterHost:cUnit.GenerateLODTES4:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "_GenerateLODTES4"
+note = "Nothing outside Oblivion (run case host-lod); the generator is lodgen.generate's."
 
 [script."xejviScriptAdapterHost:cUnit.GenerateLODTES5Objects:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "_GenerateLODTES5Objects"
+note = "Run case host-lod over the host-25 worldspace; the generator is lodgen.generate's."
 
 [script."xejviScriptAdapterHost:cUnit.GenerateLODTES5Trees:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "_GenerateLODTES5Trees"
+note = "Run case host-lod over the host-25 worldspace; the generator is lodgen.generate's."
 
 [script."xejviScriptAdapterHost:cUnit.IsPositionChanged:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "_IsPositionChanged"
+note = "With the record conflict cache it reads (run case host-dialogs)."
 
 [script."xejviScriptAdapterHost:cUnit.JumpTo:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "_JumpTo"
+note = "The selection the jump leaves (wbSelectedFiles) and the rows it paints (probes host-selection, host-paint)."
 
 [script."xejviScriptAdapterHost:cUnit.ProgramPath:function"]
 status = "covered"
@@ -20674,12 +20701,16 @@ command = "script.run"
 source = "_wbProgramPath"
 
 [script."xejviScriptAdapterHost:cUnit.RecordByHexFormID:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "_RecordByHexFormID"
+note = "Probes host-files and host-errors."
 
 [script."xejviScriptAdapterHost:cUnit.RecordFromFileByFormID:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "_RecordFromFileByFormID"
+note = "Probes host-files and host-errors."
 
 [script."xejviScriptAdapterHost:cUnit.RemoveFilter:function"]
 status = "covered"
@@ -20707,12 +20738,16 @@ command = "script.run"
 source = "_dfFloatDecimalDigits"
 
 [script."xejviScriptAdapterHost:cUnit.frmFileSelect:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "_frmFileSelect"
+note = "A new TfrmFileSelect of the VCL model with the components of its dfm, shown through the recorded answers (probe host-forms, run case host-dialogs)."
 
 [script."xejviScriptAdapterHost:cUnit.frmMain:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "_frmMain"
+note = "The VCL model's main form (TfrmMain), shown nothing headless (probe host-forms)."
 
 [script."xejviScriptAdapterHost:cUnit.wbAppName:function"]
 status = "covered"
@@ -20735,8 +20770,10 @@ command = "script.run"
 source = "_wbDataPath"
 
 [script."xejviScriptAdapterHost:cUnit.wbDecodeTextureHashes:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "_wbDecodeTextureHashes"
+note = "The load option (probe host-globals)."
 
 [script."xejviScriptAdapterHost:cUnit.wbGameMasterEsm:function"]
 status = "covered"
@@ -20759,12 +20796,16 @@ command = "script.run"
 source = "_wbGameName"
 
 [script."xejviScriptAdapterHost:cUnit.wbGetUVRangeTexturesList:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "_wbGetUVRangeTexturesList"
+note = "Run case host-uvrange."
 
 [script."xejviScriptAdapterHost:cUnit.wbLoadBSAs:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "_wbLoadBSAs"
+note = "The load option (probe host-globals)."
 
 [script."xejviScriptAdapterHost:cUnit.wbOutputPath:function"]
 status = "covered"
@@ -20777,8 +20818,10 @@ command = "script.run"
 source = "_wbProgramPath"
 
 [script."xejviScriptAdapterHost:cUnit.wbRecordDefMap:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "_wbRecordDefMap"
+note = "_wbRecordDefMap: the sorted signature list; its objects are the definitions, whose addresses no script compares (probe host-globals)."
 
 [script."xejviScriptAdapterHost:cUnit.wbScriptsPath:function"]
 status = "covered"
@@ -20786,24 +20829,34 @@ command = "script.run"
 source = "_wbScriptsPath"
 
 [script."xejviScriptAdapterHost:cUnit.wbSelectedFiles:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "_wbSelectedFiles"
+note = "Probe host-selection."
 
 [script."xejviScriptAdapterHost:cUnit.wbSelectedFilesToFileNames:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "_wbSelectedFilesToFileNames"
+note = "Probe host-selection."
 
 [script."xejviScriptAdapterHost:cUnit.wbSettings:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "_wbSettings"
+note = "frmMain.Settings: one TMemIniFile over the settings file for the run, which the LOD and atlas builders read (probe host-globals)."
 
 [script."xejviScriptAdapterHost:cUnit.wbSettingsFileName:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "_wbSettingsFileName"
+note = "xeSettingsFileName (probe host-globals)."
 
 [script."xejviScriptAdapterHost:cUnit.wbSimpleRecords:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "_wbSimpleRecords"
+note = "The load option (probe host-globals)."
 
 [script."xejviScriptAdapterHost:cUnit.wbTempPath:function"]
 status = "covered"
@@ -20811,8 +20864,10 @@ command = "script.run"
 source = "_wbTempPath"
 
 [script."xejviScriptAdapterHost:cUnit.wbTrackAllEditorID:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "_wbTrackAllEditorID"
+note = "The load option (probe host-globals)."
 
 [script."xejviScriptAdapterMisc:Controls.akBottom:const"]
 status = "covered"

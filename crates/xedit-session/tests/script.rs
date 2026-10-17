@@ -1556,6 +1556,28 @@ fn fixture_lines_for_text(
     mode: GameMode,
     master_name: &str,
 ) -> Vec<String> {
+    fixture_lines_with(
+        probe,
+        text,
+        fixture,
+        game,
+        mode,
+        master_name,
+        json!({"build_refs": build_refs}),
+    )
+}
+
+/// The same with the given `script.run` parameters (the recorded answers of
+/// a case).
+fn fixture_lines_with(
+    probe: &str,
+    text: &str,
+    fixture: &str,
+    game: &str,
+    mode: GameMode,
+    master_name: &str,
+    params: serde_json::Value,
+) -> Vec<String> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..").join("..");
     let bytes = std::fs::read(root.join("tests/fixtures/parity").join(fixture)).unwrap();
     xedit_core::implementation::clear_files_map();
@@ -1570,7 +1592,7 @@ fn fixture_lines_for_text(
     let mut session = Session::with_files(mode, vec![master]);
     session.allow_edit(true);
     let folder = script_folder(probe.trim_end_matches(".pas"), probe, text);
-    let result = run(&mut session, &folder, probe, json!({"build_refs": build_refs}));
+    let result = run(&mut session, &folder, probe, params);
     xedit_core::interface::globals::set_allow_edit_game_master(false);
     assert_eq!(result["aborted"], false, "{:?}", lines(&result));
     let all = lines(&result);
@@ -2853,4 +2875,113 @@ fn a_recorded_answer_the_run_never_shows_fails_it() {
     assert_eq!(result["aborted"], true, "{result:#}");
     let error = result["error"].as_str().unwrap_or_default();
     assert!(error.contains("never showed the dialog"), "{error}");
+}
+
+/// The oracle's lines of `probes/host-paint.pas` over the host-25 fixture
+/// (`cargo xtask parity script --script probes/host-paint`, issue #25,
+/// equal): `JumpTo` classifies the node of the record it focuses and the
+/// records the expansion opens above it (the `CELL` of a reference), and
+/// nothing else; the filter's and the paint's classifications are what
+/// `ConflictAllForNode` reads.
+#[test]
+fn the_host_paint_probe_gives_the_oracle_lines() {
+    let _guard = test_lock();
+    let zeros = |count: usize| vec!["0"; count].join(" ");
+    let gmst = |set: &[usize]| {
+        (0..40)
+            .map(|i| if set.contains(&i) { "1" } else { "0" })
+            .collect::<Vec<_>>()
+            .join(" ")
+    };
+    let expected: Vec<String> = vec![
+        format!("start GMST {}", zeros(40)),
+        "start STAT 0".to_owned(),
+        "start CELL 0".to_owned(),
+        "start REFR 0 0".to_owned(),
+        "start header 0".to_owned(),
+        format!("jump 814 GMST {}", gmst(&[20])),
+        "jump 814 STAT 0".to_owned(),
+        "jump 814 CELL 0".to_owned(),
+        "jump 814 REFR 0 0".to_owned(),
+        "jump 814 header 0".to_owned(),
+        format!("jump A02 GMST {}", gmst(&[20])),
+        "jump A02 STAT 0".to_owned(),
+        "jump A02 CELL 1".to_owned(),
+        "jump A02 REFR 0 1".to_owned(),
+        "jump A02 header 0".to_owned(),
+        format!("jump 800 GMST {}", gmst(&[0, 20])),
+        "jump 800 STAT 0".to_owned(),
+        "jump 800 CELL 1".to_owned(),
+        "jump 800 REFR 0 1".to_owned(),
+        "jump 800 header 0".to_owned(),
+    ];
+    assert_eq!(fixture_lines("host-paint.pas", "host-25.esm", false), expected);
+}
+
+/// The host functions that ask, answered from recorded answers (issue #25,
+/// the `host-dialogs` run case's answers): `AddNewFile`'s `InputQuery`
+/// (the extension dropped and `.esp` put back, the game master added),
+/// `AddRequiredElementMasters`' confirmation answered No and Yes, and the
+/// `frmFileSelect` form, whose multi-select check list starts its caret on
+/// the first entry, so Down Down Space checks the third (the oracle checks the
+/// third of its four files in the `host-dialogs` run case).
+#[test]
+fn the_host_dialogs_take_the_recorded_answers() {
+    let _guard = test_lock();
+    let text = "unit HostAsk;
+        function Initialize: Integer;
+        var f, g, r: IInterface; frm: TForm; clb: TCheckListBox; i: Integer;
+        begin
+          r := RecordByHexFormID('00000A01');
+          ElementByPath(r, 'EDID');
+          f := AddNewFile;
+          AddMessage(Name(f) + ' ' + IntToStr(MasterCount(f)));
+          g := AddNewFileName('HostAsk25b.esp');
+          if AddRequiredElementMasters(r, g, False) then AddMessage('yes') else AddMessage('no');
+          if AddRequiredElementMasters(r, g, False) then AddMessage('yes') else AddMessage('no');
+          AddMessage(IntToStr(MasterCount(g)));
+          frm := frmFileSelect;
+          frm.Caption := 'Pick a file';
+          clb := TCheckListBox(frm.FindComponent('CheckListBox1'));
+          for i := 0 to Pred(FileCount) do clb.Items.Add(GetFileName(FileByIndex(i)));
+          AddMessage(IntToStr(frm.ShowModal));
+          for i := 0 to Pred(clb.Items.Count) do
+            if clb.Checked[i] then AddMessage('checked ' + clb.Items[i]);
+          frm.Free;
+        end;
+        end.
+";
+    let answers = json!([
+        {"class": "TInputQueryForm", "title": "New Module File", "text": "HostAsk25.esp", "button": "OK"},
+        {"class": "#32770", "title": "Confirm", "button": "&No"},
+        {"class": "#32770", "title": "Confirm", "button": "&Yes"},
+        {"class": "TfrmFileSelect", "title": "Pick a file", "control": "TCheckListBox", "keys": [40, 40, 32], "button": "OK"}
+    ]);
+    let lines = fixture_lines_with(
+        "host-ask.pas",
+        text,
+        "host-25.esm",
+        "sse",
+        GameMode::gmSSE,
+        "Skyrim.esm",
+        json!({"answers": answers}),
+    );
+    let messages: Vec<&str> = lines
+        .iter()
+        .map(String::as_str)
+        .filter(|line| !line.starts_with("[Host"))
+        .collect();
+    assert_eq!(
+        messages,
+        vec![
+            "[01] HostAsk25.esp 1",
+            "no",
+            "yes",
+            "1",
+            "1",
+            // The test's session has no hardcoded file: the third entry
+            // is the second new file.
+            "checked HostAsk25b.esp"
+        ]
+    );
 }

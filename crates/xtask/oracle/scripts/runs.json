@@ -174,7 +174,11 @@
       "save": [
         "Fallout4.esm"
       ],
-      "note": "edits records: the saved bytes are compared",
+      "answers": [
+        {"class": "#32770", "title": "Confirm", "button": "&Yes"},
+        {"class": "TInputQueryForm", "title": "New Module File", "text": "DisablePreVis25", "button": "OK"}
+      ],
+      "note": "edits records: the saved bytes are compared; parity #25: the new plugin asked for (Yes), named in AddNewFile's InputQuery, and the masters AddRequiredElementMasters adds (the game master AddNewFile gave it already, so no question); the patch plugin the close saves is compared",
       "timeout_minutes": 60
     },
     {
@@ -522,7 +526,11 @@
     },
     {
       "script": "Skyrim - Check edge links in navmeshes.pas",
-      "game": "tes5"
+      "game": "tes5",
+      "answers": [
+        {"class": "#32770", "title": "Information", "button": "OK"}
+      ],
+      "note": "parity #25: wbSimpleRecords is on (the GUI's default), so the script shows its Information message (answered OK) and ends"
     },
     {
       "script": "Skyrim - Check script properties.pas",
@@ -536,7 +544,10 @@
       "save": [
         "Skyrim.esm"
       ],
-      "note": "edits records: the saved bytes are compared",
+      "answers": [
+        {"class": "#32770", "title": "Information", "button": "OK"}
+      ],
+      "note": "edits records: the saved bytes are compared; parity #25: wbSimpleRecords is on (the GUI's default), so the script shows its Information message (answered OK) and ends",
       "timeout_minutes": 60
     },
     {
@@ -574,12 +585,18 @@
       "save": [
         "Skyrim.esm"
       ],
-      "note": "edits records: the saved bytes are compared"
+      "answers": [
+        {"class": "TInputQueryForm", "title": "New Module File", "text": "CopyCells25", "button": "OK"}
+      ],
+      "note": "edits records: the saved bytes are compared; parity #25: AddNewFile's InputQuery and AddRequiredElementMasters with a file as the element (the game master is the new file's master already, so no question); the patch plugin of every interior cell, deep-copied, is compared"
     },
     {
       "script": "Skyrim - Copy VMAD subrecord.pas",
       "game": "tes5",
-      "note": "asks for input even without a form (InputQuery/InputBox): deferred unless named with --script"
+      "answers": [
+        {"class": "TInputQueryForm", "title": "Record FormID", "text": "FF000800", "button": "OK"}
+      ],
+      "note": "asks for input even without a form (InputQuery/InputBox): deferred unless named with --script; parity #25: the FormID of a load order slot nobody holds: FileByLoadOrder refuses an index past the file list (its VarIsNumeric and Length guard), and the abort is compared"
     },
     {
       "script": "Skyrim - Create patch for ClimatesOfTamriel and SoundsOfSkyrim-TheWilds.pas",
@@ -641,7 +658,11 @@
       "save": [
         "Skyrim.esm"
       ],
-      "note": "edits records: the saved bytes are compared"
+      "answers": [
+        {"class": "#32770", "title": "Confirm", "button": "&Yes"},
+        {"class": "TInputQueryForm", "title": "New Module File", "text": "OreVeins25", "button": "OK"}
+      ],
+      "note": "edits records: the saved bytes are compared; parity #25: the new plugin asked for (Yes), named in AddNewFile's InputQuery, and the masters AddRequiredElementMasters adds (the game master AddNewFile gave it already, so no question); the patch plugin the close saves is compared"
     },
     {
       "script": "Skyrim - Read Books Aloud.pas",
@@ -751,7 +772,10 @@
       "save": [
         "Skyrim.esm"
       ],
-      "note": "edits records: the saved bytes are compared"
+      "answers": [
+        {"class": "#32770", "title": "Information", "button": "OK"}
+      ],
+      "note": "edits records: the saved bytes are compared; parity #25: wbSimpleRecords is on (the GUI's default), so the script shows its Information message (answered OK) and ends"
     },
     {
       "script": "Worldspace crop.pas"
@@ -843,6 +867,15 @@
         "tests/fixtures/parity/nif/LODGen_flat_lod.nif:meshes/lod/host25/flat.nif"
       ],
       "note": "parity #25: wbGetUVRangeTexturesList over a LOD mesh in the private data folder, a missing mesh, a billboard and a name that is no mesh, into an unsorted and a sorted list"
+    },
+    {
+      "script": "probes/host-lod.pas",
+      "master": "tests/fixtures/parity/host-25.esm",
+      "data_files": [
+        "tests/fixtures/parity/host-25/lodsettings/hostworld.lod:lodsettings/hostworld.lod",
+        "tests/fixtures/parity/nif/LODGen_flat_lod.nif:meshes/lod/host25/flat.nif"
+      ],
+      "note": "parity #25: GenerateLODTES4 (nothing outside Oblivion), GenerateLODTES5Trees and GenerateLODTES5Objects over the HostWorld worldspace of the host-25 fixture, its lodsettings file and the static's LOD mesh in the private data folder; the run folder holds no LODGenx64.exe, so the objects pass writes its export (LODGen.txt) and fails to start the tool. The log and every file below the output and run folders are compared"
     },
     {
       "script": "probes/filter-scripted.pas",
