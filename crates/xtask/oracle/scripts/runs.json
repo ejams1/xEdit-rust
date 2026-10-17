@@ -1183,14 +1183,15 @@
     },
     {
       "script": "Merge overrides into master.pas",
-      "load": ["Skyrim.esm", "Update.esm"],
+      "game": "fo3",
+      "load": ["Fallout3.esm", "Anchorage.esm"],
       "close_after": true,
-      "save": ["Skyrim.esm"],
+      "save": ["Fallout3.esm"],
       "timeout_minutes": 60,
       "answers": [
         {"class": "TfrmFileSelect", "title": "Select plugin(s) to merge into", "button": "OK"}
       ],
-      "note": "parity #41, a form script: frmFileSelect answered OK with nothing checked (merge into the masters only), so every override of Update.esm is merged into its Skyrim.esm master (ConflictAllForElements, ElementAssign, Add and Remove of elements); the saved Skyrim.esm is compared"
+      "note": "parity #41, a form script: frmFileSelect answered OK with nothing checked (merge into the masters only), so every override of Anchorage.esm is merged into its Fallout3.esm master (ConflictAllForElements, ElementAssign, Add and Remove of elements); the saved Fallout3.esm is compared (over Skyrim.esm and Update.esm the release ran past 60 minutes)"
     }
   ]
 }

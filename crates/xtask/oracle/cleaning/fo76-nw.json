@@ -1,0 +1,9 @@
+{
+  "description": "Both cleaning steps on Fallout 76's NW.esm, selected with a click, with the load settings of an editing session. The quick auto clean mode's own log file loses its counts for this plugin (the release's FO76Edit_log.txt keeps only DoRename's `Closing files`, `parity clean` reports `oracle-log-lost` with the saved bytes equal), so this scenario witnesses the steps' counts and record lines of the same plugin through the script mode, whose message log the harness reads before it closes the GUI.",
+  "game": "fo76",
+  "load": ["SeventySix.esm", "NW.esm"],
+  "select": ["NW.esm"],
+  "udr": true,
+  "itm": true,
+  "save": ["NW.esm"]
+}

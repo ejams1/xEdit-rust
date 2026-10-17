@@ -658,13 +658,21 @@ impl Export {
         }
     }
 
-    /// Upstream `ProfileArray`: every record definition in the order of the
-    /// top level groups; nothing for a saves source, which has no records.
+    /// Upstream `ProfileArray`: every record definition in the order of
+    /// `wbGroupOrder`'s strings; nothing for a saves source, which has no
+    /// records. `wbGroupOrder` is a sorted case-sensitive list
+    /// (`TwbFastStringListCS.CreateSorted`, `wbAddGroupOrder`) whose objects
+    /// hold the order the definitions added the groups in, so `wbGroupOrder[i]`
+    /// walks the signatures in their byte order, not in the group order of a
+    /// file (parity #41: the export's structure text and the spelling a
+    /// case-insensitive profile entry keeps followed the group order).
     fn profile_array(&mut self, pass: Pass) {
         if self.saves {
             return;
         }
-        for signature in wb_group_order() {
+        let mut signatures = wb_group_order();
+        signatures.sort_by_key(|signature| signature.0);
+        for signature in signatures {
             if signature == header_signature() {
                 continue;
             }
