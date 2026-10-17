@@ -305,10 +305,9 @@ begin
   Log('ceil', 'Floor(-1e19)=' + IntToStr(Floor(-1.0E19)));
   Log('ceil', 'Ceil(2e9+0.5)=' + IntToStr(Ceil(2000000000.5)));
   nan := 0.0;
-  // `nan := nan / nan` writes NaN in the oracle, but the port's
-  // interpreter raises for a float zero division (owed to #28): the
-  // constant stands in here.
-  nan := NaN;
+  // The exceptions are masked: 0/0 is the default NaN, no `EInvalidOp`
+  // (issue #69; `float-invalid.pas` probes the invalid operations).
+  nan := nan / nan;
   inf := 1.0E308;
   inf := inf * 10.0;
   ninf := -inf;
