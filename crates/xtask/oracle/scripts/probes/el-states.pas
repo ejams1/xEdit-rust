@@ -136,6 +136,46 @@ begin
   d := nil;
   sr := nil;
   Log('cs', 'record2-released=' + Cs(r));
+  { The resets on a release (issue #69). When the last reference into a
+    main record's members goes (`ElementRelease` of the record with
+    `cntElementRefs` at zero), the record resets and drops its members:
+    the next access builds new ones, which answer 1024 until read (the
+    `EDID` the record's own `Init` reads 1026). While a member is held
+    (here the `DATA` subrecord `d`), the record stays, and a value that is
+    let go resets alone (`TwbContainer._Release`, `CanElementReset` of a
+    value is `eExternalRefs < 1`): it keeps `csInitOnce`, 1026. A member
+    of the value held keeps the value from resetting when `sr` goes; that
+    member's release then ends the last reference into the record. }
+  d := ElementByIndex(r, 2);
+  sr := ElementByIndex(r, 0);
+  Log('cs', 'record2-sibling-header=' + Cs(sr) + ' data=' + Cs(d));
+  s := GetEditValue(ElementByIndex(sr, 0));
+  Log('cs', 'record2-sibling-header-read=' + Cs(sr));
+  sr := nil;
+  Log('cs', 'record2-sibling-header-released=' + Cs(ElementByIndex(r, 0)));
+  Log('cs', 'record2-sibling-header-asked-again=' + Cs(ElementByIndex(r, 0)));
+  sr := ElementByIndex(r, 0);
+  Log('cs', 'record2-sibling-header-held-again=' + Cs(sr) + ' count=' + IntToStr(ElementCount(sr)) + ' cs=' + Cs(sr));
+  sr := nil;
+  Log('cs', 'record2-sibling-edid=' + Cs(ElementByIndex(r, 1)) + ' data=' + Cs(d));
+  d := nil;
+  Log('cs', 'record2-sibling-gone=' + Cs(ElementByIndex(r, 0)) + ' edid=' + Cs(ElementByIndex(r, 1)) + ' data=' + Cs(ElementByIndex(r, 2)));
+  Log('cs', 'record2-header-again=' + Cs(ElementByIndex(r, 0)));
+  sr := ElementByIndex(r, 0);
+  Log('cs', 'record2-header-held=' + Cs(sr));
+  s := GetEditValue(ElementByIndex(sr, 0));
+  Log('cs', 'record2-header-reread=' + Cs(sr));
+  c := ElementByIndex(sr, 1);
+  sr := nil;
+  Log('cs', 'record2-header-member-held=' + Cs(ElementByIndex(r, 0)) + ' ' + Name(c));
+  c := nil;
+  Log('cs', 'record2-header-member-released=' + Cs(ElementByIndex(r, 0)));
+  Log('cs', 'record2-header-asked-again=' + Cs(ElementByIndex(r, 0)));
+  sr := ElementByIndex(r, 0);
+  s := GetEditValue(ElementByIndex(sr, 0));
+  Log('cs', 'record2-header-read-held=' + Cs(sr));
+  sr := nil;
+  Log('cs', 'record2-header-read-released=' + Cs(ElementByIndex(r, 0)));
 end;
 
 end.

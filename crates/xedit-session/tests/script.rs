@@ -2494,6 +2494,67 @@ fn the_el_states_probe_gives_the_oracle_lines() {
     assert_eq!(actual, expected);
 }
 
+/// `ContainerStates` after a release (issue #69; the oracle's lines are the
+/// `record2-sibling-*` and `record2-header-*` lines of `el-states.pas`): a
+/// value read and let go while a sibling member holds the record resets
+/// alone and keeps `csInitOnce` (1026, where the port once kept 1031); the
+/// release of the last reference into the record resets the record, whose
+/// members start again unread (1024), its editor ID read by the record's
+/// own `Init` (1026).
+#[test]
+fn container_states_follow_the_resets_on_a_release() {
+    let _guard = test_lock();
+    let folder = script_folder(
+        "cs-release",
+        "CsRelease.pas",
+        "unit CsRelease;\n\
+         function Cs(e: IInterface): string;\n\
+         begin\n\
+           Result := IntToStr(ContainerStates(e));\n\
+         end;\n\
+         function Initialize: Integer;\n\
+         var\n\
+           r, sr, d: IInterface;\n\
+           s: string;\n\
+         begin\n\
+           r := RecordByIndex(FileByIndex(0), 0);\n\
+           d := ElementByIndex(r, 2);\n\
+           sr := ElementByIndex(r, 0);\n\
+           AddMessage('header=' + Cs(sr) + ' data=' + Cs(d));\n\
+           s := GetEditValue(ElementByIndex(sr, 0));\n\
+           AddMessage('read=' + Cs(sr));\n\
+           sr := nil;\n\
+           AddMessage('released=' + Cs(ElementByIndex(r, 0)));\n\
+           AddMessage('edid=' + Cs(ElementByIndex(r, 1)));\n\
+           d := nil;\n\
+           AddMessage('gone=' + Cs(ElementByIndex(r, 0)) + ' edid=' + Cs(ElementByIndex(r, 1)));\n\
+           sr := ElementByIndex(r, 0);\n\
+           s := GetEditValue(ElementByIndex(sr, 0));\n\
+           AddMessage('held=' + Cs(sr));\n\
+           sr := nil;\n\
+           AddMessage('last=' + Cs(ElementByIndex(r, 0)));\n\
+           Result := 0;\n\
+         end;\n\
+         end.\n",
+    );
+    let mut session = open_session();
+    let result = run(&mut session, &folder, "CsRelease.pas", json!({}));
+    assert_eq!(result["aborted"], false, "{:?}", lines(&result));
+    let lines = lines(&result);
+    assert_eq!(
+        lines[1..7],
+        [
+            "header=1024 data=1024",
+            "read=1031",
+            "released=1026",
+            "edid=1026",
+            "gone=1024 edid=1026",
+            "held=1031",
+        ]
+    );
+    assert_eq!(lines[7], "last=1024");
+}
+
 //=== The VCL object model and the interaction bridge (issue #26) =============
 
 /// A script whose dialogs are a `MessageDlg` question and an `InputQuery`.

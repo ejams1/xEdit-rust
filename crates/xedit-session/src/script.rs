@@ -653,9 +653,29 @@ fn is_parented_group(group_type: i32) -> bool {
 pub struct ScriptElement {
     element: ElementRef,
     class: Rc<ClassDef>,
+    /// The main record the element is a member of (at any depth), whose
+    /// count of references to its members this value is one of
+    /// ([`xedit_core::implementation::MainRecordImpl::acquire_member_ref`]).
+    record: Option<std::sync::Weak<dyn xedit_core::interface::Element>>,
 }
 
 impl ScriptElement {
+    /// The value of `element`, counted as a reference into its main record.
+    fn new(element: &ElementRef, class: Rc<ClassDef>) -> Self {
+        let record = owning_main_record(element);
+        if let Some(record) = record
+            .as_ref()
+            .and_then(|record| record.as_element_impl()?.main_record_impl())
+        {
+            record.acquire_member_ref();
+        }
+        ScriptElement {
+            element: element.clone(),
+            class,
+            record: record.as_ref().map(std::sync::Arc::downgrade),
+        }
+    }
+
     /// The element the value carries, `None` for a value that is not one.
     pub fn element_of(value: &Value) -> Option<ElementRef> {
         let Value::Object(object) = value else {
@@ -664,6 +684,51 @@ impl ScriptElement {
         let borrowed = object.borrow();
         let wrapper = borrowed.as_any().downcast_ref::<ScriptElement>()?;
         Some(wrapper.element.clone())
+    }
+}
+
+/// The main record `element` is a member of, at any depth; `None` for a
+/// main record itself and for what is no member of one (a file, a group).
+fn owning_main_record(element: &ElementRef) -> Option<ElementRef> {
+    if element.get_element_type() == ElementType::etMainRecord {
+        return None;
+    }
+    let mut current = element.get_container()?;
+    loop {
+        match current.get_element_type() {
+            ElementType::etMainRecord => return Some(current),
+            ElementType::etFile | ElementType::etGroupRecord => return None,
+            _ => current = current.get_container()?,
+        }
+    }
+}
+
+impl Drop for ScriptElement {
+    /// The release of the script's reference (`_Release` upstream). A value
+    /// whose last reference this was, with nothing below it referenced,
+    /// resets (`TwbContainer._Release`: `cntElementRefs = 0`, and
+    /// `CanElementReset` of a value is `eExternalRefs < 1`; `DoReset` exits
+    /// on `esModified`). The reference into the main record goes; the last
+    /// one resets the record, which [`xedit_core::implementation::MainRecordImpl::acquire_member_ref`]
+    /// accounts for when the next one is taken.
+    fn drop(&mut self) {
+        // The parent's reference and this one.
+        let last = std::sync::Arc::strong_count(&self.element) <= 2;
+        if let Some(element) = self.element.as_element_impl()
+            && last
+            && element.value_impl().is_some()
+            && !element.element_base().has_state(ElementState::esModified)
+            && let Some(container) = element.container_base()
+            && container.is_init_live()
+            && !container.is_subtree_referenced()
+        {
+            container.stamp_reset();
+        }
+        if let Some(record) = self.record.as_ref().and_then(std::sync::Weak::upgrade)
+            && let Some(record) = record.as_element_impl().and_then(|record| record.main_record_impl())
+        {
+            record.release_member_ref();
+        }
     }
 }
 
@@ -994,10 +1059,10 @@ impl ScriptRunState {
     /// The script value of an element: the `IInterface` value the element API
     /// functions take (see [`ScriptElement`]).
     pub fn element_value(&self, element: &ElementRef) -> Value {
-        Value::Object(Rc::new(RefCell::new(ScriptElement {
-            element: element.clone(),
-            class: self.element_class.clone(),
-        })))
+        Value::Object(Rc::new(RefCell::new(ScriptElement::new(
+            element,
+            self.element_class.clone(),
+        ))))
     }
 
     /// The element a script value carries, for the adapter functions of
