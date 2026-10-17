@@ -2614,6 +2614,46 @@ fn the_vcl_dialogs_are_answered_from_the_recorded_answers() {
     assert!(lines.contains(&"name=zz".to_owned()), "{lines:?}");
 }
 
+/// `ShowException` is the RTL's `MessageBox` titled `Application Error`
+/// with `OK` (parity #41): without an answer the run stops with the
+/// question, with one it goes on after the box, as the release does once
+/// the box is closed (`sys-showexception.pas`, answered in the run phase).
+#[test]
+fn show_exception_is_a_box_the_recorded_answer_closes() {
+    let _guard = test_lock();
+    let text = "unit ShowEx;\n\
+         function Initialize: Integer;\n\
+         var ex: Exception;\n\
+         begin\n\
+           AddMessage('before');\n\
+           ex := Exception.Create('boom');\n\
+           ShowException(ex, nil);\n\
+           AddMessage('after');\n\
+           Result := 0;\n\
+         end;\n\
+         end.\n";
+    let folder = script_folder("vcl-showexception", "ShowEx.pas", text);
+    let mut session = open_session();
+    let unanswered = run(&mut session, &folder, "ShowEx.pas", json!({}));
+    assert_eq!(unanswered["aborted"], true, "{unanswered:#}");
+    assert_eq!(unanswered["pending_interaction"]["class"], "#32770", "{unanswered:#}");
+    assert_eq!(unanswered["pending_interaction"]["title"], "Application Error");
+    assert!(!lines(&unanswered).contains(&"after".to_owned()));
+    let mut session = open_session();
+    let answered = run(
+        &mut session,
+        &folder,
+        "ShowEx.pas",
+        json!({ "answers": [{ "class": "#32770", "title": "Application Error", "button": "OK" }] }),
+    );
+    assert_eq!(answered["aborted"], false, "{answered:#}");
+    let lines = lines(&answered);
+    assert!(
+        lines.contains(&"before".to_owned()) && lines.contains(&"after".to_owned()),
+        "{lines:?}"
+    );
+}
+
 #[test]
 fn a_dialog_without_an_answer_stops_the_run_with_the_question() {
     let _guard = test_lock();

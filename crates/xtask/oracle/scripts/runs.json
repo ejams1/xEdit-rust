@@ -1065,6 +1065,18 @@
         "BrokenSteel.esm"
       ],
       "note": "parity #41 probe: the control of filter-topic-bind.pas, the same Process walk without a filter"
+    },
+    {
+      "script": "probes/sys-showexception.pas",
+      "synthetic_master": true,
+      "answers": [
+        {
+          "class": "#32770",
+          "title": "Application Error",
+          "button": "OK"
+        }
+      ],
+      "note": "parity #41: the RTL's ShowException box (MessageBox titled Application Error with OK) answered on both sides, so the run goes on after it; the probe phase runs the same probe without an answer, where it is an oracle-dialog class"
     }
   ]
 }
