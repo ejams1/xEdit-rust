@@ -101,12 +101,15 @@ const ANSI_CODE_PAGE: u32 = 1252;
 pub struct EncodingError;
 
 impl Encoding {
-    /// Delphi `EncodingName`: `UTF-8`, else the name the system gives the
-    /// code page (`TMBCSEncoding.EncodingName` is `GetCPInfoEx`'s
-    /// `CodePageName`: `1252  (ANSI - Latin I)`), else `Windows-<code page>`.
+    /// Delphi `EncodingName`: the name the system gives the code page
+    /// (`TMBCSEncoding.EncodingName` is `GetCPInfoEx`'s `CodePageName`:
+    /// `1252  (ANSI - Latin I)`), else `Windows-<code page>`. `TUTF8Encoding`
+    /// descends from `TMBCSEncoding`, so UTF-8 is code page 65001's name,
+    /// `65001 (UTF-8)` (parity #41: the `Using VMAD string encoding` line of
+    /// Fallout 4's startup log).
     pub fn name(self) -> String {
         match self {
-            Encoding::Utf8 => "UTF-8".to_owned(),
+            Encoding::Utf8 => platform::code_page_name(65001).unwrap_or_else(|| "65001 (UTF-8)".to_owned()),
             Encoding::Mbcs(code_page) => {
                 platform::code_page_name(code_page).unwrap_or_else(|| format!("Windows-{code_page}"))
             }
@@ -381,7 +384,7 @@ mod tests {
     fn the_code_page_name_is_the_system_name() {
         let name = Encoding::Mbcs(1252).name();
         assert!(name.starts_with("1252  ("), "{name}");
-        assert_eq!(Encoding::Utf8.name(), "UTF-8");
+        assert_eq!(Encoding::Utf8.name(), "65001 (UTF-8)");
     }
 
     #[test]

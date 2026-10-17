@@ -2017,26 +2017,51 @@ pub fn parse_legacy(params: &[String], exe_name: &str) -> Result<Option<LegacyRu
                 (!path.is_empty()).then_some(path)
             })
         });
-    let plugins = match &plugins_file {
-        Some(list) if std::path::Path::new(list).is_file() => {
-            let simple = matches!(
-                detected.game,
-                Some(GameMode::gmTES3)
-                    | Some(GameMode::gmTES4)
-                    | Some(GameMode::gmTES4R)
-                    | Some(GameMode::gmFO3)
-                    | Some(GameMode::gmFNV)
-                    | Some(GameMode::gmTES5)
-                    | Some(GameMode::gmEnderal)
-            );
-            read_plugin_list(list, data_path.as_deref(), simple)?
-        }
-        // Without a plugin list the modules named as parameters load, as
-        // upstream loads the plugins of the module selection.
-        _ => modules
+    // `-generateseq:<plugin>` and `-quickedit:<plugin>` name a plugin.
+    let quick_plugin =
+        find_cmd_line_param_switch(params, "generateseq").or_else(|| find_cmd_line_param_switch(params, "quickedit"));
+    // `if ((wbToolMode in wbPluginModes) or xeQuickClean or xeQuickEdit or
+    // xeQuickSEQ) and not wbIsMorrowind then Modules.DeactivateAll` and the
+    // named modules are activated (`xeMainForm.pas:5427`): such a run loads
+    // the plugins it names with their masters (`SimulateLoad`), whatever the
+    // plugin list says (parity #41: a plugin list without the target, or
+    // with nothing active, left the port's run without a plugin).
+    let quick_clean = ["quickclean", "qc", "quickautoclean", "qac"]
+        .iter()
+        .any(|name| has_cmd_line_switch(params, name));
+    let plugin_mode = (PLUGIN_MODES.contains(&detected.tool_mode) || quick_clean || quick_plugin.is_some())
+        && detected.game != Some(GameMode::gmTES3);
+    let named: Vec<String> = match &quick_plugin {
+        Some(name) => vec![name.clone()],
+        None => modules.clone(),
+    };
+    let plugins = if plugin_mode {
+        named
             .iter()
-            .filter_map(|name| resolve_module(name, data_path.as_deref()))
-            .collect(),
+            .map(|name| resolve_module(name, data_path.as_deref()).unwrap_or_else(|| name.clone()))
+            .collect()
+    } else {
+        match &plugins_file {
+            Some(list) if std::path::Path::new(list).is_file() => {
+                let simple = matches!(
+                    detected.game,
+                    Some(GameMode::gmTES3)
+                        | Some(GameMode::gmTES4)
+                        | Some(GameMode::gmTES4R)
+                        | Some(GameMode::gmFO3)
+                        | Some(GameMode::gmFNV)
+                        | Some(GameMode::gmTES5)
+                        | Some(GameMode::gmEnderal)
+                );
+                read_plugin_list(list, data_path.as_deref(), simple)?
+            }
+            // Without a plugin list the modules named as parameters load, as
+            // upstream loads the plugins of the module selection.
+            _ => modules
+                .iter()
+                .filter_map(|name| resolve_module(name, data_path.as_deref()))
+                .collect(),
+        }
     };
     let mut switches = LoadSwitches {
         tool_mode: detected.tool_mode,
@@ -2144,9 +2169,6 @@ pub fn parse_legacy(params: &[String], exe_name: &str) -> Result<Option<LegacyRu
         .or_else(|| find_cmd_line_param_switch(params, "cp-trans"))
         .and_then(|value| value.trim().parse::<u32>().ok());
     let mode = mode_name(detected.tool_mode).to_ascii_lowercase();
-    // `-generateseq:<plugin>` and `-quickedit:<plugin>` name a plugin.
-    let quick_plugin =
-        find_cmd_line_param_switch(params, "generateseq").or_else(|| find_cmd_line_param_switch(params, "quickedit"));
     let mut modules = modules;
     if let Some(name) = quick_plugin {
         modules = vec![name];
