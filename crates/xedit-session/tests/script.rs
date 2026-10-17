@@ -2614,6 +2614,67 @@ fn the_vcl_dialogs_are_answered_from_the_recorded_answers() {
     assert!(lines.contains(&"name=zz".to_owned()), "{lines:?}");
 }
 
+/// A Space on `frmFileSelect`'s check list that nobody moved toggles the
+/// first entry: the list is multi-select, so its `ItemIndex` is the caret,
+/// which starts there (parity #41: `Copy as override.pas` checks its first
+/// entry, `<new file>`, with one Space in the release).
+#[test]
+fn a_space_on_an_unmoved_multi_select_check_list_toggles_its_first_entry() {
+    let _guard = test_lock();
+    let text = "unit SpaceFirst;\n\
+                function Initialize: Integer;\n\
+                var frm: TForm; clb: TCheckListBox;\n\
+                begin\n\
+                  frm := frmFileSelect;\n\
+                  frm.Caption := 'Pick';\n\
+                  clb := TCheckListBox(frm.FindComponent('CheckListBox1'));\n\
+                  clb.Items.Add('first');\n\
+                  clb.Items.Add('second');\n\
+                  if frm.ShowModal = mrOk then\n\
+                    begin if clb.Checked[0] then AddMessage('first checked'); if clb.Checked[1] then AddMessage('second checked'); end;\n\
+                  frm.Free;\n\
+                  Result := 0;\n\
+                end;\n\
+                end.\n";
+    let folder = script_folder("space-first", "SpaceFirst.pas", text);
+    let mut session = open_session();
+    let result = run(
+        &mut session,
+        &folder,
+        "SpaceFirst.pas",
+        json!({ "answers": [
+            { "class": "TfrmFileSelect", "title": "Pick", "control": "TCheckListBox", "keys": [32], "button": "OK" },
+        ]}),
+    );
+    assert_eq!(result["aborted"], false, "{result:#}");
+    let lines = lines(&result);
+    assert!(lines.contains(&"first checked".to_owned()), "{result:#}");
+    assert!(!lines.contains(&"second checked".to_owned()), "{result:#}");
+}
+
+/// A second `Free` of an object is Delphi's `EInvalidPointer` (`Invalid
+/// pointer operation`), as the release's memory manager raises it for a
+/// block already free (parity #41, `Report masters.pas`, probe
+/// `free-twice.pas`).
+#[test]
+fn a_second_free_of_an_object_is_an_invalid_pointer() {
+    let _guard = test_lock();
+    let text = "unit FreeTwice;\nvar sl: TStringList;\nfunction Initialize: Integer;\nbegin\n  sl := TStringList.Create;\n  sl.Free;\n  AddMessage('first');\n  sl.Free;\n  AddMessage('second');\n  Result := 0;\nend;\nend.\n";
+    let folder = script_folder("free-twice", "FreeTwice.pas", text);
+    let mut session = open_session();
+    let result = run(&mut session, &folder, "FreeTwice.pas", json!({}));
+    assert_eq!(result["aborted"], true, "{result:#}");
+    let lines = lines(&result);
+    assert!(lines.contains(&"first".to_owned()), "{lines:?}");
+    assert!(!lines.contains(&"second".to_owned()), "{lines:?}");
+    assert!(
+        lines
+            .iter()
+            .any(|line| line.contains("[EInvalidPointer] Invalid pointer operation")),
+        "{lines:?}"
+    );
+}
+
 /// `ShowException` is the RTL's `MessageBox` titled `Application Error`
 /// with `OK` (parity #41): without an answer the run stops with the
 /// question, with one it goes on after the box, as the release does once
