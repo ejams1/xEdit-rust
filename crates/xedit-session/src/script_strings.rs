@@ -1244,11 +1244,11 @@ pub fn register_base(adapter: &mut Adapter, classes: &ScriptClasses) {
                 VarType::Empty,
             );
             adapter.add_iset(class.clone(), "Strings", write.clone(), 1, vec![value_param()]);
-            // The call form `sl.Strings(0)`, which the port's element API
-            // tests use where upstream writes `sl.Strings[0]` (the call
-            // shape of step 5's `TStringList` slice).
-            adapter.add_get(class.clone(), "Strings", read, 1, vec![value_param()], VarType::Empty);
-            adapter.add_set(class, "Strings", write, 1, vec![value_param()]);
+            // No `Strings` reader or writer without the index: upstream
+            // registers none, and the bare read the assignment
+            // `sl.Strings[0] := s` opens with (`InternalSetValue`) found the
+            // port's call-form reader and refused it (`Not enough
+            // parameters`, found by issue #25; nothing used the call form).
         } else {
             adapter.add_id_get(class.clone(), read, 1, vec![value_param()], VarType::Empty);
             adapter.add_id_set(class, write, 1, vec![value_param()]);
