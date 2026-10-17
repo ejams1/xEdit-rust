@@ -226,11 +226,17 @@
     {
       "script": "Fallout4 - Import SCLP bone weights.pas",
       "game": "fo4",
+      "master": "tests/fixtures/parity/sclp/sclp-arma.esm",
+      "data_files": ["tests/fixtures/parity/sclp/parity.sclp:parity.sclp"],
       "close_after": true,
-      "save": [
-        "Fallout4.esm"
+      "save": ["Fallout4.esm"],
+      "answers": [
+        {"class": "#32770", "title": "Open", "text": "Data\\parity.sclp", "button": "&Open"},
+        {"class": "#32770", "title": "Confirm", "button": "&Yes"},
+        {"class": "#32770", "title": "Open", "text": "Data\\parity.sclp", "button": "&Open"},
+        {"class": "#32770", "title": "Confirm", "button": "&No"}
       ],
-      "note": "edits records: the saved bytes are compared"
+      "note": "parity #41, an interactive case: the TOpenDialog of each ARMA (InitialDir wbScriptsPath, the run folder) answered with the bone scale file the case places below Data, and the MessageDlg answered Male for the first record the walk reaches and Female for the second, over the sclp-arma fixture (two armor addons; over Fallout4.esm every ARMA asks). The script names Bone Data and the BSMS values #0 to #2, where the 4.1.5q definitions call the member Sculpt Data with a Vec3, so the elements it adds are nil and a bone with a changed weight loops for ever on both sides (while ElementCount(nil) < 3); the file holds unchanged weights only (1.0, 1.00 and 1 through FloatToStr and SameValue), so both sides skip every bone, and the TPerlRegEx matches, the Skipping lines, the Add of the unknown member and the saved master are compared"
     },
     {
       "script": "Find ESP plugins which could be turned into ESL.pas"
