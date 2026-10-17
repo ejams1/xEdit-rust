@@ -2236,16 +2236,20 @@ pub fn wb_file_compare(
     } else if base_name.eq_ignore_ascii_case(&game_master_esm()) {
         fl_states.include(FileState::fsIsGameMaster);
         fl_states.include(FileState::fsIsOfficial);
-    } else if crate::interface::globals::official_dlc()
-        .iter()
-        .any(|name| name.eq_ignore_ascii_case(base_name))
-        || (crate::interface::globals::is_skyrim() && base_name.eq_ignore_ascii_case("Update.esm"))
-    {
-        // The module of an official DLC (`miOfficialIndex`, which Skyrim's
-        // Update.esm has too) is official; Starfield does not let it be
-        // edited (`GetIsEditable`).
-        fl_states.include(FileState::fsIsOfficial);
     }
+    // The module of an official DLC (`miOfficialIndex`, which Skyrim's
+    // Update.esm has too) is official; Starfield does not let it be edited
+    // (`GetIsEditable`). Upstream includes the state after `Scan` (the game
+    // master's before it), so a name a record of a DLC builds during the
+    // scan (an injection note) is not cached as an official file's name
+    // (`GetName`'s `fsIsOfficial` cache); parity #41: `NW.esm`'s dump kept
+    // the error text of a string the scan could not read yet.
+    let official_after_scan = compare_to.is_none()
+        && !fl_states.contains(FileState::fsIsGameMaster)
+        && (crate::interface::globals::official_dlc()
+            .iter()
+            .any(|name| name.eq_ignore_ascii_case(base_name))
+            || (crate::interface::globals::is_skyrim() && base_name.eq_ignore_ascii_case("Update.esm")));
     fl_states.include(FileState::fsMemoryMapped);
     // UPSTREAM-QUIRK: upstream adds the player reference to the hardcoded
     // file through the editing API after the scan; here its group is
@@ -2281,6 +2285,9 @@ pub fn wb_file_compare(
     progress(&format!("[{}] Loading file", file.get_name()));
     FILES_MAP.write().unwrap().push(file.clone());
     file.scan()?;
+    if official_after_scan {
+        file.fl_states.write().unwrap().include(FileState::fsIsOfficial);
+    }
     crate::interface::element::add_file(file.clone());
     Ok(file)
 }
