@@ -423,7 +423,17 @@ fn task_plugins(runner: &Runner, task: &Task) -> Result<Vec<PathBuf>> {
         if fs::read(&path).ok().as_deref() != Some(bytes.as_slice()) {
             fs::write(&path, &bytes)?;
         }
-        return Ok(vec![path]);
+        let mut paths = vec![path];
+        for plugin in &task.plugins {
+            let name = plugin.file_name().context("a fixture plugin without a name")?;
+            let path = dir.join(name);
+            let bytes = fs::read(plugin).with_context(|| format!("reading {}", plugin.display()))?;
+            if fs::read(&path).ok().as_deref() != Some(bytes.as_slice()) {
+                fs::write(&path, &bytes)?;
+            }
+            paths.push(path);
+        }
+        return Ok(paths);
     }
     let names: Vec<&str> = task.load.iter().map(String::as_str).collect();
     load_list(task.game, &task.data, &names)
@@ -633,6 +643,11 @@ struct RunCase {
     /// master alone.
     #[serde(default)]
     master: Option<String>,
+    /// Fixture plugins of the repository loaded after the fixture `master`
+    /// (a case of a script that works on overrides, such as `Merge
+    /// overrides into master.pas`), by their file names. Needs `master`.
+    #[serde(default)]
+    plugins: Vec<String>,
     /// The references come from the reference cache: each side first loads
     /// the plugins with a no-op script and the reference build (which
     /// writes its cache files, for a file above `wbCacheRecordsThreshold`
@@ -704,6 +719,8 @@ struct Task {
     synthetic_master: bool,
     /// The fixture master of a probe case, loaded as the game master.
     master: Option<PathBuf>,
+    /// The fixture plugins loaded after the fixture master.
+    plugins: Vec<PathBuf>,
     /// The case's `data_files`: (source in the repository, path under Data).
     data_files: Vec<(PathBuf, String)>,
     /// The references are loaded from a cache a first run wrote.
@@ -895,6 +912,7 @@ pub(super) fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
                 data_files: Vec::new(),
                 synthetic_master: true,
                 master: None,
+                plugins: Vec::new(),
                 refcache: false,
                 switches: Vec::new(),
                 accepted: parse_case.accept.get(name.as_str()).cloned(),
@@ -923,6 +941,12 @@ pub(super) fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
             // the game's data folder only matters for the executable of
             // Fallout 3 and New Vegas.
             let master = case.master.as_ref().map(|master| root.join(master));
+            ensure!(
+                case.plugins.is_empty() || master.is_some(),
+                "{}: fixture plugins need a fixture master",
+                case.script
+            );
+            let plugins: Vec<PathBuf> = case.plugins.iter().map(|plugin| root.join(plugin)).collect();
             let data_files = case
                 .data_files
                 .iter()
@@ -959,6 +983,9 @@ pub(super) fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
                     case.script
                 );
                 ensure!(master.is_file(), "{}: {} is not a file", case.script, master.display());
+                for plugin in &plugins {
+                    ensure!(plugin.is_file(), "{}: {} is not a file", case.script, plugin.display());
+                }
             } else {
                 let missing = load
                     .iter()
@@ -1021,6 +1048,7 @@ pub(super) fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
                 data_files,
                 synthetic_master: case.synthetic_master,
                 master,
+                plugins,
                 accepted: case.accept.clone(),
             });
         }
@@ -1060,6 +1088,7 @@ pub(super) fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
                 data_files: Vec::new(),
                 synthetic_master: true,
                 master: None,
+                plugins: Vec::new(),
                 refcache: false,
                 switches: Vec::new(),
                 accepted: accept.accept.get(name.as_str()).cloned(),

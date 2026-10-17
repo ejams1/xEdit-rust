@@ -1,5 +1,5 @@
 {
-  "description": "The order of the Creation Club modules (parity #41): Skyrim.ccc, the game's Creation Club list next to the data folder, names ccBGSSSE025-AdvDSGS.esm before ccBGSSSE001-Fish.esm, so wbLoadModules gives AdvDSGS the lower miCCIndex and its .modgroups file comes first, although Fish sorts first by its file time and its name. Both files hold a group of one name; Edit ModGroup on that name edits the first entry, so the rename writes AdvDSGS's file and leaves Fish's alone. The list also makes the two modules active (mfActive), as the release does for the Creation Club content it names.",
+  "description": "The order of the Creation Club modules (parity #41): Skyrim.ccc, the game's Creation Club list next to the data folder, names ccBGSSSE025-AdvDSGS.esm before ccBGSSSE001-Fish.esm, so wbLoadModules gives AdvDSGS the lower miCCIndex and its .modgroups file comes first, although Fish sorts first by its file time and its name. Both files hold a group of one name; Edit ModGroup on that name edits the first entry, so the rename writes AdvDSGS's file and leaves Fish's alone. The list also makes the two modules active (mfActive), as the release does for the Creation Club content it names. Neither module is loaded, so the reload after the rename finds no valid group and shows no selection dialog (mniViewModGroupsReloadClick asks only when wbModGroupsByName has an entry).",
   "game": "sse",
   "load": [
     "Skyrim.esm"
@@ -45,11 +45,6 @@
       "class": "TfrmModGroupEdit",
       "title": "Editing",
       "text": "CC renamed",
-      "button": "OK"
-    },
-    {
-      "class": "TfrmModGroupSelect",
-      "title": "Reloading",
       "button": "OK"
     }
   ],
