@@ -1,0 +1,10 @@
+{
+  "description": "Both cleaning steps on Fallout 3's BrokenSteel.esm, selected with a click, with the PNAM fill of the quick clean modes (FillPNAM in the settings file, --fill-pnam on the port): a response without PNAM sorts its topic's group when it is built, and the sort gives each such response the PNAM of the one it follows (the ITM step then removes 269 records against 268 without the fill). The quick auto clean mode also turns wbFillINOM and wbFillINOA off, which no setting does, so that part of the mode is compared by parity clean only.",
+  "game": "fo3",
+  "load": ["Fallout3.esm", "BrokenSteel.esm"],
+  "select": ["BrokenSteel.esm"],
+  "udr": true,
+  "itm": true,
+  "ini": {"FillPNAM": "1"},
+  "save": ["BrokenSteel.esm"]
+}
