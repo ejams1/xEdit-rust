@@ -17525,7 +17525,7 @@ source = "JvInterpreter_SetCurrentDir"
 status = "covered"
 command = "script.run"
 source = "JvInterpreter_ShowException"
-note = "Routed through the `Vcl` seam: upstream is the RTL's modal message box, so a headless run refuses the call with `[EVclUnavailable] ShowException is not available without a GUI (script \"<name>\")` where the oracle's box ends its run (`sys-showexception.pas` is an `oracle-dialog` case)."
+note = "The RTL's MessageBox titled Application Error with OK, a dialog of the headless VCL model (parity #41): a recorded answer closes it and the run goes on, without one the run stops with the question. The run case of `sys-showexception.pas` answers it on both sides and is equal; the probe phase runs it unanswered (an `oracle-dialog` class)."
 
 [script."JvInterpreter_SysUtils:cSysUtils.StrAlloc:function"]
 status = "covered"
