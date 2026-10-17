@@ -1675,7 +1675,11 @@ pub fn variant_compare(left: &Value, right: &Value) -> Result<Ordering, ValueErr
         (a, b) => {
             let a = to_f64(a)?;
             let b = to_f64(b)?;
-            a.partial_cmp(&b).ok_or(ValueError::Variant)
+            // The RTL's real comparison tests `<` and `>` and answers equal
+            // otherwise, under the masked exceptions of the 4.1.5q build, so
+            // a NaN compares equal to everything (`NaN = 1` is `True`,
+            // `NaN < 1` and `NaN > 1` are `False`; probe `float-invalid`).
+            Ok(a.partial_cmp(&b).unwrap_or(Ordering::Equal))
         }
     }
 }
@@ -1953,6 +1957,11 @@ mod tests {
                 ..
             })
         ));
+        // A NaN compares equal to everything (probe `float-invalid`).
+        let nan = binary_op(BinOp::Div, &Value::Double(0.0), &Value::Double(0.0)).unwrap();
+        assert!(matches!(nan, Value::Double(v) if v.is_nan()));
+        assert_eq!(variant_compare(&nan, &Value::Integer(1)).unwrap(), Ordering::Equal);
+        assert_eq!(variant_compare(&Value::Double(1.0), &nan).unwrap(), Ordering::Equal);
         // `/` is a double division without a zero check; `div` by zero is
         // `EDivByZero` (probes `v-56`, `v-57`).
         assert_eq!(
