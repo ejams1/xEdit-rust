@@ -444,7 +444,8 @@
       "save": [
         "Skyrim.esm"
       ],
-      "note": "edits records: the saved bytes are compared"
+      "note": "edits records: the saved bytes are compared",
+      "accept": "UPSTREAM-BUG (#64, not reproduced): the script names the base record of every reference first, and the release's quick init of a record named first empties the records whose subrecords all lie before QuickInitLimit and lack a required member: its saved Skyrim.esm holds 20 ACTI records with their header alone (24 bytes), where the port keeps their subrecords. A record-by-record diff of the two saves (parity #41) finds nothing else: the 869,688 records and 50,483 groups are in the same places, every other record is byte-identical, and the log (764,713 lines) is equal"
     },
     {
       "script": "Redirect references.pas",
@@ -853,7 +854,8 @@
       "save": [
         "Skyrim.esm"
       ],
-      "note": "edits records: the saved bytes are compared"
+      "note": "edits records: the saved bytes are compared",
+      "accept": "UPSTREAM-BUG (#64, not reproduced): the script names every record first, and the release's quick init empties the records whose subrecords all lie before QuickInitLimit and lack a required member: its saved Skyrim.esm holds 14 ACTI records with their header alone, where the port keeps their subrecords. A record-by-record diff of the two saves (parity #41) finds nothing else (869,688 records, 50,307 groups); the oracle's memo of the run lost 5,092 lines and every line it kept is the port's"
     },
     {
       "script": "Worldspace change height.pas",
@@ -875,7 +877,7 @@
       "save": [
         "Skyrim.esm"
       ],
-      "note": "edits records: the saved bytes are compared"
+      "note": "edits records: the saved bytes are compared. Different until issue #84 (parity #41 run at the close-out: Processed Records 962,397 in the release, 1,329,552 in the port): the shifted cells and references move into blocks, sub-blocks and children groups the edit creates under nodes the release's navigation tree has initialised already, which get no node there, while the port's live walk reaches them"
     },
     {
       "script": "Worldspace scale refs position.pas",
