@@ -1,0 +1,12 @@
+{
+  "description": "sse-copy-npc-vmad-shown with a name of Update.esm (RedguardRace [RACE:00013748], Nazeem's race) read after Nazeem [NPC_:00013BBF] is shown and before the copy, so the release has Update.esm's tables loaded when the copy adds Nazeem's names to them and keeps its strings. The copy of a shown record keeps the order the view sorted its arrays in, so its bytes are not those of sse-copy-npc-vmad. These are the saves the port must give for sse-copy-npc-vmad-shown, where the release loses the tables (UPSTREAM-BUG, issue #75).",
+  "game": "sse",
+  "load": ["Skyrim.esm", "Update.esm"],
+  "strings": true,
+  "commands": [
+    {"command": "records.compare", "params": {"form_id": "00013BBF", "file": "Skyrim.esm"}},
+    {"command": "elements.get", "params": {"form_id": "00013748", "file": "Update.esm", "path": "FULL"}},
+    {"command": "records.copy", "params": {"form_id": "00013BBF", "from": "Skyrim.esm", "to": "Update.esm"}}
+  ],
+  "save": ["Update.esm"]
+}

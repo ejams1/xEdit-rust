@@ -1,0 +1,15 @@
+{
+  "description": "sse-copy-npc-vmad with Nazeem [NPC_:00013BBF] shown first (records.compare, the GUI's JumpTo) and no name of Update.esm read before the copy. The view the GUI paints shows the rows on screen only, and none of them reads a string of Update.esm, so its tables are still unloaded when the copy assigns Nazeem's names as text: the release's AddValue makes three empty tables, the copied FULL gets ID 1, and the save writes them over Update.esm's own (1,132, 303 and 158 strings: the STRINGS table is left with the one new string, the other two empty). The port's records.compare gives the text of every row, and the Tint Layers row (wbTintLayerToStr reads the race's winning override, RedguardRace of Update.esm) loads the tables; it loads them in AddValue in any case (UPSTREAM-BUG, issue #75, not reproduced), so the port's saves must equal the release's saves of sse-copy-npc-vmad-shown-loaded, where a name of Update.esm is read after Nazeem is shown and the release keeps its strings.",
+  "game": "sse",
+  "load": ["Skyrim.esm", "Update.esm"],
+  "strings": true,
+  "commands": [
+    {"command": "records.compare", "params": {"form_id": "00013BBF", "file": "Skyrim.esm"}},
+    {"command": "records.copy", "params": {"form_id": "00013BBF", "from": "Skyrim.esm", "to": "Update.esm"}}
+  ],
+  "save": ["Update.esm"],
+  "upstream_bug": {
+    "reason": "AddValue makes empty string tables for a localized plugin none of whose strings was read and the save writes them over the plugin's (issue #75); the port loads the plugin's tables first",
+    "expect": "sse-copy-npc-vmad-shown-loaded"
+  }
+}

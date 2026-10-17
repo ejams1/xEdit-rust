@@ -1,0 +1,17 @@
+{
+  "description": "fo4-strings-archive-unloaded with a name of DLCworkshop01 read first (the keyword [KYWD:01000802]), which loads its tables from DLCworkshop01 - Main.ba2 on both sides (GetValue and its LoadForFile), so the new description takes the next ID after the plugin's strings and only the DLSTRINGS table is modified and saved. These are the saves the port must give for fo4-strings-archive-unloaded, where the release loses the tables (UPSTREAM-BUG, issue #75).",
+  "game": "fo4",
+  "strings": true,
+  "archives": ["Fallout4 - Interface.ba2", "DLCworkshop01 - Main.ba2"],
+  "load": [
+    "Fallout4.esm",
+    "DLCworkshop01.esm"
+  ],
+  "commands": [
+    {"command": "elements.get", "params": {"form_id": "01000802", "file": "DLCworkshop01.esm", "path": "FULL"}},
+    {"command": "elements.set", "params": {"form_id": "0100080A", "file": "DLCworkshop01.esm", "path": "DESC", "value": "A rating described first."}}
+  ],
+  "save": [
+    "DLCworkshop01.esm"
+  ]
+}

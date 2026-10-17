@@ -1,9 +1,10 @@
 {
-  "description": "Copies Nazeem [NPC_:00013BBF] of Skyrim.esm as an override into Update.esm, a record nothing has shown or read before the copy. His VMAD holds the script WIDeadBodyCleanupScript with the properties WI and DeathContainer, stored in that order, which is not the order of their names: the Scripts and Properties arrays are sorted (wbArrayS) under wbSortSubRecords, but TwbArrayDef.GetSorted answers False while wbCopyIsRunning, so the arrays the copy initialises (the source's and the copy's) keep the stored order and their #n names. The string tables are staged, so the localized names are assigned as text on both sides.",
+  "description": "Copies Nazeem [NPC_:00013BBF] of Skyrim.esm as an override into Update.esm, a record nothing has shown or read before the copy. His VMAD holds the script WIDeadBodyCleanupScript with the properties WI and DeathContainer, stored in that order, which is not the order of their names: the Scripts and Properties arrays are sorted (wbArrayS) under wbSortSubRecords, but TwbArrayDef.GetSorted answers False while wbCopyIsRunning, so the arrays the copy initialises (the source's and the copy's) keep the stored order and their #n names. The string tables are staged, so the localized names are assigned as text on both sides. A name of Update.esm (RedguardRace [RACE:00013748], his race) is read first, which loads Update.esm's tables, so the copied strings are added after its own: without the read the release's AddValue makes empty tables, the copied FULL gets ID 1 and the save writes them over Update.esm's 1,593 strings (UPSTREAM-BUG, issue #75; the port loads the tables there).",
   "game": "sse",
   "load": ["Skyrim.esm", "Update.esm"],
   "strings": true,
   "commands": [
+    {"command": "elements.get", "params": {"form_id": "00013748", "file": "Update.esm", "path": "FULL"}},
     {"command": "records.copy", "params": {"form_id": "00013BBF", "from": "Skyrim.esm", "to": "Update.esm"}}
   ],
   "save": ["Update.esm"]

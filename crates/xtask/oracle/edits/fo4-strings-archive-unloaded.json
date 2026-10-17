@@ -1,5 +1,5 @@
 {
-  "description": "The first touch of DLCworkshop01's strings is a new one: a description set where the record had none, before any localized value of the plugin was read. Whether the tables in DLCworkshop01 - Main.ba2 are loaded first (TwbLocalizationHandler.LoadForFile through GetValue) or AddValue makes three new, empty tables that the save writes over the plugin's is what the real load sequence of the oracle decides; the port must save the same plugin and tables.",
+  "description": "The first touch of DLCworkshop01's strings is a new one: a description set where the record had none, before any localized value of the plugin was read. The release's AddValue does not load the tables in DLCworkshop01 - Main.ba2 (only GetValue calls LoadForFile): it makes three new, empty tables, the description gets ID 1, and the save writes a .DLSTRINGS of 1 string and empty .STRINGS and .ILSTRINGS over the plugin's. That loses every other string of the plugin, so the port does not reproduce it (UPSTREAM-BUG, issue #75): it loads the tables first, and its saves must equal the release's saves of fo4-strings-archive-loaded, where a name is read first.",
   "game": "fo4",
   "strings": true,
   "archives": ["Fallout4 - Interface.ba2", "DLCworkshop01 - Main.ba2"],
@@ -12,5 +12,9 @@
   ],
   "save": [
     "DLCworkshop01.esm"
-  ]
+  ],
+  "upstream_bug": {
+    "reason": "AddValue makes empty string tables for a localized plugin none of whose strings was read and the save writes them over the plugin's (issue #75); the port loads the plugin's tables first",
+    "expect": "fo4-strings-archive-loaded"
+  }
 }
