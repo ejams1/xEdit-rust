@@ -2270,6 +2270,11 @@ pub struct GroupRecordImpl {
     /// Port of `gsSortForcedPostponed`: one of the postponed asks was
     /// forced.
     gr_sort_forced_postponed: AtomicBool,
+    /// Port of `dcfStorageInvalid` of the group (`TwbGroupRecord` is a
+    /// `TwbDataContainer`): something below it changed, so the loaded bytes
+    /// of the group no longer hold what it holds. A group made by an edit
+    /// has no loaded bytes.
+    pub(crate) gr_storage_invalid: AtomicBool,
 }
 
 impl GroupRecordImpl {
@@ -2303,6 +2308,7 @@ impl GroupRecordImpl {
             gr_sorting: AtomicBool::new(false),
             gr_sort_postponed: AtomicBool::new(false),
             gr_sort_forced_postponed: AtomicBool::new(false),
+            gr_storage_invalid: AtomicBool::new(false),
         });
         if gr_struct.group_type == 0 {
             let order = wb_get_group_order(gr_struct.label_signature());
@@ -4680,6 +4686,13 @@ impl ElementImpl for GroupRecordImpl {
 
     fn write_to_stream(&self, out: &mut Vec<u8>, reset: ResetModified) -> Result<(), SaveError> {
         self.write_to_stream_impl(out, reset)
+    }
+
+    /// Port of `TwbDataContainer.InvalidateStorage` for a group: its loaded
+    /// bytes are stale, and so are the parent's.
+    fn invalidate_storage(&self) {
+        self.gr_storage_invalid.store(true, Ordering::Relaxed);
+        edit::invalidate_storage(self);
     }
 
     fn prepare_save(&self) -> Result<(), SaveError> {

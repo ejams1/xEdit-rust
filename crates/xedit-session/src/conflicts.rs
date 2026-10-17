@@ -478,12 +478,35 @@ impl Drop for RawData {
     }
 }
 
+/// The record's node shown in the navigation tree (`JumpTo`) before the
+/// view shows the record: the tree sorts the children of the node above it
+/// (`vstNavCompareNodes`), and under `wbSortINFO` with "INFO by previous
+/// INFO" checked (the default) two responses compare by their sort order
+/// after `TwbGroupRecord.Sort` of their topic's group, which orders them
+/// and gives the topic its `INOM` and `INOA` lists (an internal edit, so
+/// the topic is written again, with its sorted arrays, and the empty
+/// children groups of the topic group are dropped at the save). A group of
+/// one response has no pair to compare.
+fn show_in_navigation(record: &Arc<MainRecordImpl>) {
+    if !xedit_core::interface::globals::sort_info() || record.get_signature().to_string() != "INFO" {
+        return;
+    }
+    if let Some(group) = record
+        .get_container()
+        .and_then(|container| container.as_element_impl()?.group_record_impl())
+        && group.get_element_count() > 1
+    {
+        group.sort_responses();
+    }
+}
+
 fn records_compare(session: &mut Session, request: CompareRequest) -> Result<CompareResponse, CommandError> {
     let record = session.record(&request.form_id, request.file.as_deref())?;
     let record = record
         .as_element_impl()
         .and_then(ElementImpl::main_record_impl)
         .ok_or_else(|| CommandError::new("internal", "the record is not a main record of a file"))?;
+    show_in_navigation(&record);
     let files = session_files(session)?;
     let active = crate::modgroups::activate(
         session,
