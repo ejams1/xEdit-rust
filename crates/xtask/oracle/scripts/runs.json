@@ -73,8 +73,12 @@
     },
     {
       "script": "Base object variations.pas",
+      "master": "tests/fixtures/parity/refs-edit.esm",
+      "answers": [
+        {"class": "TInputQueryForm", "title": "Enter", "text": "1", "button": "OK"}
+      ],
       "build_refs": true,
-      "note": "asks for input even without a form (InputQuery/InputBox): deferred unless named with --script"
+      "note": "parity #41: over the refs-edit fixture (the game master's stand-in), the InputQuery of the first Process answered 1: below the minimum of 2, so the script logs 'Invalid variations number.' and terminates itself (a valid number redistributes the references with Random, which no comparison can match)"
     },
     {
       "script": "BASH tags autodetection.pas"
@@ -122,11 +126,22 @@
     },
     {
       "script": "Change load order of FormID.pas",
+      "master": "tests/fixtures/parity/refs-edit.esm",
+      "close_after": true,
+      "save": ["Skyrim.esm"],
+      "answers": [
+        {"class": "TInputQueryForm", "title": "Enter", "text": "01", "button": "OK"}
+      ],
       "build_refs": true,
-      "note": "asks for input even without a form (InputQuery/InputBox): deferred unless named with --script"
+      "note": "parity #41: over the refs-edit fixture, the InputQuery answered 01: the first record's new FormID has a load order no file of the session has, so its references and its own FormID change to an unmapped load order; the log and the saved fixture are compared"
     },
     {
-      "script": "Change persistent flag.pas"
+      "script": "Change persistent flag.pas",
+      "master": "tests/fixtures/parity/walk-churn.esm",
+      "answers": [
+        {"class": "#32770", "title": "Confirm", "button": "&Yes"}
+      ],
+      "note": "parity #41: the MessageDlg of Initialize answered Yes (set the Persistent flag) on both sides over the walk-churn fixture (the game master's stand-in, cells with temporary references): every reference of the walk gets the flag and moves to its persistent children group while the walk runs, and the log is compared (no close, nothing saved). Over the whole Skyrim.esm the release takes 2:14 (1,531,836 processed records) and the port's walk was quadratic in the size of the group the references move into (issue #82). Different until issue #84: the release never reaches a children group the move creates under a node its walk already initialised, the port does (Processed Records 43 against 44)"
     },
     {
       "script": "Check for circular previous INFOs.pas"
@@ -139,7 +154,11 @@
       "script": "Check for invalid alternate textures.pas"
     },
     {
-      "script": "Conflict Status.pas"
+      "script": "Conflict Status.pas",
+      "answers": [
+        {"class": "#32770", "title": "Information", "button": "OK"}
+      ],
+      "note": "parity #41: without a filter on the tree the script shows its Information message (answered OK) and terminates itself"
     },
     {
       "script": "DDS - Find textures without mipmaps.pas"
@@ -149,7 +168,11 @@
     },
     {
       "script": "Export dialogues.pas",
-      "build_refs": true
+      "answers": [
+        {"class": "#32770", "title": "Save As", "text": "dialogueExportCreatureDialogueWerewolf.csv", "button": "&Save"}
+      ],
+      "build_refs": true,
+      "note": "parity #41: the TSaveDialog of Finalize answered with its default name (the last quest's export file) under ScriptsPath; the export file and the log are compared"
     },
     {
       "script": "Export list of cells.pas"
@@ -256,17 +279,24 @@
     },
     {
       "script": "FNV - Export dialogues.pas",
+      "answers": [
+        {"class": "#32770", "title": "Save As", "text": "dialogueExportPatch04Quest00.csv", "button": "&Save"}
+      ],
       "game": "fnv",
-      "build_refs": true
+      "build_refs": true,
+      "note": "parity #41: the TSaveDialog of Finalize answered with its default name under ScriptsPath; the export file and the log are compared"
     },
     {
       "script": "FO3 and FNV - Translator.pas",
+      "answers": [
+        {"class": "#32770", "title": "Confirm", "button": "&No"}
+      ],
       "game": "fnv",
       "close_after": true,
       "save": [
         "FalloutNV.esm"
       ],
-      "note": "edits records: the saved bytes are compared"
+      "note": "parity #41: the MessageDlg answered No (add to the dictionary): the walk collects the translatable texts and Finalize writes TranslatorDictionary.txt, which is compared with the log and the saved bytes"
     },
     {
       "script": "JSON - Demo.pas"
@@ -294,7 +324,11 @@
     },
     {
       "script": "List records referencing specific plugin.pas",
-      "note": "asks for input even without a form (InputQuery/InputBox): deferred unless named with --script"
+      "master": "tests/fixtures/parity/refs-edit.esm",
+      "answers": [
+        {"class": "TInputQueryForm", "title": "Enter", "text": "00", "button": "OK"}
+      ],
+      "note": "parity #41: over the refs-edit fixture, the InputQuery answered 00 (the game master): every record of the fixture and every reference into it is listed"
     },
     {
       "script": "List used baseforms and statistics.pas"
@@ -354,11 +388,20 @@
     },
     {
       "script": "Oblivion - Export all scripts in xml format.pas",
-      "game": "tes4"
+      "answers": [
+        {"class": "#32770", "title": "Save As", "text": "scripts.xml", "button": "&Save"}
+      ],
+      "game": "tes4",
+      "note": "parity #41: the TSaveDialog of Finalize answered with its default name under DataPath; scripts.xml and the log are compared"
     },
     {
       "script": "Oblivion - Export Dialogues.pas",
-      "game": "tes4"
+      "accept": "UPSTREAM-BUG (#64, not reproduced): the script names each response's topic first (EditorID for the voice file name), the release's quick init of a topic named first loses the topic's subrecords, and its export then has an empty FULL and DATA on the 898 lines of the responses of such topics, where the port keeps the subrecords and writes them (probes/tes4-topic-full.pas pins the loss: a topic read through its FULL first keeps it on both sides)",
+      "answers": [
+        {"class": "#32770", "title": "Save As", "text": "export.txt", "button": "&Save"}
+      ],
+      "game": "tes4",
+      "note": "parity #41: the TSaveDialog of Finalize answered with its default name under DataPath; export.txt and the log are compared"
     },
     {
       "script": "Oblivion - Items lookup replacement.pas",
@@ -371,7 +414,11 @@
     },
     {
       "script": "Oblivion - OCO faces assignment.pas",
-      "game": "tes4"
+      "answers": [
+        {"class": "#32770", "title": "Information", "button": "OK"}
+      ],
+      "game": "tes4",
+      "note": "parity #41: Oblivion_Character_Overhaul.esp is not loaded, so the script shows its Information message (answered OK) and ends"
     },
     {
       "script": "Output used assets filenames.pas",
@@ -395,8 +442,14 @@
     },
     {
       "script": "Redirect references.pas",
+      "master": "tests/fixtures/parity/refs-edit.esm",
+      "close_after": true,
+      "save": ["Skyrim.esm"],
+      "answers": [
+        {"class": "TInputQueryForm", "title": "Enter", "text": "00000800", "button": "OK"}
+      ],
       "build_refs": true,
-      "note": "asks for input even without a form (InputQuery/InputBox): deferred unless named with --script"
+      "note": "parity #41: over the refs-edit fixture, the InputBox answered 00000800 (the keyword Kwd000): every reference to a walked record is redirected to it with CompareExchangeFormID; the saved fixture is compared"
     },
     {
       "script": "Remove duplicate references.pas",
@@ -429,8 +482,14 @@
     },
     {
       "script": "Renumber FormID.pas",
+      "master": "tests/fixtures/parity/refs-edit.esm",
+      "close_after": true,
+      "save": ["Skyrim.esm"],
+      "answers": [
+        {"class": "TInputQueryForm", "title": "Enter", "text": "00F00000", "button": "OK"}
+      ],
       "build_refs": true,
-      "note": "asks for input even without a form (InputQuery/InputBox): deferred unless named with --script"
+      "note": "parity #41: over the refs-edit fixture, the InputBox of the first Process answered 00F00000: the records are renumbered from there with their references; the Changing FormID lines and the saved fixture are compared"
     },
     {
       "script": "Replace landscape texture.pas",
@@ -561,13 +620,16 @@
     },
     {
       "script": "Skyrim - Convert LIGH record with mesh to STAT or MISC.pas",
+      "answers": [
+        {"class": "#32770", "title": "Confirm", "button": "&Yes"}
+      ],
       "game": "tes5",
       "build_refs": true,
       "close_after": true,
       "save": [
         "Skyrim.esm"
       ],
-      "note": "edits records: the saved bytes are compared"
+      "note": "parity #41: the MessageDlg answered Yes (copy the light records with a mesh to STAT); the saved bytes are compared"
     },
     {
       "script": "Skyrim - Copy book text only from master record.pas",
@@ -600,26 +662,36 @@
     },
     {
       "script": "Skyrim - Create patch for ClimatesOfTamriel and SoundsOfSkyrim-TheWilds.pas",
+      "answers": [
+        {"class": "#32770", "title": "Confirm", "button": "OK"}
+      ],
       "game": "tes5",
       "close_after": true,
       "save": [
         "Skyrim.esm"
       ],
-      "note": "edits records: the saved bytes are compared"
+      "note": "parity #41: neither mod is loaded, so the script shows its message (mtConfirmation with OK only, answered OK) and ends"
     },
     {
       "script": "Skyrim - Export and import weapons stats from spreadsheet file.pas",
+      "answers": [
+        {"class": "#32770", "title": "Confirm", "button": "&Yes"},
+        {"class": "#32770", "title": "Save As", "text": "weapons.csv", "button": "&Save"}
+      ],
       "game": "tes5",
       "close_after": true,
       "save": [
         "Skyrim.esm"
       ],
-      "note": "edits records: the saved bytes are compared"
+      "note": "parity #41: the MessageDlg answered Yes (export) and the TSaveDialog of Finalize with its default name under ProgramPath; weapons.csv and the log are compared"
     },
     {
       "script": "Skyrim - Filter by script.pas",
+      "answers": [
+        {"class": "TInputQueryForm", "title": "Filter By", "text": "defaultSetStageTrigScript", "button": "OK"}
+      ],
       "game": "tes5",
-      "note": "asks for input even without a form (InputQuery/InputBox): deferred unless named with --script"
+      "note": "parity #41: the InputQuery answered with a script name; the scripted filter keeps the records whose VMAD names the script, and the filter's lines are compared (the script terminates itself after ApplyFilter)"
     },
     {
       "script": "Skyrim - Find uncompressed records.pas",
@@ -666,12 +738,18 @@
     },
     {
       "script": "Skyrim - Read Books Aloud.pas",
+      "answers": [
+        {"class": "#32770", "title": "Error", "button": "OK"},
+        {"class": "#32770", "title": "Error", "button": "OK"},
+        {"class": "#32770", "title": "Error", "button": "OK"},
+        {"class": "#32770", "title": "Confirm", "button": "Cancel"}
+      ],
       "game": "tes5",
       "close_after": true,
       "save": [
         "Skyrim.esm"
       ],
-      "note": "edits records: the saved bytes are compared"
+      "note": "parity #41: ReadBooksAloud.esm is not loaded; the script shows its three Error messages without leaving Initialize after them (answered OK), then asks which records to patch, answered Cancel, which ends it"
     },
     {
       "script": "Skyrim - Remove frequence variance from sound descriptors.pas",
@@ -733,12 +811,17 @@
     },
     {
       "script": "Skyrim - Tweak bloom, eyes adaptation, tint.pas",
+      "answers": [
+        {"class": "#32770", "title": "Confirm", "button": "&Yes"},
+        {"class": "#32770", "title": "Confirm", "button": "&No"},
+        {"class": "#32770", "title": "Confirm", "button": "&Yes"}
+      ],
       "game": "tes5",
       "close_after": true,
       "save": [
         "Skyrim.esm"
       ],
-      "note": "edits records: the saved bytes are compared"
+      "note": "parity #41: the three MessageDlg questions answered Yes (bloom), No (eye adaptation), Yes (tint); the edited image spaces and weathers are saved and compared"
     },
     {
       "script": "Undelete and Disable References.pas",
@@ -1077,6 +1160,37 @@
         }
       ],
       "note": "parity #41: the RTL's ShowException box (MessageBox titled Application Error with OK) answered on both sides, so the run goes on after it; the probe phase runs the same probe without an answer, where it is an oracle-dialog class"
+    },
+    {
+      "script": "probes/tes4-topic-full.pas",
+      "accept": "UPSTREAM-BUG (#64, not reproduced): the topic named first through its EditorID loses its subrecords in the release (ElementCount 0, FULL and DATA empty), while the topic read through its FULL first keeps them on both sides",
+      "game": "tes4",
+      "load": ["Oblivion.esm"],
+      "note": "parity #41 probe: the topic of an Oblivion response as Oblivion - Export Dialogues.pas reads it, and the FULL and DATA the script prints for it"
+    },
+    {
+      "script": "probes/persistent-walk.pas",
+      "master": "tests/fixtures/parity/walk-churn.esm",
+      "note": "parity #41 probe: the walk of Change persistent flag.pas over the walk-churn fixture with every processed element logged, the references re-homed into their cell's persistent children group as the walk runs; different until issue #84 (the release does not reach the persistent group the moves create in the interior cell)"
+    },
+    {
+      "script": "Report masters.pas",
+      "load": ["Skyrim.esm", "Update.esm"],
+      "answers": [
+        {"class": "TfrmFileSelect", "title": "Masters", "button": "OK"}
+      ],
+      "note": "parity #41, a form script: the walk reaches a record of Skyrim.esm first, whose file has no masters, so frmFileSelect's list is empty; OK with nothing checked makes the script call Finalize and terminate itself"
+    },
+    {
+      "script": "Merge overrides into master.pas",
+      "load": ["Skyrim.esm", "Update.esm"],
+      "close_after": true,
+      "save": ["Skyrim.esm"],
+      "timeout_minutes": 60,
+      "answers": [
+        {"class": "TfrmFileSelect", "title": "Select plugin(s) to merge into", "button": "OK"}
+      ],
+      "note": "parity #41, a form script: frmFileSelect answered OK with nothing checked (merge into the masters only), so every override of Update.esm is merged into its Skyrim.esm master (ConflictAllForElements, ElementAssign, Add and Remove of elements); the saved Skyrim.esm is compared"
     }
   ]
 }
