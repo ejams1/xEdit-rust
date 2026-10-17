@@ -837,6 +837,14 @@
       "note": "parity #25: AddNewFile's InputQuery, AddNewFileName's exists-already message, AddRequiredElementMasters' confirmation (No, then Yes) and the frmFileSelect selection form answered from recorded answers over the host-25 fixture; the overrides the new files get (IsPositionChanged, the conflict helpers, the inherited filter status) and the files the close saves"
     },
     {
+      "script": "probes/host-uvrange.pas",
+      "synthetic_master": true,
+      "data_files": [
+        "tests/fixtures/parity/nif/LODGen_flat_lod.nif:meshes/lod/host25/flat.nif"
+      ],
+      "note": "parity #25: wbGetUVRangeTexturesList over a LOD mesh in the private data folder, a missing mesh, a billboard and a name that is no mesh, into an unsorted and a sorted list"
+    },
+    {
       "script": "probes/filter-scripted.pas",
       "master": "tests/fixtures/parity/filter-scripted.esm",
       "save": [

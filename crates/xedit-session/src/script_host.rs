@@ -93,13 +93,6 @@ pub struct HostState {
 /// and objects that are no element read as `None`, a number or a string is
 /// the variant cast error upstream raises inside the handler.
 fn interface_at(args: &Args, index: usize) -> Result<Option<ElementRef>, ValueError> {
-    // `IInterface(Null)` is nil: a lookup's `Null` (`RecordByHexFormID` of
-    // a FormID nobody holds) passed on reaches the function's own refusal
-    // (`ConflictAllForNode(Null)` is `ieDirectInvalidArgument` on the
-    // oracle, probe `host-dialogs` over the probe master).
-    if matches!(args.values.get(index), Some(Value::Null)) {
-        return Ok(None);
-    }
     let element = element_at(args, index);
     take_pending_variant_error()?;
     Ok(element)
@@ -1028,9 +1021,14 @@ pub(crate) fn register(adapter: &mut Adapter, state: &Rc<RefCell<ScriptRunState>
                         continue;
                     };
                     if loaded.get_load_order_file_id() == form_id.file_id() {
-                        if let Ok(Some(record)) = loaded.get_record_by_form_id(form_id, true, true) {
-                            *value = state.element_value(&(record as ElementRef));
-                        }
+                        // `Value := Files[i].RecordByFormID[...]`: the record,
+                        // or the nil interface (no longer `Null`, so a call
+                        // that takes it reaches its own refusal, probe
+                        // `host-dialogs` over the probe master).
+                        *value = match loaded.get_record_by_form_id(form_id, true, true) {
+                            Ok(Some(record)) => state.element_value(&(record as ElementRef)),
+                            _ => Value::Empty,
+                        };
                         break;
                     }
                 }
