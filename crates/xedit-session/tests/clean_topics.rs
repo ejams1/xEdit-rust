@@ -227,3 +227,184 @@ fn a_response_the_sort_moves_past_the_walk_is_not_compared() {
         "{result:#}"
     );
 }
+
+/// A master whose topic holds its responses against the order their
+/// `PNAM` links give (the first follows the third, the second none, the
+/// third the second: sorted, the second, the third, the first), and a
+/// plugin that overrides the topic alone.
+fn sorting_master_bytes() -> Vec<u8> {
+    let mut bytes = header(1, 5, &[]);
+    bytes.extend(top_group(
+        b"QUST",
+        &main_record(b"QUST", QUEST, &sub_record(b"EDID", b"TestQuest\0")),
+    ));
+    let mut responses = response(0x810, Some(0x812), "First.");
+    responses.extend(response(0x811, Some(0), "Second."));
+    responses.extend(response(0x812, Some(0x811), "Third."));
+    bytes.extend(topic(&responses));
+    bytes
+}
+
+fn topic_override_bytes() -> Vec<u8> {
+    let mut bytes = header(0, 2, &["Master.esm"]);
+    let mut data = sub_record(b"EDID", b"TestTopicChanged\0");
+    data.extend(sub_record(b"QSTI", &QUEST.to_le_bytes()));
+    data.extend(sub_record(b"DATA", &[0, 0]));
+    bytes.extend(top_group(b"DIAL", &main_record(b"DIAL", TOPIC, &data)));
+    bytes
+}
+
+/// The filter of an editing session (the `INOM` and `INOA` fills on, no
+/// `PNAM` fill) asks for the conflict status of every record its first
+/// pass reaches (`InheritConflictByParent`). The walk starts at the last
+/// file, so the check of the plugin's topic builds the master's topic
+/// first, and its `Init` sorts the master's responses before the walk
+/// reaches their nodes: the nodes bind in the sorted order, as the
+/// release's `vstNavInitNode` binds them (parity #41, the probe
+/// `filter-topic-bind.pas` over `BrokenSteel.esm`). Binding every node
+/// before the statuses were asked kept the file's order.
+#[test]
+fn the_filter_binds_a_topic_the_walk_sorted_in_the_sorted_order() {
+    let _guard = test_lock();
+    let saved = (fill_pnam(), fill_inom(), fill_inoa());
+    set_fill_pnam(false);
+    set_fill_inom(true);
+    set_fill_inoa(true);
+    xedit_core::implementation::clear_files_map();
+    xedit_core::implementation::reset_load_order_slots();
+    xedit_core::interface::clear_files();
+    xedit_session::dump::setup_game_for_edit("fo3").unwrap();
+    xedit_session::save::apply_edit_settings(GameMode::gmFO3);
+    let mut files = Vec::new();
+    for (name, bytes) in [
+        ("Master.esm", sorting_master_bytes()),
+        ("Plugin.esp", topic_override_bytes()),
+    ] {
+        files.push(wb_file_from_bytes(name, i32::MAX, FileStates::empty(), FileBytes::Owned(bytes)).unwrap());
+    }
+    let mut session = Session::with_files(GameMode::gmFO3, files.clone());
+    let registry = Registry::standard();
+    let result = registry.call(
+        &mut session,
+        "filter.apply",
+        json!({ "options": { "inherit_conflict_by_parent": true }, "list_records": true }),
+    );
+    set_fill_pnam(saved.0);
+    set_fill_inom(saved.1);
+    set_fill_inoa(saved.2);
+    let result = result.unwrap();
+    let records: Vec<String> = result["records"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|record| record.as_str().unwrap().to_owned())
+        .filter(|record| record.contains("INFO"))
+        .collect();
+    let order: Vec<&str> = records
+        .iter()
+        .map(|record| {
+            ["00000810", "00000811", "00000812"]
+                .into_iter()
+                .find(|id| record.contains(id))
+                .unwrap_or("?")
+        })
+        .collect();
+    assert_eq!(order, ["00000811", "00000812", "00000810"], "{result:#}");
+}
+
+/// A plugin that overrides the topic with responses of its own, held against
+/// the order of their `PNAM` links, as `BrokenSteel.esm` holds the responses
+/// of `RadioGNRPlayerExploitsRELAY`.
+fn own_responses_plugin_bytes() -> Vec<u8> {
+    let mut bytes = header(0, 5, &["Master.esm"]);
+    let mut responses = response(0x0100_0810, Some(0x0100_0812), "First.");
+    responses.extend(response(0x0100_0811, Some(0), "Second."));
+    responses.extend(response(0x0100_0812, Some(0x0100_0811), "Third."));
+    let mut data = sub_record(b"EDID", b"TestTopic\0");
+    data.extend(sub_record(b"QSTI", &QUEST.to_le_bytes()));
+    data.extend(sub_record(b"DATA", &[0, 0]));
+    let mut topic = main_record(b"DIAL", TOPIC, &data);
+    topic.extend(group(TOPIC, 7, &responses));
+    bytes.extend(top_group(b"DIAL", &topic));
+    bytes
+}
+
+fn topic_master_bytes() -> Vec<u8> {
+    let mut bytes = header(1, 2, &[]);
+    bytes.extend(top_group(
+        b"QUST",
+        &main_record(b"QUST", QUEST, &sub_record(b"EDID", b"TestQuest\0")),
+    ));
+    let mut data = sub_record(b"EDID", b"TestTopic\0");
+    data.extend(sub_record(b"QSTI", &QUEST.to_le_bytes()));
+    data.extend(sub_record(b"DATA", &[0, 0]));
+    bytes.extend(top_group(b"DIAL", &main_record(b"DIAL", TOPIC, &data)));
+    bytes
+}
+
+/// After a filter the `Process` walk of a script follows the nodes of the
+/// filtered tree with the elements they were bound to (`ApplyScriptToSelection`
+/// over the filtered `vstNav`). The filter's walk binds the plugin's
+/// responses in the file's order and only then checks the plugin's topic,
+/// whose build sorts the group, so the walk visits the responses in the
+/// file's order, not in the sorted order the group holds by then (parity
+/// #41, `filter-topic-bind.pas`: `BrokenSteel.esm`'s
+/// `RadioGNRPlayerExploitsRELAY`).
+#[test]
+fn the_walk_after_a_filter_follows_the_nodes_the_filter_bound() {
+    let _guard = test_lock();
+    let saved = (fill_pnam(), fill_inom(), fill_inoa());
+    set_fill_pnam(false);
+    set_fill_inom(true);
+    set_fill_inoa(true);
+    xedit_core::implementation::clear_files_map();
+    xedit_core::implementation::reset_load_order_slots();
+    xedit_core::interface::clear_files();
+    xedit_session::dump::setup_game_for_edit("fo3").unwrap();
+    xedit_session::save::apply_edit_settings(GameMode::gmFO3);
+    let mut files = Vec::new();
+    for (name, bytes) in [
+        ("Master.esm", topic_master_bytes()),
+        ("Plugin.esp", own_responses_plugin_bytes()),
+    ] {
+        files.push(wb_file_from_bytes(name, i32::MAX, FileStates::empty(), FileBytes::Owned(bytes)).unwrap());
+    }
+    let mut session = Session::with_files(GameMode::gmFO3, files.clone());
+    session.allow_edit(true);
+    let dir = TempDir::new(format!("xedit-filter-walk-test-{}", std::process::id()));
+    std::fs::write(
+        dir.join("FilterWalk.pas"),
+        "unit userscript;\n\
+         function Initialize: Integer;\n\
+         begin\n\
+           InheritConflictByParent := True;\n\
+           ApplyFilter;\n\
+           Result := 0;\n\
+         end;\n\
+         function Process(e: IInterface): Integer;\n\
+         begin\n\
+           if Signature(e) = 'INFO' then\n\
+             AddMessage('info ' + IntToHex(GetLoadOrderFormID(e), 8));\n\
+           Result := 0;\n\
+         end;\n\
+         end.\n",
+    )
+    .unwrap();
+    let result = Registry::standard().call(
+        &mut session,
+        "script.run",
+        json!({ "file": "FilterWalk.pas", "scripts": dir.display().to_string(), "save": false }),
+    );
+    set_fill_pnam(saved.0);
+    set_fill_inom(saved.1);
+    set_fill_inoa(saved.2);
+    let result = result.unwrap();
+    let visited: Vec<&str> = result["messages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|line| line.as_str()?.split_once("info ").map(|(_, id)| id))
+        .collect();
+    // The nodes from the last back to the first, in the file's order.
+    assert_eq!(visited, ["01000812", "01000811", "01000810"], "{result:#}");
+}
