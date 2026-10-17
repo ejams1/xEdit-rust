@@ -618,6 +618,27 @@ struct EditSequence {
     /// `refs.get`. Reported as `<sequence>/refs`.
     #[serde(default)]
     refs: Vec<RefsQuery>,
+    /// An upstream bug that loses data in this sequence, which the port does
+    /// not reproduce (rule 14 of the parity brief, user decision
+    /// 2026-10-16): the release's saves here are not the ones to match.
+    /// The port's saves are compared with the oracle's saves of the
+    /// sequence `expect` names instead, the same edits shaped so that the
+    /// release keeps its data; equal there and different from the release
+    /// here, a saved file is `known-difference`. A port save equal to the
+    /// release's lossy one (the port reproduces the bug) or different from
+    /// the expected one is `different`.
+    #[serde(default)]
+    upstream_bug: Option<UpstreamBug>,
+}
+
+/// See [`EditSequence::upstream_bug`].
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct UpstreamBug {
+    /// What the release loses and where the divergence is recorded.
+    reason: String,
+    /// The sequence whose oracle saves the port's saves must equal.
+    expect: String,
 }
 
 /// A record of [`EditSequence::refs`]: its load order FormID as the named
@@ -1084,6 +1105,20 @@ fn edit_step(index: usize, command: &Value) -> Result<String> {
             check_params(params, &["form_id", "file"])?;
             format!("JumpTo(RecordIn({}, {}), False);", file()?, form_id()?)
         }
+        "elements.get" => {
+            // A read of an element's value: a localized string loads the
+            // string tables of the record's plugin on both sides
+            // (`GetValue` and its `LoadForFile`), as the GUI loads them when
+            // it shows a name of the plugin. The step logs the length of
+            // the text, which nothing compares.
+            check_params(params, &["form_id", "file", "path"])?;
+            format!(
+                "log.Add('  read ' + IntToStr(Length(GetEditValue(PathElement(RecordIn({}, {}), {})))));",
+                file()?,
+                form_id()?,
+                q(text_param(params, "path")?)
+            )
+        }
         "records.delete" => {
             check_params(params, &["form_id", "file"])?;
             format!("Remove(OwnRecord({}, {}));", file()?, form_id()?)
@@ -1300,19 +1335,32 @@ pub(super) fn run_edits(
         if !options.files.is_empty() && !options.files.contains(&stem.to_lowercase()) {
             continue;
         }
-        let text = fs::read_to_string(&path)?;
-        let sequence: EditSequence =
-            serde_json::from_str(&text).with_context(|| format!("reading {}", path.display()))?;
-        let game = super::GAMES
-            .iter()
-            .find(|game| game.name == sequence.game)
-            .with_context(|| format!("{}: unknown game {}", path.display(), sequence.game))?;
+        let (text, sequence, game) = read_sequence(&path)?;
         if !options.all_games && !options.games.iter().any(|g| g.name == game.name) {
             continue;
         }
         sequences.push((stem, text, sequence, game));
     }
+    // The sequence an `upstream_bug` names runs with it, first, so that its
+    // oracle saves are cached when the port's saves are compared with them.
+    let mut index = 0;
+    while index < sequences.len() {
+        if let Some(bug) = &sequences[index].2.upstream_bug
+            && !sequences.iter().any(|other| other.0.eq_ignore_ascii_case(&bug.expect))
+        {
+            let path = edits.join(format!("{}.json", bug.expect));
+            let (text, sequence, game) = read_sequence(&path)?;
+            ensure!(
+                sequence.upstream_bug.is_none(),
+                "{}: the sequence its upstream_bug expects has an upstream_bug itself",
+                path.display()
+            );
+            sequences.push((bug.expect.clone(), text, sequence, game));
+        }
+        index += 1;
+    }
     sequences.sort_by(|a, b| a.0.cmp(&b.0));
+    sequences.sort_by_key(|sequence| sequence.2.upstream_bug.is_some());
     ensure!(
         !sequences.is_empty(),
         "no edit sequence selected in {}",
@@ -1361,6 +1409,7 @@ pub(super) fn run_edits(
         }
     }
     let equal = outcomes.iter().filter(|o| o.status == "equal").count();
+    let known = outcomes.iter().filter(|o| o.status == "known-difference").count();
     let report = super::Report {
         tag,
         equal,
@@ -1372,14 +1421,25 @@ pub(super) fn run_edits(
     let report_file = report_dir.join("oracle-edit.json");
     fs::write(&report_file, serde_json::to_string_pretty(&report)?)?;
     println!(
-        "{equal} of {} saved files equal. Report: {}",
+        "{equal} of {} saved files equal, {known} known-difference (an upstream bug the port does not reproduce). Report: {}",
         outcomes.len(),
         report_file.display()
     );
     if !options.oracle_only {
-        ensure!(equal == outcomes.len(), "parity does not hold");
+        ensure!(equal + known == outcomes.len(), "parity does not hold");
     }
     Ok(())
+}
+
+/// A sequence file with its text and game.
+fn read_sequence(path: &Path) -> Result<(String, EditSequence, &'static Game)> {
+    let text = fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
+    let sequence: EditSequence = serde_json::from_str(&text).with_context(|| format!("reading {}", path.display()))?;
+    let game = super::GAMES
+        .iter()
+        .find(|game| game.name == sequence.game)
+        .with_context(|| format!("{}: unknown game {}", path.display(), sequence.game))?;
+    Ok((text, sequence, game))
 }
 
 /// One edit sequence: the oracle's saves (cached), the port's batch, and an
@@ -1452,8 +1512,8 @@ fn check_edit(
         let result = run_gui_with_args(
             runner,
             game,
-            prepared.plugins,
-            prepared.script,
+            prepared.plugins.clone(),
+            prepared.script.clone(),
             sequence.build_refs,
             work.clone(),
             &peak_file,
@@ -1641,39 +1701,31 @@ fn check_edit(
         }
         return Ok(outcomes);
     }
-    for ((outcome, name), path) in outcomes.iter_mut().zip(&sequence.save).zip(&saved) {
-        let oracle = dir.join(format!("{oracle_stem}.{name}.saved.zst"));
-        outcome.oracle_bytes = fs::metadata(&oracle)?.len();
-        outcome.port_bytes = fs::metadata(path)?.len();
-        // A plugin a `files.new` step made has no input: the saved file
-        // stands in for it.
-        let input = match prepared.load.iter().find(|path| {
-            path.file_name()
-                .is_some_and(|n| n.to_string_lossy().eq_ignore_ascii_case(name))
-        }) {
-            Some(path) => path.clone(),
-            None if made_files(sequence).iter().any(|made| made.eq_ignore_ascii_case(name)) => path.clone(),
-            None => find_in(&data, name)?,
-        };
-        let case = Case {
-            game,
-            input,
-            name: name.clone(),
-            data: data.clone(),
-            saves: false,
-        };
-        let (status, detail) = compare(
-            &case,
-            &OracleSave::Saved(oracle),
-            path,
-            &port_dir,
-            &format!("{stem}.{name}"),
-        )?;
-        outcome.status = status;
-        outcome.detail = Some(detail);
-        if status == "equal" {
-            fs::remove_file(path)?;
+    // The tables the port wrote, from the responses of its saves.
+    let mut port_tables: Vec<(String, PathBuf)> = Vec::new();
+    for step in &steps[saves_start..] {
+        for table in step["result"]["strings"].as_array().into_iter().flatten() {
+            if let (Some(name), Some(output)) = (table["table"].as_str(), table["output"].as_str()) {
+                port_tables.push((name.to_owned(), PathBuf::from(output)));
+            }
         }
+    }
+    let port_saves = PortSaves {
+        sequence,
+        stem,
+        game,
+        data: &data,
+        prepared: &prepared,
+        saved: &saved,
+        tables: &port_tables,
+        port_dir: &port_dir,
+    };
+    let compared = port_saves.compare_with(&dir, &oracle_stem, stem)?;
+    for (outcome, result) in outcomes.iter_mut().zip(compared.plugins) {
+        outcome.status = result.status;
+        outcome.detail = result.detail;
+        outcome.oracle_bytes = result.oracle_bytes;
+        outcome.port_bytes = result.port_bytes;
     }
     if !sequence.refs.is_empty() {
         let oracle_text = fs::read_to_string(dir.join(format!("{oracle_stem}.refs.txt")))?.replace("\r\n", "\n");
@@ -1705,39 +1757,225 @@ fn check_edit(
             fs::write(port_dir.join(format!("{stem}.refs.port.txt")), &port_text)?;
         }
     }
-    if sequence.strings {
-        // The tables the port wrote, from the responses of its saves.
-        let mut port_tables: Vec<(String, PathBuf)> = Vec::new();
-        for step in &steps[saves_start..] {
-            for table in step["result"]["strings"].as_array().into_iter().flatten() {
-                if let (Some(name), Some(output)) = (table["table"].as_str(), table["output"].as_str()) {
-                    port_tables.push((name.to_owned(), PathBuf::from(output)));
+    outcomes.extend(compared.tables);
+    if let Some(bug) = &sequence.upstream_bug {
+        outcomes = upstream_bug_outcomes(runner, edits, &port_saves, bug, outcomes)?;
+    }
+    // A port save that is equal is not kept.
+    for (name, path) in sequence.save.iter().zip(&saved) {
+        let file = format!("{stem}/{name}");
+        if outcomes
+            .iter()
+            .any(|outcome| outcome.file == file && outcome.status == "equal")
+        {
+            fs::remove_file(path)?;
+        }
+    }
+    Ok(outcomes)
+}
+
+/// The port's saves of an edit sequence, to be compared with the cached
+/// oracle saves of a sequence (its own, or the one its `upstream_bug`
+/// expects).
+struct PortSaves<'a> {
+    sequence: &'a EditSequence,
+    stem: &'a str,
+    game: &'static Game,
+    data: &'a Path,
+    prepared: &'a PreparedEdit,
+    /// The port's saved plugins, in the order of `sequence.save`.
+    saved: &'a [PathBuf],
+    /// The tables the port's saves wrote.
+    tables: &'a [(String, PathBuf)],
+    port_dir: &'a Path,
+}
+
+/// The outcomes of [`PortSaves::compare_with`]: one per plugin of `save`,
+/// then one per table either side saved.
+struct Compared {
+    plugins: Vec<Outcome>,
+    tables: Vec<Outcome>,
+}
+
+impl PortSaves<'_> {
+    /// Compares the port's saves with the oracle's saves cached under
+    /// `<dir>/<oracle_stem>.*`; `label` names the diagnostic files.
+    fn compare_with(&self, dir: &Path, oracle_stem: &str, label: &str) -> Result<Compared> {
+        let (sequence, stem, game) = (self.sequence, self.stem, self.game);
+        let mut plugins = Vec::new();
+        for (name, path) in sequence.save.iter().zip(self.saved) {
+            let oracle = dir.join(format!("{oracle_stem}.{name}.saved.zst"));
+            // A plugin a `files.new` step made has no input: the saved file
+            // stands in for it.
+            let input = match self.prepared.load.iter().find(|path| {
+                path.file_name()
+                    .is_some_and(|n| n.to_string_lossy().eq_ignore_ascii_case(name))
+            }) {
+                Some(path) => path.clone(),
+                None if made_files(sequence).iter().any(|made| made.eq_ignore_ascii_case(name)) => path.clone(),
+                None => find_in(self.data, name)?,
+            };
+            let case = Case {
+                game,
+                input,
+                name: name.clone(),
+                data: self.data.to_path_buf(),
+                saves: false,
+            };
+            let (status, detail) = compare(
+                &case,
+                &OracleSave::Saved(oracle.clone()),
+                path,
+                self.port_dir,
+                &format!("{label}.{name}"),
+            )?;
+            plugins.push(Outcome {
+                game: game.name,
+                file: format!("{stem}/{name}"),
+                status,
+                detail: Some(detail),
+                oracle_bytes: fs::metadata(&oracle)?.len(),
+                port_bytes: fs::metadata(path)?.len(),
+                oracle_peak: None,
+                port_peak: None,
+            });
+        }
+        let mut tables = Vec::new();
+        if sequence.strings {
+            let strings_file = dir.join(format!("{oracle_stem}.strings.txt"));
+            let oracle_tables: Vec<String> = fs::read_to_string(&strings_file)?.lines().map(str::to_owned).collect();
+            let mut names: Vec<String> = oracle_tables.clone();
+            for (name, _) in self.tables {
+                if !names.iter().any(|known| known.eq_ignore_ascii_case(name)) {
+                    names.push(name.clone());
                 }
             }
-        }
-        let oracle_tables: Vec<String> = fs::read_to_string(&strings_file)?.lines().map(str::to_owned).collect();
-        let mut names: Vec<String> = oracle_tables.clone();
-        for (name, _) in &port_tables {
-            if !names.iter().any(|known| known.eq_ignore_ascii_case(name)) {
-                names.push(name.clone());
+            for name in names {
+                let oracle = oracle_tables
+                    .iter()
+                    .find(|known| known.eq_ignore_ascii_case(&name))
+                    .map(|known| dir.join(format!("{oracle_stem}.Strings.{known}.saved.zst")));
+                let port = self
+                    .tables
+                    .iter()
+                    .find(|(known, _)| known.eq_ignore_ascii_case(&name))
+                    .map(|(_, path)| path.clone());
+                tables.push(super::strings::compare_table(
+                    game.name,
+                    stem,
+                    &name,
+                    oracle.as_deref(),
+                    port.as_deref(),
+                )?);
             }
         }
-        for name in names {
-            let oracle = oracle_tables
-                .iter()
-                .find(|known| known.eq_ignore_ascii_case(&name))
-                .map(|known| dir.join(format!("{oracle_stem}.Strings.{known}.saved.zst")));
-            let port = port_tables
-                .iter()
-                .find(|(known, _)| known.eq_ignore_ascii_case(&name))
-                .map(|(_, path)| path.clone());
-            outcomes.push(super::strings::compare_table(
-                game.name,
-                stem,
-                &name,
-                oracle.as_deref(),
-                port.as_deref(),
-            )?);
+        Ok(Compared { plugins, tables })
+    }
+}
+
+/// The outcomes of a sequence with an [`UpstreamBug`]: the port's saves
+/// against the oracle's saves of the sequence the bug expects. A file equal
+/// there is `known-difference` where the release's own save here differs
+/// (`equal` where it does not); a file only the release saved (the empty
+/// tables it writes over a plugin's) is `known-difference` too. Every file
+/// is `different` when one differs from the expected save, or when none
+/// differs from the release's (the port reproduces the loss again).
+fn upstream_bug_outcomes(
+    runner: &Runner,
+    edits: &Path,
+    saves: &PortSaves,
+    bug: &UpstreamBug,
+    own: Vec<Outcome>,
+) -> Result<Vec<Outcome>> {
+    let game = saves.game;
+    let path = edits.join(format!("{}.json", bug.expect));
+    let (text, expected, expected_game) = read_sequence(&path)?;
+    ensure!(
+        expected_game.name == game.name
+            && expected.save == saves.sequence.save
+            && expected.strings == saves.sequence.strings,
+        "{}: the sequence its upstream_bug expects must be of the same game and save the same plugins",
+        saves.stem
+    );
+    let key = prepare_edit(runner, edits, &bug.expect, &text, &expected, game)?.key;
+    let dir = runner.cache.join(format!("{}-oracle-edit", game.mode));
+    let expected_stem = format!("{}.{key:016x}", bug.expect);
+    let status = fs::read_to_string(dir.join(format!("{expected_stem}.oracle.log")))
+        .with_context(|| format!("{}: the oracle's saves of {} are not cached", saves.stem, bug.expect))?;
+    ensure!(
+        status.lines().last() == Some("done"),
+        "{}: the oracle run of {} did not finish: {status}",
+        saves.stem,
+        bug.expect
+    );
+    let compared = saves.compare_with(&dir, &expected_stem, &format!("{}.expected", saves.stem))?;
+    let mut against = compared.plugins;
+    against.extend(compared.tables);
+    let mut outcomes = Vec::new();
+    let mut matched = true;
+    let mut lossy = false;
+    for mut outcome in against {
+        let release = own.iter().find(|o| o.file.eq_ignore_ascii_case(&outcome.file));
+        let release_detail = release
+            .and_then(|o| o.detail.as_deref())
+            .unwrap_or("only the port saved it")
+            .trim()
+            .to_owned();
+        let release_equal = release.is_some_and(|o| o.status == "equal");
+        let detail = outcome.detail.take().unwrap_or_default();
+        if outcome.status == "equal" {
+            if release_equal {
+                outcome.detail = Some(format!(
+                    "  equal, and equal to the oracle's save of {}:{detail}",
+                    bug.expect
+                ));
+            } else {
+                lossy = true;
+                outcome.status = "known-difference";
+                outcome.detail = Some(format!(
+                    "  UPSTREAM-BUG: {}; against the release here: {release_detail}; equal to the oracle's save of {}:{detail}",
+                    bug.reason, bug.expect
+                ));
+            }
+        } else {
+            matched = false;
+            outcome.detail = Some(format!(
+                "  the port's save differs from the oracle's save of {}, which keeps the data:{detail}",
+                bug.expect
+            ));
+        }
+        outcomes.push(outcome);
+    }
+    for release in own {
+        if outcomes.iter().any(|o| o.file.eq_ignore_ascii_case(&release.file)) {
+            continue;
+        }
+        if release.file.ends_with("/refs") {
+            outcomes.push(release);
+            continue;
+        }
+        lossy = true;
+        outcomes.push(Outcome {
+            status: "known-difference",
+            detail: Some(format!(
+                "  UPSTREAM-BUG: {}; only the release saved it ({})",
+                bug.reason,
+                release.detail.as_deref().unwrap_or("").trim()
+            )),
+            ..release
+        });
+    }
+    if !matched || !lossy {
+        for outcome in &mut outcomes {
+            if outcome.status == "known-difference" || (!lossy && outcome.status == "equal") {
+                outcome.status = "different";
+                if !lossy {
+                    outcome.detail = Some(format!(
+                        "  the port's saves equal the release's, which has the upstream bug the port must not reproduce: {}",
+                        bug.reason
+                    ));
+                }
+            }
         }
     }
     Ok(outcomes)
