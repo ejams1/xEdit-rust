@@ -473,6 +473,68 @@ fn unloaded_modules_keep_the_upstream_load_order() {
     );
 }
 
+/// The game's Creation Club list (`Skyrim.ccc` next to the data folder)
+/// gives the modules it names their `miCCIndex` (`wbLoadModules`), so they
+/// come after the official ones in the list's order and before every other
+/// module, loaded or not (parity #41: the list was not read).
+#[test]
+fn creation_club_modules_follow_the_ccc_list() {
+    let _guard = test_lock();
+    let root = TempDir::new(format!("xedit-modgroups-ccc-{}", std::process::id()));
+    let dir = root.join("Data");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("Skyrim.esm"), plugin(1, &[], 1.0)).unwrap();
+    std::fs::write(dir.join("Update.esm"), plugin(1, &["Skyrim.esm"], 2.0)).unwrap();
+    for name in ["ccAAA.esm", "ccZZZ.esm", "Zeta.esp", "Alpha.esp"] {
+        std::fs::write(dir.join(name), plugin(0, &["Skyrim.esm"], 3.0)).unwrap();
+    }
+    // The list names ccZZZ.esm first; a name of the list without a file is
+    // no module.
+    std::fs::write(root.join("Skyrim.ccc"), "ccZZZ.esm\r\nccMissing.esm\r\nccAAA.esm\r\n").unwrap();
+    xedit_core::implementation::clear_files_map();
+    xedit_core::implementation::reset_load_order_slots();
+    xedit_core::interface::clear_files();
+    xedit_session::dump::setup_game_for_edit("sse").unwrap();
+    xedit_session::save::apply_edit_settings(GameMode::gmSSE);
+    let files: Vec<Arc<FileImpl>> = ["Skyrim.esm", "Zeta.esp"]
+        .iter()
+        .map(|name| wb_file(dir.join(name).to_str().unwrap(), i32::MAX, FileStates::empty()).unwrap())
+        .collect();
+    set_data_path(&format!("{}\\", dir.display()));
+    xedit_session::modgroups::set_file_options(
+        Some(dir.join("global.modgroups").to_str().unwrap()),
+        Some(dir.join("settings.ini").to_str().unwrap()),
+    );
+    let mut session = Session::with_files(GameMode::gmSSE, files);
+    session.allow_edit(true);
+    for (name, module) in [
+        ("Skyrim", "Skyrim.esm"),
+        ("Update", "Update.esm"),
+        ("ccAAA", "ccAAA.esm"),
+        ("ccZZZ", "ccZZZ.esm"),
+        ("Zeta", "Zeta.esp"),
+        ("Alpha", "Alpha.esp"),
+    ] {
+        std::fs::write(
+            dir.join(format!("{name}.modgroups")),
+            format!("[Of {name}]\r\nSkyrim.esm\r\n{module}\r\n"),
+        )
+        .unwrap();
+    }
+    assert_eq!(
+        listed_files(&mut session),
+        [
+            "Skyrim.modgroups",
+            "Update.modgroups",
+            "ccZZZ.modgroups",
+            "ccAAA.modgroups",
+            "Zeta.modgroups",
+            "Alpha.modgroups"
+        ]
+    );
+    drop(session);
+}
+
 #[test]
 fn duplicate_group_names_resolve_by_file_order() {
     let _guard = test_lock();

@@ -42,6 +42,21 @@ const MODGROUPS_SCRIPT: &str = include_str!("../../oracle/modgroups.pas");
 /// The name a scenario gives the program's own mod group file.
 pub(super) const GLOBAL_FILE: &str = "<global>";
 
+/// The scenario name of the game's Creation Club list (`<game>.ccc`), which
+/// both sides find next to their data folder
+/// (`ExtractFilePath(ExcludeTrailingPathDelimiter(wbDataPath))`).
+pub(super) const CCC_FILE: &str = "<ccc>";
+
+/// `wbCreationClubContentFileName` of a game mode, the games that have one.
+fn ccc_name(mode: &str) -> Result<&'static str> {
+    match mode {
+        "SSE" => Ok("Skyrim.ccc"),
+        "FO4" => Ok("Fallout4.ccc"),
+        "SF1" => Ok("Starfield.ccc"),
+        _ => bail!("{mode} has no Creation Club list"),
+    }
+}
+
 /// The text of a file of a scenario: the exact text, or lines that are
 /// written with CRLF after each, as xEdit writes them.
 #[derive(Deserialize, Clone)]
@@ -354,6 +369,8 @@ pub(super) fn put_files(
         let gui_path = if name == GLOBAL_FILE {
             // `wbModGroupFileName` of the script mode, next to the program.
             PathBuf::from("bin").join(format!("{}Script.modgroups", game.mode))
+        } else if name == CCC_FILE {
+            PathBuf::from(ccc_name(game.mode)?)
         } else {
             PathBuf::from("Data").join(name)
         };
@@ -600,6 +617,8 @@ fn unloaded_plugins(data: &Path, names: &[String], folder: &Path) -> Result<Vec<
 fn gui_path(game: &Game, work: &Path, name: &str) -> PathBuf {
     if name == GLOBAL_FILE {
         work.join("bin").join(format!("{}Script.modgroups", game.mode))
+    } else if name == CCC_FILE {
+        work.join(ccc_name(game.mode).unwrap_or("game.ccc"))
     } else if name == settings_name(game.mode) {
         work.join(name)
     } else {
@@ -611,6 +630,8 @@ fn gui_path(game: &Game, work: &Path, name: &str) -> PathBuf {
 fn file_key(name: &str) -> String {
     if name == GLOBAL_FILE {
         "global.modgroups".to_owned()
+    } else if name == CCC_FILE {
+        "creation-club.ccc".to_owned()
     } else {
         name.to_owned()
     }
@@ -667,6 +688,8 @@ fn run_port(
     let port_path = |name: &str| -> PathBuf {
         if name == GLOBAL_FILE {
             global.clone()
+        } else if name == CCC_FILE {
+            dir.join(ccc_name(game.mode).unwrap_or("game.ccc"))
         } else if name == settings_name(game.mode) {
             settings.clone()
         } else {
