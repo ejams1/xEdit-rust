@@ -709,10 +709,26 @@ impl LocalizationHandlerImpl {
 
     /// Port of `AddValue`: a new string for the element in the table of its
     /// type. The three tables of its plugin are made, empty and modified,
-    /// when they are not loaded (also when the containers hold them: upstream
-    /// does not load them here); the ID is the highest `NextID` of the
-    /// three, so that an ID is never in two tables of a plugin. An empty
-    /// text is no string, ID 0.
+    /// when they are not loaded and the containers do not hold them; the ID
+    /// is the highest `NextID` of the three, so that an ID is never in two
+    /// tables of a plugin. An empty text is no string, ID 0.
+    ///
+    /// UPSTREAM-BUG (data loss, not reproduced; user decision 2026-10-16,
+    /// issue #75): upstream makes the empty tables also when the containers
+    /// hold the plugin's real ones, because nothing has read a string of
+    /// the plugin yet (`GetValue` is the only caller of `LoadForFile`). The
+    /// new string then gets ID 1, the tables are modified, and the save
+    /// writes them over the plugin's: Skyrim SE's `Update.esm` (1,132, 303
+    /// and 158 strings in its three tables) is left with the one new string
+    /// and two empty tables, and every other localized element of the
+    /// plugin points at a string that is gone.
+    /// The port loads the tables of a localized plugin first
+    /// (`LoadForFile`), as a read of any of its strings would have, so the
+    /// new string is added after the plugin's own and only the table it
+    /// goes into is modified. A plugin that is not localized (the
+    /// "Localize plugin" handler calls this before it sets the flag) keeps
+    /// upstream's empty tables: its records hold no string IDs, so tables
+    /// left from an earlier localization are no data of it.
     pub fn add_value(&self, value: &str, element: ElementArg) -> u32 {
         let Some(file) = element.and_then(|element| element.get_file()) else {
             return 0;
@@ -721,6 +737,14 @@ impl LocalizationHandlerImpl {
             return 0;
         }
         let plugin = file.get_name();
+        if file.get_is_localized()
+            && LStringType::ALL.iter().any(|&kind| {
+                let path = Self::localization_file_name_by_type(&plugin, kind);
+                self.index_of(path_file_name(&path)).is_none()
+            })
+        {
+            self.load_for_file(&plugin);
+        }
         let mut files = self.files.write().unwrap();
         let mut id = 1u32;
         for kind in LStringType::ALL {

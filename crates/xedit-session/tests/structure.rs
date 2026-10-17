@@ -449,11 +449,9 @@ fn copies_a_skyrim_npc_as_an_override() {
     session.allow_edit(true);
     let registry = Registry::standard();
     // The copy assigns the localized strings of the NPC as text, so they
-    // become new strings of Update.esm's tables; its tables are loaded
-    // first, as the GUI has them once it shows a name of the plugin
-    // (`AddValue` makes empty tables for a plugin whose tables are not
-    // loaded, which would hide Update.esm's own strings).
-    registry.call(&mut session, "localization.files", json!({})).unwrap();
+    // become new strings of Update.esm's tables, which `AddValue` loads
+    // first (issue #75: upstream would make empty ones that replace
+    // Update.esm's own strings on save).
     let copied = registry
         .call(
             &mut session,
