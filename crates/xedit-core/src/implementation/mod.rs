@@ -2040,6 +2040,33 @@ pub fn trim_initialized_records(keep: usize, except: Option<&Arc<MainRecordImpl>
     }
 }
 
+/// The main records whose subrecords were built while a copy ran
+/// (`wbCopyIsRunning`), with the count of the build: see
+/// [`release_records_built_during_copy`].
+static BUILT_DURING_COPY: std::sync::Mutex<Vec<(Weak<MainRecordImpl>, u32)>> = std::sync::Mutex::new(Vec::new());
+
+/// The end of the outermost `wbCopyElementToFile`: every record whose
+/// subrecords the copy built and that nothing holds a member of any more
+/// resets, as Delphi resets it when the copy's last
+/// `IwbContainerElementRef` of it goes away (`cntElementRefs` at zero;
+/// `DoReset` keeps a modified record, the copy itself). Without it the
+/// source record kept the elements the copy built, whose sorted arrays
+/// `TwbArrayDef.GetSorted` had left unsorted while the copy ran (the
+/// entries in their stored order with their `#n` names), where upstream's
+/// next read builds them again sorted (issue #73).
+pub(crate) fn release_records_built_during_copy() {
+    let built = std::mem::take(&mut *BUILT_DURING_COPY.lock().unwrap());
+    for (record, build) in built {
+        let Some(record) = record.upgrade() else { continue };
+        if record.mr_builds.load(Ordering::Relaxed) == build
+            && record.mr_member_refs.load(Ordering::Relaxed) == 0
+            && !is_pinned(&record)
+        {
+            record.reset();
+        }
+    }
+}
+
 /// Port of `StrRight`: the text padded on the left with spaces to `len`.
 fn str_right(text: &str, len: usize) -> String {
     format!("{text:>len$}")
@@ -3268,6 +3295,9 @@ impl MainRecordImpl {
                 .unwrap()
                 .push_back((Arc::downgrade(self), build));
             INITIALIZED_COUNT.fetch_add(1, Ordering::Relaxed);
+            if crate::interface::globals::copy_is_running() > 0 {
+                BUILT_DURING_COPY.lock().unwrap().push((Arc::downgrade(self), build));
+            }
             let quick = self.in_quick_init();
             // `if not (mrsQuickInit in mrStates)`: the quick init creates
             // neither the contained-in element nor the record header.

@@ -408,6 +408,9 @@ pub fn copy_element_to_file(
         }
     })();
     set_copy_is_running(copy_is_running() - 1);
+    if copy_is_running() == 0 {
+        super::release_records_built_during_copy();
+    }
     result
 }
 

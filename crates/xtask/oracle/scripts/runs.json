@@ -843,6 +843,15 @@
       "note": "parity #33: the ATAV JSON text and the virtual perk activity tree of Skill_Rejuvenation [PERK:0028AE13] copied into a new file as an override and as a new record, through the addition of the light module OldMars.esm as a master, the sort and the clean of the masters"
     },
     {
+      "script": "probes/copy-vmad-order.pas",
+      "game": "sse",
+      "load": [
+        "Skyrim.esm"
+      ],
+      "timeout_minutes": 30,
+      "note": "issue #73: the names and the order of the sorted VMAD Scripts and Properties arrays of Nazeem [NPC_:00013BBF] copied as an override into a new file without being read first (the copy builds the source's elements while wbCopyIsRunning), after the copy and after the script let the references go"
+    },
+    {
       "script": "probes/host-paint.pas",
       "master": "tests/fixtures/parity/host-25.esm",
       "note": "parity #25: the nodes JumpTo classifies (ConflictAllForNode after a jump) over the host-25 fixture"
