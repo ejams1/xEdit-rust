@@ -133,8 +133,16 @@ impl ValueBase {
             let len = block.as_slice().len();
             return Some((block.clone(), 0, len));
         }
-        let (start, end) = self.range()?;
-        Some((self.block.clone(), start, end))
+        match self.range() {
+            Some((start, end)) => Some((self.block.clone(), start, end)),
+            // An element built over no data at all (`aBasePtr = nil`, the
+            // members of a structure whose decompression failed): upstream's
+            // `Init` of a structure, an array or a union runs
+            // `StructDoInit`/`ArrayDoInit`/`UnionDoInit` with the nil
+            // pointers all the same, so the members exist and each value
+            // says `<Error: Expected N bytes of data, found 0>`.
+            None => Some((DataBlock::Buffer(Arc::new(Vec::new())), 0, 0)),
+        }
     }
 
     /// Port of `GetName`: the name of the definition with the suffix.

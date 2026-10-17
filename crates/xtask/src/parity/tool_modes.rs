@@ -912,6 +912,17 @@ fn check_export(runner: &Runner, game: &'static Game, mode: &Mode, outcome: &mut
         if saves {
             command.arg("-saves");
         }
+        // xDump checks the data folder before it exports anything, and
+        // without `-D:` it takes the one of the install the registry names
+        // (parity #41: Fallout 3's registry path no longer held the game,
+        // so the export ended with `EDirectoryNotFoundException` and wrote
+        // no profile file).
+        if let Some(data) = std::env::var_os(game.data_var) {
+            command.arg(format!(
+                "-D:{}\\",
+                super::gui::windows_path(std::path::Path::new(&data))
+            ));
+        }
         command
             .arg("-export")
             .arg("RAW")
