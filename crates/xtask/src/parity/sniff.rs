@@ -1130,9 +1130,38 @@ fn clean_work(work: &Path, differing: &BTreeSet<String>, log_differs: bool) -> R
     Ok(())
 }
 
-/// Runs Sniff on `input` and returns what it gave.
+/// Runs Sniff on `input` and returns what it gave. The released Sniff is
+/// multi-threaded and its heap is not safe: now and then the whole process
+/// dies (`0xc0000374`, heap corruption, on the first Fallout 4 archive of
+/// the full corpus run of parity #41, which ran fine alone). A process that
+/// ends with an exception code is run again, the second time on one thread,
+/// up to three runs; the files it crashes on in every run stay errors.
 #[allow(clippy::too_many_arguments)]
 fn run_sniff(
+    sniff: &Path,
+    work: &Path,
+    case: &Case,
+    source: &Path,
+    input: &Path,
+    path_filter: Option<&str>,
+    threads: usize,
+    extensions: &[String],
+) -> Result<Results> {
+    let mut attempt = 1;
+    loop {
+        let threads = if attempt == 1 { threads } else { 1 };
+        match run_sniff_once(sniff, work, case, source, input, path_filter, threads, extensions) {
+            Err(error) if attempt < 3 && format!("{error:#}").starts_with("Sniff ended with exit code 0xc") => {
+                eprintln!("oracle crashed ({error:#}); running {} again", input.display());
+                attempt += 1;
+            }
+            other => return other,
+        }
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_sniff_once(
     sniff: &Path,
     work: &Path,
     case: &Case,
