@@ -1732,24 +1732,28 @@ pub fn wb_package_data_input_value_type_after_set(
     package_data_input_value_type_after_set(a_element, a_old_value, a_new_value);
 }
 
-/// Port of `wbVirtualPerkActivityUpdateJSON`: the first child of the NULL
-/// root (the resolved activity member) as the JSON text of the `ATAV`
-/// element of the same structure.
-fn wb_virtual_perk_activity_update_json(a_element: &ElementRef) {
-    // get the NULL root
+/// The loop of `wbVirtualPerkActivityUpdateJSON` that finds the NULL root:
+/// the first container above the element that holds a `NULL` member, and
+/// that member.
+fn virtual_perk_activity_root(a_element: &ElementRef) -> Option<(ElementRef, ElementRef)> {
     let mut current = container_of(a_element);
-    let mut found: Option<(ElementRef, ElementRef)> = None;
     while let Some(container) = current {
         if let Some(null) = container
             .as_container()
             .and_then(|container| container.get_element_by_signature(NULL))
         {
-            found = Some((container, null));
-            break;
+            return Some((container, null));
         }
         current = container_of(&container);
     }
-    let Some((l_container, l_element)) = found else {
+    None
+}
+
+/// Port of `wbVirtualPerkActivityUpdateJSON`: the first child of the NULL
+/// root (the resolved activity member) as the JSON text of the `ATAV`
+/// element of the same structure.
+fn wb_virtual_perk_activity_update_json(a_element: &ElementRef) {
+    let Some((l_container, l_element)) = virtual_perk_activity_root(a_element) else {
         return;
     };
 
@@ -2019,9 +2023,19 @@ pub fn define_sf1_anonymous_5271(a_element: &ElementRef, _a_old_value: &Variant,
 /// Upstream anonymous `AfterSet` of the virtual perk stream ID: the JSON is
 /// written back only while a masters update runs (`fsMastersUpdating`, which
 /// `FileImpl::masters_updated` sets around its walk), whose change
-/// notification the root above skips. A tree built while the update runs
-/// (the record's elements built again after a copy) writes its JSON here as
-/// each Stream FormID is set, before its `Data` values are read.
+/// notification the root above skips.
+///
+/// A set while `wbPerkActivityLoadVirtualJSON` builds the tree (its root
+/// carries `esInternalLoad`) leaves the text alone, the text being what the
+/// tree is read from (issue #73): a copy as new collapses the record's
+/// storage, so a masters update's `DoInit` builds the tree again under
+/// `fsMastersUpdating`, and the Stream sets of that build wrote the JSON
+/// from a tree whose `Data` values were not read yet (every one at its
+/// default), where the release keeps the record's text
+/// (`perk-activity-masters.pas`). Upstream's callback has no such check;
+/// the oracle runs do not show its build taking this path. A FormID the
+/// update rewrites in a built tree still writes the JSON from the whole
+/// tree (`sf1-perk-activity-masters`).
 pub fn define_sf1_anonymous_5287(a_element: &ElementRef, a_old_value: &Variant, a_new_value: &Variant) {
     if a_old_value.same_value(a_new_value) {
         return;
@@ -2029,6 +2043,11 @@ pub fn define_sf1_anonymous_5287(a_element: &ElementRef, a_old_value: &Variant, 
     if !a_element
         .get_file()
         .is_some_and(|file| file.get_file_states().contains(FileState::fsMastersUpdating))
+    {
+        return;
+    }
+    if virtual_perk_activity_root(a_element)
+        .is_some_and(|(_, root)| has_element_state(&root, ElementState::esInternalLoad))
     {
         return;
     }
