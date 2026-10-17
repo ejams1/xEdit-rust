@@ -2438,6 +2438,10 @@ fn script_lines(log: &str) -> Vec<String> {
     let mut inside = false;
     for line in log.lines() {
         let raw = line.trim_end_matches(['\r', '\n']);
+        // The oracle's memo (SynEdit) gives a line only up to a NUL in it
+        // (`gui::main_form_log`), so a line is compared up to its first NUL
+        // (`log-nul.pas`); the rest of it cannot be read from the oracle.
+        let raw = raw.split('\0').next().unwrap_or_default();
         let stripped = strip_time(raw);
         let text = match stripped.split_once(", Elapsed Time:") {
             Some((before, _)) => before.to_owned(),

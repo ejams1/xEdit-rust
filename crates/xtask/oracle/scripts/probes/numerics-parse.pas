@@ -23,11 +23,11 @@ begin
 end;
 
 { The text of a case with its control characters spelled `#<code>`: the
-  message log is a memo, whose control truncates a line at a `#0` and
-  breaks it at a `#10`/`#13`, and the harness reads the memo's text up to
-  its first zero, so the raw `#0` cases left the oracle's run without its
-  closing line (it was stopped as a hang after ten minutes). The `.dat`
-  keeps the raw text. The characters are compared, not indexed: a `string`
+  message log is a SynEdit memo, which shows a line only up to a `#0` and
+  breaks it at a `#10`/`#13`, and the lines that reach it in the same flush
+  as a line with a `#0` before them are lost with every line after them
+  (issue #69, `log-nul.pas`), so the raw `#0` cases left the oracle's run
+  without its closing line. The `.dat` keeps the raw text. The characters are compared, not indexed: a `string`
   parameter is not indexable upstream (`Array type required`,
   `e-ordidx-*.pas`), and `Ord` of a one-character string is the variant's
   integer conversion (`Ord('7')` is 7). }
