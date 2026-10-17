@@ -561,7 +561,7 @@ begin
   if EditorID(e) <> 'fPlugin' then Exit;
   AddMessage('files=' + IntToStr(FileCount));
   f := FileByIndex(1);
-  AddMessage('byname=' + Name(FileByName('[01] Plugin.esp')));
+  AddMessage('byname=' + Name(FileByName('Plugin.esp')));
   AddMessage('name=' + GetFileName(f));
   AddMessage('masters=' + IntToStr(MasterCount(f)));
   AddMessage('master0=' + Name(MasterByIndex(f, 0)));
@@ -595,7 +595,7 @@ begin
   if Signature(e) <> 'GMST' then Exit;
   if EditorID(e) <> 'fPlugin' then Exit;
   f := FileByIndex(1);
-  AddMessage('byname=' + Name(FileByName('[01] Plugin.esp')));
+  AddMessage('byname=' + Name(FileByName('Plugin.esp')));
   AddMessage('name=' + GetFileName(f));
   AddMessage('master0=' + Name(MasterByIndex(f, 0)));
   AddMessage('byindex=' + Name(RecordByIndex(f, 0)));

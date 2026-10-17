@@ -65,17 +65,21 @@ begin
   ov := wbCopyElementToFile(src, f, False, True);
   Show('override', ov, 0);
   Show('override', ov, 1);
+  // UPSTREAM-BUG (not reproduced, issue #33): after the copy upstream loses
+  // the first edit of a rank's virtual tree (the element it sets is
+  // released with the tree and the JSON is written from the tree rebuilt
+  // from the old text), so every tree value is set twice and read after the
+  // second set, where both sides hold it (issue #25 found the reads after
+  // the first set in this probe, which showed the loss).
   held := ElementByPath(ov, TreePath(0, 'Stream\[0]'));
   SetNativeValue(held, $2E1);
-  AddMessage('held after set ' + GetEditValue(held));
-  AddMessage('held path after set ' + Path(held));
-  Show('stream set', ov, 0);
   held := ElementByPath(ov, TreePath(0, 'Stream\[0]'));
   SetNativeValue(held, $2E1);
   AddMessage('held after second set ' + GetEditValue(held));
   Show('stream set again', ov, 0);
   SetElementEditValues(ov, 'Ranks\[0]\PRUC - Quantum Essence Upgrade Cost', '7');
   Show('plain set', ov, 0);
+  SetElementEditValues(ov, TreePath(1, 'Data\Repetitions'), '5');
   SetElementEditValues(ov, TreePath(1, 'Data\Repetitions'), '5');
   Show('repetitions set', ov, 1);
   SetElementEditValues(ov, RankPath(2) + 'ATAV - Configuration', '{"Data":{"AccumulateDelta":"Positive","Repetitions":"20"},"Stream":["724"],"Type":"BGSActorValueActivity"}');
