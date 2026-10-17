@@ -615,6 +615,20 @@ pub fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
 
     let mut outcomes = outcomes.into_inner().unwrap();
     outcomes.sort_by(|a, b| (a.game, &a.file).cmp(&(b.game, &b.file)));
+    // xDump 4.1.5q dumps no Morrowind plugin (issue #9): its run of a
+    // Morrowind master is no oracle to compare with, as the GUI modes class
+    // the masters, not a failure of the comparison.
+    if !options.roundtrip && !options.oracle_save {
+        for outcome in &mut outcomes {
+            if outcome.game == "tes3" && outcome.status == "oracle-failed" {
+                outcome.status = "oracle-unsupported";
+                outcome.detail = Some(format!(
+                    "  xDump 4.1.5q dumps no Morrowind plugin (issue #9): {}",
+                    outcome.detail.as_deref().unwrap_or("").trim()
+                ));
+            }
+        }
+    }
     // A save the port refuses with an upstream message is as good as equal:
     // the oracle refuses the same file with the same text.
     let equal = outcomes
@@ -671,15 +685,20 @@ pub fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
             report_file.display()
         );
     } else {
-        println!("{equal} of {} equal. Report: {}", outcomes.len(), report_file.display());
+        let unsupported = outcomes.iter().filter(|o| o.status == "oracle-unsupported").count();
+        println!(
+            "{equal} of {} equal, {unsupported} oracle-unsupported. Report: {}",
+            outcomes.len(),
+            report_file.display()
+        );
     }
     if !options.oracle_only {
-        // `oracle-save`: a plugin the release can not save at all (the
-        // Morrowind masters) is no difference; the counts above name it.
-        let unsupported = if options.oracle_save {
-            outcomes.iter().filter(|o| o.status == "oracle-unsupported").count()
-        } else {
+        // A plugin the release can not save (`oracle-save`) or dump at all
+        // (the Morrowind masters) is no difference; the counts above name it.
+        let unsupported = if options.roundtrip {
             0
+        } else {
+            outcomes.iter().filter(|o| o.status == "oracle-unsupported").count()
         };
         ensure!(equal + unsupported == outcomes.len(), "parity does not hold");
     }
