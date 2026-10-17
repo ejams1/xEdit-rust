@@ -273,7 +273,15 @@ impl SubRecordImpl {
     /// The entries of a sorted array value stay in the loaded order until a
     /// `DoInit(True)` ([`Self::sorted_init`]) sorts them.
     pub fn do_init(&self) {
-        self.sr_init.run(|| self.init());
+        self.sr_init.run(|| {
+            self.init();
+            // `TwbContainer.DoInit` after `Init`: every element takes its
+            // position as its memory order. An `AfterLoad` that read a
+            // sorted array sorted it first (`wbPGRIPointerAfterLoad`, whose
+            // duplicates go from the sorted entries), so the entries are
+            // written in their sorted order (Oblivion's `Knights.esp`).
+            super::reset_memory_orders(&self.container);
+        });
         // `DoInit` of a container a reset left: `csInit` again.
         self.container.stamp_init();
     }
