@@ -2025,17 +2025,20 @@ pub fn define_sf1_anonymous_5271(a_element: &ElementRef, _a_old_value: &Variant,
 /// `FileImpl::masters_updated` sets around its walk), whose change
 /// notification the root above skips.
 ///
-/// A set while `wbPerkActivityLoadVirtualJSON` builds the tree (its root
-/// carries `esInternalLoad`) leaves the text alone, the text being what the
-/// tree is read from (issue #73): a copy as new collapses the record's
-/// storage, so a masters update's `DoInit` builds the tree again under
-/// `fsMastersUpdating`, and the Stream sets of that build wrote the JSON
-/// from a tree whose `Data` values were not read yet (every one at its
-/// default), where the release keeps the record's text
-/// (`perk-activity-masters.pas`). Upstream's callback has no such check;
-/// the oracle runs do not show its build taking this path. A FormID the
-/// update rewrites in a built tree still writes the JSON from the whole
-/// tree (`sf1-perk-activity-masters`).
+/// UPSTREAM-BUG (not reproduced, issue #73): a set while
+/// `wbPerkActivityLoadVirtualJSON` builds the tree (its root carries
+/// `esInternalLoad`) writes the JSON from a tree whose `Data` values are
+/// not read yet, every one at its default. A copy collapses the record's
+/// storage, so a masters update's `DoInit` builds the tree of a copied
+/// record again under `fsMastersUpdating`, and the release's save of
+/// `sf1-light-masters` (a PERK copied as new, then the masters added,
+/// sorted and cleaned) had the `ATAV` text of every rank rewritten with
+/// those defaults. The port leaves the text alone while the tree is built,
+/// the text being what the tree is read from; the sequence shows the copy
+/// before the update, so the release builds the tree from the copied text
+/// then and both sides keep it (`perk-activity-masters.pas` keeps it on
+/// both sides too). A FormID the update rewrites in a built tree still
+/// writes the JSON from the whole tree (`sf1-perk-activity-masters`).
 pub fn define_sf1_anonymous_5287(a_element: &ElementRef, a_old_value: &Variant, a_new_value: &Variant) {
     if a_old_value.same_value(a_new_value) {
         return;
