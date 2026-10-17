@@ -37,6 +37,7 @@
 #![allow(clippy::result_large_err)]
 
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::Arc;
@@ -504,9 +505,13 @@ impl ScriptSelection for NavigationSelection {
 fn last_node(root: &ElementRef) -> ElementRef {
     let mut node = root.clone();
     loop {
-        let children = node_children(&node);
-        match children.last() {
-            Some(last) => node = last.clone(),
+        let children = if node.get_element_type() == ElementType::etMainRecord {
+            record_child_group(&node)
+        } else {
+            Some(node.clone())
+        };
+        match children.as_ref().and_then(last_tree_child) {
+            Some(last) => node = last,
             None => return node,
         }
     }
@@ -519,16 +524,29 @@ fn last_node(root: &ElementRef) -> ElementRef {
 /// dangling node then; the port's walk ends instead). The parent is the
 /// predecessor even when it is the walk's root: the root is processed last
 /// and the walk stops there.
+///
+/// Each step costs the same whatever the size of the group (issue #82): the
+/// node's position comes from [`position_in`], and the previous sibling is
+/// the element before it, or the record before that when the element is
+/// the record's hidden child group (the rule of
+/// [`tree_children_of_container`]).
 fn previous_node(node: &ElementRef) -> Option<ElementRef> {
     let parent = tree_parent(node)?;
-    let siblings = node_children(&parent);
-    let index = siblings
-        .iter()
-        .position(|sibling| sibling.get_element_id() == node.get_element_id())?;
-    if index > 0 {
-        return Some(last_node(&siblings[index - 1]));
+    let container = node.as_element_impl()?.element_base().container()?;
+    let base = container.as_element_impl()?.container_base()?;
+    let index = position_in(&container, node)?;
+    // A hidden child group is no node of the tree.
+    if hidden_group_record(base, index).is_some() {
+        return None;
     }
-    Some(parent)
+    if index == 0 {
+        return Some(parent);
+    }
+    let sibling = match hidden_group_record(base, index - 1) {
+        Some(record) => record,
+        None => base.element_at(index - 1)?,
+    };
+    Some(last_node(&sibling))
 }
 
 /// The parent node of `node` in the tree: the container element, or, for a
@@ -554,19 +572,121 @@ fn parent_record_of_hidden_group(group: &Arc<xedit_core::implementation::GroupRe
     let group_ref = group.self_element_ref()?;
     let container = group_ref.as_element_impl()?.element_base().container()?;
     let base = container.as_element_impl()?.container_base()?;
-    let elements = base.elements();
-    let index = elements
-        .iter()
-        .position(|element| std::ptr::addr_eq(Arc::as_ptr(element), Arc::as_ptr(&group_ref)))?;
-    let before = elements.get(index.checked_sub(1)?)?;
+    let index = position_in(&container, &group_ref)?;
+    hidden_group_record(base, index)
+}
+
+/// The record whose hidden child group the element at `index` of a
+/// container is: a parented group right after a main record whose FormID is
+/// the group's label.
+fn hidden_group_record(base: &xedit_core::implementation::ContainerBase, index: usize) -> Option<ElementRef> {
+    let element = base.element_at(index)?;
+    let group = element.as_element_impl().and_then(ElementImpl::group_record_impl)?;
+    if !is_parented_group(group.group_type()) {
+        return None;
+    }
+    let before = base.element_at(index.checked_sub(1)?)?;
     let record = before.as_element_impl().and_then(ElementImpl::main_record_impl)?;
-    (group.get_group_label() == record.mr_struct().form_id.to_cardinal()).then_some(before.clone())
+    (group.get_group_label() == record.mr_struct().form_id.to_cardinal()).then_some(before)
+}
+
+/// The child group a record's node shows its children from: the parented
+/// group right after the record with the record's FormID as its label.
+fn record_child_group(record: &ElementRef) -> Option<ElementRef> {
+    let container = record.as_element_impl()?.element_base().container()?;
+    let base = container.as_element_impl()?.container_base()?;
+    let index = position_in(&container, record)?;
+    let next = base.element_at(index + 1)?;
+    hidden_group_record(base, index + 1).map(|_| next)
+}
+
+/// The last node child of a file or group container (the last element of
+/// [`tree_children_of_container`]): its last element, or the record before
+/// it when that element is the record's hidden child group.
+fn last_tree_child(container: &ElementRef) -> Option<ElementRef> {
+    let base = container.as_element_impl()?.container_base()?;
+    let count = base.element_count();
+    let last = count.checked_sub(1)?;
+    match hidden_group_record(base, last) {
+        Some(record) => Some(record),
+        None => base.element_at(last),
+    }
+}
+
+/// A container the walk's position index was read from: held weakly, so
+/// that the index counts as no reference of the container (the resets of
+/// upstream's `cntElementRefs`, which `ContainerBase::is_element_referenced`
+/// reads from the strong counts, see the same elements with and without
+/// the walk), while the allocation the weak reference keeps stops the
+/// address from naming another container.
+type WeakElement = std::sync::Weak<dyn xedit_core::interface::Element>;
+
+/// The position index of one container: the container (weakly), the
+/// generation of its element list the index was read at, and the position
+/// of each element by its address.
+type WalkPositions = (WeakElement, u32, std::rc::Rc<HashMap<usize, usize>>);
+
+thread_local! {
+    /// The positions of the elements of the containers the walk has stepped
+    /// through, by the container's address, with the generation of its
+    /// element list they were read at and the container (weakly). Cleared at
+    /// the start and the end of every walk ([`clear_walk_positions`]).
+    static WALK_POSITIONS: std::cell::RefCell<HashMap<usize, WalkPositions>> = std::cell::RefCell::new(HashMap::new());
+}
+
+fn element_address(element: &ElementRef) -> usize {
+    Arc::as_ptr(element).cast::<()>() as usize
+}
+
+/// The position of `element` among the elements of `container`, from an
+/// index that is read again only when the container's element list changed
+/// (its generation, `ContainerBase::generation`).
+fn position_in(container: &ElementRef, element: &ElementRef) -> Option<usize> {
+    let base = container.as_element_impl()?.container_base()?;
+    let key = element_address(container);
+    let target = element_address(element);
+    let generation = base.generation();
+    let cached = WALK_POSITIONS.with(|cache| {
+        cache
+            .borrow()
+            .get(&key)
+            .filter(|(held, at, _)| *at == generation && held.strong_count() > 0)
+            .map(|(_, _, positions)| positions.clone())
+    });
+    if let Some(positions) = cached {
+        return positions.get(&target).copied();
+    }
+    let positions: HashMap<usize, usize> = base
+        .elements()
+        .iter()
+        .enumerate()
+        .map(|(index, element)| (element_address(element), index))
+        .collect();
+    let found = positions.get(&target).copied();
+    // A change while the list was read leaves the index unkept.
+    if base.generation() == generation {
+        WALK_POSITIONS.with(|cache| {
+            cache.borrow_mut().insert(
+                key,
+                (Arc::downgrade(container), generation, std::rc::Rc::new(positions)),
+            );
+        });
+    }
+    found
+}
+
+/// Drops the position index of [`position_in`] and the containers it holds.
+fn clear_walk_positions() {
+    WALK_POSITIONS.with(|cache| cache.borrow_mut().clear());
 }
 
 /// The children of a node in the navigation tree: for a main record the
 /// elements of its child group alone (`vstNavInitNode`: its own element
 /// container holds no tree nodes); for a file or group the element children
 /// with the hidden parented groups folded into the record before them.
+/// The walk's reference: [`previous_node`] and [`last_node`] step through
+/// the same tree without building these lists.
+#[cfg(test)]
 fn node_children(node: &ElementRef) -> Vec<ElementRef> {
     let Some(node_impl) = node.as_element_impl() else {
         return Vec::new();
@@ -603,6 +723,7 @@ fn node_children(node: &ElementRef) -> Vec<ElementRef> {
 /// The element children of a file or group container, in order, with a
 /// parented group whose label is the FormID of the record before it left
 /// out (its records are reached through that record, exactly once).
+#[cfg(test)]
 fn tree_children_of_container(container: &ElementRef) -> Vec<ElementRef> {
     let mut result = Vec::new();
     let Some(base) = container.as_element_impl().and_then(|node| node.container_base()) else {
@@ -1010,6 +1131,12 @@ pub struct ScriptRunState {
     /// nodes the filter kept (`RemoveFilter`'s `ReInitTree` returns to
     /// `None`).
     pub filtered_nodes: Option<std::collections::HashSet<usize>>,
+    /// The `Process` walk of the filtered tree, by the identity of each
+    /// root's element, while a filter is on the tree
+    /// ([`crate::filter::AppliedFilter::walk`]): the walk follows the nodes
+    /// the filter bound, which keep a topic's responses in the order the
+    /// filter's walk found them.
+    pub filtered_walk: Option<std::collections::HashMap<usize, Vec<ElementRef>>>,
     /// The filter call the script asked for; the run loop runs it with the
     /// session when the call that asked returns (see [`PendingFilter`]). A
     /// second call replaces the first: what a filter leaves on the tree is
@@ -1067,6 +1194,7 @@ impl ScriptRunState {
             show_start_time: 0,
             filter_applied: false,
             filtered_nodes: None,
+            filtered_walk: None,
             pending_filter: None,
             started: progress_start(),
             action_started: std::time::Instant::now(),
@@ -2128,6 +2256,7 @@ fn apply_pending_filters(
                         let mut state = state.borrow_mut();
                         state.filter_applied = true;
                         state.filtered_nodes = Some(applied.nodes.iter().map(|node| node.get_element_id()).collect());
+                        state.filtered_walk = Some(applied.walk.into_iter().collect());
                         // `ReInitTree` drops the old nodes and the filter
                         // classifies the new ones: what `ConflictAllForNode`
                         // reads afterwards.
@@ -2186,6 +2315,7 @@ fn apply_pending_filters(
                 state.filter_applied = false;
                 // `ReInitTree`: the tree holds every node again, unclassified.
                 state.filtered_nodes = None;
+                state.filtered_walk = None;
                 state.host.node_conflicts.clear();
             }
         }
@@ -2465,6 +2595,7 @@ pub fn run_script(
             }
         }
         if script.function_exists("Process") && !script.function_is_empty("Process") {
+            clear_walk_positions();
             if selection.live_walk() {
                 // `ApplyScriptToSelection` over `vstNav`: each selected root
                 // is walked from its last node back to itself, the next
@@ -2473,7 +2604,26 @@ pub fn run_script(
                 // what the walk reaches next (a record moved to a place the
                 // walk has not passed is visited again).
                 'roots: for root in &order {
-                    let mut node = last_node(root);
+                    // With a filter on the tree the walk follows the nodes
+                    // of the filtered tree with the elements they were
+                    // bound to: a topic's responses keep the order the
+                    // filter's walk bound them in, also when a check of the
+                    // walk sorted the topic's group afterwards (parity #41,
+                    // `filter-topic-bind.pas`). A root the filter's tree
+                    // does not hold has nothing to walk.
+                    let filtered = state
+                        .borrow()
+                        .filtered_walk
+                        .as_ref()
+                        .map(|walk| walk.get(&root.get_element_id()).cloned().unwrap_or_default());
+                    let mut position = 0usize;
+                    let mut node = match &filtered {
+                        Some(nodes) => match nodes.first() {
+                            Some(first) => first.clone(),
+                            None => continue,
+                        },
+                        None => last_node(root),
+                    };
                     // The predecessor of `next` when it was read: the walk
                     // continues from it when a `Process` removed the node
                     // the walk had stepped to (upstream's freed node reads
@@ -2481,27 +2631,37 @@ pub fn run_script(
                     // predecessor).
                     let mut fallback: Option<ElementRef> = None;
                     loop {
-                        let at_root = node.get_element_id() == root.get_element_id();
-                        let prev = if at_root { None } else { previous_node(&node) };
-                        if !at_root && prev.is_none() {
-                            // The node left the tree: nothing to process
-                            // (`NodeData.Element := nil` in `_RemoveNode`).
-                            match fallback.take() {
-                                Some(next) => {
-                                    node = next;
-                                    continue;
+                        let (at_root, next) = if let Some(nodes) = &filtered {
+                            (position + 1 >= nodes.len(), nodes.get(position + 1).cloned())
+                        } else {
+                            let at_root = node.get_element_id() == root.get_element_id();
+                            let prev = if at_root { None } else { previous_node(&node) };
+                            if !at_root && prev.is_none() {
+                                // The node left the tree: nothing to process
+                                // (`NodeData.Element := nil` in `_RemoveNode`).
+                                match fallback.take() {
+                                    Some(next) => {
+                                        node = next;
+                                        continue;
+                                    }
+                                    None => break,
                                 }
-                                None => break,
                             }
-                        }
-                        let next = prev;
-                        fallback = next
-                            .as_ref()
-                            .filter(|next| next.get_element_id() != root.get_element_id())
-                            .and_then(previous_node);
+                            fallback = prev
+                                .as_ref()
+                                .filter(|next| next.get_element_id() != root.get_element_id())
+                                .and_then(previous_node);
+                            (at_root, prev)
+                        };
+                        // A node of the filtered tree whose element an
+                        // earlier `Process` removed is deleted with it
+                        // (`_RemoveNode`): nothing to process.
+                        let removed = filtered.is_some()
+                            && node.get_element_id() != root.get_element_id()
+                            && tree_parent(&node).is_none();
                         // `ApplyScriptToSelection` walks the live tree: a
                         // node a filter took out is not visited.
-                        if !state.borrow().is_filtered_out(&node) && state.borrow().can_process(&node) {
+                        if !removed && !state.borrow().is_filtered_out(&node) && state.borrow().can_process(&node) {
                             let params = {
                                 let state = state.borrow();
                                 [state.element_value(&node)]
@@ -2550,7 +2710,10 @@ pub fn run_script(
                             break;
                         }
                         match next {
-                            Some(next) => node = next,
+                            Some(next) => {
+                                node = next;
+                                position += 1;
+                            }
                             // The node left the tree; upstream reads a
                             // dangling node here, the walk ends instead.
                             None => break,
@@ -2607,6 +2770,7 @@ pub fn run_script(
                 }
             }
         }
+        clear_walk_positions();
         if script.function_exists("Finalize") && !script.function_is_empty("Finalize") {
             match call_script(&mut script, &state, "Finalize", &[]) {
                 Ok(value) => {
@@ -2811,6 +2975,77 @@ fn script_run(session: &mut Session, request: ScriptRunRequest) -> Result<Script
 #[cfg(test)]
 mod tests {
     use super::is_silent;
+    use super::{ElementRef, clear_walk_positions, last_node, node_children, previous_node, tree_parent};
+
+    /// The walk over the lists of [`node_children`], as the walk stepped
+    /// before issue #82: the last node of the previous sibling's subtree, or
+    /// the parent.
+    fn reference_walk(root: &ElementRef) -> Vec<usize> {
+        fn last(node: &ElementRef) -> ElementRef {
+            let mut node = node.clone();
+            while let Some(child) = node_children(&node).last().cloned() {
+                node = child;
+            }
+            node
+        }
+        let mut visited = Vec::new();
+        let mut node = last(root);
+        loop {
+            visited.push(node.get_element_id());
+            if node.get_element_id() == root.get_element_id() {
+                break;
+            }
+            let parent = tree_parent(&node).expect("a node below the root has a parent");
+            let siblings = node_children(&parent);
+            let index = siblings
+                .iter()
+                .position(|sibling| sibling.get_element_id() == node.get_element_id())
+                .expect("a node is a child of its parent");
+            node = if index > 0 { last(&siblings[index - 1]) } else { parent };
+        }
+        visited
+    }
+
+    /// The steps of the walk that read a position index (issue #82) visit
+    /// the nodes the child lists give, in their order: the walk-churn
+    /// fixture holds worldspaces with their persistent and temporary cell
+    /// children, a cell with references and a topic with responses.
+    #[test]
+    fn the_walk_steps_through_the_tree_the_child_lists_give() {
+        let _guard = xedit_core::interface::globals::test_lock();
+        xedit_core::implementation::clear_files_map();
+        xedit_core::implementation::reset_load_order_slots();
+        xedit_core::interface::clear_files();
+        crate::dump::setup_game_for_edit("sse").unwrap();
+        crate::save::apply_edit_settings(xedit_core::interface::GameMode::gmSSE);
+        let bytes = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tests/fixtures/parity/walk-churn.esm"
+        ))
+        .unwrap();
+        let file = xedit_core::implementation::wb_file_from_bytes(
+            "Skyrim.esm",
+            i32::MAX,
+            xedit_core::interface::types::FileStates::empty(),
+            xedit_core::implementation::FileBytes::Owned(bytes),
+        )
+        .unwrap();
+        let root: ElementRef = file.clone();
+        let expected = reference_walk(&root);
+        assert!(expected.len() > 20, "{}", expected.len());
+        clear_walk_positions();
+        let mut visited = Vec::new();
+        let mut node = last_node(&root);
+        loop {
+            visited.push(node.get_element_id());
+            if node.get_element_id() == root.get_element_id() {
+                break;
+            }
+            node = previous_node(&node).expect("a node below the root has a predecessor");
+        }
+        clear_walk_positions();
+        assert_eq!(visited, expected);
+    }
 
     /// `Copy(aScript, p, PosEx(#10, aScript, p) - p)` (`xeMainForm.pas:8778`)
     /// is the window from `Mode:` to the next `#10`; without a newline

@@ -2,236 +2,301 @@
 # Maintained with `cargo xtask sync`. Edit statuses by hand.
 
 [gui."BSArch/frmArchiveInfo.dfm:FormArchiveInfo:OnClose"]
-status = "pending"
+status = "presentation"
 source = "FormClose"
+note = "Window and text view of the archive information dialog."
 
 [gui."BSArch/frmArchiveInfo.dfm:FormArchiveInfo:OnDeactivate"]
-status = "pending"
+status = "presentation"
 source = "FormDeactivate"
+note = "Window and text view of the archive information dialog."
 
 [gui."BSArch/frmArchiveInfo.dfm:FormArchiveInfo:OnDestroy"]
-status = "pending"
+status = "presentation"
 source = "FormDestroy"
+note = "Window and text view of the archive information dialog."
 
 [gui."BSArch/frmArchiveInfo.dfm:FormArchiveInfo:OnKeyDown"]
-status = "pending"
+status = "presentation"
 source = "FormKeyDown"
+note = "Window and text view of the archive information dialog."
 
 [gui."BSArch/frmArchiveInfo.dfm:FormArchiveInfo:OnShow"]
-status = "pending"
+status = "presentation"
 source = "FormShow"
+note = "Window and text view of the archive information dialog."
 
 [gui."BSArch/frmArchiveInfo.dfm:mniSaveAs:OnClick"]
-status = "pending"
+status = "covered"
+command = "archive.list"
 source = "mniSaveAsClick"
+note = "Saves the archive information text; archive.list gives it."
 
 [gui."BSArch/frmArchiveInfo.dfm:vtText:OnGetText"]
-status = "pending"
+status = "presentation"
 source = "vtTextGetText"
+note = "Window and text view of the archive information dialog."
 
 [gui."BSArch/frmArchiveInfo.dfm:vtText:OnInitNode"]
-status = "pending"
+status = "presentation"
 source = "vtTextInitNode"
+note = "Window and text view of the archive information dialog."
 
 [gui."BSArch/frmArchiveInfo.dfm:vtText:OnKeyDown"]
-status = "pending"
+status = "presentation"
 source = "vtTextKeyDown"
+note = "Window and text view of the archive information dialog."
 
 [gui."BSArch/frmMain.dfm:FormMain:OnClose"]
-status = "pending"
+status = "presentation"
 source = "FormClose"
+note = "Window, list display, filter and selection of BSArchPro's asset list; the packing is btnPack."
 
 [gui."BSArch/frmMain.dfm:FormMain:OnCreate"]
-status = "pending"
+status = "presentation"
 source = "FormCreate"
+note = "Window, list display, filter and selection of BSArchPro's asset list; the packing is btnPack."
 
 [gui."BSArch/frmMain.dfm:btnClearList:OnClick"]
-status = "pending"
+status = "presentation"
 source = "btnClearListClick"
+note = "Window, list display, filter and selection of BSArchPro's asset list; the packing is btnPack."
 
 [gui."BSArch/frmMain.dfm:btnExit:OnClick"]
-status = "pending"
+status = "presentation"
 source = "btnExitClick"
+note = "Window, list display, filter and selection of BSArchPro's asset list; the packing is btnPack."
 
 [gui."BSArch/frmMain.dfm:btnFilterReset:OnClick"]
-status = "pending"
+status = "presentation"
 source = "btnFilterResetClick"
+note = "Window, list display, filter and selection of BSArchPro's asset list; the packing is btnPack."
 
 [gui."BSArch/frmMain.dfm:btnPack:OnClick"]
-status = "pending"
+status = "covered"
+command = "archive.pack"
 source = "btnPackClick"
+note = "Packs the checked assets of the list into an archive (TFormPack): the format, compression, split and flags are the parameters; cargo xtask parity bsarchpro drives the GUI route."
 
 [gui."BSArch/frmMain.dfm:edFilter:OnKeyPress"]
-status = "pending"
+status = "presentation"
 source = "edFilterKeyPress"
+note = "Window, list display, filter and selection of BSArchPro's asset list; the packing is btnPack."
 
 [gui."BSArch/frmMain.dfm:mnAssets:OnPopup"]
-status = "pending"
+status = "presentation"
 source = "mnAssetsPopup"
+note = "Window, list display, filter and selection of BSArchPro's asset list; the packing is btnPack."
 
 [gui."BSArch/frmMain.dfm:mniArchiveInfo:OnClick"]
-status = "pending"
+status = "covered"
+command = "archive.list"
 source = "mniArchiveInfoClick"
+note = "The information of an archive (its format, flags and files)."
 
 [gui."BSArch/frmMain.dfm:mniAssetCompress:OnClick"]
 status = "pending"
 source = "mniAssetCompressClick"
+note = "Owned by issue #78 (GUI operations without a typed command): the asset list editor of BSArchPro: find assets with identical data, reset the compressed flags by DoNotCompress, rename an asset, search and replace in asset names, remove assets from the list"
 
 [gui."BSArch/frmMain.dfm:mniAssetEdit:OnClick"]
 status = "pending"
 source = "mniAssetEditClick"
+note = "Owned by issue #78 (GUI operations without a typed command): the asset list editor of BSArchPro: find assets with identical data, reset the compressed flags by DoNotCompress, rename an asset, search and replace in asset names, remove assets from the list"
 
 [gui."BSArch/frmMain.dfm:mniAssetFindIdentical:OnClick"]
 status = "pending"
 source = "mniAssetFindIdenticalClick"
+note = "Owned by issue #78 (GUI operations without a typed command): the asset list editor of BSArchPro: find assets with identical data, reset the compressed flags by DoNotCompress, rename an asset, search and replace in asset names, remove assets from the list"
 
 [gui."BSArch/frmMain.dfm:mniAssetOpen:OnClick"]
-status = "pending"
+status = "presentation"
 source = "mniAssetOpenClick"
+note = "Opens an asset with the program the shell associates with it."
 
 [gui."BSArch/frmMain.dfm:mniAssetPack:OnClick"]
-status = "pending"
+status = "covered"
+command = "archive.pack"
 source = "mniAssetPackClick"
+note = "Packs the checked assets of the list into an archive (TFormPack): the format, compression, split and flags are the parameters; cargo xtask parity bsarchpro drives the GUI route."
 
 [gui."BSArch/frmMain.dfm:mniAssetRemoveSelected:OnClick"]
 status = "pending"
 source = "mniAssetRemoveSelectedClick"
+note = "Owned by issue #78 (GUI operations without a typed command): the asset list editor of BSArchPro: find assets with identical data, reset the compressed flags by DoNotCompress, rename an asset, search and replace in asset names, remove assets from the list"
 
 [gui."BSArch/frmMain.dfm:mniAssetRemoveUnselected:OnClick"]
 status = "pending"
 source = "mniAssetRemoveUnselectedClick"
+note = "Owned by issue #78 (GUI operations without a typed command): the asset list editor of BSArchPro: find assets with identical data, reset the compressed flags by DoNotCompress, rename an asset, search and replace in asset names, remove assets from the list"
 
 [gui."BSArch/frmMain.dfm:mniAssetReplace:OnClick"]
 status = "pending"
 source = "mniAssetReplaceClick"
+note = "Owned by issue #78 (GUI operations without a typed command): the asset list editor of BSArchPro: find assets with identical data, reset the compressed flags by DoNotCompress, rename an asset, search and replace in asset names, remove assets from the list"
 
 [gui."BSArch/frmMain.dfm:mniAssetUnpack:OnClick"]
-status = "pending"
+status = "covered"
+command = "archive.extract"
 source = "mniAssetUnpackClick"
+note = "Unpacks the selected assets into a folder."
 
 [gui."BSArch/frmMain.dfm:mniAssetUnpackSaveAs:OnClick"]
-status = "pending"
+status = "covered"
+command = "archive.extract"
 source = "mniAssetUnpackSaveAsClick"
+note = "Unpacks the selected assets into a folder."
 
 [gui."BSArch/frmMain.dfm:mniLoadList:OnClick"]
 status = "pending"
 source = "mniLoadListClick"
+note = "Owned by issue #78 (GUI operations without a typed command): load and save a BSArchPro asset list file (.bsarch)"
 
 [gui."BSArch/frmMain.dfm:mniSaveList:OnClick"]
 status = "pending"
 source = "mniSaveListClick"
+note = "Owned by issue #78 (GUI operations without a typed command): load and save a BSArchPro asset list file (.bsarch)"
 
 [gui."BSArch/frmMain.dfm:rbAll:OnClick"]
-status = "pending"
+status = "presentation"
 source = "rbAllClick"
+note = "Window, list display, filter and selection of BSArchPro's asset list; the packing is btnPack."
 
 [gui."BSArch/frmMain.dfm:rbCompressed:OnClick"]
-status = "pending"
+status = "presentation"
 source = "rbAllClick"
+note = "Window, list display, filter and selection of BSArchPro's asset list; the packing is btnPack."
 
 [gui."BSArch/frmMain.dfm:rbUncompressed:OnClick"]
-status = "pending"
+status = "presentation"
 source = "rbAllClick"
+note = "Window, list display, filter and selection of BSArchPro's asset list; the packing is btnPack."
 
 [gui."BSArch/frmMain.dfm:timerFilter:OnTimer"]
-status = "pending"
+status = "presentation"
 source = "timerFilterTimer"
+note = "Window, list display, filter and selection of BSArchPro's asset list; the packing is btnPack."
 
 [gui."BSArch/frmMain.dfm:vtAssets:OnBeforeCellPaint"]
-status = "pending"
+status = "presentation"
 source = "vtAssetsBeforeCellPaint"
+note = "Window, list display, filter and selection of BSArchPro's asset list; the packing is btnPack."
 
 [gui."BSArch/frmMain.dfm:vtAssets:OnChecked"]
-status = "pending"
+status = "presentation"
 source = "vtAssetsChecked"
+note = "Window, list display, filter and selection of BSArchPro's asset list; the packing is btnPack."
 
 [gui."BSArch/frmMain.dfm:vtAssets:OnCompareNodes"]
-status = "pending"
+status = "presentation"
 source = "vtAssetsCompareNodes"
+note = "Window, list display, filter and selection of BSArchPro's asset list; the packing is btnPack."
 
 [gui."BSArch/frmMain.dfm:vtAssets:OnDblClick"]
-status = "pending"
+status = "presentation"
 source = "vtAssetsDblClick"
+note = "Opens an asset with the program the shell associates with it."
 
 [gui."BSArch/frmMain.dfm:vtAssets:OnGetText"]
-status = "pending"
+status = "presentation"
 source = "vtAssetsGetText"
+note = "Window, list display, filter and selection of BSArchPro's asset list; the packing is btnPack."
 
 [gui."BSArch/frmMain.dfm:vtAssets:OnHeaderClick"]
-status = "pending"
+status = "presentation"
 source = "vtAssetsHeaderClick"
+note = "Window, list display, filter and selection of BSArchPro's asset list; the packing is btnPack."
 
 [gui."BSArch/frmMain.dfm:vtAssets:OnInitNode"]
-status = "pending"
+status = "presentation"
 source = "vtAssetsInitNode"
+note = "Window, list display, filter and selection of BSArchPro's asset list; the packing is btnPack."
 
 [gui."BSArch/frmMain.dfm:vtAssets:OnKeyDown"]
-status = "pending"
+status = "presentation"
 source = "vtAssetsKeyDown"
+note = "Window, list display, filter and selection of BSArchPro's asset list; the packing is btnPack."
 
 [gui."BSArch/frmPack.dfm:FormPack:OnClose"]
-status = "pending"
+status = "presentation"
 source = "FormClose"
+note = "Window and browse dialog of the pack options dialog; archive.pack takes the options."
 
 [gui."BSArch/frmPack.dfm:FormPack:OnCreate"]
-status = "pending"
+status = "presentation"
 source = "FormCreate"
+note = "Window and browse dialog of the pack options dialog; archive.pack takes the options."
 
 [gui."BSArch/frmPack.dfm:FormPack:OnKeyDown"]
-status = "pending"
+status = "presentation"
 source = "FormKeyDown"
+note = "Window and browse dialog of the pack options dialog; archive.pack takes the options."
 
 [gui."BSArch/frmPack.dfm:FormPack:OnShow"]
-status = "pending"
+status = "presentation"
 source = "FormShow"
+note = "Window and browse dialog of the pack options dialog; archive.pack takes the options."
 
 [gui."BSArch/frmPack.dfm:btnBrowse:OnClick"]
-status = "pending"
+status = "presentation"
 source = "btnBrowseClick"
+note = "Window and browse dialog of the pack options dialog; archive.pack takes the options."
 
 [gui."BSArch/frmPack.dfm:chkAutodetectFlags:OnClick"]
-status = "pending"
+status = "covered"
+command = "archive.pack"
 source = "chkAutodetectFlagsClick"
+note = "TwbBSArchive.DetectFlags: archive.pack detects the flags unless archive_flags/file_flags override them."
 
 [gui."BSArch/frmSearchReplace.dfm:FormSearchReplace:OnClose"]
-status = "pending"
+status = "presentation"
 source = "FormClose"
+note = "The search and replace dialog of the asset list editor (owed with mniAssetReplace)."
 
 [gui."BSArch/frmSearchReplace.dfm:FormSearchReplace:OnKeyDown"]
-status = "pending"
+status = "presentation"
 source = "FormKeyDown"
+note = "The search and replace dialog of the asset list editor (owed with mniAssetReplace)."
 
 [gui."BSArch/frmSearchReplace.dfm:FormSearchReplace:OnShow"]
-status = "pending"
+status = "presentation"
 source = "FormShow"
+note = "The search and replace dialog of the asset list editor (owed with mniAssetReplace)."
 
 [gui."BSArch/frmSearchReplace.dfm:rbAppend:OnClick"]
-status = "pending"
+status = "presentation"
 source = "rbReplaceClick"
+note = "The search and replace dialog of the asset list editor (owed with mniAssetReplace)."
 
 [gui."BSArch/frmSearchReplace.dfm:rbPrepend:OnClick"]
-status = "pending"
+status = "presentation"
 source = "rbReplaceClick"
+note = "The search and replace dialog of the asset list editor (owed with mniAssetReplace)."
 
 [gui."BSArch/frmSearchReplace.dfm:rbReplace:OnClick"]
-status = "pending"
+status = "presentation"
 source = "rbReplaceClick"
+note = "The search and replace dialog of the asset list editor (owed with mniAssetReplace)."
 
 [gui."Core/wbTaskProgress.dfm:FormTaskProgress:OnActivate"]
-status = "pending"
+status = "presentation"
 source = "FormActivate"
+note = "The progress window of a long task and its Cancel button."
 
 [gui."Core/wbTaskProgress.dfm:FormTaskProgress:OnClose"]
-status = "pending"
+status = "presentation"
 source = "FormClose"
+note = "The progress window of a long task and its Cancel button."
 
 [gui."Core/wbTaskProgress.dfm:FormTaskProgress:OnCreate"]
-status = "pending"
+status = "presentation"
 source = "FormCreate"
+note = "The progress window of a long task and its Cancel button."
 
 [gui."Core/wbTaskProgress.dfm:btnCancel:OnClick"]
-status = "pending"
+status = "presentation"
 source = "btnCancelClick"
+note = "The progress window of a long task and its Cancel button."
 
 [gui."Sniff/Proc/ProcAnalyzeMesh.dfm:lblInfoCache:OnClick"]
 status = "presentation"
@@ -520,84 +585,104 @@ source = "tcMainChange"
 note = "Window, browse dialogs and tabs of the GUI."
 
 [gui."Sniff/frmVertexPaintHelper.dfm:FormVertexPaintHelper:OnKeyDown"]
-status = "pending"
+status = "presentation"
 source = "FormKeyDown"
+note = "A colour picker of the vertex paint frame; sniff.run takes the colour."
 
 [gui."Sniff/frmVertexPaintHelper.dfm:Image1:OnClick"]
-status = "pending"
+status = "presentation"
 source = "Image1Click"
+note = "A colour picker of the vertex paint frame; sniff.run takes the colour."
 
 [gui."xEdit/xeDeveloperMessageForm.dfm:btnKoFi:OnClick"]
-status = "pending"
+status = "presentation"
 source = "btnKoFiClick"
+note = "The developer's start message (donation links and its timer)."
 
 [gui."xEdit/xeDeveloperMessageForm.dfm:btnOK:OnClick"]
-status = "pending"
+status = "presentation"
 source = "btnOKClick"
+note = "The developer's start message (donation links and its timer)."
 
 [gui."xEdit/xeDeveloperMessageForm.dfm:btnOops:OnClick"]
-status = "pending"
+status = "presentation"
 source = "btnOopsClick"
+note = "The developer's start message (donation links and its timer)."
 
 [gui."xEdit/xeDeveloperMessageForm.dfm:btnPayPal:OnClick"]
-status = "pending"
+status = "presentation"
 source = "btnPayPalClick"
+note = "The developer's start message (donation links and its timer)."
 
 [gui."xEdit/xeDeveloperMessageForm.dfm:frmDeveloperMessage:OnClose"]
-status = "pending"
+status = "presentation"
 source = "FormClose"
+note = "The developer's start message (donation links and its timer)."
 
 [gui."xEdit/xeDeveloperMessageForm.dfm:frmDeveloperMessage:OnCreate"]
-status = "pending"
+status = "presentation"
 source = "FormCreate"
+note = "The developer's start message (donation links and its timer)."
 
 [gui."xEdit/xeDeveloperMessageForm.dfm:frmDeveloperMessage:OnShow"]
-status = "pending"
+status = "presentation"
 source = "FormShow"
+note = "The developer's start message (donation links and its timer)."
 
 [gui."xEdit/xeDeveloperMessageForm.dfm:tmrEnableButton:OnTimer"]
-status = "pending"
+status = "presentation"
 source = "tmrEnableButtonTimer"
+note = "The developer's start message (donation links and its timer)."
 
 [gui."xEdit/xeEditWarningForm.dfm:Timer1:OnTimer"]
-status = "pending"
+status = "presentation"
 source = "Timer1Timer"
+note = "The edit warning shown before the first edit; the CLI's --edit flag is the explicit consent."
 
 [gui."xEdit/xeEditWarningForm.dfm:frmEditWarning:OnCreate"]
-status = "pending"
+status = "presentation"
 source = "FormCreate"
+note = "The edit warning shown before the first edit; the CLI's --edit flag is the explicit consent."
 
 [gui."xEdit/xeEditWarningForm.dfm:frmEditWarning:OnShow"]
-status = "pending"
+status = "presentation"
 source = "FormShow"
+note = "The edit warning shown before the first edit; the CLI's --edit flag is the explicit consent."
 
 [gui."xEdit/xeFileSelectForm.dfm:CheckListBox1:OnDblClick"]
-status = "pending"
+status = "presentation"
 source = "CheckListBox1DblClick"
+note = "The generic file and record selection list; a request names the files or records."
 
 [gui."xEdit/xeFileSelectForm.dfm:InvertSelection1:OnClick"]
-status = "pending"
+status = "presentation"
 source = "InvertSelection1Click"
+note = "The generic file and record selection list; a request names the files or records."
 
 [gui."xEdit/xeFileSelectForm.dfm:SelectAll1:OnClick"]
-status = "pending"
+status = "presentation"
 source = "SelectAll1Click"
+note = "The generic file and record selection list; a request names the files or records."
 
 [gui."xEdit/xeFileSelectForm.dfm:SelectNone1:OnClick"]
-status = "pending"
+status = "presentation"
 source = "SelectNone1Click"
+note = "The generic file and record selection list; a request names the files or records."
 
 [gui."xEdit/xeFileSelectForm.dfm:edSearch:OnChange"]
-status = "pending"
+status = "presentation"
 source = "edSearchChange"
+note = "The generic file and record selection list; a request names the files or records."
 
 [gui."xEdit/xeFileSelectForm.dfm:frmFileSelect:OnCreate"]
-status = "pending"
+status = "presentation"
 source = "FormCreate"
+note = "The generic file and record selection list; a request names the files or records."
 
 [gui."xEdit/xeFileSelectForm.dfm:frmFileSelect:OnKeyDown"]
-status = "pending"
+status = "presentation"
 source = "FormKeyDown"
+note = "The generic file and record selection list; a request names the files or records."
 
 [gui."xEdit/xeFilterOptionsForm.dfm:btnFilterAdd:OnClick"]
 status = "presentation"
@@ -680,20 +765,24 @@ source = "mniSelectionClick"
 note = "Unchecks every entry of a list of the dialog; an empty set empties the tree (filter.apply)."
 
 [gui."xEdit/xeGameSelectForm.dfm:ListBox1:OnDblClick"]
-status = "pending"
+status = "presentation"
 source = "ListBox1DblClick"
+note = "The game selection list at start; --game selects the game."
 
 [gui."xEdit/xeGameSelectForm.dfm:edSearch:OnChange"]
-status = "pending"
+status = "presentation"
 source = "edSearchChange"
+note = "The game selection list at start; --game selects the game."
 
 [gui."xEdit/xeGameSelectForm.dfm:frmGameSelect:OnCreate"]
-status = "pending"
+status = "presentation"
 source = "FormCreate"
+note = "The game selection list at start; --game selects the game."
 
 [gui."xEdit/xeGameSelectForm.dfm:frmGameSelect:OnKeyDown"]
-status = "pending"
+status = "presentation"
 source = "FormKeyDown"
+note = "The game selection list at start; --game selects the game."
 
 [gui."xEdit/xeLODGenForm.dfm:SelectAll1:OnClick"]
 status = "covered"
@@ -763,28 +852,34 @@ source = "FormShow"
 note = "The worldspace list and its default checks (the response lists them)."
 
 [gui."xEdit/xeLegendForm.dfm:dgLegend:OnDrawCell"]
-status = "pending"
+status = "presentation"
 source = "dgLegendDrawCell"
+note = "The legend of the conflict colours."
 
 [gui."xEdit/xeLegendForm.dfm:frmLegend:OnClose"]
-status = "pending"
+status = "presentation"
 source = "FormClose"
+note = "The legend of the conflict colours."
 
 [gui."xEdit/xeLegendForm.dfm:frmLegend:OnCreate"]
-status = "pending"
+status = "presentation"
 source = "FormCreate"
+note = "The legend of the conflict colours."
 
 [gui."xEdit/xeLegendForm.dfm:frmLegend:OnDestroy"]
-status = "pending"
+status = "presentation"
 source = "FormDestroy"
+note = "The legend of the conflict colours."
 
 [gui."xEdit/xeLegendForm.dfm:frmLegend:OnHide"]
-status = "pending"
+status = "presentation"
 source = "FormHide"
+note = "The legend of the conflict colours."
 
 [gui."xEdit/xeLegendForm.dfm:frmLegend:OnShow"]
-status = "pending"
+status = "presentation"
 source = "FormShow"
+note = "The legend of the conflict colours."
 
 [gui."xEdit/xeLocalizationForm.dfm:btnSave:OnClick"]
 status = "covered"
@@ -862,122 +957,153 @@ note = "Font and scale."
 [gui."xEdit/xeLogAnalyzerForm.dfm:btnAnalyze:OnClick"]
 status = "pending"
 source = "btnAnalyzeClick"
+note = "Owned by issue #78 (GUI operations without a typed command): the Log Analyzer (mniNavLogAnalyzer): reads the game's Papyrus or crash log and lists the forms it names, with jumps to them"
 
 [gui."xEdit/xeLogAnalyzerForm.dfm:btnFileSelect:OnClick"]
 status = "pending"
 source = "btnFileSelectClick"
+note = "Owned by issue #78 (GUI operations without a typed command): the Log Analyzer (mniNavLogAnalyzer): reads the game's Papyrus or crash log and lists the forms it names, with jumps to them"
 
 [gui."xEdit/xeLogAnalyzerForm.dfm:frmLogAnalyzer:OnClose"]
 status = "pending"
 source = "FormClose"
+note = "Owned by issue #78 (GUI operations without a typed command): the Log Analyzer (mniNavLogAnalyzer): reads the game's Papyrus or crash log and lists the forms it names, with jumps to them"
 
 [gui."xEdit/xeLogAnalyzerForm.dfm:frmLogAnalyzer:OnCreate"]
 status = "pending"
 source = "FormCreate"
+note = "Owned by issue #78 (GUI operations without a typed command): the Log Analyzer (mniNavLogAnalyzer): reads the game's Papyrus or crash log and lists the forms it names, with jumps to them"
 
 [gui."xEdit/xeLogAnalyzerForm.dfm:frmLogAnalyzer:OnShow"]
 status = "pending"
 source = "FormShow"
+note = "Owned by issue #78 (GUI operations without a typed command): the Log Analyzer (mniNavLogAnalyzer): reads the game's Papyrus or crash log and lists the forms it names, with jumps to them"
 
 [gui."xEdit/xeLogAnalyzerForm.dfm:vstForms:OnChange"]
 status = "pending"
 source = "vstFormsChange"
+note = "Owned by issue #78 (GUI operations without a typed command): the Log Analyzer (mniNavLogAnalyzer): reads the game's Papyrus or crash log and lists the forms it names, with jumps to them"
 
 [gui."xEdit/xeLogAnalyzerForm.dfm:vstForms:OnCompareNodes"]
 status = "pending"
 source = "vstFormsCompareNodes"
+note = "Owned by issue #78 (GUI operations without a typed command): the Log Analyzer (mniNavLogAnalyzer): reads the game's Papyrus or crash log and lists the forms it names, with jumps to them"
 
 [gui."xEdit/xeLogAnalyzerForm.dfm:vstForms:OnDblClick"]
 status = "pending"
 source = "vstFormsDblClick"
+note = "Owned by issue #78 (GUI operations without a typed command): the Log Analyzer (mniNavLogAnalyzer): reads the game's Papyrus or crash log and lists the forms it names, with jumps to them"
 
 [gui."xEdit/xeLogAnalyzerForm.dfm:vstForms:OnFreeNode"]
 status = "pending"
 source = "vstFormsFreeNode"
+note = "Owned by issue #78 (GUI operations without a typed command): the Log Analyzer (mniNavLogAnalyzer): reads the game's Papyrus or crash log and lists the forms it names, with jumps to them"
 
 [gui."xEdit/xeLogAnalyzerForm.dfm:vstForms:OnGetText"]
 status = "pending"
 source = "vstFormsGetText"
+note = "Owned by issue #78 (GUI operations without a typed command): the Log Analyzer (mniNavLogAnalyzer): reads the game's Papyrus or crash log and lists the forms it names, with jumps to them"
 
 [gui."xEdit/xeLogAnalyzerForm.dfm:vstForms:OnHeaderClick"]
 status = "pending"
 source = "vstFormsHeaderClick"
+note = "Owned by issue #78 (GUI operations without a typed command): the Log Analyzer (mniNavLogAnalyzer): reads the game's Papyrus or crash log and lists the forms it names, with jumps to them"
 
 [gui."xEdit/xeLogAnalyzerForm.dfm:vstForms:OnInitChildren"]
 status = "pending"
 source = "vstFormsInitChildren"
+note = "Owned by issue #78 (GUI operations without a typed command): the Log Analyzer (mniNavLogAnalyzer): reads the game's Papyrus or crash log and lists the forms it names, with jumps to them"
 
 [gui."xEdit/xeLogAnalyzerForm.dfm:vstForms:OnInitNode"]
 status = "pending"
 source = "vstFormsInitNode"
+note = "Owned by issue #78 (GUI operations without a typed command): the Log Analyzer (mniNavLogAnalyzer): reads the game's Papyrus or crash log and lists the forms it names, with jumps to them"
 
 [gui."xEdit/xeMainForm.dfm:acBack:OnExecute"]
-status = "pending"
+status = "presentation"
 source = "acBackExecute"
+note = "The view's back/forward history of shown records (JumpTo); the commands name the record they act on."
 
 [gui."xEdit/xeMainForm.dfm:acBack:OnUpdate"]
-status = "pending"
+status = "presentation"
 source = "acBackUpdate"
+note = "The view's back/forward history of shown records (JumpTo); the commands name the record they act on."
 
 [gui."xEdit/xeMainForm.dfm:acForward:OnExecute"]
-status = "pending"
+status = "presentation"
 source = "acForwardExecute"
+note = "The view's back/forward history of shown records (JumpTo); the commands name the record they act on."
 
 [gui."xEdit/xeMainForm.dfm:acForward:OnUpdate"]
-status = "pending"
+status = "presentation"
 source = "acForwardUpdate"
+note = "The view's back/forward history of shown records (JumpTo); the commands name the record they act on."
 
 [gui."xEdit/xeMainForm.dfm:acScript:OnExecute"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "acScriptExecute"
+note = "A script hotkey runs the script file through ApplyScript; script.run runs any script by path."
 
 [gui."xEdit/xeMainForm.dfm:bnDiscord:OnClick"]
-status = "pending"
+status = "presentation"
 source = "bnDiscordClick"
+note = "Opens a web page."
 
 [gui."xEdit/xeMainForm.dfm:bnGitHub:OnClick"]
-status = "pending"
+status = "presentation"
 source = "bnGitHubClick"
+note = "Opens a web page."
 
 [gui."xEdit/xeMainForm.dfm:bnHelp:OnClick"]
-status = "pending"
+status = "presentation"
 source = "bnHelpClick"
+note = "Opens a web page."
 
 [gui."xEdit/xeMainForm.dfm:bnKoFi:OnClick"]
-status = "pending"
+status = "presentation"
 source = "bnKoFiClick"
+note = "Opens a web page."
 
 [gui."xEdit/xeMainForm.dfm:bnLegend:OnClick"]
-status = "pending"
+status = "presentation"
 source = "bnLegendClick"
+note = "The legend window, the pinned view and the main menu button of the GUI."
 
 [gui."xEdit/xeMainForm.dfm:bnMainMenu:OnMouseDown"]
-status = "pending"
+status = "presentation"
 source = "bnMainMenuMouseDown"
+note = "The legend window, the pinned view and the main menu button of the GUI."
 
 [gui."xEdit/xeMainForm.dfm:bnNexusMods:OnClick"]
-status = "pending"
+status = "presentation"
 source = "bnNexusModsClick"
+note = "Opens a web page."
 
 [gui."xEdit/xeMainForm.dfm:bnPatreon:OnClick"]
-status = "pending"
+status = "presentation"
 source = "bnPatreonClick"
+note = "Opens a web page."
 
 [gui."xEdit/xeMainForm.dfm:bnPayPal:OnClick"]
-status = "pending"
+status = "presentation"
 source = "bnPayPalClick"
+note = "Opens a web page."
 
 [gui."xEdit/xeMainForm.dfm:bnPinned:OnClick"]
-status = "pending"
+status = "presentation"
 source = "bnPinnedClick"
+note = "The legend window, the pinned view and the main menu button of the GUI."
 
 [gui."xEdit/xeMainForm.dfm:bnVideos:OnClick"]
-status = "pending"
+status = "presentation"
 source = "bnVideosClick"
+note = "Opens a web page."
 
 [gui."xEdit/xeMainForm.dfm:btnCancel:OnClick"]
-status = "pending"
+status = "presentation"
 source = "btnCancelClick"
+note = "Cancels a long action of the GUI (wbForceTerminate); a CLI command is stopped by ending the process."
 
 [gui."xEdit/xeMainForm.dfm:cbRegExFilter:OnClick"]
 status = "covered"
@@ -1026,16 +1152,21 @@ source = "edViewFilterNameKeyDown"
 note = "Moves the focus between the filter controls."
 
 [gui."xEdit/xeMainForm.dfm:edEditorIDSearch:OnChange"]
-status = "pending"
+status = "covered"
+command = "records.find"
 source = "edEditorIDSearchChange"
+note = "The editor ID search finds the record of an editor ID; records.find searches editor IDs."
 
 [gui."xEdit/xeMainForm.dfm:edEditorIDSearch:OnEnter"]
-status = "pending"
+status = "presentation"
 source = "edEditorIDSearchEnter"
+note = "Selects the text of the search box when it gets the focus."
 
 [gui."xEdit/xeMainForm.dfm:edEditorIDSearch:OnKeyDown"]
-status = "pending"
+status = "covered"
+command = "records.find"
 source = "edEditorIDSearchKeyDown"
+note = "The editor ID search finds the record of an editor ID; records.find searches editor IDs."
 
 [gui."xEdit/xeMainForm.dfm:edFileNameFilter:OnChange"]
 status = "covered"
@@ -1053,16 +1184,21 @@ status = "presentation"
 source = "edFilterNoBeepOnEnterKeyPress"
 
 [gui."xEdit/xeMainForm.dfm:edFormIDSearch:OnChange"]
-status = "pending"
+status = "covered"
+command = "records.get"
 source = "edFormIDSearchChange"
+note = "The FormID search jumps to the record with that load order FormID; records.get reads it by FormID."
 
 [gui."xEdit/xeMainForm.dfm:edFormIDSearch:OnEnter"]
-status = "pending"
+status = "presentation"
 source = "edFormIDSearchEnter"
+note = "Selects the text of the search box when it gets the focus."
 
 [gui."xEdit/xeMainForm.dfm:edFormIDSearch:OnKeyDown"]
-status = "pending"
+status = "covered"
+command = "records.get"
 source = "edFormIDSearchKeyDown"
+note = "The FormID search jumps to the record with that load order FormID; records.get reads it by FormID."
 
 [gui."xEdit/xeMainForm.dfm:edReferencedByFilterFileName:OnChange"]
 status = "covered"
@@ -1145,72 +1281,90 @@ source = "edFilterNoBeepOnEnterKeyPress"
 note = "Swallows the beep of Enter."
 
 [gui."xEdit/xeMainForm.dfm:fpnlReferencedByFilter:OnResize"]
-status = "pending"
+status = "presentation"
 source = "fpnlViewFilterResize"
+note = "Layout of the filter panels."
 
 [gui."xEdit/xeMainForm.dfm:fpnlViewFilter:OnResize"]
-status = "pending"
+status = "presentation"
 source = "fpnlViewFilterResize"
+note = "Layout of the filter panels."
 
 [gui."xEdit/xeMainForm.dfm:frmMain:OnClose"]
-status = "pending"
+status = "covered"
+command = "files.save"
 source = "FormClose"
+note = "FormClose asks to save the changed modules (SaveChanged); files.save saves them, the session never saves on its own."
 
 [gui."xEdit/xeMainForm.dfm:frmMain:OnCreate"]
-status = "pending"
+status = "presentation"
 source = "FormCreate"
+note = "Window setup and keyboard handling of the main form; the session settings FormCreate sets (wbDisplayShorterNames, the settings file) are the editor session's defaults."
 
 [gui."xEdit/xeMainForm.dfm:frmMain:OnKeyDown"]
-status = "pending"
+status = "presentation"
 source = "FormKeyDown"
+note = "Window setup and keyboard handling of the main form; the session settings FormCreate sets (wbDisplayShorterNames, the settings file) are the editor session's defaults."
 
 [gui."xEdit/xeMainForm.dfm:frmMain:OnKeyUp"]
-status = "pending"
+status = "presentation"
 source = "FormKeyUp"
+note = "Window setup and keyboard handling of the main form; the session settings FormCreate sets (wbDisplayShorterNames, the settings file) are the editor session's defaults."
 
 [gui."xEdit/xeMainForm.dfm:frmMain:OnResize"]
-status = "pending"
+status = "presentation"
 source = "FormResize"
+note = "Window setup and keyboard handling of the main form; the session settings FormCreate sets (wbDisplayShorterNames, the settings file) are the editor session's defaults."
 
 [gui."xEdit/xeMainForm.dfm:frmMain:OnShow"]
-status = "pending"
+status = "presentation"
 source = "FormShow"
+note = "Window setup and keyboard handling of the main form; the session settings FormCreate sets (wbDisplayShorterNames, the settings file) are the editor session's defaults."
 
 [gui."xEdit/xeMainForm.dfm:jbhGitHub:OnBalloonClick"]
-status = "pending"
+status = "presentation"
 source = "jbhGitHubBalloonClick"
+note = "A hint balloon of the main form (new versions, the save hint)."
 
 [gui."xEdit/xeMainForm.dfm:jbhGitHub:OnCloseBtnClick"]
-status = "pending"
+status = "presentation"
 source = "jbhGitHubCloseBtnClick"
+note = "A hint balloon of the main form (new versions, the save hint)."
 
 [gui."xEdit/xeMainForm.dfm:jbhNexusMods:OnBalloonClick"]
-status = "pending"
+status = "presentation"
 source = "jbhNexusModsBalloonClick"
+note = "A hint balloon of the main form (new versions, the save hint)."
 
 [gui."xEdit/xeMainForm.dfm:jbhNexusMods:OnCloseBtnClick"]
-status = "pending"
+status = "presentation"
 source = "jbhNexusModsCloseBtnClick"
+note = "A hint balloon of the main form (new versions, the save hint)."
 
 [gui."xEdit/xeMainForm.dfm:jbhPatreon:OnBalloonClick"]
-status = "pending"
+status = "presentation"
 source = "jbhPatreonBalloonClick"
+note = "A hint balloon of the main form (new versions, the save hint)."
 
 [gui."xEdit/xeMainForm.dfm:jbhPatreon:OnCloseBtnClick"]
-status = "pending"
+status = "presentation"
 source = "jbhPatreonCloseBtnClick"
+note = "A hint balloon of the main form (new versions, the save hint)."
 
 [gui."xEdit/xeMainForm.dfm:jbhSave:OnBalloonClick"]
-status = "pending"
+status = "presentation"
 source = "jbhSaveBalloonClick"
+note = "A hint balloon of the main form (new versions, the save hint)."
 
 [gui."xEdit/xeMainForm.dfm:jbhSave:OnCloseBtnClick"]
-status = "pending"
+status = "presentation"
 source = "jbhSaveCloseBtnClick"
+note = "A hint balloon of the main form (new versions, the save hint)."
 
 [gui."xEdit/xeMainForm.dfm:lvReferencedBy:OnColumnClick"]
-status = "pending"
+status = "presentation"
 source = "lvReferencedByColumnClick"
+note = "Sorting, selection and the jump of the Referenced By list; refs.get gives the rows."
 
 [gui."xEdit/xeMainForm.dfm:lvReferencedBy:OnData"]
 status = "covered"
@@ -1219,66 +1373,81 @@ source = "lvReferencedByLoadData"
 note = "The rows of the Referenced By tab: ReferencedBy of the master of the selected record."
 
 [gui."xEdit/xeMainForm.dfm:lvReferencedBy:OnDataStateChange"]
-status = "pending"
+status = "presentation"
 source = "lvReferencedByOnDataStateChange"
+note = "Sorting, selection and the jump of the Referenced By list; refs.get gives the rows."
 
 [gui."xEdit/xeMainForm.dfm:lvReferencedBy:OnDblClick"]
-status = "pending"
+status = "presentation"
 source = "lvReferencedByDblClick"
+note = "Sorting, selection and the jump of the Referenced By list; refs.get gives the rows."
 
 [gui."xEdit/xeMainForm.dfm:lvReferencedBy:OnKeyDown"]
-status = "pending"
+status = "covered"
+command = "records.delete"
 source = "lvReferencedByKeyDown"
+note = "Delete removes the selected referencing records (mniRefByRemove); Ctrl+A/Ctrl+C select and copy the list (refs.get gives it)."
 
 [gui."xEdit/xeMainForm.dfm:lvReferencedBy:OnSelectItem"]
-status = "pending"
+status = "presentation"
 source = "lvReferencedByOnSelect"
+note = "Sorting, selection and the jump of the Referenced By list; refs.get gives the rows."
 
 [gui."xEdit/xeMainForm.dfm:mmoMessages:OnDblClick"]
-status = "pending"
+status = "presentation"
 source = "mmoMessagesDblClick"
+note = "Jumps to the record named on a line of the message log."
 
 [gui."xEdit/xeMainForm.dfm:mniBtnShrinkButtons:OnClick"]
-status = "pending"
+status = "presentation"
 source = "mniBtnShrinkButtonsClick"
+note = "Shrinks the buttons of the main form."
 
 [gui."xEdit/xeMainForm.dfm:mniCopyDisplayNameToClipboard:OnClick"]
-status = "pending"
+status = "presentation"
 source = "mniCopyDisplayNameToClipboardClick"
+note = "Copies the focused element's text to the clipboard; the same texts are the script functions of the same names (DisplayName, FullPath, IndexedPath, Name, PathName, Path, ShortName, Signature) through script.run, and elements.get gives an element's path and name."
 
 [gui."xEdit/xeMainForm.dfm:mniCopyFullPathToClipboard:OnClick"]
-status = "pending"
+status = "presentation"
 source = "mniCopyFullPathToClipboardClick"
+note = "Copies the focused element's text to the clipboard; the same texts are the script functions of the same names (DisplayName, FullPath, IndexedPath, Name, PathName, Path, ShortName, Signature) through script.run, and elements.get gives an element's path and name."
 
 [gui."xEdit/xeMainForm.dfm:mniCopyIndexedPathToClipBoard:OnClick"]
-status = "pending"
+status = "presentation"
 source = "mniCopyIndexedPathToClipboardClick"
+note = "Copies the focused element's text to the clipboard; the same texts are the script functions of the same names (DisplayName, FullPath, IndexedPath, Name, PathName, Path, ShortName, Signature) through script.run, and elements.get gives an element's path and name."
 
 [gui."xEdit/xeMainForm.dfm:mniCopyNameToClipboard:OnClick"]
-status = "pending"
+status = "presentation"
 source = "mniCopyNameToClipboardClick"
+note = "Copies the focused element's text to the clipboard; the same texts are the script functions of the same names (DisplayName, FullPath, IndexedPath, Name, PathName, Path, ShortName, Signature) through script.run, and elements.get gives an element's path and name."
 
 [gui."xEdit/xeMainForm.dfm:mniCopyPathNameToClipboard:OnClick"]
-status = "pending"
+status = "presentation"
 source = "mniCopyPathNameToClipboardClick"
+note = "Copies the focused element's text to the clipboard; the same texts are the script functions of the same names (DisplayName, FullPath, IndexedPath, Name, PathName, Path, ShortName, Signature) through script.run, and elements.get gives an element's path and name."
 
 [gui."xEdit/xeMainForm.dfm:mniCopyPathToClipboard:OnClick"]
-status = "pending"
+status = "presentation"
 source = "mniCopyPathToClipboardClick"
+note = "Copies the focused element's text to the clipboard; the same texts are the script functions of the same names (DisplayName, FullPath, IndexedPath, Name, PathName, Path, ShortName, Signature) through script.run, and elements.get gives an element's path and name."
 
 [gui."xEdit/xeMainForm.dfm:mniCopyShortNameToClipboard:OnClick"]
-status = "pending"
+status = "presentation"
 source = "mniCopyShortNameToClipboardClick"
+note = "Copies the focused element's text to the clipboard; the same texts are the script functions of the same names (DisplayName, FullPath, IndexedPath, Name, PathName, Path, ShortName, Signature) through script.run, and elements.get gives an element's path and name."
 
 [gui."xEdit/xeMainForm.dfm:mniCopySignatureToClipboard:OnClick"]
-status = "pending"
+status = "presentation"
 source = "mniCopySignatureToClipboardClick"
+note = "Copies the focused element's text to the clipboard; the same texts are the script functions of the same names (DisplayName, FullPath, IndexedPath, Name, PathName, Path, ShortName, Signature) through script.run, and elements.get gives an element's path and name."
 
 [gui."xEdit/xeMainForm.dfm:mniCreateNewFile:OnClick"]
 status = "covered"
 command = "files.new"
 source = "mniCreateNewFileClick"
-note = "Partial: the new file of AddNewFile with the light and medium flags as parameters; the module templates of AddNewFileWithDialog are not ported."
+note = "AddNewFileWithDialog: the name and the module template of the dialog (files.new template, parity #22: esp, esp-esm, esp-light and the rest the game offers; checked by the oracle-edit sequence sse-files-new-templates), or the light and medium flags."
 
 [gui."xEdit/xeMainForm.dfm:mniMainLocalizationEditor:OnClick"]
 status = "covered"
@@ -1287,32 +1456,39 @@ source = "mniMainLocalizationEditorClick"
 note = "The localization editor: localization.files, localization.strings, localization.get, localization.set and localization.export."
 
 [gui."xEdit/xeMainForm.dfm:mniMainOptions:OnClick"]
-status = "pending"
+status = "presentation"
 source = "mniNavOptionsClick"
+note = "Opens the options dialog; the settings it writes are the settings file each command reads, and the load settings are the CLI's flags."
 
 [gui."xEdit/xeMainForm.dfm:mniMainPluggyLinkBaseObject:OnClick"]
-status = "pending"
+status = "excluded"
 source = "mniMainPluggyLinkClick"
+note = "The Pluggy game link of Oblivion needs the Pluggy DLLs and a running game (the -agl switch is classified the same way); not a file operation."
 
 [gui."xEdit/xeMainForm.dfm:mniMainPluggyLinkDisabled:OnClick"]
-status = "pending"
+status = "excluded"
 source = "mniMainPluggyLinkClick"
+note = "The Pluggy game link of Oblivion needs the Pluggy DLLs and a running game (the -agl switch is classified the same way); not a file operation."
 
 [gui."xEdit/xeMainForm.dfm:mniMainPluggyLinkEnchantment:OnClick"]
-status = "pending"
+status = "excluded"
 source = "mniMainPluggyLinkClick"
+note = "The Pluggy game link of Oblivion needs the Pluggy DLLs and a running game (the -agl switch is classified the same way); not a file operation."
 
 [gui."xEdit/xeMainForm.dfm:mniMainPluggyLinkInventory:OnClick"]
-status = "pending"
+status = "excluded"
 source = "mniMainPluggyLinkClick"
+note = "The Pluggy game link of Oblivion needs the Pluggy DLLs and a running game (the -agl switch is classified the same way); not a file operation."
 
 [gui."xEdit/xeMainForm.dfm:mniMainPluggyLinkReference:OnClick"]
-status = "pending"
+status = "excluded"
 source = "mniMainPluggyLinkClick"
+note = "The Pluggy game link of Oblivion needs the Pluggy DLLs and a running game (the -agl switch is classified the same way); not a file operation."
 
 [gui."xEdit/xeMainForm.dfm:mniMainPluggyLinkSpell:OnClick"]
-status = "pending"
+status = "excluded"
 source = "mniMainPluggyLinkClick"
+note = "The Pluggy game link of Oblivion needs the Pluggy DLLs and a running game (the -agl switch is classified the same way); not a file operation."
 
 [gui."xEdit/xeMainForm.dfm:mniMainSave:OnClick"]
 status = "covered"
@@ -1323,22 +1499,29 @@ note = "Saves one file per call; the dialog that picks several files is presenta
 [gui."xEdit/xeMainForm.dfm:mniMarkallfileswithoutONAMasmodified:OnClick"]
 status = "pending"
 source = "mniMarkallfileswithoutONAMasmodifiedClick"
+note = "Owned by issue #78 (GUI operations without a typed command): mark the header of every editable file without ONAM modified (MarkHeaderModified)"
 
 [gui."xEdit/xeMainForm.dfm:mniMasterAndLeafsDisabled:OnClick"]
-status = "pending"
+status = "covered"
+command = "records.compare"
 source = "mniMasterAndLeafsClick"
+note = "OnlyShowMasterAndLeafs: the master_and_leafs option of records.compare and conflicts.list."
 
 [gui."xEdit/xeMainForm.dfm:mniMasterAndLeafsEnabled:OnClick"]
-status = "pending"
+status = "covered"
+command = "records.compare"
 source = "mniMasterAndLeafsClick"
+note = "OnlyShowMasterAndLeafs: the master_and_leafs option of records.compare and conflicts.list."
 
 [gui."xEdit/xeMainForm.dfm:mniMessagesClear:OnClick"]
-status = "pending"
+status = "presentation"
 source = "mniMessagesClearClick"
+note = "Clears the message log or saves its selected lines; the CLI prints the log."
 
 [gui."xEdit/xeMainForm.dfm:mniMessagesSaveSelected:OnClick"]
-status = "pending"
+status = "presentation"
 source = "mniMessagesSaveSelectedClick"
+note = "Clears the message log or saves its selected lines; the CLI prints the log."
 
 [gui."xEdit/xeMainForm.dfm:mniModGroups:OnClick"]
 status = "presentation"
@@ -1369,16 +1552,20 @@ source = "mniNavAddMastersClick"
 note = "The module selection dialog is presentation; the request names the masters."
 
 [gui."xEdit/xeMainForm.dfm:mniNavApplyScript:OnClick"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "mniNavApplyScriptClick"
+note = "ApplyScript over the selected nodes; script.run takes the script and the selection (the loaded files, or the records named)."
 
 [gui."xEdit/xeMainForm.dfm:mniNavBanditFix:OnClick"]
 status = "pending"
 source = "mniNavBanditFixClick"
+note = "Owned by issue #78 (GUI operations without a typed command): Bandit fix of Mart's Monster Mod (Oblivion)"
 
 [gui."xEdit/xeMainForm.dfm:mniNavBatchChangeReferencingRecords:OnClick"]
 status = "pending"
 source = "mniNavBatchChangeReferencingRecordsClick"
+note = "Owned by issue #78 (GUI operations without a typed command): batch change of the references in referencing records from a list of FormID pairs"
 
 [gui."xEdit/xeMainForm.dfm:mniNavBuildReachable:OnClick"]
 status = "covered"
@@ -1395,18 +1582,22 @@ note = "refs.build with file builds the references of one file again (TwbFile.Bu
 [gui."xEdit/xeMainForm.dfm:mniNavCellChildNotVWD:OnClick"]
 status = "pending"
 source = "mniNavCellChild"
+note = "Owned by issue #78 (GUI operations without a typed command): make the selected references of a cell persistent, temporary, visible when distant or not (the flag and the child group the reference moves to)"
 
 [gui."xEdit/xeMainForm.dfm:mniNavCellChildPers:OnClick"]
 status = "pending"
 source = "mniNavCellChild"
+note = "Owned by issue #78 (GUI operations without a typed command): make the selected references of a cell persistent, temporary, visible when distant or not (the flag and the child group the reference moves to)"
 
 [gui."xEdit/xeMainForm.dfm:mniNavCellChildTemp:OnClick"]
 status = "pending"
 source = "mniNavCellChild"
+note = "Owned by issue #78 (GUI operations without a typed command): make the selected references of a cell persistent, temporary, visible when distant or not (the flag and the child group the reference moves to)"
 
 [gui."xEdit/xeMainForm.dfm:mniNavCellChildVWD:OnClick"]
 status = "pending"
 source = "mniNavCellChild"
+note = "Owned by issue #78 (GUI operations without a typed command): make the selected references of a cell persistent, temporary, visible when distant or not (the flag and the child group the reference moves to)"
 
 [gui."xEdit/xeMainForm.dfm:mniNavChangeFormID:OnClick"]
 status = "covered"
@@ -1417,10 +1608,12 @@ note = "The dialogs are parameters: the new FormID, the target file, whether lat
 [gui."xEdit/xeMainForm.dfm:mniNavChangeReferencingRecords:OnClick"]
 status = "pending"
 source = "mniNavChangeReferencingRecordsClick"
+note = "Owned by issue #78 (GUI operations without a typed command): change the references in the selected referencing records from one FormID to another (the record itself keeps its FormID, unlike formids.change)"
 
 [gui."xEdit/xeMainForm.dfm:mniNavCheckForCircularLeveledLists:OnClick"]
 status = "pending"
 source = "mniNavCheckForCircularLeveledListsClick"
+note = "Owned by issue #78 (GUI operations without a typed command): check the leveled lists (LVLI, LVLC, LVLN, LVSP) of the selection for circular references"
 
 [gui."xEdit/xeMainForm.dfm:mniNavCheckForErrors:OnClick"]
 status = "covered"
@@ -1477,18 +1670,22 @@ note = "The overwrite parameter (aAllowOverwrite with wbCanOverwrite); the overw
 [gui."xEdit/xeMainForm.dfm:mniNavCopyAsSpawnRateOverride:OnClick"]
 status = "pending"
 source = "mniNavCopyIntoClick"
+note = "Owned by issue #78 (GUI operations without a typed command): CopyInto as a spawn rate override"
 
 [gui."xEdit/xeMainForm.dfm:mniNavCopyAsWrapper:OnClick"]
 status = "pending"
 source = "mniNavCopyIntoClick"
+note = "Owned by issue #78 (GUI operations without a typed command): CopyInto as a wrapper record"
 
 [gui."xEdit/xeMainForm.dfm:mniNavCopyIdle:OnClick"]
 status = "pending"
 source = "mniNavCopyIdleClick"
+note = "Owned by issue #78 (GUI operations without a typed command): copy the IDLE animations of the selection"
 
 [gui."xEdit/xeMainForm.dfm:mniNavCreateDeltaPatch:OnClick"]
 status = "pending"
 source = "mniNavCreateDeltaPatchClick"
+note = "Owned by issue #78 (GUI operations without a typed command): create a delta patch of a module against a newer version of it"
 
 [gui."xEdit/xeMainForm.dfm:mniNavCreateMergedPatch:OnClick"]
 status = "covered"
@@ -1503,8 +1700,10 @@ source = "mniNavCreateModGroupClick"
 note = "The selected files of the navigation tree are the modules parameter; the dialogs are parameters (include_crcs, file)."
 
 [gui."xEdit/xeMainForm.dfm:mniNavCreateSEQFile:OnClick"]
-status = "pending"
+status = "covered"
+command = "tool.run"
 source = "mniNavCreateSEQFileClick"
+note = "GenerateSEQFileForFile over the selected modules; tool.run mode=generateseq writes the same .seq files (parity tool-modes)."
 
 [gui."xEdit/xeMainForm.dfm:mniNavDeepCopyAsOverride:OnClick"]
 status = "covered"
@@ -1587,24 +1786,29 @@ source = "mniNavGenerateLODClick"
 note = "The worldspace list, the form options read from and written to the settings file, and wbGenerateLODTES4, wbGenerateLODTES5 or wbGenerateLODFO4 per worldspace (xedit lodgen); checked by cargo xtask parity lodgen."
 
 [gui."xEdit/xeMainForm.dfm:mniNavHeaderFilesDefault:OnClick"]
-status = "pending"
+status = "presentation"
 source = "mniNavHeaderFilesClick"
+note = "The display order of the files in the navigation tree."
 
 [gui."xEdit/xeMainForm.dfm:mniNavHeaderFilesFileName:OnClick"]
-status = "pending"
+status = "presentation"
 source = "mniNavHeaderFilesClick"
+note = "The display order of the files in the navigation tree."
 
 [gui."xEdit/xeMainForm.dfm:mniNavHeaderFilesLoadOrder:OnClick"]
-status = "pending"
+status = "presentation"
 source = "mniNavHeaderFilesClick"
+note = "The display order of the files in the navigation tree."
 
 [gui."xEdit/xeMainForm.dfm:mniNavHeaderINFObyFormID:OnClick"]
-status = "pending"
+status = "presentation"
 source = "mniNavHeaderINFOClick"
+note = "The display order of a topic's responses in the navigation tree (vstNavCompareNodes); the session keeps the order the release starts with."
 
 [gui."xEdit/xeMainForm.dfm:mniNavHeaderINFObyPreviousINFO:OnClick"]
-status = "pending"
+status = "presentation"
 source = "mniNavHeaderINFOClick"
+note = "The display order of a topic's responses in the navigation tree (vstNavCompareNodes); the session keeps the order the release starts with."
 
 [gui."xEdit/xeMainForm.dfm:mniNavHidden:OnClick"]
 status = "covered"
@@ -1627,18 +1831,22 @@ note = "Localize plugin is localization.localize (with the translation of TfrmLo
 [gui."xEdit/xeMainForm.dfm:mniNavMarkModified:OnClick"]
 status = "pending"
 source = "mniNavMarkModifiedClick"
+note = "Owned by issue #78 (GUI operations without a typed command): mark the selected elements modified (MarkModifiedRecursive), so the save writes them"
 
 [gui."xEdit/xeMainForm.dfm:mniNavOptions:OnClick"]
-status = "pending"
+status = "presentation"
 source = "mniNavOptionsClick"
+note = "Opens the options dialog; the settings it writes are the settings file each command reads, and the load settings are the CLI's flags."
 
 [gui."xEdit/xeMainForm.dfm:mniNavOtherCodeSiteLogging:OnClick"]
-status = "pending"
+status = "excluded"
 source = "mniNavOtherCodeSiteLoggingClick"
+note = "Turns on CodeSite debug logging of the Delphi build (Raize CodeSite); a developer tool of the release with no output of its own."
 
 [gui."xEdit/xeMainForm.dfm:mniNavRaceLVLIs:OnClick"]
 status = "pending"
 source = "mniNavRaceLVLIsClick"
+note = "Owned by issue #78 (GUI operations without a typed command): the race leveled item lists of the NPCs of the selection (Oblivion)"
 
 [gui."xEdit/xeMainForm.dfm:mniNavRemove:OnClick"]
 status = "covered"
@@ -1671,10 +1879,12 @@ note = "--inject-into, with --preserve-object-ids and --all-or-nothing for the t
 [gui."xEdit/xeMainForm.dfm:mniNavSetVWDAuto:OnClick"]
 status = "pending"
 source = "mniNavSetVWDAutoClick"
+note = "Owned by issue #78 (GUI operations without a typed command): set the Visible When Distant flag of every reference whose base has a VWD mesh (into the file chosen for the Into item)"
 
 [gui."xEdit/xeMainForm.dfm:mniNavSetVWDAutoInto:OnClick"]
 status = "pending"
 source = "mniNavSetVWDAutoIntoClick"
+note = "Owned by issue #78 (GUI operations without a typed command): set the Visible When Distant flag of every reference whose base has a VWD mesh (into the file chosen for the Into item)"
 
 [gui."xEdit/xeMainForm.dfm:mniNavSortMasters:OnClick"]
 status = "covered"
@@ -1683,8 +1893,9 @@ source = "mniNavSortMastersClick"
 note = "One file per call."
 
 [gui."xEdit/xeMainForm.dfm:mniNavTest:OnClick"]
-status = "pending"
+status = "excluded"
 source = "mniNavTestClick"
+note = "A developer test item of the release (hidden unless DEBUG); no user operation."
 
 [gui."xEdit/xeMainForm.dfm:mniNavUndeleteAndDisableReferences:OnClick"]
 status = "covered"
@@ -1704,8 +1915,10 @@ source = "mniNavUpdateCRCModGroupsClick"
 note = "The two questions are add and update, the module and group selections are modules and mod_groups."
 
 [gui."xEdit/xeMainForm.dfm:mniRefByApplyScript:OnClick"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "mniNavApplyScriptClick"
+note = "ApplyScript over the selected nodes; script.run takes the script and the selection (the loaded files, or the records named)."
 
 [gui."xEdit/xeMainForm.dfm:mniRefByCompareSelected:OnClick"]
 status = "covered"
@@ -1721,6 +1934,7 @@ source = "mniRefByCopyIntoClick"
 [gui."xEdit/xeMainForm.dfm:mniRefByCopyDisabledOverrideInto:OnClick"]
 status = "pending"
 source = "mniRefByCopyDisabledOverrideIntoClick"
+note = "Owned by issue #78 (GUI operations without a typed command): copy the selected referencing references as disabled overrides (initially disabled, enable parent opposite of the player, moved below the world)"
 
 [gui."xEdit/xeMainForm.dfm:mniRefByCopyOverrideInto:OnClick"]
 status = "covered"
@@ -1728,8 +1942,10 @@ command = "records.copy"
 source = "mniRefByCopyIntoClick"
 
 [gui."xEdit/xeMainForm.dfm:mniRefByCopyOverrideIntoWithOverwriting:OnClick"]
-status = "pending"
+status = "covered"
+command = "records.copy"
 source = "mniRefByCopyIntoClick"
+note = "CopyInto of the selected referencing records as overrides with overwrite (and deep for the deep item)."
 
 [gui."xEdit/xeMainForm.dfm:mniRefByDeepCopyOverrideInto:OnClick"]
 status = "covered"
@@ -1737,72 +1953,94 @@ command = "records.copy"
 source = "mniRefByCopyIntoClick"
 
 [gui."xEdit/xeMainForm.dfm:mniRefByDeepCopyOverrideIntoWithOverwriting:OnClick"]
-status = "pending"
+status = "covered"
+command = "records.copy"
 source = "mniRefByCopyIntoClick"
+note = "CopyInto of the selected referencing records as overrides with overwrite (and deep for the deep item)."
 
 [gui."xEdit/xeMainForm.dfm:mniRefByMarkModified:OnClick"]
 status = "pending"
 source = "mniRefByMarkModifiedClick"
+note = "Owned by issue #78 (GUI operations without a typed command): mark the selected referencing records modified"
 
 [gui."xEdit/xeMainForm.dfm:mniRefByNotVWD:OnClick"]
 status = "pending"
 source = "mniRefByVWDClick"
+note = "Owned by issue #78 (GUI operations without a typed command): set or clear the Visible When Distant flag of the selected referencing references"
 
 [gui."xEdit/xeMainForm.dfm:mniRefByRemove:OnClick"]
-status = "pending"
+status = "covered"
+command = "records.delete"
 source = "mniRefByRemoveClick"
+note = "Remove of the selected referencing records."
 
 [gui."xEdit/xeMainForm.dfm:mniRefByVWD:OnClick"]
 status = "pending"
 source = "mniRefByVWDClick"
+note = "Owned by issue #78 (GUI operations without a typed command): set or clear the Visible When Distant flag of the selected referencing references"
 
 [gui."xEdit/xeMainForm.dfm:mniSpreadsheetCompareSelected:OnClick"]
-status = "pending"
+status = "covered"
+command = "records.compare_selected"
 source = "mniSpreadsheetCompareSelectedClick"
+note = "The view of the selected spreadsheet rows (records of different FormIDs side by side)."
 
 [gui."xEdit/xeMainForm.dfm:mniSpreadsheetRebuild:OnClick"]
-status = "pending"
+status = "presentation"
 source = "mniSpreadsheetRebuildClick"
+note = "Rebuilds the rows of the spreadsheet tab."
 
 [gui."xEdit/xeMainForm.dfm:mniViewAdd:OnClick"]
-status = "pending"
+status = "covered"
+command = "elements.add"
 source = "mniViewAddClick"
+note = "Add of a member, an array entry or a child record at the focused element."
 
 [gui."xEdit/xeMainForm.dfm:mniViewClear:OnClick"]
 status = "pending"
 source = "mniViewClearClick"
+note = "Owned by issue #78 (GUI operations without a typed command): Element.Clear of the focused element"
 
 [gui."xEdit/xeMainForm.dfm:mniViewClipboard:OnClick"]
-status = "pending"
+status = "presentation"
 source = "mniViewClipboardClick"
+note = "Copies the view's text to the clipboard; records.compare gives the rows."
 
 [gui."xEdit/xeMainForm.dfm:mniViewColumnWidthFitAll:OnClick"]
-status = "pending"
+status = "presentation"
 source = "mniViewColumnWidthClick"
+note = "Column widths of the view."
 
 [gui."xEdit/xeMainForm.dfm:mniViewColumnWidthFitSmart:OnClick"]
-status = "pending"
+status = "presentation"
 source = "mniViewColumnWidthClick"
+note = "Column widths of the view."
 
 [gui."xEdit/xeMainForm.dfm:mniViewColumnWidthFitText:OnClick"]
-status = "pending"
+status = "presentation"
 source = "mniViewColumnWidthClick"
+note = "Column widths of the view."
 
 [gui."xEdit/xeMainForm.dfm:mniViewColumnWidthStandard:OnClick"]
-status = "pending"
+status = "presentation"
 source = "mniViewColumnWidthClick"
+note = "Column widths of the view."
 
 [gui."xEdit/xeMainForm.dfm:mniViewCompareReferencedRow:OnClick"]
-status = "pending"
+status = "covered"
+command = "records.compare_selected"
 source = "mniViewCompareReferencedRowClick"
+note = "The view of the records the focused row's references point to; records.compare_selected takes those FormIDs."
 
 [gui."xEdit/xeMainForm.dfm:mniViewCopyMultipleToSelectedRecords:OnClick"]
 status = "pending"
 source = "mniViewCopyMultipleToSelectedRecordsClick"
+note = "Owned by issue #78 (GUI operations without a typed command): copy the selected elements into the records of the other view columns"
 
 [gui."xEdit/xeMainForm.dfm:mniViewCopyToSelectedRecords:OnClick"]
 status = "pending"
 source = "mniViewCopyToSelectedRecordsClick"
+note = "Owned by issue #78 (GUI operations without a typed command): copy the focused element into the records of the other view columns chosen in a file selection"
 
 [gui."xEdit/xeMainForm.dfm:mniViewCreateModGroup:OnClick"]
 status = "covered"
@@ -1811,48 +2049,68 @@ source = "mniNavCreateModGroupClick"
 note = "The loaded records of the view (the override chain of the shown record, the master's own record left out) are the modules parameter; the CRC32 question is include_crcs, the store-file selection is file, and the edit dialog is name, items and add_current_crcs."
 
 [gui."xEdit/xeMainForm.dfm:mniViewEdit:OnClick"]
-status = "pending"
+status = "covered"
+command = "elements.set"
 source = "mniViewEditClick"
+note = "EditValue of the focused element (the multi-line editor is the dialog's)."
 
 [gui."xEdit/xeMainForm.dfm:mniViewHeaderCopyAsNewRecord:OnClick"]
-status = "pending"
+status = "covered"
+command = "records.copy"
 source = "mniViewHeaderCopyIntoClick"
+note = "CopyInto of the record of a view column: as_new, deep and overwrite are the parameters."
 
 [gui."xEdit/xeMainForm.dfm:mniViewHeaderCopyAsOverride:OnClick"]
-status = "pending"
+status = "covered"
+command = "records.copy"
 source = "mniViewHeaderCopyIntoClick"
+note = "CopyInto of the record of a view column: as_new, deep and overwrite are the parameters."
 
 [gui."xEdit/xeMainForm.dfm:mniViewHeaderCopyAsOverrideWithOverwriting:OnClick"]
-status = "pending"
+status = "covered"
+command = "records.copy"
 source = "mniViewHeaderCopyIntoClick"
+note = "CopyInto of the record of a view column: as_new, deep and overwrite are the parameters."
 
 [gui."xEdit/xeMainForm.dfm:mniViewHeaderCopyAsWrapper:OnClick"]
 status = "pending"
 source = "mniViewHeaderCopyIntoClick"
+note = "Owned by issue #78 (GUI operations without a typed command): CopyInto as a wrapper record, from a view column"
 
 [gui."xEdit/xeMainForm.dfm:mniViewHeaderDeepCopyAsOverride:OnClick"]
-status = "pending"
+status = "covered"
+command = "records.copy"
 source = "mniViewHeaderCopyIntoClick"
+note = "CopyInto of the record of a view column: as_new, deep and overwrite are the parameters."
 
 [gui."xEdit/xeMainForm.dfm:mniViewHeaderDeepCopyAsOverrideWithOverwriting:OnClick"]
-status = "pending"
+status = "covered"
+command = "records.copy"
 source = "mniViewHeaderCopyIntoClick"
+note = "CopyInto of the record of a view column: as_new, deep and overwrite are the parameters."
 
 [gui."xEdit/xeMainForm.dfm:mniViewHeaderHidden:OnClick"]
-status = "pending"
+status = "covered"
+command = "records.set_hidden"
 source = "mniViewHeaderHiddenClick"
+note = "esHidden of the record of a view column, or of every hidden record (records.set_hidden per record)."
 
 [gui."xEdit/xeMainForm.dfm:mniViewHeaderJumpTo:OnClick"]
-status = "pending"
+status = "presentation"
 source = "mniViewHeaderJumpToClick"
+note = "Shows the record of a view column in the navigation tree."
 
 [gui."xEdit/xeMainForm.dfm:mniViewHeaderRemove:OnClick"]
-status = "pending"
+status = "covered"
+command = "records.delete"
 source = "mniViewHeaderRemoveClick"
+note = "Remove of the record of a view column."
 
 [gui."xEdit/xeMainForm.dfm:mniViewHeaderUnhideAll:OnClick"]
-status = "pending"
+status = "covered"
+command = "records.set_hidden"
 source = "mniViewHeaderUnhideAllClick"
+note = "esHidden of the record of a view column, or of every hidden record (records.set_hidden per record)."
 
 [gui."xEdit/xeMainForm.dfm:mniViewHideNoConflict:OnClick"]
 status = "covered"
@@ -1879,402 +2137,519 @@ source = "mniViewMoveUpClick"
 [gui."xEdit/xeMainForm.dfm:mniViewNextMember:OnClick"]
 status = "pending"
 source = "mniViewNextMemberClick"
+note = "Owned by issue #78 (GUI operations without a typed command): NextMember/PreviousMember: switch the member of the focused union"
 
 [gui."xEdit/xeMainForm.dfm:mniViewPreviousMember:OnClick"]
 status = "pending"
 source = "mniViewPreviousMemberClick"
+note = "Owned by issue #78 (GUI operations without a typed command): NextMember/PreviousMember: switch the member of the focused union"
 
 [gui."xEdit/xeMainForm.dfm:mniViewRemove:OnClick"]
-status = "pending"
+status = "covered"
+command = "elements.remove"
 source = "mniViewRemoveClick"
+note = "Remove of the focused element."
 
 [gui."xEdit/xeMainForm.dfm:mniViewRemoveFromSelected:OnClick"]
 status = "pending"
 source = "mniViewRemoveFromSelectedClick"
+note = "Owned by issue #78 (GUI operations without a typed command): remove the focused row's element from every record of the view"
 
 [gui."xEdit/xeMainForm.dfm:mniViewSetToDefault:OnClick"]
-status = "pending"
+status = "covered"
+command = "elements.set"
 source = "mniViewSetToDefaultClick"
+note = "SetToDefault of the focused element: elements.set with default."
 
 [gui."xEdit/xeMainForm.dfm:mniViewSort:OnClick"]
-status = "pending"
+status = "presentation"
 source = "mniViewSortClick"
+note = "The sort of the view's rows; records.compare gives them in the definition's order."
 
 [gui."xEdit/xeMainForm.dfm:mniViewStickAuto:OnClick"]
-status = "pending"
+status = "presentation"
 source = "mniViewStickAutoClick"
+note = "Keeps a view column in place while scrolling."
 
 [gui."xEdit/xeMainForm.dfm:mniViewStickSelected:OnClick"]
-status = "pending"
+status = "presentation"
 source = "mniViewStickSelectedClick"
+note = "Keeps a view column in place while scrolling."
 
 [gui."xEdit/xeMainForm.dfm:pgMain:OnChange"]
-status = "pending"
+status = "presentation"
 source = "pgMainChange"
+note = "Switches the tabs of the main form."
 
 [gui."xEdit/xeMainForm.dfm:pmuBtnMenu:OnPopup"]
-status = "pending"
+status = "presentation"
 source = "pmuBtnMenuPopup"
+note = "Enables and shows the items of a popup menu; each item is its own entry."
 
 [gui."xEdit/xeMainForm.dfm:pmuMain:OnPopup"]
-status = "pending"
+status = "presentation"
 source = "pmuMainPopup"
+note = "Enables and shows the items of a popup menu; each item is its own entry."
 
 [gui."xEdit/xeMainForm.dfm:pmuNav:OnPopup"]
-status = "pending"
+status = "presentation"
 source = "pmuNavPopup"
+note = "Enables and shows the items of a popup menu; each item is its own entry."
 
 [gui."xEdit/xeMainForm.dfm:pmuNavHeaderPopup:OnPopup"]
-status = "pending"
+status = "presentation"
 source = "pmuNavHeaderPopupPopup"
+note = "Enables and shows the items of a popup menu; each item is its own entry."
 
 [gui."xEdit/xeMainForm.dfm:pmuRefBy:OnPopup"]
-status = "pending"
+status = "presentation"
 source = "pmuRefByPopup"
+note = "Enables and shows the items of a popup menu; each item is its own entry."
 
 [gui."xEdit/xeMainForm.dfm:pmuSpreadsheet:OnPopup"]
-status = "pending"
+status = "presentation"
 source = "pmuSpreadsheetPopup"
+note = "Enables and shows the items of a popup menu; each item is its own entry."
 
 [gui."xEdit/xeMainForm.dfm:pmuView:OnPopup"]
-status = "pending"
+status = "presentation"
 source = "pmuViewPopup"
+note = "Enables and shows the items of a popup menu; each item is its own entry."
 
 [gui."xEdit/xeMainForm.dfm:pmuViewHeader:OnPopup"]
-status = "pending"
+status = "presentation"
 source = "pmuViewHeaderPopup"
+note = "Enables and shows the items of a popup menu; each item is its own entry."
 
 [gui."xEdit/xeMainForm.dfm:pnlNav:OnResize"]
-status = "pending"
+status = "presentation"
 source = "pnlNavResize"
+note = "Layout of the navigation panel."
 
 [gui."xEdit/xeMainForm.dfm:tbsAMMOSpreadsheet:OnShow"]
-status = "pending"
+status = "presentation"
 source = "tbsSpreadsheetShow"
+note = "A tab of the main form is shown."
 
 [gui."xEdit/xeMainForm.dfm:tbsARMOSpreadsheet:OnShow"]
-status = "pending"
+status = "presentation"
 source = "tbsSpreadsheetShow"
+note = "A tab of the main form is shown."
 
 [gui."xEdit/xeMainForm.dfm:tbsMessages:OnShow"]
-status = "pending"
+status = "presentation"
 source = "tbsMessagesShow"
+note = "A tab of the main form is shown."
 
 [gui."xEdit/xeMainForm.dfm:tbsReferencedBy:OnShow"]
-status = "pending"
+status = "presentation"
 source = "tbsViewShow"
+note = "A tab of the main form is shown."
 
 [gui."xEdit/xeMainForm.dfm:tbsView:OnShow"]
-status = "pending"
+status = "presentation"
 source = "tbsViewShow"
+note = "A tab of the main form is shown."
 
 [gui."xEdit/xeMainForm.dfm:tbsWEAPSpreadsheet:OnShow"]
-status = "pending"
+status = "presentation"
 source = "tbsSpreadsheetShow"
+note = "A tab of the main form is shown."
 
 [gui."xEdit/xeMainForm.dfm:tmrCheckUnsaved:OnTimer"]
-status = "pending"
+status = "presentation"
 source = "tmrCheckUnsavedTimer"
+note = "A timer of the GUI: the unsaved-changes hint, the flush of the queued log lines into the memo, the deferred show of a record, the deferred filters of the view and the Referenced By tab, the column widths."
 
 [gui."xEdit/xeMainForm.dfm:tmrGenerator:OnTimer"]
-status = "pending"
+status = "covered"
+command = "tool.run"
 source = "tmrGeneratorTimer"
+note = "The dispatch of the auto modes after the load (quick clean, check, the tool modes); tool.run runs a mode."
 
 [gui."xEdit/xeMainForm.dfm:tmrMessages:OnTimer"]
-status = "pending"
+status = "presentation"
 source = "tmrMessagesTimer"
+note = "A timer of the GUI: the unsaved-changes hint, the flush of the queued log lines into the memo, the deferred show of a record, the deferred filters of the view and the Referenced By tab, the column widths."
 
 [gui."xEdit/xeMainForm.dfm:tmrPendingSetActive:OnTimer"]
-status = "pending"
+status = "presentation"
 source = "tmrPendingSetActiveTimer"
+note = "A timer of the GUI: the unsaved-changes hint, the flush of the queued log lines into the memo, the deferred show of a record, the deferred filters of the view and the Referenced By tab, the column widths."
 
 [gui."xEdit/xeMainForm.dfm:tmrReferencedByFilterApply:OnTimer"]
-status = "pending"
+status = "presentation"
 source = "tmrReferencedByFilterApplyTimer"
+note = "A timer of the GUI: the unsaved-changes hint, the flush of the queued log lines into the memo, the deferred show of a record, the deferred filters of the view and the Referenced By tab, the column widths."
 
 [gui."xEdit/xeMainForm.dfm:tmrShutdown:OnTimer"]
-status = "pending"
+status = "presentation"
 source = "tmrShutdownTimer"
+note = "The -autoexit close of the GUI after an auto mode; a CLI command ends when it is done."
 
 [gui."xEdit/xeMainForm.dfm:tmrStartup:OnTimer"]
-status = "pending"
+status = "covered"
+command = "session.load"
 source = "tmrStartupTimer"
+note = "The start of the load (the module selection, TLoaderThread); session.load and the --load options load a plugin list."
 
 [gui."xEdit/xeMainForm.dfm:tmrUpdateColumnWidths:OnTimer"]
-status = "pending"
+status = "presentation"
 source = "tmrUpdateColumnWidthsTimer"
+note = "A timer of the GUI: the unsaved-changes hint, the flush of the queued log lines into the memo, the deferred show of a record, the deferred filters of the view and the Referenced By tab, the column widths."
 
 [gui."xEdit/xeMainForm.dfm:tmrViewFilterApply:OnTimer"]
-status = "pending"
+status = "presentation"
 source = "tmrViewFilterApplyTimer"
+note = "A timer of the GUI: the unsaved-changes hint, the flush of the queued log lines into the memo, the deferred show of a record, the deferred filters of the view and the Referenced By tab, the column widths."
 
 [gui."xEdit/xeMainForm.dfm:vstNav:OnBeforeItemErase"]
-status = "pending"
+status = "presentation"
 source = "vstNavBeforeItemErase"
+note = "Display, focus, sort and keyboard handling of the navigation tree; the tree the walks and the filter use (InitNode, InitChildren) is xedit_analysis::filter::NavTree and the script walk, covered through script.run and filter.apply."
 
 [gui."xEdit/xeMainForm.dfm:vstNav:OnChange"]
-status = "pending"
+status = "presentation"
 source = "vstNavChange"
+note = "Display, focus, sort and keyboard handling of the navigation tree; the tree the walks and the filter use (InitNode, InitChildren) is xedit_analysis::filter::NavTree and the script walk, covered through script.run and filter.apply."
 
 [gui."xEdit/xeMainForm.dfm:vstNav:OnCompareNodes"]
-status = "pending"
+status = "presentation"
 source = "vstNavCompareNodes"
+note = "Display, focus, sort and keyboard handling of the navigation tree; the tree the walks and the filter use (InitNode, InitChildren) is xedit_analysis::filter::NavTree and the script walk, covered through script.run and filter.apply."
 
 [gui."xEdit/xeMainForm.dfm:vstNav:OnDragAllowed"]
-status = "pending"
+status = "presentation"
 source = "vstNavDragAllowed"
+note = "Display, focus, sort and keyboard handling of the navigation tree; the tree the walks and the filter use (InitNode, InitChildren) is xedit_analysis::filter::NavTree and the script walk, covered through script.run and filter.apply."
 
 [gui."xEdit/xeMainForm.dfm:vstNav:OnDragOver"]
-status = "pending"
+status = "presentation"
 source = "vstNavDragOver"
+note = "Display, focus, sort and keyboard handling of the navigation tree; the tree the walks and the filter use (InitNode, InitChildren) is xedit_analysis::filter::NavTree and the script walk, covered through script.run and filter.apply."
 
 [gui."xEdit/xeMainForm.dfm:vstNav:OnExpanding"]
-status = "pending"
+status = "presentation"
 source = "vstNavExpanding"
+note = "Display, focus, sort and keyboard handling of the navigation tree; the tree the walks and the filter use (InitNode, InitChildren) is xedit_analysis::filter::NavTree and the script walk, covered through script.run and filter.apply."
 
 [gui."xEdit/xeMainForm.dfm:vstNav:OnFocusChanged"]
-status = "pending"
+status = "presentation"
 source = "vstNavFocusChanged"
+note = "Display, focus, sort and keyboard handling of the navigation tree; the tree the walks and the filter use (InitNode, InitChildren) is xedit_analysis::filter::NavTree and the script walk, covered through script.run and filter.apply."
 
 [gui."xEdit/xeMainForm.dfm:vstNav:OnFreeNode"]
-status = "pending"
+status = "presentation"
 source = "vstNavFreeNode"
+note = "Display, focus, sort and keyboard handling of the navigation tree; the tree the walks and the filter use (InitNode, InitChildren) is xedit_analysis::filter::NavTree and the script walk, covered through script.run and filter.apply."
 
 [gui."xEdit/xeMainForm.dfm:vstNav:OnGetText"]
-status = "pending"
+status = "presentation"
 source = "vstNavGetText"
+note = "Display, focus, sort and keyboard handling of the navigation tree; the tree the walks and the filter use (InitNode, InitChildren) is xedit_analysis::filter::NavTree and the script walk, covered through script.run and filter.apply."
 
 [gui."xEdit/xeMainForm.dfm:vstNav:OnHeaderClick"]
-status = "pending"
+status = "presentation"
 source = "vstNavHeaderClick"
+note = "Display, focus, sort and keyboard handling of the navigation tree; the tree the walks and the filter use (InitNode, InitChildren) is xedit_analysis::filter::NavTree and the script walk, covered through script.run and filter.apply."
 
 [gui."xEdit/xeMainForm.dfm:vstNav:OnIncrementalSearch"]
-status = "pending"
+status = "presentation"
 source = "vstNavIncrementalSearch"
+note = "Display, focus, sort and keyboard handling of the navigation tree; the tree the walks and the filter use (InitNode, InitChildren) is xedit_analysis::filter::NavTree and the script walk, covered through script.run and filter.apply."
 
 [gui."xEdit/xeMainForm.dfm:vstNav:OnInitChildren"]
-status = "pending"
+status = "presentation"
 source = "vstNavInitChildren"
+note = "Display, focus, sort and keyboard handling of the navigation tree; the tree the walks and the filter use (InitNode, InitChildren) is xedit_analysis::filter::NavTree and the script walk, covered through script.run and filter.apply."
 
 [gui."xEdit/xeMainForm.dfm:vstNav:OnInitNode"]
-status = "pending"
+status = "presentation"
 source = "vstNavInitNode"
+note = "Display, focus, sort and keyboard handling of the navigation tree; the tree the walks and the filter use (InitNode, InitChildren) is xedit_analysis::filter::NavTree and the script walk, covered through script.run and filter.apply."
 
 [gui."xEdit/xeMainForm.dfm:vstNav:OnKeyDown"]
-status = "pending"
+status = "presentation"
 source = "vstNavKeyDown"
+note = "Display, focus, sort and keyboard handling of the navigation tree; the tree the walks and the filter use (InitNode, InitChildren) is xedit_analysis::filter::NavTree and the script walk, covered through script.run and filter.apply."
 
 [gui."xEdit/xeMainForm.dfm:vstNav:OnKeyPress"]
-status = "pending"
+status = "presentation"
 source = "vstNavKeyPress"
+note = "Display, focus, sort and keyboard handling of the navigation tree; the tree the walks and the filter use (InitNode, InitChildren) is xedit_analysis::filter::NavTree and the script walk, covered through script.run and filter.apply."
 
 [gui."xEdit/xeMainForm.dfm:vstNav:OnPaintText"]
-status = "pending"
+status = "presentation"
 source = "vstNavPaintText"
+note = "Display, focus, sort and keyboard handling of the navigation tree; the tree the walks and the filter use (InitNode, InitChildren) is xedit_analysis::filter::NavTree and the script walk, covered through script.run and filter.apply."
 
 [gui."xEdit/xeMainForm.dfm:vstSpreadSheetAmmo:OnClick"]
-status = "pending"
+status = "presentation"
 source = "vstSpreadSheetClick"
+note = "Display, sort and in-place editors of a spreadsheet tab; the edit is OnNewText."
 
 [gui."xEdit/xeMainForm.dfm:vstSpreadSheetAmmo:OnCompareNodes"]
-status = "pending"
+status = "presentation"
 source = "vstSpreadSheetCompareNodes"
+note = "Display, sort and in-place editors of a spreadsheet tab; the edit is OnNewText."
 
 [gui."xEdit/xeMainForm.dfm:vstSpreadSheetAmmo:OnCreateEditor"]
-status = "pending"
+status = "presentation"
 source = "vstSpreadSheetCreateEditor"
+note = "Display, sort and in-place editors of a spreadsheet tab; the edit is OnNewText."
 
 [gui."xEdit/xeMainForm.dfm:vstSpreadSheetAmmo:OnDragAllowed"]
-status = "pending"
+status = "covered"
+command = "elements.assign"
 source = "vstSpreadSheetDragAllowed"
+note = "The spreadsheet's drag and drop assigns the dragged element to the row's record (Assign)."
 
 [gui."xEdit/xeMainForm.dfm:vstSpreadSheetAmmo:OnDragDrop"]
-status = "pending"
+status = "covered"
+command = "elements.assign"
 source = "vstSpreadSheetDragDrop"
+note = "The spreadsheet's drag and drop assigns the dragged element to the row's record (Assign)."
 
 [gui."xEdit/xeMainForm.dfm:vstSpreadSheetAmmo:OnDragOver"]
-status = "pending"
+status = "covered"
+command = "elements.assign"
 source = "vstSpreadSheetDragOver"
+note = "The spreadsheet's drag and drop assigns the dragged element to the row's record (Assign)."
 
 [gui."xEdit/xeMainForm.dfm:vstSpreadSheetAmmo:OnEditing"]
-status = "pending"
+status = "presentation"
 source = "vstSpreadSheetEditing"
+note = "Display, sort and in-place editors of a spreadsheet tab; the edit is OnNewText."
 
 [gui."xEdit/xeMainForm.dfm:vstSpreadSheetAmmo:OnFreeNode"]
-status = "pending"
+status = "presentation"
 source = "vstSpreadSheetFreeNode"
+note = "Display, sort and in-place editors of a spreadsheet tab; the edit is OnNewText."
 
 [gui."xEdit/xeMainForm.dfm:vstSpreadSheetAmmo:OnGetText"]
-status = "pending"
+status = "presentation"
 source = "vstSpreadSheetGetText"
+note = "Display, sort and in-place editors of a spreadsheet tab; the edit is OnNewText."
 
 [gui."xEdit/xeMainForm.dfm:vstSpreadSheetAmmo:OnHeaderClick"]
-status = "pending"
+status = "presentation"
 source = "vstNavHeaderClick"
+note = "Display, sort and in-place editors of a spreadsheet tab; the edit is OnNewText."
 
 [gui."xEdit/xeMainForm.dfm:vstSpreadSheetAmmo:OnIncrementalSearch"]
-status = "pending"
+status = "presentation"
 source = "vstSpreadSheetIncrementalSearch"
+note = "Display, sort and in-place editors of a spreadsheet tab; the edit is OnNewText."
 
 [gui."xEdit/xeMainForm.dfm:vstSpreadSheetAmmo:OnInitNode"]
-status = "pending"
+status = "presentation"
 source = "vstSpreadSheetAmmoInitNode"
+note = "Display, sort and in-place editors of a spreadsheet tab; the edit is OnNewText."
 
 [gui."xEdit/xeMainForm.dfm:vstSpreadSheetAmmo:OnNewText"]
-status = "pending"
+status = "covered"
+command = "elements.set"
 source = "vstSpreadSheetNewText"
+note = "EditValue of the edited cell of the spreadsheet row's record."
 
 [gui."xEdit/xeMainForm.dfm:vstSpreadSheetAmmo:OnPaintText"]
-status = "pending"
+status = "presentation"
 source = "vstSpreadSheetPaintText"
+note = "Display, sort and in-place editors of a spreadsheet tab; the edit is OnNewText."
 
 [gui."xEdit/xeMainForm.dfm:vstSpreadSheetWeapon:OnClick"]
-status = "pending"
+status = "presentation"
 source = "vstSpreadSheetClick"
+note = "Display, sort and in-place editors of a spreadsheet tab; the edit is OnNewText."
 
 [gui."xEdit/xeMainForm.dfm:vstSpreadSheetWeapon:OnCompareNodes"]
-status = "pending"
+status = "presentation"
 source = "vstSpreadSheetCompareNodes"
+note = "Display, sort and in-place editors of a spreadsheet tab; the edit is OnNewText."
 
 [gui."xEdit/xeMainForm.dfm:vstSpreadSheetWeapon:OnCreateEditor"]
-status = "pending"
+status = "presentation"
 source = "vstSpreadSheetCreateEditor"
+note = "Display, sort and in-place editors of a spreadsheet tab; the edit is OnNewText."
 
 [gui."xEdit/xeMainForm.dfm:vstSpreadSheetWeapon:OnDragAllowed"]
-status = "pending"
+status = "covered"
+command = "elements.assign"
 source = "vstSpreadSheetDragAllowed"
+note = "The spreadsheet's drag and drop assigns the dragged element to the row's record (Assign)."
 
 [gui."xEdit/xeMainForm.dfm:vstSpreadSheetWeapon:OnDragDrop"]
-status = "pending"
+status = "covered"
+command = "elements.assign"
 source = "vstSpreadSheetDragDrop"
+note = "The spreadsheet's drag and drop assigns the dragged element to the row's record (Assign)."
 
 [gui."xEdit/xeMainForm.dfm:vstSpreadSheetWeapon:OnDragOver"]
-status = "pending"
+status = "covered"
+command = "elements.assign"
 source = "vstSpreadSheetDragOver"
+note = "The spreadsheet's drag and drop assigns the dragged element to the row's record (Assign)."
 
 [gui."xEdit/xeMainForm.dfm:vstSpreadSheetWeapon:OnEditing"]
-status = "pending"
+status = "presentation"
 source = "vstSpreadSheetEditing"
+note = "Display, sort and in-place editors of a spreadsheet tab; the edit is OnNewText."
 
 [gui."xEdit/xeMainForm.dfm:vstSpreadSheetWeapon:OnFreeNode"]
-status = "pending"
+status = "presentation"
 source = "vstSpreadSheetFreeNode"
+note = "Display, sort and in-place editors of a spreadsheet tab; the edit is OnNewText."
 
 [gui."xEdit/xeMainForm.dfm:vstSpreadSheetWeapon:OnGetText"]
-status = "pending"
+status = "presentation"
 source = "vstSpreadSheetGetText"
+note = "Display, sort and in-place editors of a spreadsheet tab; the edit is OnNewText."
 
 [gui."xEdit/xeMainForm.dfm:vstSpreadSheetWeapon:OnHeaderClick"]
-status = "pending"
+status = "presentation"
 source = "vstNavHeaderClick"
+note = "Display, sort and in-place editors of a spreadsheet tab; the edit is OnNewText."
 
 [gui."xEdit/xeMainForm.dfm:vstSpreadSheetWeapon:OnIncrementalSearch"]
-status = "pending"
+status = "presentation"
 source = "vstSpreadSheetIncrementalSearch"
+note = "Display, sort and in-place editors of a spreadsheet tab; the edit is OnNewText."
 
 [gui."xEdit/xeMainForm.dfm:vstSpreadSheetWeapon:OnInitNode"]
-status = "pending"
+status = "presentation"
 source = "vstSpreadSheetWeaponInitNode"
+note = "Display, sort and in-place editors of a spreadsheet tab; the edit is OnNewText."
 
 [gui."xEdit/xeMainForm.dfm:vstSpreadSheetWeapon:OnNewText"]
-status = "pending"
+status = "covered"
+command = "elements.set"
 source = "vstSpreadSheetNewText"
+note = "EditValue of the edited cell of the spreadsheet row's record."
 
 [gui."xEdit/xeMainForm.dfm:vstSpreadSheetWeapon:OnPaintText"]
-status = "pending"
+status = "presentation"
 source = "vstSpreadSheetPaintText"
+note = "Display, sort and in-place editors of a spreadsheet tab; the edit is OnNewText."
 
 [gui."xEdit/xeMainForm.dfm:vstSpreadsheetArmor:OnClick"]
-status = "pending"
+status = "presentation"
 source = "vstSpreadSheetClick"
+note = "Display, sort and in-place editors of a spreadsheet tab; the edit is OnNewText."
 
 [gui."xEdit/xeMainForm.dfm:vstSpreadsheetArmor:OnCompareNodes"]
-status = "pending"
+status = "presentation"
 source = "vstSpreadSheetCompareNodes"
+note = "Display, sort and in-place editors of a spreadsheet tab; the edit is OnNewText."
 
 [gui."xEdit/xeMainForm.dfm:vstSpreadsheetArmor:OnCreateEditor"]
-status = "pending"
+status = "presentation"
 source = "vstSpreadSheetCreateEditor"
+note = "Display, sort and in-place editors of a spreadsheet tab; the edit is OnNewText."
 
 [gui."xEdit/xeMainForm.dfm:vstSpreadsheetArmor:OnDragAllowed"]
-status = "pending"
+status = "covered"
+command = "elements.assign"
 source = "vstSpreadSheetDragAllowed"
+note = "The spreadsheet's drag and drop assigns the dragged element to the row's record (Assign)."
 
 [gui."xEdit/xeMainForm.dfm:vstSpreadsheetArmor:OnDragDrop"]
-status = "pending"
+status = "covered"
+command = "elements.assign"
 source = "vstSpreadSheetDragDrop"
+note = "The spreadsheet's drag and drop assigns the dragged element to the row's record (Assign)."
 
 [gui."xEdit/xeMainForm.dfm:vstSpreadsheetArmor:OnDragOver"]
-status = "pending"
+status = "covered"
+command = "elements.assign"
 source = "vstSpreadSheetDragOver"
+note = "The spreadsheet's drag and drop assigns the dragged element to the row's record (Assign)."
 
 [gui."xEdit/xeMainForm.dfm:vstSpreadsheetArmor:OnEditing"]
-status = "pending"
+status = "presentation"
 source = "vstSpreadSheetEditing"
+note = "Display, sort and in-place editors of a spreadsheet tab; the edit is OnNewText."
 
 [gui."xEdit/xeMainForm.dfm:vstSpreadsheetArmor:OnFreeNode"]
-status = "pending"
+status = "presentation"
 source = "vstSpreadSheetFreeNode"
+note = "Display, sort and in-place editors of a spreadsheet tab; the edit is OnNewText."
 
 [gui."xEdit/xeMainForm.dfm:vstSpreadsheetArmor:OnGetText"]
-status = "pending"
+status = "presentation"
 source = "vstSpreadSheetGetText"
+note = "Display, sort and in-place editors of a spreadsheet tab; the edit is OnNewText."
 
 [gui."xEdit/xeMainForm.dfm:vstSpreadsheetArmor:OnHeaderClick"]
-status = "pending"
+status = "presentation"
 source = "vstNavHeaderClick"
+note = "Display, sort and in-place editors of a spreadsheet tab; the edit is OnNewText."
 
 [gui."xEdit/xeMainForm.dfm:vstSpreadsheetArmor:OnIncrementalSearch"]
-status = "pending"
+status = "presentation"
 source = "vstSpreadSheetIncrementalSearch"
+note = "Display, sort and in-place editors of a spreadsheet tab; the edit is OnNewText."
 
 [gui."xEdit/xeMainForm.dfm:vstSpreadsheetArmor:OnInitNode"]
-status = "pending"
+status = "presentation"
 source = "vstSpreadSheetArmorInitNode"
+note = "Display, sort and in-place editors of a spreadsheet tab; the edit is OnNewText."
 
 [gui."xEdit/xeMainForm.dfm:vstSpreadsheetArmor:OnNewText"]
-status = "pending"
+status = "covered"
+command = "elements.set"
 source = "vstSpreadSheetNewText"
+note = "EditValue of the edited cell of the spreadsheet row's record."
 
 [gui."xEdit/xeMainForm.dfm:vstSpreadsheetArmor:OnPaintText"]
-status = "pending"
+status = "presentation"
 source = "vstSpreadSheetPaintText"
+note = "Display, sort and in-place editors of a spreadsheet tab; the edit is OnNewText."
 
 [gui."xEdit/xeMainForm.dfm:vstView:OnAdvancedHeaderDraw"]
-status = "pending"
+status = "presentation"
 source = "vstViewAdvancedHeaderDraw"
+note = "Display, focus, in-place editors and keyboard handling of the view tab; records.compare gives its rows (NodeDatasForMainRecord), the edits are their own entries."
 
 [gui."xEdit/xeMainForm.dfm:vstView:OnBeforeCellPaint"]
-status = "pending"
+status = "presentation"
 source = "vstViewBeforeCellPaint"
+note = "Display, focus, in-place editors and keyboard handling of the view tab; records.compare gives its rows (NodeDatasForMainRecord), the edits are their own entries."
 
 [gui."xEdit/xeMainForm.dfm:vstView:OnBeforeItemErase"]
-status = "pending"
+status = "presentation"
 source = "vstViewBeforeItemErase"
+note = "Display, focus, in-place editors and keyboard handling of the view tab; records.compare gives its rows (NodeDatasForMainRecord), the edits are their own entries."
 
 [gui."xEdit/xeMainForm.dfm:vstView:OnClick"]
-status = "pending"
+status = "presentation"
 source = "vstViewClick"
+note = "Display, focus, in-place editors and keyboard handling of the view tab; records.compare gives its rows (NodeDatasForMainRecord), the edits are their own entries."
 
 [gui."xEdit/xeMainForm.dfm:vstView:OnCollapsed"]
-status = "pending"
+status = "presentation"
 source = "vstViewCollapsed"
+note = "Display, focus, in-place editors and keyboard handling of the view tab; records.compare gives its rows (NodeDatasForMainRecord), the edits are their own entries."
 
 [gui."xEdit/xeMainForm.dfm:vstView:OnCollapsing"]
-status = "pending"
+status = "presentation"
 source = "vstViewCollapsing"
+note = "Display, focus, in-place editors and keyboard handling of the view tab; records.compare gives its rows (NodeDatasForMainRecord), the edits are their own entries."
 
 [gui."xEdit/xeMainForm.dfm:vstView:OnCreateEditor"]
-status = "pending"
+status = "presentation"
 source = "vstViewCreateEditor"
+note = "Display, focus, in-place editors and keyboard handling of the view tab; records.compare gives its rows (NodeDatasForMainRecord), the edits are their own entries."
 
 [gui."xEdit/xeMainForm.dfm:vstView:OnDblClick"]
-status = "pending"
+status = "presentation"
 source = "vstViewDblClick"
+note = "Display, focus, in-place editors and keyboard handling of the view tab; records.compare gives its rows (NodeDatasForMainRecord), the edits are their own entries."
 
 [gui."xEdit/xeMainForm.dfm:vstView:OnDragAllowed"]
-status = "pending"
+status = "covered"
+command = "elements.assign"
 source = "vstViewDragAllowed"
+note = "The view's drag and drop assigns the dragged element (Assign); elements.assign is the drop."
 
 [gui."xEdit/xeMainForm.dfm:vstView:OnDragDrop"]
 status = "covered"
@@ -2283,84 +2658,106 @@ source = "vstViewDragDrop"
 note = "The drop position and the sort order the view gives the dragged entry are the index parameter; a drop on an array is an aligned position, for which records.compare (the view showing the record) writes the alignment first."
 
 [gui."xEdit/xeMainForm.dfm:vstView:OnDragOver"]
-status = "pending"
+status = "covered"
+command = "elements.assign"
 source = "vstViewDragOver"
+note = "The view's drag and drop assigns the dragged element (Assign); elements.assign is the drop."
 
 [gui."xEdit/xeMainForm.dfm:vstView:OnEditing"]
-status = "pending"
+status = "presentation"
 source = "vstViewEditing"
+note = "Display, focus, in-place editors and keyboard handling of the view tab; records.compare gives its rows (NodeDatasForMainRecord), the edits are their own entries."
 
 [gui."xEdit/xeMainForm.dfm:vstView:OnExpanded"]
-status = "pending"
+status = "presentation"
 source = "vstViewExpanded"
+note = "Display, focus, in-place editors and keyboard handling of the view tab; records.compare gives its rows (NodeDatasForMainRecord), the edits are their own entries."
 
 [gui."xEdit/xeMainForm.dfm:vstView:OnExpanding"]
-status = "pending"
+status = "presentation"
 source = "vstViewExpanding"
+note = "Display, focus, in-place editors and keyboard handling of the view tab; records.compare gives its rows (NodeDatasForMainRecord), the edits are their own entries."
 
 [gui."xEdit/xeMainForm.dfm:vstView:OnFocusChanged"]
-status = "pending"
+status = "presentation"
 source = "vstViewFocusChanged"
+note = "Display, focus, in-place editors and keyboard handling of the view tab; records.compare gives its rows (NodeDatasForMainRecord), the edits are their own entries."
 
 [gui."xEdit/xeMainForm.dfm:vstView:OnFocusChanging"]
-status = "pending"
+status = "presentation"
 source = "vstViewFocusChanging"
+note = "Display, focus, in-place editors and keyboard handling of the view tab; records.compare gives its rows (NodeDatasForMainRecord), the edits are their own entries."
 
 [gui."xEdit/xeMainForm.dfm:vstView:OnFreeNode"]
-status = "pending"
+status = "presentation"
 source = "vstViewFreeNode"
+note = "Display, focus, in-place editors and keyboard handling of the view tab; records.compare gives its rows (NodeDatasForMainRecord), the edits are their own entries."
 
 [gui."xEdit/xeMainForm.dfm:vstView:OnGetText"]
-status = "pending"
+status = "presentation"
 source = "vstViewGetText"
+note = "Display, focus, in-place editors and keyboard handling of the view tab; records.compare gives its rows (NodeDatasForMainRecord), the edits are their own entries."
 
 [gui."xEdit/xeMainForm.dfm:vstView:OnHeaderClick"]
-status = "pending"
+status = "presentation"
 source = "vstViewHeaderClick"
+note = "Display, focus, in-place editors and keyboard handling of the view tab; records.compare gives its rows (NodeDatasForMainRecord), the edits are their own entries."
 
 [gui."xEdit/xeMainForm.dfm:vstView:OnHeaderDrawQueryElements"]
-status = "pending"
+status = "presentation"
 source = "vstViewHeaderDrawQueryElements"
+note = "Display, focus, in-place editors and keyboard handling of the view tab; records.compare gives its rows (NodeDatasForMainRecord), the edits are their own entries."
 
 [gui."xEdit/xeMainForm.dfm:vstView:OnHeaderMouseDown"]
-status = "pending"
+status = "presentation"
 source = "vstViewHeaderMouseDown"
+note = "Display, focus, in-place editors and keyboard handling of the view tab; records.compare gives its rows (NodeDatasForMainRecord), the edits are their own entries."
 
 [gui."xEdit/xeMainForm.dfm:vstView:OnHeaderMouseMove"]
-status = "pending"
+status = "presentation"
 source = "vstViewHeaderMouseMove"
+note = "Display, focus, in-place editors and keyboard handling of the view tab; records.compare gives its rows (NodeDatasForMainRecord), the edits are their own entries."
 
 [gui."xEdit/xeMainForm.dfm:vstView:OnInitChildren"]
-status = "pending"
+status = "presentation"
 source = "vstViewInitChildren"
+note = "Display, focus, in-place editors and keyboard handling of the view tab; records.compare gives its rows (NodeDatasForMainRecord), the edits are their own entries."
 
 [gui."xEdit/xeMainForm.dfm:vstView:OnInitNode"]
-status = "pending"
+status = "presentation"
 source = "vstViewInitNode"
+note = "Display, focus, in-place editors and keyboard handling of the view tab; records.compare gives its rows (NodeDatasForMainRecord), the edits are their own entries."
 
 [gui."xEdit/xeMainForm.dfm:vstView:OnKeyDown"]
-status = "pending"
+status = "presentation"
 source = "vstViewKeyDown"
+note = "Display, focus, in-place editors and keyboard handling of the view tab; records.compare gives its rows (NodeDatasForMainRecord), the edits are their own entries."
 
 [gui."xEdit/xeMainForm.dfm:vstView:OnKeyPress"]
-status = "pending"
+status = "presentation"
 source = "vstViewKeyPress"
+note = "Display, focus, in-place editors and keyboard handling of the view tab; records.compare gives its rows (NodeDatasForMainRecord), the edits are their own entries."
 
 [gui."xEdit/xeMainForm.dfm:vstView:OnNewText"]
-status = "pending"
+status = "covered"
+command = "elements.set"
 source = "vstViewNewText"
+note = "EditValue of the edited cell."
 
 [gui."xEdit/xeMainForm.dfm:vstView:OnPaintText"]
-status = "pending"
+status = "presentation"
 source = "vstViewPaintText"
+note = "Display, focus, in-place editors and keyboard handling of the view tab; records.compare gives its rows (NodeDatasForMainRecord), the edits are their own entries."
 
 [gui."xEdit/xeMainForm.dfm:vstView:OnResize"]
-status = "pending"
+status = "presentation"
 source = "vstViewResize"
+note = "Display, focus, in-place editors and keyboard handling of the view tab; records.compare gives its rows (NodeDatasForMainRecord), the edits are their own entries."
 
 [gui."xEdit/xeMainForm.dfm:vstView:OnScroll"]
-status = "pending"
+status = "presentation"
 source = "vstViewScroll"
+note = "Display, focus, in-place editors and keyboard handling of the view tab; records.compare gives its rows (NodeDatasForMainRecord), the edits are their own entries."
 
 [gui."xEdit/xeModGroupEditForm.dfm:edName:OnChange"]
 status = "covered"
@@ -2587,394 +2984,497 @@ note = "Display and keyboard handling of the selection dialog."
 [gui."xEdit/xeModuleSelectForm.dfm:acPresetDelete:OnExecute"]
 status = "pending"
 source = "acPresetDeleteExecute"
+note = "Owned by issue #78 (GUI operations without a typed command): the presets of the module selection dialog (saved module selections in the settings file)"
 
 [gui."xEdit/xeModuleSelectForm.dfm:acPresetDelete:OnUpdate"]
 status = "pending"
 source = "acPresetDeleteUpdate"
+note = "Owned by issue #78 (GUI operations without a typed command): the presets of the module selection dialog (saved module selections in the settings file)"
 
 [gui."xEdit/xeModuleSelectForm.dfm:acPresetLoad:OnExecute"]
 status = "pending"
 source = "acPresetLoadExecute"
+note = "Owned by issue #78 (GUI operations without a typed command): the presets of the module selection dialog (saved module selections in the settings file)"
 
 [gui."xEdit/xeModuleSelectForm.dfm:acPresetLoad:OnUpdate"]
 status = "pending"
 source = "acPresetLoadUpdate"
+note = "Owned by issue #78 (GUI operations without a typed command): the presets of the module selection dialog (saved module selections in the settings file)"
 
 [gui."xEdit/xeModuleSelectForm.dfm:acPresetSave:OnExecute"]
 status = "pending"
 source = "acPresetSaveExecute"
+note = "Owned by issue #78 (GUI operations without a typed command): the presets of the module selection dialog (saved module selections in the settings file)"
 
 [gui."xEdit/xeModuleSelectForm.dfm:acPresetSave:OnUpdate"]
 status = "pending"
 source = "acPresetSaveUpdate"
+note = "Owned by issue #78 (GUI operations without a typed command): the presets of the module selection dialog (saved module selections in the settings file)"
 
 [gui."xEdit/xeModuleSelectForm.dfm:btnOK:OnClick"]
-status = "pending"
+status = "covered"
+command = "session.load"
 source = "btnOKClick"
+note = "The module selection: the checked modules and the masters a checked module needs (vstModulesChecked checks them) are the plugins session.load and --load load, masters with them."
 
 [gui."xEdit/xeModuleSelectForm.dfm:cbPreset:OnKeyPress"]
-status = "pending"
+status = "presentation"
 source = "cbPresetKeyPress"
+note = "Display, filter, selection helpers and keyboard handling of the module selection dialog; session.load takes the list."
 
 [gui."xEdit/xeModuleSelectForm.dfm:cbRegExFilter:OnClick"]
-status = "pending"
+status = "presentation"
 source = "cbRegExFilterClick"
+note = "Display, filter, selection helpers and keyboard handling of the module selection dialog; session.load takes the list."
 
 [gui."xEdit/xeModuleSelectForm.dfm:edFilter:OnChange"]
-status = "pending"
+status = "presentation"
 source = "edFilterChange"
+note = "Display, filter, selection helpers and keyboard handling of the module selection dialog; session.load takes the list."
 
 [gui."xEdit/xeModuleSelectForm.dfm:edFilter:OnKeyDown"]
-status = "pending"
+status = "presentation"
 source = "edFilterKeyDown"
+note = "Display, filter, selection helpers and keyboard handling of the module selection dialog; session.load takes the list."
 
 [gui."xEdit/xeModuleSelectForm.dfm:frmModuleSelect:OnClose"]
-status = "pending"
+status = "presentation"
 source = "FormClose"
+note = "Display, filter, selection helpers and keyboard handling of the module selection dialog; session.load takes the list."
 
 [gui."xEdit/xeModuleSelectForm.dfm:frmModuleSelect:OnCreate"]
-status = "pending"
+status = "presentation"
 source = "FormCreate"
+note = "Display, filter, selection helpers and keyboard handling of the module selection dialog; session.load takes the list."
 
 [gui."xEdit/xeModuleSelectForm.dfm:frmModuleSelect:OnKeyDown"]
-status = "pending"
+status = "presentation"
 source = "FormKeyDown"
+note = "Display, filter, selection helpers and keyboard handling of the module selection dialog; session.load takes the list."
 
 [gui."xEdit/xeModuleSelectForm.dfm:frmModuleSelect:OnShow"]
-status = "pending"
+status = "presentation"
 source = "FormShow"
+note = "Display, filter, selection helpers and keyboard handling of the module selection dialog; session.load takes the list."
 
 [gui."xEdit/xeModuleSelectForm.dfm:mniInvertSelection:OnClick"]
-status = "pending"
+status = "presentation"
 source = "mniInvertSelectionClick"
+note = "Display, filter, selection helpers and keyboard handling of the module selection dialog; session.load takes the list."
 
 [gui."xEdit/xeModuleSelectForm.dfm:mniSelectAll:OnClick"]
-status = "pending"
+status = "presentation"
 source = "mniSelectAllClick"
+note = "Display, filter, selection helpers and keyboard handling of the module selection dialog; session.load takes the list."
 
 [gui."xEdit/xeModuleSelectForm.dfm:mniSelectNone:OnClick"]
-status = "pending"
+status = "presentation"
 source = "mniSelectNoneClick"
+note = "Display, filter, selection helpers and keyboard handling of the module selection dialog; session.load takes the list."
 
 [gui."xEdit/xeModuleSelectForm.dfm:pmuModules:OnPopup"]
-status = "pending"
+status = "presentation"
 source = "pmuModulesPopup"
+note = "Display, filter, selection helpers and keyboard handling of the module selection dialog; session.load takes the list."
 
 [gui."xEdit/xeModuleSelectForm.dfm:vstModules:OnBeforeGetCheckState"]
-status = "pending"
+status = "covered"
+command = "session.load"
 source = "vstModulesBeforeGetCheckState"
+note = "The module selection: the checked modules and the masters a checked module needs (vstModulesChecked checks them) are the plugins session.load and --load load, masters with them."
 
 [gui."xEdit/xeModuleSelectForm.dfm:vstModules:OnChecked"]
-status = "pending"
+status = "covered"
+command = "session.load"
 source = "vstModulesChecked"
+note = "The module selection: the checked modules and the masters a checked module needs (vstModulesChecked checks them) are the plugins session.load and --load load, masters with them."
 
 [gui."xEdit/xeModuleSelectForm.dfm:vstModules:OnCompareNodes"]
-status = "pending"
+status = "presentation"
 source = "vstModulesCompareNodes"
+note = "Display, filter, selection helpers and keyboard handling of the module selection dialog; session.load takes the list."
 
 [gui."xEdit/xeModuleSelectForm.dfm:vstModules:OnFreeNode"]
-status = "pending"
+status = "presentation"
 source = "vstModulesFreeNode"
+note = "Display, filter, selection helpers and keyboard handling of the module selection dialog; session.load takes the list."
 
 [gui."xEdit/xeModuleSelectForm.dfm:vstModules:OnGetText"]
-status = "pending"
+status = "presentation"
 source = "vstModulesGetText"
+note = "Display, filter, selection helpers and keyboard handling of the module selection dialog; session.load takes the list."
 
 [gui."xEdit/xeModuleSelectForm.dfm:vstModules:OnHeaderClick"]
-status = "pending"
+status = "presentation"
 source = "vstModulesHeaderClick"
+note = "Display, filter, selection helpers and keyboard handling of the module selection dialog; session.load takes the list."
 
 [gui."xEdit/xeModuleSelectForm.dfm:vstModules:OnIncrementalSearch"]
-status = "pending"
+status = "presentation"
 source = "vstModulesIncrementalSearch"
+note = "Display, filter, selection helpers and keyboard handling of the module selection dialog; session.load takes the list."
 
 [gui."xEdit/xeModuleSelectForm.dfm:vstModules:OnInitChildren"]
-status = "pending"
+status = "presentation"
 source = "vstModulesInitChildren"
+note = "Display, filter, selection helpers and keyboard handling of the module selection dialog; session.load takes the list."
 
 [gui."xEdit/xeModuleSelectForm.dfm:vstModules:OnInitNode"]
-status = "pending"
+status = "presentation"
 source = "vstModulesInitNode"
+note = "Display, filter, selection helpers and keyboard handling of the module selection dialog; session.load takes the list."
 
 [gui."xEdit/xeModuleSelectForm.dfm:vstModules:OnKeyDown"]
-status = "pending"
+status = "presentation"
 source = "vstModulesKeyDown"
+note = "Display, filter, selection helpers and keyboard handling of the module selection dialog; session.load takes the list."
 
 [gui."xEdit/xeModuleSelectForm.dfm:vstModules:OnKeyPress"]
-status = "pending"
+status = "presentation"
 source = "vstModulesKeyPress"
+note = "Display, filter, selection helpers and keyboard handling of the module selection dialog; session.load takes the list."
 
 [gui."xEdit/xeModuleSelectForm.dfm:vstModules:OnNodeDblClick"]
-status = "pending"
+status = "presentation"
 source = "vstModulesNodeDblClick"
+note = "Display, filter, selection helpers and keyboard handling of the module selection dialog; session.load takes the list."
 
 [gui."xEdit/xeModuleSelectForm.dfm:vstModules:OnPaintText"]
-status = "pending"
+status = "presentation"
 source = "vstModulesPaintText"
+note = "Display, filter, selection helpers and keyboard handling of the module selection dialog; session.load takes the list."
 
 [gui."xEdit/xeOptionsForm.dfm:cbConflictAll:OnChange"]
-status = "pending"
+status = "presentation"
 source = "cbConflictAllChange"
+note = "The options dialog: themes, fonts and the conflict colours; the settings that change behaviour are the settings file and the CLI flags."
 
 [gui."xEdit/xeOptionsForm.dfm:cbConflictThis:OnChange"]
-status = "pending"
+status = "presentation"
 source = "cbConflictThisChange"
+note = "The options dialog: themes, fonts and the conflict colours; the settings that change behaviour are the settings file and the CLI flags."
 
 [gui."xEdit/xeOptionsForm.dfm:cbThemeDark:OnSelect"]
-status = "pending"
+status = "presentation"
 source = "cbThemeSystemSelect"
+note = "The options dialog: themes, fonts and the conflict colours; the settings that change behaviour are the settings file and the CLI flags."
 
 [gui."xEdit/xeOptionsForm.dfm:cbThemeLight:OnSelect"]
-status = "pending"
+status = "presentation"
 source = "cbThemeSystemSelect"
+note = "The options dialog: themes, fonts and the conflict colours; the settings that change behaviour are the settings file and the CLI flags."
 
 [gui."xEdit/xeOptionsForm.dfm:cbThemeSystem:OnSelect"]
-status = "pending"
+status = "presentation"
 source = "cbThemeSystemSelect"
+note = "The options dialog: themes, fonts and the conflict colours; the settings that change behaviour are the settings file and the CLI flags."
 
 [gui."xEdit/xeOptionsForm.dfm:clbConflictAll:OnChange"]
-status = "pending"
+status = "presentation"
 source = "clbConflictAllChange"
+note = "The options dialog: themes, fonts and the conflict colours; the settings that change behaviour are the settings file and the CLI flags."
 
 [gui."xEdit/xeOptionsForm.dfm:clbConflictThis:OnChange"]
-status = "pending"
+status = "presentation"
 source = "clbConflictThisChange"
+note = "The options dialog: themes, fonts and the conflict colours; the settings that change behaviour are the settings file and the CLI flags."
 
 [gui."xEdit/xeOptionsForm.dfm:frmOptions:OnClose"]
-status = "pending"
+status = "presentation"
 source = "FormClose"
+note = "The options dialog: themes, fonts and the conflict colours; the settings that change behaviour are the settings file and the CLI flags."
 
 [gui."xEdit/xeOptionsForm.dfm:frmOptions:OnCreate"]
-status = "pending"
+status = "presentation"
 source = "FormCreate"
+note = "The options dialog: themes, fonts and the conflict colours; the settings that change behaviour are the settings file and the CLI flags."
 
 [gui."xEdit/xeOptionsForm.dfm:frmOptions:OnKeyDown"]
-status = "pending"
+status = "presentation"
 source = "FormKeyDown"
+note = "The options dialog: themes, fonts and the conflict colours; the settings that change behaviour are the settings file and the CLI flags."
 
 [gui."xEdit/xeOptionsForm.dfm:pnlFontMessages:OnClick"]
-status = "pending"
+status = "presentation"
 source = "pnlFontRecordsClick"
+note = "The options dialog: themes, fonts and the conflict colours; the settings that change behaviour are the settings file and the CLI flags."
 
 [gui."xEdit/xeOptionsForm.dfm:pnlFontRecords:OnClick"]
-status = "pending"
+status = "presentation"
 source = "pnlFontRecordsClick"
+note = "The options dialog: themes, fonts and the conflict colours; the settings that change behaviour are the settings file and the CLI flags."
 
 [gui."xEdit/xeOptionsForm.dfm:pnlFontViewer:OnClick"]
-status = "pending"
+status = "presentation"
 source = "pnlFontRecordsClick"
+note = "The options dialog: themes, fonts and the conflict colours; the settings that change behaviour are the settings file and the CLI flags."
 
 [gui."xEdit/xeOptionsForm.dfm:rbThemeDark:OnClick"]
-status = "pending"
+status = "presentation"
 source = "rbThemeClick"
+note = "The options dialog: themes, fonts and the conflict colours; the settings that change behaviour are the settings file and the CLI flags."
 
 [gui."xEdit/xeOptionsForm.dfm:rbThemeLight:OnClick"]
-status = "pending"
+status = "presentation"
 source = "rbThemeClick"
+note = "The options dialog: themes, fonts and the conflict colours; the settings that change behaviour are the settings file and the CLI flags."
 
 [gui."xEdit/xeOptionsForm.dfm:rbThemeSystem:OnClick"]
-status = "pending"
+status = "presentation"
 source = "rbThemeClick"
+note = "The options dialog: themes, fonts and the conflict colours; the settings that change behaviour are the settings file and the CLI flags."
 
 [gui."xEdit/xeRichEditForm.dfm:btnTOC:OnClick"]
-status = "pending"
+status = "presentation"
 source = "btnTOCClick"
+note = "The help and text viewer (table of contents, search, zoom)."
 
 [gui."xEdit/xeRichEditForm.dfm:edSearch:OnKeyPress"]
-status = "pending"
+status = "presentation"
 source = "edSearchKeyPress"
+note = "The help and text viewer (table of contents, search, zoom)."
 
 [gui."xEdit/xeRichEditForm.dfm:frmRichEdit:OnClose"]
-status = "pending"
+status = "presentation"
 source = "FormClose"
+note = "The help and text viewer (table of contents, search, zoom)."
 
 [gui."xEdit/xeRichEditForm.dfm:frmRichEdit:OnCreate"]
-status = "pending"
+status = "presentation"
 source = "FormCreate"
+note = "The help and text viewer (table of contents, search, zoom)."
 
 [gui."xEdit/xeRichEditForm.dfm:frmRichEdit:OnKeyDown"]
-status = "pending"
+status = "presentation"
 source = "FormKeyDown"
+note = "The help and text viewer (table of contents, search, zoom)."
 
 [gui."xEdit/xeRichEditForm.dfm:frmRichEdit:OnShow"]
-status = "pending"
+status = "presentation"
 source = "FormShow"
+note = "The help and text viewer (table of contents, search, zoom)."
 
 [gui."xEdit/xeRichEditForm.dfm:splTOC:OnMoved"]
-status = "pending"
+status = "presentation"
 source = "splTOCMoved"
+note = "The help and text viewer (table of contents, search, zoom)."
 
 [gui."xEdit/xeRichEditForm.dfm:tbrZoom:OnChange"]
-status = "pending"
+status = "presentation"
 source = "tbrZoomChange"
+note = "The help and text viewer (table of contents, search, zoom)."
 
 [gui."xEdit/xeRichEditForm.dfm:tmrEnableButton:OnTimer"]
-status = "pending"
+status = "presentation"
 source = "tmrEnableButtonTimer"
+note = "The help and text viewer (table of contents, search, zoom)."
 
 [gui."xEdit/xeRichEditForm.dfm:vstTOC:OnCollapsing"]
-status = "pending"
+status = "presentation"
 source = "vstTOCCollapsing"
+note = "The help and text viewer (table of contents, search, zoom)."
 
 [gui."xEdit/xeRichEditForm.dfm:vstTOC:OnGetText"]
-status = "pending"
+status = "presentation"
 source = "vstTOCGetText"
+note = "The help and text viewer (table of contents, search, zoom)."
 
 [gui."xEdit/xeRichEditForm.dfm:vstTOC:OnNodeDblClick"]
-status = "pending"
+status = "presentation"
 source = "vstTOCNodeDblClick"
+note = "The help and text viewer (table of contents, search, zoom)."
 
 [gui."xEdit/xeScriptForm.dfm:Editor:OnKeyDown"]
-status = "pending"
+status = "presentation"
 source = "EditorKeyDown"
+note = "The script selection and editor dialog: choosing, filtering, editing and saving a script's text; running it is script.run and script.list lists the scripts folder."
 
 [gui."xEdit/xeScriptForm.dfm:Editor:OnKeyPress"]
-status = "pending"
+status = "presentation"
 source = "EditorKeyPress"
+note = "The script selection and editor dialog: choosing, filtering, editing and saving a script's text; running it is script.run and script.list lists the scripts folder."
 
 [gui."xEdit/xeScriptForm.dfm:Editor:OnKeyUp"]
-status = "pending"
+status = "presentation"
 source = "EditorKeyUp"
+note = "The script selection and editor dialog: choosing, filtering, editing and saving a script's text; running it is script.run and script.list lists the scripts folder."
 
 [gui."xEdit/xeScriptForm.dfm:Editor:OnMouseUp"]
-status = "pending"
+status = "presentation"
 source = "EditorMouseUp"
+note = "The script selection and editor dialog: choosing, filtering, editing and saving a script's text; running it is script.run and script.list lists the scripts folder."
 
 [gui."xEdit/xeScriptForm.dfm:btnSave:OnClick"]
-status = "pending"
+status = "presentation"
 source = "btnSaveClick"
+note = "The script selection and editor dialog: choosing, filtering, editing and saving a script's text; running it is script.run and script.list lists the scripts folder."
 
 [gui."xEdit/xeScriptForm.dfm:chkScriptsSubDir:OnClick"]
-status = "pending"
+status = "presentation"
 source = "chkScriptsSubDirClick"
+note = "The script selection and editor dialog: choosing, filtering, editing and saving a script's text; running it is script.run and script.list lists the scripts folder."
 
 [gui."xEdit/xeScriptForm.dfm:cmbScripts:OnChange"]
-status = "pending"
+status = "presentation"
 source = "cmbScriptsChange"
+note = "The script selection and editor dialog: choosing, filtering, editing and saving a script's text; running it is script.run and script.list lists the scripts folder."
 
 [gui."xEdit/xeScriptForm.dfm:cmbScripts:OnCloseUp"]
-status = "pending"
+status = "presentation"
 source = "cmbScriptsCloseUp"
+note = "The script selection and editor dialog: choosing, filtering, editing and saving a script's text; running it is script.run and script.list lists the scripts folder."
 
 [gui."xEdit/xeScriptForm.dfm:cmbScripts:OnDropDown"]
-status = "pending"
+status = "presentation"
 source = "cmbScriptsDropDown"
+note = "The script selection and editor dialog: choosing, filtering, editing and saving a script's text; running it is script.run and script.list lists the scripts folder."
 
 [gui."xEdit/xeScriptForm.dfm:cmbScripts:OnEnter"]
-status = "pending"
+status = "presentation"
 source = "cmbScriptsEnter"
+note = "The script selection and editor dialog: choosing, filtering, editing and saving a script's text; running it is script.run and script.list lists the scripts folder."
 
 [gui."xEdit/xeScriptForm.dfm:cmbScripts:OnExit"]
-status = "pending"
+status = "presentation"
 source = "cmbScriptsExit"
+note = "The script selection and editor dialog: choosing, filtering, editing and saving a script's text; running it is script.run and script.list lists the scripts folder."
 
 [gui."xEdit/xeScriptForm.dfm:cmbScripts:OnKeyDown"]
-status = "pending"
+status = "presentation"
 source = "cmbScriptsKeyDown"
+note = "The script selection and editor dialog: choosing, filtering, editing and saving a script's text; running it is script.run and script.list lists the scripts folder."
 
 [gui."xEdit/xeScriptForm.dfm:cmbScripts:OnSelect"]
-status = "pending"
+status = "presentation"
 source = "cmbScriptsSelect"
+note = "The script selection and editor dialog: choosing, filtering, editing and saving a script's text; running it is script.run and script.list lists the scripts folder."
 
 [gui."xEdit/xeScriptForm.dfm:edFilter:OnChange"]
-status = "pending"
+status = "presentation"
 source = "edFilterChange"
+note = "The script selection and editor dialog: choosing, filtering, editing and saving a script's text; running it is script.run and script.list lists the scripts folder."
 
 [gui."xEdit/xeScriptForm.dfm:edFilter:OnKeyDown"]
-status = "pending"
+status = "presentation"
 source = "edFilterKeyDown"
+note = "The script selection and editor dialog: choosing, filtering, editing and saving a script's text; running it is script.run and script.list lists the scripts folder."
 
 [gui."xEdit/xeScriptForm.dfm:frmScript:OnClose"]
-status = "pending"
+status = "presentation"
 source = "FormClose"
+note = "The script selection and editor dialog: choosing, filtering, editing and saving a script's text; running it is script.run and script.list lists the scripts folder."
 
 [gui."xEdit/xeScriptForm.dfm:frmScript:OnCreate"]
-status = "pending"
+status = "presentation"
 source = "FormCreate"
+note = "The script selection and editor dialog: choosing, filtering, editing and saving a script's text; running it is script.run and script.list lists the scripts folder."
 
 [gui."xEdit/xeScriptForm.dfm:frmScript:OnKeyDown"]
-status = "pending"
+status = "presentation"
 source = "FormKeyDown"
+note = "The script selection and editor dialog: choosing, filtering, editing and saving a script's text; running it is script.run and script.list lists the scripts folder."
 
 [gui."xEdit/xeScriptForm.dfm:frmScript:OnShow"]
-status = "pending"
+status = "presentation"
 source = "FormShow"
+note = "The script selection and editor dialog: choosing, filtering, editing and saving a script's text; running it is script.run and script.list lists the scripts folder."
 
 [gui."xEdit/xeTipForm.dfm:cbShowTip:OnClick"]
-status = "pending"
+status = "presentation"
 source = "cbShowTipClick"
+note = "The tip of the day."
 
 [gui."xEdit/xeTipForm.dfm:frmTip:OnCreate"]
-status = "pending"
+status = "presentation"
 source = "FormCreate"
+note = "The tip of the day."
 
 [gui."xEdit/xeTipForm.dfm:frmTip:OnDestroy"]
-status = "pending"
+status = "presentation"
 source = "FormDestroy"
+note = "The tip of the day."
 
 [gui."xEdit/xeTipForm.dfm:lblNextTip:OnClick"]
-status = "pending"
+status = "presentation"
 source = "lblNextTipClick"
+note = "The tip of the day."
 
 [gui."xEdit/xeViewElementsForm.dfm:FindDialog1:OnFind"]
-status = "pending"
+status = "presentation"
 source = "FindDialog1Find"
+note = "The text view of an element's value with an external compare tool (mniCompareConf configures it); elements.get gives the value."
 
 [gui."xEdit/xeViewElementsForm.dfm:LiteCompareButton:OnClick"]
-status = "pending"
+status = "presentation"
 source = "btnCompareClick"
+note = "The text view of an element's value with an external compare tool (mniCompareConf configures it); elements.get gives the value."
 
 [gui."xEdit/xeViewElementsForm.dfm:LiteCopyButton:OnClick"]
-status = "pending"
+status = "presentation"
 source = "btnCopyToClipboard"
+note = "The text view of an element's value with an external compare tool (mniCompareConf configures it); elements.get gives the value."
 
 [gui."xEdit/xeViewElementsForm.dfm:btnCancel:OnClick"]
-status = "pending"
+status = "presentation"
 source = "btnCancelClick"
+note = "The text view of an element's value with an external compare tool (mniCompareConf configures it); elements.get gives the value."
 
 [gui."xEdit/xeViewElementsForm.dfm:btnCompare:OnClick"]
-status = "pending"
+status = "presentation"
 source = "btnCompareClick"
+note = "The text view of an element's value with an external compare tool (mniCompareConf configures it); elements.get gives the value."
 
 [gui."xEdit/xeViewElementsForm.dfm:frmViewElements:OnClose"]
-status = "pending"
+status = "presentation"
 source = "FormClose"
+note = "The text view of an element's value with an external compare tool (mniCompareConf configures it); elements.get gives the value."
 
 [gui."xEdit/xeViewElementsForm.dfm:frmViewElements:OnCreate"]
-status = "pending"
+status = "presentation"
 source = "FormCreate"
+note = "The text view of an element's value with an external compare tool (mniCompareConf configures it); elements.get gives the value."
 
 [gui."xEdit/xeViewElementsForm.dfm:frmViewElements:OnKeyDown"]
-status = "pending"
+status = "presentation"
 source = "FormKeyDown"
+note = "The text view of an element's value with an external compare tool (mniCompareConf configures it); elements.get gives the value."
 
 [gui."xEdit/xeViewElementsForm.dfm:frmViewElements:OnShow"]
-status = "pending"
+status = "presentation"
 source = "FormShow"
+note = "The text view of an element's value with an external compare tool (mniCompareConf configures it); elements.get gives the value."
 
 [gui."xEdit/xeViewElementsForm.dfm:mniCompareConf:OnClick"]
-status = "pending"
+status = "presentation"
 source = "mniCompareConfClick"
+note = "The text view of an element's value with an external compare tool (mniCompareConf configures it); elements.get gives the value."
 
 [gui."xEdit/xeWaitForm.dfm:bnCancel:OnClick"]
-status = "pending"
+status = "presentation"
 source = "bnCancelClick"
+note = "The wait window of a long action and its Cancel button."
 
 [gui."xEdit/xeWaitForm.dfm:frmWait:OnCreate"]
-status = "pending"
+status = "presentation"
 source = "FormCreate"
+note = "The wait window of a long action and its Cancel button."
 
 [gui."xEdit/xeWorldspaceCellDetailsForm.dfm:frmWorldspaceCellDetails:OnCreate"]
-status = "pending"
+status = "covered"
+command = "elements.add"
 source = "FormCreate"
+note = "wbGetCellDetailsForWorldspace asks whether a world cell added to a worldspace is persistent or which grid cell it takes; elements.add takes CELL[P] or CELL[x,y] (add.rs), the silent form of the same Add."
 
 [gui."xEdit/xeWorldspaceCellDetailsForm.dfm:rbTemporary:OnClick"]
-status = "pending"
+status = "covered"
+command = "elements.add"
 source = "rbTemporaryClick"
+note = "wbGetCellDetailsForWorldspace asks whether a world cell added to a worldspace is persistent or which grid cell it takes; elements.add takes CELL[P] or CELL[x,y] (add.rs), the silent form of the same Add."
 
 [switch."?"]
-status = "pending"
+status = "presentation"
 source = "xDump.dpr"
+note = "xDump's usage text on its error output; `xedit dump --help` prints the port's options."
 
 [switch.af]
 status = "covered"
@@ -2983,13 +3483,14 @@ source = "BSArch.dpr"
 note = "bsarch accepts -af as BSArch does; xedit archive pack takes it as an option of the same meaning."
 
 [switch.agl]
-status = "pending"
+status = "excluded"
 source = "xEdit/xeInit.pas"
-note = "Read and classified by parse_legacy of tool_modes.rs; xeAutoGameLink: the GUI activates its Pluggy link, which needs the Pluggy DLLs; the port reads the switch and reports it."
+note = "xeAutoGameLink: activates the Pluggy game link of Oblivion, which needs the Pluggy DLLs and a running game; not a file operation (the Pluggy menu items are classified the same way)."
 
 [switch.aim]
-status = "pending"
+status = "excluded"
 source = "Tools/TreeLodBillboardCreator/treelod.dpr"
+note = "A switch of TreeLodBillboardCreator (Tools/TreeLodBillboardCreator/treelod.dpr), which the 4.1.5q release does not ship, so no oracle can check it; it is not one of the side tools of decision 5 in docs/PLAN.md (BSArch, BSArchPro, Sniff, xDump, LODGen)."
 
 [switch.all]
 status = "covered"
@@ -3045,9 +3546,9 @@ source = "xEdit/xeInit.pas"
 note = "Accepted by the legacy command line; the CLI has no window to close, and every tool mode ends by itself."
 
 [switch.autogamelink]
-status = "pending"
+status = "excluded"
 source = "xEdit/xeInit.pas"
-note = "Read and classified by parse_legacy of tool_modes.rs; As -agl."
+note = "As -agl."
 
 [switch.autoload]
 status = "covered"
@@ -3062,12 +3563,14 @@ source = "xEdit/xeInit.pas"
 note = "wbBackupPath: -B: names the folder a replaced file moves to; without it (legacy) the data folder's <AppName>Edit Backups, else the folder of the plugin."
 
 [switch.border]
-status = "pending"
+status = "excluded"
 source = "Tools/TreeLodBillboardCreator/treelod.dpr"
+note = "A switch of TreeLodBillboardCreator (Tools/TreeLodBillboardCreator/treelod.dpr), which the 4.1.5q release does not ship, so no oracle can check it; it is not one of the side tools of decision 5 in docs/PLAN.md (BSArch, BSArchPro, Sniff, xDump, LODGen)."
 
 [switch.brightness]
-status = "pending"
+status = "excluded"
 source = "Tools/TreeLodBillboardCreator/treelod.dpr"
+note = "A switch of TreeLodBillboardCreator (Tools/TreeLodBillboardCreator/treelod.dpr), which the 4.1.5q release does not ship, so no oracle can check it; it is not one of the side tools of decision 5 in docs/PLAN.md (BSArch, BSArchPro, Sniff, xDump, LODGen)."
 
 [switch.bsa]
 status = "covered"
@@ -3078,10 +3581,12 @@ note = "wbLoadBSAs of xDump: xedit dump --bsa loads each module's own, interface
 [switch.btd]
 status = "pending"
 source = "xDump.dpr"
+note = "Owned by issue #79 (xDump's dump filter and report switches): -btd, the number of undecoded bytes to dump as unknown"
 
 [switch.bts]
 status = "pending"
 source = "xDump.dpr"
+note = "Owned by issue #79 (xDump's dump filter and report switches): -bts, the number of undecoded bytes to skip"
 
 [switch.c]
 status = "covered"
@@ -3090,12 +3595,15 @@ source = "xEdit/xeInit.pas"
 note = "The global CLI option --cache-path: the folder of the reference cache files."
 
 [switch.check]
-status = "pending"
+status = "covered"
+command = "dump"
 source = "xDump.dpr"
+note = "xedit dump --check, xDump's \"Check for Errors\" (parity check-dump: 246 of 246 files the oracle dumps)."
 
 [switch.contrast]
-status = "pending"
+status = "excluded"
 source = "Tools/TreeLodBillboardCreator/treelod.dpr"
+note = "A switch of TreeLodBillboardCreator (Tools/TreeLodBillboardCreator/treelod.dpr), which the 4.1.5q release does not ship, so no oracle can check it; it is not one of the side tools of decision 5 in docs/PLAN.md (BSArch, BSArchPro, Sniff, xDump, LODGen)."
 
 [switch.cp]
 status = "covered"
@@ -3130,31 +3638,37 @@ note = "wbDataPath: -D: names the data folder the load resolves modules, saves a
 [switch.dc]
 status = "pending"
 source = "xDump.dpr"
+note = "Owned by issue #79 (xDump's dump filter and report switches): -dc:list, process only the listed global data IDs of a save"
 
 [switch.dcr]
 status = "pending"
 source = "xDump.dpr"
+note = "Owned by issue #79 (xDump's dump filter and report switches): -dcr, the record contents with a Check for Errors of each element and a report"
 
 [switch.devmode]
-status = "pending"
+status = "presentation"
 source = "xEdit/xeInit.pas"
-note = "wbDevMode swaps the program's CRC32 for the fixed development one (`wbHelpers.pas:621`); the port stores the setting."
+note = "wbDevMode swaps the program's CRC32 for the fixed development one (`wbHelpers.pas:621`), which only the GUI's start line prints; the port's logs do not print a program CRC."
 
 [switch.df]
 status = "pending"
 source = "xDump.dpr"
+note = "Owned by issue #79 (xDump's dump filter and report switches): -df:list, dump only the listed ChangedForm types of a save"
 
 [switch.dg]
 status = "pending"
 source = "xDump.dpr"
+note = "Owned by issue #79 (xDump's dump filter and report switches): -dg:list, dump only the listed top level groups"
 
 [switch.dh]
 status = "pending"
 source = "xDump.dpr"
+note = "Owned by issue #79 (xDump's dump filter and report switches): -dh, the normally hidden elements"
 
 [switch.do]
 status = "pending"
 source = "xDump.dpr"
+note = "Owned by issue #79 (xDump's dump filter and report switches): -do:value, dump object offsets and sizes and/or array counts"
 
 [switch.dontcache]
 status = "covered"
@@ -3183,6 +3697,7 @@ note = "wbRemoveOffsetData off: the load keeps the offset data of a worldspace (
 [switch.dr]
 status = "pending"
 source = "xDump.dpr"
+note = "Owned by issue #79 (xDump's dump filter and report switches): -dr:list, dump only the listed records"
 
 [switch.dump]
 status = "covered"
@@ -3199,6 +3714,7 @@ note = "wbEnforceAllMasters (`apply_on_load`); a CLI run sets it with --enforce-
 [switch.es]
 status = "pending"
 source = "xDump.dpr"
+note = "Owned by issue #79 (xDump's dump filter and report switches): -es, the size of every element"
 
 [switch.exceptiontest]
 status = "excluded"
@@ -3283,8 +3799,9 @@ source = "xEdit/xeInit.pas"
 note = "As -fixup."
 
 [switch.format]
-status = "pending"
+status = "excluded"
 source = "Tools/TreeLodBillboardCreator/treelod.dpr"
+note = "A switch of TreeLodBillboardCreator (Tools/TreeLodBillboardCreator/treelod.dpr), which the 4.1.5q release does not ship, so no oracle can check it; it is not one of the side tools of decision 5 in docs/PLAN.md (BSArch, BSArchPro, Sniff, xDump, LODGen)."
 
 [switch.g]
 status = "presentation"
@@ -3304,12 +3821,14 @@ source = "xEdit/xeInit.pas"
 note = "As -ItJustWorksTM."
 
 [switch.height]
-status = "pending"
+status = "excluded"
 source = "Tools/TreeLodBillboardCreator/treelod.dpr"
+note = "A switch of TreeLodBillboardCreator (Tools/TreeLodBillboardCreator/treelod.dpr), which the 4.1.5q release does not ship, so no oracle can check it; it is not one of the side tools of decision 5 in docs/PLAN.md (BSArch, BSArchPro, Sniff, xDump, LODGen)."
 
 [switch.help]
-status = "pending"
+status = "presentation"
 source = "xDump.dpr"
+note = "xDump's usage text on its error output; `xedit dump --help` prints the port's options."
 
 [switch.hidefixup]
 status = "covered"
@@ -3372,8 +3891,10 @@ source = "xEdit/xeInit.pas"
 note = "With -ThisIsFine and -GiveMeTheRedPill: wbRedPill on and wbStarfieldIsABugInfestedHellhole off for Starfield (`apply_on_load`); a CLI run sets it with --starfield-red-pill."
 
 [switch.l]
-status = "pending"
+status = "covered"
+command = "dump"
 source = "xDump.dpr"
+note = "xedit dump --language: the language of the string tables of localized plugins (-l:)."
 
 [switch.list]
 status = "covered"
@@ -3394,26 +3915,29 @@ source = "xEdit/xeInit.pas"
 note = "wbMyGamesTheGamePath: the global --my-games and the legacy -M:, else <Documents>\\My Games\\<wbGameName2>\\ (the game folder for Morrowind, FalloutNV_Epic for the Epic release), where the game ini and the custom ini are (resources.rs, init_game_paths). The save folder below it is the SLocalSavePath of those inis (switch.g, game_paths::save_path)."
 
 [switch.maskdiff]
-status = "pending"
+status = "excluded"
 source = "Tools/TreeLodBillboardCreator/treelod.dpr"
+note = "A switch of TreeLodBillboardCreator (Tools/TreeLodBillboardCreator/treelod.dpr), which the 4.1.5q release does not ship, so no oracle can check it; it is not one of the side tools of decision 5 in docs/PLAN.md (BSArch, BSArchPro, Sniff, xDump, LODGen)."
 
 [switch.memory]
-status = "pending"
+status = "excluded"
 source = "xEdit/xeInit.pas"
-note = "As -speed."
+note = "As -speed (wbSpeedOverMemory off); parsed and stored (--memory-over-speed)."
 
 [switch.mipmap]
-status = "pending"
+status = "excluded"
 source = "Tools/TreeLodBillboardCreator/treelod.dpr"
+note = "A switch of TreeLodBillboardCreator (Tools/TreeLodBillboardCreator/treelod.dpr), which the 4.1.5q release does not ship, so no oracle can check it; it is not one of the side tools of decision 5 in docs/PLAN.md (BSArch, BSArchPro, Sniff, xDump, LODGen)."
 
 [switch.moprofile]
-status = "pending"
+status = "excluded"
 source = "xEdit/xeInit.pas"
-note = "Read and classified by parse_legacy of tool_modes.rs (SwitchKind::Unported, named on stderr); the Mod Organizer hook (modorganizer\\hook.dll) is not ported, so no profile is loaded."
+note = "Loads Mod Organizer's hook.dll for a profile's virtual file system; the port reads real folders, so a Mod Organizer user starts it from Mod Organizer or points --load and -D: at the folders. Parsed and named on stderr (SwitchKind::Unported)."
 
 [switch.more]
 status = "pending"
 source = "xDump.dpr"
+note = "Owned by issue #79 (xDump's dump filter and report switches): -more, wbMoreInfoForUnknown: the name of an element with unknown data added to its value"
 
 [switch.moreinfoforindex]
 status = "excluded"
@@ -3423,7 +3947,7 @@ note = "wbMoreInfoForIndex is read by the release under `DebugHook <> 0`, which 
 [switch.moreunknown]
 status = "pending"
 source = "xEdit/xeInit.pas"
-note = "wbMoreInfoForUnknown adds the name of an element with unknown data to its value (`wbImplementation.pas:23005`); the port stores the setting and renders unknowns as it does without it."
+note = "Owned by issue #79 (xDump's dump filter and report switches): -moreunknown, wbMoreInfoForUnknown of the GUI (`wbImplementation.pas:23005`), the same setting as xDump's -more; the port stores it and renders unknowns without the name"
 
 [switch.mt]
 status = "covered"
@@ -3527,8 +4051,9 @@ source = "xEdit/xeInit.pas"
 note = "wbPseudoUpdate, as -PseudoESL."
 
 [switch.q]
-status = "pending"
+status = "presentation"
 source = "xDump.dpr"
+note = "Leaves out xDump's version and licence banner on its error output; the port's dump writes no banner, so its output is xDump's with -q (the parity dump compares the standard output)."
 
 [switch.qac]
 status = "covered"
@@ -3543,9 +4068,10 @@ source = "xEdit/xeInit.pas"
 note = "The legacy switch -qc of the quick clean mode (the same as -quickautoclean without its auto save); the CLI's `clean --quick`."
 
 [switch.qsc]
-status = "pending"
+status = "covered"
+command = "conflicts.list"
 source = "xEdit/xeInit.pas"
-note = "Read and classified by parse_legacy of tool_modes.rs; xeQuickShowConflicts of the edit mode; `xedit conflicts --quick-show-conflicts` classifies without comparing."
+note = "xeQuickShowConflicts: conflicts.list with quick_show_conflicts (`xedit conflicts --quick-show-conflicts`) classifies a FormID with one override as an override without comparing."
 
 [switch.quickautoclean]
 status = "covered"
@@ -3560,19 +4086,22 @@ source = "xEdit/xeInit.pas"
 note = "As -qc."
 
 [switch.quickedit]
-status = "pending"
+status = "covered"
+command = "session.load"
 source = "xEdit/xeInit.pas"
-note = "Read and classified by parse_legacy of tool_modes.rs; -quickedit:<plugin>: the edit mode auto loads one plugin (xeQuickEdit); the port's edit mode loads the plugin list."
+note = "-quickedit:<plugin>: the edit mode loads that plugin with its masters (xeQuickEdit); session.load and --load load a plugin with its masters."
 
 [switch.quickshowconflicts]
-status = "pending"
+status = "covered"
+command = "conflicts.list"
 source = "xEdit/xeInit.pas"
-note = "Read and classified by parse_legacy of tool_modes.rs; As -qsc."
+note = "As -qsc."
 
 [switch.r]
-status = "pending"
+status = "covered"
+command = "tool.run"
 source = "xEdit/xeInit.pas"
-note = "Read and classified by parse_legacy of tool_modes.rs; the legacy command line writes the startup lines and the messages of the run to -R:<file>."
+note = "-R:<file>: the legacy command line writes the startup lines and the messages of the run to the file (tool_modes.rs log_file)."
 
 [switch.report]
 status = "excluded"
@@ -3597,14 +4126,16 @@ source = "Sniff/frmMain.pas"
 note = "The sniff binary takes -S: as Sniff.exe does; sniff.run takes it as a parameter."
 
 [switch.script]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/xeInit.pas"
-note = "Read and classified by parse_legacy of tool_modes.rs; -script:<file> selects the script mode and the game of the script's extension; the script runs (script.run)."
+note = "-script:<file> selects the script mode and the game of the script's extension; the script runs through script.run (parity script)."
 
 [switch.scripthost]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "xEdit/xeInit.pas"
-note = "Read and classified by parse_legacy of tool_modes.rs; -scripthost:<name> selects the script host (xedit_script::host::init), JvI by default."
+note = "-scripthost:<name> selects the script host (xedit_script::host::init), JvI by default; script.run runs under it."
 
 [switch.sf1]
 status = "covered"
@@ -3661,9 +4192,9 @@ source = "xEdit/xeInit.pas"
 note = "wbSortINFO."
 
 [switch.speed]
-status = "pending"
+status = "excluded"
 source = "xEdit/xeInit.pas"
-note = "wbSpeedOverMemory trades memory for speed in the release's caches (`wbImplementation.pas:8905`); the port's structures are not the release's, so the setting is stored and nothing reads it."
+note = "wbSpeedOverMemory picks a caching strategy of the release's own structures (`wbImplementation.pas:8905`); it changes no output, and the port's structures are its own. Parsed and stored (--speed-over-memory)."
 
 [switch.split]
 status = "covered"
@@ -3674,14 +4205,17 @@ note = "bsarch accepts -split as BSArch does; xedit archive pack takes it as an 
 [switch.sr]
 status = "pending"
 source = "xDump.dpr"
+note = "Owned by issue #79 (xDump's dump filter and report switches): -sr, the record header and size report"
 
 [switch.sro]
 status = "pending"
 source = "xDump.dpr"
+note = "Owned by issue #79 (xDump's dump filter and report switches): -sro, the record report ordered"
 
 [switch.sroe]
 status = "pending"
 source = "xDump.dpr"
+note = "Owned by issue #79 (xDump's dump filter and report switches): -sroe, the record report ordered with every entry"
 
 [switch.sse]
 status = "covered"
@@ -3710,6 +4244,7 @@ note = "The sniff binary takes -subdir: as Sniff.exe does; sniff.run takes it as
 [switch.summary]
 status = "pending"
 source = "xDump.dpr"
+note = "Owned by issue #79 (xDump's dump filter and report switches): -summary, the summary report"
 
 [switch.t]
 status = "covered"
@@ -3750,6 +4285,7 @@ note = "The sniff binary takes -threads: as Sniff.exe does; sniff.run takes it a
 [switch.top]
 status = "pending"
 source = "xDump.dpr"
+note = "Owned by issue #79 (xDump's dump filter and report switches): -top:N, dump only the first N records"
 
 [switch.trackalleditorid]
 status = "covered"
@@ -3758,50 +4294,61 @@ source = "xEdit/xeInit.pas"
 note = "wbTrackAllEditorID (`apply_on_load`); a CLI run sets it with --track-all-editor-id."
 
 [switch.veryquickshowconflicts]
-status = "pending"
+status = "covered"
+command = "filter.apply"
 source = "xEdit/xeInit.pas"
-note = "Read and classified by parse_legacy of tool_modes.rs; As -vqsc."
+note = "As -vqsc."
 
 [switch.vqsc]
-status = "pending"
+status = "covered"
+command = "filter.apply"
 source = "xEdit/xeInit.pas"
-note = "Read and classified by parse_legacy of tool_modes.rs; xeVeryQuickShowConflicts."
+note = "xeVeryQuickShowConflicts: the conflict filter with FilterConflictOnly and FilterNoGameMaster, filter.apply's conflict_only and no_game_master."
 
 [switch.width]
-status = "pending"
+status = "excluded"
 source = "Tools/TreeLodBillboardCreator/treelod.dpr"
+note = "A switch of TreeLodBillboardCreator (Tools/TreeLodBillboardCreator/treelod.dpr), which the 4.1.5q release does not ship, so no oracle can check it; it is not one of the side tools of decision 5 in docs/PLAN.md (BSArch, BSArchPro, Sniff, xDump, LODGen)."
 
 [switch.xbloat]
 status = "pending"
 source = "xDump.dpr"
+note = "Owned by issue #79 (xDump's dump filter and report switches): -xbloat, the exclusion list xDump uses for bloat"
 
 [switch.xc]
 status = "pending"
 source = "xDump.dpr"
+note = "Owned by issue #79 (xDump's dump filter and report switches): -xc:list, exclude the listed global data IDs of a save"
 
 [switch.xcbloat]
 status = "pending"
 source = "xDump.dpr"
+note = "Owned by issue #79 (xDump's dump filter and report switches): -xcbloat, the global data exclusion list for bloat"
 
 [switch.xcg]
 status = "pending"
 source = "xDump.dpr"
+note = "Owned by issue #79 (xDump's dump filter and report switches): -xcg:list, exclude the listed record child groups"
 
 [switch.xf]
 status = "pending"
 source = "xDump.dpr"
+note = "Owned by issue #79 (xDump's dump filter and report switches): -xf:list, exclude the listed ChangedForm types of a save"
 
 [switch.xg]
 status = "pending"
 source = "xDump.dpr"
+note = "Owned by issue #79 (xDump's dump filter and report switches): -xg:list, exclude the listed top level groups"
 
 [switch.xr]
 status = "pending"
 source = "xDump.dpr"
+note = "Owned by issue #79 (xDump's dump filter and report switches): -xr:list, exclude the contents of the listed records"
 
 [switch.xsr]
 status = "pending"
 source = "xDump.dpr"
+note = "Owned by issue #79 (xDump's dump filter and report switches): -xsr:list, exclude the listed subrecords"
 
 [switch.z]
 status = "covered"
@@ -3812,58 +4359,82 @@ note = "bsarch accepts -z as BSArch does; xedit archive pack takes it as an opti
 [game_mode.gmEnderal]
 status = "pending"
 source = "Core/wbInterface.pas"
+note = "The mode loads with the Skyrim definitions and the Enderal settings, but Enderal is not installed on the development machine, so no oracle run has checked it; owned by issue #7."
 
 [game_mode.gmEnderalSE]
 status = "pending"
 source = "Core/wbInterface.pas"
+note = "The mode loads with the Skyrim definitions and the Enderal settings, but Enderal is not installed on the development machine, so no oracle run has checked it; owned by issue #7."
 
 [game_mode.gmFNV]
-status = "pending"
+status = "covered"
+command = "session.load"
 source = "Core/wbInterface.pas"
+note = "Fallout New Vegas: --game selects the mode; its corpus is checked against the release by the parity modes (dump, check, roundtrip, oracle-save, conflicts, refs, clean and the rest; docs/PLAN.md has the numbers)."
 
 [game_mode.gmFO3]
-status = "pending"
+status = "covered"
+command = "session.load"
 source = "Core/wbInterface.pas"
+note = "Fallout 3: --game selects the mode; its corpus is checked against the release by the parity modes (dump, check, roundtrip, oracle-save, conflicts, refs, clean and the rest; docs/PLAN.md has the numbers)."
 
 [game_mode.gmFO4]
-status = "pending"
+status = "covered"
+command = "session.load"
 source = "Core/wbInterface.pas"
+note = "Fallout 4: --game selects the mode; its corpus is checked against the release by the parity modes (dump, check, roundtrip, oracle-save, conflicts, refs, clean and the rest; docs/PLAN.md has the numbers)."
 
 [game_mode.gmFO4VR]
-status = "pending"
+status = "covered"
+command = "session.load"
 source = "Core/wbInterface.pas"
+note = "Fallout 4 VR: --game selects the mode; its corpus is checked against the release by the parity modes (dump, check, roundtrip, oracle-save, conflicts, refs, clean and the rest; docs/PLAN.md has the numbers)."
 
 [game_mode.gmFO76]
-status = "pending"
+status = "covered"
+command = "session.load"
 source = "Core/wbInterface.pas"
+note = "Fallout 76: --game selects the mode; its corpus is checked against the release by the parity modes (dump, check, roundtrip, oracle-save, conflicts, refs, clean and the rest; docs/PLAN.md has the numbers)."
 
 [game_mode.gmSF1]
-status = "pending"
+status = "covered"
+command = "session.load"
 source = "Core/wbInterface.pas"
+note = "Starfield: --game selects the mode; its corpus is checked against the release by the parity modes (dump, check, roundtrip, oracle-save, conflicts, refs, clean and the rest; docs/PLAN.md has the numbers)."
 
 [game_mode.gmSSE]
-status = "pending"
+status = "covered"
+command = "session.load"
 source = "Core/wbInterface.pas"
+note = "Skyrim Special Edition: --game selects the mode; its corpus is checked against the release by the parity modes (dump, check, roundtrip, oracle-save, conflicts, refs, clean and the rest; docs/PLAN.md has the numbers)."
 
 [game_mode.gmTES3]
 status = "pending"
 source = "Core/wbInterface.pas"
+note = "Morrowind loads, dumps and saves in the port, but the 4.1.5q release cannot dump or save its plugins and runs it in view mode only (oracle-unsupported in every mode); owned by issue #9."
 
 [game_mode.gmTES4]
-status = "pending"
+status = "covered"
+command = "session.load"
 source = "Core/wbInterface.pas"
+note = "Oblivion: --game selects the mode; its corpus is checked against the release by the parity modes (dump, check, roundtrip, oracle-save, conflicts, refs, clean and the rest; docs/PLAN.md has the numbers)."
 
 [game_mode.gmTES4R]
 status = "pending"
 source = "Core/wbInterface.pas"
+note = "Oblivion Remastered: the game is not installed on the development machine, so no oracle run has checked it; owned by issue #80."
 
 [game_mode.gmTES5]
-status = "pending"
+status = "covered"
+command = "session.load"
 source = "Core/wbInterface.pas"
+note = "Skyrim: --game selects the mode; its corpus is checked against the release by the parity modes (dump, check, roundtrip, oracle-save, conflicts, refs, clean and the rest; docs/PLAN.md has the numbers)."
 
 [game_mode.gmTES5VR]
-status = "pending"
+status = "covered"
+command = "session.load"
 source = "Core/wbInterface.pas"
+note = "Skyrim VR: --game selects the mode; its corpus is checked against the release by the parity modes (dump, check, roundtrip, oracle-save, conflicts, refs, clean and the rest; docs/PLAN.md has the numbers)."
 
 [tool_mode.tmCheckForDR]
 status = "covered"
@@ -3884,9 +4455,10 @@ source = "Core/wbInterface.pas"
 note = "tool.run mode=checkforitm counts the records identical to their master of the last loaded plugin (files.clean with dry_run, the Counting/Counted wording of the mode) and exits with the count, at most 127; nothing is saved."
 
 [tool_mode.tmDump]
-status = "pending"
+status = "covered"
+command = "dump"
 source = "Core/wbInterface.pas"
-note = "The mode of xDump.exe; the port's dump is `xedit dump --game <game> <plugin>` (the dump check of the harness). The mode name is accepted by tool.run and by the legacy command line."
+note = "The mode of xDump.exe: `xedit dump --game <game> <plugin>` (parity dump compares it with xDump on every corpus plugin); tool.run and the legacy command line accept the mode name."
 
 [tool_mode.tmESMify]
 status = "covered"
@@ -3938,9 +4510,10 @@ command = "tool.run"
 source = "Core/wbInterface.pas"
 
 [tool_mode.tmScript]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "Core/wbInterface.pas"
-note = "Accepted by tool.run and by the legacy command line, including the -script: switch and the .FNVpas style executable names; the interpreter is phase 6 (xedit script run)."
+note = "The script mode (-script:): script.run, compared with the GUI's script mode by parity script (parse, run and probe phases)."
 
 [tool_mode.tmSortAndCleanMasters]
 status = "covered"
@@ -3965,24 +4538,24 @@ source = "External/jvcl/jvcl/run/JvInterpreter.pas"
 note = "A function a script declares external is called in its library (CallDll, CallDllIns): integer, boolean and small integer arguments and results, string and var arguments, procedures; the other types are refused with ieDllInvalidArgument/ieDllInvalidResult where the release faults re-raising a freed exception (probes host-extfun, host-extfun-double, host-extfun-result)."
 
 [script."JvInterpreterFm:cJvInterpreterFm.JvInterpreterMakeForm:function"]
-status = "covered"
-command = "script.run"
+status = "pending"
 source = "JvInterpreter_JvInterpreterMakeForm"
+note = "Owned by issue #81 (form scripts): JvInterpreterMakeForm builds a form from a unit and its DFM file (TJvInterpreterFm.MakeForm); the headless VCL model refuses it with [EVclUnavailable] JvInterpreterMakeForm is not available without a GUI (script_vcl/interactive.rs), so the ledger's earlier covered was a refusal, not the operation (parity #41 audit). No script of the corpus calls it."
 
 [script."JvInterpreterFm:cJvInterpreterFm.JvInterpreterRunForm:function"]
-status = "covered"
-command = "script.run"
+status = "pending"
 source = "JvInterpreter_JvInterpreterRunForm"
+note = "Owned by issue #81 (form scripts): JvInterpreterRunForm builds and shows a form from a unit and its DFM file; the headless VCL model refuses it with [EVclUnavailable] JvInterpreterRunForm is not available without a GUI (script_vcl/interactive.rs), so the ledger's earlier covered was a refusal, not the operation (parity #41 audit). No script of the corpus calls it."
 
 [script."JvInterpreterFm:cJvInterpreterFm.JvInterpreterRunFormModal:function"]
-status = "covered"
-command = "script.run"
+status = "pending"
 source = "JvInterpreter_JvInterpreterRunFormModal"
+note = "Owned by issue #81 (form scripts): JvInterpreterRunFormModal builds a form from a unit and its DFM file and shows it modally; the headless VCL model refuses it with [EVclUnavailable] JvInterpreterRunFormModal is not available without a GUI (script_vcl/interactive.rs), so the ledger's earlier covered was a refusal, not the operation (parity #41 audit). No script of the corpus calls it."
 
 [script."JvInterpreterFm:cJvInterpreterFm.JvInterpreterRunUnit:function"]
-status = "covered"
-command = "script.run"
+status = "pending"
 source = "JvInterpreter_JvInterpreterRunUnit"
+note = "Owned by issue #81 (form scripts): JvInterpreterRunUnit compiles a unit's source in a new form interpreter and runs its main block; the headless VCL model refuses it with [EVclUnavailable] JvInterpreterRunUnit is not available without a GUI (script_vcl/interactive.rs), so the ledger's earlier covered was a refusal, not the operation (parity #41 audit). No script of the corpus calls it."
 
 [script."JvInterpreter_Buttons:TBitBtn.Click:get"]
 status = "covered"
@@ -16952,7 +17525,7 @@ source = "JvInterpreter_SetCurrentDir"
 status = "covered"
 command = "script.run"
 source = "JvInterpreter_ShowException"
-note = "Routed through the `Vcl` seam: upstream is the RTL's modal message box, so a headless run refuses the call with `[EVclUnavailable] ShowException is not available without a GUI (script \"<name>\")` where the oracle's box ends its run (`sys-showexception.pas` is an `oracle-dialog` case)."
+note = "The RTL's MessageBox titled Application Error with OK, a dialog of the headless VCL model (parity #41): a recorded answer closes it and the run goes on, without one the run stops with the question. The run case of `sys-showexception.pas` answers it on both sides and is equal; the probe phase runs it unanswered (an `oracle-dialog` class)."
 
 [script."JvInterpreter_SysUtils:cSysUtils.StrAlloc:function"]
 status = "covered"

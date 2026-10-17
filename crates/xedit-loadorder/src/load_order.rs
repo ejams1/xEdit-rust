@@ -17,10 +17,10 @@
 //! Differences to upstream: the port does not build a load order from the
 //! modules (a session loads the plugins it is given, and the CLI reads no
 //! plugin list), so a loaded module takes its session load order as
-//! `miPluginsTxtIndex` (upstream reads it from `Plugins.txt`, which #37
-//! owns) and every other module keeps the highest index; the Creation Club
-//! list (the game's `.ccc` file) is not read either, so `miCCIndex` is the
-//! highest for every module. A plugin of the data folder counts as a
+//! `miPluginsTxtIndex` (upstream reads it from `Plugins.txt`, issue #83)
+//! and every other module keeps the highest index. The Creation Club list (the
+//! game's `.ccc` file next to the data folder) gives the modules it names
+//! their `miCCIndex`, as `wbLoadModules` does. A plugin of the data folder counts as a
 //! module when its first record is a file header (upstream reads its
 //! masters and flags, `wbMastersForFile`); the header flags that the order
 //! reads (the ESM and blueprint bits) are read here.
@@ -30,7 +30,9 @@ use std::sync::{Arc, OnceLock};
 
 use xedit_core::implementation::FileImpl;
 use xedit_core::interface::Element;
-use xedit_core::interface::globals::{GameMode, game_exe_name, game_master_esm, game_mode, official_dlc};
+use xedit_core::interface::globals::{
+    GameMode, creation_club_content_file_name, game_exe_name, game_master_esm, game_mode, official_dlc,
+};
 
 use crate::ini_files::same_text;
 use crate::mod_groups::compare_text;
@@ -58,8 +60,8 @@ pub struct ModuleInfo {
     /// executable and its official DLC (and `Update.esm` of the Skyrim
     /// family), `High(Integer)` for every other module.
     pub official_index: i32,
-    /// `miCCIndex`: the place of the Creation Club content (not read, so
-    /// `High(Integer)` for every module).
+    /// `miCCIndex`: the place of the module in the game's Creation Club
+    /// list, from 1, `High(Integer)` for a module the list does not name.
     pub cc_index: i32,
     /// `miPluginsTxtIndex`: for a loaded module its load order, else
     /// `High(Integer)`.
@@ -253,6 +255,62 @@ fn set_official_indices(modules: &mut [ModuleInfo]) {
     }
 }
 
+/// `wbCreationClubContent`: the lines of the game's Creation Club list,
+/// `ExtractFilePath(ExcludeTrailingPathDelimiter(wbDataPath)) +
+/// wbCreationClubContentFileName` (`xeInit.pas`, `TStringList.LoadFromFile`),
+/// or none when the game has no list or the file is not there.
+pub fn creation_club_content(data_path: &str) -> Vec<String> {
+    let name = creation_club_content_file_name();
+    if name.is_empty() {
+        return Vec::new();
+    }
+    let trimmed = data_path.trim_end_matches(['\\', '/']);
+    let folder = match trimmed.rfind(['\\', '/']) {
+        Some(at) => &trimmed[..=at],
+        None => "",
+    };
+    let Ok(bytes) = std::fs::read(format!("{folder}{name}")) else {
+        return Vec::new();
+    };
+    let text = match bytes.strip_prefix(&[0xEF, 0xBB, 0xBF]) {
+        Some(rest) => String::from_utf8_lossy(rest).into_owned(),
+        None => bytes.iter().map(|&byte| char::from(byte)).collect(),
+    };
+    // `TStrings.SetTextStr`: CR, LF or CRLF end a line, and a last line
+    // without one counts.
+    let mut lines = Vec::new();
+    let mut line = String::new();
+    let mut chars = text.chars().peekable();
+    while let Some(c) = chars.next() {
+        match c {
+            '\r' | '\n' => {
+                if c == '\r' && chars.peek() == Some(&'\n') {
+                    chars.next();
+                }
+                lines.push(std::mem::take(&mut line));
+            }
+            _ => line.push(c),
+        }
+    }
+    if !line.is_empty() {
+        lines.push(line);
+    }
+    lines
+}
+
+/// `for i := Low(wbCreationClubContent) to High(wbCreationClubContent) do
+/// with wbModuleByName(...) do if IsValid then miCCIndex := Succ(i)`.
+fn set_cc_indices(modules: &mut [ModuleInfo], content: &[String]) {
+    for (i, name) in content.iter().enumerate() {
+        if let Some(module) = modules
+            .iter_mut()
+            .find(|module| module.valid && same_text(&module.name, name))
+        {
+            module.cc_index = i32::try_from(i + 1).unwrap_or(i32::MAX);
+        }
+    }
+}
+
 impl Modules {
     /// The modules of the data folder `data_path` (with a trailing
     /// separator) and of the loaded `files` (`wbLoadModules`, with the
@@ -360,6 +418,7 @@ impl Modules {
             }
         }
         set_official_indices(&mut modules);
+        set_cc_indices(&mut modules, &creation_club_content(data_path));
         // The plugin list index of a loaded module is its load order: the
         // caller loads the plugins in the order the plugin list has them.
         for module in &mut modules {

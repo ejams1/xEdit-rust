@@ -658,13 +658,21 @@ impl Export {
         }
     }
 
-    /// Upstream `ProfileArray`: every record definition in the order of the
-    /// top level groups; nothing for a saves source, which has no records.
+    /// Upstream `ProfileArray`: every record definition in the order of
+    /// `wbGroupOrder`'s strings; nothing for a saves source, which has no
+    /// records. `wbGroupOrder` is a sorted case-sensitive list
+    /// (`TwbFastStringListCS.CreateSorted`, `wbAddGroupOrder`) whose objects
+    /// hold the order the definitions added the groups in, so `wbGroupOrder[i]`
+    /// walks the signatures in their byte order, not in the group order of a
+    /// file (parity #41: the export's structure text and the spelling a
+    /// case-insensitive profile entry keeps followed the group order).
     fn profile_array(&mut self, pass: Pass) {
         if self.saves {
             return;
         }
-        for signature in wb_group_order() {
+        let mut signatures = wb_group_order();
+        signatures.sort_by_key(|signature| signature.0);
+        for signature in signatures {
             if signature == header_signature() {
                 continue;
             }
@@ -681,9 +689,14 @@ impl Export {
         if !self.saves {
             return;
         }
+        // UPSTREAM-QUIRK: `ProfileChapters` clears its `Profile` once, before
+        // the loop, and `ProfileElement` appends to it, so the profile of a
+        // chapter starts with the profiles of the chapters before it (where
+        // `ProfileArray` clears it for every record definition); the
+        // entries of the saves' profile file are these running strings.
         if let Some(chapters) = file_chapters() {
+            let mut profile = String::new();
             for index in 0..chapters.get_member_count() as usize {
-                let mut profile = String::new();
                 self.profile_element(chapters.get_member(index).as_dyn_def(), &mut profile, pass, "");
             }
         }
@@ -799,6 +812,33 @@ mod tests {
         assert_eq!(uesp_type("2 Bytes Array"), "");
         assert_eq!(uesp_type("4 Word_ARRAY_OF_FormID"), "4_int16_ARRAY_OF_formid");
         assert_eq!(uesp_type("4_Word_OF_Bytes_ARRAY"), "4_int16_int8[]");
+    }
+
+    /// `ProfileChapters` clears its profile once, so the entry of a chapter
+    /// starts with the profiles of the chapters before it (parity #41: the
+    /// saves' profile files of the release are these running strings).
+    #[test]
+    fn the_chapter_profiles_run_on_from_the_chapters_before_them() {
+        let _guard = xedit_core::interface::globals::test_lock();
+        crate::dump::setup_game_for_save_definitions("fo4").unwrap();
+        let mut export = Export {
+            format: ExportFormat::Raw,
+            saves: true,
+            out: String::new(),
+            profiles: Profiles::new(),
+        };
+        export.profile_chapters(Pass::Read);
+        let chapters = file_chapters().expect("the chapters of the Fallout 4 saves");
+        assert!(chapters.get_member_count() > 1);
+        let first = format!(":{}=", wb_def_to_name(chapters.get_member(0).as_dyn_def()));
+        let second = format!(":{}=", wb_def_to_name(chapters.get_member(1).as_dyn_def()));
+        let text = export.profiles.text();
+        assert!(
+            text.lines()
+                .any(|line| line.starts_with(&first) && line.contains(&second)),
+            "no entry of the second chapter runs on from the first"
+        );
+        assert!(!text.lines().any(|line| line.starts_with(&second)));
     }
 
     #[test]

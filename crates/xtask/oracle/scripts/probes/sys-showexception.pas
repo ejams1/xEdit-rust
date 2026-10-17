@@ -3,13 +3,12 @@
 
   Upstream is the RTL's `ShowException(ExceptObject, ExceptAddr)`: it puts
   up a modal message box (the exception's message, and for an object that
-  is no `Exception` the `ExceptionErrorMessage` shape). A headless run has
-  no dialog; the port refuses the call through its GUI seam
-  (`[EVclUnavailable] ShowException is not available without a GUI`), and
-  the harness classes the oracle's run as `oracle-dialog`: the run stops on
-  the box, which the 120 s watch ends. The probe pins that the call is
-  reached (the line before it) and that nothing after it runs on a side
-  without a window.
+  is no `Exception` the `ExceptionErrorMessage` shape), titled `Application
+  Error` with `OK`. The probe phase runs it unanswered: the oracle's run
+  stops on the box, which the 120 s watch ends (`oracle-dialog`), and the
+  port's headless VCL model stops with the question. The run case of
+  runs.json answers the box on both sides (parity #41), so the line after
+  the call is compared too.
 }
 unit SysShowExceptionProbe;
 

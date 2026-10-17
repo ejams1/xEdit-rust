@@ -888,6 +888,37 @@ impl VclModel {
         Ok(())
     }
 
+    /// `SysUtils.ShowException(ExceptObject, ExceptAddr)` of a GUI program:
+    /// `MessageBox(0, <ExceptionErrorMessage>, SExceptTitle, MB_OK or
+    /// MB_ICONSTOP or MB_TASKMODAL)`, a box of the class `#32770` titled
+    /// `Application Error` with `OK`; the call returns when it closes.
+    fn show_exception(&mut self, args: &Args) -> Result<(), ValueError> {
+        let (class, message) = match args.values.first().and_then(Value::as_object) {
+            Some(object) => {
+                let borrowed = object.borrow();
+                let message = borrowed
+                    .as_any()
+                    .downcast_ref::<crate::script_rtl::sysutils::ExceptionObject>()
+                    .map(|exception| exception.message.clone())
+                    .unwrap_or_default();
+                (borrowed.class().name.clone(), message)
+            }
+            None => (String::new(), String::new()),
+        };
+        let offered: Vec<&(&str, &str, i32)> = MSG_BUTTONS.iter().filter(|(name, _, _)| *name == "ok").collect();
+        let buttons = vec!["OK".to_owned()];
+        let answer = self.ask(
+            "#32770",
+            "Application Error",
+            format!("Exception {class} in module  at 00000000.\r\n{message}."),
+            buttons.clone(),
+            buttons.first().cloned(),
+            "message",
+        )?;
+        self.resolve_button(&answer, &offered, "Application Error")?;
+        Ok(())
+    }
+
     /// `InputQuery` (`Dialogs.InputQuery`): a `TInputQueryForm` with an edit
     /// control; the answer's `text` is the new value, `false` when its
     /// button is Cancel or it posts escape.
@@ -1120,7 +1151,10 @@ impl VclModel {
                 if self.is_a(&active, "TCheckListBox") {
                     // `TCheckListBox.KeyPress` toggles the entry at
                     // `ItemIndex`; nothing happens while nothing is selected.
-                    let index = self.prop_i32(&active, "ItemIndex", -1);
+                    // A multi-select list nobody moved has its caret on the
+                    // first entry (parity #41: `Copy as override.pas` checks
+                    // `<new file>` with one Space, as the release does).
+                    let index = self.prop_i32(&active, "ItemIndex", self.default_item_index(&active));
                     if index >= 0 {
                         let index = index as usize;
                         let mut borrowed = active.borrow_mut();
@@ -1843,6 +1877,7 @@ impl Vcl for VclModel {
                 Ok(())
             }
             "ShowMessage" | "ShowMessageFmt" | "ShowMessagePos" => self.show_message(args),
+            "ShowException" => self.show_exception(args),
             "InputQuery" => {
                 *value = Value::Bool(self.input_query(args)?);
                 Ok(())

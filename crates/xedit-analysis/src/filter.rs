@@ -49,7 +49,7 @@ use xedit_core::implementation::{ElementImpl, FileImpl, MainRecordImpl};
 use xedit_core::interface::constructors::find_record_def;
 use xedit_core::interface::form_id::FormID;
 use xedit_core::interface::globals::{
-    can_sort_info, fill_pnam, is_fallout4, is_fallout76, is_morrowind, is_oblivion, is_skyrim, is_starfield, sort_info,
+    can_sort_info, is_fallout4, is_fallout76, is_morrowind, is_oblivion, is_skyrim, is_starfield, sort_info,
     vwd_as_quest_children,
 };
 use xedit_core::interface::main_record::MainRecordDef;
@@ -281,7 +281,11 @@ impl NavTree {
     /// order: some responses get two nodes and some none, and a response
     /// without a node is never compared (UPSTREAM-QUIRK, `BrokenSteel.esm`:
     /// the `GREETING` responses `000198DB` and `00025FC9` keep their text
-    /// untrimmed because nothing builds them before the save). The other
+    /// untrimmed because nothing builds them before the save). The `INOM`
+    /// and `INOA` fills of an editing session sort a master's topic when
+    /// the check of its override builds it, before the walk reaches the
+    /// master's responses, whose nodes then all bind in the sorted order
+    /// (parity #41, `filter-topic-bind.pas` over `BrokenSteel.esm`). The other
     /// nodes of the port's tree are bound when it is built, which is the
     /// same, as only a sort reorders the elements of a container while the
     /// tree walks.
@@ -1542,14 +1546,17 @@ pub fn apply_filter_scripted(
     let check_conflict = options.conflict_all.is_some() || options.conflict_this.is_some();
     let conflict_options = options.conflict_options(mod_groups);
 
-    // Under the PNAM fill the conflict check of a node can sort the
-    // responses of a topic whose nodes the walk has not bound yet
-    // (`NavTree::init_node`), so the first pass asks for each status where
-    // the GUI computes it, node by node; otherwise the statuses the first
-    // pass reads are asked before it, in the order it walks (the PNAM fill
-    // compares on one thread either way).
+    // Where the game sorts the responses of its topics, the conflict check
+    // of a node can sort the responses of a topic whose nodes the walk has
+    // not bound yet (`NavTree::init_node`): under the PNAM fill the check of
+    // a response without `PNAM` sorts its own topic, and under the INOM and
+    // INOA fills of an editing session the check of a topic's override
+    // builds the master's topic, whose `Init` sorts the master's responses
+    // before the walk reaches them. So the first pass asks for each status
+    // where the GUI computes it, node by node; otherwise the statuses the
+    // first pass reads are asked before it, in the order it walks.
     let wants_conflict = check_conflict || options.inherit_conflict_by_parent;
-    let statuses_as_walked = wants_conflict && fill_pnam() && can_sort_info() && sort_info();
+    let statuses_as_walked = wants_conflict && can_sort_info() && sort_info();
     let mut results = if wants_conflict && !statuses_as_walked {
         let mut records = Vec::new();
         let mut current = tree.get_last(None);

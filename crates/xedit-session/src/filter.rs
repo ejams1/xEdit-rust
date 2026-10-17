@@ -396,6 +396,40 @@ pub(crate) struct AppliedFilter {
     /// functions `ConflictAllForNode`/`ConflictThisForNode` read. Nodes the
     /// filter never classified are left out (they read `caUnknown`).
     pub conflicts: Vec<(usize, ConflictAll, ConflictThis)>,
+    /// The elements the `Process` walk of a script reaches in the filtered
+    /// tree, by the identity of each root's element (a file): the nodes
+    /// from the last of the root's subtree back to the root, each with the
+    /// element the tree bound to it (`ApplyScriptToSelection` over the
+    /// filtered `vstNav`). The responses of a topic are bound as the
+    /// filter's walk reached them, so after a sort of the topic's group
+    /// they keep the order they had then, not the group's.
+    pub walk: Vec<(usize, Vec<xedit_core::interface::ElementRef>)>,
+}
+
+/// [`AppliedFilter::walk`]: `vstNav.GetLast(StartNode)` and `GetPrevious`
+/// back to the start node of every root, as `ApplyScriptToSelection` walks
+/// it (`GetPrevious` initialises the node it moves to).
+fn filtered_walk(tree: &mut NavTree) -> Vec<(usize, Vec<xedit_core::interface::ElementRef>)> {
+    let mut walk = Vec::new();
+    for root in tree.roots() {
+        let Some(root_element) = tree.data(root).element.clone() else {
+            continue;
+        };
+        let mut visited = Vec::new();
+        let mut node = tree.get_last(Some(root));
+        while let Some(id) = node {
+            tree.init_node(id);
+            if let Some(element) = tree.data(id).element.clone() {
+                visited.push(element);
+            }
+            if id == root {
+                break;
+            }
+            node = tree.get_previous(id);
+        }
+        walk.push((root_element.get_element_id(), visited));
+    }
+    walk
 }
 
 /// The classified nodes of a filtered tree, for [`AppliedFilter::conflicts`].
@@ -487,10 +521,12 @@ pub(crate) fn filter_apply_scripted(
         .flat_map(|root| node_elements_below(&tree, root))
         .collect();
     let conflicts = node_conflicts(&tree);
+    let walk = filtered_walk(&mut tree);
     Ok(AppliedFilter {
         response: response_of(&tree, &options, request.list_records, report, &active),
         nodes,
         conflicts,
+        walk,
     })
 }
 

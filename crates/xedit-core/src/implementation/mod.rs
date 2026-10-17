@@ -246,7 +246,7 @@ pub use write::{ElementState, ResetModified, SaveError};
 
 use std::collections::HashMap;
 use std::path::Path;
-use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU64, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU32, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, OnceLock, RwLock, Weak};
 
 use xedit_io::collate::ansi_compare_text;
@@ -638,6 +638,11 @@ pub(crate) fn set_localized_state(base: &ElementBase, value: TriBool) {
 #[derive(Default)]
 pub struct ContainerBase {
     cnt_elements: RwLock<Vec<ElementRef>>,
+    /// Raised by every change of the element list, while the change still
+    /// holds the list's lock ([`ElementsWrite`]): a position index of the
+    /// elements built at one value stays right while the value does (the
+    /// script walk's, `xedit-session`).
+    cnt_generation: AtomicU32,
     /// Port of `csAsCreatedEmpty`: the one element an array of variable
     /// size was created with, which the first `Assign` takes over.
     pub(crate) cnt_as_created_empty: AtomicBool,
@@ -674,12 +679,54 @@ fn next_init_sequence() -> u64 {
     INIT_SEQUENCE.fetch_add(1, Ordering::Relaxed) + 1
 }
 
+/// A write lock of a container's element list that raises the container's
+/// generation when the write ends, before the lock is let go.
+pub(crate) struct ElementsWrite<'a> {
+    guard: std::sync::RwLockWriteGuard<'a, Vec<ElementRef>>,
+    generation: &'a AtomicU32,
+}
+
+impl std::ops::Deref for ElementsWrite<'_> {
+    type Target = Vec<ElementRef>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.guard
+    }
+}
+
+impl std::ops::DerefMut for ElementsWrite<'_> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.guard
+    }
+}
+
+impl Drop for ElementsWrite<'_> {
+    fn drop(&mut self) {
+        // The fields drop after this, so the lock is still held here.
+        self.generation.fetch_add(1, Ordering::Release);
+    }
+}
+
 impl ContainerBase {
+    /// The element list for a change ([`ElementsWrite`]).
+    pub(crate) fn write_elements(&self) -> ElementsWrite<'_> {
+        ElementsWrite {
+            guard: self.cnt_elements.write().unwrap(),
+            generation: &self.cnt_generation,
+        }
+    }
+
+    /// The generation of the element list: it changes whenever the list
+    /// does (an element added, inserted, removed, moved or released).
+    pub fn generation(&self) -> u32 {
+        self.cnt_generation.load(Ordering::Acquire)
+    }
+
     /// Port of `AddElement`: the element takes its position as its memory
     /// order, which the callbacks that size it may read
     /// (`wbLGDIRankSlotArrayShouldInclude`).
     pub(crate) fn add_element(&self, element: ElementRef) {
-        let mut elements = self.cnt_elements.write().unwrap();
+        let mut elements = self.write_elements();
         if let Some(element) = element.as_element_impl() {
             element
                 .element_base()
@@ -691,12 +738,12 @@ impl ContainerBase {
 
     /// Port of `InsertElement`.
     pub(crate) fn insert_element(&self, index: usize, element: ElementRef) {
-        self.cnt_elements.write().unwrap().insert(index, element);
+        self.write_elements().insert(index, element);
     }
 
     /// Port of `RemoveElement` by position.
     pub(crate) fn remove_element(&self, index: usize) -> ElementRef {
-        self.cnt_elements.write().unwrap().remove(index)
+        self.write_elements().remove(index)
     }
 
     /// The elements in memory order. Public for the script walk of
@@ -711,7 +758,7 @@ impl ContainerBase {
     }
 
     /// The element at `index`, without copying the list.
-    pub(crate) fn element_at(&self, index: usize) -> Option<ElementRef> {
+    pub fn element_at(&self, index: usize) -> Option<ElementRef> {
         self.cnt_elements.read().unwrap().get(index).cloned()
     }
 
@@ -795,31 +842,31 @@ impl ContainerBase {
     pub(crate) fn release_elements(&self) -> Vec<ElementRef> {
         self.cnt_as_created_empty.store(false, Ordering::Relaxed);
         self.cnt_sorted_by_sort_order.store(false, Ordering::Relaxed);
-        std::mem::take(&mut *self.cnt_elements.write().unwrap())
+        std::mem::take(&mut *self.write_elements())
     }
 
     /// Port of `RemoveElement` by element: removes the element itself,
     /// not one that merely compares equal.
     pub(crate) fn remove_element_by_identity(&self, element: &ElementRef) -> Option<ElementRef> {
-        let mut elements = self.cnt_elements.write().unwrap();
+        let mut elements = self.write_elements();
         let index = elements.iter().position(|candidate| Arc::ptr_eq(candidate, element))?;
         Some(elements.remove(index))
     }
 
     /// Port of `wbMergeSortPtr` on the elements: a stable sort.
     pub(crate) fn sort_by(&self, compare: impl FnMut(&ElementRef, &ElementRef) -> std::cmp::Ordering) {
-        self.cnt_elements.write().unwrap().sort_by(compare);
+        self.write_elements().sort_by(compare);
     }
 
     /// The elements at `a` and `b` swap places.
     pub(crate) fn swap(&self, a: usize, b: usize) {
-        self.cnt_elements.write().unwrap().swap(a, b);
+        self.write_elements().swap(a, b);
     }
 
     /// Port of `ReverseElements`.
     pub(crate) fn reverse(&self) {
         self.cnt_sorted_by_sort_order.store(false, Ordering::Relaxed);
-        self.cnt_elements.write().unwrap().reverse();
+        self.write_elements().reverse();
     }
 
     /// Port of `TwbContainer.GetElementBySortOrder` after the init: the
@@ -2189,16 +2236,20 @@ pub fn wb_file_compare(
     } else if base_name.eq_ignore_ascii_case(&game_master_esm()) {
         fl_states.include(FileState::fsIsGameMaster);
         fl_states.include(FileState::fsIsOfficial);
-    } else if crate::interface::globals::official_dlc()
-        .iter()
-        .any(|name| name.eq_ignore_ascii_case(base_name))
-        || (crate::interface::globals::is_skyrim() && base_name.eq_ignore_ascii_case("Update.esm"))
-    {
-        // The module of an official DLC (`miOfficialIndex`, which Skyrim's
-        // Update.esm has too) is official; Starfield does not let it be
-        // edited (`GetIsEditable`).
-        fl_states.include(FileState::fsIsOfficial);
     }
+    // The module of an official DLC (`miOfficialIndex`, which Skyrim's
+    // Update.esm has too) is official; Starfield does not let it be edited
+    // (`GetIsEditable`). Upstream includes the state after `Scan` (the game
+    // master's before it), so a name a record of a DLC builds during the
+    // scan (an injection note) is not cached as an official file's name
+    // (`GetName`'s `fsIsOfficial` cache); parity #41: `NW.esm`'s dump kept
+    // the error text of a string the scan could not read yet.
+    let official_after_scan = compare_to.is_none()
+        && !fl_states.contains(FileState::fsIsGameMaster)
+        && (crate::interface::globals::official_dlc()
+            .iter()
+            .any(|name| name.eq_ignore_ascii_case(base_name))
+            || (crate::interface::globals::is_skyrim() && base_name.eq_ignore_ascii_case("Update.esm")));
     fl_states.include(FileState::fsMemoryMapped);
     // UPSTREAM-QUIRK: upstream adds the player reference to the hardcoded
     // file through the editing API after the scan; here its group is
@@ -2234,6 +2285,9 @@ pub fn wb_file_compare(
     progress(&format!("[{}] Loading file", file.get_name()));
     FILES_MAP.write().unwrap().push(file.clone());
     file.scan()?;
+    if official_after_scan {
+        file.fl_states.write().unwrap().include(FileState::fsIsOfficial);
+    }
     crate::interface::element::add_file(file.clone());
     Ok(file)
 }
@@ -2798,7 +2852,19 @@ impl MainRecordImpl {
         if self.mr_l_generation.load(Ordering::Relaxed) == generation {
             return;
         }
-        self.mr_l_generation.store(generation, Ordering::Relaxed);
+        self.invalidate_name_cache();
+    }
+
+    /// Port of `TwbMainRecord.mrInvalidateNameCache`: a record of a
+    /// localized file forgets its cached names and reads its full name again
+    /// (when its subrecords were read), and takes the handler's generation.
+    /// `SetParentModified` and `ContainerChanged` run it too, so a name the
+    /// record cached before one of its elements changed (the injection notes
+    /// of a load, which name the cell and worldspace a navmesh is in) is
+    /// built again with what the record and its parents hold now.
+    pub(crate) fn invalidate_name_cache(&self) {
+        self.mr_l_generation
+            .store(crate::localization::localization_generation(), Ordering::Relaxed);
         if !self.file_impl().is_some_and(|file| file.get_is_localized()) {
             return;
         }
@@ -3393,7 +3459,7 @@ impl MainRecordImpl {
     /// meanwhile builds it again (`crate::threads`).
     pub fn reset(&self) {
         let released = {
-            let mut elements = self.container.cnt_elements.write().unwrap();
+            let mut elements = self.container.write_elements();
             // A record whose init runs keeps its elements and data.
             if self.mr_init.is_running() {
                 return;
@@ -3460,7 +3526,7 @@ impl MainRecordImpl {
             return;
         }
         self.collapse_storage_in_init();
-        let _elements = self.container.cnt_elements.write().unwrap();
+        let _elements = self.container.write_elements();
         self.mr_init.reset();
     }
 
@@ -5050,6 +5116,8 @@ impl ElementImpl for MainRecordImpl {
     /// modified, the references are built again and the index keys
     /// updated.
     fn set_parent_modified(&self) {
+        // `mrInvalidateNameCache; inherited; UpdateRefs; UpdateKeys`.
+        self.invalidate_name_cache();
         if let Some(container) = self.base.container()
             && let Some(container) = container.as_element_impl()
         {

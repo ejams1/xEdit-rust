@@ -1904,6 +1904,22 @@ pub(super) fn init_main_record(record: &Arc<MainRecordImpl>) -> bool {
         if current_def_pos as i32 > quick_init_limit {
             record.mr_grid_cell.lock().unwrap().checked = true;
             passed_limit = true;
+            // `Include(mrStates, mrsQuickInitDone)`, then under
+            // `mrsQuickInit` the errors found so far are reported and `Init`
+            // is left: the names are known by then, so the message names the
+            // record, and an error past the limit is not reported by the
+            // quick init (issue #86: the port went on to the end of the
+            // subrecords and reported those errors while the names still
+            // answered `<... not yet available: init still running>`, and the
+            // name of an official file kept that text in its cache).
+            if record.in_quick_init() {
+                record.mr_names_known.store(true, Ordering::Release);
+                if found_error {
+                    progress(&format!("Errors were found in: {}", record.get_name()));
+                    progress(&format!("Contained subrecords: {}", sub_records.join(" ")));
+                }
+                return true;
+            }
         }
         if current_def.get_def_type() == DefType::dtSubRecordUnion {
             current_def = current_def

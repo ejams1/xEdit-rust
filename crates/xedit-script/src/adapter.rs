@@ -42,6 +42,14 @@ use std::cell::{RefCell, RefMut};
 use std::cmp::Ordering;
 use std::rc::Rc;
 
+thread_local! {
+    /// The objects a script freed (`Args.Obj.Free`), by address, held weakly
+    /// so the address names no other object while the entry lives: a second
+    /// `Free` of one of them is the memory manager's `EInvalidPointer`.
+    static FREED_OBJECTS: RefCell<std::collections::HashMap<usize, std::rc::Weak<RefCell<dyn ScriptObject>>>> =
+        RefCell::new(std::collections::HashMap::new());
+}
+
 use crate::ast::{RoutineBody, RoutineDecl};
 use crate::error::{
     self, Error, IE_EVENT_NOT_REGISTERED, IE_IDENTIFIER_REDECLARED, IE_NOT_ENOUGH_PARAMS, IE_TOO_MANY_PARAMS,
@@ -1429,7 +1437,34 @@ impl Adapter {
         if cmp(identifier, b"Free")
             && let Some(object) = args.obj.as_ref().and_then(Value::as_object)
         {
+            // `TObject.Free` of an object freed before: Delphi's memory
+            // manager finds the block already free and raises
+            // `EInvalidPointer` (parity #41: `Report masters.pas` frees its
+            // lists in `Finalize`, which its `Process` calls before the run
+            // calls it again).
+            let address = Rc::as_ptr(object).cast::<()>() as usize;
+            let freed_before = FREED_OBJECTS.with(|freed| {
+                freed
+                    .borrow()
+                    .get(&address)
+                    .and_then(std::rc::Weak::upgrade)
+                    .is_some_and(|held| Rc::ptr_eq(&held, object))
+            });
+            if freed_before {
+                return Err(ValueError::external_class(
+                    "EInvalidPointer",
+                    "Invalid pointer operation".to_owned(),
+                ));
+            }
             object.borrow_mut().free();
+            FREED_OBJECTS.with(|freed| {
+                let mut freed = freed.borrow_mut();
+                // An object no value holds any more can not be freed again.
+                if freed.len() >= 4096 {
+                    freed.retain(|_, held| held.strong_count() > 0);
+                }
+                freed.insert(address, Rc::downgrade(object));
+            });
             args.obj = None;
             *value = Value::Null;
             return Ok(true);

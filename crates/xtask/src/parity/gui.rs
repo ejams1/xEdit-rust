@@ -711,6 +711,22 @@ pub struct ScriptRun {
     pub saved_log: Option<String>,
 }
 
+/// The error of a run that ended before an expected dialog came, with the
+/// last lines of the main form's log (what the GUI did instead).
+fn missing_dialog(answer: &Answer, log: &str) -> anyhow::Error {
+    let lines: Vec<&str> = log.lines().collect();
+    let tail = lines[lines.len().saturating_sub(8)..].join(
+        "
+    ",
+    );
+    anyhow::anyhow!(
+        "the oracle did not show the expected dialog [{}] \"{}\"; the log ends:
+    {tail}",
+        answer.class,
+        answer.title
+    )
+}
+
 /// Waits for the script's marker (or the exit), answering the module
 /// selection and the expected dialogs (`answers`, in order) and failing on
 /// any other dialog, a timeout or a hang. `log_out` gets the message log of
@@ -744,12 +760,9 @@ fn watch(
             && !closing
             && marker.exists()
         {
-            ensure!(
-                next_answer.is_none(),
-                "the oracle did not show the expected dialog [{}] \"{}\"",
-                next_answer.map(|a| a.class.as_str()).unwrap_or_default(),
-                next_answer.map(|a| a.title.as_str()).unwrap_or_default()
-            );
+            if let Some(answer) = next_answer {
+                return Err(missing_dialog(answer, log_out));
+            }
             // The marker is written before the script returns.
             std::thread::sleep(Duration::from_secs(2));
             close_main_form(child);
@@ -764,12 +777,9 @@ fn watch(
             && !closing
             && (log_out.contains(SCRIPT_END_LINE) || log_out.contains(SCRIPT_ABORT_LINE))
         {
-            ensure!(
-                next_answer.is_none(),
-                "the oracle did not show the expected dialog [{}] \"{}\"",
-                next_answer.map(|a| a.class.as_str()).unwrap_or_default(),
-                next_answer.map(|a| a.title.as_str()).unwrap_or_default()
-            );
+            if let Some(answer) = next_answer {
+                return Err(missing_dialog(answer, log_out));
+            }
             if !close_after {
                 std::thread::sleep(Duration::from_millis(500));
                 if let Some(handle) = main_form {
@@ -809,12 +819,9 @@ fn watch(
                     *log_out = log;
                 }
             }
-            ensure!(
-                next_answer.is_none(),
-                "the oracle did not show the expected dialog [{}] \"{}\"",
-                next_answer.map(|a| a.class.as_str()).unwrap_or_default(),
-                next_answer.map(|a| a.title.as_str()).unwrap_or_default()
-            );
+            if let Some(answer) = next_answer {
+                return Err(missing_dialog(answer, log_out));
+            }
             return Ok(None);
         }
         // A script whose step closed the main form itself (the GUI's
