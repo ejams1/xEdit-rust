@@ -71,6 +71,68 @@ fn serve_answers_commands_over_stdio_until_the_input_ends() {
     client.finish();
 }
 
+/// Every command of the registry is reachable the same way through the
+/// CLI's schema, `serve` and `mcp` (parity #41: the operations of the CLI,
+/// `xedit batch`, `serve` and MCP are one set): `rpc.discover` lists the
+/// commands `xedit schema` prints, and `tools/list` the same names with the
+/// dots of a command name as underscores.
+#[test]
+fn schema_serve_and_mcp_offer_the_same_commands() {
+    let output = Command::new(env!("CARGO_BIN_EXE_xedit"))
+        .arg("schema")
+        .stdin(Stdio::null())
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let schema: Value = serde_json::from_slice(&output.stdout).unwrap();
+    let mut names: Vec<String> = schema["commands"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|command| command["name"].as_str().unwrap().to_owned())
+        .collect();
+    names.sort();
+    assert!(names.len() > 50, "{names:?}");
+
+    let mut client = Client::start(&["serve"]);
+    let reply = client.request(1, "rpc.discover", json!({}));
+    let mut served: Vec<String> = reply["result"]["commands"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|command| {
+            command["name"]
+                .as_str()
+                .or_else(|| command.as_str())
+                .unwrap()
+                .to_owned()
+        })
+        .collect();
+    served.sort();
+    client.finish();
+    assert_eq!(served, names);
+
+    let mut client = Client::start(&["mcp"]);
+    client.request(
+        1,
+        "initialize",
+        json!({ "protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": { "name": "test", "version": "1" } }),
+    );
+    client.send(json!({ "jsonrpc": "2.0", "method": "notifications/initialized" }));
+    let reply = client.request(2, "tools/list", json!({}));
+    let mut tools: Vec<String> = reply["result"]["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|tool| tool["name"].as_str().unwrap().to_owned())
+        .collect();
+    tools.sort();
+    client.finish();
+    let mut expected: Vec<String> = names.iter().map(|name| name.replace('.', "_")).collect();
+    expected.sort();
+    assert_eq!(tools, expected);
+}
+
 #[test]
 fn serve_ends_on_shutdown() {
     let mut client = Client::start(&["serve"]);
