@@ -31,9 +31,9 @@ The overall bar counts merged phases only: 2 cells per phase out of 20. A phase 
 ## Goals
 
 - Port xEdit to Rust with 1:1 functionality*
-  - Morrowind and Enderal are loaded but not verified against the oracle yet (it can not dump or save Morrowind plugins, and Enderal is not installed); verified support comes later
+  - Morrowind, Enderal and Oblivion Remastered load but are not verified against the oracle yet: the 4.1.5q release cannot dump or save Morrowind plugins (issue #9), and Enderal (issue #7) and Oblivion Remastered (issue #80) are not installed on the development machine. The rest of what is verified, deferred and out of the oracle's reach is under Status.
 - Match the upstream release build exactly
-  - The official binaries of the baseline tag (`xedit-4.1.5q`) are the oracle; a differential harness compares the port's output with theirs on the real game files, and each phase closes only when its parity gate holds. Upstream quirks are reproduced, not corrected.
+  - The official binaries of the baseline tag (`xedit-4.1.5q`) are the oracle; a differential harness compares the port's output with theirs on the real game files, and each phase closes only when its parity gate holds. Upstream quirks are reproduced, not corrected; an upstream bug that loses or corrupts data is the one exception: the port keeps the data and records the divergence (see Status).
 - Keep existing scripts, plugins and workflows working. Compatibility with xEdit behaviour, its Pascal scripts and the files it writes wins over every other concern.
 - Be easier to contribute to than the Delphi original: a modern toolchain (`cargo build`, `cargo test`, clippy, one command for the parity check), no proprietary compiler, typed interfaces instead of 103 COM-style interfaces in one 50,000-line unit, and a module per upstream unit so the Pascal source stays a readable map of the Rust.
 - Expose every operation through the `xedit` CLI as a typed command with `--json` output, stable error codes and a printable schema (`xedit schema`), so that an AI agent can discover and drive the whole tool without the GUI.
