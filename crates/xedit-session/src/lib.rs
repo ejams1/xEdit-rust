@@ -35,6 +35,8 @@ pub mod script;
 pub mod script_adapter;
 pub mod script_classes;
 pub mod script_df;
+pub(crate) mod script_extfun;
+pub mod script_host;
 pub mod script_misc;
 pub mod script_misc_json;
 pub mod script_misc_regex;

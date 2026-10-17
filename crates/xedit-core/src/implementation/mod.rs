@@ -538,7 +538,7 @@ impl ElementBase {
     }
 
     /// Port of `TwbElement.GetElementGeneration`.
-    pub(crate) fn element_generation(&self) -> i32 {
+    pub fn element_generation(&self) -> i32 {
         self.e_generation.load(std::sync::atomic::Ordering::Relaxed)
     }
 
@@ -1799,7 +1799,7 @@ impl FileImpl {
 
     /// Port of `AddAllMastersToSet` with `SortByReverseLoadOrder`: every
     /// master, direct or not, from the highest load order down.
-    fn all_masters(&self) -> Vec<Arc<FileImpl>> {
+    pub fn all_masters(&self) -> Vec<Arc<FileImpl>> {
         let mut result: Vec<Arc<FileImpl>> = Vec::new();
         let mut pending = self.masters();
         while let Some(master) = pending.pop() {

@@ -2175,6 +2175,11 @@ fn port_run(
             // script's `wbTempPath` reports.
             .arg("--temp-path")
             .arg(format!("{}\\temp\\", dir.display()))
+            // The GUI's `xeSettingsFileName` (`wbSettingsFileName`): no
+            // `<AppName>Edit.ini` beside its program, so the plugin list's
+            // name with `.<app>viewsettings` (`-P:<work>\plugins.txt`).
+            .arg("--settings")
+            .arg(dir.join(format!("plugins.{}viewsettings", task.game.mode.to_lowercase())))
             .env("XEDIT_SCRIPTS", &dir);
         for plugin in &plugins {
             command.arg("--load").arg(plugin);
@@ -2194,6 +2199,13 @@ fn port_run(
             // unless `-nobuildrefs` was passed; the cases that read them say
             // so.
             command.arg("--build-refs");
+        }
+        if !task.close_after {
+            // The oracle's GUI is not closed, so its `SaveChanged` never
+            // runs: the port keeps what the script changed in memory too
+            // (an aborted run's save lines are part of the compared log,
+            // and a saved file would be one of the run's data files).
+            command.arg("--no-save");
         }
         command.current_dir(&dir).stdin(std::process::Stdio::null());
         command

@@ -819,6 +819,24 @@
       "note": "parity #33: the ATAV JSON text and the virtual perk activity tree of Skill_Rejuvenation [PERK:0028AE13] copied into a new file as an override and as a new record, through the addition of the light module OldMars.esm as a master, the sort and the clean of the masters"
     },
     {
+      "script": "probes/host-paint.pas",
+      "master": "tests/fixtures/parity/host-25.esm",
+      "note": "parity #25: the nodes JumpTo classifies (ConflictAllForNode after a jump) over the host-25 fixture"
+    },
+    {
+      "script": "probes/host-dialogs.pas",
+      "master": "tests/fixtures/parity/host-25.esm",
+      "close_after": true,
+      "answers": [
+        {"class": "TInputQueryForm", "title": "New Module File", "text": "HostDialogs25.esp", "button": "OK"},
+        {"class": "#32770", "title": "", "button": "OK"},
+        {"class": "#32770", "title": "Confirm", "button": "&No"},
+        {"class": "#32770", "title": "Confirm", "button": "&Yes"},
+        {"class": "TfrmFileSelect", "title": "Pick a file", "control": "TCheckListBox", "keys": [40, 40, 32], "button": "OK"}
+      ],
+      "note": "parity #25: AddNewFile's InputQuery, AddNewFileName's exists-already message, AddRequiredElementMasters' confirmation (No, then Yes) and the frmFileSelect selection form answered from recorded answers over the host-25 fixture; the overrides the new files get (IsPositionChanged, the conflict helpers, the inherited filter status) and the files the close saves"
+    },
+    {
       "script": "probes/filter-scripted.pas",
       "master": "tests/fixtures/parity/filter-scripted.esm",
       "save": [

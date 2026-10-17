@@ -82,6 +82,7 @@ use xedit_script::values::{ClassDef, ScriptObject, Value, ValueError};
 
 use super::{MemberKind, VCL_ERROR_CLASS, Vcl};
 use crate::script::{ScriptAnswer, ScriptInteraction};
+use crate::script_rtl::classes::{ComponentState, insert_component, remove_component};
 use crate::script_rtl::{arg_i32, arg_text};
 
 /// The class of the error a run raises when a dialog has no recorded answer:
@@ -143,6 +144,10 @@ pub struct VclObject {
     /// starts with).
     pub children: Vec<i64>,
     pub parent: Option<i64>,
+    /// The `TComponent` side of the object: its `Name`, `Tag`, `Owner` and
+    /// owned components, the state the `Classes` unit's `TComponent` members
+    /// read and write (`FindComponent` finds a control by its name).
+    pub component: Rc<RefCell<ComponentState>>,
 }
 
 impl VclObject {
@@ -156,7 +161,17 @@ impl VclObject {
             checks: Vec::new(),
             children: Vec::new(),
             parent: None,
+            component: Rc::new(RefCell::new(ComponentState::new())),
         }
+    }
+
+    /// Wraps a new object into the shared cell its script values hold and
+    /// points its component state back at it.
+    fn into_cell(self) -> Rc<RefCell<VclObject>> {
+        let cell = Rc::new(RefCell::new(self));
+        let object: Rc<RefCell<dyn ScriptObject>> = cell.clone();
+        cell.borrow().component.borrow_mut().object = Some(Rc::downgrade(&object));
+        cell
     }
 
     /// `Checked[i]`: an explicit entry, else the `CheckAll` state an earlier
@@ -234,6 +249,9 @@ pub struct VclModel {
     /// The forms currently shown modal, innermost last (a button's
     /// `ModalResult` closes the innermost).
     modal_stack: Vec<i64>,
+    /// The main form (`frmMain` of the script host, issue #25), made on
+    /// first use.
+    main_form: Option<i64>,
 }
 
 impl VclModel {
@@ -247,6 +265,7 @@ impl VclModel {
             next_id: 0,
             screen: None,
             modal_stack: Vec::new(),
+            main_form: None,
         }
     }
 
@@ -287,7 +306,7 @@ impl VclModel {
         };
         // Events are `tkMethod` properties, which `GetValueRTTI` does not
         // read (its `case` has no arm for them).
-        if is_event_name(name) {
+        if is_event_name(name) || self.is_array_property(&object, name) {
             return Ok(false);
         }
         self.dispatch_get(&object, name, value)?;
@@ -307,11 +326,21 @@ impl VclModel {
         let Some(name) = published_name(identifier) else {
             return Ok(false);
         };
-        if is_event_name(name) {
+        if is_event_name(name) || self.is_array_property(&object, name) {
             return Ok(false);
         }
         self.dispatch_set(&object, name, value)?;
         Ok(true)
+    }
+
+    /// A name that is an array property of the receiver's class, which no
+    /// RTTI lookup answers (`GetPropInfo` lists published properties only):
+    /// a check list's `Checked[i]`/`State[i]`/`ItemEnabled[i]`/`Header[i]`
+    /// are its indexed members, while `Checked` of a check box is published.
+    /// Answering the bare name made `clb.Checked[i] := b` index the boolean
+    /// (`Array type required`, found by issue #25).
+    fn is_array_property(&self, object: &Rc<RefCell<VclObject>>, name: &str) -> bool {
+        self.is_a(object, "TCheckListBox") && matches!(name, "Checked" | "State" | "ItemEnabled" | "Header")
     }
 
     /// The receiver of `args` when it is one of the model's live objects.
@@ -364,12 +393,17 @@ impl VclModel {
         let class = self.class_of(class_name)?;
         let id = self.next_id;
         self.next_id += 1;
-        let object = Rc::new(RefCell::new(VclObject::new(id, class, class_name)));
+        let object = VclObject::new(id, class, class_name).into_cell();
         let parent = owner.and_then(|value| value.as_object()).and_then(|owner| {
             let borrowed = owner.borrow();
             borrowed.as_any().downcast_ref::<VclObject>().map(|vcl| vcl.id)
         });
         object.borrow_mut().parent = parent;
+        // `TComponent.Create(AOwner)`: the owner holds the new component.
+        if let Some(owner_state) = owner.and_then(crate::script_rtl::classes::component_of) {
+            let state = object.borrow().component.clone();
+            insert_component(&owner_state, &state);
+        }
         self.objects.insert(id, object.clone());
         if let Some(parent) = parent
             && let Some(parent_object) = self.objects.get(&parent).cloned()
@@ -385,7 +419,7 @@ impl VclModel {
         let class = self.class_of(class_name)?;
         let id = self.next_id;
         self.next_id += 1;
-        let object = Rc::new(RefCell::new(VclObject::new(id, class, class_name)));
+        let object = VclObject::new(id, class, class_name).into_cell();
         object.borrow_mut().parent = Some(parent_id);
         self.objects.insert(id, object.clone());
         if let Some(parent) = self.objects.get(&parent_id).cloned() {
@@ -413,6 +447,8 @@ impl VclModel {
         let Some(object) = self.objects.remove(&id) else {
             return;
         };
+        let component = object.borrow().component.clone();
+        remove_component(&component);
         let (children, parent) = {
             let borrowed = object.borrow();
             (borrowed.children.clone(), borrowed.parent)
@@ -545,6 +581,169 @@ impl VclModel {
         }
         let children = form.borrow().children.clone();
         children.into_iter().find_map(|child| self.objects.get(&child).cloned())
+    }
+
+    //=== The host's forms (issue #25) ========================================
+
+    /// An object of a form class the registration tables do not carry
+    /// (`TfrmMain`, `TfrmFileSelect`): a class of its own below `TForm`, so
+    /// `ClassName` names it and every `TForm` member answers.
+    fn create_form_of_class(&mut self, unit: &str, class_name: &str) -> Result<Rc<RefCell<VclObject>>, ValueError> {
+        let parent = self.class_of("TForm")?;
+        let class = Rc::new(ClassDef {
+            unit: unit.to_owned(),
+            name: class_name.to_owned(),
+            parent: Some(parent),
+        });
+        let id = self.next_id;
+        self.next_id += 1;
+        let object = VclObject::new(id, class, class_name).into_cell();
+        self.objects.insert(id, object.clone());
+        Ok(object)
+    }
+
+    /// A component of a form built from its `.dfm`: owned and parented by
+    /// `owner`, named, with its design-time properties.
+    fn dfm_component(
+        &mut self,
+        owner: &Rc<RefCell<VclObject>>,
+        class_name: &str,
+        name: &str,
+        props: &[(&str, Value)],
+    ) -> Result<Rc<RefCell<VclObject>>, ValueError> {
+        let value = self.create_object(class_name, Some(&Value::Object(owner.clone())))?;
+        let id = Self::id_of(&value).ok_or_else(|| self.model_error("the component was not made".to_owned()))?;
+        let object = self.object(id)?;
+        object.borrow().component.borrow_mut().name = name.to_owned();
+        for (prop, value) in props {
+            self.set_prop(&object, prop, value.clone());
+        }
+        Ok(object)
+    }
+
+    /// `O2V(frmMain)`: the main form, one object for the whole run.
+    /// Headless it shows nothing; a script reads and sets its properties
+    /// and owns its own forms by it (`TForm.Create(frmMain)`).
+    fn main_form(&mut self) -> Result<Value, ValueError> {
+        if let Some(id) = self.main_form
+            && let Ok(form) = self.object(id)
+        {
+            return Ok(Value::Object(form));
+        }
+        let form = self.create_form_of_class("xeMainForm", "TfrmMain")?;
+        form.borrow().component.borrow_mut().name = "frmMain".to_owned();
+        self.set_prop(&form, "Visible", Value::Bool(true));
+        self.main_form = Some(form.borrow().id);
+        Ok(Value::Object(form))
+    }
+
+    /// `O2V(TfrmFileSelect.Create(nil))`: a new selection form each call,
+    /// with the components of `xeFileSelectForm.dfm` and its `FormCreate`
+    /// (`CheckListBox1.MultiSelect := True`). The script fills
+    /// `CheckListBox1` (found with `FindComponent`) and shows it modal; the
+    /// recorded answers check the entries (the keys go to the check list)
+    /// and click `OK`, whose `ModalResult` is `mrOk`; return clicks `OK` and
+    /// escape closes it with `mrCancel` (its `FormKeyDown`).
+    fn file_select_form(&mut self) -> Result<Value, ValueError> {
+        let form = self.create_form_of_class("xeFileSelectForm", "TfrmFileSelect")?;
+        form.borrow().component.borrow_mut().name = "frmFileSelect".to_owned();
+        let text = |value: &str| Value::Str(value.as_bytes().to_vec());
+        self.set_prop(&form, "Caption", text("Master/Plugin Selection"));
+        self.set_prop(&form, "ClientHeight", Value::Integer(615));
+        self.set_prop(&form, "ClientWidth", Value::Integer(332));
+        self.set_prop(&form, "KeyPreview", Value::Bool(true));
+        // `poMainFormCenter`.
+        self.set_prop(&form, "Position", Value::Integer(5));
+        self.dfm_component(
+            &form,
+            "TLabel",
+            "Label1",
+            &[
+                ("Left", Value::Integer(8)),
+                ("Top", Value::Integer(11)),
+                ("Width", Value::Integer(33)),
+                ("Height", Value::Integer(13)),
+                ("Caption", text("Search")),
+            ],
+        )?;
+        let list = self.dfm_component(
+            &form,
+            "TCheckListBox",
+            "CheckListBox1",
+            &[
+                ("Left", Value::Integer(3)),
+                ("Top", Value::Integer(40)),
+                ("Width", Value::Integer(326)),
+                ("Height", Value::Integer(535)),
+                ("ItemHeight", Value::Integer(13)),
+                ("TabOrder", Value::Integer(0)),
+                ("MultiSelect", Value::Bool(true)),
+            ],
+        )?;
+        self.dfm_component(
+            &form,
+            "TEdit",
+            "edSearch",
+            &[
+                ("Left", Value::Integer(47)),
+                ("Top", Value::Integer(8)),
+                ("Width", Value::Integer(282)),
+                ("Height", Value::Integer(21)),
+                ("TabOrder", Value::Integer(1)),
+            ],
+        )?;
+        self.dfm_component(
+            &form,
+            "TCheckBox",
+            "cbBackup",
+            &[
+                ("Left", Value::Integer(8)),
+                ("Top", Value::Integer(582)),
+                ("Width", Value::Integer(113)),
+                ("Height", Value::Integer(17)),
+                ("Caption", text("Backup plugins")),
+                ("Checked", Value::Bool(true)),
+                ("TabOrder", Value::Integer(2)),
+                ("Visible", Value::Bool(false)),
+            ],
+        )?;
+        self.dfm_component(
+            &form,
+            "TButton",
+            "btnOK",
+            &[
+                ("Left", Value::Integer(249)),
+                ("Top", Value::Integer(582)),
+                ("Width", Value::Integer(75)),
+                ("Height", Value::Integer(25)),
+                ("Caption", text("OK")),
+                ("ModalResult", Value::Integer(1)),
+                ("TabOrder", Value::Integer(3)),
+            ],
+        )?;
+        let menu = self.dfm_component(&form, "TPopupMenu", "PopupMenu1", &[])?;
+        for (name, caption) in [
+            ("SelectAll1", "Select All"),
+            ("SelectNone1", "Select None"),
+            ("InvertSelection1", "Invert Selection"),
+        ] {
+            let item = self.dfm_component(&form, "TMenuItem", name, &[("Caption", text(caption))])?;
+            // The menu's items: the item is the menu's child in the tree
+            // (`Items.Add`), and the form still owns it.
+            let (item_id, menu_id) = (item.borrow().id, menu.borrow().id);
+            if let Some(old) = self.parent_of(item_id)
+                && let Some(old_object) = self.objects.get(&old).cloned()
+            {
+                old_object.borrow_mut().children.retain(|child| *child != item_id);
+            }
+            item.borrow_mut().parent = Some(menu_id);
+            menu.borrow_mut().children.push(item_id);
+        }
+        self.set_prop(&list, "PopupMenu", Value::Object(menu.clone()));
+        // The VCL focuses the first control in the tab order when the form
+        // shows: the check list.
+        self.set_prop(&form, "ActiveControl", Value::Object(list.clone()));
+        Ok(Value::Object(form))
     }
 
     //=== The interaction bridge ==============================================
@@ -912,7 +1111,7 @@ impl VclModel {
                     // cursor as the control does.
                     let step = if key == VK_DOWN { 1 } else { -1 };
                     let count = self.list_count(&active);
-                    let index = (self.prop_i32(&active, "ItemIndex", -1) + step).max(0);
+                    let index = (self.prop_i32(&active, "ItemIndex", self.default_item_index(&active)) + step).max(0);
                     let index = if count > 0 { index.min(count - 1) } else { index };
                     self.set_prop(&active, "ItemIndex", Value::Integer(index));
                 }
@@ -967,6 +1166,18 @@ impl VclModel {
         self.is_a(object, "TCustomListBox")
             || self.is_a(object, "TCheckListBox")
             || self.is_a(object, "TCustomComboBox")
+    }
+
+    /// The `ItemIndex` of a list nobody moved: -1 (nothing selected), but
+    /// the caret's 0 for a multi-select list, whose `ItemIndex` is the caret
+    /// (`LB_GETCARETINDEX`): the first Down of an answer lands on the second
+    /// entry there (`TfrmFileSelect`'s check list, `host-dialogs`).
+    fn default_item_index(&self, object: &Rc<RefCell<VclObject>>) -> i32 {
+        if self.prop_bool(object, "MultiSelect", false) {
+            0
+        } else {
+            -1
+        }
     }
 
     /// The entry count of a list control's `Items` (0 before any was added).
@@ -1219,7 +1430,7 @@ impl VclModel {
                 if member == "ItemIndex" && self.is_list(object) {
                     // A fresh list box or combo box selects nothing (-1); the
                     // model's lists start as the control does.
-                    *value = Value::Integer(-1);
+                    *value = Value::Integer(self.default_item_index(object));
                     return Ok(());
                 }
                 if member == "Options" {
@@ -1656,6 +1867,14 @@ impl Vcl for VclModel {
             }
             "MessageBox" => {
                 *value = Value::Integer(self.message_box(args)?);
+                Ok(())
+            }
+            "frmMain" => {
+                *value = self.main_form()?;
+                Ok(())
+            }
+            "frmFileSelect" => {
+                *value = self.file_select_form()?;
                 Ok(())
             }
             _ => Err(ValueError::external_class(

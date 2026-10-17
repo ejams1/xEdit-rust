@@ -430,8 +430,15 @@ fn text_to_short_cut_of(text: &str) -> i32 {
 /// function that shows a modal window -- the port routes it through the same
 /// seam as every other form, so the GUI phase answers it with the real API
 /// call and headless it refuses with the clear error.
+///
+/// A function a script declares `external` itself (`AddExtFun` of
+/// `InterpretFunction`, issue #25) is called in its library
+/// ([`crate::script_extfun::call_dll`]), as upstream's `CallDll` does.
 pub(crate) fn register_external(adapter: &mut Adapter, vcl: Rc<RefCell<dyn Vcl>>) {
     let call: ExternalCallFn = Rc::new(move |function, args| {
+        if function.unit_name != "Windows" {
+            return crate::script_extfun::call_dll(function, args);
+        }
         let mut value = Value::Empty;
         vcl.borrow_mut()
             .function(&function.unit_name, &function.identifier, &mut value, args)?;

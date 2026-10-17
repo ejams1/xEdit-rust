@@ -390,6 +390,31 @@ impl From<CommandError> for FilterApplyFailure {
 pub(crate) struct AppliedFilter {
     pub response: FilterApplyResponse,
     pub nodes: Vec<xedit_core::interface::ElementRef>,
+    /// The conflict status the filter left on the nodes (`NodeData.ConflictAll`
+    /// and `ConflictThis`), by the identity of the node's element and of its
+    /// container (`FindNodeForElement` matches either): what the script
+    /// functions `ConflictAllForNode`/`ConflictThisForNode` read. Nodes the
+    /// filter never classified are left out (they read `caUnknown`).
+    pub conflicts: Vec<(usize, ConflictAll, ConflictThis)>,
+}
+
+/// The classified nodes of a filtered tree, for [`AppliedFilter::conflicts`].
+fn node_conflicts(tree: &NavTree) -> Vec<(usize, ConflictAll, ConflictThis)> {
+    let mut result = Vec::new();
+    let mut stack: Vec<_> = tree.roots();
+    stack.reverse();
+    while let Some(id) = stack.pop() {
+        let data = tree.data(id);
+        if data.conflict_all != ConflictAll::caUnknown || data.conflict_this != ConflictThis::ctUnknown {
+            for element in [&data.element, &data.container].into_iter().flatten() {
+                result.push((element.get_element_id(), data.conflict_all, data.conflict_this));
+            }
+        }
+        let mut children = tree.children(id);
+        children.reverse();
+        stack.extend(children);
+    }
+    result
 }
 
 /// [`filter_apply`] with the scripted filter of a `script.run`
@@ -461,9 +486,11 @@ pub(crate) fn filter_apply_scripted(
         .into_iter()
         .flat_map(|root| node_elements_below(&tree, root))
         .collect();
+    let conflicts = node_conflicts(&tree);
     Ok(AppliedFilter {
         response: response_of(&tree, &options, request.list_records, report, &active),
         nodes,
+        conflicts,
     })
 }
 

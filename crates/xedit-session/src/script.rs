@@ -633,6 +633,20 @@ fn tree_children_of_container(container: &ElementRef) -> Vec<ElementRef> {
 
 /// `ParentedGroupRecordType` (`xeMainForm.pas:5157`): world, cell and topic
 /// children, quest children with `wbVWDAsQuestChildren`.
+/// The element whose navigation node an element shows as: a child group is
+/// shown by its record's node (`NodeData.Container`), any other element by
+/// its own (`FindNodeForElement` matches either).
+pub(crate) fn node_element(element: &ElementRef) -> ElementRef {
+    if element.get_element_type() == ElementType::etGroupRecord
+        && let Some(group) = element.as_element_impl().and_then(ElementImpl::group_record_impl)
+        && is_parented_group(group.group_type())
+        && let Some(record) = parent_record_of_hidden_group(&group)
+    {
+        return record;
+    }
+    element.clone()
+}
+
 fn is_parented_group(group_type: i32) -> bool {
     matches!(group_type, 1 | 6 | 7) || (group_type == 10 && xedit_core::interface::globals::vwd_as_quest_children())
 }
@@ -1018,6 +1032,11 @@ pub struct ScriptRunState {
     /// cannot hold this state, so [`run_script`] installs a relay whose
     /// lines [`ScriptRunState::add_message`] drains in order.
     relayed: std::sync::Arc<std::sync::Mutex<Vec<String>>>,
+    /// The main form's state the `xejviScriptAdapterHost.pas` registrations
+    /// of issue #25 read and change: the navigation tree's selection, the
+    /// conflict status its nodes hold, the cached settings and record
+    /// definition map objects.
+    pub host: crate::script_host::HostState,
 }
 
 /// One `ApplyFilter`/`RemoveFilter` a script called. The adapter function
@@ -1053,6 +1072,7 @@ impl ScriptRunState {
             action_started: std::time::Instant::now(),
             lists: ScriptLists::default(),
             relayed: std::sync::Arc::new(std::sync::Mutex::new(Vec::new())),
+            host: crate::script_host::HostState::default(),
         }
     }
 
@@ -1152,6 +1172,17 @@ impl ScriptRunState {
         self.files.len()
     }
 
+    /// `frmMain.Files`, in its order.
+    pub(crate) fn files(&self) -> &[ElementRef] {
+        &self.files
+    }
+
+    /// `SetLength(Files, Succ(Length(Files))); Files[High(Files)] := ...`:
+    /// a file the script made joins the list (`AddNewFileName`).
+    pub(crate) fn push_file(&mut self, file: ElementRef) {
+        self.files.push(file);
+    }
+
     pub(crate) fn file_at(&self, index: i64) -> Option<ElementRef> {
         usize::try_from(index)
             .ok()
@@ -1212,7 +1243,7 @@ pub(crate) fn progress_start() -> std::time::Instant {
 
 /// `wbFormatElapsedTime` (`xeMainForm.pas:1361`): `FormatDateTime('nn:ss')`,
 /// the hours in front once there are any.
-fn elapsed_text(elapsed: std::time::Duration) -> String {
+pub(crate) fn elapsed_text(elapsed: std::time::Duration) -> String {
     let seconds = elapsed.as_secs();
     let hours = seconds / 3600;
     let text = format!("{:02}:{:02}", (seconds / 60) % 60, seconds % 60);
@@ -1380,59 +1411,8 @@ fn register_functions(
 
     //=== The LOD and atlas builders (xejviScriptAdapterHost.pas) =============
 
-    /// The object of a `TStrings` argument as the LOD list the atlas
-    /// builders take: the lines with the integer their object holds (a
-    /// script builds `AddObject(name, TObject(flag))`); a nil or other
-    /// object counts as 0, as `PtrInt(nil)` does upstream.
-    fn lod_list(value: &Value) -> Option<xedit_assets::lod::StringList> {
-        let object = crate::script_rtl::classes::strings_object(value)?;
-        let borrowed = object.borrow();
-        let list = borrowed.string_list()?;
-        let mut result = xedit_assets::lod::StringList::new();
-        for (line, object) in list.lines().iter().zip(list.objects()) {
-            let flag = match object {
-                Value::Integer(flag) => u64::try_from(*flag).unwrap_or(0),
-                Value::Int64(flag) => u64::try_from(*flag).unwrap_or(0),
-                _ => 0,
-            };
-            result.items.push((xedit_io::encoding::ansi_string(line), flag));
-        }
-        Some(result)
-    }
-
-    /// The `LodEnv` of a script run. `frmMain.Settings` is
-    /// `xeSettingsFileName` (`crate::modgroups::settings_file`: the
-    /// `<AppName><ToolName>.ini` next to the program when it exists), and a
-    /// headless run of either side has none, so both read the defaults;
-    /// the Fallout 4 and Starfield overrides are the ones the GUI's
-    /// `wbLODDefaults` sets (as `lodgen.rs` applies them).
-    fn script_lod_env() -> xedit_assets::lod::LodEnv {
-        use xedit_core::interface::globals;
-        let ini = crate::modgroups::settings_file();
-        let settings = if ini.is_file() {
-            xedit_assets::sniff::processor::MemIniFile::load(&ini)
-        } else {
-            xedit_assets::sniff::processor::MemIniFile::default()
-        };
-        let mut defaults = xedit_assets::lod::LodDefaults::initial();
-        if globals::is_fallout4() || globals::is_starfield() {
-            defaults.atlas_width = 4096;
-            defaults.atlas_height = 4096;
-            defaults.uv_range = 1.1;
-            defaults.atlas_diffuse_format = xedit_assets::imaging::ImageFormat::Dxt5;
-            defaults.atlas_normal_format = xedit_assets::imaging::ImageFormat::Ati2n;
-        }
-        xedit_assets::lod::LodEnv {
-            data_path: globals::data_path(),
-            output_path: globals::output_path(),
-            scripts_path: globals::scripts_path(),
-            temp_path: globals::temp_path(),
-            settings,
-            defaults,
-        }
-    }
-
     {
+        let state = state.clone();
         host_function(
             adapter,
             "wbBuildAtlasFromAtlasMap",
@@ -1444,8 +1424,8 @@ fn register_functions(
                 ParamType::value(VarType::Empty),
                 ParamType::value(VarType::Empty),
             ],
-            Rc::new(|_value: &mut Value, args: &mut Args| {
-                let Some(map) = lod_list(&args.values[0]) else {
+            Rc::new(move |_value: &mut Value, args: &mut Args| {
+                let Some(map) = crate::script_host::lod_list(&args.values[0]) else {
                     return Err(ValueError::interp(IE_DIRECT_INVALID_ARGUMENT));
                 };
                 let brightness = xedit_script::values::to_i32(&args.values[1])
@@ -1460,7 +1440,7 @@ fn register_functions(
                     single(&args.values[3])?,
                     single(&args.values[4])?,
                 );
-                let env = script_lod_env();
+                let env = crate::script_host::lod_env(&state);
                 xedit_assets::lod::build_atlas_from_atlas_map(&env, &map, brightness, gamma)
                     .map_err(|error| ValueError::external_class("Exception", error.0))?;
                 Ok(())
@@ -1468,6 +1448,7 @@ fn register_functions(
         );
     }
     {
+        let state = state.clone();
         host_function(
             adapter,
             "wbBuildAtlasFromTexturesList",
@@ -1481,8 +1462,8 @@ fn register_functions(
                 ParamType::value(VarType::Empty),
                 ParamType::value(VarType::Empty),
             ],
-            Rc::new(|_value: &mut Value, args: &mut Args| {
-                let Some(textures) = lod_list(&args.values[0]) else {
+            Rc::new(move |_value: &mut Value, args: &mut Args| {
+                let Some(textures) = crate::script_host::lod_list(&args.values[0]) else {
                     return Err(ValueError::interp(IE_DIRECT_INVALID_ARGUMENT));
                 };
                 let integer = |value: &Value| {
@@ -1495,7 +1476,7 @@ fn register_functions(
                     _ => String::new(),
                 };
                 let (name, map_name) = (string(&args.values[5]), string(&args.values[6]));
-                let env = script_lod_env();
+                let env = crate::script_host::lod_env(&state);
                 xedit_assets::lod::build_atlas_from_textures_list(
                     &env,
                     &textures,
@@ -1566,8 +1547,14 @@ fn register_functions(
                 };
                 let name = String::from_utf8_lossy(name).into_owned();
                 let state = state.borrow();
+                // `SameText(Args.Values[0], frmMain.Files[i].FileName)`: the
+                // file name, without the `[NN] ` of `Name` (the port compared
+                // the display name, so no plain file name ever matched).
                 for file in &state.files {
-                    if element_name(file).eq_ignore_ascii_case(&name) {
+                    if file
+                        .get_file()
+                        .is_some_and(|loaded| crate::script_host::file_name_of(&loaded).eq_ignore_ascii_case(&name))
+                    {
                         *value = state.element_value(file);
                         break;
                     }
@@ -1791,6 +1778,12 @@ fn register_functions(
     // the `Classes` unit's `TComponent`/`TStringList`.
 
     crate::script_vcl::register(adapter, state, &vcl);
+
+    //=== The rest of xejviScriptAdapterHost.pas (issue #25) ==================
+    // After the VCL surface: `frmMain`/`frmFileSelect` are its objects, and
+    // `wbSettings`/`wbRecordDefMap` objects of its `TMemIniFile`/`TStringList`.
+
+    crate::script_host::register(adapter, state, &vcl);
 }
 
 /// The `OnSetValue` hook (`xejviScriptHost.pas:60`): the identifiers a script
@@ -2135,6 +2128,14 @@ fn apply_pending_filters(
                         let mut state = state.borrow_mut();
                         state.filter_applied = true;
                         state.filtered_nodes = Some(applied.nodes.iter().map(|node| node.get_element_id()).collect());
+                        // `ReInitTree` drops the old nodes and the filter
+                        // classifies the new ones: what `ConflictAllForNode`
+                        // reads afterwards.
+                        state.host.node_conflicts = applied
+                            .conflicts
+                            .iter()
+                            .map(|(id, all, this)| (*id, (*all, *this)))
+                            .collect();
                         block.extend(applied.response.messages);
                         if let Some(line) = state.progress_line(
                             &format!(
@@ -2183,8 +2184,9 @@ fn apply_pending_filters(
                 let _ = crate::filter::filter_remove(session, crate::filter::FilterRemoveRequest {})?;
                 let mut state = state.borrow_mut();
                 state.filter_applied = false;
-                // `ReInitTree`: the tree holds every node again.
+                // `ReInitTree`: the tree holds every node again, unclassified.
                 state.filtered_nodes = None;
+                state.host.node_conflicts.clear();
             }
         }
     }
@@ -2720,8 +2722,17 @@ pub fn run_script(
         let data_path = globals::data_path();
         for file in &changed_files {
             let name = file.get_name();
-            // `NeedsRename := FileExists(wbDataPath + name)`: the loaded
-            // file is the copy below the data path, so it exists.
+            // `NeedsRename := FileExists(wbDataPath + name)`: a loaded file
+            // is the copy below the data path, so it exists and its save is
+            // queued for renaming; a file the script made
+            // (`AddNewFileName`) is not on disk yet and is saved under its
+            // own name at once.
+            if !Path::new(&format!("{data_path}{name}")).exists() {
+                state.borrow_mut().progress(&format!("Saving: {name}"), false);
+                let saved = crate::save::save_file(file, None, false, false)?;
+                response.files.push(ScriptRunFile::from_save(file, &saved));
+                continue;
+            }
             let queued = format!("{name}{suffix}");
             state.borrow_mut().progress(&format!("Saving: {queued}"), false);
             // The port writes the file itself, without the GUI's backup
