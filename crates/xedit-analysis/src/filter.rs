@@ -49,7 +49,8 @@ use xedit_core::implementation::{ElementImpl, FileImpl, MainRecordImpl};
 use xedit_core::interface::constructors::find_record_def;
 use xedit_core::interface::form_id::FormID;
 use xedit_core::interface::globals::{
-    is_fallout4, is_fallout76, is_morrowind, is_oblivion, is_skyrim, is_starfield, sort_info, vwd_as_quest_children,
+    can_sort_info, fill_pnam, is_fallout4, is_fallout76, is_morrowind, is_oblivion, is_skyrim, is_starfield, sort_info,
+    vwd_as_quest_children,
 };
 use xedit_core::interface::main_record::MainRecordDef;
 use xedit_core::interface::misc::Variant;
@@ -100,6 +101,12 @@ struct Node {
     next_sibling: Option<NodeId>,
     child_count: usize,
     deleted: bool,
+    /// `Node.Index`: the place of the node below its parent when it was
+    /// added.
+    index: usize,
+    /// A response of a topic whose element is bound when the walk first
+    /// reaches the node ([`NavTree::init_node`]).
+    unbound: bool,
 }
 
 /// Port of the navigation tree (`vstNav`): one root node per file, the
@@ -177,6 +184,7 @@ impl NavTree {
             Some(parent) => self.nodes[parent].last_child,
             None => self.last_root,
         };
+        let index = parent.map_or(0, |parent| self.nodes[parent].child_count);
         self.nodes.push(Node {
             data: NavNodeData {
                 element,
@@ -194,6 +202,8 @@ impl NavTree {
             next_sibling: None,
             child_count: 0,
             deleted: false,
+            index,
+            unbound: false,
         });
         if let Some(prev) = prev {
             self.nodes[prev].next_sibling = Some(id);
@@ -224,6 +234,9 @@ impl NavTree {
             return;
         };
         let elements = elements_of(&container);
+        // The responses of a topic (a group of type 7) are bound as the walk
+        // reaches them, see `init_node`.
+        let responses = group_of(&container).is_some_and(|group| group.group_type() == 7);
         let mut added = Vec::with_capacity(elements.len());
         for (index, element) in elements.iter().enumerate() {
             // A child group after its record shows below the record: its
@@ -249,11 +262,43 @@ impl NavTree {
             } else {
                 (!elements_of(element).is_empty()).then(|| element.clone())
             };
-            added.push(self.add_node(Some(id), Some(element.clone()), container));
+            let child = self.add_node(Some(id), Some(element.clone()), container);
+            self.nodes[child].unbound = responses;
+            added.push(child);
         }
         for child in added {
             self.init_children(child);
         }
+    }
+
+    /// The element binding of `vstNavInitNode` for a response of a topic:
+    /// `NodeData.Element := Container.Elements[Node.Index]` runs when the
+    /// walk first reaches the node (`GetPrevious` and `GetLast` initialise
+    /// the node they move to), not when the tree is built. A forced sort of
+    /// the responses (the `PNAM` fill of a response built by the conflict
+    /// check of a node, `TwbGroupRecord.Sort(True)`) between two nodes
+    /// therefore binds the nodes the walk has not reached to the sorted
+    /// order: some responses get two nodes and some none, and a response
+    /// without a node is never compared (UPSTREAM-QUIRK, `BrokenSteel.esm`:
+    /// the `GREETING` responses `000198DB` and `00025FC9` keep their text
+    /// untrimmed because nothing builds them before the save). The other
+    /// nodes of the port's tree are bound when it is built, which is the
+    /// same, as only a sort reorders the elements of a container while the
+    /// tree walks.
+    pub fn init_node(&mut self, id: NodeId) {
+        let node = &self.nodes[id];
+        if !node.unbound {
+            return;
+        }
+        let element = node
+            .parent
+            .and_then(|parent| self.nodes[parent].data.container.as_ref())
+            .and_then(|container| container.as_container()?.get_element(i32::try_from(node.index).ok()?));
+        // A node past the elements of the container has no element (the
+        // GUI hides it, and the walk deletes it).
+        let node = &mut self.nodes[id];
+        node.unbound = false;
+        node.data.element = element;
     }
 
     pub fn data(&self, id: NodeId) -> &NavNodeData {
@@ -1497,11 +1542,19 @@ pub fn apply_filter_scripted(
     let check_conflict = options.conflict_all.is_some() || options.conflict_this.is_some();
     let conflict_options = options.conflict_options(mod_groups);
 
-    // The statuses the first pass reads, asked in the order it walks.
-    let results = if check_conflict || options.inherit_conflict_by_parent {
+    // Under the PNAM fill the conflict check of a node can sort the
+    // responses of a topic whose nodes the walk has not bound yet
+    // (`NavTree::init_node`), so the first pass asks for each status where
+    // the GUI computes it, node by node; otherwise the statuses the first
+    // pass reads are asked before it, in the order it walks (the PNAM fill
+    // compares on one thread either way).
+    let wants_conflict = check_conflict || options.inherit_conflict_by_parent;
+    let statuses_as_walked = wants_conflict && fill_pnam() && can_sort_info() && sort_info();
+    let mut results = if wants_conflict && !statuses_as_walked {
         let mut records = Vec::new();
         let mut current = tree.get_last(None);
         while let Some(id) = current {
+            tree.init_node(id);
             if let Some(record) = tree.data(id).element.as_ref().and_then(record_of) {
                 records.push(record);
             }
@@ -1511,7 +1564,6 @@ pub fn apply_filter_scripted(
     } else {
         ConflictResults::default()
     };
-    report.messages = results.messages.clone();
 
     // `TopLevelGroups`: the top level groups of the signatures asked for
     // stay, the others go.
@@ -1543,9 +1595,17 @@ pub fn apply_filter_scripted(
     let mut pers_cell_checked = false;
     let mut pers_cell: Option<NodeId> = None;
     let mut current = tree.get_last(None);
+    if let Some(id) = current {
+        tree.init_node(id);
+    }
     while let Some(id) = current {
         report.pass1 += 1;
+        // `NextNode := vstNav.GetPrevious(Node)` initialises the next node
+        // before the conflict check of this one.
         let mut next = tree.get_previous(id);
+        if let Some(next) = next {
+            tree.init_node(next);
+        }
         let mut found_any = false;
         let Some(element) = tree.data(id).element.clone() else {
             // A node without an element (the child group of a record) goes.
@@ -1603,6 +1663,13 @@ pub fn apply_filter_scripted(
                 continue;
             }
             if check_conflict || options.inherit_conflict_by_parent {
+                // `ConflictLevelForMainRecord` returns the status cached on
+                // the record when there is one.
+                if statuses_as_walked && !results.has_status(&record) {
+                    let found = conflict_statuses_of(std::slice::from_ref(&record), files, &conflict_options);
+                    results.statuses.extend(found.statuses);
+                    results.messages.extend(found.messages);
+                }
                 let status = results.status(&record);
                 let data = tree.data_mut(id);
                 data.conflict_all = status.all;
@@ -1717,6 +1784,8 @@ pub fn apply_filter_scripted(
         }
         current = next;
     }
+
+    report.messages = results.messages.clone();
 
     // ----- Pass 2: `CheckFilterNode(True)` on the nodes without children
     // and the records left per file. -----

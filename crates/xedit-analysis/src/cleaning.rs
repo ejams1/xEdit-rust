@@ -153,8 +153,14 @@ fn walk(tree: &mut NavTree, start: NodeId, mut visit: impl FnMut(&mut NavTree, N
     if current == Some(start) {
         return 0;
     }
+    if let Some(id) = current {
+        tree.init_node(id);
+    }
     while let Some(id) = current {
         let next = tree.get_previous(id);
+        if let Some(next) = next {
+            tree.init_node(next);
+        }
         visit(tree, id);
         count += 1;
         current = next.filter(|&next| next != start);

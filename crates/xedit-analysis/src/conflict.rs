@@ -1424,6 +1424,11 @@ impl ConflictResults {
     pub fn status(&self, record: &MainRecordImpl) -> ConflictStatus {
         self.statuses.get(&record_id(record)).copied().unwrap_or_default()
     }
+
+    /// Whether `record` was compared.
+    pub fn has_status(&self, record: &MainRecordImpl) -> bool {
+        self.statuses.contains_key(&record_id(record))
+    }
 }
 
 /// A node of the view tab: its cells, its rows and whether the view shows
