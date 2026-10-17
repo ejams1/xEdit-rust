@@ -238,6 +238,13 @@ fn check() -> Result<()> {
             if entry.status == "excluded" && entry.note.is_none() {
                 problems.push(format!("{LEDGER_FILE}: {kind} {key}: excluded needs a note"));
             }
+            // An open entry names who owns it, so no functional gap is left
+            // without an owner (parity #41): an issue (`#N`) or a phase.
+            if entry.status == "pending" && !entry.note.as_deref().is_some_and(names_an_owner) {
+                problems.push(format!(
+                    "{LEDGER_FILE}: {kind} {key}: pending needs a note that names its owner (an issue #N or a phase)"
+                ));
+            }
         }
         let open = entries.values().filter(|e| e.status == "pending").count();
         println!("{kind}: {} entries, {open} pending", entries.len());
@@ -250,6 +257,16 @@ fn check() -> Result<()> {
     }
     ensure!(problems.is_empty(), "{} problem(s) found", problems.len());
     Ok(())
+}
+
+/// Whether a ledger note names the owner of an open entry: an issue
+/// (`#` and a number) or a phase (`phase` and a number).
+fn names_an_owner(note: &str) -> bool {
+    let has_number_after = |marker: &str| {
+        note.match_indices(marker)
+            .any(|(at, _)| note[at + marker.len()..].starts_with(|c: char| c.is_ascii_digit()))
+    };
+    has_number_after("#") || has_number_after("phase ") || has_number_after("Phase ")
 }
 
 fn sync(upstream: &Path, commit: Option<&str>) -> Result<()> {
