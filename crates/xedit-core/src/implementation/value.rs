@@ -637,12 +637,14 @@ impl ValueImpl {
     /// Port of `DoInit`: builds the children once.
     pub fn do_init(&self) {
         self.vb.init.run(|| self.init());
+        // `DoInit` of a container a reset left: `csInit` again.
+        self.vb.container.stamp_init();
     }
 
     /// The body of the init, which `SetDataSize` runs again while the init
     /// runs (from an `AfterLoad` callback).
     fn init(&self) {
-        self.vb.container.set_init_once();
+        self.vb.container.stamp_init();
         {
             let Some((block, start, end)) = self.vb.data_source() else {
                 return;

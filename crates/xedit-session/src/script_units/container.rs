@@ -122,40 +122,55 @@ pub(crate) fn register(adapter: &mut Adapter, state: &Rc<RefCell<ScriptRunState>
             // read once and let go answers 1026 and one never read 1024.
             // The file and a group stay held. A main record and a subrecord
             // may reset while no element of theirs is referenced from
-            // outside (`cntElementRefs < 1`): the record a script holds a
-            // subrecord of, or the `DATA` it holds the value of, is 1031,
-            // the same after the reference is gone 1026 (`el-states`). A
-            // value (the record header) may reset only while nothing refers
-            // to the value itself (`eExternalRefs < 1`), and the script's
-            // reference is there while it asks: once read it is 1031.
-            // UPSTREAM-NOTE: the port does not reset on a release, so a
-            // value read, let go and asked about again answers 1031 where
-            // the oracle may have reset it to 1026.
+            // outside (`cntElementRefs < 1`), which the release of any
+            // reference to them does: the record a script holds a subrecord
+            // of, or the `DATA` it holds the value of, is 1031, the same
+            // after the reference is gone 1026 (`el-states`). A value (the
+            // record header) resets on the release of its last reference
+            // while nothing below it is held (`eExternalRefs < 1`), which
+            // `ScriptElement`'s drop stamps. The reset of a main record
+            // drops its members, so a member counts as read only when its
+            // stamp is from the current life of its record's members
+            // (`MainRecordImpl::member_epoch`), or when the record's own
+            // `Init` reads it (the `EDID`, 1026).
             let full = 1 | 2 | 4 | 1024;
             let element_impl = element.as_element_impl();
             let mut states: i32 = match element.get_element_type() {
                 xedit_core::interface::ElementType::etFile | xedit_core::interface::ElementType::etGroupRecord => full,
-                _ => {
-                    let held_by_elements = element_impl
-                        .and_then(|element| element.container_base())
-                        .is_some_and(|container| container.is_element_referenced());
-                    let (init_once, is_value) = match element_impl.and_then(|element| element.main_record_impl()) {
-                        Some(record) => (record.is_initialized(), false),
-                        None => (
-                            element_impl
-                                .and_then(|element| element.container_base())
-                                .is_some_and(|container| container.is_init_once()),
-                            element_impl.is_some_and(|element| element.value_impl().is_some()),
-                        ),
-                    };
-                    if !init_once {
-                        1024
-                    } else if is_value || held_by_elements {
-                        full
-                    } else {
-                        2 | 1024
+                _ => match element_impl.and_then(|element| element.main_record_impl()) {
+                    Some(record) => {
+                        let held_by_elements = element_impl
+                            .and_then(|element| element.container_base())
+                            .is_some_and(|container| container.is_element_referenced());
+                        if !record.is_initialized() {
+                            1024
+                        } else if held_by_elements {
+                            full
+                        } else {
+                            2 | 1024
+                        }
                     }
-                }
+                    None => match element_impl.and_then(|element| element.container_base()) {
+                        Some(container) => {
+                            let epoch = owning_record_epoch(&element);
+                            let init_once = container.init_seq() != 0
+                                && (container.is_owner_init() || container.init_seq() >= epoch);
+                            let is_value = element_impl.is_some_and(|element| element.value_impl().is_some());
+                            if !init_once {
+                                1024
+                            } else if if is_value {
+                                container.is_init_live()
+                            } else {
+                                container.is_element_referenced()
+                            } {
+                                full
+                            } else {
+                                2 | 1024
+                            }
+                        }
+                        None => 1024,
+                    },
+                },
             };
             if let Some(file) = element.get_file()
                 && file.get_file_states().contains(FileState::fsRefsBuild)
@@ -559,4 +574,21 @@ pub(crate) fn register(adapter: &mut Adapter, state: &Rc<RefCell<ScriptRunState>
         ],
         VarType::Empty,
     );
+}
+
+/// The first stamp of the current life of the members of the main record
+/// `element` is a member of (`MainRecordImpl::member_epoch`), 0 when it is
+/// no member of one.
+fn owning_record_epoch(element: &xedit_core::interface::ElementRef) -> u64 {
+    let mut current = element.get_container();
+    while let Some(container) = current {
+        if let Some(record) = container
+            .as_element_impl()
+            .and_then(|element| element.main_record_impl())
+        {
+            return record.member_epoch();
+        }
+        current = container.get_container();
+    }
+    0
 }

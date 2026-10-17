@@ -500,6 +500,8 @@ impl MainRecordImpl {
             mr_storage_invalid: std::sync::atomic::AtomicBool::new(true),
             mr_collapsed: super::CollapsedData::default(),
             mr_duplicate: std::sync::atomic::AtomicBool::new(false),
+            mr_member_refs: std::sync::atomic::AtomicUsize::new(0),
+            mr_member_epoch: std::sync::atomic::AtomicU64::new(0),
             mr_index_keys: std::sync::Mutex::new(None),
             mr_refs: Default::default(),
             mr_referenced_by: Default::default(),

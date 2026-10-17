@@ -274,12 +274,14 @@ impl SubRecordImpl {
     /// `DoInit(True)` ([`Self::sorted_init`]) sorts them.
     pub fn do_init(&self) {
         self.sr_init.run(|| self.init());
+        // `DoInit` of a container a reset left: `csInit` again.
+        self.container.stamp_init();
     }
 
     /// The body of `TwbSubRecord.Init`, which `SetDataSize` runs again
     /// while the init runs (from an `AfterLoad` callback).
     fn init(&self) {
-        self.container.set_init_once();
+        self.container.stamp_init();
         {
             if self.skipped() {
                 return;

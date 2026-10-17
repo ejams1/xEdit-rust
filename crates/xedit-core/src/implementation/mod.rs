@@ -246,7 +246,7 @@ pub use write::{ElementState, ResetModified, SaveError};
 
 use std::collections::HashMap;
 use std::path::Path;
-use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, OnceLock, RwLock, Weak};
 
 use xedit_io::collate::ansi_compare_text;
@@ -633,13 +633,32 @@ pub struct ContainerBase {
     /// `SetIsSortedBySortOrder`), which an assign at a sort order of an
     /// alignable array reads (`AlignedCreate`).
     pub(crate) cnt_sorted_by_sort_order: AtomicBool,
-    /// Port of `csInitOnce` of a subrecord or a value: `DoInit` ran once.
-    /// Unlike `csInit` and `csInitDone`, which the reset of the container
-    /// excludes when the last reference to it is released, the bit stays,
-    /// so `ContainerStates` of a member read once answers it (an `EDID`,
-    /// which the record's own `Init` reads, is 1026 in the `el-states`
-    /// probe).
-    cnt_init_once: AtomicBool,
+    /// The `DoInit` of a subrecord or a value, as the [`INIT_SEQUENCE`]
+    /// number of its last call (0: never). Upstream a member read once holds
+    /// `csInitOnce`; `DoReset` excludes `csInit` and `csInitDone` again but
+    /// keeps that bit, and the reset of its main record drops the member
+    /// altogether, so the member the next access builds starts without it.
+    /// The port keeps its members, so a member counts as initialised in
+    /// the current life of its record only when this number is not below
+    /// the record's [`MainRecordImpl::member_epoch`].
+    cnt_init_seq: AtomicU64,
+    /// The [`INIT_SEQUENCE`] number of the last reset of a value on the
+    /// release of its last reference (`TwbContainer._Release`): `csInit` and
+    /// `csInitDone` hold while [`ContainerBase::init_seq`] is not below it.
+    cnt_reset_seq: AtomicU64,
+    /// The member was initialised by its main record's own `Init` (the
+    /// record's editor ID), which every rebuild of the members repeats.
+    cnt_owner_init: AtomicBool,
+}
+
+/// The sequence the init and reset stamps of [`ContainerBase`] and the
+/// member epochs of [`MainRecordImpl`] are numbered by: a stamp taken
+/// after an event is never below that event's number.
+static INIT_SEQUENCE: AtomicU64 = AtomicU64::new(1);
+
+/// A new number of [`INIT_SEQUENCE`], above every stamp taken so far.
+fn next_init_sequence() -> u64 {
+    INIT_SEQUENCE.fetch_add(1, Ordering::Relaxed) + 1
 }
 
 impl ContainerBase {
@@ -711,14 +730,46 @@ impl ContainerBase {
             .any(|element| Arc::strong_count(element) > 1)
     }
 
-    /// `csInitOnce in cntStates` for a subrecord or a value.
-    pub fn is_init_once(&self) -> bool {
-        self.cnt_init_once.load(Ordering::Relaxed)
+    /// Whether a descendant of the container is referenced from outside
+    /// (upstream the reference of the descendant holds its container
+    /// through `eContainerRef`, up to this one: `cntElementRefs > 0`).
+    pub fn is_subtree_referenced(&self) -> bool {
+        self.cnt_elements.read().unwrap().iter().any(|element| {
+            Arc::strong_count(element) > 1
+                || element
+                    .as_element_impl()
+                    .and_then(|element| element.container_base())
+                    .is_some_and(ContainerBase::is_subtree_referenced)
+        })
     }
 
-    /// `Include(cntStates, csInitOnce)` of `DoInit`.
-    pub(crate) fn set_init_once(&self) {
-        self.cnt_init_once.store(true, Ordering::Relaxed);
+    /// The [`INIT_SEQUENCE`] number of the last `DoInit` of a subrecord or
+    /// a value, 0 for none.
+    pub fn init_seq(&self) -> u64 {
+        self.cnt_init_seq.load(Ordering::Relaxed)
+    }
+
+    /// `csInit in cntStates` of a value: initialised and not reset since.
+    pub fn is_init_live(&self) -> bool {
+        self.init_seq() >= self.cnt_reset_seq.load(Ordering::Relaxed)
+    }
+
+    /// Whether the main record's own `Init` initialised the member.
+    pub fn is_owner_init(&self) -> bool {
+        self.cnt_owner_init.load(Ordering::Relaxed)
+    }
+
+    /// `Include(cntStates, csInit/csInitOnce/csInitDone)` of `DoInit`: the
+    /// stamp of the current number.
+    pub(crate) fn stamp_init(&self) {
+        self.cnt_init_seq
+            .store(INIT_SEQUENCE.load(Ordering::Relaxed), Ordering::Relaxed);
+    }
+
+    /// `DoReset` of a value whose last reference was released: `csInit`
+    /// and `csInitDone` go, `csInitOnce` stays.
+    pub fn stamp_reset(&self) {
+        self.cnt_reset_seq.store(next_init_sequence(), Ordering::Relaxed);
     }
 
     /// `csSortedBySortOrder in cntStates`.
@@ -2540,6 +2591,17 @@ pub struct MainRecordImpl {
     /// A record that repeats the FormID of the record before it, which
     /// upstream skips on load.
     mr_duplicate: AtomicBool,
+    /// The references from outside to the members of the record (a script's
+    /// element values below it): upstream each holds the record through the
+    /// `eContainerRef` chain (`cntElementRefs`), and the release of the
+    /// last resets the record, which drops its members (`ElementRelease`,
+    /// `DoReset`, `CanElementReset` of a main record).
+    mr_member_refs: AtomicUsize,
+    /// The [`INIT_SEQUENCE`] number the current life of the members began
+    /// with: the first reference to a member after the record reset. A
+    /// member whose last `DoInit` stamp is below it is, upstream, a member
+    /// built anew that nothing has read.
+    mr_member_epoch: AtomicU64,
     /// Port of `mrIndexKeys` with `mrsIndexKeysActive`: the keys the record
     /// has in the named indices of its file, `Some` once they are active.
     mr_index_keys: std::sync::Mutex<Option<IndexKeys>>,
@@ -2614,6 +2676,8 @@ impl MainRecordImpl {
             mr_position_generation: AtomicI32::new(0),
             mr_collapsed: CollapsedData::default(),
             mr_duplicate: AtomicBool::new(duplicate),
+            mr_member_refs: AtomicUsize::new(0),
+            mr_member_epoch: AtomicU64::new(0),
             mr_index_keys: std::sync::Mutex::new(None),
             mr_refs: Default::default(),
             mr_referenced_by: Default::default(),
@@ -3153,7 +3217,46 @@ impl MainRecordImpl {
     /// Port of `DoInit`: builds the subrecords once. Returns whether this
     /// call built them.
     pub fn do_init(self: &Arc<Self>) -> bool {
-        self.mr_init.run(|| self.build())
+        let built = self.mr_init.run(|| self.build());
+        if built {
+            // The members the record's own `Init` read (its editor ID):
+            // upstream every rebuild of the members reads them again.
+            for element in self.container.elements() {
+                if let Some(container) = element.as_element_impl().and_then(|element| element.container_base())
+                    && container.init_seq() != 0
+                {
+                    container.cnt_owner_init.store(true, Ordering::Relaxed);
+                }
+            }
+        }
+        built
+    }
+
+    /// The first [`INIT_SEQUENCE`] number of the current life of the
+    /// record's members (see [`MainRecordImpl::acquire_member_ref`]).
+    pub fn member_epoch(&self) -> u64 {
+        self.mr_member_epoch.load(Ordering::Relaxed)
+    }
+
+    /// A reference from outside to a member of the record was taken. The
+    /// first one after none begins a new life of the members: upstream the
+    /// release of the last reference before it reset the record
+    /// (`ElementRelease` of `TwbContainer`, `cntElementRefs` at zero), and
+    /// so did the release of any reference to the record while no member
+    /// was held (`TwbContainer._Release`), so what was read before is gone.
+    /// A modified record is not reset (`DoReset` exits on `esModified`).
+    pub fn acquire_member_ref(&self) {
+        if self.mr_member_refs.fetch_add(1, Ordering::Relaxed) == 0 && !self.base.has_state(ElementState::esModified) {
+            self.mr_member_epoch.store(next_init_sequence(), Ordering::Relaxed);
+        }
+    }
+
+    /// The release of a reference [`MainRecordImpl::acquire_member_ref`]
+    /// counted.
+    pub fn release_member_ref(&self) {
+        let _ = self
+            .mr_member_refs
+            .try_update(Ordering::Relaxed, Ordering::Relaxed, |count| count.checked_sub(1));
     }
 
     /// The init of `do_init`.
