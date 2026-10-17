@@ -1151,7 +1151,10 @@ impl VclModel {
                 if self.is_a(&active, "TCheckListBox") {
                     // `TCheckListBox.KeyPress` toggles the entry at
                     // `ItemIndex`; nothing happens while nothing is selected.
-                    let index = self.prop_i32(&active, "ItemIndex", -1);
+                    // A multi-select list nobody moved has its caret on the
+                    // first entry (parity #41: `Copy as override.pas` checks
+                    // `<new file>` with one Space, as the release does).
+                    let index = self.prop_i32(&active, "ItemIndex", self.default_item_index(&active));
                     if index >= 0 {
                         let index = index as usize;
                         let mut borrowed = active.borrow_mut();
