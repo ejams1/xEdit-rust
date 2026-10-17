@@ -636,7 +636,12 @@ impl ValueImpl {
 
     /// Port of `DoInit`: builds the children once.
     pub fn do_init(&self) {
-        self.vb.init.run(|| self.init());
+        self.vb.init.run(|| {
+            self.init();
+            // `TwbContainer.DoInit` after `Init`: every element takes its
+            // position as its memory order.
+            super::reset_memory_orders(&self.vb.container);
+        });
         // `DoInit` of a container a reset left: `csInit` again.
         self.vb.container.stamp_init();
     }

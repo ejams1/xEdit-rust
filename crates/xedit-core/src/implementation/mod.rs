@@ -298,6 +298,19 @@ impl FileBytes {
 
 pub use crate::threads::InitOnce;
 
+/// The loop of `TwbContainer.DoInit` after `Init`: every element of the
+/// container takes its position as its memory order.
+pub(crate) fn reset_memory_orders(container: &ContainerBase) {
+    for (index, element) in container.elements().iter().enumerate() {
+        if let Some(element) = element.as_element_impl() {
+            element
+                .element_base()
+                .e_memory_order
+                .store(index as i32, Ordering::Relaxed);
+        }
+    }
+}
+
 /// Runs `work` with the sorted arrays keeping their order (see `NO_SORT`).
 pub(crate) fn without_sorting<T>(work: impl FnOnce() -> T) -> T {
     let outer = NO_SORT.with(|no_sort| no_sort.replace(true));
