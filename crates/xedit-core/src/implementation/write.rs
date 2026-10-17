@@ -449,11 +449,49 @@ impl super::sub_record::SubRecordImpl {
 // ----- group records -----
 
 impl GroupRecordImpl {
+    /// The data of the group as loaded, after its header: `None` for a
+    /// group an edit made, or when the bytes at its range are not the group
+    /// the file was read with.
+    fn loaded_data(&self) -> Option<(Arc<FileImpl>, std::ops::Range<usize>)> {
+        if self.dc_end <= self.dc_base {
+            return None;
+        }
+        let file = self.file.upgrade()?;
+        let bytes = file.fl_bytes.as_slice();
+        let group = bytes.get(self.dc_base..self.dc_end)?;
+        let header_size = size_of_main_record_struct() as usize;
+        let size = u32::from_le_bytes(group.get(4..8)?.try_into().ok()?) as usize;
+        if group.get(..4)? != b"GRUP" || size != group.len() || group.len() < header_size {
+            return None;
+        }
+        Some((file.clone(), self.dc_base + header_size..self.dc_end))
+    }
+
     /// Port of `TwbGroupRecord.WriteToStreamInternal`: the header, the
     /// elements, and the size patched when the group changed.
     pub(crate) fn write_to_stream_impl(&self, out: &mut Vec<u8>, reset: ResetModified) -> Result<(), SaveError> {
         let start = out.len();
         out.extend_from_slice(&self.gr_struct().to_bytes());
+        // `TwbDataContainer.WriteToStreamInternal`: a group that is not
+        // modified writes its data as loaded, whatever order its elements
+        // were sorted into since (a topic's responses that the navigation
+        // tree sorted by their `PNAM` links keep the order of the file). A
+        // modified child always modifies its group; the check of the
+        // children only keeps a stale state of the port from writing old
+        // bytes.
+        if !self.base.has_state(ElementState::esModified)
+            && !self.gr_storage_invalid.load(Ordering::Relaxed)
+            && let Some((file, range)) = self.loaded_data()
+            && !self.container.elements().iter().any(|child| {
+                child
+                    .as_element_impl()
+                    .is_some_and(|child| child.element_base().has_state(ElementState::esModified))
+            })
+        {
+            out.extend_from_slice(&file.fl_bytes.as_slice()[range]);
+            self.base.reset_modified(reset);
+            return Ok(());
+        }
         for child in self.container.elements() {
             child
                 .as_element_impl()

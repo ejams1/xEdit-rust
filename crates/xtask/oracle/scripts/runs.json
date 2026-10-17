@@ -1038,6 +1038,15 @@
         "FillPNAM"
       ],
       "note": "parity #35 probe: the same with the PNAM fill of the quick clean modes (-FillPNAM)"
+    },
+    {
+      "script": "probes/topic-sort.pas",
+      "game": "fo3",
+      "load": [
+        "Fallout3.esm",
+        "BrokenSteel.esm"
+      ],
+      "note": "parity #35 probe: the order the sort of the HELLO topic's responses gives in each file and the INOM and INOA lists it gives the topic"
     }
   ]
 }
