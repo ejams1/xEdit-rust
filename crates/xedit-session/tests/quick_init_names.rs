@@ -10,7 +10,7 @@
 use xedit_core::implementation::{FileBytes, wb_file_from_bytes};
 use xedit_core::interface::globals::test_lock;
 use xedit_core::interface::types::FileStates;
-use xedit_core::interface::{Container, Element, File, FormID, MainRecord};
+use xedit_core::interface::{File, FormID};
 
 fn sub_record(signature: &[u8; 4], data: &[u8]) -> Vec<u8> {
     let mut bytes = signature.to_vec();

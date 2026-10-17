@@ -13,8 +13,8 @@ use xedit_core::implementation::{FileBytes, wb_file_from_bytes};
 use xedit_core::interface::globals::test_lock;
 use xedit_core::interface::types::FileStates;
 use xedit_core::interface::{
-    ConflictPriority, Container, DataPtr, Element, ElementArg, File, FormID, IntType, RecordMemberDef, Signature,
-    ValueDef, wb_float, wb_integer, wb_record, wb_struct, wb_struct_z, wb_sub_record_signature,
+    ConflictPriority, DataPtr, ElementArg, File, FormID, IntType, RecordMemberDef, Signature, ValueDef, wb_float,
+    wb_integer, wb_record, wb_struct, wb_struct_z, wb_sub_record_signature,
 };
 
 fn sub_record(signature: &[u8; 4], data: &[u8]) -> Vec<u8> {
