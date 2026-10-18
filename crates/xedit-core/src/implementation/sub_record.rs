@@ -909,8 +909,8 @@ pub struct SubRecordArrayImpl {
     self_ref: Weak<SubRecordArrayImpl>,
     pub(super) base: ElementBase,
     pub(super) container: ContainerBase,
-    file: Weak<super::FileImpl>,
-    arc_def: Arc<dyn RecordMemberDef>,
+    pub(super) file: Weak<super::FileImpl>,
+    pub(super) arc_def: Arc<dyn RecordMemberDef>,
     /// Port of `arcSorted`: the definition sorts the members (under
     /// `wbSortSubRecords`).
     arc_sorted: AtomicBool,
@@ -929,8 +929,8 @@ pub struct SubRecordStructImpl {
     self_ref: Weak<SubRecordStructImpl>,
     pub(super) base: ElementBase,
     pub(super) container: ContainerBase,
-    file: Weak<super::FileImpl>,
-    src_def: Arc<dyn RecordMemberDef>,
+    pub(super) file: Weak<super::FileImpl>,
+    pub(super) src_def: Arc<dyn RecordMemberDef>,
 }
 
 /// Port of `TwbSubRecordArray.Create` with `DoProcess`: takes the subrecords
@@ -2898,6 +2898,10 @@ impl ElementImpl for SubRecordStructImpl {
 
     fn add_impl(&self, name: &str, _silent: bool) -> Result<Option<ElementRef>, EditError> {
         self.add_by_name(name)
+    }
+
+    fn sub_record_struct_impl(&self) -> Option<&SubRecordStructImpl> {
+        Some(self)
     }
 
     fn assign_internal(

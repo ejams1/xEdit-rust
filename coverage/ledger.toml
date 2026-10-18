@@ -1497,9 +1497,10 @@ source = "mniMainSaveClick"
 note = "Saves one file per call; the dialog that picks several files is presentation."
 
 [gui."xEdit/xeMainForm.dfm:mniMarkallfileswithoutONAMasmodified:OnClick"]
-status = "pending"
+status = "covered"
+command = "files.mark_modified_headers"
 source = "mniMarkallfileswithoutONAMasmodifiedClick"
-note = "Owned by issue #78 (GUI operations without a typed command): mark the header of every editable file without ONAM modified (MarkHeaderModified)"
+note = "MarkHeaderModified of every editable file without ONAM (mniMarkallfileswithoutONAMasmodifiedClick); files.mark_modified_headers. No oracle scenario: the clean-scenarios harness clicks only the cleaning items and the script harness cannot drive this item on the port side; the port test checks the file list and the header's esModified."
 
 [gui."xEdit/xeMainForm.dfm:mniMasterAndLeafsDisabled:OnClick"]
 status = "covered"
@@ -1668,14 +1669,16 @@ source = "mniNavCopyIntoClick"
 note = "The overwrite parameter (aAllowOverwrite with wbCanOverwrite); the overwrite and deleted-source questions of the GUI are answer parameters (remove_deleted)."
 
 [gui."xEdit/xeMainForm.dfm:mniNavCopyAsSpawnRateOverride:OnClick"]
-status = "pending"
+status = "covered"
+command = "records.copy"
 source = "mniNavCopyIntoClick"
-note = "Owned by issue #78 (GUI operations without a typed command): CopyInto as a spawn rate override"
+note = "CopyInto's AsSpawnRate branch through AfterCopyAdjustSpawnRate (mniNavCopyIntoClick for mniNavCopyAsSpawnRateOverride); records.copy as_spawn_rate. UPSTREAM-QUIRK: the callback takes the entries named 'LVLO - Leveled List Entry', but the elements of 'Leveled List Entries' are SubRecordStructs named 'Leveled List Entry', so nothing matches and the release's item copies the record as a plain override; the port follows it and its test checks that the copy keeps the source's single entry. No oracle scenario: neither harness can drive the item."
 
 [gui."xEdit/xeMainForm.dfm:mniNavCopyAsWrapper:OnClick"]
-status = "pending"
+status = "covered"
+command = "records.copy"
 source = "mniNavCopyIntoClick"
-note = "Owned by issue #78 (GUI operations without a typed command): CopyInto as a wrapper record"
+note = "CopyInto's AsWrapper branch (mniNavCopyIntoClick for mniNavCopyAsWrapper): a new record with the InputQuery's EditorID, then an override cleared and given one leveled list entry that points to the wrapper with level and count 1; records.copy as_wrapper with wrapper_editor_id. The item is offered for LVLB, LVLC, LVLI, LVLN, LVLP, LVSC and LVSP (not in Fallout 76 or Morrowind). No oracle scenario: clean-scenarios drives only the cleaning items and the script harness cannot click this item on the port side, so it is pinned to CopyInto and the port test, which checks the wrapper record and the override's single entry."
 
 [gui."xEdit/xeMainForm.dfm:mniNavCopyIdle:OnClick"]
 status = "pending"
@@ -1829,9 +1832,10 @@ source = "mniNavLocalizationSwitchClick"
 note = "Localize plugin is localization.localize (with the translation of TfrmLocalizePlugin), Delocalize plugin is localization.delocalize; the GUI closes itself afterwards, the command leaves the save to files.save."
 
 [gui."xEdit/xeMainForm.dfm:mniNavMarkModified:OnClick"]
-status = "pending"
+status = "covered"
+command = "elements.mark_modified"
 source = "mniNavMarkModifiedClick"
-note = "Owned by issue #78 (GUI operations without a typed command): mark the selected elements modified (MarkModifiedRecursive), so the save writes them"
+note = "Element.MarkModifiedRecursive(AllElementTypes) of every selected element (mniNavMarkModifiedClick); elements.mark_modified over the element or the record. No oracle scenario: the mark changes only element states, not saved bytes (a modified record writes its loaded data), and the harnesses above cannot click the item; the port test checks the esModified state of the record and its DATA."
 
 [gui."xEdit/xeMainForm.dfm:mniNavOptions:OnClick"]
 status = "presentation"
@@ -1932,9 +1936,10 @@ command = "records.copy"
 source = "mniRefByCopyIntoClick"
 
 [gui."xEdit/xeMainForm.dfm:mniRefByCopyDisabledOverrideInto:OnClick"]
-status = "pending"
+status = "covered"
+command = "records.copy"
 source = "mniRefByCopyDisabledOverrideIntoClick"
-note = "Owned by issue #78 (GUI operations without a typed command): copy the selected referencing references as disabled overrides (initially disabled, enable parent opposite of the player, moved below the world)"
+note = "CopyInto with AfterCopyDisable (mniRefByCopyDisabledOverrideIntoClick): IsInitiallyDisabled := True on every copied record; records.copy disable. The 4.1.5q callback sets no enable parent and moves nothing below the world, unlike the older description in this entry's note; the port follows the release. No oracle scenario: neither harness can drive the item; the port test checks the flag."
 
 [gui."xEdit/xeMainForm.dfm:mniRefByCopyOverrideInto:OnClick"]
 status = "covered"
@@ -1959,9 +1964,10 @@ source = "mniRefByCopyIntoClick"
 note = "CopyInto of the selected referencing records as overrides with overwrite (and deep for the deep item)."
 
 [gui."xEdit/xeMainForm.dfm:mniRefByMarkModified:OnClick"]
-status = "pending"
+status = "covered"
+command = "elements.mark_modified"
 source = "mniRefByMarkModifiedClick"
-note = "Owned by issue #78 (GUI operations without a typed command): mark the selected referencing records modified"
+note = "MarkModifiedRecursive(AllElementTypes) of the selected referencing records (mniRefByMarkModifiedClick); elements.mark_modified, the same command as the navigation item. No oracle scenario: states only, not saved bytes; the port test covers the operation."
 
 [gui."xEdit/xeMainForm.dfm:mniRefByNotVWD:OnClick"]
 status = "pending"
@@ -1997,9 +2003,10 @@ source = "mniViewAddClick"
 note = "Add of a member, an array entry or a child record at the focused element."
 
 [gui."xEdit/xeMainForm.dfm:mniViewClear:OnClick"]
-status = "pending"
+status = "covered"
+command = "elements.clear"
 source = "mniViewClearClick"
-note = "Owned by issue #78 (GUI operations without a typed command): Element.Clear of the focused element"
+note = "Element.Clear of the focused element (mniViewClearClick: TwbArray.GetIsClearable then TwbArray.Clear, the elements removed from the last); elements.clear. No oracle scenario: the clean-scenarios harness clicks only the cleaning items, and the script harness cannot drive this item on the port side (the port's frmMain model has no menu components); the port test clears a Fallout 4 XCRI meshes array and checks the count and the dry run."
 
 [gui."xEdit/xeMainForm.dfm:mniViewClipboard:OnClick"]
 status = "presentation"
@@ -2033,14 +2040,16 @@ source = "mniViewCompareReferencedRowClick"
 note = "The view of the records the focused row's references point to; records.compare_selected takes those FormIDs."
 
 [gui."xEdit/xeMainForm.dfm:mniViewCopyMultipleToSelectedRecords:OnClick"]
-status = "pending"
+status = "covered"
+command = "elements.copy_to_records"
 source = "mniViewCopyMultipleToSelectedRecordsClick"
-note = "Owned by issue #78 (GUI operations without a typed command): copy the selected elements into the records of the other view columns"
+note = "wbCopyElementToRecord(Element, MainRecords[i], False, True) of each selected row into each selected record, and Element.Remove of a row the focused record has not (mniViewCopyMultipleToSelectedRecordsClick); elements.copy_to_records mode=copy, remove_missing removes a row the source record lacks. No oracle scenario: neither harness drives the view; the port test copies an EDID into another file's record."
 
 [gui."xEdit/xeMainForm.dfm:mniViewCopyToSelectedRecords:OnClick"]
-status = "pending"
+status = "covered"
+command = "elements.copy_to_records"
 source = "mniViewCopyToSelectedRecordsClick"
-note = "Owned by issue #78 (GUI operations without a typed command): copy the focused element into the records of the other view columns chosen in a file selection"
+note = "PerformDrop of the focused element onto the chosen view columns: TargetElement.Assign(wbAssignThis, SourceElement, False) after AddRequiredMasters (mniViewCopyToSelectedRecordsClick); elements.copy_to_records mode=assign. No oracle scenario: the file selection dialog is presentation and neither harness drives the view; the port test assigns the DATA of one override into another file's record."
 
 [gui."xEdit/xeMainForm.dfm:mniViewCreateModGroup:OnClick"]
 status = "covered"
@@ -2073,9 +2082,10 @@ source = "mniViewHeaderCopyIntoClick"
 note = "CopyInto of the record of a view column: as_new, deep and overwrite are the parameters."
 
 [gui."xEdit/xeMainForm.dfm:mniViewHeaderCopyAsWrapper:OnClick"]
-status = "pending"
+status = "covered"
+command = "records.copy"
 source = "mniViewHeaderCopyIntoClick"
-note = "Owned by issue #78 (GUI operations without a typed command): CopyInto as a wrapper record, from a view column"
+note = "CopyInto's AsWrapper branch of a view column's record header (mniViewHeaderCopyIntoClick with mniViewHeaderCopyAsWrapper); records.copy as_wrapper. No oracle scenario; the port test covers the command."
 
 [gui."xEdit/xeMainForm.dfm:mniViewHeaderDeepCopyAsOverride:OnClick"]
 status = "covered"
@@ -2135,14 +2145,16 @@ command = "elements.move"
 source = "mniViewMoveUpClick"
 
 [gui."xEdit/xeMainForm.dfm:mniViewNextMember:OnClick"]
-status = "pending"
+status = "covered"
+command = "elements.change_member"
 source = "mniViewNextMemberClick"
-note = "Owned by issue #78 (GUI operations without a typed command): NextMember/PreviousMember: switch the member of the focused union"
+note = "Element.NextMember of the focused element (mniViewNextMemberClick, TwbContainer.ChangeElementMember wrapping around); elements.change_member direction=next. No oracle scenario: neither harness can click the view item, and the release's own handler is the reference; the port test switches the XWCN member of a cell's Water Current Velocities to XWCS and back with direction=previous."
 
 [gui."xEdit/xeMainForm.dfm:mniViewPreviousMember:OnClick"]
-status = "pending"
+status = "covered"
+command = "elements.change_member"
 source = "mniViewPreviousMemberClick"
-note = "Owned by issue #78 (GUI operations without a typed command): NextMember/PreviousMember: switch the member of the focused union"
+note = "Element.PreviousMember of the focused element (mniViewPreviousMemberClick, TwbContainer.ChangeElementMember aPrevious=True); elements.change_member direction=previous, the same command as Next Member. No oracle scenario; the port test covers the operation."
 
 [gui."xEdit/xeMainForm.dfm:mniViewRemove:OnClick"]
 status = "covered"
@@ -2151,9 +2163,10 @@ source = "mniViewRemoveClick"
 note = "Remove of the focused element."
 
 [gui."xEdit/xeMainForm.dfm:mniViewRemoveFromSelected:OnClick"]
-status = "pending"
+status = "covered"
+command = "elements.remove_from_records"
 source = "mniViewRemoveFromSelectedClick"
-note = "Owned by issue #78 (GUI operations without a typed command): remove the focused row's element from every record of the view"
+note = "Element.Remove of the focused row's element in every record of the view, each one that IsRemovable (mniViewRemoveFromSelectedClick); elements.remove_from_records. No oracle scenario: neither harness drives the view; the port test removes an entry of a form ID list from another file's record."
 
 [gui."xEdit/xeMainForm.dfm:mniViewSetToDefault:OnClick"]
 status = "covered"

@@ -162,6 +162,27 @@ pub trait Element: Send + Sync {
     /// Upstream `Remove`: the element leaves its container.
     fn remove(&self) {}
 
+    /// Upstream `NextMember`: the element takes the next member of its
+    /// union, or stays itself when it can not change its member.
+    fn next_member(&self) -> Option<ElementRef> {
+        self.as_element_impl()
+            .and_then(|element| crate::implementation::member::change_element_member(element, false))
+    }
+
+    /// Upstream `PreviousMember`: the element takes the previous member of
+    /// its union, or stays itself when it can not change its member.
+    fn previous_member(&self) -> Option<ElementRef> {
+        self.as_element_impl()
+            .and_then(|element| crate::implementation::member::change_element_member(element, true))
+    }
+
+    /// Upstream `CanChangeMember`: whether [`next_member`](Self::next_member)
+    /// and [`previous_member`](Self::previous_member) change the element.
+    fn get_can_change_member(&self) -> bool {
+        self.as_element_impl()
+            .is_some_and(crate::implementation::member::can_change_member)
+    }
+
     /// Upstream `SortOrder`.
     fn get_sort_order(&self) -> i32 {
         i32::MAX
@@ -215,6 +236,17 @@ pub trait Element: Send + Sync {
 
     /// Upstream `MarkModifiedRecursive(AllElementTypes)`.
     fn mark_modified_recursive(&self) {}
+
+    /// Upstream `IsClearable`: whether `clear` takes the elements out. Only
+    /// a variable-size array whose elements are all removable is clearable
+    /// (`TwbArray.GetIsClearable`); every other element answers false.
+    fn get_is_clearable(&self) -> bool {
+        false
+    }
+
+    /// Upstream `Clear`: the elements of a clearable array are removed. A
+    /// no-op for every other element (`TwbElement.Clear`).
+    fn clear(&self) {}
 
     /// Upstream `Assign(wbAssignThis, aSource, False)`: the element takes
     /// the value of the source, member by member for a container. Upstream
@@ -526,6 +558,10 @@ pub trait MainRecord: Container {
     fn get_signature(&self) -> Signature;
 
     fn get_editor_id(&self) -> String;
+
+    /// Upstream `SetEditorID`: the editor ID subrecord takes the value,
+    /// added when it is missing.
+    fn set_editor_id(&self, value: &str) -> Result<(), EditError>;
 
     /// Upstream `ShortName`: the editor ID or the FormID of the record.
     fn get_short_name(&self) -> String;
