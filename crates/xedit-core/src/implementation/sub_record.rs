@@ -12,23 +12,27 @@ use std::sync::{Arc, RwLock, Weak};
 
 use crate::interface::def::{NamedDef, ValueDef};
 use crate::interface::element::{
-    Container, CopyArgs, DataContainer, DataPtr, Element, ElementRef, FileRef, MainRecord, MainRecordRef,
+    Container, CopyArgs, DataContainer, DataPtr, Element, ElementRef, File as FileInterface, FileRef, MainRecord,
+    MainRecordRef,
 };
 use crate::interface::form_id::FormID;
 use crate::interface::globals::{
-    always_fast_assign, compare_raw_data, edit_allowed, ignore_records, is_internal_edit, report_mode, sort_sub_records,
+    always_fast_assign, compare_raw_data, edit_allowed, ignore_records, is_internal_edit, report_mode,
+    signature_list_contains, sort_sub_records, sub_record_to_skip,
 };
 use crate::interface::misc::{EditError, Variant, progress};
 use crate::interface::sub_record::RecordMemberDef;
 use crate::interface::sub_record_group::RecordDef;
 use crate::interface::types::{
-    ASSIGN_ADD, ASSIGN_THIS, CallbackType, ConflictPriority, DefFlag, DefType, ElementType, KnownSubRecord, PascalEnum,
-    Signature, TriBool,
+    ASSIGN_ADD, ASSIGN_THIS, CallbackType, ConflictPriority, DefFlag, DefType, ElementType, FileState, KnownSubRecord,
+    PascalEnum, Signature, TriBool,
 };
 
 use super::edit::{self, Storage};
 use super::structs::SubRecordHeaderStruct;
-use super::value::{Cursor, array_do_init, create_value_element, resolve, struct_do_init, union_do_init};
+use super::value::{
+    Cursor, array_do_init, create_more_info_for_unknown, create_value_element, resolve, struct_do_init, union_do_init,
+};
 use super::{ContainerBase, DataBlock, ElementBase, ElementImpl, MainRecordImpl};
 
 /// Port of `TwbSubRecord`.
@@ -355,6 +359,7 @@ impl SubRecordImpl {
                         // a definition with a size advances the pointer past
                         // the value; a definition without one consumes the
                         // rest of the data.
+                        let value_start = cursor.pos;
                         let size = value_def.get_size(cursor.data(), Some(&self_ref));
                         if size == i32::MAX {
                             cursor.pos = cursor.end;
@@ -364,8 +369,19 @@ impl SubRecordImpl {
                             }
                             cursor.pos += size as usize;
                         }
-                        // `ValueDoInit` ends with `aResolvedDef.AfterLoad`.
+                        // `ValueDoInit` ends with `aResolvedDef.AfterLoad`,
+                        // then adds the more-info structures of an unknown
+                        // byte array.
                         value_def.after_load(&self_ref);
+                        let container_name = self.def().map_or_else(String::new, |def| def.get_name().to_owned());
+                        create_more_info_for_unknown(
+                            &self_ref,
+                            &self.file,
+                            &value_def,
+                            &container_name,
+                            &cursor.block,
+                            (value_start, cursor.end, data_source.is_some()),
+                        );
                     }
                 }
             } else {
@@ -1827,7 +1843,21 @@ pub(super) fn init_main_record(record: &Arc<MainRecordImpl>) -> bool {
             break;
         };
         let signature = sub_record.get_signature();
-        if ignored.contains(&signature) || record.mr_def.as_ref().is_some_and(|def| def.should_ignore(signature)) {
+        // The player reference record of a hardcoded file is upstream's
+        // `Add('PLYR')` followed by `EditorID := 'PlayerRef'`: its `EDID` is
+        // created by that edit, after the load, so the load skip list never
+        // marks it (`SubRecordToSkip` is applied while `Init` reads the
+        // bytes). The port appends the record's bytes before the scan
+        // (see `player_reference_group`), which would skip it.
+        let synthetic_player_edid = file.get_file_states().contains(FileState::fsIsHardcoded)
+            && record.mr_struct().signature == Signature::new(b"PLYR")
+            && record.mr_struct().form_id == FormID::from_cardinal(0x14)
+            && signature == Signature::new(b"EDID");
+        if !synthetic_player_edid
+            && (signature_list_contains(&ignored, signature)
+                || record.mr_def.as_ref().is_some_and(|def| def.should_ignore(signature))
+                || signature_list_contains(&sub_record_to_skip(), signature))
+        {
             sub_record.set_skipped(true);
         }
         sub_records.push(sub_record.get_display_signature());

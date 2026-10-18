@@ -621,6 +621,58 @@ enum Action {
         /// Load no archives for a localized plugin whose loose string tables are missing (xDump's -nobsa).
         #[arg(long)]
         no_bsa: bool,
+        /// Keep only these top level groups, by label (xDump's -dg:list).
+        #[arg(long, value_name = "LIST")]
+        dump_groups: Option<String>,
+        /// Keep the children of only these records, by signature (xDump's -dr:list).
+        #[arg(long, value_name = "LIST")]
+        dump_records: Option<String>,
+        /// Leave out the child groups of records with these signatures (xDump's -xcg:list).
+        #[arg(long, value_name = "LIST")]
+        skip_child_groups: Option<String>,
+        /// Mark records with these signatures as skipped (xDump's -xr:list).
+        #[arg(long, value_name = "LIST")]
+        record_to_skip: Option<String>,
+        /// Mark subrecords with these signatures as skipped (xDump's -xsr:list).
+        #[arg(long, value_name = "LIST")]
+        sub_record_to_skip: Option<String>,
+        /// Drop the top level groups with these labels as empty (xDump's -xg:list).
+        #[arg(long, value_name = "LIST")]
+        group_to_skip: Option<String>,
+        /// Drop the groups of the record types that take most of the space (xDump's -xbloat).
+        #[arg(long)]
+        xbloat: bool,
+        /// Write at most this many main records, the file header included (xDump's -top:N).
+        #[arg(long, value_name = "N")]
+        top: Option<i32>,
+        /// Write the data size of every element (xDump's -es).
+        #[arg(long)]
+        size: bool,
+        /// Keep the elements the editor hides, such as "Unused" (xDump's -dh).
+        #[arg(long)]
+        dump_hidden: bool,
+        /// Report mode without a check report (xDump's -report).
+        #[arg(long)]
+        report: bool,
+        /// Report mode that writes no report (xDump's -sro).
+        #[arg(long)]
+        sro: bool,
+        /// As --sro, reporting only subrecord errors (xDump's -sroe).
+        #[arg(long)]
+        sroe: bool,
+        /// Dump with the Check of every element and a REPORT tail (xDump's -dcr).
+        #[arg(long)]
+        dcr: bool,
+        /// Dump with the simple record definitions (xDump's -sr).
+        #[arg(long)]
+        sr: bool,
+        /// Ask the dump for the summary of an element (xDump's -summary); the dump writes
+        /// summaries unless report mode silences them, so this is accepted and has no effect.
+        #[arg(long)]
+        summary: bool,
+        /// Create the extra unknown data elements of a byte array (xDump's -more).
+        #[arg(long)]
+        more: bool,
     },
     /// NIF and KF meshes, BGSM and BGEM materials, LOD, FUZ and DDS files, loose or in an archive.
     Assets {
@@ -3459,6 +3511,20 @@ fn run(game: Option<String>, load: Vec<String>, edit: bool, action: Action) -> R
     registry.call(&mut session, &name, params)
 }
 
+/// A `-dr:list` style switch of `xDump.dpr`: the comma separated signatures.
+/// An item that is not four characters long can never equal a signature, as
+/// in the upstream string list find.
+fn parse_signature_list_collected(list: &str) -> Vec<xedit_core::interface::types::Signature> {
+    list.split(',')
+        .filter_map(|item| xedit_core::interface::types::Signature::from_str(item.trim()).ok())
+        .collect()
+}
+
+/// [`parse_signature_list_collected`] for an optional switch.
+fn parse_signature_list(list: Option<&str>) -> Vec<xedit_core::interface::types::Signature> {
+    list.map(parse_signature_list_collected).unwrap_or_default()
+}
+
 /// Runs a dump on a thread with a large stack, because the element tree
 /// resolves deeply through the definitions. The progress messages go to
 /// stderr like the log of xDump.
@@ -3809,6 +3875,23 @@ fn real_main() -> ExitCode {
         bsa,
         all_bsa,
         no_bsa,
+        dump_groups,
+        dump_records,
+        skip_child_groups,
+        record_to_skip,
+        sub_record_to_skip,
+        group_to_skip,
+        xbloat,
+        top,
+        size,
+        dump_hidden,
+        report,
+        sro,
+        sroe,
+        dcr,
+        sr,
+        summary: _,
+        more,
     } = cli.action
     {
         xedit_session::resources::set_dump_switches(xedit_session::resources::DumpArchiveSwitches {
@@ -3817,11 +3900,62 @@ fn real_main() -> ExitCode {
             no_bsa,
         });
         return run_dump(move |out| {
-            let mode = xedit_session::dump::setup_game(&game)?;
-            if check {
+            // The skip lists are read when the file loads, the report mode
+            // changes the definitions and the values already (`xDump.dpr`
+            // sets the switches before it reads the file). `-sr` is applied
+            // before the definitions are built.
+            for signature in parse_signature_list(record_to_skip.as_deref()) {
+                xedit_core::interface::globals::record_to_skip_add(signature);
+            }
+            for signature in parse_signature_list(sub_record_to_skip.as_deref()) {
+                xedit_core::interface::globals::sub_record_to_skip_add(signature);
+            }
+            for signature in parse_signature_list(group_to_skip.as_deref()) {
+                xedit_core::interface::globals::group_to_skip_add(signature);
+            }
+            // `-xbloat` is an `else if` of `-xg` (`xDump.dpr:1344`): an
+            // explicit group list replaces the bloat list.
+            if xbloat && group_to_skip.is_none() {
+                for label in [
+                    b"LAND", b"REGN", b"PGRD", b"SCEN", b"PACK", b"PERK", b"NAVI", b"CELL", b"WRLD",
+                ] {
+                    xedit_core::interface::globals::group_to_skip_add(xedit_core::interface::types::Signature::new(
+                        label,
+                    ));
+                }
+            }
+            let mode = if sr {
+                xedit_session::dump::setup_game_with_simple_records(&game, true)?
+            } else {
+                xedit_session::dump::setup_game(&game)?
+            };
+            if more {
+                xedit_core::interface::globals::set_more_info_for_unknown(true);
+            }
+            let report_mode = report || sro || sroe || dcr;
+            if report_mode {
+                xedit_core::interface::globals::set_report_mode(true);
+                // `if wbReportMode then wbShowFlagEnumValue := True`.
+                xedit_core::interface::globals::set_show_flag_enum_value(true);
+            }
+            if sroe {
+                xedit_core::interface::globals::set_sub_record_errors_only(true);
+            }
+            let options = xedit_session::dump::DumpOptions {
+                dump_groups: dump_groups.as_deref().map(parse_signature_list_collected),
+                dump_records: dump_records.as_deref().map(parse_signature_list_collected),
+                skip_child_groups: skip_child_groups.as_deref().map(parse_signature_list_collected),
+                dump_max: top.unwrap_or(0),
+                dump_size: size,
+                dump_hidden,
+                report_mode,
+                dont_write_report: sro || sroe,
+                dump_check_report: dcr,
+            };
+            if check && !report_mode {
                 xedit_session::dump::check_file(&file, mode, out)
             } else {
-                xedit_session::dump::dump_file(&file, mode, out)
+                xedit_session::dump::dump_file_with_options(&file, mode, &options, out)
             }
         });
     }

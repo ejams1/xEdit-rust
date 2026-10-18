@@ -469,6 +469,12 @@ impl MainRecordImpl {
     /// element of it nor a record of the file.
     fn new_unattached(container: &ElementRef, file: &Arc<FileImpl>, mr_struct: MainRecordStruct) -> Arc<Self> {
         let mr_def = crate::interface::constructors::find_record_def(mr_struct.signature);
+        // `TwbRecord.Create`: `recSkipped := recSkipped or
+        // RecordToSkip.Find(GetSignature, Dummy)`.
+        let record_skipped = crate::interface::globals::signature_list_contains(
+            &crate::interface::globals::record_to_skip(),
+            mr_struct.signature,
+        );
         Arc::new_cyclic(|self_ref: &Weak<MainRecordImpl>| MainRecordImpl {
             self_ref: self_ref.clone(),
             base: ElementBase::new(Some(container)),
@@ -500,6 +506,7 @@ impl MainRecordImpl {
             mr_storage_invalid: std::sync::atomic::AtomicBool::new(true),
             mr_collapsed: super::CollapsedData::default(),
             mr_duplicate: std::sync::atomic::AtomicBool::new(false),
+            mr_skipped: record_skipped,
             mr_member_refs: std::sync::atomic::AtomicUsize::new(0),
             mr_member_epoch: std::sync::atomic::AtomicU64::new(0),
             mr_index_keys: std::sync::Mutex::new(None),

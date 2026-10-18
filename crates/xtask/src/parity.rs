@@ -308,6 +308,10 @@ struct Options {
     /// `parity discovery`: the startup discovery of `xeInit.pas` without
     /// `-D:` and `-P:`.
     discovery: bool,
+    /// `--switch`: xDump switches whose effect the port has an option for.
+    /// Each spec is `name` or `name:value`, named as in xDump without the
+    /// leading dash (`dr:WEAP`, `top:3`, `dcr`).
+    switches: Vec<String>,
     games: Vec<&'static Game>,
     /// Lower-case file names. Empty selects the whole corpus.
     files: Vec<String>,
@@ -334,6 +338,71 @@ struct Case {
     /// The data folder: the folder of a plugin, the game data of a save.
     data: PathBuf,
     saves: bool,
+    /// xDump switches, as `-name[:value]`, in command-line order.
+    oracle_switches: Vec<String>,
+    /// The port's equivalents of `oracle_switches`.
+    port_switches: Vec<String>,
+    /// A file-name-safe summary of the switches, part of the cache stem.
+    switch_tag: String,
+}
+
+/// Maps `--switch` specs (`dr:WEAP`, `top:3`, `dcr`) to the oracle's
+/// switches and the port's options. Returns an error for a name the port has
+/// no option for.
+fn switch_args(specs: &[String]) -> Result<(Vec<String>, Vec<String>, String)> {
+    let mut oracle = Vec::new();
+    let mut port = Vec::new();
+    let mut tag = Vec::new();
+    for spec in specs {
+        let (name, value) = match spec.split_once(':') {
+            Some((name, value)) => (name, Some(value)),
+            None => (spec.as_str(), None),
+        };
+        match name {
+            "dg" | "dr" | "xcg" | "xr" | "xsr" | "xg" => {
+                let value = value.with_context(|| format!("--switch {spec}: a signature list needs a value"))?;
+                let option = match name {
+                    "dg" => "--dump-groups",
+                    "dr" => "--dump-records",
+                    "xcg" => "--skip-child-groups",
+                    "xr" => "--record-to-skip",
+                    "xsr" => "--sub-record-to-skip",
+                    "xg" => "--group-to-skip",
+                    _ => unreachable!(),
+                };
+                oracle.push(format!("-{name}:{value}"));
+                port.push(option.to_owned());
+                port.push(value.to_owned());
+            }
+            "top" => {
+                let value = value.with_context(|| format!("--switch {spec}: a count needs a value"))?;
+                oracle.push(format!("-top:{value}"));
+                port.push("--top".to_owned());
+                port.push(value.to_owned());
+            }
+            "es" | "dh" | "dcr" | "sro" | "sroe" | "sr" | "report" | "summary" | "more" | "xbloat" => {
+                ensure!(value.is_none(), "--switch {spec}: {name} takes no value");
+                oracle.push(format!("-{name}"));
+                let option = match name {
+                    "es" => "--size",
+                    "dh" => "--dump-hidden",
+                    "dcr" => "--dcr",
+                    "sro" => "--sro",
+                    "sroe" => "--sroe",
+                    "sr" => "--sr",
+                    "report" => "--report",
+                    "summary" => "--summary",
+                    "more" => "--more",
+                    "xbloat" => "--xbloat",
+                    _ => unreachable!(),
+                };
+                port.push(option.to_owned());
+            }
+            _ => bail!("--switch {spec}: no port option for this switch"),
+        }
+        tag.push(spec.replace(':', "-"));
+    }
+    Ok((oracle, port, tag.join(".")))
 }
 
 /// What every check shares.
@@ -476,6 +545,11 @@ pub fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
     }
 
     let mut cases = Vec::new();
+    ensure!(
+        options.switches.is_empty() || (!options.saves && !check_dump()),
+        "--switch applies to plugin dumps only"
+    );
+    let (oracle_switches, port_switches, switch_tag) = switch_args(&options.switches)?;
     for &game in &options.games {
         // Without `--game`, the games whose data directory is not set are
         // skipped and named, so a partial run is visible.
@@ -512,6 +586,9 @@ pub fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
                         name,
                         data: data.clone(),
                         saves: true,
+                        oracle_switches: Vec::new(),
+                        port_switches: Vec::new(),
+                        switch_tag: String::new(),
                     });
                 }
             }
@@ -538,6 +615,9 @@ pub fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
                     name,
                     data: data.clone(),
                     saves: false,
+                    oracle_switches: oracle_switches.clone(),
+                    port_switches: port_switches.clone(),
+                    switch_tag: switch_tag.clone(),
                 });
             }
         }
@@ -1325,7 +1405,7 @@ fn first_byte_difference(a: &Path, b: &Path) -> Result<Option<u64>> {
 fn parse(args: &[&str]) -> Result<Options> {
     const USAGE: &str = "usage: cargo xtask parity dump|saves|roundtrip|oracle-save|oracle-edit|bsarch|conflicts|refs|clean|clean-scenarios|check|check-dump|modgroups|merged|filter|tool-modes|resources|discovery|script [--game <game>]... [--file <name>]... [--mode <tool mode>]... \
                          [--record <FormID>]... [--hidden <FormID>]... [--oracle-only] [--jobs <n>] [--memory-budget <GiB>] \
-                         [--max-memory <GiB>] [--oracle-timeout <minutes>]";
+                         [--max-memory <GiB>] [--oracle-timeout <minutes>] [--switch <name[:value]>]...";
     let (mode, rest) = args.split_first().context(USAGE)?;
     let (saves, roundtrip, oracle_save, oracle_edit) = match *mode {
         "dump" | "conflicts" | "refs" | "clean" | "clean-scenarios" | "check" | "modgroups" | "merged" | "filter"
@@ -1358,6 +1438,7 @@ fn parse(args: &[&str]) -> Result<Options> {
         filter: *mode == "filter",
         resources: *mode == "resources",
         discovery: *mode == "discovery",
+        switches: Vec::new(),
         games: Vec::new(),
         files: Vec::new(),
         modes: Vec::new(),
@@ -1390,6 +1471,7 @@ fn parse(args: &[&str]) -> Result<Options> {
             "--record" => options.records.push(rest.next().context(USAGE)?.to_uppercase()),
             "--hidden" => options.hidden.push(rest.next().context(USAGE)?.to_uppercase()),
             "--oracle-only" => options.oracle_only = true,
+            "--switch" => options.switches.push(rest.next().context(USAGE)?.to_string()),
             "--jobs" => options.jobs = rest.next().context(USAGE)?.parse::<usize>()?.max(1),
             "--memory-budget" => options.memory_budget = Some(gib(rest.next())?),
             "--max-memory" => options.max_memory = Some(gib(rest.next())?),
@@ -1604,7 +1686,11 @@ fn check(case: &Case, runner: &Runner) -> Result<Outcome> {
         runner.cache.join(case.game.mode)
     };
     fs::create_dir_all(&dir)?;
-    let stem = format!("{}.{:016x}", case.name, content_hash(&case.input)?);
+    let stem = if case.switch_tag.is_empty() {
+        format!("{}.{:016x}", case.name, content_hash(&case.input)?)
+    } else {
+        format!("{}.{:016x}.{}", case.name, content_hash(&case.input)?, case.switch_tag)
+    };
     let mut outcome = Outcome {
         game: case.game.name,
         file: case.name.clone(),
@@ -1641,6 +1727,7 @@ fn check(case: &Case, runner: &Runner) -> Result<Outcome> {
         if check_dump() {
             command.arg("--check");
         }
+        command.args(&case.port_switches);
     }
     command
         .arg(&case.input)
@@ -1740,6 +1827,7 @@ fn run_oracle(case: &Case, runner: &Runner, dir: &Path, stem: &str) -> Result<Op
     if check_dump() {
         command.arg("-check");
     }
+    command.args(&case.oracle_switches);
     command
         .arg("-q")
         // The masters of a plugin that is not the game master, and the
@@ -1932,6 +2020,18 @@ mod tests {
         assert!(is_vanilla(fo4, "dlccoast.esm"));
         assert!(is_vanilla(fo4, "ccbgsfo4001-pipboy(black).esl"));
         assert!(!is_vanilla(fo4, "mymod.esp"));
+    }
+
+    #[test]
+    fn switch_specs_map_to_the_oracle_and_the_port() {
+        let (oracle, port, tag) = switch_args(&["dg:KYWD".to_owned(), "top:3".to_owned(), "dcr".to_owned()]).unwrap();
+        assert_eq!(oracle, ["-dg:KYWD", "-top:3", "-dcr"]);
+        assert_eq!(port, ["--dump-groups", "KYWD", "--top", "3", "--dcr"]);
+        assert_eq!(tag, "dg-KYWD.top-3.dcr");
+        assert!(switch_args(&["dg".to_owned()]).is_err());
+        assert!(switch_args(&["top".to_owned()]).is_err());
+        assert!(switch_args(&["es:1".to_owned()]).is_err());
+        assert!(switch_args(&["unknown".to_owned()]).is_err());
     }
 
     #[test]

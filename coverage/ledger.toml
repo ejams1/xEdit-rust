@@ -3621,12 +3621,12 @@ note = "wbLoadBSAs of xDump: xedit dump --bsa loads each module's own, interface
 [switch.btd]
 status = "pending"
 source = "xDump.dpr"
-note = "Owned by issue #79 (xDump's dump filter and report switches): -btd, the number of undecoded bytes to dump as unknown"
+note = "Owned by issue #79 (follow-up saves pass): -btd sets wbBytesToDump, read only by the save definitions (wbDefinitionsFO4Saves.pas:2514), so no plugin dump exercises it"
 
 [switch.bts]
 status = "pending"
 source = "xDump.dpr"
-note = "Owned by issue #79 (xDump's dump filter and report switches): -bts, the number of undecoded bytes to skip"
+note = "Owned by issue #79 (follow-up saves pass): -bts sets wbBytesToSkip, read only by the save definitions (wbDefinitionsFO4Saves.pas:2509), so no plugin dump exercises it"
 
 [switch.c]
 status = "covered"
@@ -3683,7 +3683,7 @@ note = "Owned by issue #79 (xDump's dump filter and report switches): -dc:list, 
 [switch.dcr]
 status = "pending"
 source = "xDump.dpr"
-note = "Owned by issue #79 (xDump's dump filter and report switches): -dcr, the record contents with a Check for Errors of each element and a report"
+note = "Owned by issue #79 (follow-up pass): -dcr's dump lines, [ERROR:] lines and REPORT header are equal; the trailing ReportDefs walk (wbInterface.pas:5300, the unchecked FormID formatters) is unported, so parity differs in that tail"
 
 [switch.devmode]
 status = "presentation"
@@ -3696,19 +3696,21 @@ source = "xDump.dpr"
 note = "Owned by issue #79 (xDump's dump filter and report switches): -df:list, dump only the listed ChangedForm types of a save"
 
 [switch.dg]
-status = "pending"
+status = "covered"
+command = "dump"
 source = "xDump.dpr"
-note = "Owned by issue #79 (xDump's dump filter and report switches): -dg:list, dump only the listed top level groups"
+note = "The port's --dump-groups; the oracle case -dg:MISC on ccswkfo4002-pipnuka.esl is equal"
 
 [switch.dh]
-status = "pending"
+status = "covered"
+command = "dump"
 source = "xDump.dpr"
-note = "Owned by issue #79 (xDump's dump filter and report switches): -dh, the normally hidden elements"
+note = "The port's --dump-hidden; the oracle case -dh on DLCworkshop01.esm is equal (the Unused lines and the hidden containers)"
 
 [switch.do]
 status = "pending"
 source = "xDump.dpr"
-note = "Owned by issue #79 (xDump's dump filter and report switches): -do:value, dump object offsets and sizes and/or array counts"
+note = "Owned by issue #79 (follow-up pass): -do sets wbDumpOffset, which renders the raw data base and end pointers against wbBaseOffset (wbImplementation.pas:25014); the port's blocks carry no base address to subtract"
 
 [switch.dontcache]
 status = "covered"
@@ -3735,9 +3737,10 @@ source = "xEdit/xeInit.pas"
 note = "wbRemoveOffsetData off: the load keeps the offset data of a worldspace (`apply_on_load`); a CLI run sets it with --dont-remove-offset-data."
 
 [switch.dr]
-status = "pending"
+status = "covered"
+command = "dump"
 source = "xDump.dpr"
-note = "Owned by issue #79 (xDump's dump filter and report switches): -dr:list, dump only the listed records"
+note = "The port's --dump-records; the oracle case -dr:MISC on ccswkfo4002-pipnuka.esl is equal (a record not listed keeps its line, not its children)"
 
 [switch.dump]
 status = "covered"
@@ -3752,9 +3755,10 @@ source = "xEdit/xeInit.pas"
 note = "wbEnforceAllMasters (`apply_on_load`); a CLI run sets it with --enforce-all-masters."
 
 [switch.es]
-status = "pending"
+status = "covered"
+command = "dump"
 source = "xDump.dpr"
-note = "Owned by issue #79 (xDump's dump filter and report switches): -es, the size of every element"
+note = "The port's --size; the oracle case -es on ccswkfo4002-pipnuka.esl is equal (TwbDataContainer.GetDataSize: a group's range without its 24 byte header)"
 
 [switch.exceptiontest]
 status = "excluded"
@@ -3975,9 +3979,10 @@ source = "xEdit/xeInit.pas"
 note = "Loads Mod Organizer's hook.dll for a profile's virtual file system; the port reads real folders, so a Mod Organizer user starts it from Mod Organizer or points --load and -D: at the folders. Parsed and named on stderr (SwitchKind::Unported)."
 
 [switch.more]
-status = "pending"
+status = "covered"
+command = "dump"
 source = "xDump.dpr"
-note = "Owned by issue #79 (xDump's dump filter and report switches): -more, wbMoreInfoForUnknown: the name of an element with unknown data added to its value"
+note = "The port's --more (wbMoreInfoForUnknown); the oracle case -more on ccswkfo4002-pipnuka.esl is equal: an unknown byte array gains four Offset i structures of every scalar array"
 
 [switch.moreinfoforindex]
 status = "excluded"
@@ -3985,9 +3990,10 @@ source = "xEdit/xeInit.pas"
 note = "wbMoreInfoForIndex is read by the release under `DebugHook <> 0`, which is 0 in a release build: the switch does nothing."
 
 [switch.moreunknown]
-status = "pending"
+status = "covered"
+command = "dump"
 source = "xEdit/xeInit.pas"
-note = "Owned by issue #79 (xDump's dump filter and report switches): -moreunknown, wbMoreInfoForUnknown of the GUI (`wbImplementation.pas:23005`), the same setting as xDump's -more; the port stores it and renders unknowns without the name"
+note = "The GUI setting is the same wbMoreInfoForUnknown global (wbImplementation.pas:23581); its rendering is covered by the dump case -more on ccswkfo4002-pipnuka.esl"
 
 [switch.mt]
 status = "covered"
@@ -4144,9 +4150,9 @@ source = "xEdit/xeInit.pas"
 note = "-R:<file>: the legacy command line writes the startup lines and the messages of the run to the file (tool_modes.rs log_file)."
 
 [switch.report]
-status = "excluded"
+status = "pending"
 source = "xDump.dpr"
-note = "wbReportMode follows `DebugHook`, which is 0 in a release build: the switch does nothing."
+note = "The port sets wbReportMode, but xDump then walks wbRecordDefs printing Unchecked FormID Formatter lines (ReportDefs, wbInterface.pas:5300), which the port does not do; -report and -dcr differ from the oracle only in that tail on ccswkfo4002-pipnuka.esl. Owned by issue #79."
 
 [switch.reportinjected]
 status = "covered"
@@ -4243,19 +4249,22 @@ source = "BSArch.dpr"
 note = "bsarch accepts -split as BSArch does; xedit archive pack takes it as an option of the same meaning."
 
 [switch.sr]
-status = "pending"
+status = "covered"
+command = "dump"
 source = "xDump.dpr"
-note = "Owned by issue #79 (xDump's dump filter and report switches): -sr, the record header and size report"
+note = "The port's --sr: the game is set up with wbSimpleRecords := True; the oracle case -sr on ccswkfo4002-pipnuka.esl is equal"
 
 [switch.sro]
-status = "pending"
+status = "covered"
+command = "dump"
 source = "xDump.dpr"
-note = "Owned by issue #79 (xDump's dump filter and report switches): -sro, the record report ordered"
+note = "The port's --sro: wbReportMode with DontWriteReport, the empty dump; the oracle case -sro on ccswkfo4002-pipnuka.esl is equal"
 
 [switch.sroe]
-status = "pending"
+status = "covered"
+command = "dump"
 source = "xDump.dpr"
-note = "Owned by issue #79 (xDump's dump filter and report switches): -sroe, the record report ordered with every entry"
+note = "The port's --sroe: wbReportMode, DontWriteReport and wbSubRecordErrorsOnly; the oracle case -sroe on ccswkfo4002-pipnuka.esl is equal"
 
 [switch.sse]
 status = "covered"
@@ -4282,9 +4291,10 @@ source = "Sniff/frmMain.pas"
 note = "The sniff binary takes -subdir: as Sniff.exe does; sniff.run takes it as a parameter."
 
 [switch.summary]
-status = "pending"
+status = "covered"
+command = "dump"
 source = "xDump.dpr"
-note = "Owned by issue #79 (xDump's dump filter and report switches): -summary, the summary report"
+note = "DumpSummary already defaults to True (xDump.dpr:1201); the oracle case -summary on ccswkfo4002-pipnuka.esl is equal"
 
 [switch.t]
 status = "covered"
@@ -4323,9 +4333,10 @@ source = "Sniff/frmMain.pas"
 note = "The sniff binary takes -threads: as Sniff.exe does; sniff.run takes it as a parameter."
 
 [switch.top]
-status = "pending"
+status = "covered"
+command = "dump"
 source = "xDump.dpr"
-note = "Owned by issue #79 (xDump's dump filter and report switches): -top:N, dump only the first N records"
+note = "Cli's --top sets DumpOptions::dump_max; the oracle case -top:3 on ccswkfo4002-pipnuka.esl is equal"
 
 [switch.trackalleditorid]
 status = "covered"
@@ -4351,9 +4362,10 @@ source = "Tools/TreeLodBillboardCreator/treelod.dpr"
 note = "A switch of TreeLodBillboardCreator (Tools/TreeLodBillboardCreator/treelod.dpr), which the 4.1.5q release does not ship, so no oracle can check it; it is not one of the side tools of decision 5 in docs/PLAN.md (BSArch, BSArchPro, Sniff, xDump, LODGen)."
 
 [switch.xbloat]
-status = "pending"
+status = "covered"
+command = "dump"
 source = "xDump.dpr"
-note = "Owned by issue #79 (xDump's dump filter and report switches): -xbloat, the exclusion list xDump uses for bloat"
+note = "-xbloat adds LAND,REGN,PGRD,SCEN,PACK,PERK,NAVI,CELL,WRLD to GroupToSkip unless -xg is given (it is an else if, xDump.dpr:1344); the oracle case -xbloat on DLCworkshop01.esm is equal"
 
 [switch.xc]
 status = "pending"
@@ -4366,9 +4378,10 @@ source = "xDump.dpr"
 note = "Owned by issue #79 (xDump's dump filter and report switches): -xcbloat, the global data exclusion list for bloat"
 
 [switch.xcg]
-status = "pending"
+status = "covered"
+command = "dump"
 source = "xDump.dpr"
-note = "Owned by issue #79 (xDump's dump filter and report switches): -xcg:list, exclude the listed record child groups"
+note = "Child-group exclusion is checked in WriteElement only when -dg is assigned, but WriteContainer always skips the children (xDump.dpr:609, 671); the oracle cases -xcg:CELL and -dg:CELL -xcg:CELL on DLCworkshop01.esm are equal"
 
 [switch.xf]
 status = "pending"
@@ -4376,19 +4389,22 @@ source = "xDump.dpr"
 note = "Owned by issue #79 (xDump's dump filter and report switches): -xf:list, exclude the listed ChangedForm types of a save"
 
 [switch.xg]
-status = "pending"
+status = "covered"
+command = "dump"
 source = "xDump.dpr"
-note = "Owned by issue #79 (xDump's dump filter and report switches): -xg:list, exclude the listed top level groups"
+note = "Top-level group exclusion; an explicit list replaces the -xbloat bloat list; the oracle case -xg:MISC on ccswkfo4002-pipnuka.esl is equal"
 
 [switch.xr]
-status = "pending"
+status = "covered"
+command = "dump"
 source = "xDump.dpr"
-note = "Owned by issue #79 (xDump's dump filter and report switches): -xr:list, exclude the contents of the listed records"
+note = "RecordToSkip excludes the record contents but keeps the record header, as in WriteElement (xDump.dpr:664); the oracle case -xr:MISC on ccswkfo4002-pipnuka.esl is equal"
 
 [switch.xsr]
-status = "pending"
+status = "covered"
+command = "dump"
 source = "xDump.dpr"
-note = "Owned by issue #79 (xDump's dump filter and report switches): -xsr:list, exclude the listed subrecords"
+note = "SubRecordToSkip excludes the subrecord, as in WriteElement (xDump.dpr:700); the oracle case -xsr:DATA on ccswkfo4002-pipnuka.esl is equal"
 
 [switch.z]
 status = "covered"
