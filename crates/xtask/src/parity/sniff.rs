@@ -1491,6 +1491,12 @@ fn run_sniff_refusal(sniff: &Path, work: &Path, case: &RefusalCase) -> Result<Ve
 fn port_refusal(work: &Path, case: &RefusalCase) -> Result<String> {
     let input = work.join("refusal-in");
     let output = work.join("refusal-out");
+    // Same valid, empty folders the oracle got. They are made here and not
+    // left over from the oracle's run: a cached refusal skips that run, and
+    // the port would stop on its input check before the operation's own
+    // refusal.
+    fs::create_dir_all(&input)?;
+    fs::create_dir_all(&output)?;
     let options = RunOptions {
         operation: case.operation.to_owned(),
         input: windows_path(&input),
