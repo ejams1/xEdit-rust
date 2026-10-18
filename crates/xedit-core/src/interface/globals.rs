@@ -620,6 +620,59 @@ pub fn ignore_records_add(signature: Signature) {
     IGNORE_RECORDS.write().unwrap().push(signature);
 }
 
+static RECORD_TO_SKIP: RwLock<Vec<Signature>> = RwLock::new(Vec::new());
+static SUB_RECORD_TO_SKIP: RwLock<Vec<Signature>> = RwLock::new(Vec::new());
+static GROUP_TO_SKIP: RwLock<Vec<Signature>> = RwLock::new(Vec::new());
+
+/// Upstream `RecordToSkip`: the record signatures the dump leaves as
+/// `<contents skipped>`.
+pub fn record_to_skip() -> Vec<Signature> {
+    RECORD_TO_SKIP.read().unwrap().clone()
+}
+
+/// Upstream `RecordToSkip.Add`. The upstream list compares case-insensitively,
+/// so entries are stored upper case and compared the same way.
+pub fn record_to_skip_add(signature: Signature) {
+    RECORD_TO_SKIP
+        .write()
+        .unwrap()
+        .push(Signature(signature.0.map(|byte| byte.to_ascii_uppercase())));
+}
+
+/// Upstream `SubRecordToSkip`: the subrecord signatures the dump leaves as
+/// `<contents skipped>`.
+pub fn sub_record_to_skip() -> Vec<Signature> {
+    SUB_RECORD_TO_SKIP.read().unwrap().clone()
+}
+
+/// Upstream `SubRecordToSkip.Add`, case-insensitive as `RecordToSkip.Add`.
+pub fn sub_record_to_skip_add(signature: Signature) {
+    SUB_RECORD_TO_SKIP
+        .write()
+        .unwrap()
+        .push(Signature(signature.0.map(|byte| byte.to_ascii_uppercase())));
+}
+
+/// Upstream `GroupToSkip`: the labels of the top level groups the loader drops.
+pub fn group_to_skip() -> Vec<Signature> {
+    GROUP_TO_SKIP.read().unwrap().clone()
+}
+
+/// Upstream `GroupToSkip.Add`, case-insensitive as `RecordToSkip.Add`.
+pub fn group_to_skip_add(signature: Signature) {
+    GROUP_TO_SKIP
+        .write()
+        .unwrap()
+        .push(Signature(signature.0.map(|byte| byte.to_ascii_uppercase())));
+}
+
+/// Whether `list` holds `signature`, comparing as the upstream `TStringList`
+/// does (ASCII case-insensitive).
+pub fn signature_list_contains(list: &[Signature], signature: Signature) -> bool {
+    let upper = Signature(signature.0.map(|byte| byte.to_ascii_uppercase()));
+    list.contains(&upper)
+}
+
 /// Upstream `wbOfficialDLC`: the file names of the official DLC of the game.
 pub fn official_dlc() -> Vec<String> {
     OFFICIAL_DLC.read().unwrap().clone()

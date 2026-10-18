@@ -1832,6 +1832,9 @@ impl PortSaves<'_> {
                 name: name.clone(),
                 data: self.data.to_path_buf(),
                 saves: false,
+                oracle_switches: Vec::new(),
+                port_switches: Vec::new(),
+                switch_tag: String::new(),
             };
             let (status, detail) = compare(
                 &case,

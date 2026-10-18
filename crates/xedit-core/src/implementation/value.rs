@@ -16,16 +16,24 @@ use std::sync::{Arc, OnceLock, RwLock, Weak};
 
 use xedit_io::compression::CompressionType;
 
+use crate::interface::builders::{
+    wb_array_count, wb_char4, wb_float, wb_integer, wb_l_string, wb_len_string, wb_string, wb_struct,
+};
+use crate::interface::constructors::{wb_form_id, wb_ref_id};
 use crate::interface::def::{EmptyDef, NamedDef, NamedDefArgs, ValueDef};
 use crate::interface::element::{
     Container, CopyArgs, DataContainer, DataPtr, Element, ElementRef, FileRef, MainRecordRef,
 };
 use crate::interface::form_id::FormID;
-use crate::interface::globals::{compare_raw_data, edit_allowed, hide_never_show, is_internal_edit, sort_sub_records};
+use crate::interface::globals::{
+    ToolSource, compare_raw_data, edit_allowed, hide_never_show, is_internal_edit, more_info_for_unknown,
+    sort_sub_records, tool_source,
+};
+use crate::interface::integer::IntegerDefFormater;
 use crate::interface::misc::{EditError, Variant};
 use crate::interface::struct_def::ChapterKind;
 use crate::interface::types::{
-    ASSIGN_ADD, ASSIGN_THIS, ConflictPriority, DefFlag, DefType, ElementType, TriBool, dt_non_values,
+    ASSIGN_ADD, ASSIGN_THIS, ConflictPriority, DefFlag, DefType, ElementType, IntType, TriBool, dt_non_values,
 };
 
 use super::edit::{self, Storage};
@@ -211,6 +219,75 @@ pub(super) fn resolve(value_def: Arc<dyn ValueDef>, data: DataPtr, element: Opti
         internal.end_resolve();
     }
     result
+}
+
+/// Port of the `wbMoreInfoForUnknown` tail of `ValueDoInit`
+/// (`wbImplementation.pas:23581`): an unknown byte array gains four
+/// `Offset i` structures, each reading the same bytes as every scalar type of
+/// every alignment.
+///
+/// `has_data` is upstream's `Assigned(aBasePtr)`: without data the structures
+/// are still created, empty.
+pub(super) fn create_more_info_for_unknown(
+    container: &ElementRef,
+    file: &Weak<super::FileImpl>,
+    resolved: &Arc<dyn ValueDef>,
+    container_name: &str,
+    block: &DataBlock,
+    (start, end, has_data): (usize, usize, bool),
+) {
+    if !more_info_for_unknown() || resolved.get_def_type() != DefType::dtByteArray {
+        return;
+    }
+    // `t := aResolvedDef.Name; if t = '' then t := aContainer.Def.Name`.
+    let name = if resolved.get_name().is_empty() {
+        container_name
+    } else {
+        resolved.get_name()
+    };
+    // `t.StartsWith('Unknown', True)`.
+    if !name.to_ascii_lowercase().starts_with("unknown") {
+        return;
+    }
+    // `(not Assigned(aBasePtr) or (aBasePtr <> aEndPtr))`: an empty range has
+    // both pointers at the same, non-nil, address.
+    if has_data && start == end {
+        return;
+    }
+    for offset in 0..4 {
+        // `BasePtr := PByte(aBasePtr) + i`: the structures start at each
+        // alignment, and past the end their arrays stay empty.
+        let start = (start + offset).min(end);
+        let mut struct_cursor = Cursor {
+            block: block.clone(),
+            pos: start,
+            end,
+            over: false,
+        };
+        let struct_def = wb_struct(
+            &format!("Offset {offset}"),
+            &[],
+            ConflictPriority::cpNormal,
+            false,
+            None,
+            -1,
+            None,
+            None,
+            None,
+        )
+        .expect("the definition of an offset structure is valid");
+        let offset_struct = create_value_element(container, file, &mut struct_cursor, struct_def, "");
+        let offset_container: ElementRef = offset_struct;
+        for array_def in more_info_for_unknown_arrays(tool_source() == ToolSource::tsSaves) {
+            let mut array_cursor = Cursor {
+                block: block.clone(),
+                pos: start,
+                end,
+                over: false,
+            };
+            create_value_element(&offset_container, file, &mut array_cursor, array_def, "");
+        }
+    }
 }
 
 /// Port of `TwbValue`, `TwbStruct`, `TwbArray` and `TwbUnion` in one type.
@@ -660,6 +737,25 @@ impl ValueImpl {
         self.vb.container.stamp_init();
         {
             let Some((block, start, end)) = self.vb.data_source() else {
+                // `ValueDoInit` runs with `aBasePtr = nil` for an element
+                // built from its definition alone; the more-info structures
+                // are still created.
+                if self.kind == ValueKind::Value {
+                    let self_ref = self.element_ref();
+                    let resolved = resolve(self.vb.vb_value_def.clone(), None, Some(&self_ref));
+                    resolved.after_load(&self_ref);
+                    let container_name = self_ref
+                        .get_def()
+                        .map_or_else(String::new, |def| def.get_name().to_owned());
+                    create_more_info_for_unknown(
+                        &self_ref,
+                        &self.vb.file,
+                        &resolved,
+                        &container_name,
+                        &DataBlock::Buffer(Arc::new(Vec::new())),
+                        (0, 0, false),
+                    );
+                }
                 return;
             };
             let self_ref = self.element_ref();
@@ -687,6 +783,17 @@ impl ValueImpl {
                     let data = cursor.block.as_slice().get(cursor.pos..cursor.end);
                     let resolved = resolve(self.vb.vb_value_def.clone(), data, Some(&self_ref));
                     resolved.after_load(&self_ref);
+                    let container_name = self_ref
+                        .get_def()
+                        .map_or_else(String::new, |def| def.get_name().to_owned());
+                    create_more_info_for_unknown(
+                        &self_ref,
+                        &self.vb.file,
+                        &resolved,
+                        &container_name,
+                        &cursor.block,
+                        (cursor.pos, cursor.end, true),
+                    );
                 }
                 ValueKind::Struct => struct_do_init(&self.vb.vb_value_def, &self_ref, &self.vb.file, &mut cursor),
                 ValueKind::Array => {
@@ -890,6 +997,92 @@ pub(super) fn create_contained_in_element(
     element.vb.dont_save.store(true, Ordering::Relaxed);
     element.vb.contained_in.store(true, Ordering::Relaxed);
     element
+}
+
+/// The arrays of one `Offset i` structure of `wbMoreInfoForUnknown`
+/// (`ValueDoInit`): every scalar type read over the same bytes. `saves`
+/// adds the two save-only arrays.
+fn more_info_for_unknown_arrays(saves: bool) -> Vec<Arc<dyn ValueDef>> {
+    let integer = |name: &str, int_type: IntType, formater: Option<Arc<dyn IntegerDefFormater>>| {
+        wb_integer(
+            name,
+            int_type,
+            formater,
+            ConflictPriority::cpNormal,
+            false,
+            None,
+            None,
+            0,
+            None,
+        )
+        .map(|def| def as Arc<dyn ValueDef>)
+    };
+    let array = |name: &str, element: Option<Arc<dyn ValueDef>>| {
+        wb_array_count(name, element, 0, ConflictPriority::cpNormal, false, None, None)
+            .map(|def| def as Arc<dyn ValueDef>)
+    };
+    let mut arrays = vec![
+        array("AsU8", integer("AsU8", IntType::itU8, None)),
+        array("AsS8", integer("AsS8", IntType::itS8, None)),
+        array("AsU16", integer("AsU16", IntType::itU16, None)),
+        array("AsS16", integer("AsS16", IntType::itS16, None)),
+        array("AsU32", integer("AsU32", IntType::itU32, None)),
+        array("AsS32", integer("AsS32", IntType::itS32, None)),
+        array("AsS64", integer("AsS64", IntType::itS64, None)),
+        array(
+            "AsFormID",
+            integer(
+                "AsFormID",
+                IntType::itU32,
+                wb_form_id().map(|formater| formater as Arc<dyn IntegerDefFormater>),
+            ),
+        ),
+        array(
+            "AsChar4",
+            integer(
+                "AsChar4",
+                IntType::itU32,
+                wb_char4().map(|formater| formater as Arc<dyn IntegerDefFormater>),
+            ),
+        ),
+        array(
+            "AsFloat",
+            wb_float(
+                "AsFloat",
+                ConflictPriority::cpNormal,
+                false,
+                None,
+                None,
+                None,
+                0.0,
+                None,
+            )
+            .map(|def| def as Arc<dyn ValueDef>),
+        ),
+        array(
+            "AsString",
+            wb_string("AsString", 0, ConflictPriority::cpNormal, false, None, None, None)
+                .map(|def| def as Arc<dyn ValueDef>),
+        ),
+        array(
+            "AsLString",
+            wb_l_string("AsLString", 0, ConflictPriority::cpNormal, false, None, None, None)
+                .map(|def| def as Arc<dyn ValueDef>),
+        ),
+        array(
+            "AsLenString",
+            wb_len_string("AsLenString", 4, ConflictPriority::cpNormal, false, None, None)
+                .map(|def| def as Arc<dyn ValueDef>),
+        ),
+    ];
+    if saves {
+        arrays.push(array("AsRefID", integer("RefID", IntType::itU24, wb_ref_id())));
+        arrays.push(array(" AsU6to30", integer("AsU6to30", IntType::itU6to30, None)));
+    }
+    arrays
+        .into_iter()
+        .map(|def| def.expect("the definition of a more-info array is valid"))
+        .collect()
 }
 
 /// Port of `StructDoInit`: one child per member of the structure.
@@ -1749,5 +1942,41 @@ impl Container for ValueImpl {
 
     fn get_additional_element_count(&self) -> i32 {
         0
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn more_info_arrays_list_every_scalar_type() {
+        let names: Vec<String> = more_info_for_unknown_arrays(false)
+            .iter()
+            .map(|def| def.get_name().to_owned())
+            .collect();
+        assert_eq!(
+            names,
+            [
+                "AsU8",
+                "AsS8",
+                "AsU16",
+                "AsS16",
+                "AsU32",
+                "AsS32",
+                "AsS64",
+                "AsFormID",
+                "AsChar4",
+                "AsFloat",
+                "AsString",
+                "AsLString",
+                "AsLenString",
+            ]
+        );
+        let saves: Vec<String> = more_info_for_unknown_arrays(true)
+            .iter()
+            .map(|def| def.get_name().to_owned())
+            .collect();
+        assert_eq!(&saves[13..], ["AsRefID", " AsU6to30"]);
     }
 }

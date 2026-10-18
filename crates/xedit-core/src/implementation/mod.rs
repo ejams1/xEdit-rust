@@ -266,11 +266,12 @@ use crate::interface::element::{
 use crate::interface::form_id::{FileID, FormID};
 use crate::interface::globals::{
     GameMode, ToolSource, create_contained_in, data_path, display_load_order_form_id, edit_allowed, extract_info,
-    file_chapters, file_header, file_magic, file_plugins, game_exe_name, game_master_esm, game_mode,
+    file_chapters, file_header, file_magic, file_plugins, game_exe_name, game_master_esm, game_mode, group_to_skip,
     has_added_light_support, header_signature, is_fallout3, is_fallout4, is_fallout76, is_internal_edit,
     is_light_supported, is_medium_supported, is_skyrim, is_starfield, is_update_supported, pseudo_light, pseudo_medium,
-    pseudo_update, remove_offset_data, report_injected, size_of_main_record_struct, strip_empty_masters, strip_masters,
-    strip_masters_file_names, tool_source, track_all_editor_id, vwd_as_quest_children, wb_get_group_order,
+    pseudo_update, record_to_skip, remove_offset_data, report_injected, signature_list_contains,
+    size_of_main_record_struct, strip_empty_masters, strip_masters, strip_masters_file_names, tool_source,
+    track_all_editor_id, vwd_as_quest_children, wb_get_group_order,
 };
 use crate::interface::integer::IntegerDefFormater;
 use crate::interface::main_record::{
@@ -2387,10 +2388,15 @@ impl GroupRecordImpl {
             group.base.e_memory_order.store(order, Ordering::Relaxed);
         }
         scan::attach(container, group.clone());
-        // Port of `TwbGroupRecord.ScanData`, the large child groups on the
-        // worker threads.
-        let self_element: ElementRef = group.clone();
-        scan::scan_records(file, &self_element, bytes, dc_base + header_size, dc_end)?;
+        // Port of `TwbGroupRecord.InitDataPtr` and `ScanData`: a top level
+        // group whose label is in `GroupToSkip` keeps no children, which the
+        // file load then removes as an empty group.
+        if gr_struct.group_type != 0 || !signature_list_contains(&group_to_skip(), gr_struct.label_signature()) {
+            // Port of `TwbGroupRecord.ScanData`, the large child groups on the
+            // worker threads.
+            let self_element: ElementRef = group.clone();
+            scan::scan_records(file, &self_element, bytes, dc_base + header_size, dc_end)?;
+        }
         *offset = dc_end;
         Ok(group)
     }
@@ -2722,6 +2728,10 @@ pub struct MainRecordImpl {
     /// A record that repeats the FormID of the record before it, which
     /// upstream skips on load.
     mr_duplicate: AtomicBool,
+    /// Port of `recSkipped` set from `RecordToSkip`: `Init` exits before
+    /// the subrecords are built and the display name is empty, so the dump
+    /// writes the record line as `<contents skipped>`.
+    mr_skipped: bool,
     /// The references from outside to the members of the record (a script's
     /// element values below it): upstream each holds the record through the
     /// `eContainerRef` chain (`cntElementRefs`), and the release of the
@@ -2765,6 +2775,9 @@ impl MainRecordImpl {
             scan::progress(&format!("Error: unknown record type {}", mr_struct.signature));
         }
         let duplicate = prev_main_record.is_some_and(|prev| prev.mr_struct().form_id == mr_struct.form_id);
+        // Port of `TwbRecord.Create`: `recSkipped := recSkipped or
+        // RecordToSkip.Find(GetSignature, Dummy)`, a case-insensitive find.
+        let record_skipped = signature_list_contains(&record_to_skip(), mr_struct.signature);
         let skipped = |form_id: FormID| {
             // Port of `EwbSkipLoad` for a duplicate FormID: the record is skipped.
             scan::progress(&format!(
@@ -2807,6 +2820,7 @@ impl MainRecordImpl {
             mr_position_generation: AtomicI32::new(0),
             mr_collapsed: CollapsedData::default(),
             mr_duplicate: AtomicBool::new(duplicate),
+            mr_skipped: record_skipped,
             mr_member_refs: AtomicUsize::new(0),
             mr_member_epoch: AtomicU64::new(0),
             mr_index_keys: std::sync::Mutex::new(None),
@@ -3413,6 +3427,11 @@ impl MainRecordImpl {
             INITIALIZED_COUNT.fetch_add(1, Ordering::Relaxed);
             if crate::interface::globals::copy_is_running() > 0 {
                 BUILT_DURING_COPY.lock().unwrap().push((Arc::downgrade(self), build));
+            }
+            // Port of `TwbMainRecord.Init`: `if recSkipped then Exit`, before
+            // the quick init, the data storage or any element exists.
+            if self.mr_skipped {
+                return;
             }
             let quick = self.in_quick_init();
             // `if not (mrsQuickInit in mrStates)`: the quick init creates
@@ -4752,8 +4771,15 @@ impl Element for GroupRecordImpl {
         format!("{prefix}{label}")
     }
 
+    /// Port of `TwbDataContainer.GetDataSize` for a group
+    /// (`wbImplementation.pas:24486`): the loaded range without its 24 byte
+    /// group header, `dcDataBasePtr` to `dcDataEndPtr`; a group made by an
+    /// edit adds the data sizes of its elements instead.
     fn get_data_size(&self) -> i32 {
-        (self.dc_end - self.dc_base) as i32
+        if self.gr_storage_invalid.load(Ordering::Relaxed) || self.dc_end <= self.dc_base {
+            return edit::data_size_from_elements(self);
+        }
+        (self.dc_end - self.dc_base - size_of_main_record_struct() as usize) as i32
     }
 
     fn get_element_type(&self) -> ElementType {
@@ -4980,6 +5006,10 @@ impl Element for MainRecordImpl {
     /// of references, cells and responses, or the summary.
     fn get_display_name(&self, _use_suffix: bool) -> String {
         self.check_l_generation();
+        // `if recSkipped then Exit`: the name of a skipped record is empty.
+        if self.mr_skipped {
+            return String::new();
+        }
         if let Some(cached) = self.mr_display_name.read().unwrap().as_ref() {
             return cached.clone();
         }
@@ -5065,6 +5095,11 @@ impl Element for MainRecordImpl {
 
     fn get_data_size(&self) -> i32 {
         self.data_len().map_or(0, |len| len as i32)
+    }
+
+    /// Port of `TwbRecord.GetSkipped`.
+    fn get_skipped(&self) -> bool {
+        self.mr_skipped
     }
 
     fn get_element_type(&self) -> ElementType {

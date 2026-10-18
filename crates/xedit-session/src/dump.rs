@@ -23,9 +23,10 @@ use xedit_core::implementation::{
 use xedit_core::interface::globals::{
     GameMode, ToolSource, clear_resources_loaded_handlers, game_exe_name, game_master_esm, game_name,
     set_create_contained_in, set_data_path, set_game_exe_name, set_game_master_esm, set_game_mode, set_game_name,
-    set_hide_unused, set_language, set_simple_records, set_tool_source,
+    set_hide_unused, set_language, set_simple_records, set_tool_source, signature_list_contains,
 };
 use xedit_core::interface::misc::set_progress_callback;
+use xedit_core::interface::types::Signature;
 use xedit_core::interface::{Container, ElementRef, FileState, FileStates, clear_record_defs, init_records};
 use xedit_core::localization::{add_default_l_encodings_if_missing, add_l_encoding_if_missing, set_l_encoding_default};
 use xedit_core::threads::{self, init_cycles};
@@ -65,7 +66,13 @@ pub fn game_tag(mode: GameMode) -> &'static str {
 /// Port of the game setup of `xDump.dpr` for the plugins of a game: the
 /// names of the game, its executable and its master, and the definitions.
 pub fn setup_game(game: &str) -> Result<GameMode, String> {
-    setup(game, DefinitionSource::Plugins, false)
+    setup(game, DefinitionSource::Plugins, false, None)
+}
+
+/// The game setup of a dump run with `-sr`, which `xDump.dpr` applies to
+/// `wbSimpleRecords` before it builds the definitions.
+pub fn setup_game_with_simple_records(game: &str, simple_records: bool) -> Result<GameMode, String> {
+    setup(game, DefinitionSource::Plugins, false, Some(simple_records))
 }
 
 /// The source of the definitions a game is set up with (`xDump.dpr` chooses
@@ -85,7 +92,7 @@ pub enum DefinitionSource<'a> {
 /// the saves of a game without a save file (`xDump.exe -<GAME> -saves
 /// -export`).
 pub fn setup_game_for_save_definitions(game: &str) -> Result<GameMode, String> {
-    setup(game, DefinitionSource::Saves(None), false)
+    setup(game, DefinitionSource::Saves(None), false, None)
 }
 
 /// The game setup of the editor (`xeInit.pas`) for a session: as
@@ -95,14 +102,14 @@ pub fn setup_game_for_save_definitions(game: &str) -> Result<GameMode, String> {
 /// contained-in elements of the records in a worldspace, cell or topic
 /// group (`wbCreateContainedIn`, off for Morrowind only).
 pub fn setup_game_for_edit(game: &str) -> Result<GameMode, String> {
-    setup(game, DefinitionSource::Plugins, true)
+    setup(game, DefinitionSource::Plugins, true, None)
 }
 
 /// Port of the game setup of `xDump.dpr -saves` for a save or co-save of a
 /// game: the save definitions, switched to the co-save ones for the
 /// extension of the script extender.
 pub fn setup_saves(game: &str, path: &str) -> Result<GameMode, String> {
-    setup(game, DefinitionSource::Saves(Some(path)), false)
+    setup(game, DefinitionSource::Saves(Some(path)), false, None)
 }
 
 /// The save definitions of a game.
@@ -152,7 +159,7 @@ fn save_definitions(mode: GameMode) -> Option<SaveDefinitions> {
     }
 }
 
-fn setup(game: &str, source: DefinitionSource, edit: bool) -> Result<GameMode, String> {
+fn setup(game: &str, source: DefinitionSource, edit: bool, simple_records: Option<bool>) -> Result<GameMode, String> {
     // `xDump.dpr`: `wbAllowInternalEdit := False`, so a dump shows a record
     // as loaded, without the required subrecords the editor would add.
     xedit_core::interface::globals::set_allow_internal_edit(false);
@@ -195,7 +202,7 @@ fn setup(game: &str, source: DefinitionSource, edit: bool) -> Result<GameMode, S
         _ => return Err(format!("the definitions of {tag} are not ported yet")),
     };
     // The quick clean modes load with the full definitions.
-    set_simple_records(edit && !crate::commands::quick_clean_on_load());
+    set_simple_records(simple_records.unwrap_or(edit && !crate::commands::quick_clean_on_load()));
     set_hide_unused(edit);
     set_game_mode(mode);
     // xDump turns the contained-in elements off for Fallout 4 and later, the
@@ -297,13 +304,72 @@ pub fn dump_save(path: &str, data_path: &str, mode: GameMode, out: &mut dyn Writ
     load_hardcoded()?;
     // A save has no main records to spread over the workers, and the save
     // definitions keep the tables of the save being read in globals.
-    write_elements(&*file, 0, None, out).map_err(|error| error.to_string())
+    write_elements(&*file, 0, None, &DumpOptions::default(), out).map_err(|error| error.to_string())
 }
 
-/// Loads the plugin and writes its dump.
-pub fn dump_file(path: &str, mode: GameMode, out: &mut dyn Write) -> Result<(), String> {
+/// The switches of `xDump.dpr` that change what the plain dump writes.
+/// The defaults are the upstream ones: every group and record, no sizes, no
+/// hidden elements and no report mode.
+#[derive(Clone, Debug, Default)]
+pub struct DumpOptions {
+    /// `-dg`: the top level groups the dump keeps, by label.
+    pub dump_groups: Option<Vec<Signature>>,
+    /// `-dr`: the records whose children the dump keeps, by signature.
+    pub dump_records: Option<Vec<Signature>>,
+    /// `-xcg`: the non-top-level groups whose parent record the dump skips.
+    pub skip_child_groups: Option<Vec<Signature>>,
+    /// `-top`: the number of main records the dump writes, the file header
+    /// included (`DumpMax`).
+    pub dump_max: i32,
+    /// `-es`: write the data size of every element (`DumpSize`).
+    pub dump_size: bool,
+    /// `-dh`: keep the elements the editor hides (`DumpHidden`).
+    pub dump_hidden: bool,
+    /// `-report`, `-sro`, `-sroe` and `-dcr`: `wbReportMode`.
+    pub report_mode: bool,
+    /// `-sro` and `-sroe`: `DontWriteReport`, which silences the dump.
+    pub dont_write_report: bool,
+    /// `-dcr`: `DumpCheckReport`, the `Check` of every element and the
+    /// REPORT header.
+    pub dump_check_report: bool,
+}
+
+/// Port of the `ReportDefs` tail of `xDump.dpr`. Only `-dcr` with a report
+/// enabled reaches it; the definitions report what the load and the dump
+/// recorded, which the port collects in the definitions themselves.
+fn report_defs() {
+    // The definition side of the report is not ported yet: the enum and
+    // flag unknown values are recorded (see `EnumDef::report_unknown` and
+    // `FlagsDef::report_unknown`), but the walk of `wbDefProfiles` that
+    // prints them is missing, so nothing is written.
+}
+
+/// Loads the plugin and writes its dump with `options`.
+pub fn dump_file_with_options(
+    path: &str,
+    mode: GameMode,
+    options: &DumpOptions,
+    out: &mut dyn Write,
+) -> Result<(), String> {
     let file = load_file(path, mode)?;
-    write_container(&file, out).map_err(|error| error.to_string())
+    write_container_with_options(&file, options, out).map_err(|error| error.to_string())?;
+    if options.report_mode {
+        if options.dump_check_report {
+            out.write_all(
+                b"\r\n==================================== REPORT ====================================\r\n\r\n",
+            )
+            .map_err(|error| error.to_string())?;
+        }
+        if !options.dont_write_report {
+            report_defs();
+        }
+    }
+    Ok(())
+}
+
+/// Loads the save and writes its dump with the default options.
+pub fn dump_file(path: &str, mode: GameMode, out: &mut dyn Write) -> Result<(), String> {
+    dump_file_with_options(path, mode, &DumpOptions::default(), out)
 }
 
 /// Port of `xDump -check`: loads the plugin and writes the errors of its
@@ -353,25 +419,60 @@ pub(crate) fn load_hardcoded() -> Result<(), String> {
 
 /// Port of `WriteContainer`. With more than one thread the main records
 /// are built and written on worker threads (`ParallelDump`); the output is
-/// the same.
+/// the same. `-top` counts the main records in file order, so it forces the
+/// serial dump.
 fn write_container(container: &FileImpl, out: &mut dyn Write) -> std::io::Result<()> {
+    write_container_with_options(container, &DumpOptions::default(), out)
+}
+
+fn write_container_with_options(
+    container: &FileImpl,
+    options: &DumpOptions,
+    out: &mut dyn Write,
+) -> std::io::Result<()> {
     match threads::pool() {
-        None => write_elements(container, 0, None, out),
-        Some(pool) => ParallelDump::new(pool, out).run(container),
+        None => {
+            let mut count = 0;
+            write_elements_with_count(container, 0, None, options, &mut count, out)
+        }
+        Some(pool) if options.dump_max <= 0 => ParallelDump::new(pool, options, out).run(container),
+        Some(_) => {
+            let mut count = 0;
+            write_elements_with_count(container, 0, None, options, &mut count, out)
+        }
     }
 }
 
-/// Writes the elements of `container` at nesting `depth`. `record` is the
-/// main record the elements belong to.
+/// The number of main records `WriteElement` wrote so far (`DumpCount`):
+/// the file header counts as one, as it does upstream.
+type DumpCount = i32;
+
+/// Writes the elements of `container` at nesting `depth` with the default
+/// options. `record` is the main record the elements belong to.
 fn write_elements(
     container: &dyn Container,
     depth: usize,
     record: Option<&Arc<MainRecordImpl>>,
+    options: &DumpOptions,
+    out: &mut dyn Write,
+) -> std::io::Result<()> {
+    let mut count = 0;
+    write_elements_with_count(container, depth, record, options, &mut count, out)
+}
+
+/// Writes the elements of `container` at nesting `depth`. `record` is the
+/// main record the elements belong to.
+fn write_elements_with_count(
+    container: &dyn Container,
+    depth: usize,
+    record: Option<&Arc<MainRecordImpl>>,
+    options: &DumpOptions,
+    count: &mut DumpCount,
     out: &mut dyn Write,
 ) -> std::io::Result<()> {
     for index in 0..container.get_element_count() {
         if let Some(element) = container.get_element(index) {
-            write_element(&element, depth, record, out)?;
+            write_element_with_count(&element, depth, record, options, count, out)?;
         }
     }
     Ok(())
@@ -432,6 +533,7 @@ struct Batch {
 /// thread alone.
 struct ParallelDump<'a> {
     pool: &'static rayon::ThreadPool,
+    options: &'a DumpOptions,
     out: &'a mut dyn Write,
     /// The batch being collected.
     segments: Vec<Segment>,
@@ -443,9 +545,10 @@ struct ParallelDump<'a> {
 }
 
 impl<'a> ParallelDump<'a> {
-    fn new(pool: &'static rayon::ThreadPool, out: &'a mut dyn Write) -> Self {
+    fn new(pool: &'static rayon::ThreadPool, options: &'a DumpOptions, out: &'a mut dyn Write) -> Self {
         ParallelDump {
             pool,
+            options,
             out,
             segments: Vec::new(),
             jobs: Vec::new(),
@@ -476,6 +579,9 @@ impl<'a> ParallelDump<'a> {
     /// `write_element` for the elements outside of the main records; a main
     /// record goes into the batch.
     fn walk_element(&mut self, element: &ElementRef, depth: usize) -> std::io::Result<()> {
+        if group_filtered(element, self.options, true) {
+            return Ok(());
+        }
         if let Some(record) = element.as_element_impl().and_then(ElementImpl::main_record_impl) {
             self.batch_bytes += record.header_struct().data_size as usize;
             self.segments.push(Segment::Record(self.jobs.len()));
@@ -496,15 +602,18 @@ impl<'a> ParallelDump<'a> {
         let (name, child_depth) = {
             let _read = threads::read_guard();
             let name = element.get_display_name(true);
-            let child_depth = write_line(element, &name, depth, &mut line)?;
+            let child_depth = write_line(element, &name, depth, self.options, &mut line)?;
             (name, child_depth)
         };
         self.segments.push(Segment::Line(element.clone(), depth, line));
         if let Some(container) = element.as_container()
-            && !name.starts_with("Hidden: ")
+            && !group_filtered(element, self.options, false)
+            && (self.options.dump_hidden || !name.starts_with("Hidden: "))
         {
             if element.get_skipped() {
-                self.segments.push(Segment::Skipped(child_depth));
+                if !self.options.report_mode || self.options.dump_check_report {
+                    self.segments.push(Segment::Skipped(child_depth));
+                }
             } else {
                 self.walk_elements(container, child_depth)?;
             }
@@ -518,6 +627,7 @@ impl<'a> ParallelDump<'a> {
         let jobs = Arc::new(std::mem::take(&mut self.jobs));
         let (sender, written) = std::sync::mpsc::channel();
         let batch_jobs = jobs.clone();
+        let options = self.options.clone();
         self.pool.spawn(move || {
             let result = batch_jobs
                 .par_iter()
@@ -527,7 +637,7 @@ impl<'a> ParallelDump<'a> {
                     // is reset at the end as on one thread.
                     let _pin = pin_record(&job.record);
                     let mut buffer = Vec::new();
-                    write_element(&job.element, job.depth, None, &mut buffer)?;
+                    write_element(&job.element, job.depth, None, &options, &mut buffer)?;
                     Ok(buffer)
                 })
                 .collect();
@@ -583,7 +693,7 @@ impl<'a> ParallelDump<'a> {
                 .iter()
                 .map(|job| {
                     let mut buffer = Vec::new();
-                    write_element(&job.element, job.depth, None, &mut buffer)?;
+                    write_element(&job.element, job.depth, None, self.options, &mut buffer)?;
                     Ok(buffer)
                 })
                 .collect::<std::io::Result<Vec<_>>>()?;
@@ -592,7 +702,13 @@ impl<'a> ParallelDump<'a> {
                 segments.push(match segment {
                     Segment::Line(element, depth, _) => {
                         let mut line = Vec::new();
-                        write_line(element, &element.get_display_name(true), *depth, &mut line)?;
+                        write_line(
+                            element,
+                            &element.get_display_name(true),
+                            *depth,
+                            self.options,
+                            &mut line,
+                        )?;
                         Segment::Line(element.clone(), *depth, line)
                     }
                     Segment::Skipped(depth) => Segment::Skipped(*depth),
@@ -649,6 +765,35 @@ fn trace_enabled() -> bool {
     *TRACE
 }
 
+/// The group filters of `WriteElement` and `WriteContainer` (`-dg` and
+/// `-xcg`): whether the element is left out entirely.
+///
+/// `WriteElement` runs its filters only when `DumpGroups` is assigned
+/// (`xDump.dpr:671`), so a child group excluded by `-xcg` alone still writes
+/// its line; `WriteContainer` then skips the children (`xDump.dpr:609`).
+/// `write_element` is false for that second check.
+fn group_filtered(element: &ElementRef, options: &DumpOptions, write_element: bool) -> bool {
+    let Some(group) = element.as_element_impl().and_then(ElementImpl::group_record_impl) else {
+        return false;
+    };
+    if write_element && options.dump_groups.is_none() {
+        return false;
+    }
+    if group.group_type() == 0 {
+        if let Some(dump_groups) = &options.dump_groups
+            && !signature_list_contains(dump_groups, group.gr_struct().label_signature())
+        {
+            return true;
+        }
+    } else if let Some(skip_child_groups) = &options.skip_child_groups
+        && let Some(children_of) = group.children_of()
+        && signature_list_contains(skip_child_groups, children_of.get_signature())
+    {
+        return true;
+    }
+    false
+}
+
 /// Port of `WriteElement` in the plain dump mode. The name, the value and
 /// the summary are written straight into `out`; the summary is only
 /// computed when the line needs it.
@@ -656,10 +801,42 @@ fn write_element(
     element: &ElementRef,
     depth: usize,
     record: Option<&Arc<MainRecordImpl>>,
+    options: &DumpOptions,
     out: &mut dyn Write,
 ) -> std::io::Result<()> {
+    let mut count = 0;
+    write_element_with_count(element, depth, record, options, &mut count, out)
+}
+
+fn write_element_with_count(
+    element: &ElementRef,
+    depth: usize,
+    record: Option<&Arc<MainRecordImpl>>,
+    options: &DumpOptions,
+    count: &mut DumpCount,
+    out: &mut dyn Write,
+) -> std::io::Result<()> {
+    if group_filtered(element, options, true) {
+        return Ok(());
+    }
     let own_record = element.as_element_impl().and_then(ElementImpl::main_record_impl);
     let record = own_record.as_ref().or(record);
+    if own_record.is_some() {
+        *count += 1;
+        // `if wbReportMode and DontWriteReport`: the record is built and the
+        // sampling count goes on, and nothing is written.
+        if options.report_mode && options.dont_write_report {
+            return Ok(());
+        }
+    }
+    if options.dump_max > 0 && *count > options.dump_max {
+        return Ok(());
+    }
+    let error = if options.dump_check_report {
+        element.get_check()
+    } else {
+        String::new()
+    };
     if trace_enabled() {
         eprintln!("{:width$}{}", "", element.get_name(), width = depth * 2);
     }
@@ -667,7 +844,7 @@ fn write_element(
     let (name, child_depth) = {
         let _read = threads::read_guard();
         let name = element.get_display_name(true);
-        let child_depth = write_line(element, &name, depth, out)?;
+        let child_depth = write_line(element, &name, depth, options, out)?;
         (name, child_depth)
     };
     // The other records the callbacks of this line built, such as the
@@ -675,14 +852,33 @@ fn write_element(
     // the callback lets go of them. The port resets them once more than
     // `KEPT_RECORDS` are built; the record being written stays.
     trim_initialized_records(kept_records(), record);
+    if options.dump_check_report && !error.is_empty() {
+        write_indent(out, child_depth)?;
+        out.write_all(b"[ERROR: ")?;
+        write_text(out, &error)?;
+        out.write_all(b"]\r\n")?;
+    }
     if let Some(container) = element.as_container()
-        && !name.starts_with("Hidden: ")
+        && !group_filtered(element, options, false)
+        && (options.dump_hidden || !name.starts_with("Hidden: "))
     {
         if element.get_skipped() {
-            write_indent(out, child_depth)?;
-            out.write_all(b"<contents skipped>\r\n")?;
+            if !options.report_mode || options.dump_check_report {
+                write_indent(out, child_depth)?;
+                out.write_all(b"<contents skipped>\r\n")?;
+            }
+        } else if let Some(own_record) = &own_record {
+            // Port of `WriteContainer`'s `DumpRecords` filter: a record not
+            // listed keeps its line but not its children.
+            let kept = options
+                .dump_records
+                .as_ref()
+                .is_none_or(|dump_records| signature_list_contains(dump_records, own_record.get_signature()));
+            if kept {
+                write_elements_with_count(container, child_depth, record, options, count, out)?;
+            }
         } else {
-            write_elements(container, child_depth, record, out)?;
+            write_elements_with_count(container, child_depth, record, options, count, out)?;
         }
     }
     // `WriteContainer` holds an `IwbContainerElementRef` on the record while
@@ -697,18 +893,35 @@ fn write_element(
 /// The line `WriteElement` writes for the element with the display name
 /// `name`: the name with the value or the summary. Returns the depth of the
 /// children.
-fn write_line(element: &ElementRef, name: &str, depth: usize, out: &mut dyn Write) -> std::io::Result<usize> {
+fn write_line(
+    element: &ElementRef,
+    name: &str,
+    depth: usize,
+    options: &DumpOptions,
+    out: &mut dyn Write,
+) -> std::io::Result<usize> {
     let value = element.get_value();
+    // `(not wbReportMode) or DumpCheckReport`: the report modes without a
+    // check report write no line at all.
+    let writes = !options.report_mode || options.dump_check_report;
     let mut child_depth = depth;
-    if element.get_name() != "Unused" && name != "Unused" {
-        if !name.is_empty() {
+    if options.dump_hidden || (element.get_name() != "Unused" && name != "Unused") {
+        if writes && !name.is_empty() {
             write_indent(out, depth)?;
             write_text(out, name)?;
         }
         if !name.is_empty() || !value.is_empty() {
             child_depth += 1;
+            if options.dump_size && writes {
+                if !name.is_empty() {
+                    out.write_all(b" ")?;
+                }
+                out.write_all(b"[")?;
+                out.write_all(element.get_data_size().to_string().as_bytes())?;
+                out.write_all(b"]")?;
+            }
         }
-        if !name.starts_with("Hidden: ") {
+        if (options.dump_hidden || !name.starts_with("Hidden: ")) && writes {
             if !value.is_empty() {
                 out.write_all(b": ")?;
                 write_text(out, &value)?;
