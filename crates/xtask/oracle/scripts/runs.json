@@ -1274,6 +1274,125 @@
       "synthetic_master": true,
       "timeout_minutes": 6,
       "note": "issue #81: TStringList.SaveToFile over the extended-length spelling ExportImportTexts.pas builds (the \\?\\ prefix plus the base path), with spaces and brackets in the file name and into a folder ForceDirectories made through its extended path; a silent exception in its try/except would explain an export run that writes no file"
+    },
+    {
+      "script": "Worldspace copy landscape.pas",
+      "game": "tes5",
+      "master": "tests/fixtures/parity/worldspaces.esm",
+      "plugins": [],
+      "close_after": true,
+      "save": ["Skyrim.esm"],
+      "answers": [
+        {"class": "TForm", "title": "Copy landscape data", "control": "TCheckListBox", "keys": [40, 40, 32], "button": "OK"}
+      ],
+      "note": "issue #81, worldspace tools: the fixture master holds two worldspaces with cells at the same grid (0,0), each with a LAND whose VHGT is filled with its own byte (A0 0x11, AN 0x33, B0 0x22), and region ParityRegion of world A. Simple records are on (the GUI default), so Initialize runs the options form: the worlds sort as A, B, so A is the destination, and Down Down Space checks 'Vertex heightmap'. Process then copies VHGT into the destination cell's LAND for every source LAND: A0 and AN copy to themselves and B0 copies into A0, and Finalize logs '3 cell(s) copied'. The log and the saved master are compared; A0's VHGT becomes B0's 0x22 bytes"
+    },
+    {
+      "script": "Worldspace move references into another worldspace.pas",
+      "game": "tes5",
+      "master": "tests/fixtures/parity/worldspaces.esm",
+      "plugins": [],
+      "close_after": true,
+      "save": ["Skyrim.esm"],
+      "answers": [
+        {"class": "TForm", "title": "Move references", "control": "TComboBox", "keys": [40], "button": "OK"}
+      ],
+      "note": "issue #81, worldspace tools: the destination combo lists the two worlds sorted (A, B) with the sources stored as Items.Objects (TStringList.AddObject into Items.Assign, so the objects must come along); one Down selects world A, the offset edits default to '0'. Process moves every temporary reference into world A: A0 and B0 both land in A's cell (0,0) and AN moves from grid (1,-2) to A's cell (1,-2), each through SetElementEditValues(ref, 'Cell', Name(cell)) (the contained-in relocation), with the position unchanged. Persistent references stay put (the checkbox is off). The log and the saved master are compared"
+    },
+    {
+      "script": "Create Shared Infos.pas",
+      "game": "tes5",
+      "master": "tests/fixtures/parity/shared-infos.esm",
+      "plugins": [],
+      "close_after": true,
+      "save": ["Skyrim.esm"],
+      "answers": [
+        {"class": "TForm", "title": "Shared Infos", "button": "Create"}
+      ],
+      "note": "issue #81, a list-view form: the fixture master's two INFO records carry the same response text, so Finalize builds one entry with both records and shows the form; the 'Create' button (mrOk) runs DoCreateSharedInfos with the preselected quest and the '<Create new topic>' entry (references are not built, so cmbQuestOnChange adds no shared topic), which creates the SharedInfosTopic DIAL and one shared INFO, copies the responses into it and points both source INFOs' DNAM at it; the saved master and the log are compared. The form exercises TListView.Columns (the Columns.Add chain and Columns[0].Width), OwnerData and Items.Count"
+    },
+    {
+      "script": "Worldspace copy landscape area to another worldspace.pas",
+      "game": "tes5",
+      "master": "tests/fixtures/parity/worldspaces.esm",
+      "plugins": [],
+      "close_after": true,
+      "save": ["Skyrim.esm"],
+      "answers": [
+        {"class": "#32770", "title": "Information", "button": "OK"}
+      ],
+      "note": "issue #81, worldspace tools: default Options 'Simple records' makes the script stop at its Information guard before the Copy landscape form; the dialog is answered and the run ends without edits."
+    },
+    {
+      "script": "Worldspace region change height.pas",
+      "game": "tes5",
+      "master": "tests/fixtures/parity/worldspaces.esm",
+      "plugins": [],
+      "close_after": true,
+      "save": ["Skyrim.esm"],
+      "answers": [
+        {"class": "#32770", "title": "Information", "button": "OK"}
+      ],
+      "note": "issue #81, worldspace tools: same 'Simple records' Information guard in Process; Process returns 1, so the first dialog answer ends the run."
+    },
+    {
+      "script": "Worldspace region move.pas",
+      "game": "tes5",
+      "master": "tests/fixtures/parity/worldspaces.esm",
+      "plugins": [],
+      "close_after": true,
+      "save": ["Skyrim.esm"],
+      "build_refs": true,
+      "answers": [
+        {"class": "TForm", "title": "Move region of worldspace", "button": "OK"}
+      ],
+      "note": "issue #81, worldspace tools: form defaults move world A's ParityRegion by (1,-2) cells; cell A00's LAND/REFR move to cell A12 with a +4096/-8192 position offset and persistent ref 0x820 is offset too."
+    },
+    {
+      "script": "NIF - Batch JSON converter.pas",
+      "game": "tes5",
+      "master": "tests/fixtures/parity/worldspaces.esm",
+      "plugins": [],
+      "data_files": ["tests/fixtures/parity/nif/LODGen_flat_lod.nif:meshes/LODGen_flat_lod.nif"],
+      "answers": [
+        {"class": "TForm", "title": "Batch JSON Converter", "button": "OK"}
+      ],
+      "note": "issue #81, mesh tools: the form's default source folder is wbDataPath, so OK converts the fixture mesh across the whole Data folder; the log and the JSON file the script writes next to it are compared."
+    },
+    {
+      "script": "NIF - Batch textures replacement.pas",
+      "game": "tes5",
+      "master": "tests/fixtures/parity/worldspaces.esm",
+      "plugins": [],
+      "data_files": ["tests/fixtures/parity/nif/LODGen_flat_lod.nif:meshes/LODGen_flat_lod.nif"],
+      "answers": [
+        {"class": "TForm", "title": "NIF/BGSM/BGEM Batch Textures Replacement", "button": "OK"}
+      ],
+      "note": "issue #81, mesh tools: the default replacement pair of the memo is read back from its lines; the fixture mesh has no matching path, so the run reports Processed Files and Updated without a save."
+    },
+    {
+      "script": "NIF - Batch update tangents and bitangents.pas",
+      "game": "tes5",
+      "master": "tests/fixtures/parity/worldspaces.esm",
+      "plugins": [],
+      "data_files": ["tests/fixtures/parity/nif/LODGen_flat_lod.nif:meshes/LODGen_flat_lod.nif"],
+      "answers": [
+        {"class": "TForm", "title": "Batch Update Tangents", "button": "OK"}
+      ],
+      "note": "issue #81, mesh tools: the form's default folder and 'add if missing' checked state run the tangent spell over the fixture mesh; the log and any NIF the run rewrites are compared."
+    },
+    {
+      "script": "NIF - Convert OBJ to NIF.pas",
+      "game": "tes5",
+      "master": "tests/fixtures/parity/worldspaces.esm",
+      "plugins": [],
+      "data_files": ["tests/fixtures/parity/nif/parity-triangle.obj:parity-triangle.obj"],
+      "answers": [
+        {"class": "TForm", "title": "OBJ to NIF Converter", "control": "TLabeledEdit", "control_index": 0, "text": "{{WORK}}\\Data\\parity-triangle.obj", "repeat": true},
+        {"class": "TForm", "title": "OBJ to NIF Converter", "control": "TLabeledEdit", "control_index": 1, "text": "{{WORK}}\\Data\\parity-triangle.obj", "repeat": true},
+        {"class": "TForm", "title": "OBJ to NIF Converter", "button": "OK", "repeat": true}
+      ],
+      "note": "issue #81, mesh tools: the form starts with empty file names and the source and destination edits are both set to the fixture OBJ (the harness picks a TLabeledEdit by its position among the window's children, whose order is the Z-order, so the same path goes to both); OK converts with the radio group's default Skyrim format and the written NIF is compared."
     }
   ]
 }

@@ -295,7 +295,11 @@ impl VclModel {
     /// as a nil `PropInfo` does upstream. Returns `false` for a receiver
     /// that is not one of the model's objects.
     pub fn rtti_get(&mut self, identifier: &str, value: &mut Value, args: &Args) -> Result<bool, ValueError> {
-        if !args.values.is_empty() || args.indexed {
+        // Upstream tries the RTTI property after the indexed readers fail with
+        // the index arguments dropped (`Args.Count := 0`, `JvInterpreter.pas:4461`),
+        // then reads the result's default indexed property: `Columns[0]` reads
+        // the property `Columns` and indexes the `TListColumns` it returns.
+        if !args.values.is_empty() && !args.indexed {
             return Ok(false);
         }
         let Some(object) = self.model_receiver(args) else {
@@ -589,9 +593,12 @@ impl VclModel {
             self.create_child(id, "TMenuItem")?
         } else {
             let class = self.class_of("TStringList")?;
-            Value::Object(Rc::new(RefCell::new(crate::script_strings::StringListObject::new(
-                class,
-            ))))
+            let mut list = crate::script_strings::StringListObject::new(class);
+            // The rich edit's `Lines` answers `''` for a line it does not
+            // have; a `TStringList` raises `EStringListError`
+            // (`NIF - Batch textures replacement.pas` reads one past).
+            list.set_lenient_index(self.is_a(object, "TRichEdit"));
+            Value::Object(Rc::new(RefCell::new(list)))
         };
         self.set_prop(object, "Items", value.clone());
         Ok(value)
@@ -1439,6 +1446,15 @@ impl VclModel {
                     *value = Value::Integer(object.borrow().id as i32);
                     return Ok(());
                 }
+                if member == "Parent" {
+                    // A published `TControl.Parent`; scripts walk up from a
+                    // control to the form that owns it (`TForm(cmb.Parent)`).
+                    *value = match self.parent_of(object.borrow().id) {
+                        Some(parent) => Value::Object(self.object(parent)?),
+                        None => Value::Null,
+                    };
+                    return Ok(());
+                }
                 if member == "Visible" {
                     *value = Value::Bool(self.visible(object));
                     return Ok(());
@@ -1452,9 +1468,48 @@ impl VclModel {
                     }
                     return Ok(());
                 }
+                if member == "Items" && self.is_a(object, "TCustomListView") {
+                    // A list view's `Items` is its `TListItems`, not a string
+                    // list: `Items.Count := ...` is the owner-data count
+                    // (`Create Shared Infos.pas`), and `Items[j]` a row.
+                    let id = object.borrow().id;
+                    if let Some(items) = self.first_child_of_class(id, "TListItems") {
+                        *value = Value::Object(items);
+                    } else {
+                        *value = self.create_child(id, "TListItems")?;
+                    }
+                    return Ok(());
+                }
+                if member == "Columns" && self.is_a(object, "TCustomListView") {
+                    // `Columns` is a published `TListColumns` property the
+                    // tables do not register; the column objects live under
+                    // the list view (`Columns.Add`, `Columns[0].Width`).
+                    let id = object.borrow().id;
+                    if let Some(columns) = self.first_child_of_class(id, "TListColumns") {
+                        *value = Value::Object(columns);
+                    } else {
+                        *value = self.create_child(id, "TListColumns")?;
+                    }
+                    return Ok(());
+                }
                 if member == "Items" || member == "Lines" {
                     *value = self.items_of(object)?;
                     return Ok(());
+                }
+                if member == "Text"
+                    && self.is_a(object, "TCustomComboBox")
+                    && let Some(items) = self.prop(object, "Items")
+                    && let Some(list) = crate::script_strings::list_of(&items)
+                {
+                    // A `csDropDownList` combo's text is the selected item's
+                    // (`TComboBox.GetText`): the batch NIF scripts read it
+                    // back (`StrToInt(cmbDigits.Text)`).
+                    let index = self.prop_i32(object, "ItemIndex", self.default_item_index(object));
+                    let list = crate::script_strings::borrow_list(&list);
+                    if index >= 0 && (index as usize) < list.count() {
+                        *value = Value::Str(list.string_at(i64::from(index)).into_bytes());
+                        return Ok(());
+                    }
                 }
                 if member == "Font" {
                     let id = object.borrow().id;
@@ -1578,11 +1633,33 @@ impl VclModel {
                 *value = Value::Integer(if object.borrow().checked_at(index) { 1 } else { 0 });
                 Ok(())
             }
+            // `Columns[0]`/`Items[0]`: the default indexed property's value
+            // of the collection, the child at the index.
+            "Items" if self.is_a(object, "TListColumns") => {
+                *value = self.child_at(object, index);
+                Ok(())
+            }
+            "Item" if self.is_a(object, "TListItems") => {
+                *value = self.child_at(object, index);
+                Ok(())
+            }
             _ => {
                 *value = Value::Empty;
                 Ok(())
             }
         }
+    }
+
+    /// The `index`th child object of `object` as a value (`Null` past the
+    /// end).
+    fn child_at(&self, object: &Rc<RefCell<VclObject>>, index: usize) -> Value {
+        object
+            .borrow()
+            .children
+            .get(index)
+            .and_then(|id| self.objects.get(id))
+            .map(|child| Value::Object(child.clone()))
+            .unwrap_or(Value::Null)
     }
 
     fn dispatch_indexed_set(
@@ -1865,6 +1942,13 @@ impl Vcl for VclModel {
                     return Ok(());
                 }
                 if member == "Add" {
+                    // `TListColumns.Add`: a new column, returned so a chained
+                    // `Columns.Add.Caption := ...` writes the new object.
+                    if self.is_a(&object, "TListColumns") {
+                        let parent_id = object.borrow().id;
+                        *value = self.create_child(parent_id, "TListColumn")?;
+                        return Ok(());
+                    }
                     // `TMenuItem.Add`/`Items.Add`: the argument is the child
                     // object, re-parented under the receiver.
                     if let Some(Value::Object(child)) = args.values.first() {

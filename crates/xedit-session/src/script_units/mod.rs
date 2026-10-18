@@ -46,6 +46,21 @@ pub(super) fn refused<T, E: std::fmt::Display>(result: Result<T, E>) -> Result<T
     result.map_err(|error| ValueError::external_class("Exception", error.to_string()))
 }
 
+/// A refused element edit: the RTL's string conversions (`StrToInt`,
+/// `StrToFloat`, `StrToInt64('$' + ...)`) raise `EConvertError`, which the
+/// run line prints by class; every other refusal is the bare `Exception`
+/// of [`refused`].
+pub(super) fn refused_edit(message: String) -> ValueError {
+    let class = if message.ends_with("is not a valid integer value")
+        || message.ends_with("is not a valid floating point value")
+    {
+        "EConvertError"
+    } else {
+        "Exception"
+    };
+    ValueError::external_class(class, message)
+}
+
 pub(crate) mod container;
 pub(crate) mod element;
 pub(crate) mod file;

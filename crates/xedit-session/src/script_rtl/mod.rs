@@ -275,8 +275,8 @@ impl Vcl for NoVcl {
 pub fn register(adapter: &mut Adapter, state: &Rc<RefCell<ScriptRunState>>, vcl: Rc<RefCell<dyn Vcl>>) {
     fm::register(adapter, vcl.clone());
     system::register(adapter);
-    sysutils::register(adapter, vcl);
-    classes::register(adapter, state);
+    sysutils::register(adapter, vcl.clone());
+    classes::register(adapter, state, vcl);
     math::register(adapter);
 }
 
