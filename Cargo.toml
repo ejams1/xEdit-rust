@@ -11,3 +11,15 @@ members = ["crates/*"]
 edition = "2024"
 license = "MPL-2.0"
 repository = "https://github.com/ejams1/xEdit-rust"
+
+# Debug information is the largest per-crate cost of a debug or test build,
+# and the parity work rarely needs more than line tables for a backtrace.
+# Dependencies get none: their frames are not what a failing port test reads.
+[profile.dev]
+debug = 1
+
+[profile.dev.package."*"]
+debug = 0
+
+[profile.test]
+debug = 0
