@@ -248,6 +248,63 @@ fn the_headless_vcl_helpers_answer_as_the_oracle() {
     );
 }
 
+//=== TCustomEdit.SelectAll and CopyToClipboard ==============================
+
+/// `TCustomEdit.SelectAll` and `TCustomEdit.CopyToClipboard` (the pair the
+/// corpus cases `Copy FormID to clipboard.pas` runs): `SelectAll` selects the
+/// whole `Text`, `CopyToClipboard` writes the current `SelStart`/`SelLength`
+/// selection with the real clipboard's `CF_UNICODETEXT` write, and an empty
+/// selection copies an empty string. The clipboard is read back through
+/// `Vcl.Clipbrd.GetClipboardText`.
+const EDIT_CLIPBOARD_SCRIPT: &str = r#"{
+  Headless `TCustomEdit.SelectAll`/`CopyToClipboard` checks for the xEdit-rust port.
+}
+unit VclEditClipboard;
+function Initialize: integer;
+var
+  ed: TEdit;
+begin
+  ed := TEdit.Create(nil);
+  try
+    ed.Text := 'Alpha Beta Gamma';
+    ed.SelStart := 0;
+    ed.SelLength := 0;
+    ed.SelectAll;
+    ed.CopyToClipboard;
+    if GetClipboardText = 'Alpha Beta Gamma' then AddMessage('OK SelectAll.Text') else AddMessage('FAIL SelectAll.Text: ' + GetClipboardText);
+    ed.SelStart := 6;
+    ed.SelLength := 4;
+    ed.CopyToClipboard;
+    if GetClipboardText = 'Beta' then AddMessage('OK CopyToClipboard.Selection') else AddMessage('FAIL CopyToClipboard.Selection: ' + GetClipboardText);
+    ed.SelLength := 0;
+    ed.CopyToClipboard;
+    if GetClipboardText = '' then AddMessage('OK CopyToClipboard.Empty') else AddMessage('FAIL CopyToClipboard.Empty: ' + GetClipboardText);
+  finally
+    ed.Free;
+  end;
+  AddMessage('VclEditClipboard done');
+  Result := 0;
+end;
+end.
+"#;
+
+#[test]
+fn select_all_and_copy_to_clipboard_follow_the_edit() {
+    let _guard = test_lock();
+    let folder = script_folder("VclEditClipboard", EDIT_CLIPBOARD_SCRIPT);
+    let mut session = open_session();
+    let result = run(&mut session, &folder, "VclEditClipboard");
+    assert_eq!(result["aborted"], false, "{:?}", lines(&result));
+    assert_eq!(
+        ok_lines(&result),
+        vec!["SelectAll.Text", "CopyToClipboard.Selection", "CopyToClipboard.Empty"]
+    );
+    assert_eq!(
+        lines(&result).last().map(String::as_str),
+        Some("You can close this application now.")
+    );
+}
+
 //=== The IniFiles and IOUtils members =======================================
 
 /// 24 checks of `TCustomIniFile`/`TMemIniFile`/`TIniFile` and the `IOUtils`
@@ -429,6 +486,42 @@ fn a_control_is_built_by_the_object_model() {
     assert_eq!(result["aborted"], false, "{result:#}");
     let lines = lines(&result);
     assert!(lines.iter().any(|line| line == "count=1 index=0"), "{lines:?}");
+}
+
+/// A list view's column collection and owner-data item count (issue #81):
+/// `Columns.Add` returns the created `TListColumn`, `Columns[i]` reads it
+/// back with the properties set on it, and `Items` is a `TListItems` whose
+/// `Count` the script sets (`LODGen.pas` and `Assets browser.pas`).
+#[test]
+fn a_list_view_columns_and_item_count_are_modelled_by_the_object_model() {
+    let _guard = test_lock();
+    let folder = script_folder(
+        "ListView",
+        "unit ListView;
+         function Initialize: integer;
+         var
+           lv: TListView;
+         begin
+           lv := TListView.Create(nil);
+           lv.Columns.Add.Caption := 'File Name';
+           lv.Columns[0].Width := 320;
+           lv.Columns.Add.Caption := 'Containers';
+           lv.Items.Count := 3;
+           AddMessage('col0=' + lv.Columns[0].Caption + ' width=' + IntToStr(lv.Columns[0].Width) + ' count=' + IntToStr(lv.Items.Count));
+           lv.Free;
+           Result := 0;
+         end;
+         end.
+",
+    );
+    let mut session = open_session();
+    let result = run(&mut session, &folder, "ListView");
+    assert_eq!(result["aborted"], false, "{result:#}");
+    let lines = lines(&result);
+    assert!(
+        lines.iter().any(|line| line == "col0=File Name width=320 count=3"),
+        "{lines:?}"
+    );
 }
 
 //=== The corpus scripts of the two classes ==================================

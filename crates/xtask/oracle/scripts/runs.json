@@ -239,6 +239,14 @@
       "note": "parity #41, an interactive case: the TOpenDialog of each ARMA (InitialDir wbScriptsPath, the run folder) answered with the bone scale file the case places below Data, and the MessageDlg answered Male for the first record the walk reaches and Female for the second, over the sclp-arma fixture (two armor addons; over Fallout4.esm every ARMA asks). The script names Bone Data and the BSMS values #0 to #2, where the 4.1.5q definitions call the member Sculpt Data with a Vec3, so the elements it adds are nil and a bone with a changed weight loops for ever on both sides (while ElementCount(nil) < 3); the file holds unchanged weights only (1.0, 1.00 and 1 through FloatToStr and SameValue), so both sides skip every bone, and the TPerlRegEx matches, the Skipping lines, the Add of the unknown member and the saved master are compared"
     },
     {
+      "script": "Copy FormID to clipboard.pas",
+      "game": "fo4",
+      "master": "tests/fixtures/parity/sclp/sclp-arma.esm",
+      "class": "headless",
+      "clipboard": true,
+      "note": "issue #81, the clipboard case: the script creates a TForm and a TEdit without showing either, writes FixedFormID(e) as eight hex digits, SelectAll and CopyToClipboard, and stops at the first record. The harness reads the desktop clipboard after each side's run and compares the text; the oracle leaves CF_TEXT (the case's read falls back to it), the port writes CF_UNICODETEXT"
+    },
+    {
       "script": "Find ESP plugins which could be turned into ESL.pas"
     },
     {
@@ -1393,6 +1401,82 @@
         {"class": "TForm", "title": "OBJ to NIF Converter", "button": "OK", "repeat": true}
       ],
       "note": "issue #81, mesh tools: the form starts with empty file names and the source and destination edits are both set to the fixture OBJ (the harness picks a TLabeledEdit by its position among the window's children, whose order is the Z-order, so the same path goes to both); OK converts with the radio group's default Skyrim format and the written NIF is compared."
+    },
+    {
+      "script": "Skyrim - Book Covers Patch.pas",
+      "game": "tes5",
+      "master": "tests/fixtures/parity/book-covers/book-covers-master.esm",
+      "plugins": [
+        "tests/fixtures/parity/book-covers/Book Covers Skyrim.esp",
+        "tests/fixtures/parity/book-covers/Parity Book Conflict.esp"
+      ],
+      "close_after": true,
+      "answers": [
+        {"class": "TfrmFileSelect", "title": "Books to patch", "button": "OK"},
+        {"class": "TInputQueryForm", "title": "New Module File", "text": "BookCoversPatch", "button": "OK"},
+        {"class": "#32770", "title": "Confirm", "button": "&Yes"},
+        {"class": "#32770", "title": "Information", "button": "OK"}
+      ],
+      "note": "issue #81, a file form and AddNewFile: the fixture's Book Covers Skyrim.esp BOOK is overridden by Parity Book Conflict.esp, so the selection form lists one conflict and OK patches it; AddNewFile asks for the module name, AddRequiredElementMasters asks once for Book Covers Skyrim.esp (the book's ReferenceFile: an override reports the master its FormID belongs to, not the overriding file, so Parity Book Conflict.esp is never asked for or added), the copy's OBND, Model, INAM and DATA\\Type are taken from the BC record, and the new plugin after SortMasters and CleanMasters is compared"
+    },
+    {
+      "script": "Skyrim - Tree LOD files patcher.pas",
+      "game": "tes5",
+      "master": "tests/fixtures/parity/tree-lod/tree-lod-master.esm",
+      "plugins": ["tests/fixtures/parity/tree-lod/tree-lod.esp"],
+      "data_files": [
+        "tests/fixtures/parity/tree-lod/meshes/terrain/ParityWorld/Trees/ParityWorld.0.28.0.BTT:meshes/terrain/ParityWorld/Trees/ParityWorld.0.28.0.BTT"
+      ],
+      "answers": [
+        {"class": "TForm", "title": "BTT Patcher", "button": "OK"}
+      ],
+      "note": "issue #81, a form and a random-access file: ParityWorld is the one worldspace with a Trees folder, so the combo has one entry and the OK patches ParityWorld.0.28.0.BTT (its name's third field, 28, is at the patched range); the BTT's single tree names a persistent REFR of a TREE, and the reader/writer pass rewrites its X and Y from the REFR's DATA position, deletes the original and renames .patched; the patched BTT is compared byte for byte"
+    },
+    {
+      "script": "Skyrim SE - Generate Large References.pas",
+      "game": "sse",
+      "master": "tests/fixtures/parity/large-refs/large-refs-master.esm",
+      "plugins": ["tests/fixtures/parity/large-refs/ParityLargeRefs.esm"],
+      "close_after": true,
+      "save": ["ParityLargeRefs.esm"],
+      "answers": [
+        {"class": "TForm", "title": "Generate Large References", "control": "TComboBox", "control_index": 0, "keys": [40], "button": "OK"}
+      ],
+      "note": "issue #81, a combo form: the plugin combo lists the one non-vanilla ESM and the script preselects it when the list holds a placeholder and one file, and the world combo's placeholder is index 0; the world combo is the first TComboBox of EnumChildWindows (created after the plugin combo, so above it in the z-order), and one Down moves it to ParityWorld; OK runs wbFindREFRsByBase over the worldspace, the STAT's 1200-unit OBND makes the REFR a large reference at cell 5,-3, and the RNAM the script adds (X, Y and one Ref) is compared in the saved ESM; the plugin must be an ESM (the script skips ESPs)"
+    },
+    {
+      "script": "LODGen.pas",
+      "game": "tes5",
+      "master": "tests/fixtures/parity/lodgen/lodgen-master.esm",
+      "plugins": ["tests/fixtures/parity/lodgen/ParityLODGen.esp"],
+      "data_files": [
+        "tests/fixtures/parity/lodgen/lodsettings/ParityWorld.lod:lodsettings/ParityWorld.lod"
+      ],
+      "answers": [
+        {"class": "TForm", "title": "LODGen", "button": "OK"},
+        {"class": "#32770", "title": "Information", "button": "OK"}
+      ],
+      "note": "issue #81, a list-view form: ParityWorld is the one worldspace with a lodsettings file, so the world combo holds only it and OK exports it. The worldspace has no references, so ExportWorldspace prints the gathering and filtering lines and stops at MessageDlg 'No LOD objects in ParityWorld world.' before SaveToFile and the external lodgen.exe (CreateProcessWait at the end of ExecuteLODGen). The form itself builds the TListView columns (Columns.Add.Caption, Columns[i].Width) and sets lvRules.Items.Count, the owner-data count the port's list-view model now keeps"
+    },
+    {
+      "script": "Assets manager.pas",
+      "game": "sse",
+      "synthetic_master": true,
+      "load": [],
+      "answers": [
+        {"class": "TForm", "title": "Assets Manager", "button": "Cancel"}
+      ],
+      "note": "issue #81, the manager form: ShowOptions builds the two TCheckListBoxes, the three TRadioButtons, the TRadioGroup, the TLabeledEdit, the popup menu and the checksums button and shows the form; rbModeClick(nil) runs directly (not as an event), not the radio OnClick handlers. The Cancel button's mrCancel leaves optMode wmNone, so the run compares the construction, the direct rbModeClick(nil) and the close only. The work paths are out of reach: an OK answer runs the check over every selected record, which did not finish on the oracle within the 10 minute limit over the game masters, and the mode changes need fired OnClick handlers (lines 261/280/308)"
+    },
+    {
+      "script": "Assets browser.pas",
+      "game": "sse",
+      "synthetic_master": true,
+      "load": [],
+      "answers": [
+        {"class": "TForm", "title": "Assets Browser", "keys": [27]}
+      ],
+      "note": "issue #81, the browser form: Initialize builds the form (the container combo, the asset TListView with its two columns and the owner-data Items.Count, the info memo) over the private Data folder and shows it; the form has no OK/Cancel button, and an Esc reaches its KeyPreview FormKeyDown (line 401), which sets mrOk and closes it. Nothing is selected or opened, so the run compares the log of the construction and close only; the actions (popup menu, double click, drag and drop, Ctrl+C) are out of the answers' reach"
     }
   ]
 }

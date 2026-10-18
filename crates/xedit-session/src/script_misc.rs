@@ -2129,8 +2129,9 @@ fn get_clipboard_text() -> String {
     }
 }
 
-/// `Clipboard.AsText := s` (an empty string clears the clipboard).
-fn set_clipboard_text(text: &str) {
+/// `Clipboard.AsText := s` (an empty string clears the clipboard), also the
+/// write of `TCustomEdit.CopyToClipboard`.
+pub(crate) fn set_clipboard_text(text: &str) {
     #[cfg(windows)]
     {
         use windows_sys::Win32::System::DataExchange::{

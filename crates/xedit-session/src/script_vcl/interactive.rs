@@ -82,7 +82,9 @@ use xedit_script::values::{ClassDef, ScriptObject, Value, ValueError};
 
 use super::{MemberKind, VCL_ERROR_CLASS, Vcl};
 use crate::script::{ScriptAnswer, ScriptInteraction};
-use crate::script_rtl::classes::{ComponentState, insert_component, remove_component};
+use crate::script_rtl::classes::{
+    CollectionState, ComponentState, collection_item_of, insert_component, remove_component,
+};
 use crate::script_rtl::{arg_i32, arg_text};
 
 /// The class of the error a run raises when a dialog has no recorded answer:
@@ -148,6 +150,11 @@ pub struct VclObject {
     /// owned components, the state the `Classes` unit's `TComponent` members
     /// read and write (`FindComponent` finds a control by its name).
     pub component: Rc<RefCell<ComponentState>>,
+    /// The `TCollection` side of a `TListColumns`: the `Add`, `Items` and
+    /// `Count` members of its `TCollection` ancestor belong to the `Classes`
+    /// unit, whose object model is this state (`collection_of` recognizes
+    /// the object through it).
+    pub collection: Option<Rc<RefCell<CollectionState>>>,
 }
 
 impl VclObject {
@@ -162,6 +169,13 @@ impl VclObject {
             children: Vec::new(),
             parent: None,
             component: Rc::new(RefCell::new(ComponentState::new())),
+            collection: (class_name == "TListColumns").then(|| {
+                Rc::new(RefCell::new(CollectionState {
+                    item_class: None,
+                    items: Vec::new(),
+                    updating: 0,
+                }))
+            }),
         }
     }
 
@@ -299,18 +313,37 @@ impl VclModel {
         // the index arguments dropped (`Args.Count := 0`, `JvInterpreter.pas:4461`),
         // then reads the result's default indexed property: `Columns[0]` reads
         // the property `Columns` and indexes the `TListColumns` it returns.
+        // A member read carrying call arguments is a call, not a property
+        // read; `GetValueRTTI` itself gates only on the receiver
+        // (`Args.ObjTyp` is its only gate) and the caller applies `[i]` to
+        // the value it returns.
         if !args.values.is_empty() && !args.indexed {
             return Ok(false);
         }
-        let Some(object) = self.model_receiver(args) else {
-            return Ok(false);
-        };
         let Some(name) = published_name(identifier) else {
             return Ok(false);
         };
         // Events are `tkMethod` properties, which `GetValueRTTI` does not
         // read (its `case` has no arm for them).
-        if is_event_name(name) || self.is_array_property(&object, name) {
+        if is_event_name(name) {
+            return Ok(false);
+        }
+        // A column of a list view's `Columns` is a `TCollectionItem` of the
+        // classes unit whose real class (`TListColumn`) adds published
+        // properties (`Caption`, `Width`) over it: they live on the item.
+        if let Some(item) = args.obj.as_ref().and_then(collection_item_of) {
+            *value = item
+                .borrow()
+                .props
+                .get(name)
+                .cloned()
+                .unwrap_or_else(|| property_default(name));
+            return Ok(true);
+        }
+        let Some(object) = self.model_receiver(args) else {
+            return Ok(false);
+        };
+        if self.is_array_property(&object, name) {
             return Ok(false);
         }
         self.dispatch_get(&object, name, value)?;
@@ -321,16 +354,20 @@ impl VclModel {
     /// [`Self::rtti_get`]. The event (`tkMethod`) branch is the evaluator's
     /// own (`ScriptObject::set_event`), reached before this.
     pub fn rtti_set(&mut self, identifier: &str, value: &Value, args: &Args) -> Result<bool, ValueError> {
-        if !args.values.is_empty() || args.indexed {
+        let Some(name) = published_name(identifier) else {
             return Ok(false);
+        };
+        if is_event_name(name) {
+            return Ok(false);
+        }
+        if let Some(item) = args.obj.as_ref().and_then(collection_item_of) {
+            item.borrow_mut().props.insert(name.to_owned(), value.clone());
+            return Ok(true);
         }
         let Some(object) = self.model_receiver(args) else {
             return Ok(false);
         };
-        let Some(name) = published_name(identifier) else {
-            return Ok(false);
-        };
-        if is_event_name(name) || self.is_array_property(&object, name) {
+        if self.is_array_property(&object, name) {
             return Ok(false);
         }
         self.dispatch_set(&object, name, value)?;
@@ -494,6 +531,14 @@ impl VclModel {
         }
     }
 
+    /// The `Text` of an edit control as a string, what `SelectAll` measures
+    /// and `CopyToClipboard` reads.
+    fn edit_text(&self, object: &Rc<RefCell<VclObject>>) -> String {
+        self.prop_str(object, "Text")
+            .map(|text| String::from_utf8_lossy(&text).into_owned())
+            .unwrap_or_default()
+    }
+
     fn prop_i32(&self, object: &Rc<RefCell<VclObject>>, name: &str, default: i32) -> i32 {
         match self.prop(object, name) {
             Some(Value::Integer(value)) => value,
@@ -591,6 +636,11 @@ impl VclModel {
         let value = if self.is_a(object, "TMenu") {
             let id = object.borrow().id;
             self.create_child(id, "TMenuItem")?
+        } else if self.is_a(object, "TListView") {
+            // The list view is owner-drawn: `Items` is a `TListItems` whose
+            // `Count` the script sets, not a string list.
+            let id = object.borrow().id;
+            self.create_child(id, "TListItems")?
         } else {
             let class = self.class_of("TStringList")?;
             let mut list = crate::script_strings::StringListObject::new(class);
@@ -1178,7 +1228,7 @@ impl VclModel {
                     let count = self.list_count(&active);
                     let index = (self.prop_i32(&active, "ItemIndex", self.default_item_index(&active)) + step).max(0);
                     let index = if count > 0 { index.min(count - 1) } else { index };
-                    self.set_prop(&active, "ItemIndex", Value::Integer(index));
+                    self.set_item_index(&active, index)?;
                 }
             }
             VK_SPACE => {
@@ -1234,6 +1284,27 @@ impl VclModel {
         self.is_a(object, "TCustomListBox")
             || self.is_a(object, "TCheckListBox")
             || self.is_a(object, "TCustomComboBox")
+    }
+
+    /// `ItemIndex := index` on a list control, with the `Text` follow of
+    /// `TCustomComboBox.SetItemIndex`: the selected item's text, `''` for
+    /// -1 (the script sets a combo's index and later reads `.Text`,
+    /// `LODGen.pas`'s `cbWorld.Text`). A list box has no `Text` to follow.
+    fn set_item_index(&mut self, object: &Rc<RefCell<VclObject>>, index: i32) -> Result<(), ValueError> {
+        self.set_prop(object, "ItemIndex", Value::Integer(index));
+        if !self.is_a(object, "TCustomComboBox") {
+            return Ok(());
+        }
+        if index == -1 {
+            self.set_prop(object, "Text", Value::Str(Vec::new()));
+        } else if index >= 0 && index < self.list_count(object) {
+            let items = self.items_of(object)?;
+            let text = crate::script_strings::list_of(&items)
+                .map(|list| crate::script_strings::borrow_list(&list).string_at(index as i64))
+                .unwrap_or_default();
+            self.set_prop(object, "Text", Value::Str(text.into_bytes()));
+        }
+        Ok(())
     }
 
     /// The `ItemIndex` of a list nobody moved: -1 (nothing selected), but
@@ -1436,6 +1507,35 @@ impl VclModel {
                 self.set_prop(object, "Text", Value::Str(Vec::new()));
                 Ok(())
             }
+            // `TCustomEdit.SelectAll`: the whole text becomes the selection,
+            // which `CopyToClipboard` then copies. The VCL's edit keeps the
+            // selection as `SelStart`/`SelLength`; so does the model, so a
+            // script that selects less copies less.
+            "SelectAll" => {
+                if self.is_a(object, "TCustomEdit") {
+                    let length = self.edit_text(object).chars().count() as i32;
+                    self.set_prop(object, "SelStart", Value::Integer(0));
+                    self.set_prop(object, "SelLength", Value::Integer(length));
+                }
+                Ok(())
+            }
+            // `TCustomEdit.CopyToClipboard`: the selected text to the real
+            // clipboard, as the VCL does (a script reads it back with
+            // `Clipboard.AsText`, which the RTL's `SetClipboardText` shares).
+            "CopyToClipboard" => {
+                if self.is_a(object, "TCustomEdit") {
+                    let text = self.edit_text(object);
+                    let start = self.prop_i32(object, "SelStart", 0).max(0) as usize;
+                    let length = self.prop_i32(object, "SelLength", 0).max(0) as usize;
+                    let selected: String = if length == 0 {
+                        String::new()
+                    } else {
+                        text.chars().skip(start).take(length).collect()
+                    };
+                    crate::script_misc::set_clipboard_text(&selected);
+                }
+                Ok(())
+            }
             _ => {
                 // The property read.
                 if let Some(stored) = self.prop(object, member) {
@@ -1562,19 +1662,7 @@ impl VclModel {
                     *value = Value::Set(0b11);
                     return Ok(());
                 }
-                if STRING_PROPS.contains(&member) {
-                    *value = Value::Str(Vec::new());
-                    return Ok(());
-                }
-                if INT_PROPS.contains(&member) {
-                    *value = Value::Integer(0);
-                    return Ok(());
-                }
-                if BOOL_PROPS.contains(&member) {
-                    *value = Value::Bool(false);
-                    return Ok(());
-                }
-                *value = Value::Empty;
+                *value = property_default(member);
                 Ok(())
             }
         }
@@ -1609,6 +1697,7 @@ impl VclModel {
                 );
                 Ok(())
             }
+            "ItemIndex" => self.set_item_index(object, xedit_script::values::to_i32(value).unwrap_or(-1)),
             _ => {
                 self.set_prop(object, member, value.clone());
                 Ok(())
@@ -1624,6 +1713,16 @@ impl VclModel {
         value: &mut Value,
     ) -> Result<(), ValueError> {
         let index = arg_i32(args, 0).unwrap_or(0).max(0) as usize;
+        if member == "Items" && self.is_a(object, "TListColumns") {
+            // `Columns[i]`: the column at that position of the collection.
+            let children = object.borrow().children.clone();
+            if let Some(child) = children.get(index)
+                && let Some(child_object) = self.objects.get(child).cloned()
+            {
+                *value = Value::Object(child_object);
+            }
+            return Ok(());
+        }
         match member {
             "Checked" => {
                 *value = Value::Bool(object.borrow().checked_at(index));
@@ -1866,6 +1965,20 @@ fn published_name(identifier: &str) -> Option<&'static str> {
         .flatten()
         .copied()
         .find(|name| name.eq_ignore_ascii_case(identifier))
+}
+
+/// The value an unset published property reads: the empty string, `0` or
+/// `false` by its shape, `Unassigned` for the object- and set-shaped ones.
+fn property_default(name: &str) -> Value {
+    if STRING_PROPS.contains(&name) {
+        Value::Str(Vec::new())
+    } else if INT_PROPS.contains(&name) {
+        Value::Integer(0)
+    } else if BOOL_PROPS.contains(&name) {
+        Value::Bool(false)
+    } else {
+        Value::Empty
+    }
 }
 
 impl Vcl for VclModel {

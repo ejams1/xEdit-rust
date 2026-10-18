@@ -628,6 +628,11 @@ struct RunCase {
     /// ones); with them `close_after` is implied.
     #[serde(default)]
     save: Vec<String>,
+    /// Compare the desktop clipboard the run leaves: a script whose only
+    /// output is a copy to it (`Copy FormID to clipboard.pas`). The oracle
+    /// result caches the text it left.
+    #[serde(default)]
+    clipboard: bool,
     /// The recorded dialogs the script shows, in order: the oracle GUI is
     /// answered with them (`gui::Answer`) and the port's headless VCL model
     /// consumes the same JSON (`script.run`'s `answers`). One case file
@@ -637,6 +642,11 @@ struct RunCase {
     /// A script that is slow over the loaded plugins.
     #[serde(default)]
     timeout_minutes: Option<f64>,
+    /// Override the corpus classification (`headless`, `form`,
+    /// `interactive`, `api`): `Copy FormID to clipboard.pas` creates a
+    /// `TForm` but never shows it, so the case runs it as headless.
+    #[serde(default)]
+    class: Option<String>,
     /// A synthetic game master of the repository (`tests/fixtures/...`)
     /// loaded in place of the game's, under the game master's name, by both
     /// sides: a fixture case needs no game data. `load` then names the game
@@ -723,6 +733,10 @@ struct Task {
     plugins: Vec<PathBuf>,
     /// The case's `data_files`: (source in the repository, path under Data).
     data_files: Vec<(PathBuf, String)>,
+    /// Compare the desktop clipboard the run leaves (`runs.json`'s
+    /// `clipboard`): a script whose only output is a copy, such as
+    /// `Copy FormID to clipboard.pas`.
+    clipboard: bool,
     /// The references are loaded from a cache a first run wrote.
     refcache: bool,
     /// The load settings of the case (`-PseudoESL` for the GUI, the port's
@@ -756,6 +770,11 @@ struct OracleResult {
     files: Vec<CapturedFile>,
     #[serde(default)]
     saved: Vec<CapturedFile>,
+    /// The desktop clipboard after the run, for the cases that say the
+    /// script writes it (`runs.json`'s `clipboard`): a clipboard-only
+    /// script's whole output.
+    #[serde(default)]
+    clipboard: Option<String>,
     #[serde(default)]
     note: Option<String>,
 }
@@ -895,7 +914,7 @@ pub(super) fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
         }
         for name in chosen {
             let text = fs::read_to_string(scripts.join(name)).unwrap_or_default();
-            let class = class_from(&classes, name, &text);
+            let class = class_from(&classes, name, &text, None);
             tasks.push(Task {
                 phase: "parse",
                 script: name.clone(),
@@ -910,6 +929,7 @@ pub(super) fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
                 answers: Vec::new(),
                 timeout: Duration::from_secs(10 * 60),
                 data_files: Vec::new(),
+                clipboard: false,
                 synthetic_master: true,
                 master: None,
                 plugins: Vec::new(),
@@ -1002,7 +1022,7 @@ pub(super) fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
                 None => (scripts.clone(), case.script.clone()),
             };
             let text = fs::read_to_string(scripts_dir.join(&script)).unwrap_or_default();
-            let class = class_from(&classes, &script, &text);
+            let class = class_from(&classes, &script, &text, case.class.as_deref());
             let close_after = case.close_after || !case.save.is_empty();
             let build_refs = case.build_refs.unwrap_or(runs.defaults.build_refs);
             ensure!(
@@ -1046,6 +1066,7 @@ pub(super) fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
                     Duration::from_secs_f64(minutes * 60.0)
                 }),
                 data_files,
+                clipboard: case.clipboard,
                 synthetic_master: case.synthetic_master,
                 master,
                 plugins,
@@ -1086,6 +1107,7 @@ pub(super) fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
                 answers: Vec::new(),
                 timeout: Duration::from_secs(10 * 60),
                 data_files: Vec::new(),
+                clipboard: false,
                 synthetic_master: true,
                 master: None,
                 plugins: Vec::new(),
@@ -1235,8 +1257,16 @@ fn game_data_or_none(game: &Game) -> Option<PathBuf> {
 }
 
 /// The class of a script: `corpus.json` when it has one, else the greps.
-fn class_from(classes: &std::collections::HashMap<String, String>, name: &str, text: &str) -> Class {
-    match classes.get(&name.to_lowercase()).map(String::as_str) {
+fn class_from(
+    classes: &std::collections::HashMap<String, String>,
+    name: &str,
+    text: &str,
+    over: Option<&str>,
+) -> Class {
+    let named = over
+        .map(str::to_owned)
+        .or_else(|| classes.get(&name.to_lowercase()).cloned());
+    match named.as_deref() {
         Some("headless") => Class::Headless,
         Some("form") => Class::Form,
         Some("interactive") => Class::Interactive,
@@ -1386,6 +1416,11 @@ switches ",
     }
     if task.refcache {
         recipe.push_str("\nrefcache");
+    }
+    if task.clipboard {
+        // The clipboard capture is part of the cached result: an older
+        // entry without one must not stand for this case.
+        recipe.push_str("\nclipboard");
     }
     for (source, path) in &task.data_files {
         recipe.push_str(path);
@@ -1573,6 +1608,7 @@ switches ",
             "interactive".to_owned()
         },
         dialogs: result.dialogs.clone(),
+        clipboard: task.clipboard.then(|| result.clipboard.clone()),
         ..OracleResult::default()
     };
     if let Some(dialog) = application_dialog {
@@ -1783,7 +1819,7 @@ fn capture_work(
                 if *prefix == "data" && save.iter().any(|plugin| saved_matches(plugin, &lower)) {
                     continue;
                 }
-                files.push(capture(&path, &mapped)?);
+                files.push(capture_with_root(&path, &mapped, work)?);
             }
         }
     }
@@ -1873,6 +1909,37 @@ fn capture(path: &Path, mapped: &str) -> Result<CapturedFile> {
         size: fs::metadata(path)?.len(),
         hash: content_hash(path)?,
     })
+}
+
+/// A captured file the script wrote, with the run's own absolute path
+/// normalized to `<root>` first: `ScriptsPath()` and `DataPath()` are the
+/// run folder on both sides, so a text file that embeds one (`LODGen
+/// preset default.ini`'s export and destination lines) would never hold
+/// the same bytes. The log's lines are normalized the same way. A file
+/// that is not UTF-8 (a plugin save, a NIF) keeps its bytes.
+fn capture_with_root(path: &Path, mapped: &str, root: &Path) -> Result<CapturedFile> {
+    let bytes = fs::read(path)?;
+    let root = root.display().to_string();
+    let (size, hash) = normalized_capture(&bytes, &root);
+    Ok(CapturedFile {
+        path: mapped.to_owned(),
+        size,
+        hash,
+    })
+}
+
+/// The size and hash [`capture_with_root`] compares: a UTF-8 file with the
+/// run's root replaced by `<root>`, any other file as it is.
+fn normalized_capture(bytes: &[u8], root: &str) -> (u64, u64) {
+    let Ok(text) = std::str::from_utf8(bytes) else {
+        return (bytes.len() as u64, super::nif::fnv(bytes));
+    };
+    let normalized = if root.is_empty() {
+        text.to_owned()
+    } else {
+        replace_ci(text, root, "<root>")
+    };
+    (normalized.len() as u64, super::nif::fnv(normalized.as_bytes()))
 }
 
 /// The file of a run folder a mapped path names: `out/` below the run
@@ -2121,13 +2188,22 @@ fn port_run(
     for source in loaded {
         let name = source.file_name().context("plugin without a name")?;
         fs::copy(&source, data.join(name))?;
-        // The oracle's `-D:` value ends `Data\\` and its log paths repeat
-        // the separator (`<work>\Data\\Skyrim.esm`); the port takes its data
-        // path from the loaded plugin's folder, so the mode names the copies
-        // with the same doubled separator and the printed paths compare.
+        // The oracle's `-D:` argument is quoted when the run folder holds a
+        // space, and Delphi's `ParamStr` then keeps the doubled closing
+        // backslash the quote needs, so `wbDataPath` ends `Data\\` and the
+        // printed paths repeat the separator (`<work>\Data\\Skyrim.esm`);
+        // without a space the argument is unquoted and the separator stays
+        // single (`<work>\Data\`). The port takes its data path from the
+        // loaded plugin's folder, so the copies carry the separator count
+        // the oracle received.
+        let data_text = data.display().to_string();
+        let separator = if data_text.contains([' ', '\t', '"']) {
+            "\\\\"
+        } else {
+            "\\"
+        };
         plugins.push(PathBuf::from(format!(
-            "{}\\\\{}",
-            data.display(),
+            "{data_text}{separator}{}",
             name.to_string_lossy()
         )));
     }
@@ -2278,6 +2354,9 @@ fn port_run(
     let mut command = port_command(&task.script);
     let started = std::time::Instant::now();
     let output = command.output()?;
+    // Read the clipboard at once: it is desktop state, and the port writes
+    // it during the run.
+    let port_clipboard = task.clipboard.then(gui::clipboard_text);
     outcome.port_seconds = Some(started.elapsed().as_secs_f64());
     let report = dir.join("port.json");
     fs::write(&report, &output.stdout)?;
@@ -2327,6 +2406,14 @@ fn port_run(
             oracle_lines.get(first).map_or("<end>", String::as_str),
             port_lines.get(first).map_or("<end>", String::as_str)
         ));
+    }
+    // The clipboard, for the cases that compare it: the oracle's text was
+    // read and cached with its run, the port's right after its own.
+    if let Some(expected) = &oracle.clipboard {
+        let actual = port_clipboard.as_deref().unwrap_or_default();
+        if actual != expected {
+            differences.push(format!("  clipboard: oracle {expected:?}, port {actual:?}"));
+        }
     }
     // The files: every file the oracle captured, by the path both sides map
     // to, plus the port's own. Files are hashed in place (the port writes
@@ -2454,7 +2541,7 @@ fn capture_port(
                 if machinery {
                     continue;
                 }
-                files.push(capture(&path, &mapped)?);
+                files.push(capture_with_root(&path, &mapped, dir)?);
             }
         }
     }
@@ -2754,6 +2841,29 @@ Setting a bookmark
             "Saving: Skyrim.esm.save.<time>"
         );
         assert_eq!(replace_ci("A:\\B\\C", "a:\\b", "<root>"), "<root>\\C");
+    }
+
+    #[test]
+    fn a_written_text_file_normalizes_the_runs_own_root() {
+        // The preset an options form writes names `ScriptsPath()` and
+        // `DataPath()`; the two runs' folders stand for each other, so the
+        // same file from two roots captures equal.
+        let oracle = b"[Skyrim]\r\nWorld=ParityWorld\r\nExport=M:\\cache\\oracle-work\\run-x.abc.123\\LODGen ParityWorld.txt\r\n";
+        let port = b"[Skyrim]\r\nWorld=ParityWorld\r\nExport=M:\\scratch\\TES5-port\\run-x\\LODGen ParityWorld.txt\r\n";
+        assert_eq!(
+            normalized_capture(oracle, "M:\\cache\\oracle-work\\run-x.abc.123"),
+            normalized_capture(port, "M:\\scratch\\TES5-port\\run-x")
+        );
+        // A file without the root keeps its bytes; a binary file (not
+        // UTF-8) is never rewritten.
+        assert_eq!(
+            normalized_capture(b"plain", "M:\\scratch"),
+            (5, super::super::nif::fnv(b"plain"))
+        );
+        assert_eq!(
+            normalized_capture(&[0xff, 0x00, 0xfe], "M:\\scratch"),
+            (3, super::super::nif::fnv(&[0xff, 0x00, 0xfe]))
+        );
     }
 
     #[test]

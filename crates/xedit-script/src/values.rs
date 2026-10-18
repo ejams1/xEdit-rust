@@ -1080,6 +1080,12 @@ pub fn jv_var_assignment(dest: &mut Value, source: &Value) -> Result<(), ValueEr
         Value::Array(_) => Err(ValueError::not_implemented(RS_ARRAY_TO_ARRAY_ASSIGNMENT)),
         Value::Record(source_record) => {
             if let Value::Record(dest_record) = dest {
+                // A `var` record parameter and its argument share the holder
+                // (FindFirst's `var F: TSearchRec`); a self-assignment is a
+                // no-op, and borrowing the same `RefCell` twice would panic.
+                if Rc::ptr_eq(source_record, dest_record) {
+                    return Ok(());
+                }
                 let source = source_record.borrow();
                 let mut target = dest_record.borrow_mut();
                 let count = source.values.len().min(target.values.len());
@@ -1888,6 +1894,40 @@ mod tests {
         // The first-character switch upstream (`:1657`) is an optimization:
         // `AnsiString` matches under 'A' only case-insensitively.
         assert_eq!(type_name_2_var_type(b"ansistring"), VarType::Str);
+    }
+
+    #[test]
+    fn record_self_assignment_is_a_noop() {
+        // A `var` record parameter aliases its argument, so `UpdateVarParams`
+        // assigns the record to itself (FindFirst's `var F: TSearchRec`).
+        let def = Rc::new(RecordDef {
+            unit: String::new(),
+            name: "TSearchRec".to_string(),
+            size: 8,
+            fields: vec![
+                RecordField {
+                    name: "Time".to_string(),
+                    offset: 0,
+                    typ: VarType::Integer,
+                    data_type: None,
+                },
+                RecordField {
+                    name: "Name".to_string(),
+                    offset: 4,
+                    typ: VarType::Str,
+                    data_type: None,
+                },
+            ],
+        });
+        let record = Rc::new(RefCell::new(RecordInstance::new(def)));
+        record.borrow_mut().values[0] = Value::Integer(42);
+        record.borrow_mut().values[1] = Value::Str(b"parity.btt".to_vec());
+        let mut dest = Value::Record(record.clone());
+        let source = dest.clone();
+        jv_var_assignment(&mut dest, &source).unwrap();
+        let borrowed = record.borrow();
+        assert_eq!(borrowed.values[0], Value::Integer(42));
+        assert_eq!(borrowed.values[1], Value::Str(b"parity.btt".to_vec()));
     }
 
     #[test]
