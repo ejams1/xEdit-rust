@@ -663,7 +663,7 @@ mod tests {
         assert_eq!(float_color_to_byte(4.484_155_085_839_415e-44), 0);
 
         // The same vertex through both adjust cases of `parity sniff`.
-        let mut channels = || {
+        let channels = || {
             (
                 float_color_to_byte(1.783_195_214_014_246_4e25),
                 float_color_to_byte(15_352_481_185_792.0),
