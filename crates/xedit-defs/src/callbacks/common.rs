@@ -320,7 +320,10 @@ pub fn wb_info_add_info(a_main_record: &MainRecordRef) -> String {
     }
     if !result.is_empty() {
         let response = element_value(a_main_record, r"Responses\Response\NAM1");
-        let response = response.trim();
+        // Delphi `SysUtils.Trim`, not the Unicode whitespace of `str::trim`:
+        // the length prefix of a `wbLStringKC` native value reads as a
+        // control character (`Create Shared Infos.pas` INFO names).
+        let response = response.trim_matches(|c: char| c <= ' ');
         if !response.is_empty() {
             result = format!("''{response}''{result}");
         }
@@ -3613,7 +3616,12 @@ pub fn wb_dialogue_text_after_load(a_element: &ElementRef) {
     with_internal_edit(|| {
         let Some(file) = a_element.get_file() else { return };
         if !file.get_is_localized() {
-            let trimmed = a_element.get_edit_value().trim().to_owned();
+            // Delphi `SysUtils.Trim` removes every character up to and
+            // including a space, not the Unicode whitespace `str::trim` does:
+            // the length prefix of an `wbLStringKC` reads as a control
+            // character that must go too (`Create Shared Infos.pas` INFO
+            // names read a leading NUL otherwise).
+            let trimmed = a_element.get_edit_value().trim_matches(|c: char| c <= ' ').to_owned();
             set_edit(a_element, &trimmed);
         }
     });
@@ -3630,7 +3638,7 @@ pub fn wb_dialogue_text_after_set(a_element: &ElementRef, a_old_value: &Variant,
     with_internal_edit(|| {
         let Some(file) = a_element.get_file() else { return };
         if !file.get_is_localized() {
-            set_edit(a_element, variant_text(a_new_value).trim());
+            set_edit(a_element, variant_text(a_new_value).trim_matches(|c: char| c <= ' '));
         }
     });
 }

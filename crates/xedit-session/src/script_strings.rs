@@ -76,6 +76,10 @@ pub struct StringListObject {
     delimiter: char,
     strict_delimiter: bool,
     name_value_separator: char,
+    /// A read past the last line is `''` instead of `EStringListError`: the
+    /// `Lines` of a `TRichEdit` (`TRichEditStrings.Get` asks the control,
+    /// which answers nothing for a line it does not have).
+    lenient_index: bool,
 }
 
 impl StringListObject {
@@ -90,7 +94,14 @@ impl StringListObject {
             delimiter: ',',
             strict_delimiter: false,
             name_value_separator: '=',
+            lenient_index: false,
         }
+    }
+
+    /// Marks the list as one whose out-of-range reads are `''` (the
+    /// `TRichEdit.Lines` of the interactive controls).
+    pub fn set_lenient_index(&mut self, lenient: bool) {
+        self.lenient_index = lenient;
     }
 
     /// `CompareStrings` (`System.Classes`): `AnsiCompareText`, or
@@ -401,6 +412,7 @@ impl StringListObject {
             delimiter: self.delimiter,
             strict_delimiter: self.strict_delimiter,
             name_value_separator: self.name_value_separator,
+            lenient_index: self.lenient_index,
         }
     }
 
@@ -1058,20 +1070,17 @@ pub fn register_base(adapter: &mut Adapter, classes: &ScriptClasses) {
         Rc::new(|_value: &mut Value, args: &mut Args| {
             let other = list_of_or_error(&args.values[0])?;
             let object = receiver(args)?;
-            if Rc::ptr_eq(&other, &object) {
-                // `AddStrings(Self)` doubles the list; snapshot first so the
-                // borrow does not alias.
-                let lines = borrow_list(&object).strings();
-                let mut list = borrow_list_mut(&object);
-                for text in lines {
-                    list.add(text)?;
-                }
-                return Ok(());
-            }
-            let lines = borrow_list(&other).strings();
+            // `TStrings.AddStrings` adds every line with `AddObject`
+            // (`System.Classes`), so the objects come along; `AddStrings(Self)`
+            // reads the growing list, which a snapshot of its starting state
+            // reproduces.
+            let source = borrow_list(&other).snapshot();
             let mut list = borrow_list_mut(&object);
-            for text in lines {
-                list.add(text)?;
+            for index in 0..source.count() {
+                let text = source.line_bytes(index).unwrap_or_default().to_vec();
+                let item = source.objects.get(index).cloned().unwrap_or(Value::Empty);
+                let at = list.add_bytes(text)?;
+                list.objects[at] = item;
             }
             Ok(())
         }),
@@ -1221,6 +1230,10 @@ pub fn register_base(adapter: &mut Adapter, classes: &ScriptClasses) {
             let index = int_arg(&args.values[0])?;
             let object = receiver(args)?;
             let list = borrow_list(&object);
+            if list.lenient_index && (index < 0 || index as usize >= list.strings.len()) {
+                *value = Value::Str(Vec::new());
+                return Ok(());
+            }
             list.check_index(i64::from(index), list.strings.len())?;
             *value = Value::Str(list.string_at(i64::from(index)).into_bytes());
             Ok(())

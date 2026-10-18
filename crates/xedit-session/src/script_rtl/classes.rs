@@ -51,8 +51,8 @@ use xedit_script::values::{ClassDef, ScriptObject, Value, ValueError, to_bool, t
 use crate::script::ScriptRunState;
 
 use super::{
-    BYREF, EMPTY, NULL, arg, arg_i32, arg_str, arg_text, constant, default_get, default_set, index_get, index_set,
-    method, setter,
+    BYREF, EMPTY, MemberKind, NULL, Vcl, arg, arg_i32, arg_str, arg_text, constant, default_get, default_set,
+    index_get, index_set, method, setter,
 };
 
 /// `cClasses = 'Classes'` (`JvInterpreter_Classes.pas:1164`).
@@ -376,7 +376,7 @@ struct Classes {
 }
 
 /// Registers the unit.
-pub fn register(adapter: &mut Adapter, state: &Rc<RefCell<ScriptRunState>>) {
+pub fn register(adapter: &mut Adapter, state: &Rc<RefCell<ScriptRunState>>, vcl: Rc<RefCell<dyn Vcl>>) {
     // `AddHandler(cClasses, 'TNotifyEvent', TJvInterpreterClassesEvent, ...)`
     // and `THelpEvent`: the handler *class* both registrations name.
     adapter.add_handler(UNIT, "TNotifyEvent", "TJvInterpreterClassesEvent");
@@ -452,7 +452,7 @@ pub fn register(adapter: &mut Adapter, state: &Rc<RefCell<ScriptRunState>>) {
 
     register_list(adapter, &t_list);
     register_persistent(adapter, &classes);
-    register_collection(adapter, &classes);
+    register_collection(adapter, &classes, vcl);
     register_strings(adapter, &classes);
     register_stream(adapter, &classes);
     register_component(adapter, &classes);
@@ -841,7 +841,7 @@ fn register_persistent(adapter: &mut Adapter, classes: &Classes) {
 
 //=== TCollection =============================================================
 
-fn register_collection(adapter: &mut Adapter, classes: &Classes) {
+fn register_collection(adapter: &mut Adapter, classes: &Classes, vcl: Rc<RefCell<dyn Vcl>>) {
     {
         let class = classes.t_collection_item.clone();
         method(
@@ -947,14 +947,28 @@ fn register_collection(adapter: &mut Adapter, classes: &Classes) {
     }
     {
         let item_class = classes.t_collection_item.clone();
+        let vcl = vcl.clone();
         method(adapter, &classes.t_collection, "Add", &[], move |value, args| {
-            let collection = collection_arg(args)?;
+            let received = receiver(args)?;
+            if collection_of(&received).is_none() {
+                // Upstream's `TCollection.Add` is
+                // `Value := O2V(TCollection(Args.Obj).Add)` on the real
+                // object, so a VCL collection (`TListView.Columns`) gets its
+                // own class's `Add` (`JvInterpreter_ComCtrls.pas` registers
+                // it after this one and the receiver `is` the VCL class).
+                if let Some(object) = received.as_object() {
+                    let class = object.borrow().class().name.clone();
+                    return vcl.borrow_mut().member(&class, "Add", MemberKind::Get, value, args);
+                }
+                return Err(ValueError::Variant);
+            }
+            let collection = collection_of(&received).expect("checked above");
             let mut collection = collection.borrow_mut();
             let index = collection.items.len();
             let item = Value::Object(Rc::new(RefCell::new(CollectionItemObject {
                 class: item_class.clone(),
                 state: Rc::new(RefCell::new(CollectionItemState {
-                    collection: Some(receiver(args)?),
+                    collection: Some(received),
                     id: index as i32,
                     index: index as i32,
                     display_name: String::new(),
@@ -1018,8 +1032,23 @@ fn register_collection(adapter: &mut Adapter, classes: &Classes) {
     });
     {
         let item_class = classes.t_collection_item.clone();
+        let vcl = vcl.clone();
         let read = move |value: &mut Value, args: &mut Args| {
-            let collection = collection_arg(args)?;
+            let received = receiver(args)?;
+            if collection_of(&received).is_none() {
+                // The default indexed property of a VCL collection: upstream
+                // `TCollection_Read_Items` indexes the real `TCollection`
+                // (`Args.Obj.Items[Args.Values[0]]`), which for
+                // `TListView.Columns` is the VCL class's own entry.
+                if let Some(object) = received.as_object() {
+                    let class = object.borrow().class().name.clone();
+                    return vcl
+                        .borrow_mut()
+                        .member(&class, "Items", MemberKind::IndexedGet, value, args);
+                }
+                return Err(ValueError::Variant);
+            }
+            let collection = collection_of(&received).expect("checked above");
             let index = arg_i32(args, 0)?.max(0) as usize;
             let item = collection.borrow().items.get(index).cloned();
             *value = match item {

@@ -536,7 +536,7 @@ pub(crate) fn register(adapter: &mut Adapter, state: &Rc<RefCell<ScriptRunState>
                 // (`wbImplementation.pas:16444-16468`) and aborts the run;
                 // the discarded error made a refused edit a silent no-op.
                 if let Err(message) = container.set_element_edit_value(&path, &value) {
-                    return Err(ValueError::external_class("Exception", message));
+                    return Err(super::refused_edit(message));
                 }
             }
             Ok(())
