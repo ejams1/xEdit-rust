@@ -831,10 +831,20 @@ static HANDLER: RwLock<Option<Arc<LocalizationHandlerImpl>>> = RwLock::new(None)
 static GENERATION: AtomicI32 = AtomicI32::new(0);
 
 /// Creates the handler and registers it as `wbLocalizationHandler`.
+///
+/// The generation counts on, as `Clear` does: the names built while the
+/// files loaded (the notes `<Note: X was injected into Y>` read a record's
+/// name) got the empty handler's answer, and a record of a localized file
+/// has to read its names again now that the tables are there. Upstream's
+/// GUI clears the handler when its resources are loaded; the port's dump
+/// (xDump's route) had no tables during the load either, and `NW.esm` of
+/// Fallout 76 kept the error text of one `FULL` string in the record
+/// heading (parity #41).
 pub fn install_localization_handler() -> Arc<LocalizationHandlerImpl> {
     let handler = Arc::new(LocalizationHandlerImpl::default());
     set_localization_handler(Some(handler.clone()));
     *HANDLER.write().unwrap() = Some(handler.clone());
+    GENERATION.fetch_add(1, Ordering::Relaxed);
     handler
 }
 
