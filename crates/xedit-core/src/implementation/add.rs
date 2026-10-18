@@ -14,8 +14,7 @@
 //!
 //! State: the move of a record between the child groups of a cell
 //! (`UpdateCellChildGroup`), `CollapseStorage` and the reference index
-//! (`BuildRef`) are not ported; the editor ID index of a file does not
-//! learn the records an edit adds.
+//! (`BuildRef`) are not ported.
 
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, RwLock, Weak};

@@ -103,7 +103,6 @@ The progress bar above counts merged phases of [docs/PLAN.md](docs/PLAN.md); it 
 - **4 script registrations** (issue #81): the form runners that exist to run a form script headlessly, with the run cases the issue lists.
 - **The legacy module list** (issue #83): `wbLoadModules`' implicit actives, `loadorder.txt` and the missing-masters filter of the legacy load.
 - **The walk into a group created under an initialised node** (issue #84): `Change persistent flag.pas`, `persistent-walk.pas` and `Worldspace displacement.pas` reach a child group the walk has already passed, and the port's walk stops one processed record short.
-- **Small owed items** (issue #85): the FO4 object-LOD export fixture and the remaining checks the issue lists.
 
 ### Out of the oracle's reach
 
