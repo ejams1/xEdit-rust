@@ -150,9 +150,11 @@ mod tests {
             assert_eq!(failure_code(&error), Some("edit_required"), "{name}");
             assert!(error.message.contains(name), "{name}: {}", error.message);
             // With dry_run the gate opens, and the command runs as far as
-            // the empty session allows.
-            let error = handler.call(name, json!({ "dry_run": true })).unwrap_err();
-            assert_ne!(failure_code(&error), Some("edit_required"), "{name}");
+            // the empty session allows; a command whose selection defaults
+            // to empty may succeed as a no-op.
+            if let Err(error) = handler.call(name, json!({ "dry_run": true })) {
+                assert_ne!(failure_code(&error), Some("edit_required"), "{name}");
+            }
         }
     }
 

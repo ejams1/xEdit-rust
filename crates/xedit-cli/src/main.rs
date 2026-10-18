@@ -285,6 +285,13 @@ enum CliCopyToRecordsMode {
     Copy,
 }
 
+/// The log of `logs analyze`.
+#[derive(Clone, Copy, Debug, clap::ValueEnum)]
+enum CliLogType {
+    Papyrus,
+    RuntimeScriptProfiler,
+}
+
 #[derive(Subcommand)]
 enum Action {
     /// Print every command with its request and response JSON Schema.
@@ -687,6 +694,16 @@ enum Action {
     },
     /// Serve the commands as Model Context Protocol tools on stdio. The plugins load when the first tool is called.
     Mcp,
+    /// Check the leveled lists of the loaded files for circular references (leveled_lists.check_circular).
+    LeveledLists {
+        #[command(subcommand)]
+        action: LeveledListsAction,
+    },
+    /// The Log Analyzer (logs.analyze).
+    Logs {
+        #[command(subcommand)]
+        action: LogsAction,
+    },
 }
 
 #[derive(Subcommand)]
@@ -996,6 +1013,20 @@ enum FilesAction {
         #[arg(long)]
         dry_run: bool,
     },
+    /// Copy a newer version of a module into the data folder as a .esu and load it as a delta patch against the module (files.create_delta_patch, Create Delta Patch). Needs --edit unless --dry-run.
+    CreateDeltaPatch {
+        /// The loaded module the patch is made against.
+        file: String,
+        /// The newer version of the module on disk.
+        #[arg(long)]
+        newer: String,
+        /// The patch name without its extension; the newer file's name when omitted.
+        #[arg(long)]
+        name: Option<String>,
+        /// Report the patch file, write and load nothing.
+        #[arg(long)]
+        dry_run: bool,
+    },
     /// Make a new empty plugin in the data folder with the game master as its master (files.new, AddNewFile); it exists in memory until saved, so use it in batch or serve. Needs --edit unless --dry-run.
     New {
         /// File name; the extension is replaced by .esp, or .esl with --light, as xEdit does.
@@ -1271,6 +1302,84 @@ enum RefsAction {
         /// Skip the reference build of the files that have none.
         #[arg(long)]
         no_build_refs: bool,
+    },
+    /// Change the references in the referencing records from one FormID to another, the record itself keeping its FormID (references.change, mniNavChangeReferencingRecords). Needs --edit unless --dry-run.
+    Change {
+        /// Load order FormID of the referenced record as hexadecimal digits.
+        form_id: String,
+        /// Plugin whose version of the record names the referenced-by list; the last loaded plugin when omitted.
+        #[arg(long)]
+        file: Option<String>,
+        /// The new load order FormID.
+        #[arg(long)]
+        new_form_id: String,
+        /// Only the referencing records of these loaded files; repeat for several. Every editable referencing record when omitted.
+        #[arg(long)]
+        file_filter: Vec<String>,
+        /// Report the records, change nothing.
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Change the references of the focused plugin's records for a list of FormID pairs and rename its old-record overrides (references.change_batch, mniNavBatchChangeReferencingRecords). Needs --edit unless --dry-run.
+    ChangeBatch {
+        /// The loaded plugin whose records are updated; the only loaded plugin when omitted.
+        #[arg(long)]
+        file: Option<String>,
+        /// Old and new load order FormID, in that order; repeat for several.
+        #[arg(long = "pair", value_names = ["OLD", "NEW"], num_args = 2)]
+        pairs: Vec<String>,
+        /// Report the records, change nothing.
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Set Visible When Distant on every exterior reference of the selection whose base has a VWD mesh (references.set_vwd_auto, mniNavSetVWDAuto). Needs --edit unless --dry-run.
+    SetVwdAuto {
+        /// The selected files: every reference of them is examined.
+        #[arg(long)]
+        file: Vec<String>,
+        /// The selected records, as load order FormIDs.
+        #[arg(long)]
+        record: Vec<String>,
+        /// Report the references, change nothing.
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Copy the exterior references of the selection with a VWD mesh into a plugin as overrides with Visible When Distant set (references.copy_vwd_auto, mniNavSetVWDAutoInto). Needs --edit unless --dry-run.
+    CopyVwdAuto {
+        /// The selected files: every reference of them is examined.
+        #[arg(long)]
+        file: Vec<String>,
+        /// The selected records, as load order FormIDs.
+        #[arg(long)]
+        record: Vec<String>,
+        /// Plugin to copy the references into.
+        #[arg(long)]
+        to: String,
+        /// Report the copies, change nothing.
+        #[arg(long)]
+        dry_run: bool,
+    },
+}
+
+#[derive(Subcommand)]
+enum LeveledListsAction {
+    /// Walk the leveled lists of the loaded files and report the ones that refer back to themselves (leveled_lists.check_circular, "Check for Circular Leveled Lists").
+    CheckCircular,
+}
+
+#[derive(Subcommand)]
+enum LogsAction {
+    /// Read the game's Papyrus or RuntimeScriptProfiler log and list the forms it names (logs.analyze, the Log Analyzer).
+    Analyze {
+        /// papyrus, or runtime-script-profiler.
+        #[arg(long, value_enum, default_value_t = CliLogType::Papyrus)]
+        log: CliLogType,
+        /// The log file; the game's default when omitted.
+        #[arg(long)]
+        file: Option<String>,
+        /// Read only the first this many megabytes; 50 when omitted.
+        #[arg(long)]
+        max_size_mb: Option<u32>,
     },
 }
 
@@ -1705,6 +1814,60 @@ enum RecordsAction {
         #[arg(long)]
         disable: bool,
         /// Report the masters the copy needs and whether the target has the record, but copy nothing.
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Make a reference persistent or temporary, moving it to the child group of its cell (records.set_persistent, Cell Child > Persistent/Temporary). Needs --edit unless --dry-run.
+    SetPersistent {
+        /// Load order FormID of the reference as hexadecimal digits.
+        form_id: String,
+        /// Plugin the record is seen from; the last loaded plugin when omitted.
+        #[arg(long)]
+        file: Option<String>,
+        /// false makes the reference temporary; persistent when omitted.
+        #[arg(long, num_args = 0..=1, default_missing_value = "true")]
+        persistent: Option<bool>,
+        /// Report the record, change nothing.
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Set or clear the Visible When Distant flag of a reference, moving it to the child group of its cell (records.set_visible_when_distant, Cell Child > Visible When Distant, and the referencing records' item). Needs --edit unless --dry-run.
+    SetVisibleWhenDistant {
+        /// Load order FormID of the reference as hexadecimal digits.
+        form_id: String,
+        /// Plugin the record is seen from; the last loaded plugin when omitted.
+        #[arg(long)]
+        file: Option<String>,
+        /// false clears the flag; set when omitted.
+        #[arg(long, num_args = 0..=1, default_missing_value = "true")]
+        visible_when_distant: Option<bool>,
+        /// Report the record, change nothing.
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Copy the IDLE records of a model folder as new records, change their model prefix and their references (records.copy_idles, Copy Idles). Needs --edit unless --dry-run; Morrowind up to Fallout: New Vegas.
+    CopyIdles {
+        /// The model prefix (the folder of the MODL path) to copy.
+        path: String,
+        /// The new model prefix.
+        #[arg(long)]
+        new_path: String,
+        /// Plugin to copy the idle records into.
+        #[arg(long)]
+        to: String,
+        /// Report the copies, change nothing.
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// The bandit script fix of Mart's Monster Mod (records.bandit_fix). Needs --edit unless --dry-run.
+    BanditFix {
+        /// Report the records, change nothing.
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Point the NPCs' race leveled item entries at the master leveled lists by their load order FormID (records.race_leveled_lists). Needs --edit unless --dry-run.
+    RaceLeveledLists {
+        /// Report the records, change nothing.
         #[arg(long)]
         dry_run: bool,
     },
@@ -2262,6 +2425,18 @@ fn command_of(action: Action) -> Result<(String, Value), CommandError> {
         } => ("files.mark_modified_headers".to_owned(), json!({ "dry_run": dry_run })),
         Action::Files {
             action:
+                FilesAction::CreateDeltaPatch {
+                    file,
+                    newer,
+                    name,
+                    dry_run,
+                },
+        } => (
+            "files.create_delta_patch".to_owned(),
+            json!({ "file": file, "newer": newer, "name": name, "dry_run": dry_run }),
+        ),
+        Action::Files {
+            action:
                 FilesAction::New {
                     file,
                     light,
@@ -2419,6 +2594,54 @@ fn command_of(action: Action) -> Result<(String, Value), CommandError> {
             RefsAction::BuildReachable { no_build_refs } => (
                 "refs.build_reachable".to_owned(),
                 json!({ "build_refs": !no_build_refs }),
+            ),
+            RefsAction::Change {
+                form_id,
+                file,
+                new_form_id,
+                file_filter,
+                dry_run,
+            } => (
+                "references.change".to_owned(),
+                json!({ "form_id": form_id, "file": file, "new_form_id": new_form_id,
+                        "files": file_filter, "dry_run": dry_run }),
+            ),
+            RefsAction::ChangeBatch { file, pairs, dry_run } => {
+                let mut values = Vec::new();
+                for chunk in pairs.chunks(2) {
+                    if let [old_form_id, new_form_id] = chunk {
+                        values.push(json!({ "old_form_id": old_form_id, "new_form_id": new_form_id }));
+                    }
+                }
+                (
+                    "references.change_batch".to_owned(),
+                    json!({ "file": file, "pairs": values, "dry_run": dry_run }),
+                )
+            }
+            RefsAction::SetVwdAuto { file, record, dry_run } => (
+                "references.set_vwd_auto".to_owned(),
+                json!({ "files": file, "records": record, "dry_run": dry_run }),
+            ),
+            RefsAction::CopyVwdAuto {
+                file,
+                record,
+                to,
+                dry_run,
+            } => (
+                "references.copy_vwd_auto".to_owned(),
+                json!({ "files": file, "records": record, "to": to, "dry_run": dry_run }),
+            ),
+        },
+        Action::LeveledLists { action } => match action {
+            LeveledListsAction::CheckCircular => ("leveled_lists.check_circular".to_owned(), json!({})),
+        },
+        Action::Logs { action } => match action {
+            LogsAction::Analyze { log, file, max_size_mb } => (
+                "logs.analyze".to_owned(),
+                json!({ "log": match log {
+                    CliLogType::Papyrus => "papyrus",
+                    CliLogType::RuntimeScriptProfiler => "runtime_script_profiler",
+                }, "file": file, "max_size_mb": max_size_mb }),
             ),
         },
         Action::Filter { action } => filter_command(action)?,
@@ -2597,6 +2820,39 @@ fn command_of(action: Action) -> Result<(String, Value), CommandError> {
                         "wrapper_editor_id": wrapper_editor_id, "as_spawn_rate": as_spawn_rate,
                         "disable": disable, "dry_run": dry_run }),
             ),
+            RecordsAction::SetPersistent {
+                form_id,
+                file,
+                persistent,
+                dry_run,
+            } => (
+                "records.set_persistent".to_owned(),
+                json!({ "form_id": form_id, "file": file, "persistent": persistent.unwrap_or(true),
+                        "dry_run": dry_run }),
+            ),
+            RecordsAction::SetVisibleWhenDistant {
+                form_id,
+                file,
+                visible_when_distant,
+                dry_run,
+            } => (
+                "records.set_visible_when_distant".to_owned(),
+                json!({ "form_id": form_id, "file": file,
+                        "visible_when_distant": visible_when_distant.unwrap_or(true), "dry_run": dry_run }),
+            ),
+            RecordsAction::CopyIdles {
+                path,
+                new_path,
+                to,
+                dry_run,
+            } => (
+                "records.copy_idles".to_owned(),
+                json!({ "path": path, "new_path": new_path, "to": to, "dry_run": dry_run }),
+            ),
+            RecordsAction::BanditFix { dry_run } => ("records.bandit_fix".to_owned(), json!({ "dry_run": dry_run })),
+            RecordsAction::RaceLeveledLists { dry_run } => {
+                ("records.race_leveled_lists".to_owned(), json!({ "dry_run": dry_run }))
+            }
             RecordsAction::Delete { form_id, file, dry_run } => (
                 "records.delete".to_owned(),
                 json!({ "form_id": form_id, "file": file, "dry_run": dry_run }),

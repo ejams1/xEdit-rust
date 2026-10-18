@@ -5564,6 +5564,29 @@ impl MainRecord for MainRecordImpl {
         self.mr_struct().flags.is_persistent()
     }
 
+    /// Port of `TwbMainRecord.SetIsPersistent`.
+    fn set_is_persistent(&self, value: bool) {
+        MainRecordImpl::set_is_persistent(&self.self_arc(), value);
+    }
+
+    /// Port of `TwbMainRecord.SetIsVisibleWhenDistant`.
+    fn set_is_visible_when_distant(&self, value: bool) {
+        MainRecordImpl::set_is_visible_when_distant(&self.self_arc(), value);
+    }
+
+    /// Port of `TwbMainRecord.ReferencedBy`.
+    fn referenced_by(&self) -> Vec<MainRecordRef> {
+        MainRecordImpl::referenced_by(self)
+            .into_iter()
+            .map(|record| record as MainRecordRef)
+            .collect()
+    }
+
+    /// Port of `TwbMainRecord.CompareExchangeFormID`.
+    fn compare_exchange_form_id(&self, old: FormID, new: FormID) -> Result<bool, EditError> {
+        MainRecordImpl::compare_exchange_form_id(&self.self_arc(), old, new)
+    }
+
     fn get_version(&self) -> u32 {
         u32::from(self.mr_struct().version)
     }

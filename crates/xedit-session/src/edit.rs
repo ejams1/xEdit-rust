@@ -1329,6 +1329,120 @@ fn elements_remove_from_records(
     })
 }
 
+/// `records.set_persistent`: the request.
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct RecordsSetPersistentRequest {
+    /// Load order FormID of the reference as hexadecimal digits.
+    pub form_id: String,
+    /// Plugin the record is seen from; the last loaded plugin when omitted.
+    pub file: Option<String>,
+    /// `true` makes the reference persistent (the persistent children group
+    /// of its cell), `false` temporary. Defaults to `true`.
+    #[serde(default = "default_true")]
+    pub persistent: bool,
+    /// Report the record, change nothing.
+    #[serde(default)]
+    pub dry_run: bool,
+}
+
+/// `records.set_persistent`: the response.
+#[derive(Serialize, JsonSchema)]
+pub struct RecordsSetPersistentResponse {
+    /// The record after the change.
+    pub record: RecordSummary,
+    /// The flag before the call.
+    pub was_persistent: bool,
+    /// Whether the flag changed (false for a dry run and when the record
+    /// already had the asked state).
+    pub changed: bool,
+}
+
+fn reference_of(session: &Session, form_id: &str, file: Option<&str>) -> Result<MainRecordRef, CommandError> {
+    let record = session.record(form_id, file)?;
+    if record.get_signature().to_string() != "REFR" {
+        return Err(CommandError::new(
+            "not_reference",
+            format!("{} is not a reference (REFR)", record.get_name()),
+        ));
+    }
+    Ok(record)
+}
+
+/// `records.set_persistent`: `IsPersistent := persistent` of a reference
+/// (`mniNavCellChildPers` and `mniNavCellChildTemp`): the flag changes and
+/// the reference moves to the persistent, temporary or visible distant
+/// children group of its cell (`UpdateCellChildGroup`).
+fn records_set_persistent(
+    session: &mut Session,
+    request: RecordsSetPersistentRequest,
+) -> Result<RecordsSetPersistentResponse, CommandError> {
+    crate::commands::refuse_in_translate_mode("records.set_persistent")?;
+    let record = reference_of(session, &request.form_id, request.file.as_deref())?;
+    let was_persistent = record.get_is_persistent();
+    let changed = was_persistent != request.persistent && !request.dry_run;
+    if changed {
+        record.set_is_persistent(request.persistent);
+    }
+    Ok(RecordsSetPersistentResponse {
+        record: summary_of(&record),
+        was_persistent,
+        changed,
+    })
+}
+
+/// `records.set_visible_when_distant`: the request.
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct RecordsSetVisibleWhenDistantRequest {
+    /// Load order FormID of the reference as hexadecimal digits.
+    pub form_id: String,
+    /// Plugin the record is seen from; the last loaded plugin when omitted.
+    pub file: Option<String>,
+    /// `true` sets the Visible When Distant flag, `false` clears it.
+    /// Defaults to `true`.
+    #[serde(default = "default_true")]
+    pub visible_when_distant: bool,
+    /// Report the record, change nothing.
+    #[serde(default)]
+    pub dry_run: bool,
+}
+
+/// `records.set_visible_when_distant`: the response.
+#[derive(Serialize, JsonSchema)]
+pub struct RecordsSetVisibleWhenDistantResponse {
+    /// The record after the change.
+    pub record: RecordSummary,
+    /// The flag before the call.
+    pub was_visible_when_distant: bool,
+    /// Whether the flag changed (false for a dry run and when the record
+    /// already had the asked state).
+    pub changed: bool,
+}
+
+/// `records.set_visible_when_distant`: `IsVisibleWhenDistant := value` of a
+/// reference (`mniNavCellChildVWD` and `mniNavCellChildNotVWD`, and
+/// `mniRefByVWD` and `mniRefByNotVWD` for the referencing records): the
+/// flag changes and the reference moves to the visible distant or temporary
+/// children group of its cell.
+fn records_set_visible_when_distant(
+    session: &mut Session,
+    request: RecordsSetVisibleWhenDistantRequest,
+) -> Result<RecordsSetVisibleWhenDistantResponse, CommandError> {
+    crate::commands::refuse_in_translate_mode("records.set_visible_when_distant")?;
+    let record = reference_of(session, &request.form_id, request.file.as_deref())?;
+    let was_visible_when_distant = record.get_is_visible_when_distant();
+    let changed = was_visible_when_distant != request.visible_when_distant && !request.dry_run;
+    if changed {
+        record.set_is_visible_when_distant(request.visible_when_distant);
+    }
+    Ok(RecordsSetVisibleWhenDistantResponse {
+        record: summary_of(&record),
+        was_visible_when_distant,
+        changed,
+    })
+}
+
 /// Adds the structure commands to the registry.
 pub fn register(registry: &mut Registry) {
     registry.register(
@@ -1396,5 +1510,17 @@ pub fn register(registry: &mut Registry) {
         "Mark a record deleted (TwbMainRecord.Delete: it keeps its place, child group and references) or undelete it, as SetIsDeleted does; unlike records.delete it stays in the plugin.",
         true,
         records_set_deleted,
+    );
+    registry.register(
+        "records.set_persistent",
+        "Make a reference persistent or temporary, moving it to the child group of its cell (Cell Child > Persistent/Temporary).",
+        true,
+        records_set_persistent,
+    );
+    registry.register(
+        "records.set_visible_when_distant",
+        "Set or clear the Visible When Distant flag of a reference, moving it to the child group of its cell (Cell Child > Visible When Distant, and the referencing records' item).",
+        true,
+        records_set_visible_when_distant,
     );
 }

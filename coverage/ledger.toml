@@ -955,69 +955,81 @@ source = "FormCreate"
 note = "Font and scale."
 
 [gui."xEdit/xeLogAnalyzerForm.dfm:btnAnalyze:OnClick"]
-status = "pending"
+status = "covered"
+command = "logs.analyze"
 source = "btnAnalyzeClick"
-note = "Owned by issue #78 (GUI operations without a typed command): the Log Analyzer (mniNavLogAnalyzer): reads the game's Papyrus or crash log and lists the forms it names, with jumps to them"
+note = "logs.analyze reads the log the file select names (or the game's default) and returns the forms, their counts and the plugin totals the trees and the memo show. No oracle scenario: the harnesses cannot open a dialog; the port test covers a Papyrus log and a RuntimeScriptProfiler log."
 
 [gui."xEdit/xeLogAnalyzerForm.dfm:btnFileSelect:OnClick"]
-status = "pending"
+status = "presentation"
 source = "btnFileSelectClick"
-note = "Owned by issue #78 (GUI operations without a typed command): the Log Analyzer (mniNavLogAnalyzer): reads the game's Papyrus or crash log and lists the forms it names, with jumps to them"
+note = "The file open dialog picks the log the analyzer reads; logs.analyze takes the path as its file parameter."
 
 [gui."xEdit/xeLogAnalyzerForm.dfm:frmLogAnalyzer:OnClose"]
-status = "pending"
+status = "covered"
+command = "logs.analyze"
 source = "FormClose"
-note = "Owned by issue #78 (GUI operations without a typed command): the Log Analyzer (mniNavLogAnalyzer): reads the game's Papyrus or crash log and lists the forms it names, with jumps to them"
+note = "Frees the analysis; the data belongs to logs.analyze."
 
 [gui."xEdit/xeLogAnalyzerForm.dfm:frmLogAnalyzer:OnCreate"]
-status = "pending"
+status = "covered"
+command = "logs.analyze"
 source = "FormCreate"
-note = "Owned by issue #78 (GUI operations without a typed command): the Log Analyzer (mniNavLogAnalyzer): reads the game's Papyrus or crash log and lists the forms it names, with jumps to them"
+note = "The file name edit and the hints (the first 50 MB, [FF] Saved game); the log type and the file are parameters of logs.analyze."
 
 [gui."xEdit/xeLogAnalyzerForm.dfm:frmLogAnalyzer:OnShow"]
-status = "pending"
+status = "covered"
+command = "logs.analyze"
 source = "FormShow"
-note = "Owned by issue #78 (GUI operations without a typed command): the Log Analyzer (mniNavLogAnalyzer): reads the game's Papyrus or crash log and lists the forms it names, with jumps to them"
+note = "The background analysis starts when the form shows; logs.analyze returns the analysis the form would display."
 
 [gui."xEdit/xeLogAnalyzerForm.dfm:vstForms:OnChange"]
-status = "pending"
+status = "covered"
+command = "logs.analyze"
 source = "vstFormsChange"
-note = "Owned by issue #78 (GUI operations without a typed command): the Log Analyzer (mniNavLogAnalyzer): reads the game's Papyrus or crash log and lists the forms it names, with jumps to them"
+note = "Memo of the selected form: the text and the counts; entries[].text/errors/warnings/frames_executed/total_time_ms/max_execution_time_ms of logs.analyze."
 
 [gui."xEdit/xeLogAnalyzerForm.dfm:vstForms:OnCompareNodes"]
-status = "pending"
+status = "covered"
+command = "logs.analyze"
 source = "vstFormsCompareNodes"
-note = "Owned by issue #78 (GUI operations without a typed command): the Log Analyzer (mniNavLogAnalyzer): reads the game's Papyrus or crash log and lists the forms it names, with jumps to them"
+note = "The tree sorts by load order then FormID; logs.analyze returns entries sorted the same way."
 
 [gui."xEdit/xeLogAnalyzerForm.dfm:vstForms:OnDblClick"]
-status = "pending"
+status = "covered"
+command = "logs.analyze"
 source = "vstFormsDblClick"
-note = "Owned by issue #78 (GUI operations without a typed command): the Log Analyzer (mniNavLogAnalyzer): reads the game's Papyrus or crash log and lists the forms it names, with jumps to them"
+note = "Jumps to the selected form's record; entries[].record of logs.analyze."
 
 [gui."xEdit/xeLogAnalyzerForm.dfm:vstForms:OnFreeNode"]
-status = "pending"
+status = "covered"
+command = "logs.analyze"
 source = "vstFormsFreeNode"
-note = "Owned by issue #78 (GUI operations without a typed command): the Log Analyzer (mniNavLogAnalyzer): reads the game's Papyrus or crash log and lists the forms it names, with jumps to them"
+note = "Frees the tree nodes; the data belongs to logs.analyze."
 
 [gui."xEdit/xeLogAnalyzerForm.dfm:vstForms:OnGetText"]
-status = "pending"
+status = "covered"
+command = "logs.analyze"
 source = "vstFormsGetText"
-note = "Owned by issue #78 (GUI operations without a typed command): the Log Analyzer (mniNavLogAnalyzer): reads the game's Papyrus or crash log and lists the forms it names, with jumps to them"
+note = "Node labels: the plugin file name, Unknown or [FF] Saved game; plugins[].label of logs.analyze."
 
 [gui."xEdit/xeLogAnalyzerForm.dfm:vstForms:OnHeaderClick"]
-status = "pending"
+status = "covered"
+command = "logs.analyze"
 source = "vstFormsHeaderClick"
-note = "Owned by issue #78 (GUI operations without a typed command): the Log Analyzer (mniNavLogAnalyzer): reads the game's Papyrus or crash log and lists the forms it names, with jumps to them"
+note = "Sorts the tree by the clicked column; logs.analyze returns the columns (plugins and entries) already sorted."
 
 [gui."xEdit/xeLogAnalyzerForm.dfm:vstForms:OnInitChildren"]
-status = "pending"
+status = "covered"
+command = "logs.analyze"
 source = "vstFormsInitChildren"
-note = "Owned by issue #78 (GUI operations without a typed command): the Log Analyzer (mniNavLogAnalyzer): reads the game's Papyrus or crash log and lists the forms it names, with jumps to them"
+note = "Plugin nodes of the root: a node per plugin with forms; plugins[] of logs.analyze."
 
 [gui."xEdit/xeLogAnalyzerForm.dfm:vstForms:OnInitNode"]
-status = "pending"
+status = "covered"
+command = "logs.analyze"
 source = "vstFormsInitNode"
-note = "Owned by issue #78 (GUI operations without a typed command): the Log Analyzer (mniNavLogAnalyzer): reads the game's Papyrus or crash log and lists the forms it names, with jumps to them"
+note = "The counts on a plugin node and the FormID on a form node; plugins[].entries/errors/warnings/frames_executed/total_time_ms/max_execution_time_ms and entries[].form_id of logs.analyze."
 
 [gui."xEdit/xeMainForm.dfm:acBack:OnExecute"]
 status = "presentation"
@@ -1559,14 +1571,16 @@ source = "mniNavApplyScriptClick"
 note = "ApplyScript over the selected nodes; script.run takes the script and the selection (the loaded files, or the records named)."
 
 [gui."xEdit/xeMainForm.dfm:mniNavBanditFix:OnClick"]
-status = "pending"
+status = "covered"
+command = "records.bandit_fix"
 source = "mniNavBanditFixClick"
-note = "Owned by issue #78 (GUI operations without a typed command): Bandit fix of Mart's Monster Mod (Oblivion)"
+note = "records.bandit_fix: the SCPT scripts of Mart's Monster Mod.esm, then every NPC_ of the modules that load it whose editor ID names a bandit, marauder or raider (not an adventurer); SCRI changes to the bandit script (empty SCRI takes the script of the Boss editor ID). No oracle scenario: it needs a copy of Mart's Monster Mod.esm; the port test covers a synthetic module."
 
 [gui."xEdit/xeMainForm.dfm:mniNavBatchChangeReferencingRecords:OnClick"]
-status = "pending"
+status = "covered"
+command = "references.change_batch"
 source = "mniNavBatchChangeReferencingRecordsClick"
-note = "Owned by issue #78 (GUI operations without a typed command): batch change of the references in referencing records from a list of FormID pairs"
+note = "references.change_batch takes the old/new FormID pairs the dialog loads from a file and runs references.change for each, once per file, then renames the focused file's old records. No oracle scenario: the dialog reads a text file of pairs; the port test covers the pairs as parameters."
 
 [gui."xEdit/xeMainForm.dfm:mniNavBuildReachable:OnClick"]
 status = "covered"
@@ -1581,24 +1595,28 @@ source = "mniNavBuildRefClick"
 note = "refs.build with file builds the references of one file again (TwbFile.BuildRef); without it, every loaded file."
 
 [gui."xEdit/xeMainForm.dfm:mniNavCellChildNotVWD:OnClick"]
-status = "pending"
+status = "covered"
+command = "records.set_visible_when_distant"
 source = "mniNavCellChild"
-note = "Owned by issue #78 (GUI operations without a typed command): make the selected references of a cell persistent, temporary, visible when distant or not (the flag and the child group the reference moves to)"
+note = "records.set_visible_when_distant with visible_when_distant=false: the flag cleared and the temporary children group of the cell. No oracle scenario: states only, not saved bytes; the port test covers the operation."
 
 [gui."xEdit/xeMainForm.dfm:mniNavCellChildPers:OnClick"]
-status = "pending"
+status = "covered"
+command = "records.set_persistent"
 source = "mniNavCellChild"
-note = "Owned by issue #78 (GUI operations without a typed command): make the selected references of a cell persistent, temporary, visible when distant or not (the flag and the child group the reference moves to)"
+note = "records.set_persistent with persistent (the default): IsPersistent := True and the reference moves to the persistent children group of its cell (UpdateCellChildGroup). No oracle scenario: the flag and group are states, not saved bytes the harnesses can compare; the port test covers the operation."
 
 [gui."xEdit/xeMainForm.dfm:mniNavCellChildTemp:OnClick"]
-status = "pending"
+status = "covered"
+command = "records.set_persistent"
 source = "mniNavCellChild"
-note = "Owned by issue #78 (GUI operations without a typed command): make the selected references of a cell persistent, temporary, visible when distant or not (the flag and the child group the reference moves to)"
+note = "records.set_persistent with persistent=false: IsPersistent := False and the reference moves to the temporary children group of its cell (UpdateCellChildGroup). No oracle scenario: states only, not saved bytes; the port test covers the operation."
 
 [gui."xEdit/xeMainForm.dfm:mniNavCellChildVWD:OnClick"]
-status = "pending"
+status = "covered"
+command = "records.set_visible_when_distant"
 source = "mniNavCellChild"
-note = "Owned by issue #78 (GUI operations without a typed command): make the selected references of a cell persistent, temporary, visible when distant or not (the flag and the child group the reference moves to)"
+note = "records.set_visible_when_distant with visible_when_distant (the default): the flag and, where the game has a separate VWD group (wbVWDInTemporary false), the move to it; Skyrim and later keep VWD references in the temporary group. No oracle scenario: states only, not saved bytes; the port test covers the operation."
 
 [gui."xEdit/xeMainForm.dfm:mniNavChangeFormID:OnClick"]
 status = "covered"
@@ -1607,14 +1625,16 @@ source = "mniNavChangeFormIDClick"
 note = "The dialogs are parameters: the new FormID, the target file, whether later overrides follow."
 
 [gui."xEdit/xeMainForm.dfm:mniNavChangeReferencingRecords:OnClick"]
-status = "pending"
+status = "covered"
+command = "references.change"
 source = "mniNavChangeReferencingRecordsClick"
-note = "Owned by issue #78 (GUI operations without a typed command): change the references in the selected referencing records from one FormID to another (the record itself keeps its FormID, unlike formids.change)"
+note = "references.change with the old and the new FormID changes every reference to the old record in the selected referencing records of the focused file, then points the old record's FormID at the new one (CompareExchangeFormID); the record keeps its FormID. No oracle scenario: the dialog supplies two FormIDs; the port test covers the operation."
 
 [gui."xEdit/xeMainForm.dfm:mniNavCheckForCircularLeveledLists:OnClick"]
-status = "pending"
+status = "covered"
+command = "leveled_lists.check_circular"
 source = "mniNavCheckForCircularLeveledListsClick"
-note = "Owned by issue #78 (GUI operations without a typed command): check the leveled lists (LVLI, LVLC, LVLN, LVSP) of the selection for circular references"
+note = "leveled_lists.check_circular walks every leveled list (LVLI, LVLC, LVLN, LVSP and the other leveled record types) of the loaded files depth first and reports a cycle with its path; the release shows the same list in a message box. No oracle scenario: the result is a report, not saved bytes; the port test covers a cycle."
 
 [gui."xEdit/xeMainForm.dfm:mniNavCheckForErrors:OnClick"]
 status = "covered"
@@ -1681,14 +1701,16 @@ source = "mniNavCopyIntoClick"
 note = "CopyInto's AsWrapper branch (mniNavCopyIntoClick for mniNavCopyAsWrapper): a new record with the InputQuery's EditorID, then an override cleared and given one leveled list entry that points to the wrapper with level and count 1; records.copy as_wrapper with wrapper_editor_id. The item is offered for LVLB, LVLC, LVLI, LVLN, LVLP, LVSC and LVSP (not in Fallout 76 or Morrowind). No oracle scenario: clean-scenarios drives only the cleaning items and the script harness cannot click this item on the port side, so it is pinned to CopyInto and the port test, which checks the wrapper record and the override's single entry."
 
 [gui."xEdit/xeMainForm.dfm:mniNavCopyIdle:OnClick"]
-status = "pending"
+status = "covered"
+command = "records.copy_idles"
 source = "mniNavCopyIdleClick"
-note = "Owned by issue #78 (GUI operations without a typed command): copy the IDLE animations of the selection"
+note = "records.copy_idles: the IDLE records of a model prefix are copied as new records, each copy's MODL\\MODL takes the new prefix, and the old FormIDs are changed to the copies (CompareExchangeFormID). No oracle scenario: the InputQuery values are parameters; the port test covers the copy and the reference change."
 
 [gui."xEdit/xeMainForm.dfm:mniNavCreateDeltaPatch:OnClick"]
-status = "pending"
+status = "covered"
+command = "files.create_delta_patch"
 source = "mniNavCreateDeltaPatchClick"
-note = "Owned by issue #78 (GUI operations without a typed command): create a delta patch of a module against a newer version of it"
+note = "files.create_delta_patch copies the newer version into the data folder as <name>.esu and loads it in the place of the module at its load order with fsIsDeltaPatch, as the loader thread does; files.save then writes it. No oracle scenario: the file dialog and the InputQuery are parameters; the port test covers the patch load and the saved bytes."
 
 [gui."xEdit/xeMainForm.dfm:mniNavCreateMergedPatch:OnClick"]
 status = "covered"
@@ -1848,9 +1870,10 @@ source = "mniNavOtherCodeSiteLoggingClick"
 note = "Turns on CodeSite debug logging of the Delphi build (Raize CodeSite); a developer tool of the release with no output of its own."
 
 [gui."xEdit/xeMainForm.dfm:mniNavRaceLVLIs:OnClick"]
-status = "pending"
+status = "covered"
+command = "records.race_leveled_lists"
 source = "mniNavRaceLVLIsClick"
-note = "Owned by issue #78 (GUI operations without a typed command): the race leveled item lists of the NPCs of the selection (Oblivion)"
+note = "records.race_leveled_lists: the NPC_ items that name an LVLI under the editor ID of the NPC's race take the master list's load order FormID. UPSTREAM-QUIRK: the release looks up EditorID+Race against a list keyed by EditorID alone, so nothing matches outside such a concatenation; the port follows it. No oracle scenario: Oblivion-only; the port test covers the lookup."
 
 [gui."xEdit/xeMainForm.dfm:mniNavRemove:OnClick"]
 status = "covered"
@@ -1881,14 +1904,16 @@ source = "mniNavRenumberFormIDsFromClick"
 note = "--inject-into, with --preserve-object-ids and --all-or-nothing for the two questions."
 
 [gui."xEdit/xeMainForm.dfm:mniNavSetVWDAuto:OnClick"]
-status = "pending"
+status = "covered"
+command = "references.set_vwd_auto"
 source = "mniNavSetVWDAutoClick"
-note = "Owned by issue #78 (GUI operations without a typed command): set the Visible When Distant flag of every reference whose base has a VWD mesh (into the file chosen for the Into item)"
+note = "Sets the Visible When Distant flag of the references of the selected records whose base has a VWD mesh (<stem>_far.nif in the data folder); the release offers it for Oblivion only. No oracle scenario: the mesh check reads the data folder and the flag is a state; the port test covers the operation with a fake mesh file."
 
 [gui."xEdit/xeMainForm.dfm:mniNavSetVWDAutoInto:OnClick"]
-status = "pending"
+status = "covered"
+command = "references.copy_vwd_auto"
 source = "mniNavSetVWDAutoIntoClick"
-note = "Owned by issue #78 (GUI operations without a typed command): set the Visible When Distant flag of every reference whose base has a VWD mesh (into the file chosen for the Into item)"
+note = "As references.set_vwd_auto, but copies the references into the chosen file first (CopyInto as new records) and sets the flag there. No oracle scenario: the mesh check reads the data folder and the copy is the port's own file write; the port test covers the operation with a fake mesh file."
 
 [gui."xEdit/xeMainForm.dfm:mniNavSortMasters:OnClick"]
 status = "covered"
@@ -1970,9 +1995,10 @@ source = "mniRefByMarkModifiedClick"
 note = "MarkModifiedRecursive(AllElementTypes) of the selected referencing records (mniRefByMarkModifiedClick); elements.mark_modified, the same command as the navigation item. No oracle scenario: states only, not saved bytes; the port test covers the operation."
 
 [gui."xEdit/xeMainForm.dfm:mniRefByNotVWD:OnClick"]
-status = "pending"
+status = "covered"
+command = "records.set_visible_when_distant"
 source = "mniRefByVWDClick"
-note = "Owned by issue #78 (GUI operations without a typed command): set or clear the Visible When Distant flag of the selected referencing references"
+note = "records.set_visible_when_distant with visible_when_distant=false on each selected referencing reference. No oracle scenario: states only, not saved bytes; the port test covers the operation."
 
 [gui."xEdit/xeMainForm.dfm:mniRefByRemove:OnClick"]
 status = "covered"
@@ -1981,9 +2007,10 @@ source = "mniRefByRemoveClick"
 note = "Remove of the selected referencing records."
 
 [gui."xEdit/xeMainForm.dfm:mniRefByVWD:OnClick"]
-status = "pending"
+status = "covered"
+command = "records.set_visible_when_distant"
 source = "mniRefByVWDClick"
-note = "Owned by issue #78 (GUI operations without a typed command): set or clear the Visible When Distant flag of the selected referencing references"
+note = "records.set_visible_when_distant with visible_when_distant (the default) on each selected referencing reference. No oracle scenario: states only, not saved bytes; the port test covers the operation."
 
 [gui."xEdit/xeMainForm.dfm:mniSpreadsheetCompareSelected:OnClick"]
 status = "covered"

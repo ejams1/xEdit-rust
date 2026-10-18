@@ -84,7 +84,7 @@ fn any_file(name: &str) -> Result<Arc<FileImpl>, CommandError> {
 }
 
 /// Whether a record can be edited: `IsEditable` of the record and its file.
-fn record_editable(record: &MainRecordImpl) -> bool {
+pub(crate) fn record_editable(record: &MainRecordImpl) -> bool {
     record.get_is_editable() && file_impl_of(record).is_some_and(|file| file.get_is_editable())
 }
 
