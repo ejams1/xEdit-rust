@@ -295,7 +295,7 @@ Results: #41 (branch `parity-41`, PR #77) closed the parity backlog: the full-co
 
 *Issues filed:* #78 GUI operations without a typed command, #79 xDump's dump filter and report switches, #80 the Oblivion Remastered corpus, #81 run cases for the form scripts, #82 the quadratic walk (fixed here), #83 the legacy load's module list (`wbLoadModules`), #84 the walk reaches a group created under an initialised node (`Change persistent flag.pas` 44 against 43 processed records), #85 small owed items, #86 the dump and saves regressions (fixed here). 
 
-*Ledger audit.* Every open entry names its owner and `cargo xtask check` refuses one that does not: gui 55 pending (#78), switch 25 (#79), game_mode 4 (#7 twice, #9, #80), script 4 (#81), tool_mode 0; 58 GUI bindings moved to covered, 320 to presentation and 8 to excluded, each with its reason.
+*Ledger audit.* Every open entry names its owner and `cargo xtask check` refuses one that does not: gui 0 pending (#78 closed by its three batches), switch 25 (#79), game_mode 4 (#7 twice, #9, #80), script 4 (#81), tool_mode 0; 228 GUI bindings moved to covered, 425 to presentation and 8 to excluded, each with its reason.
 
 *Owed to the user.* Nothing blocking. BSArchPro's GUI packing comparison (the owed item of #38/#85) was done by the agent at the user's instruction, with screenshots: six of six cases equal. The manual walkthrough of the 4.1.5q menus against the ledger is likewise replaced by agent-run screen checks where the ledger's classes need confirming.
 

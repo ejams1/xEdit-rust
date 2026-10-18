@@ -97,7 +97,6 @@ The progress bar above counts merged phases of [docs/PLAN.md](docs/PLAN.md); it 
 
 `coverage/ledger.toml` lists every upstream GUI binding, switch, game mode, tool mode and script registration with its command; `cargo xtask check` refuses an open entry that names no owner. The open work:
 
-- **14 GUI bindings without a typed command** (issue #78): BSArchPro's asset editor and list (8) and the module-selection presets (6). Parity #78's two batches covered 41: the view Clear, mark-modified, union members, copy-to-records, remove-from-records, the wrapper/spawn-rate/disabled copy variants, cell-child persistence and VWD, change-referencing (single and batch), the circular leveled-list check, Copy IDLE, the delta patch, BanditFix, RaceLVLIs and the Log Analyzer.
 - **10 xDump switch entries** (issue #79): the dump-side filters, element-output and report switches are in (`-dg`, `-dr`, `-xr`, `-xsr`, `-xg`, `-xcg`, `-xbloat`, `-top`, `-es`, `-dh`, `-more`/`-moreunknown`, `-sr`, `-sro`, `-sroe`, `-summary`; equal cases in `cargo xtask parity dump --switch`); what remains is `-do` (raw data pointers), `-bts`/`-btd` (save definitions), the `-dcr`/`-report` report walk and the save-side switches `-df`/`-xf`/`-dc`/`-xc`/`-xcbloat`.
 - **Game modes not verified** (issues #7, #9, #80): Enderal and Oblivion Remastered are not installed on the development machine, and the 4.1.5q oracle cannot dump a Morrowind plugin (below).
 - **4 script registrations** (issue #81): the form runners that exist to run a form script headlessly, with the run cases the issue lists.

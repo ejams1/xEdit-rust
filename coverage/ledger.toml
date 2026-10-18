@@ -95,19 +95,22 @@ source = "mniArchiveInfoClick"
 note = "The information of an archive (its format, flags and files)."
 
 [gui."BSArch/frmMain.dfm:mniAssetCompress:OnClick"]
-status = "pending"
+status = "covered"
+command = "bsarchpro.compress"
 source = "mniAssetCompressClick"
-note = "Owned by issue #78 (GUI operations without a typed command): the asset list editor of BSArchPro: find assets with identical data, reset the compressed flags by DoNotCompress, rename an asset, search and replace in asset names, remove assets from the list"
+note = "Every asset's Compressed flag is set from TwbAsset.DoNotCompress (the sound, voice, music and strings folders, except .fuz and .hkx) and written to the list, or only reported with dry_run."
 
 [gui."BSArch/frmMain.dfm:mniAssetEdit:OnClick"]
-status = "pending"
+status = "covered"
+command = "bsarchpro.edit"
 source = "mniAssetEditClick"
-note = "Owned by issue #78 (GUI operations without a typed command): the asset list editor of BSArchPro: find assets with identical data, reset the compressed flags by DoNotCompress, rename an asset, search and replace in asset names, remove assets from the list"
+note = "The edited name of exactly one selected asset (the InputQuery's OK), trimmed; empty text keeps the name. The asset is the index into the list's assets."
 
 [gui."BSArch/frmMain.dfm:mniAssetFindIdentical:OnClick"]
-status = "pending"
+status = "covered"
+command = "bsarchpro.find_identical"
 source = "mniAssetFindIdenticalClick"
-note = "Owned by issue #78 (GUI operations without a typed command): the asset list editor of BSArchPro: find assets with identical data, reset the compressed flags by DoNotCompress, rename an asset, search and replace in asset names, remove assets from the list"
+note = "UPSTREAM-QUIRK: TwbSameData.Add groups on DataSize and LookupHash alone (wbBSArchive.pas:813-822), with no byte compare, so a hash collision between equal-sized assets counts as identical; the port follows it. The whole list is compared; the duplicate count, size and FormatSize report are the dialog's title and lines. The dialog's options (sort duplicates first 100, filter them 101, archive info 102) are presentation; the command is read-only."
 
 [gui."BSArch/frmMain.dfm:mniAssetOpen:OnClick"]
 status = "presentation"
@@ -121,19 +124,22 @@ source = "mniAssetPackClick"
 note = "Packs the checked assets of the list into an archive (TFormPack): the format, compression, split and flags are the parameters; cargo xtask parity bsarchpro drives the GUI route."
 
 [gui."BSArch/frmMain.dfm:mniAssetRemoveSelected:OnClick"]
-status = "pending"
+status = "covered"
+command = "bsarchpro.remove_selected"
 source = "mniAssetRemoveSelectedClick"
-note = "Owned by issue #78 (GUI operations without a typed command): the asset list editor of BSArchPro: find assets with identical data, reset the compressed flags by DoNotCompress, rename an asset, search and replace in asset names, remove assets from the list"
+note = "The 'Remove N selected asset(s)?' question (default Yes) is confirm; when the selection is the whole list the second 'Clear assets list?' question is clear_confirm (default Yes). The remaining assets are written to the list."
 
 [gui."BSArch/frmMain.dfm:mniAssetRemoveUnselected:OnClick"]
-status = "pending"
+status = "covered"
+command = "bsarchpro.remove_unselected"
 source = "mniAssetRemoveUnselectedClick"
-note = "Owned by issue #78 (GUI operations without a typed command): the asset list editor of BSArchPro: find assets with identical data, reset the compressed flags by DoNotCompress, rename an asset, search and replace in asset names, remove assets from the list"
+note = "The 'Remove N unselected asset(s)?' question (default Yes) is confirm; the selected assets are kept and the rest written to the list."
 
 [gui."BSArch/frmMain.dfm:mniAssetReplace:OnClick"]
-status = "pending"
+status = "covered"
+command = "bsarchpro.replace"
 source = "mniAssetReplaceClick"
-note = "Owned by issue #78 (GUI operations without a typed command): the asset list editor of BSArchPro: find assets with identical data, reset the compressed flags by DoNotCompress, rename an asset, search and replace in asset names, remove assets from the list"
+note = "TfrmSearchReplace's SearchText, ReplaceText and radio mode are search, replace_text and mode; replace is StringReplace with rfReplaceAll and rfIgnoreCase and refuses an empty search (the form's OnClose), prepend and append put the search text around the name."
 
 [gui."BSArch/frmMain.dfm:mniAssetUnpack:OnClick"]
 status = "covered"
@@ -148,14 +154,16 @@ source = "mniAssetUnpackSaveAsClick"
 note = "Unpacks the selected assets into a folder."
 
 [gui."BSArch/frmMain.dfm:mniLoadList:OnClick"]
-status = "pending"
+status = "covered"
+command = "bsarchpro.list_load"
 source = "mniLoadListClick"
-note = "Owned by issue #78 (GUI operations without a typed command): load and save a BSArchPro asset list file (.bsarch)"
+note = "LoadList reads the zip's assets.json (or the plain JSON file) into Packing and Assets; a Packing key the object lacks gets LoadList's defaults (baNone the highest archive type, missing Split -1, booleans false, strings empty), and no Packing at all gets FormCreate's defaults. The dialog and Settings.ListFileName are presentation."
 
 [gui."BSArch/frmMain.dfm:mniSaveList:OnClick"]
-status = "pending"
+status = "covered"
+command = "bsarchpro.list_save"
 source = "mniSaveListClick"
-note = "Owned by issue #78 (GUI operations without a typed command): load and save a BSArchPro asset list file (.bsarch)"
+note = "SaveList writes the zip with assets.json holding Packing and Assets; mniSaveListClick gives the path the .bsarch extension. The settings (ListFileName and the packing defaults) are presentation."
 
 [gui."BSArch/frmMain.dfm:rbAll:OnClick"]
 status = "presentation"
@@ -3022,34 +3030,37 @@ source = "vstModGroupsPaintText"
 note = "Display and keyboard handling of the selection dialog."
 
 [gui."xEdit/xeModuleSelectForm.dfm:acPresetDelete:OnExecute"]
-status = "pending"
+status = "covered"
+command = "modules.preset_delete"
 source = "acPresetDeleteExecute"
-note = "Owned by issue #78 (GUI operations without a typed command): the presets of the module selection dialog (saved module selections in the settings file)"
+note = "PresetDelete: the 'Are you sure you want to delete preset ...?' question (mbYesNo, default Yes) is confirm, then DeleteKey and UpdateFile in frmModuleSelect_ActiveModules_Presets."
 
 [gui."xEdit/xeModuleSelectForm.dfm:acPresetDelete:OnUpdate"]
-status = "pending"
+status = "presentation"
 source = "acPresetDeleteUpdate"
-note = "Owned by issue #78 (GUI operations without a typed command): the presets of the module selection dialog (saved module selections in the settings file)"
+note = "The enabled state of Delete (Settings assigned and the preset name exists in the section); the command answers a missing preset with unknown_preset instead."
 
 [gui."xEdit/xeModuleSelectForm.dfm:acPresetLoad:OnExecute"]
-status = "pending"
+status = "covered"
+command = "modules.preset_load"
 source = "acPresetLoadExecute"
-note = "Owned by issue #78 (GUI operations without a typed command): the presets of the module selection dialog (saved module selections in the settings file)"
+note = "UPSTREAM-QUIRK: '<plugins.txt>' activates every module whose miOfficialIndex < High(Integer), whether or not plugins.txt lists it, and only the plugin-list actives otherwise (xeModuleSelectForm.pas:255-260); the port follows it. PresetLoad: '<plugins.txt>' checks the modules the plugin list activates plus the official ones, else the preset's sorted names are checked; SimulateLoad gives the filtered modules. The dialog changes only its in-memory checks, so the command is read-only; IsPresetDifferent is preset_differs and an empty selection is the panel error."
 
 [gui."xEdit/xeModuleSelectForm.dfm:acPresetLoad:OnUpdate"]
-status = "pending"
+status = "presentation"
 source = "acPresetLoadUpdate"
-note = "Owned by issue #78 (GUI operations without a typed command): the presets of the module selection dialog (saved module selections in the settings file)"
+note = "The enabled state of Load ('<plugins.txt>' or an existing preset); the command answers another name with unknown_preset instead."
 
 [gui."xEdit/xeModuleSelectForm.dfm:acPresetSave:OnExecute"]
-status = "pending"
+status = "covered"
+command = "modules.preset_save"
 source = "acPresetSaveExecute"
-note = "Owned by issue #78 (GUI operations without a typed command): the presets of the module selection dialog (saved module selections in the settings file)"
+note = "PresetSave writes FilteredModules as a CommaText; the overwrite question and the after-modal changed-selection question (default No) are confirm and after_modal. The command refuses the names the action disables and an empty selection with invalid_params."
 
 [gui."xEdit/xeModuleSelectForm.dfm:acPresetSave:OnUpdate"]
-status = "pending"
+status = "presentation"
 source = "acPresetSaveUpdate"
-note = "Owned by issue #78 (GUI operations without a typed command): the presets of the module selection dialog (saved module selections in the settings file)"
+note = "The enabled state of Save (Text equals Trim(Replace('=', '')), non-empty, not starting with '<', FilteredModules non-empty); the command answers with invalid_params instead."
 
 [gui."xEdit/xeModuleSelectForm.dfm:btnOK:OnClick"]
 status = "covered"

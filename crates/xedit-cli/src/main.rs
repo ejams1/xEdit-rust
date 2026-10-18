@@ -11,7 +11,7 @@ mod serve;
 use std::io::BufReader;
 use std::process::ExitCode;
 
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
 use serde_json::{Value, json};
 use xedit_session::{CommandError, Registry, parse_batch};
 
@@ -331,6 +331,11 @@ enum Action {
         #[command(subcommand)]
         action: ModgroupsAction,
     },
+    /// The selection presets of the module selection dialog: modules.presets, modules.preset_load, modules.preset_save, modules.preset_delete.
+    Modules {
+        #[command(subcommand)]
+        action: ModulesAction,
+    },
     /// String tables of localized plugins (the localization editor), the language, and localizing or delocalizing a plugin.
     Localization {
         #[command(subcommand)]
@@ -355,6 +360,11 @@ enum Action {
     Archive {
         #[command(subcommand)]
         action: ArchiveAction,
+    },
+    /// BSArchPro's asset list (the .bsarch file): its editor and the asset menu of the main form.
+    Bsarchpro {
+        #[command(subcommand)]
+        action: BsarchproAction,
     },
     /// Save files.
     Saves {
@@ -1727,6 +1737,169 @@ enum ModgroupsAction {
 }
 
 #[derive(Subcommand)]
+enum ModulesAction {
+    /// List the presets of the module selection dialog and the filtered modules the current selection would save (modules.presets).
+    Presets,
+    /// Load a selection preset and report the filtered modules (modules.preset_load).
+    PresetLoad {
+        /// The name of the preset, or <plugins.txt> for the modules the plugin list activates.
+        preset: String,
+    },
+    /// Write the filtered modules as a preset of the module selection dialog (modules.preset_save). Needs --edit unless --dry-run.
+    PresetSave {
+        /// The name of the preset to write.
+        preset: String,
+        /// A checked module of the dialog's tree; repeat for several. The active modules when none is given.
+        #[arg(long = "module")]
+        modules: Vec<String>,
+        /// The save the dialog runs on close after a preset was loaded (the question about the changed selection).
+        #[arg(long)]
+        after_modal: bool,
+        /// Answer Yes to the question; the default button when omitted.
+        #[arg(long)]
+        confirm: bool,
+        /// Answer No to the question.
+        #[arg(long, conflicts_with = "confirm")]
+        no_confirm: bool,
+        /// Report what would be written, but write nothing.
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Delete a selection preset of the module selection dialog (modules.preset_delete). Needs --edit unless --dry-run.
+    PresetDelete {
+        /// The name of the preset to delete.
+        preset: String,
+        /// Answer Yes to the question; the default button when omitted.
+        #[arg(long)]
+        confirm: bool,
+        /// Answer No to the question.
+        #[arg(long, conflicts_with = "confirm")]
+        no_confirm: bool,
+        /// Report what would be deleted, but write nothing.
+        #[arg(long)]
+        dry_run: bool,
+    },
+}
+
+/// The mode of the search and replace dialog (`TfrmSearchReplace`).
+#[derive(Clone, Copy, ValueEnum)]
+enum ReplaceAction {
+    /// Replace every occurrence of the search text, without regard to case.
+    Replace,
+    /// Put the search text before the name.
+    Prepend,
+    /// Put the search text after the name.
+    Append,
+}
+
+#[derive(Subcommand)]
+enum BsarchproAction {
+    /// Read an asset list and show its packing settings and assets (bsarchpro.list_load).
+    ListLoad {
+        /// Path of the .bsarch list (or a plain JSON list).
+        list: String,
+    },
+    /// Write an asset list as the GUI saves it, with the .bsarch extension (bsarchpro.list_save). Needs --edit unless --dry-run.
+    ListSave {
+        /// Path to write; its extension becomes .bsarch.
+        list: String,
+        /// The packing settings as a JSON object; the form's defaults when omitted.
+        #[arg(long)]
+        packing: Option<String>,
+        /// The assets as a JSON array; none when omitted.
+        #[arg(long, default_value = "[]")]
+        assets: String,
+        /// Report the path that would be written, but write nothing.
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Set every asset's compressed flag from TwbAsset.DoNotCompress (bsarchpro.compress). Needs --edit unless --dry-run.
+    Compress {
+        /// Path of the .bsarch list to change.
+        list: String,
+        /// Report what would be written, but write nothing.
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Replace the name of one asset, trimmed; an empty name keeps it (bsarchpro.edit). Needs --edit unless --dry-run.
+    Edit {
+        /// Path of the .bsarch list to change.
+        list: String,
+        /// The selected asset (an index into the assets list).
+        index: usize,
+        /// The edited asset name.
+        name: String,
+        /// Report what would be written, but write nothing.
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Replace, prepend or append text in the names of the selected assets (bsarchpro.replace). Needs --edit unless --dry-run.
+    Replace {
+        /// Path of the .bsarch list to change.
+        list: String,
+        /// The dialog's mode.
+        #[arg(long, value_enum, default_value = "replace")]
+        mode: ReplaceAction,
+        /// The search text (the replace mode needs it), or the text to prepend or append.
+        search: String,
+        /// The replacement of the replace mode.
+        #[arg(default_value = "")]
+        replace_text: String,
+        /// A selected asset (an index); repeat for several.
+        #[arg(long = "select")]
+        selected: Vec<usize>,
+        /// Report what would be written, but write nothing.
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Remove the selected assets, asking about clearing the whole list (bsarchpro.remove_selected). Needs --edit unless --dry-run.
+    RemoveSelected {
+        /// Path of the .bsarch list to change.
+        list: String,
+        /// A selected asset (an index); repeat for several.
+        #[arg(long = "select")]
+        selected: Vec<usize>,
+        /// Answer Yes to "Remove N selected asset(s)?"; the default button when omitted.
+        #[arg(long)]
+        confirm: bool,
+        /// Answer No to "Remove N selected asset(s)?".
+        #[arg(long, conflicts_with = "confirm")]
+        no_confirm: bool,
+        /// Answer Yes to "Clear assets list?" when every asset is selected.
+        #[arg(long)]
+        clear_confirm: bool,
+        /// Answer No to "Clear assets list?".
+        #[arg(long, conflicts_with = "clear_confirm")]
+        no_clear_confirm: bool,
+        /// Report what would be written, but write nothing.
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Remove the assets that are not selected (bsarchpro.remove_unselected). Needs --edit unless --dry-run.
+    RemoveUnselected {
+        /// Path of the .bsarch list to change.
+        list: String,
+        /// A selected asset (an index) to keep; repeat for several.
+        #[arg(long = "select")]
+        selected: Vec<usize>,
+        /// Answer Yes to "Remove N unselected asset(s)?"; the default button when omitted.
+        #[arg(long)]
+        confirm: bool,
+        /// Answer No to "Remove N unselected asset(s)?".
+        #[arg(long, conflicts_with = "confirm")]
+        no_confirm: bool,
+        /// Report what would be written, but write nothing.
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Find the assets with identical data and report the duplicates as the dialog does (bsarchpro.find_identical).
+    FindIdentical {
+        /// Path of the .bsarch list to read.
+        list: String,
+    },
+}
+
+#[derive(Subcommand)]
 enum FormidsAction {
     /// Change the FormID of a record and update the records that refer to it (formids.change). Needs --edit unless --dry-run.
     Change {
@@ -2790,6 +2963,125 @@ fn command_of(action: Action) -> Result<(String, Value), CommandError> {
                     "mod_groups": mod_groups, "dry_run": dry_run
                 }),
             ),
+        },
+        Action::Modules { action } => match action {
+            ModulesAction::Presets => ("modules.presets".to_owned(), json!({})),
+            ModulesAction::PresetLoad { preset } => ("modules.preset_load".to_owned(), json!({ "preset": preset })),
+            ModulesAction::PresetSave {
+                preset,
+                modules,
+                after_modal,
+                confirm,
+                no_confirm,
+                dry_run,
+            } => (
+                "modules.preset_save".to_owned(),
+                json!({
+                    "preset": preset,
+                    "modules": if modules.is_empty() { Value::Null } else { json!(modules) },
+                    "after_modal": after_modal,
+                    "confirm": if no_confirm { json!(false) } else if confirm { json!(true) } else { Value::Null },
+                    "dry_run": dry_run
+                }),
+            ),
+            ModulesAction::PresetDelete {
+                preset,
+                confirm,
+                no_confirm,
+                dry_run,
+            } => (
+                "modules.preset_delete".to_owned(),
+                json!({
+                    "preset": preset,
+                    "confirm": if no_confirm { json!(false) } else if confirm { json!(true) } else { Value::Null },
+                    "dry_run": dry_run
+                }),
+            ),
+        },
+        Action::Bsarchpro { action } => match action {
+            BsarchproAction::ListLoad { list } => ("bsarchpro.list_load".to_owned(), json!({ "list": list })),
+            BsarchproAction::ListSave {
+                list,
+                packing,
+                assets,
+                dry_run,
+            } => {
+                let assets: Value = serde_json::from_str(&assets)
+                    .map_err(|error| CommandError::new("invalid_params", format!("--assets: {error}")))?;
+                let mut params = json!({ "list": list, "assets": assets, "dry_run": dry_run });
+                if let Some(packing) = packing {
+                    let packing: Value = serde_json::from_str(&packing)
+                        .map_err(|error| CommandError::new("invalid_params", format!("--packing: {error}")))?;
+                    params["packing"] = packing;
+                }
+                ("bsarchpro.list_save".to_owned(), params)
+            }
+            BsarchproAction::Compress { list, dry_run } => (
+                "bsarchpro.compress".to_owned(),
+                json!({ "list": list, "dry_run": dry_run }),
+            ),
+            BsarchproAction::Edit {
+                list,
+                index,
+                name,
+                dry_run,
+            } => (
+                "bsarchpro.edit".to_owned(),
+                json!({ "list": list, "index": index, "name": name, "dry_run": dry_run }),
+            ),
+            BsarchproAction::Replace {
+                list,
+                mode,
+                search,
+                replace_text,
+                selected,
+                dry_run,
+            } => {
+                let mode = match mode {
+                    ReplaceAction::Replace => "replace",
+                    ReplaceAction::Prepend => "prepend",
+                    ReplaceAction::Append => "append",
+                };
+                (
+                    "bsarchpro.replace".to_owned(),
+                    json!({
+                        "list": list, "mode": mode, "search": search, "replace_text": replace_text,
+                        "selected": selected, "dry_run": dry_run
+                    }),
+                )
+            }
+            BsarchproAction::RemoveSelected {
+                list,
+                selected,
+                confirm,
+                no_confirm,
+                clear_confirm,
+                no_clear_confirm,
+                dry_run,
+            } => (
+                "bsarchpro.remove_selected".to_owned(),
+                json!({
+                    "list": list, "selected": selected,
+                    "confirm": if no_confirm { json!(false) } else if confirm { json!(true) } else { Value::Null },
+                    "clear_confirm": if no_clear_confirm { json!(false) } else if clear_confirm { json!(true) } else { Value::Null },
+                    "dry_run": dry_run
+                }),
+            ),
+            BsarchproAction::RemoveUnselected {
+                list,
+                selected,
+                confirm,
+                no_confirm,
+                dry_run,
+            } => (
+                "bsarchpro.remove_unselected".to_owned(),
+                json!({
+                    "list": list, "selected": selected,
+                    "confirm": if no_confirm { json!(false) } else if confirm { json!(true) } else { Value::Null },
+                    "dry_run": dry_run
+                }),
+            ),
+            BsarchproAction::FindIdentical { list } => ("bsarchpro.find_identical".to_owned(), json!({ "list": list })),
         },
         Action::Formids { action } => match action {
             FormidsAction::Change {

@@ -40,8 +40,8 @@ use std::sync::{Arc, OnceLock};
 use xedit_core::implementation::FileImpl;
 use xedit_core::interface::Element;
 use xedit_core::interface::globals::{
-    GameMode, creation_club_content_file_name, game_exe_name, game_master_esm, game_mode, official_dlc,
-    plugins_file_name,
+    GameMode, always_load_game_master, creation_club_content_file_name, game_exe_name, game_master_esm, game_mode,
+    official_dlc, plugins_file_name,
 };
 
 use crate::ini_files::same_text;
@@ -94,6 +94,11 @@ pub struct ModuleInfo {
     /// `wbLoadModules`' implicit actives); `Modules::active_load_order`
     /// loads it.
     pub active: bool,
+    /// `mfActiveInPluginsTxt`: the plugin list names the module with no
+    /// `#` before its active mark. The module select dialog's `<plugins.txt>`
+    /// preset checks these (and the official modules) rather than every
+    /// implicitly active one.
+    pub active_in_plugins_txt: bool,
     /// `miMasterNames`: the file names the module's file header lists.
     pub master_names: Vec<String>,
     /// `miDateTime`: the last write time of the module's file in the data
@@ -457,6 +462,7 @@ fn apply_plugins_txt(modules: &mut [ModuleInfo]) {
         }
         if active {
             modules[module].active = true;
+            modules[module].active_in_plugins_txt = true;
         }
     }
 }
@@ -602,6 +608,7 @@ fn scan_modules(data_path: &str) -> Vec<ModuleInfo> {
         has_index: false,
         masters_missing: false,
         active: false,
+        active_in_plugins_txt: false,
         master_names: Vec::new(),
         date_time: 0.0,
         data_path: data_path.to_owned(),
@@ -647,6 +654,7 @@ fn scan_modules(data_path: &str) -> Vec<ModuleInfo> {
             has_index: false,
             masters_missing: false,
             active: false,
+            active_in_plugins_txt: false,
             master_names: header.masters,
             date_time: date_time(&path),
             data_path: data_path.to_owned(),
@@ -686,6 +694,7 @@ fn attach_files(modules: &mut Vec<ModuleInfo>, data_path: &str, files: &[Arc<Fil
                     has_index: false,
                     masters_missing: false,
                     active: false,
+                    active_in_plugins_txt: false,
                     master_names: Vec::new(),
                     date_time: now_date_time(),
                     data_path: data_path.to_owned(),
@@ -852,11 +861,28 @@ impl Modules {
     /// need, each after its masters, in load order. The indices point into
     /// [`Modules::modules`].
     pub fn active_load_order(&self) -> Result<Vec<usize>, String> {
+        let active: Vec<bool> = self.modules.iter().map(|module| module.active).collect();
+        self.load_checked(&active, false)
+    }
+
+    /// Port of the module selection's `SimulateLoad` over the modules its
+    /// tree has checked (`checked`, by index into [`Modules::modules`]):
+    /// the checked modules and the masters they need, each after its
+    /// masters, in load order. The game master also loads when
+    /// `wbAlwaysLoadGameMaster` is set, as `TfrmModuleSelect.SimulateLoad`
+    /// gives it `mfForceLoad`.
+    pub fn simulate_load(&self, checked: &[bool]) -> Result<Vec<usize>, String> {
+        self.load_checked(checked, always_load_game_master())
+    }
+
+    fn load_checked(&self, checked: &[bool], force_game_master: bool) -> Result<Vec<usize>, String> {
         let mut loaded = vec![false; self.modules.len()];
         let mut loading = vec![false; self.modules.len()];
         let mut order = Vec::new();
         for index in 0..self.modules.len() {
-            if self.modules[index].active {
+            let load = checked.get(index).copied().unwrap_or(false)
+                || (force_game_master && self.modules[index].official_index == i32::MIN);
+            if load {
                 load_module(&self.modules, index, &mut loaded, &mut loading, &mut order)?;
             }
         }
