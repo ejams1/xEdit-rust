@@ -1123,16 +1123,44 @@ mod win {
 
 #[cfg(windows)]
 pub(super) fn visible_windows(pid: u32) -> Vec<Window> {
-    use windows_sys::Win32::Foundation::HWND;
-    use windows_sys::Win32::System::StationsAndDesktops::EnumDesktopWindows;
-    use windows_sys::Win32::UI::WindowsAndMessaging::EnumChildWindows;
-    let mut tops: Vec<HWND> = Vec::new();
     // The GUI runs on the harness's own desktop (`hidden::desktop`), or on
     // the current one (a null desktop) where that could not be created.
     let desktop = super::hidden::desktop().unwrap_or(std::ptr::null_mut());
+    visible_windows_on(desktop, pid)
+}
+
+/// The windows of a program started visibly on the caller's desktop (the
+/// BSArchPro autopacking mode; see `HiddenCommand::visible`). `EnumWindows`
+/// is the call for the caller's own desktop: `EnumDesktopWindows` with a
+/// null handle enumerates nothing.
+#[cfg(windows)]
+pub(super) fn current_desktop_windows(pid: u32) -> Vec<Window> {
+    use windows_sys::Win32::Foundation::HWND;
+    use windows_sys::Win32::UI::WindowsAndMessaging::EnumWindows;
+    let mut tops: Vec<HWND> = Vec::new();
+    // SAFETY: the callback only pushes into the vector passed as `LPARAM`,
+    // which outlives the call.
+    unsafe { EnumWindows(Some(win::collect), (&raw mut tops) as isize) };
+    map_windows(tops, pid)
+}
+
+#[cfg(windows)]
+fn visible_windows_on(desktop: windows_sys::Win32::System::StationsAndDesktops::HDESK, pid: u32) -> Vec<Window> {
+    use windows_sys::Win32::Foundation::HWND;
+    use windows_sys::Win32::System::StationsAndDesktops::EnumDesktopWindows;
+    let mut tops: Vec<HWND> = Vec::new();
     // SAFETY: the callback only pushes into the vector passed as `LPARAM`,
     // which outlives the call.
     unsafe { EnumDesktopWindows(desktop, Some(win::collect), (&raw mut tops) as isize) };
+    map_windows(tops, pid)
+}
+
+/// The windows of `pid` among the enumerated top-level `tops`, with the
+/// text of their children.
+#[cfg(windows)]
+fn map_windows(tops: Vec<windows_sys::Win32::Foundation::HWND>, pid: u32) -> Vec<Window> {
+    use windows_sys::Win32::Foundation::HWND;
+    use windows_sys::Win32::UI::WindowsAndMessaging::EnumChildWindows;
     tops.into_iter()
         .filter(|&handle| {
             // The GUI runs hidden: its main form and the module selection
