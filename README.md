@@ -89,6 +89,7 @@ The progress bar above counts merged phases of [docs/PLAN.md](docs/PLAN.md); it 
 | `discovery` | 3 runs | 3 of 3 equal |
 | `lodgen` | 20 scenarios | 20 of 20 equal |
 | `bsarch` | 1,472 pack/unpack/list checks | 1,472 equal |
+| `bsarchpro` | 6 GUI packing cases | 6 of 6 equal: five archives byte for byte with BSArchPro's own autopacking, and the XBox refusal `DDS is not in XBox format` |
 | `nif` | the NIF and material corpus | 542,505 equal + 250,543 `equal-error` (the release's own crashes) |
 | `sniff` | every archive of 10 games, 69 operations | 2,028,002 `equal`, 3,360 `equal-error`, 10,665,231 `unchanged`, 6,157 `oracle-failed` (the release's Sniff crashes or hangs), 0 output-different; 578 log differences, 537 of them the release's uninitialised `XBOX` flag |
 
