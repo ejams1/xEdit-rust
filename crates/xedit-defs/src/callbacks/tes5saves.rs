@@ -13,7 +13,7 @@ pub use super::tes5saves_stubs::*;
 use std::sync::atomic::Ordering;
 
 use xedit_core::interface::globals::{
-    set_extract_info, set_file_chapters, set_file_header, set_file_magic, set_file_plugins,
+    chapters_to_skip_contains, set_extract_info, set_file_chapters, set_file_header, set_file_magic, set_file_plugins,
 };
 use xedit_core::interface::*;
 
@@ -579,16 +579,20 @@ pub fn global_data_decider(_a_base_ptr: DataPtr, a_element: ElementArg) -> i32 {
         return 0;
     };
     let mut result = 0;
+    let mut a_type = 0;
     if let Some(kind) = container.get_element_by_name("Type") {
-        let kind = native(Some(kind));
-        result = match kind {
-            0..=8 => kind as i32 + 1,
-            100..=114 => (kind - 100 + 9 + 1) as i32,
-            1000..=1005 => (kind - 1000 + 9 + 15 + 1) as i32,
+        a_type = native(Some(kind)) as i32;
+        result = match a_type {
+            kind @ 0..=8 => kind + 1,
+            kind @ 100..=114 => kind - 100 + 9 + 1,
+            kind @ 1000..=1005 => kind - 1000 + 9 + 15 + 1,
             _ => 0,
         };
     }
     if result < 1001 - 1000 + 9 + 15 + 1 && result > 2 {
+        result = 0;
+    }
+    if chapters_to_skip_contains(&a_type.to_string()) {
         result = 0;
     }
     result

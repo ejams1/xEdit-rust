@@ -191,6 +191,11 @@ impl StringDef {
         this
     }
 
+    /// The `bsdFormater` field, which `Report` walks.
+    pub fn formater(&self) -> Option<Arc<dyn StringDefFormater>> {
+        self.bsd_formater.load().as_deref().cloned()
+    }
+
     fn bsd_get_encoding(&self, element: ElementArg) -> Encoding {
         bsd_get_encoding(&self.def, &self.bsd_encoding_override, element)
     }

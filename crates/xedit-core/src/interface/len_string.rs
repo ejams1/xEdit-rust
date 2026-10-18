@@ -93,6 +93,11 @@ impl LenStringDef {
         this
     }
 
+    /// The `bsdFormater` field, which `Report` walks.
+    pub fn formater(&self) -> Option<Arc<dyn StringDefFormater>> {
+        self.bsd_formater.load().as_deref().cloned()
+    }
+
     /// Size of the length field.
     pub fn get_prefix_len(&self) -> i32 {
         match self.prefix {

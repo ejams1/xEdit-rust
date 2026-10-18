@@ -21,13 +21,14 @@ use xedit_core::implementation::{
     wb_file_compare,
 };
 use xedit_core::interface::globals::{
-    GameMode, ToolSource, clear_resources_loaded_handlers, game_exe_name, game_master_esm, game_name,
-    set_create_contained_in, set_data_path, set_game_exe_name, set_game_master_esm, set_game_mode, set_game_name,
-    set_hide_unused, set_language, set_simple_records, set_tool_source, signature_list_contains,
+    GameMode, ToolSource, chapters_to_skip_contains, clear_resources_loaded_handlers, dump_chapters, game_exe_name,
+    game_master_esm, game_name, set_create_contained_in, set_data_path, set_game_exe_name, set_game_master_esm,
+    set_game_mode, set_game_name, set_hide_unused, set_language, set_simple_records, set_tool_source,
+    signature_list_contains,
 };
 use xedit_core::interface::misc::set_progress_callback;
-use xedit_core::interface::types::Signature;
-use xedit_core::interface::{Container, ElementRef, FileState, FileStates, clear_record_defs, init_records};
+use xedit_core::interface::types::{DefFlag, Signature};
+use xedit_core::interface::{Container, Def, ElementRef, FileState, FileStates, clear_record_defs, init_records};
 use xedit_core::localization::{add_default_l_encodings_if_missing, add_l_encoding_if_missing, set_l_encoding_default};
 use xedit_core::threads::{self, init_cycles};
 use xedit_io::Encoding;
@@ -307,6 +308,72 @@ pub fn dump_save(path: &str, data_path: &str, mode: GameMode, out: &mut dyn Writ
     write_elements(&*file, 0, None, &DumpOptions::default(), out).map_err(|error| error.to_string())
 }
 
+/// The saves-side switches of `xDump.dpr` (`-dc`, `-df`, `-xc`, `-xcbloat`,
+/// `-bts` and `-btd`).
+#[derive(Clone, Debug, Default)]
+pub struct SaveDumpOptions {
+    /// `-dc`: the global data IDs to keep.
+    pub dc: Option<String>,
+    /// `-df`: the ChangedForm types to keep.
+    pub df: Option<String>,
+    /// `-xc`: the global data IDs to skip.
+    pub xc: Option<String>,
+    /// `-xf`: the ChangedForm types to skip.
+    pub xf: Option<String>,
+    /// `-xcbloat`: skip the global data type 1001.
+    pub xcbloat: bool,
+    /// `-bts`: the bytes the `Unused` array skips.
+    pub bts: Option<i64>,
+    /// `-btd`: the bytes the `Remaining` array dumps.
+    pub btd: Option<i64>,
+}
+
+/// Port of the `-dc`/`-df`/`-xc`/`-xcbloat`/`-bts`/`-btd` handling of
+/// `xDump.dpr`: sets `DumpChapters`, `ChaptersToSkip` and the byte limits,
+/// which the save definitions and the dump read.
+pub fn configure_save_dump(options: &SaveDumpOptions) -> Result<(), String> {
+    use xedit_core::interface::formaters::comma_text;
+    use xedit_core::interface::globals::{
+        chapters_to_skip_add, set_bytes_to_dump, set_bytes_to_skip, set_chapters_to_skip, set_dump_chapters,
+    };
+    use xedit_defs::callbacks::fo4saves::CHANGED_FORM_OFFSET;
+
+    // `-dc` fills the list, then `-df` adds the changed form chapter types.
+    if options.dc.is_some() || options.df.is_some() {
+        let mut chapters = Vec::new();
+        if let Some(dc) = &options.dc {
+            chapters.extend(comma_text(dc));
+        }
+        if let Some(df) = &options.df {
+            for entry in comma_text(df) {
+                let value: i32 = entry.parse().map_err(|_| format!("-df: {entry} is not an integer"))?;
+                chapters.push((CHANGED_FORM_OFFSET + value).to_string());
+            }
+        }
+        set_dump_chapters(Some(chapters));
+    }
+    // `-xc` replaces the list; `-xcbloat` only applies without it. `-xf`
+    // then adds the changed form chapter types to whatever the list holds.
+    if let Some(xc) = &options.xc {
+        set_chapters_to_skip(comma_text(xc));
+    } else if options.xcbloat {
+        chapters_to_skip_add("1001".to_owned());
+    }
+    if let Some(xf) = &options.xf {
+        for entry in comma_text(xf) {
+            let value: i32 = entry.parse().map_err(|_| format!("-xf: {entry} is not an integer"))?;
+            chapters_to_skip_add((CHANGED_FORM_OFFSET + value).to_string());
+        }
+    }
+    if let Some(bts) = options.bts {
+        set_bytes_to_skip(bts);
+    }
+    if let Some(btd) = options.btd {
+        set_bytes_to_dump(btd);
+    }
+    Ok(())
+}
+
 /// The switches of `xDump.dpr` that change what the plain dump writes.
 /// The defaults are the upstream ones: every group and record, no sizes, no
 /// hidden elements and no report mode.
@@ -334,14 +401,453 @@ pub struct DumpOptions {
     pub dump_check_report: bool,
 }
 
-/// Port of the `ReportDefs` tail of `xDump.dpr`. Only `-dcr` with a report
-/// enabled reaches it; the definitions report what the load and the dump
-/// recorded, which the port collects in the definitions themselves.
-fn report_defs() {
-    // The definition side of the report is not ported yet: the enum and
-    // flag unknown values are recorded (see `EnumDef::report_unknown` and
-    // `FlagsDef::report_unknown`), but the walk of `wbDefProfiles` that
-    // prints them is missing, so nothing is written.
+/// One component of a definition path (`TwbDefPath`): the definition and the
+/// index of the member of its parent that leads to it, or -1.
+struct DefPathPart {
+    def: xedit_core::interface::DefRef,
+    index: i32,
+}
+
+/// Port of `wbDefToName`: the name of a definition in a report line: the
+/// signature and the name of a record member, the name of a named definition,
+/// else the name of its definition type.
+fn def_to_name(def: &dyn xedit_core::interface::Def) -> String {
+    use xedit_core::interface::types::PascalEnum;
+
+    let result = if let Some(signature_def) = def.as_signature_def() {
+        let signature = signature_def.get_default_signature();
+        let mut result = String::new();
+        let chars = |result: &mut String, bytes: &[u8]| {
+            for &byte in bytes {
+                match byte {
+                    0..=0x7F => result.push(char::from(byte)),
+                    _ => result.push_str(&Encoding::Mbcs(1252).get_string(&[byte]).unwrap_or_default()),
+                }
+            }
+        };
+        if signature.0[0] == 0 {
+            result.push_str("$(00)");
+            chars(&mut result, &signature.0[1..]);
+        } else {
+            chars(&mut result, &signature.0);
+        }
+        result.push_str(" - ");
+        result.push_str(signature_def.get_name());
+        result
+    } else if let Some(named_def) = def.as_named_def() {
+        named_def.get_name().to_owned()
+    } else {
+        format!("<{}>", def.get_def_type().enum_name())
+    };
+    result
+        .chars()
+        .map(|c| {
+            if (c as u32) < 0x20 {
+                format!("$({:02X})", c as u32)
+            } else {
+                c.to_string()
+            }
+        })
+        .collect()
+}
+
+/// Port of `wbDefsToPath`: every component as `name \ [index] `, with the
+/// index left out for a negative one.
+fn defs_to_path(parents: &[DefPathPart]) -> String {
+    let mut result = String::new();
+    for part in parents {
+        result.push_str(&def_to_name(&*part.def));
+        result.push_str(" \\ ");
+        if part.index >= 0 {
+            result.push_str(&format!("[{}] ", part.index));
+        }
+    }
+    result
+}
+
+/// Port of the `TStringList.CommaText` of a sorted list of names. Names with
+/// whitespace, commas or quotes would be quoted; the report only stores
+/// signatures, which are four visible characters.
+fn comma_text(entries: &[(String, i32)]) -> String {
+    entries
+        .iter()
+        .map(|(name, _)| name.as_str())
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+/// Port of the `Unknown Flags in` part of `TwbFlagsDef.Report`.
+fn report_flags(
+    def: &dyn xedit_core::interface::Def,
+    parents: &[DefPathPart],
+    out: &mut dyn Write,
+) -> std::io::Result<()> {
+    use xedit_core::interface::globals::{report_mode, report_unknown_flags};
+
+    let Some(flags_def) = def.as_flags_def() else {
+        return Ok(());
+    };
+    let counts: Vec<(usize, i32)> = (0..64)
+        .map(|index| (index, flags_def.unknown_flag_count(index)))
+        .filter(|(_, count)| *count > 0)
+        .collect();
+    if report_mode() && report_unknown_flags() && !counts.is_empty() {
+        write_text(
+            out,
+            &format!("Unknown Flags in: {}{}\r\n", defs_to_path(parents), def_to_name(def)),
+        )?;
+        for (index, count) in counts {
+            write_text(out, &format!("  {index} ({count})\r\n"))?;
+        }
+    }
+    Ok(())
+}
+
+/// Port of the `Unknown Enums in` part of `TwbEnumDef.Report`.
+fn report_enums(
+    def: &dyn xedit_core::interface::Def,
+    parents: &[DefPathPart],
+    out: &mut dyn Write,
+) -> std::io::Result<()> {
+    use xedit_core::interface::globals::{report_mode, report_unknown_enums};
+
+    let Some(enum_def) = def.as_enum_def() else {
+        return Ok(());
+    };
+    let unknown = enum_def.unknown_enums();
+    if report_mode() && report_unknown_enums() && !unknown.is_empty() {
+        write_text(
+            out,
+            &format!("Unknown Enums in: {}{}\r\n", defs_to_path(parents), def_to_name(def)),
+        )?;
+        for (value, paths) in unknown {
+            write_text(out, &format!("  {value} ({})\r\n", paths.len()))?;
+            for (path, count) in paths {
+                write_text(out, &format!("    {path} ({count})\r\n"))?;
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Port of `TwbFormIDDefFormater.Report`.
+fn report_form_id_formater(
+    def: &dyn xedit_core::interface::Def,
+    parents: &[DefPathPart],
+    out: &mut dyn Write,
+) -> std::io::Result<()> {
+    use xedit_core::interface::form_id_formater::FormIDClass;
+    use xedit_core::interface::globals::{report_form_ids, report_mode};
+
+    let Some(formater) = def.as_form_id_def_formater() else {
+        return Ok(());
+    };
+    if !(report_mode() && !def.get_def_flags().contains(DefFlag::dfNoReport) && report_form_ids()) {
+        return Ok(());
+    }
+    let found = formater.found_signatures();
+    if !found.is_empty() && formater.class() == FormIDClass::FormID {
+        write_text(
+            out,
+            &format!(
+                "Unchecked FormID Formatter: {}{}\r\n",
+                defs_to_path(parents),
+                def_to_name(def)
+            ),
+        )?;
+        write_text(out, &format!("  {}\r\n", comma_text(&found)))?;
+        for (signature, count) in &found {
+            write_text(out, &format!("  {signature} ({count})\r\n"))?;
+        }
+    }
+    let not_resolved = formater.not_resolved();
+    if !not_resolved.is_empty() {
+        write_text(
+            out,
+            &format!(
+                "FormID contains unresolvable values: {}{}\r\n",
+                defs_to_path(parents),
+                def_to_name(def)
+            ),
+        )?;
+        for (form_id, count) in not_resolved {
+            write_text(out, &format!("  {form_id} ({count})\r\n"))?;
+        }
+    }
+    let not_allowed = formater.found_not_allowed_references();
+    if !not_allowed.is_empty() {
+        write_text(
+            out,
+            &format!(
+                "FormID contains not allowed references: {}{}\r\n",
+                defs_to_path(parents),
+                def_to_name(def)
+            ),
+        )?;
+        for (name, count) in not_allowed {
+            write_text(out, &format!("  {name} ({count})\r\n"))?;
+        }
+    }
+    Ok(())
+}
+
+/// Port of `TwbFormIDChecked.Report` after its `inherited` call.
+fn report_form_id_checked(
+    def: &dyn xedit_core::interface::Def,
+    parents: &[DefPathPart],
+    out: &mut dyn Write,
+) -> std::io::Result<()> {
+    use xedit_core::interface::form_id_formater::FormIDClass;
+    use xedit_core::interface::globals::{report_form_ids, report_mode, report_not_found_but_allowed_form_ids};
+
+    let Some(formater) = def.as_form_id_def_formater() else {
+        return Ok(());
+    };
+    if !matches!(formater.class(), FormIDClass::Checked | FormIDClass::CheckedST) {
+        return Ok(());
+    }
+    if !(report_mode() && !def.get_def_flags().contains(DefFlag::dfNoReport) && report_form_ids()) {
+        return Ok(());
+    }
+    let found = formater.found_signatures();
+    if found.is_empty() {
+        return Ok(());
+    }
+    let mut sigs = found;
+    let mut not_found = String::new();
+    for index in 0..formater.get_signature_count() {
+        let valid = formater.get_signature(index as usize).to_string();
+        if let Some(position) = sigs.iter().position(|(signature, _)| *signature == valid) {
+            sigs.remove(position);
+        } else {
+            not_found.push_str(&valid);
+            not_found.push(',');
+        }
+    }
+    if !not_found.is_empty() {
+        not_found.pop();
+    }
+    if !report_not_found_but_allowed_form_ids() {
+        not_found.clear();
+    }
+    if not_found.is_empty() && sigs.is_empty() {
+        return Ok(());
+    }
+    write_text(
+        out,
+        &format!(
+            "Differences in Checked FormID Formater: {}{}\r\n",
+            defs_to_path(parents),
+            def_to_name(def)
+        ),
+    )?;
+    if !not_found.is_empty() {
+        write_text(out, &format!("  Not found but allowed: {not_found}\r\n"))?;
+    }
+    if !sigs.is_empty() {
+        write_text(out, &format!("  Found but not allowed: {}\r\n", comma_text(&sigs)))?;
+        for (signature, count) in &sigs {
+            write_text(out, &format!("    {signature} ({count})\r\n"))?;
+        }
+    }
+    Ok(())
+}
+
+/// Port of `wbDef.Report`: the shared part of every definition report, then
+/// the members of the definition type.
+fn report_def(
+    def: &dyn xedit_core::interface::Def,
+    parents: &mut Vec<DefPathPart>,
+    out: &mut dyn Write,
+) -> std::io::Result<()> {
+    use xedit_core::interface::globals::{report_required, report_unknown, report_unused};
+
+    if def.def_base().def_reported() || def.get_def_flags().contains(DefFlag::dfNoReport) {
+        return Ok(());
+    }
+
+    // Port of `TwbDef.Report`.
+    if report_unused() && !def.def_base().def_used() {
+        write_text(
+            out,
+            &format!("Unused: {}{}\r\n", defs_to_path(parents), def_to_name(def)),
+        )?;
+    }
+    if report_required()
+        && def.def_base().def_possibly_required()
+        && def.def_base().def_not_required() == def.def_base().def_required()
+    {
+        let label = if def.def_base().def_not_required() {
+            "Not Required: "
+        } else {
+            "Required: "
+        };
+        write_text(
+            out,
+            &format!("{label}{}{}\r\n", defs_to_path(parents), def_to_name(def)),
+        )?;
+    }
+    if report_unknown() {
+        let unknown = def.def_base().unknown_values();
+        if !unknown.is_empty() {
+            write_text(
+                out,
+                &format!(
+                    "Unknown Field: {}{} ({})\r\n",
+                    defs_to_path(parents),
+                    def_to_name(def),
+                    unknown.len()
+                ),
+            )?;
+            for (value, paths) in unknown {
+                write_text(out, &format!("  {value} ({})\r\n", paths.len()))?;
+                for path in paths {
+                    write_text(out, &format!("    {path}\r\n"))?;
+                }
+            }
+        } else if def.def_base().is_unknown.load(std::sync::atomic::Ordering::Relaxed) {
+            write_text(
+                out,
+                &format!("Unknown Field: {}{}\r\n", defs_to_path(parents), def_to_name(def)),
+            )?;
+        }
+    }
+    def.def_base().mark_reported();
+
+    // `TwbMainRecordDef.Report` and the `TwbSubRecordStructDef` and
+    // `TwbSubRecordUnionDef` reports: the members, each with its index.
+    if let Some(record_def) = def.as_record_def() {
+        parents.push(DefPathPart {
+            def: def.def_ref(),
+            index: -1,
+        });
+        for index in 0..record_def.get_member_count() {
+            parents.last_mut().unwrap().index = index;
+            let member = record_def.get_member(index as usize);
+            report_def(member.as_dyn_def(), parents, out)?;
+        }
+        parents.pop();
+        return Ok(());
+    }
+
+    // `TwbSubRecordDef.Report`: the value, then the unused data marker of the
+    // subrecord itself.
+    if let Some(sub_record) = def.as_sub_record_def() {
+        if let Some(value) = sub_record.get_value() {
+            parents.push(DefPathPart {
+                def: def.def_ref(),
+                index: -1,
+            });
+            report_def(value.as_dyn_def(), parents, out)?;
+            parents.pop();
+        }
+        if xedit_core::interface::globals::report_unused_data() && sub_record.sr_has_unused_data() {
+            write_text(
+                out,
+                &format!("Has Unused Data: {}{}\r\n", defs_to_path(parents), def_to_name(def)),
+            )?;
+        }
+        return Ok(());
+    }
+
+    // `TwbSubRecordArrayDef.Report`: the element with the array in the path.
+    if let Some(sub_array) = def.as_sub_record_array_def() {
+        parents.push(DefPathPart {
+            def: def.def_ref(),
+            index: -1,
+        });
+        report_def(sub_array.get_element().as_dyn_def(), parents, out)?;
+        parents.pop();
+        return Ok(());
+    }
+
+    // `TwbStructDef.Report`: the members, each with its index.
+    if let Some(struct_def) = def.as_struct_def() {
+        parents.push(DefPathPart {
+            def: def.def_ref(),
+            index: -1,
+        });
+        for index in 0..struct_def.get_member_count() {
+            parents.last_mut().unwrap().index = index;
+            let member = struct_def.get_member(index as usize);
+            report_def(member.as_dyn_def(), parents, out)?;
+        }
+        parents.pop();
+        return Ok(());
+    }
+
+    // `TwbArrayDef.Report` reports the element with the path of the array
+    // itself (`arElement.Report(aParents)` upstream).
+    if let Some(array_def) = def.as_array_def() {
+        if let Some(element) = array_def.try_get_element() {
+            report_def(element.as_dyn_def(), parents, out)?;
+        }
+        return Ok(());
+    }
+
+    // `TwbUnionDef.Report`: the members, each with its index.
+    if let Some(union_def) = def.as_union_def() {
+        parents.push(DefPathPart {
+            def: def.def_ref(),
+            index: -1,
+        });
+        for index in 0..union_def.get_member_count() {
+            parents.last_mut().unwrap().index = index;
+            let member = union_def.get_member(index as usize);
+            report_def(member.as_dyn_def(), parents, out)?;
+        }
+        parents.pop();
+        return Ok(());
+    }
+
+    // `TwbIntegerDef.Report` reports its formater with the path of the
+    // integer itself (`inFormater.Report(aParents)` upstream).
+    if let Some(integer_def) = def.as_integer_def() {
+        if let Some(formater) = integer_def.get_raw_formater() {
+            report_def(formater.as_dyn_def(), parents, out)?;
+        }
+        return Ok(());
+    }
+
+    // `TwbBaseStringDef.Report` reports its formater with the path of the
+    // string itself (`bsdFormater.Report(aParents)` upstream).
+    if let Some(string_def) = def.as_string_def() {
+        if let Some(formater) = string_def.formater() {
+            report_def(formater.as_dyn_def(), parents, out)?;
+        }
+        return Ok(());
+    }
+    if let Some(len_string_def) = def.as_len_string_def() {
+        if let Some(formater) = len_string_def.formater() {
+            report_def(formater.as_dyn_def(), parents, out)?;
+        }
+        return Ok(());
+    }
+
+    if def.as_flags_def().is_some() {
+        report_flags(def, parents, out)?;
+        return Ok(());
+    }
+    if def.as_enum_def().is_some() {
+        report_enums(def, parents, out)?;
+        return Ok(());
+    }
+    if def.as_form_id_def_formater().is_some() {
+        report_form_id_formater(def, parents, out)?;
+        report_form_id_checked(def, parents, out)?;
+    }
+    Ok(())
+}
+
+/// Port of the `ReportDefs` tail of `xDump.dpr`: every record definition, in
+/// definition order, reports what the load and the dump recorded in report
+/// mode.
+fn report_defs(out: &mut dyn Write) -> std::io::Result<()> {
+    let mut parents = Vec::new();
+    for (_, record_def) in xedit_core::interface::record_defs() {
+        report_def(record_def.as_dyn_def(), &mut parents, out)?;
+    }
+    Ok(())
 }
 
 /// Loads the plugin and writes its dump with `options`.
@@ -361,7 +867,7 @@ pub fn dump_file_with_options(
             .map_err(|error| error.to_string())?;
         }
         if !options.dont_write_report {
-            report_defs();
+            report_defs(out).map_err(|error| error.to_string())?;
         }
     }
     Ok(())
@@ -794,6 +1300,33 @@ fn group_filtered(element: &ElementRef, options: &DumpOptions, write_element: bo
     false
 }
 
+/// The chapter type of a save element (`IwbChapter.ChapterType`), or `None`
+/// when its definition has no chapter.
+fn chapter_type(element: &ElementRef) -> Option<i32> {
+    let value_def = element.get_value_def()?;
+    let struct_def = value_def.as_struct_def()?;
+    struct_def.chapter()?;
+    let data = element.as_data_container()?.get_data();
+    Some(struct_def.get_chapter_type(data, Some(element)))
+}
+
+/// The chapter filters of `WriteContainer` (`xDump.dpr:627`, saves only):
+/// `-dc`/`-df` keep only the listed chapter types and `-xc`/`-xf`/
+/// `-xcbloat` drop the listed ones. The checks run before the `Skipped`
+/// handling, so a filtered chapter writes no line at all.
+fn chapter_filtered(element: &ElementRef) -> bool {
+    let Some(chapter_type) = chapter_type(element) else {
+        return false;
+    };
+    let chapter_type = chapter_type.to_string();
+    if let Some(dump_chapters) = dump_chapters()
+        && !dump_chapters.iter().any(|entry| entry == &chapter_type)
+    {
+        return true;
+    }
+    chapters_to_skip_contains(&chapter_type)
+}
+
 /// Port of `WriteElement` in the plain dump mode. The name, the value and
 /// the summary are written straight into `out`; the summary is only
 /// computed when the line needs it.
@@ -860,6 +1393,7 @@ fn write_element_with_count(
     }
     if let Some(container) = element.as_container()
         && !group_filtered(element, options, false)
+        && !chapter_filtered(element)
         && (options.dump_hidden || !name.starts_with("Hidden: "))
     {
         if element.get_skipped() {
@@ -957,5 +1491,135 @@ fn kept_records() -> usize {
     match rayon::current_thread_index() {
         Some(_) => KEPT_RECORDS * KEPT_RECORDS_PER_WORKER,
         None => KEPT_RECORDS,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use xedit_core::interface::def::NamedDefArgs;
+    use xedit_core::interface::form_id_formater::FormIDDefFormater;
+    use xedit_core::interface::globals::test_lock;
+    use xedit_core::interface::integer::IntegerDef;
+    use xedit_core::interface::struct_def::{StructDef, StructDefArgs};
+    use xedit_core::interface::sub_record::SubRecordDef;
+    use xedit_core::interface::types::{ConflictPriority, IntType};
+
+    fn named(name: &str) -> NamedDefArgs {
+        NamedDefArgs {
+            priority: ConflictPriority::cpNormal,
+            required: false,
+            name: name.to_owned(),
+            after_load: None,
+            after_set: None,
+            dont_show: None,
+            get_cp: None,
+            terminator: false,
+        }
+    }
+
+    fn integer(name: &str) -> DefPathPart {
+        DefPathPart {
+            def: IntegerDef::create(named(name), IntType::itU32, None, 0),
+            index: -1,
+        }
+    }
+
+    /// `wbDefToName` and `wbDefsToPath` on the witness path of the
+    /// `ccswkfo4002-pipnuka.esl` `-dcr` case.
+    #[test]
+    fn report_names() {
+        let _guard = test_lock();
+        let sub_record = DefPathPart {
+            def: SubRecordDef::create(named("Data"), &[Signature::new(b"DATA")], None, false),
+            index: -1,
+        };
+        let structure = DefPathPart {
+            def: StructDef::create(named(""), StructDefArgs::default()),
+            index: 11,
+        };
+        assert_eq!(def_to_name(&*sub_record.def), "DATA - Data");
+        // The unnamed structure of `wbStruct` is a named definition with an
+        // empty name, which renders as nothing, as the witness path shows.
+        assert_eq!(def_to_name(&*structure.def), "");
+        assert_eq!(def_to_name(&*integer("Value 1").def), "Value 1");
+
+        let formater = FormIDDefFormater::create();
+        assert_eq!(def_to_name(&*formater), "TwbFormIDDefFormater");
+        let mut parents = vec![sub_record, structure, integer("Property"), integer("Value 1")];
+        parents[2].index = 6;
+        parents[3].index = 4;
+        assert_eq!(
+            format!("{}{}", defs_to_path(&parents), def_to_name(&*formater)),
+            r"DATA - Data \  \ [11] Property \ [6] Value 1 \ [4] TwbFormIDDefFormater"
+        );
+
+        // Control characters are escaped, and a zero first signature byte
+        // renders as $(00).
+        let control = integer("A\u{1}B");
+        assert_eq!(def_to_name(&*control.def), "A$(01)B");
+        let zeroed = SubRecordDef::create(named("Seek"), &[Signature::new(&[0, b'S', b'K', b'R'])], None, false);
+        assert_eq!(def_to_name(&*zeroed), "$(00)SKR - Seek");
+    }
+
+    /// The `-dc`/`-df`/`-xc`/`-xf`/`-xcbloat` wiring of `xDump.dpr`: the
+    /// chapter lists the dump and the save definitions read.
+    #[test]
+    fn configure_save_dump_chapters() {
+        let _guard = test_lock();
+        use xedit_core::interface::globals::{
+            bytes_to_dump, bytes_to_skip, chapters_to_skip, dump_chapters, set_bytes_to_dump, set_bytes_to_skip,
+            set_chapters_to_skip, set_dump_chapters,
+        };
+
+        let options = SaveDumpOptions {
+            dc: Some("1, 2".to_owned()),
+            df: Some("5".to_owned()),
+            ..SaveDumpOptions::default()
+        };
+        configure_save_dump(&options).unwrap();
+        assert_eq!(
+            dump_chapters(),
+            Some(vec!["1".to_owned(), "2".to_owned(), "10005".to_owned()])
+        );
+        assert!(chapters_to_skip().is_empty());
+
+        set_dump_chapters(None);
+        set_chapters_to_skip(Vec::new());
+        let options = SaveDumpOptions {
+            xc: Some("7,8".to_owned()),
+            xcbloat: true,
+            xf: Some("3".to_owned()),
+            ..SaveDumpOptions::default()
+        };
+        configure_save_dump(&options).unwrap();
+        assert_eq!(chapters_to_skip(), ["7", "8", "10003"]);
+
+        // `-xcbloat` only applies without `-xc`.
+        set_chapters_to_skip(Vec::new());
+        configure_save_dump(&SaveDumpOptions {
+            xcbloat: true,
+            ..SaveDumpOptions::default()
+        })
+        .unwrap();
+        assert_eq!(chapters_to_skip(), ["1001"]);
+
+        let options = SaveDumpOptions {
+            bts: Some(-1),
+            btd: Some(16),
+            ..SaveDumpOptions::default()
+        };
+        configure_save_dump(&options).unwrap();
+        assert_eq!(bytes_to_skip(), -1);
+        assert_eq!(bytes_to_dump(), 16);
+        set_bytes_to_skip(0);
+        set_bytes_to_dump(0xFFFF_FFFF);
+
+        let error = configure_save_dump(&SaveDumpOptions {
+            df: Some("x".to_owned()),
+            ..SaveDumpOptions::default()
+        })
+        .unwrap_err();
+        assert!(error.contains("-df: x is not an integer"), "{error}");
     }
 }

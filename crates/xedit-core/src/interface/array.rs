@@ -194,6 +194,12 @@ impl ArrayDef {
             .unwrap_or_else(|| panic!("array {} has no element definition", self.get_name()))
     }
 
+    /// The element definition when the array has one, like the `Assigned`
+    /// test of the upstream code.
+    pub fn try_get_element(&self) -> Option<&Arc<dyn ValueDef>> {
+        self.ar_element.as_ref()
+    }
+
     pub fn get_count(&self) -> i32 {
         self.ar_count.load(Ordering::Relaxed)
     }

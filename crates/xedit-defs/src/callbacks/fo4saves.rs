@@ -14,8 +14,8 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicI64, Ordering};
 
 use xedit_core::interface::globals::{
-    bytes_to_dump, bytes_to_group, bytes_to_skip, set_extract_info, set_file_chapters, set_file_header, set_file_magic,
-    set_file_plugins,
+    bytes_to_dump, bytes_to_group, bytes_to_skip, chapters_to_skip_contains, set_extract_info, set_file_chapters,
+    set_file_header, set_file_magic, set_file_plugins,
 };
 use xedit_core::interface::*;
 
@@ -57,7 +57,7 @@ pub fn switch_to_fo4_co_save() {
 
 /// Upstream `wbChangedFormOffset`: the chapter types of the changed forms
 /// start here.
-pub(crate) const CHANGED_FORM_OFFSET: i32 = 10000;
+pub const CHANGED_FORM_OFFSET: i32 = 10000;
 
 /// The lengths of the tables that the `AfterLoad` callbacks set once,
 /// upstream `VMTypeCount` and the others; -1 until then.
@@ -291,6 +291,9 @@ pub fn global_data_decider(_a_base_ptr: DataPtr, a_element: ElementArg) -> i32 {
         return 0;
     };
     let kind = native(Some(kind));
+    if chapters_to_skip_contains(&kind.to_string()) {
+        return 0;
+    }
     match kind {
         0..=11 => kind as i32 + 1,
         100..=117 => (kind - 100 + 12 + 1) as i32,
@@ -865,7 +868,12 @@ pub fn changed_form_data_decider(_a_base_ptr: DataPtr, a_element: ElementArg) ->
     let Some(element) = a_element else { return 0 };
     let (kind, changed_form) = changed_form_get_raw_type(element);
     if kind >= 0 && changed_form.as_data_container().is_some() {
-        1 + (kind & 0x3F)
+        let result = 1 + (kind & 0x3F);
+        if chapters_to_skip_contains(&(CHANGED_FORM_OFFSET + result).to_string()) {
+            0
+        } else {
+            result
+        }
     } else {
         0
     }

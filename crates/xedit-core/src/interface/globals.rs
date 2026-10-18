@@ -673,6 +673,47 @@ pub fn signature_list_contains(list: &[Signature], signature: Signature) -> bool
     list.contains(&upper)
 }
 
+static DUMP_CHAPTERS: RwLock<Option<Vec<String>>> = RwLock::new(None);
+static CHAPTERS_TO_SKIP: RwLock<Vec<String>> = RwLock::new(Vec::new());
+
+/// Upstream xDump's `DumpChapters`: the chapter types `-dc` and `-df` keep,
+/// or `None` while neither switch is given.
+pub fn dump_chapters() -> Option<Vec<String>> {
+    DUMP_CHAPTERS.read().unwrap().clone()
+}
+
+/// Sets upstream xDump's `DumpChapters`.
+pub fn set_dump_chapters(value: Option<Vec<String>>) {
+    *DUMP_CHAPTERS.write().unwrap() = value;
+}
+
+/// Adds an entry to upstream xDump's `DumpChapters`, which the first entry
+/// assigns.
+pub fn dump_chapters_add(value: String) {
+    DUMP_CHAPTERS.write().unwrap().get_or_insert_with(Vec::new).push(value);
+}
+
+/// Upstream `ChaptersToSkip`: the chapter types `-xc` and `-xcbloat` drop.
+/// The upstream list always exists and is empty by default.
+pub fn chapters_to_skip() -> Vec<String> {
+    CHAPTERS_TO_SKIP.read().unwrap().clone()
+}
+
+/// Sets upstream `ChaptersToSkip`.
+pub fn set_chapters_to_skip(value: Vec<String>) {
+    *CHAPTERS_TO_SKIP.write().unwrap() = value;
+}
+
+/// Upstream `ChaptersToSkip.Add`.
+pub fn chapters_to_skip_add(value: String) {
+    CHAPTERS_TO_SKIP.write().unwrap().push(value);
+}
+
+/// Whether upstream `ChaptersToSkip.Find` would find `value`.
+pub fn chapters_to_skip_contains(value: &str) -> bool {
+    CHAPTERS_TO_SKIP.read().unwrap().iter().any(|entry| entry == value)
+}
+
 /// Upstream `wbOfficialDLC`: the file names of the official DLC of the game.
 pub fn official_dlc() -> Vec<String> {
     OFFICIAL_DLC.read().unwrap().clone()
@@ -930,6 +971,8 @@ pub fn reset() {
     set_tool_source(ToolSource::tsPlugins);
     set_strip_masters_file_names(Vec::new());
     set_allow_direct_save_for(Vec::new());
+    set_dump_chapters(None);
+    set_chapters_to_skip(Vec::new());
 }
 
 /// Serializes tests that change settings. The guard resets all settings when
