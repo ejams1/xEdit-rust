@@ -2082,7 +2082,11 @@ mod tests {
         let mut runs = Vec::new();
         let result = retry_crashes(|attempt| {
             runs.push(attempt);
-            if attempt < 3 { bail!("Sniff ended with exit code 0xc0000374") } else { Ok(attempt) }
+            if attempt < 3 {
+                bail!("Sniff ended with exit code 0xc0000374")
+            } else {
+                Ok(attempt)
+            }
         });
         assert_eq!(result.unwrap(), 3);
         assert_eq!(runs, [1, 2, 3]);
