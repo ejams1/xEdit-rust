@@ -1153,15 +1153,32 @@ fn run_sniff(
     })
 }
 
+/// Whether another run of the oracle may give what this one did not: a
+/// crash of the process (the release's Sniff is not thread safe), or a run
+/// that hung (the retry runs on one thread).
+fn is_retryable(error: &anyhow::Error) -> bool {
+    let text = format!("{error:#}");
+    text.starts_with("Sniff ended with exit code 0xc") || text.starts_with("Sniff did not finish within")
+}
+
 /// Calls `run` (with the number of the attempt, from 1) until it succeeds,
-/// fails with something other than a crash of the Sniff process, or has
-/// crashed three times; the last error is returned.
+/// fails with something other than a crash or a hang of the Sniff process,
+/// or has used its attempts: three for a crash, two for a hang (a hung
+/// archive that runs again would cost its whole timeout twice).
 fn retry_crashes<T>(mut run: impl FnMut(usize) -> Result<T>) -> Result<T> {
     let mut attempt = 1;
     loop {
         match run(attempt) {
-            Err(error) if attempt < 3 && format!("{error:#}").starts_with("Sniff ended with exit code 0xc") => {
-                eprintln!("oracle crashed ({error:#}); running it again");
+            Err(error) if is_retryable(&error) => {
+                let limit = if format!("{error:#}").starts_with("Sniff did not finish within") {
+                    2
+                } else {
+                    3
+                };
+                if attempt >= limit {
+                    return Err(error);
+                }
+                eprintln!("oracle failed ({error:#}); running it again on one thread");
                 attempt += 1;
             }
             other => return other,
@@ -2100,11 +2117,21 @@ mod tests {
         assert_eq!(runs, 3);
         assert!(format!("{error:#}").contains("0xc0000374"));
 
-        // Another failure is not a crash of the process: no second run.
+        // A hung archive runs once more, on one thread; a second hang ends it.
+        let mut runs = Vec::new();
+        let error = retry_crashes::<()>(|attempt| {
+            runs.push(attempt);
+            bail!("Sniff did not finish within 714 s")
+        })
+        .unwrap_err();
+        assert_eq!(runs, [1, 2]);
+        assert!(format!("{error:#}").contains("714"));
+
+        // Another failure asks for no second run.
         let mut runs = 0;
         let _ = retry_crashes::<()>(|_| {
             runs += 1;
-            bail!("Sniff did not finish within 600 s")
+            bail!("Sniff wrote no log oracle.log")
         });
         assert_eq!(runs, 1);
     }
