@@ -19,8 +19,11 @@ use serde::{Deserialize, Serialize};
 use xedit_core::implementation::refs::{BuildOrLoadRefResult, build_or_load_refs};
 use xedit_core::implementation::{FileImpl, MainRecordImpl, refcache};
 use xedit_core::interface::globals::{cache_path, dont_cache, set_cache_path};
-use xedit_core::interface::{Element, File, FileState, GameMode, MainRecord};
+use xedit_core::interface::{
+    CopyArgs, Element, ElementRef, File, FileState, GameMode, MainRecord, MainRecordRef, Signature,
+};
 
+use crate::edit::with_edit_allowed;
 use crate::formids::{RecordRef, record_ref};
 use crate::{CommandError, Registry, Session};
 
@@ -364,6 +367,574 @@ pub fn write_index(session: &mut Session, out: &mut dyn std::io::Write) -> Resul
     Ok(())
 }
 
+/// `references.change`: the request.
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ReferencesChangeRequest {
+    /// Load order FormID of the referenced record as hexadecimal digits
+    /// (`ActiveMaster.LoadOrderFormID` of the change).
+    pub form_id: String,
+    /// Plugin whose version of the record names the master the referencing
+    /// records of which are updated; the last loaded plugin when omitted.
+    pub file: Option<String>,
+    /// The new load order FormID, as the dialog asks it.
+    pub new_form_id: String,
+    /// Only the referencing records of these loaded files, as the file
+    /// selection dialog checks them; every editable referencing record when
+    /// omitted.
+    #[serde(default)]
+    pub files: Vec<String>,
+    /// Report the records, change nothing.
+    #[serde(default)]
+    pub dry_run: bool,
+}
+
+/// `references.change`: the response.
+#[derive(Serialize, JsonSchema)]
+pub struct ReferencesChangeResponse {
+    /// The referenced record as `file` sees it.
+    pub record: RecordRef,
+    /// Its master, which keeps the referenced-by list.
+    pub master: RecordRef,
+    /// `ReferencedByCount`: the entries before the file selection.
+    pub referenced_by_count: usize,
+    /// The editable referencing records of the selection.
+    pub records: Vec<RecordRef>,
+    /// How many of them now refer to the new FormID.
+    pub updated: usize,
+    /// The errors upstream logs and goes on after.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub errors: Vec<String>,
+    /// The new FormID, as eight hexadecimal digits.
+    pub new_form_id: String,
+    /// Whether this was a dry run.
+    pub dry_run: bool,
+}
+
+/// `references.change`: change the references in the selected referencing
+/// records from one FormID to another (`mniNavChangeReferencingRecords`):
+/// every record that refers to the record gets `CompareExchangeFormID`
+/// with the two load order FormIDs. The record itself keeps its FormID,
+/// unlike `formids.change`.
+fn references_change(
+    session: &mut Session,
+    request: ReferencesChangeRequest,
+) -> Result<ReferencesChangeResponse, CommandError> {
+    crate::commands::refuse_in_translate_mode("references.change")?;
+    let old_form_id = crate::commands::parse_form_id(&request.form_id)?;
+    let new_form_id = crate::commands::parse_form_id(&request.new_form_id)?;
+    if new_form_id.is_null() {
+        return Err(CommandError::new("invalid_params", "00000000 is not a valid FormID"));
+    }
+    if new_form_id.is_player() {
+        return Err(CommandError::new("invalid_params", "00000014 is not a valid FormID"));
+    }
+    if new_form_id == old_form_id {
+        return Err(CommandError::new("invalid_params", "Old and new FormID are identical"));
+    }
+    let record = session.record(&request.form_id, request.file.as_deref())?;
+    session.ensure_refs()?;
+    let record: std::sync::Arc<MainRecordImpl> = crate::formids::record_impl(&record)?;
+    let master = record.master_or_self_impl();
+    let referenced_by = master.referenced_by();
+    let selected: Vec<&std::sync::Arc<MainRecordImpl>> = referenced_by
+        .iter()
+        .filter(|referrer| {
+            request.files.is_empty()
+                || referrer.get_file().is_some_and(|file| {
+                    request
+                        .files
+                        .iter()
+                        .any(|name| name.eq_ignore_ascii_case(&file.get_name()))
+                })
+        })
+        .filter(|referrer| with_edit_allowed(|| crate::formids::record_editable(referrer)))
+        .collect();
+    let mut errors = Vec::new();
+    let mut updated = 0;
+    for referrer in &selected {
+        if request.dry_run {
+            continue;
+        }
+        match referrer.compare_exchange_form_id(old_form_id, new_form_id) {
+            Ok(true) => updated += 1,
+            Ok(false) => {}
+            Err(error) => errors.push(format!("Error updating FormID for {}: {error}", referrer.get_name())),
+        }
+    }
+    Ok(ReferencesChangeResponse {
+        record: record_ref(&record),
+        master: record_ref(&master),
+        referenced_by_count: referenced_by.len(),
+        records: selected.iter().map(|referrer| record_ref(referrer)).collect(),
+        updated,
+        errors,
+        new_form_id: new_form_id.to_string(false),
+        dry_run: request.dry_run,
+    })
+}
+
+/// `references.change_batch`: one pair of the batch.
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ReferencePair {
+    /// Load order FormID of the old record, as the CSV's old master and
+    /// object ID name it.
+    pub old_form_id: String,
+    /// The old master file, as the CSV names it; the version of the record
+    /// in that file is the one whose references change. Omitted for the
+    /// winning override.
+    pub old_file: Option<String>,
+    /// Load order FormID of the new record.
+    pub new_form_id: String,
+    /// The new master file, as the CSV names it; omitted for the winning
+    /// override.
+    pub new_file: Option<String>,
+}
+
+/// `references.change_batch`: the request.
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ReferencesChangeBatchRequest {
+    /// The loaded plugin whose referencing records are updated, as the
+    /// focused file node of the batch item; the only loaded plugin when
+    /// omitted.
+    pub file: Option<String>,
+    /// The pairs, as the lines of the CSV the dialog opens.
+    pub pairs: Vec<ReferencePair>,
+    /// Report the records, change nothing.
+    #[serde(default)]
+    pub dry_run: bool,
+}
+
+/// What `references.change_batch` did with one pair.
+#[derive(Serialize, JsonSchema)]
+pub struct BatchChangeResult {
+    /// Load order FormID of the old record.
+    pub old_form_id: String,
+    /// Load order FormID of the new record.
+    pub new_form_id: String,
+    /// The referencing records of the file that were updated.
+    pub records: Vec<RecordRef>,
+    /// How many of them now refer to the new FormID.
+    pub updated: usize,
+    /// Whether the file's own version of the old record took the new
+    /// FormID.
+    pub renamed: bool,
+    /// Why the pair was skipped.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub skipped: Option<String>,
+}
+
+/// `references.change_batch`: the response.
+#[derive(Serialize, JsonSchema)]
+pub struct ReferencesChangeBatchResponse {
+    /// The plugin whose records were updated.
+    pub file: String,
+    pub pairs: Vec<BatchChangeResult>,
+    /// Whether this was a dry run.
+    pub dry_run: bool,
+}
+
+/// `references.change_batch`: the batch form of `references.change`
+/// (`mniNavBatchChangeReferencingRecords`): for every pair the referencing
+/// records of the focused file get `CompareExchangeFormID`, the new
+/// record's file becomes a master of the focused file, and the focused
+/// file's version of the old record takes the new FormID. The CSV's
+/// signature and editor ID checks are warnings of the dialog and have no
+/// data effect.
+fn references_change_batch(
+    session: &mut Session,
+    request: ReferencesChangeBatchRequest,
+) -> Result<ReferencesChangeBatchResponse, CommandError> {
+    crate::commands::refuse_in_translate_mode("references.change_batch")?;
+    let target = session.file(request.file.as_deref())?;
+    session.ensure_refs()?;
+    let mut results = Vec::new();
+    for pair in &request.pairs {
+        let old_form_id = crate::commands::parse_form_id(&pair.old_form_id)?;
+        let new_form_id = crate::commands::parse_form_id(&pair.new_form_id)?;
+        let skipped = |reason: String| BatchChangeResult {
+            old_form_id: old_form_id.to_string(false),
+            new_form_id: new_form_id.to_string(false),
+            records: Vec::new(),
+            updated: 0,
+            renamed: false,
+            skipped: Some(reason),
+        };
+        let old = session
+            .record(&pair.old_form_id, pair.old_file.as_deref())
+            .and_then(|record| crate::formids::record_impl(&record));
+        let Ok(old) = old else {
+            results.push(skipped(format!(
+                "Old Record with FormID {} was not found",
+                old_form_id.to_string(false)
+            )));
+            continue;
+        };
+        let new = session
+            .record(&pair.new_form_id, pair.new_file.as_deref())
+            .and_then(|record| crate::formids::record_impl(&record));
+        let Ok(new) = new else {
+            results.push(skipped(format!(
+                "New Record with FormID {} was not found",
+                new_form_id.to_string(false)
+            )));
+            continue;
+        };
+        if old.get_element_id() == new.get_element_id() {
+            results.push(skipped("Old and new Record are identical".to_owned()));
+            continue;
+        }
+        let referenced_by: Vec<std::sync::Arc<MainRecordImpl>> = old
+            .referenced_by()
+            .into_iter()
+            .filter(|referrer| {
+                referrer
+                    .get_file()
+                    .is_some_and(|file| file.get_name().eq_ignore_ascii_case(&target.get_name()))
+            })
+            .collect();
+        if referenced_by.is_empty() {
+            results.push(skipped(format!(
+                "Old Record \"{}\" is not referenced by any record in file \"{}\"",
+                old.get_name(),
+                target.get_name()
+            )));
+            continue;
+        }
+        let mut updated = 0;
+        if !request.dry_run {
+            if let Some(new_file) = new.get_file()
+                && !new_file.get_name().eq_ignore_ascii_case(&target.get_name())
+            {
+                target
+                    .add_master_if_missing(&new_file.get_name(), true, true)
+                    .map_err(|error| CommandError::new("edit_failed", error))?;
+            }
+            for referrer in &referenced_by {
+                if with_edit_allowed(|| crate::formids::record_editable(referrer))
+                    && referrer
+                        .compare_exchange_form_id(old_form_id, new_form_id)
+                        .map_err(|error| CommandError::new("edit_failed", error))?
+                {
+                    updated += 1;
+                }
+            }
+            if let Some(record) = target.contained_record_by_load_order_form_id(old_form_id) {
+                record
+                    .set_load_order_form_id(new_form_id)
+                    .map_err(|error| CommandError::new("edit_failed", error))?;
+            }
+        }
+        let renamed = !request.dry_run && target.contained_record_by_load_order_form_id(old_form_id).is_none();
+        results.push(BatchChangeResult {
+            old_form_id: old_form_id.to_string(false),
+            new_form_id: new_form_id.to_string(false),
+            records: referenced_by.iter().map(|referrer| record_ref(referrer)).collect(),
+            updated,
+            renamed,
+            skipped: None,
+        });
+    }
+    Ok(ReferencesChangeBatchResponse {
+        file: target.get_name(),
+        pairs: results,
+        dry_run: request.dry_run,
+    })
+}
+
+/// Port of `IsExterior`: the element is below a worldspace exterior block
+/// or an exterior cell block, sub-block or cell.
+fn is_exterior(element: &ElementRef) -> bool {
+    let mut current = Some(element.clone());
+    while let Some(element) = current {
+        if let Some(group) = element
+            .as_element_impl()
+            .and_then(|element| element.group_record_impl())
+        {
+            match group.group_type() {
+                0 => return group.group_label() == u32::from_le_bytes(*b"WRLD"),
+                1 | 4 | 5 => return true,
+                2 | 3 => return false,
+                _ => {}
+            }
+        }
+        current = element.get_container();
+    }
+    false
+}
+
+/// The `NAME` record the reference points at.
+fn base_record(record: &MainRecordRef) -> Option<MainRecordRef> {
+    record
+        .as_container()?
+        .get_element_by_signature(Signature::new(b"NAME"))?
+        .get_links_to()?
+        .into_main_record()
+}
+
+/// `records` of the selected files and the selected records, each once.
+fn selection_records(
+    session: &Session,
+    files: &[String],
+    records: &[String],
+) -> Result<Vec<MainRecordRef>, CommandError> {
+    let mut selected: Vec<MainRecordRef> = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    let mut push = |record: MainRecordRef| {
+        if seen.insert(record.get_element_id()) {
+            selected.push(record);
+        }
+    };
+    for name in files {
+        let file = session.file(Some(name))?;
+        for record in file.records() {
+            push(record as MainRecordRef);
+        }
+    }
+    for form_id in records {
+        push(session.record(form_id, None)?);
+    }
+    Ok(selected)
+}
+
+/// The references a VWD auto command changes: `REFR`, exterior, with a
+/// `NAME` that points at a base record with a `_far.nif`, and not visible
+/// when distant yet.
+fn vwd_candidates(records: &[MainRecordRef], check_errors: bool) -> Vec<(&MainRecordRef, String)> {
+    let mut candidates = Vec::new();
+    for record in records {
+        if record.get_signature().to_string() != "REFR" {
+            continue;
+        }
+        if record.get_is_visible_when_distant() {
+            continue;
+        }
+        let record_ref: ElementRef = record.clone();
+        if !is_exterior(&record_ref) {
+            continue;
+        }
+        let Some(base) = base_record(record) else {
+            continue;
+        };
+        if !base.get_has_visible_when_distant_mesh() {
+            continue;
+        }
+        if check_errors && !record.get_check().is_empty() {
+            continue;
+        }
+        candidates.push((record, base.get_name()));
+    }
+    candidates
+}
+
+/// `references.set_vwd_auto`: the request.
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct SetVwdAutoRequest {
+    /// The selected file nodes: every reference of them is examined.
+    #[serde(default)]
+    pub files: Vec<String>,
+    /// The selected record nodes, as load order FormIDs.
+    #[serde(default)]
+    pub records: Vec<String>,
+    /// Report the references, change nothing.
+    #[serde(default)]
+    pub dry_run: bool,
+}
+
+/// A reference a VWD auto command changed or skipped.
+#[derive(Serialize, JsonSchema)]
+pub struct VwdRecord {
+    #[serde(flatten)]
+    pub record: RecordRef,
+    /// The base record's name, for the skip messages.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub base: Option<String>,
+    /// Why the reference was skipped.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
+}
+
+/// `references.set_vwd_auto`: the response.
+#[derive(Serialize, JsonSchema)]
+pub struct SetVwdAutoResponse {
+    /// The references that were (or would be) changed.
+    pub changed: Vec<VwdRecord>,
+    /// The references that were not, with the reason.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub skipped: Vec<VwdRecord>,
+    /// Whether this was a dry run.
+    pub dry_run: bool,
+}
+
+/// `references.set_vwd_auto`: `IsVisibleWhenDistant := True` for every
+/// exterior reference of the selection whose base record has a visible when
+/// distant mesh (`mniNavSetVWDAuto`). A reference that is not editable is
+/// reported and left as it is, as the item messages "Can't change".
+fn references_set_vwd_auto(
+    session: &mut Session,
+    request: SetVwdAutoRequest,
+) -> Result<SetVwdAutoResponse, CommandError> {
+    crate::commands::refuse_in_translate_mode("references.set_vwd_auto")?;
+    let records = selection_records(session, &request.files, &request.records)?;
+    let candidates = vwd_candidates(&records, false);
+    let mut changed = Vec::new();
+    let mut skipped = Vec::new();
+    for (record, base) in candidates {
+        if !with_edit_allowed(|| record.get_is_editable()) {
+            skipped.push(VwdRecord {
+                record: record_ref_of(record),
+                base: Some(base),
+                reason: Some("Can't change: the reference is not editable".to_owned()),
+            });
+            continue;
+        }
+        if !request.dry_run {
+            record.set_is_visible_when_distant(true);
+        }
+        changed.push(VwdRecord {
+            record: record_ref_of(record),
+            base: Some(base),
+            reason: None,
+        });
+    }
+    Ok(SetVwdAutoResponse {
+        changed,
+        skipped,
+        dry_run: request.dry_run,
+    })
+}
+
+/// `references.copy_vwd_auto`: the request.
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct CopyVwdAutoRequest {
+    /// The selected file nodes: every reference of them is examined.
+    #[serde(default)]
+    pub files: Vec<String>,
+    /// The selected record nodes, as load order FormIDs.
+    #[serde(default)]
+    pub records: Vec<String>,
+    /// Plugin to copy the references into as overrides.
+    pub to: String,
+    /// Report the copies, change nothing.
+    #[serde(default)]
+    pub dry_run: bool,
+}
+
+/// `references.copy_vwd_auto`: the response.
+#[derive(Serialize, JsonSchema)]
+pub struct CopyVwdAutoResponse {
+    /// The copies that were (or would be) made, with the Visible When
+    /// Distant flag set.
+    pub copied: Vec<VwdRecord>,
+    /// The references that were not copied, with the reason.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub skipped: Vec<VwdRecord>,
+    /// The plugin copied into.
+    pub file: String,
+    /// Whether this was a dry run.
+    pub dry_run: bool,
+}
+
+/// `references.copy_vwd_auto`: the "into" form of the item
+/// (`mniNavSetVWDAutoInto`): the exterior references of the selection whose
+/// base record has a visible when distant mesh are copied into the chosen
+/// plugin as overrides, and each copy gets the Visible When Distant flag
+/// (`CopyInto` with `SetVWDCallback`). A reference whose check reports an
+/// error is skipped, as `MainRecord.HasErrors` skips it in the release.
+fn references_copy_vwd_auto(
+    session: &mut Session,
+    request: CopyVwdAutoRequest,
+) -> Result<CopyVwdAutoResponse, CommandError> {
+    crate::commands::refuse_in_translate_mode("references.copy_vwd_auto")?;
+    let records = selection_records(session, &request.files, &request.records)?;
+    let target = session.file(Some(&request.to))?;
+    if !with_edit_allowed(|| target.get_is_editable()) {
+        return Err(CommandError::new(
+            "not_editable",
+            format!("File \"{}\" is not editable", target.get_name()),
+        ));
+    }
+    let mut copied = Vec::new();
+    let mut skipped = Vec::new();
+    for (record, base) in vwd_candidates(&records, true) {
+        let source: ElementRef = record.clone();
+        let required = xedit_core::implementation::copy::required_masters(&source, false);
+        if let Err(error) = xedit_core::implementation::copy::missing_masters(&required, &target) {
+            skipped.push(VwdRecord {
+                record: record_ref_of(record),
+                base: Some(base),
+                reason: Some(error),
+            });
+            continue;
+        }
+        if request.dry_run {
+            copied.push(VwdRecord {
+                record: record_ref_of(record),
+                base: Some(base),
+                reason: None,
+            });
+            continue;
+        }
+        if let Err(error) = xedit_core::implementation::copy::add_required_masters_of(&required, &target) {
+            skipped.push(VwdRecord {
+                record: record_ref_of(record),
+                base: Some(base),
+                reason: Some(error),
+            });
+            continue;
+        }
+        let args = CopyArgs {
+            as_new: false,
+            deep_copy: false,
+            ..CopyArgs::default()
+        };
+        match xedit_core::implementation::copy::copy_into_file(&source, &target, &args) {
+            Ok(Some(copy)) => {
+                let copy: MainRecordRef = copy.into_main_record().unwrap_or_else(|| record.clone());
+                copy.set_is_visible_when_distant(true);
+                copied.push(VwdRecord {
+                    record: record_ref_of(&copy),
+                    base: Some(base),
+                    reason: None,
+                });
+            }
+            Ok(None) => skipped.push(VwdRecord {
+                record: record_ref_of(record),
+                base: Some(base),
+                reason: Some("the copy gave no element".to_owned()),
+            }),
+            Err(error) => skipped.push(VwdRecord {
+                record: record_ref_of(record),
+                base: Some(base),
+                reason: Some(error),
+            }),
+        }
+    }
+    Ok(CopyVwdAutoResponse {
+        copied,
+        skipped,
+        file: target.get_name(),
+        dry_run: request.dry_run,
+    })
+}
+
+/// The summary of a record read through the main record interface.
+fn record_ref_of(record: &MainRecordRef) -> RecordRef {
+    match crate::formids::record_impl(record) {
+        Ok(record) => record_ref(&record),
+        Err(_) => RecordRef {
+            form_id: record.get_load_order_form_id().to_string(false),
+            signature: record.get_signature().to_string(),
+            editor_id: record.get_editor_id(),
+            file: record.get_file().map(|file| file.get_name()).unwrap_or_default(),
+        },
+    }
+}
+
 pub fn register(registry: &mut Registry) {
     registry.register(
         "refs.build",
@@ -376,5 +947,29 @@ pub fn register(registry: &mut Registry) {
         "The records that refer to a record (ReferencedBy of its master) and the records it refers to.",
         false,
         refs_get,
+    );
+    registry.register(
+        "references.set_vwd_auto",
+        "Set Visible When Distant on every exterior reference of the selection whose base has a VWD mesh (mniNavSetVWDAuto).",
+        true,
+        references_set_vwd_auto,
+    );
+    registry.register(
+        "references.copy_vwd_auto",
+        "Copy the exterior references of the selection with a VWD mesh into a plugin as overrides with Visible When Distant set (mniNavSetVWDAutoInto).",
+        true,
+        references_copy_vwd_auto,
+    );
+    registry.register(
+        "references.change",
+        "Change the references in the referencing records from one FormID to another, without changing the record's FormID (mniNavChangeReferencingRecords).",
+        true,
+        references_change,
+    );
+    registry.register(
+        "references.change_batch",
+        "Change the references of the focused plugin's records for a list of FormID pairs and rename its old-record overrides (mniNavBatchChangeReferencingRecords).",
+        true,
+        references_change_batch,
     );
 }

@@ -570,6 +570,28 @@ pub trait MainRecord: Container {
 
     fn get_is_persistent(&self) -> bool;
 
+    /// Upstream `SetIsPersistent`: the flag changes and a placed record
+    /// moves to the persistent or temporary children group of its cell.
+    fn set_is_persistent(&self, _value: bool) {}
+
+    /// Upstream `SetIsVisibleWhenDistant`: the flag changes and a placed
+    /// record moves to the visible distant or temporary children group of
+    /// its cell.
+    fn set_is_visible_when_distant(&self, _value: bool) {}
+
+    /// Upstream `ReferencedBy`: the records that refer to the record or one
+    /// of its overrides, kept by its master.
+    fn referenced_by(&self) -> Vec<MainRecordRef> {
+        Vec::new()
+    }
+
+    /// Upstream `CompareExchangeFormID`: every element that can hold a
+    /// FormID replaces the load order FormID `old` by `new`; whether
+    /// anything changed.
+    fn compare_exchange_form_id(&self, _old: FormID, _new: FormID) -> Result<bool, EditError> {
+        Ok(false)
+    }
+
     /// Upstream `Version`: the form version in the record header.
     fn get_version(&self) -> u32;
 
