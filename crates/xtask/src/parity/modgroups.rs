@@ -699,6 +699,21 @@ fn run_port(
     for (name, _, bytes) in files {
         fs::write(port_path(name), bytes)?;
     }
+    // The plugin list the oracle's GUI wrote for the same run: the loaded
+    // modules in load order, starred for the games that mark the active
+    // ones. The port's module order reads it (`wbPluginsFileName`, issue
+    // #83).
+    let mut plugins_txt = String::new();
+    for plugin in plugins {
+        let name = plugin.file_name().context("plugin without a name")?;
+        if !gui::simple_plugins_txt(game.mode) {
+            plugins_txt.push('*');
+        }
+        plugins_txt.push_str(&name.to_string_lossy());
+        plugins_txt.push_str("\r\n");
+    }
+    let plugins_file = dir.join("plugins.txt");
+    fs::write(&plugins_file, plugins_txt)?;
     let mut commands = scenario.port.clone();
     commands.push(json!({ "command": "conflicts.list", "params": { "saved_mod_groups": true } }));
     let batch = dir.join("batch.json");
@@ -716,6 +731,8 @@ fn run_port(
         .arg(&global)
         .arg("--settings")
         .arg(&settings)
+        .arg("--plugins-list")
+        .arg(&plugins_file)
         .arg("batch")
         .arg(&batch);
     let log = dir.join("port.log");

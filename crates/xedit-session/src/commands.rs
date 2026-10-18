@@ -116,6 +116,21 @@ pub(crate) fn refuse_in_translate_mode(command: &str) -> Result<(), CommandError
 impl Session {
     /// Loads the plugins of a game in the order given, with their masters.
     pub fn load(game: &str, plugins: &[String]) -> Result<Self, String> {
+        Self::load_with(game, |_mode| Ok(plugins.to_vec()))
+    }
+
+    /// Port of the module selection of a legacy command line: the plugins
+    /// are `wbModulesByLoadOrder`'s active modules with their masters
+    /// (`SimulateLoad`), read after the game is set up because
+    /// `wbLoadModules` needs its tables (the game master, the official DLC,
+    /// the Creation Club list, `Plugins.txt`).
+    pub fn load_legacy(game: &str) -> Result<Self, String> {
+        Self::load_with(game, |_mode| crate::tool_modes::legacy_load_order())
+    }
+
+    /// [`Self::load`] with the plugin list computed once the game is set
+    /// up (`wbLoadModules`).
+    fn load_with(game: &str, plugins: impl FnOnce(GameMode) -> Result<Vec<String>, String>) -> Result<Self, String> {
         // `xeInit.pas` sets `wbStartTime := Now` right before the loader
         // thread starts: the `[mm:ss]` prefixes of the message log count
         // from the load's start.
@@ -146,6 +161,10 @@ impl Session {
         if !xdump {
             xedit_core::interface::globals::set_display_shorter_names(true);
         }
+        // `wbLoadModules` reads the tables the setup just filled (the game
+        // master, the official DLC, the Creation Club list) and the data
+        // folder and plugin list of the command line.
+        let plugins = plugins(mode)?;
         // The data folder of the session: the folder of the plugins.
         let data = plugins
             .last()
@@ -217,7 +236,7 @@ impl Session {
         }
         clear_files();
         let mut files = Vec::new();
-        for path in plugins {
+        for path in &plugins {
             // Each plugin takes the next free slot after its masters.
             let file = wb_file(path, i32::MAX, FileStates::empty()).map_err(|error| error.to_string())?;
             files.push(file);

@@ -24,6 +24,16 @@ pub fn open_session(game: Option<&str>, load: &[String], edit: bool) -> Result<S
     Ok(session)
 }
 
+/// The session of a legacy command line that is not a plugin mode: the
+/// active modules of `wbLoadModules` with their masters (`SimulateLoad`),
+/// read after the game's tables are set up (`Session::load_legacy`).
+pub fn open_session_legacy(game: &str, edit: bool) -> Result<Session, CommandError> {
+    let mut session = Session::load_legacy(game).map_err(|message| CommandError::new("load_failed", message))?;
+    xedit_session::refs::init_cache_path();
+    session.allow_edit(edit);
+    Ok(session)
+}
+
 enum State {
     /// Not loaded yet: the first command loads it.
     Pending {

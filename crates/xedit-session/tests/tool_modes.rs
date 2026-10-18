@@ -12,7 +12,7 @@ use std::sync::Arc;
 use serde_json::json;
 
 use xedit_core::implementation::{FileBytes, FileImpl, wb_file_from_bytes};
-use xedit_core::interface::globals::test_lock;
+use xedit_core::interface::globals::{set_data_path, set_plugins_file_name, test_lock};
 use xedit_core::interface::{Element, File, FileStates, GameMode};
 use xedit_io::temp::TempDir;
 use xedit_session::tool_modes::{self, LegacyRun};
@@ -436,6 +436,35 @@ fn the_legacy_command_line_of_a_mod_manager_is_read() {
     let params: Vec<String> = ["-SSE", "-setesm"].iter().map(|arg| (*arg).to_owned()).collect();
     let error = tool_modes::parse_legacy(&params, "xedit.exe").unwrap_err();
     assert!(error.contains("requires a valid plugin name"), "{error}");
+}
+
+#[test]
+fn the_legacy_load_reads_the_module_list_after_the_game_setup() {
+    let _guard = test_lock();
+    let dir = scratch("legacy-modules");
+    std::fs::write(dir.join("Skyrim.esm"), header(1, &[], 0, 0x800)).unwrap();
+    std::fs::write(dir.join("Mod.esp"), header(0, &["Skyrim.esm"], 0, 0x800)).unwrap();
+    let list = dir.join("plugins.txt");
+    std::fs::write(&list, "*Mod.esp\r\n").unwrap();
+    // The tables `wbLoadModules` reads (the game master, `Update.esm`, the
+    // official DLC, the Creation Club list) are the definitions' work.
+    xedit_session::dump::setup_game_for_edit("sse").unwrap();
+    set_data_path(&format!("{}\\", dir.display()));
+    set_plugins_file_name(list.to_str().unwrap());
+
+    let plugins = tool_modes::legacy_load_order().unwrap();
+    let names: Vec<&str> = plugins
+        .iter()
+        .map(|path| {
+            std::path::Path::new(path)
+                .file_name()
+                .map(|name| name.to_str().unwrap())
+                .unwrap_or_default()
+        })
+        .collect();
+    // The game master is active without the plugin list naming it, then the
+    // module it names.
+    assert_eq!(names, ["Skyrim.esm", "Mod.esp"]);
 }
 
 /// The plugin of the session, out of the process-wide file list.

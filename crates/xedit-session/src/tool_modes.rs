@@ -1618,8 +1618,14 @@ pub struct LegacyRun {
     pub mode: String,
     /// The data folder of `-D:`, with a trailing separator.
     pub data_path: Option<String>,
-    /// The plugins to load, in load order, as full paths.
+    /// The plugins to load, in load order, as full paths: the modules the
+    /// mode names in a plugin mode, and empty otherwise, where the load
+    /// takes [`legacy_load_order`] after the game is set up.
     pub plugins: Vec<String>,
+    /// `(wbToolMode in wbPluginModes) or xeQuickClean or xeQuickEdit or
+    /// xeQuickSEQ`: the mode deactivates every module and loads the ones
+    /// the command line names.
+    pub plugin_mode: bool,
     /// The modules the mode works on (`xeModulesToUse`).
     pub modules: Vec<String>,
     /// The settings the session loads with.
@@ -1904,55 +1910,53 @@ pub fn is_legacy(params: &[String]) -> bool {
             .any(|name| find_cmd_line_param_switch(params, name).is_some())
 }
 
-/// The paths of the plugins a `plugins.txt` lists as active, in the order of
-/// the file. The games of `wbSimplePluginsTxt` (Morrowind to Skyrim LE) name
-/// only the active plugins; the later ones mark them with `*`. A `#` starts
-/// a comment, and a name that does not resolve against the data folder is
-/// reported.
-fn read_plugin_list(path: &str, data_path: Option<&str>, simple: bool) -> Result<Vec<String>, String> {
-    let text = std::fs::read_to_string(path).map_err(|error| format!("{path}: {error}"))?;
-    let mut plugins = Vec::new();
-    let mut missing = Vec::new();
-    for line in text.lines() {
-        let line = line.trim();
-        if line.is_empty() || line.starts_with('#') {
-            continue;
-        }
-        let (active, name) = if simple {
-            (true, line)
-        } else if let Some(name) = line.strip_prefix('*') {
-            (true, name)
-        } else {
-            (false, line)
-        };
-        if !active {
-            continue;
-        }
-        let name = name.trim();
-        match resolve_module(name, data_path) {
-            Some(full) => plugins.push(full),
-            None if data_path.is_none() => plugins.push(name.to_owned()),
-            None => missing.push(name.to_owned()),
-        }
-    }
-    if !missing.is_empty() {
-        return Err(format!(
-            "the plugins.txt {path} lists plugins that are not in the data folder: {}",
-            missing.join(", ")
-        ));
-    }
-    Ok(plugins)
+/// The plugins a legacy run of a mode that is not a plugin mode loads: the
+/// active modules of `wbLoadModules` (`Plugins.txt` and the modules the
+/// release activates without the list naming them), with the masters they
+/// need before them (`SimulateLoad`), in load order, as full paths. Reads
+/// `wbDataPath` and `wbPluginsFileName` and the game's tables, so the game
+/// has to be set up (the caller runs it after `setup_game_for_edit`).
+pub fn legacy_load_order() -> Result<Vec<String>, String> {
+    let modules = xedit_loadorder::load_order::Modules::load_data_folder(&globals::data_path());
+    let order = modules.active_load_order()?;
+    Ok(order
+        .into_iter()
+        .map(|index| modules.modules[index].file_path())
+        .collect())
 }
 
 /// The full path of a module name: as it is when the file exists, in the
-/// data folder of `-D:` when it does not, and `None` when neither.
+/// data folder of `-D:` when it does not, and `None` when neither. The file
+/// name takes the casing of the folder's entry, as `wbModuleByName`
+/// resolves a name to the module the folder lists.
 fn resolve_module(name: &str, data_path: Option<&str>) -> Option<String> {
     if std::path::Path::new(name).is_file() {
-        return Some(name.to_owned());
+        return Some(canonical_file_name(name));
     }
     let data = data_path?;
     let full = format!("{data}{}", name.trim_start_matches(['\\', '/']));
-    std::path::Path::new(&full).is_file().then_some(full)
+    std::path::Path::new(&full)
+        .is_file()
+        .then(|| canonical_file_name(&full))
+}
+
+/// `path` with its file name in the casing the folder lists it in.
+fn canonical_file_name(path: &str) -> String {
+    let path = std::path::Path::new(path);
+    let (Some(folder), Some(name)) = (path.parent(), path.file_name()) else {
+        return path.to_string_lossy().into_owned();
+    };
+    let wanted = name.to_string_lossy();
+    let found = std::fs::read_dir(folder)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .find(|entry| entry.file_name().to_string_lossy().eq_ignore_ascii_case(&wanted))
+        .map(|entry| entry.file_name().to_string_lossy().into_owned());
+    match found {
+        Some(found) => folder.join(found).to_string_lossy().into_owned(),
+        None => path.to_string_lossy().into_owned(),
+    }
 }
 
 /// Port of `DetectAppMode` and the part of `DoInitPath` a tool mode needs
@@ -2023,9 +2027,9 @@ pub fn parse_legacy(params: &[String], exe_name: &str) -> Result<Option<LegacyRu
     // `if ((wbToolMode in wbPluginModes) or xeQuickClean or xeQuickEdit or
     // xeQuickSEQ) and not wbIsMorrowind then Modules.DeactivateAll` and the
     // named modules are activated (`xeMainForm.pas:5427`): such a run loads
-    // the plugins it names with their masters (`SimulateLoad`), whatever the
-    // plugin list says (parity #41: a plugin list without the target, or
-    // with nothing active, left the port's run without a plugin).
+    // the plugins it names, whatever the plugin list says (parity #41: a
+    // plugin list without the target, or with nothing active, left the
+    // port's run without a plugin).
     let quick_clean = ["quickclean", "qc", "quickautoclean", "qac"]
         .iter()
         .any(|name| has_cmd_line_switch(params, name));
@@ -2035,33 +2039,16 @@ pub fn parse_legacy(params: &[String], exe_name: &str) -> Result<Option<LegacyRu
         Some(name) => vec![name.clone()],
         None => modules.clone(),
     };
+    // A plugin mode loads the modules it names; every other mode loads the
+    // active modules of `wbLoadModules`, which the load reads after the game
+    // is set up (`Session::load_legacy`, issue #83).
     let plugins = if plugin_mode {
         named
             .iter()
             .map(|name| resolve_module(name, data_path.as_deref()).unwrap_or_else(|| name.clone()))
             .collect()
     } else {
-        match &plugins_file {
-            Some(list) if std::path::Path::new(list).is_file() => {
-                let simple = matches!(
-                    detected.game,
-                    Some(GameMode::gmTES3)
-                        | Some(GameMode::gmTES4)
-                        | Some(GameMode::gmTES4R)
-                        | Some(GameMode::gmFO3)
-                        | Some(GameMode::gmFNV)
-                        | Some(GameMode::gmTES5)
-                        | Some(GameMode::gmEnderal)
-                );
-                read_plugin_list(list, data_path.as_deref(), simple)?
-            }
-            // Without a plugin list the modules named as parameters load, as
-            // upstream loads the plugins of the module selection.
-            _ => modules
-                .iter()
-                .filter_map(|name| resolve_module(name, data_path.as_deref()))
-                .collect(),
-        }
+        Vec::new()
     };
     let mut switches = LoadSwitches {
         tool_mode: detected.tool_mode,
@@ -2192,6 +2179,7 @@ pub fn parse_legacy(params: &[String], exe_name: &str) -> Result<Option<LegacyRu
         },
         data_path,
         plugins,
+        plugin_mode,
         modules,
         switches,
         output: find_cmd_line_param_switch(params, "O"),
