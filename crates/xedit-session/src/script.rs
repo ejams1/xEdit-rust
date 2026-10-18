@@ -451,25 +451,28 @@ pub trait ScriptSelection {
     /// subtree *backwards*: it starts at `vstNav.GetLast(node)` and steps
     /// `GetPrevious` until the node itself, so the last element of a file is
     /// processed first and the file node last. With
-    /// [`live_walk`](Self::live_walk) the steps happen over the live tree, so
-    /// the nodes an edit re-materialises are visited where they are now;
-    /// without it the returned elements are the walk's fixed order.
+    /// [`live_walk`](Self::live_walk) the steps happen over the navigation
+    /// tree as `vstNav` builds it lazily; without it the returned elements
+    /// are the walk's fixed order.
     fn selection(&mut self, session: &mut Session, files: &[ElementRef]) -> Result<Vec<ElementRef>, CommandError>;
 
-    /// Whether the walk steps over the live tree (`vstNav.GetPrevious`): a
-    /// record an edit re-homes or removes re-materialises its node, and the
-    /// oracle's walk then visits it where it is now -- a record moved to a
-    /// place the walk has not reached yet is visited again (`Processed
-    /// Records` above the record count; the issue-#24 `walk-move` probe and
-    /// the two Worldspace cases pin it).
+    /// Whether the walk steps over the navigation tree (`vstNav.GetLast` /
+    /// `GetPrevious`): a node's children are its container's elements when
+    /// the walk first needs them and a child binds its element when the walk
+    /// reaches it (see [`WalkNode`]), so a record a `Process` moves is
+    /// visited again only where the walk reaches a container it has not
+    /// enumerated yet (`Processed Records` above the record count; the
+    /// issue-#24 `walk-move` probe and the two Worldspace cases pin it), and
+    /// a group created under a container the walk has already enumerated is
+    /// never reached (issue #84).
     fn live_walk(&self) -> bool {
         false
     }
 }
 
 /// The port of the navigation tree walk: every loaded file is selected as a
-/// root, and each root's subtree is walked backwards over the live tree
-/// ([`live_walk`](ScriptSelection::live_walk)).
+/// root, and each root's subtree is walked backwards over the navigation
+/// tree ([`live_walk`](ScriptSelection::live_walk)).
 ///
 /// The tree holds the file, its groups and its records (`vstNavInitChildren`
 /// gives every container element a node) and, for a record, the child group
@@ -478,8 +481,9 @@ pub trait ScriptSelection {
 /// reaches records through their groups. The default filter of a run is
 /// `[etMainRecord]` (`ApplyScript`), so with no script variable set it is
 /// every main record of the loaded files, each file's records in reverse
-/// FormID order (the file's `flRecords` order) unless an edit re-homes a
-/// record while the walk runs.
+/// FormID order (the file's `flRecords` order), with the re-visits a moved
+/// record gets where the walk reaches a container it has not enumerated
+/// yet.
 #[derive(Default)]
 pub struct NavigationSelection;
 
@@ -498,55 +502,275 @@ impl ScriptSelection for NavigationSelection {
     }
 }
 
-/// `vstNav.GetLast(aNode)`: the last node of `root`'s subtree, descending
-/// into the node children of [`node_children`]. The node itself when it has
-/// none (the walk then starts on `root`, as `ApplyScriptToSelection`
-/// substitutes the unassigned `GetLast`).
-fn last_node(root: &ElementRef) -> ElementRef {
-    let mut node = root.clone();
-    loop {
-        let children = if node.get_element_type() == ElementType::etMainRecord {
-            record_child_group(&node)
-        } else {
-            Some(node.clone())
-        };
-        match children.as_ref().and_then(last_tree_child) {
-            Some(last) => node = last,
-            None => return node,
+/// The parent link of a file node: a root of the walk has no parent node.
+const NO_PARENT: usize = usize::MAX;
+
+/// One node of the navigation tree `vstNav` builds lazily for one script
+/// walk, with the state `vstNavInitChildren` and `vstNavInitNode` give it.
+///
+/// UPSTREAM-QUIRK: the tree freezes a container's child count when the walk
+/// first needs the children and binds a child's element only when the walk
+/// reaches it, so the walk does not mirror the element lists it walks:
+///
+/// - `vstNavInitChildren` fixes a node's child count the first time the
+///   walk needs the node's children, so an element a script adds to that
+///   container afterwards has no node and is never visited by this walk
+///   (the issue-#84 `persistent-walk.pas`: the persistent children group a
+///   `SetIsPersistent` creates under a cell whose children the walk has
+///   already enumerated is never reached).
+/// - `vstNavInitNode` binds a child's element only when the walk reaches
+///   it, from the container's element at the child's slot *then*, so an
+///   element that moves into a container the walk has not enumerated yet
+///   is found where it is now when the walk gets there (`walk-move.pas`
+///   re-visits `REFR 0000080A` in its new cell).
+/// - A record that moves keeps the node it had and the place it had: the
+///   walk never sets foot under its old parent again.
+#[derive(Clone)]
+struct WalkNode {
+    /// The parent node, [`NO_PARENT`] for a file node.
+    parent: usize,
+    /// The node's slot among its parent's children -- the element index
+    /// `vstNavInitNode` reads `Container.Elements[Node.Index]` from.
+    index: u32,
+    /// Whether `vstNavInitNode` has run for this node.
+    bound: bool,
+    /// `NodeData.Element`, weakly: a node must not count as a reference of
+    /// its element (`ElementStates` reads the port's strong counts where
+    /// upstream's tree holds an `IwbElement` that leaves `cntElementRefs`
+    /// alone, as the position index below notes).
+    element: Option<WeakElement>,
+    /// `NodeData.Container`: the element whose element list supplies this
+    /// node's children -- the element itself for a file or group, the child
+    /// group for a main record.
+    container: Option<ElementRef>,
+    /// `vsHasChildren` after `vstNavInitNode`.
+    has_children: bool,
+    /// `ChildCount` after `vstNavInitChildren`; `None` until the walk first
+    /// needs the children.
+    child_count: Option<u32>,
+    /// `vstNav.DeleteNode`: a `RemoveNode` took the node with its element.
+    removed: bool,
+}
+
+/// The navigation tree of the walk in progress: its nodes and, for a
+/// `RemoveNode`, the nodes each bound element was bound to, by the element's
+/// allocation address (a weak reference keeps the allocation from being
+/// reused while the node holds it).
+#[derive(Default)]
+struct WalkTree {
+    nodes: Vec<WalkNode>,
+    bound: HashMap<usize, Vec<usize>>,
+}
+
+thread_local! {
+    /// The navigation tree of the walk in progress (cleared at the start and
+    /// the end of every walk, [`clear_walk_tree`]).
+    static WALK_TREE: std::cell::RefCell<WalkTree> = std::cell::RefCell::new(WalkTree::default());
+}
+
+/// Drops the nodes of the walk in progress.
+fn clear_walk_tree() {
+    WALK_TREE.with(|tree| *tree.borrow_mut() = WalkTree::default());
+}
+
+/// The node of a selected root (a file): `vstNavInitNode` ran for it when it
+/// was added to the tree, with the file as its container.
+fn walk_root(root: &ElementRef) -> usize {
+    WALK_TREE.with(|tree| {
+        let mut tree = tree.borrow_mut();
+        let has_children = root
+            .as_element_impl()
+            .and_then(|element| element.container_base())
+            .is_some_and(|base| base.element_count() > 0);
+        tree.nodes.push(WalkNode {
+            parent: NO_PARENT,
+            index: 0,
+            bound: true,
+            element: Some(Arc::downgrade(root)),
+            container: Some(root.clone()),
+            has_children,
+            child_count: None,
+            removed: false,
+        });
+        let id = tree.nodes.len() - 1;
+        tree.bound.entry(element_address(root)).or_default().push(id);
+        id
+    })
+}
+
+/// The child node of `parent`'s slot `index`. The walk reaches every slot
+/// once: it enters a subtree at its last node and leaves it at the subtree's
+/// root, so no slot is created twice.
+fn child_slot(tree: &mut WalkTree, parent: usize, index: u32) -> usize {
+    tree.nodes.push(WalkNode {
+        parent,
+        index,
+        bound: false,
+        element: None,
+        container: None,
+        has_children: false,
+        child_count: None,
+        removed: false,
+    });
+    tree.nodes.len() - 1
+}
+
+/// `vstNavInitNode`: bind the node's element, its child container and, for a
+/// parented group that is the child group of the record before it, the
+/// hidden state (`NodeData.Element`/`Container := nil`, no children).
+fn init_node(tree: &mut WalkTree, id: usize) {
+    if tree.nodes[id].bound {
+        return;
+    }
+    tree.nodes[id].bound = true;
+    let parent = tree.nodes[id].parent;
+    if parent == NO_PARENT {
+        return;
+    }
+    let index = tree.nodes[id].index as usize;
+    let Some(container) = tree.nodes[parent].container.clone() else {
+        return;
+    };
+    let Some(base) = container.as_element_impl().and_then(|element| element.container_base()) else {
+        return;
+    };
+    // `Container.Elements[Node.Index]`: the element in the slot at the
+    // moment the walk reaches the node, not the element the container held
+    // when its children were enumerated (`vstNavInitNode`).
+    let Some(element) = base.element_at(index) else {
+        return; // ivsHidden: a slot the container no longer holds
+    };
+    if element.get_element_type() == ElementType::etGroupRecord
+        && let Some(group) = element.as_element_impl().and_then(ElementImpl::group_record_impl)
+        && is_parented_group(group.group_type())
+        && hidden_group_record(base, index).is_some()
+    {
+        // `vstNavInitNode`'s tail: a parented group that is the child group
+        // of the record before it is hidden and carries no element or
+        // children of its own; the record's node shows its children.
+        return;
+    }
+    tree.nodes[id].element = Some(Arc::downgrade(&element));
+    tree.bound.entry(element_address(&element)).or_default().push(id);
+    if element.get_element_type() == ElementType::etMainRecord {
+        // `vstNavInitNode`: the parented group right after the record in its
+        // container, labelled with the record's FormID, is the container
+        // its node enumerates as children.
+        if let Some(next) = base.element_at(index + 1)
+            && let Some(group) = next.as_element_impl().and_then(ElementImpl::group_record_impl)
+            && is_parented_group(group.group_type())
+            && element
+                .as_element_impl()
+                .and_then(ElementImpl::main_record_impl)
+                .is_some_and(|record| group.get_group_label() == record.mr_struct().form_id.to_cardinal())
+        {
+            tree.nodes[id].has_children = next
+                .as_element_impl()
+                .and_then(|element| element.container_base())
+                .is_some_and(|base| base.element_count() > 0);
+            tree.nodes[id].container = Some(next);
         }
+    } else if let Some(inner) = element.as_element_impl().and_then(|element| element.container_base())
+        && inner.element_count() > 0
+    {
+        tree.nodes[id].has_children = true;
+        tree.nodes[id].container = Some(element.clone());
     }
 }
 
-/// `vstNav.GetPrevious(aNode)` over the live tree: the previous node of the
-/// pre-order of [`node_children`] -- the last node of the previous sibling's
-/// subtree, or the parent when the node is its first child. `None` when the
-/// node has no tree parent (a root) or left the tree (upstream reads a
-/// dangling node then; the port's walk ends instead). The parent is the
-/// predecessor even when it is the walk's root: the root is processed last
-/// and the walk stops there.
-///
-/// Each step costs the same whatever the size of the group (issue #82): the
-/// node's position comes from [`position_in`], and the previous sibling is
-/// the element before it, or the record before that when the element is
-/// the record's hidden child group (the rule of
-/// [`tree_children_of_container`]).
-fn previous_node(node: &ElementRef) -> Option<ElementRef> {
-    let parent = tree_parent(node)?;
-    let container = node.as_element_impl()?.element_base().container()?;
-    let base = container.as_element_impl()?.container_base()?;
-    let index = position_in(&container, node)?;
-    // A hidden child group is no node of the tree.
-    if hidden_group_record(base, index).is_some() {
-        return None;
+/// `vstNavInitChildren`: `ChildCount := Container.ElementCount`, read the
+/// first time the walk needs the node's children.
+fn child_count(tree: &mut WalkTree, id: usize) -> u32 {
+    if let Some(count) = tree.nodes[id].child_count {
+        return count;
     }
-    if index == 0 {
-        return Some(parent);
-    }
-    let sibling = match hidden_group_record(base, index - 1) {
-        Some(record) => record,
-        None => base.element_at(index - 1)?,
+    let count = if tree.nodes[id].removed || !tree.nodes[id].has_children {
+        0
+    } else {
+        tree.nodes[id]
+            .container
+            .as_ref()
+            .and_then(|container| container.as_element_impl())
+            .and_then(|element| element.container_base())
+            .map(|base| base.element_count() as u32)
+            .unwrap_or(0)
     };
-    Some(last_node(&sibling))
+    tree.nodes[id].child_count = Some(count);
+    count
+}
+
+/// `vstNav.GetLast(aNode)`: the last node of `root`'s subtree. Each node on
+/// the way down is initialized (`vstNavInitNode`) and a node with children
+/// has them enumerated (`vstNavInitChildren`) and is entered through its
+/// last child (`GetLastChild`).
+fn last_node(root: usize) -> usize {
+    WALK_TREE.with(|tree| last_in(&mut tree.borrow_mut(), root))
+}
+
+fn last_in(tree: &mut WalkTree, root: usize) -> usize {
+    let mut node = root;
+    loop {
+        init_node(tree, node);
+        let count = child_count(tree, node);
+        if count == 0 {
+            return node;
+        }
+        node = child_slot(tree, node, count - 1);
+    }
+}
+
+/// `vstNav.GetPrevious(aNode)`: the previous node of the pre-order of the
+/// node tree -- the last node of the previous sibling's subtree, or the
+/// parent when the node is its first child. `None` when the node has no
+/// parent (a file node, the walk's root). The parent is the predecessor even
+/// when it is the walk's root: the root is processed last and the walk stops
+/// there.
+fn previous_node(node: usize) -> Option<usize> {
+    WALK_TREE.with(|tree| {
+        let mut tree = tree.borrow_mut();
+        let current = tree.nodes.get(node)?.clone();
+        if current.parent == NO_PARENT {
+            return None;
+        }
+        if current.index == 0 {
+            return Some(current.parent);
+        }
+        let sibling = child_slot(&mut tree, current.parent, current.index - 1);
+        Some(last_in(&mut tree, sibling))
+    })
+}
+
+/// `NodeData.Element`, when the node still has one: a hidden child group, a
+/// slot the container no longer holds and a node a `RemoveNode` deleted all
+/// process nothing (`ScriptCanProcessElement(nil)`).
+fn walk_element(node: usize) -> Option<ElementRef> {
+    WALK_TREE.with(|tree| {
+        let tree = tree.borrow();
+        let node = tree.nodes.get(node)?;
+        if node.removed {
+            return None;
+        }
+        node.element.as_ref().and_then(std::sync::Weak::upgrade)
+    })
+}
+
+/// `_RemoveNode`'s `vstNav.DeleteNode(Node)`: the element's node leaves the
+/// tree with it (`NodeData.Element := nil`). The walk may still hold the
+/// node it stepped to; it processes nothing there, and its links still
+/// navigate backwards as upstream's freed node's do.
+fn walk_remove_element(element: &ElementRef) {
+    let address = element_address(element);
+    WALK_TREE.with(|tree| {
+        let mut tree = tree.borrow_mut();
+        // A weak reference keeps the allocation alive, so the address names
+        // this element alone for the whole walk.
+        let Some(nodes) = tree.bound.get(&address).cloned() else {
+            return;
+        };
+        for node in nodes {
+            tree.nodes[node].removed = true;
+        }
+    });
 }
 
 /// The parent node of `node` in the tree: the container element, or, for a
@@ -590,35 +814,11 @@ fn hidden_group_record(base: &xedit_core::implementation::ContainerBase, index: 
     (group.get_group_label() == record.mr_struct().form_id.to_cardinal()).then_some(before)
 }
 
-/// The child group a record's node shows its children from: the parented
-/// group right after the record with the record's FormID as its label.
-fn record_child_group(record: &ElementRef) -> Option<ElementRef> {
-    let container = record.as_element_impl()?.element_base().container()?;
-    let base = container.as_element_impl()?.container_base()?;
-    let index = position_in(&container, record)?;
-    let next = base.element_at(index + 1)?;
-    hidden_group_record(base, index + 1).map(|_| next)
-}
-
-/// The last node child of a file or group container (the last element of
-/// [`tree_children_of_container`]): its last element, or the record before
-/// it when that element is the record's hidden child group.
-fn last_tree_child(container: &ElementRef) -> Option<ElementRef> {
-    let base = container.as_element_impl()?.container_base()?;
-    let count = base.element_count();
-    let last = count.checked_sub(1)?;
-    match hidden_group_record(base, last) {
-        Some(record) => Some(record),
-        None => base.element_at(last),
-    }
-}
-
-/// A container the walk's position index was read from: held weakly, so
-/// that the index counts as no reference of the container (the resets of
-/// upstream's `cntElementRefs`, which `ContainerBase::is_element_referenced`
-/// reads from the strong counts, see the same elements with and without
-/// the walk), while the allocation the weak reference keeps stops the
-/// address from naming another container.
+/// An element or container held weakly: the tree must not count as a
+/// reference of it (the resets of upstream's `cntElementRefs`, which
+/// `ContainerBase::is_element_referenced` reads from the strong counts, see
+/// the same elements with and without the walk), while the allocation the
+/// weak reference keeps stops the address from naming another element.
 type WeakElement = std::sync::Weak<dyn xedit_core::interface::Element>;
 
 /// The position index of one container: the container (weakly), the
@@ -680,12 +880,12 @@ fn clear_walk_positions() {
     WALK_POSITIONS.with(|cache| cache.borrow_mut().clear());
 }
 
-/// The children of a node in the navigation tree: for a main record the
-/// elements of its child group alone (`vstNavInitNode`: its own element
-/// container holds no tree nodes); for a file or group the element children
-/// with the hidden parented groups folded into the record before them.
-/// The walk's reference: [`previous_node`] and [`last_node`] step through
-/// the same tree without building these lists.
+/// The children of a node, with the hidden parented groups folded into the
+/// record before them: the reference the tests compare the walk against on a
+/// tree no `Process` changes. The walk itself steps over the raw slots
+/// ([`last_node`], [`previous_node`]) and binds each child when it reaches
+/// it; a hidden group's slot is stepped over there because it carries no
+/// element.
 #[cfg(test)]
 fn node_children(node: &ElementRef) -> Vec<ElementRef> {
     let Some(node_impl) = node.as_element_impl() else {
@@ -1718,8 +1918,9 @@ pub(crate) fn register_functions(
             // node's container -- a main record's child group -- leaves
             // first, then the element itself, through the same `Remove` as
             // `elements.remove`. The GUI's active-record, undo-history and
-            // tree work has no headless counterpart; the walk holds its own
-            // order and never re-visits a removed element.
+            // tree work has no headless counterpart beyond the node leaving
+            // the walk's tree with the element ([`walk_remove_element`]).
+            walk_remove_element(&element);
             if element.get_element_type() == ElementType::etMainRecord
                 && let Some(group) = element
                     .as_element_impl()
@@ -2596,13 +2797,24 @@ pub fn run_script(
         }
         if script.function_exists("Process") && !script.function_is_empty("Process") {
             clear_walk_positions();
+            clear_walk_tree();
             if selection.live_walk() {
                 // `ApplyScriptToSelection` over `vstNav`: each selected root
-                // is walked from its last node back to itself, the next
-                // node is read *before* `Process` runs, and the tree is
-                // live, so an edit that re-homes or removes a node changes
-                // what the walk reaches next (a record moved to a place the
-                // walk has not passed is visited again).
+                // is walked from its last node back to itself, the next node
+                // is read *before* `Process` runs, and the walk steps over
+                // the navigation tree the GUI builds lazily: a node's
+                // children are its container's elements at the moment the
+                // walk first needs them and a child binds its element when
+                // the walk reaches it, so an edit changes what the walk
+                // reaches only where the tree has not looked yet (issue #84;
+                // see [`WalkNode`]).
+                enum Cursor {
+                    /// A node of the navigation tree ([`WalkNode`]).
+                    Node(usize),
+                    /// A node of the filtered tree, with the element the
+                    /// filter's walk bound to it.
+                    Element(ElementRef),
+                }
                 'roots: for root in &order {
                     // With a filter on the tree the walk follows the nodes
                     // of the filtered tree with the elements they were
@@ -2617,51 +2829,54 @@ pub fn run_script(
                         .as_ref()
                         .map(|walk| walk.get(&root.get_element_id()).cloned().unwrap_or_default());
                     let mut position = 0usize;
-                    let mut node = match &filtered {
+                    let mut root_node = None;
+                    let mut cursor = match &filtered {
                         Some(nodes) => match nodes.first() {
-                            Some(first) => first.clone(),
+                            Some(first) => Cursor::Element(first.clone()),
                             None => continue,
                         },
-                        None => last_node(root),
+                        None => {
+                            let node = walk_root(root);
+                            root_node = Some(node);
+                            Cursor::Node(last_node(node))
+                        }
                     };
-                    // The predecessor of `next` when it was read: the walk
-                    // continues from it when a `Process` removed the node
-                    // the walk had stepped to (upstream's freed node reads
-                    // nothing to process and its stale links carry the
-                    // predecessor).
-                    let mut fallback: Option<ElementRef> = None;
                     loop {
                         let (at_root, next) = if let Some(nodes) = &filtered {
-                            (position + 1 >= nodes.len(), nodes.get(position + 1).cloned())
+                            (
+                                position + 1 >= nodes.len(),
+                                nodes.get(position + 1).cloned().map(Cursor::Element),
+                            )
                         } else {
-                            let at_root = node.get_element_id() == root.get_element_id();
-                            let prev = if at_root { None } else { previous_node(&node) };
-                            if !at_root && prev.is_none() {
-                                // The node left the tree: nothing to process
-                                // (`NodeData.Element := nil` in `_RemoveNode`).
-                                match fallback.take() {
-                                    Some(next) => {
-                                        node = next;
-                                        continue;
-                                    }
-                                    None => break,
-                                }
-                            }
-                            fallback = prev
-                                .as_ref()
-                                .filter(|next| next.get_element_id() != root.get_element_id())
-                                .and_then(previous_node);
-                            (at_root, prev)
+                            let node = match &cursor {
+                                Cursor::Node(node) => *node,
+                                Cursor::Element(_) => unreachable!("an unfiltered walk steps over tree nodes"),
+                            };
+                            (Some(node) == root_node, previous_node(node).map(Cursor::Node))
                         };
                         // A node of the filtered tree whose element an
                         // earlier `Process` removed is deleted with it
-                        // (`_RemoveNode`): nothing to process.
-                        let removed = filtered.is_some()
-                            && node.get_element_id() != root.get_element_id()
-                            && tree_parent(&node).is_none();
+                        // (`_RemoveNode`): nothing to process. A tree node
+                        // without an element (`NodeData.Element = nil`: a
+                        // hidden child group, a slot the container no longer
+                        // holds, or a `RemoveNode`) processes nothing either.
+                        let removed = match (&filtered, &cursor) {
+                            (Some(_), Cursor::Element(element)) => {
+                                element.get_element_id() != root.get_element_id() && tree_parent(element).is_none()
+                            }
+                            _ => false,
+                        };
+                        let element = match &cursor {
+                            Cursor::Node(node) => walk_element(*node),
+                            Cursor::Element(element) => Some(element.clone()),
+                        };
                         // `ApplyScriptToSelection` walks the live tree: a
                         // node a filter took out is not visited.
-                        if !removed && !state.borrow().is_filtered_out(&node) && state.borrow().can_process(&node) {
+                        if let Some(node) = element
+                            && !removed
+                            && !state.borrow().is_filtered_out(&node)
+                            && state.borrow().can_process(&node)
+                        {
                             let params = {
                                 let state = state.borrow();
                                 [state.element_value(&node)]
@@ -2711,15 +2926,17 @@ pub fn run_script(
                         }
                         match next {
                             Some(next) => {
-                                node = next;
+                                cursor = next;
                                 position += 1;
                             }
-                            // The node left the tree; upstream reads a
-                            // dangling node here, the walk ends instead.
+                            // A root has no predecessor (`GetPrevious` of a
+                            // file node is nil): the walk of this root is
+                            // done.
                             None => break,
                         }
                     }
                 }
+                clear_walk_tree();
             } else {
                 for element in &order {
                     // `ApplyScriptToSelection` walks the live tree: a node a
@@ -2771,6 +2988,7 @@ pub fn run_script(
             }
         }
         clear_walk_positions();
+        clear_walk_tree();
         if script.function_exists("Finalize") && !script.function_is_empty("Finalize") {
             match call_script(&mut script, &state, "Finalize", &[]) {
                 Ok(value) => {
@@ -2975,11 +3193,32 @@ fn script_run(session: &mut Session, request: ScriptRunRequest) -> Result<Script
 #[cfg(test)]
 mod tests {
     use super::is_silent;
-    use super::{ElementRef, clear_walk_positions, last_node, node_children, previous_node, tree_parent};
+    use super::{
+        ElementImpl, ElementRef, ElementType, clear_walk_positions, clear_walk_tree, last_node, node_children,
+        previous_node, signature_text, tree_parent, walk_element, walk_root,
+    };
 
-    /// The walk over the lists of [`node_children`], as the walk stepped
-    /// before issue #82: the last node of the previous sibling's subtree, or
-    /// the parent.
+    /// The walk-churn fixture (`tests/fixtures/parity`) as the game master of
+    /// an editable load order, the way the parity run loads it.
+    fn walk_churn_file() -> ElementRef {
+        crate::dump::setup_game_for_edit("sse").unwrap();
+        crate::save::apply_edit_settings(xedit_core::interface::GameMode::gmSSE);
+        let bytes = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tests/fixtures/parity/walk-churn.esm"
+        ))
+        .unwrap();
+        xedit_core::implementation::wb_file_from_bytes(
+            "Skyrim.esm",
+            i32::MAX,
+            xedit_core::interface::types::FileStates::empty(),
+            xedit_core::implementation::FileBytes::Owned(bytes),
+        )
+        .unwrap()
+    }
+
+    /// The walk over the lists of [`node_children`]: the last node of the
+    /// previous sibling's subtree, or the parent.
     fn reference_walk(root: &ElementRef) -> Vec<usize> {
         fn last(node: &ElementRef) -> ElementRef {
             let mut node = node.clone();
@@ -3006,44 +3245,120 @@ mod tests {
         visited
     }
 
-    /// The steps of the walk that read a position index (issue #82) visit
-    /// the nodes the child lists give, in their order: the walk-churn
-    /// fixture holds worldspaces with their persistent and temporary cell
-    /// children, a cell with references and a topic with responses.
+    /// The elements the walk visits, in order, over the tree the walk builds.
+    fn tree_walk(root: &ElementRef, mut process: impl FnMut(&ElementRef)) -> Vec<ElementRef> {
+        clear_walk_tree();
+        let root_node = walk_root(root);
+        let mut node = last_node(root_node);
+        let mut visited = Vec::new();
+        loop {
+            if let Some(element) = walk_element(node) {
+                visited.push(element.clone());
+                process(&element);
+            }
+            if node == root_node {
+                break;
+            }
+            node = previous_node(node).expect("a node below the root has a predecessor");
+        }
+        clear_walk_tree();
+        visited
+    }
+
+    /// The walk visits the nodes the child lists give, in their order, with
+    /// the hidden child groups (which carry no element) stepped over: the
+    /// walk-churn fixture holds worldspaces with their persistent and
+    /// temporary cell children, a cell with references and a topic with
+    /// responses.
     #[test]
     fn the_walk_steps_through_the_tree_the_child_lists_give() {
         let _guard = xedit_core::interface::globals::test_lock();
         xedit_core::implementation::clear_files_map();
         xedit_core::implementation::reset_load_order_slots();
         xedit_core::interface::clear_files();
-        crate::dump::setup_game_for_edit("sse").unwrap();
-        crate::save::apply_edit_settings(xedit_core::interface::GameMode::gmSSE);
-        let bytes = std::fs::read(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/../../tests/fixtures/parity/walk-churn.esm"
-        ))
-        .unwrap();
-        let file = xedit_core::implementation::wb_file_from_bytes(
-            "Skyrim.esm",
-            i32::MAX,
-            xedit_core::interface::types::FileStates::empty(),
-            xedit_core::implementation::FileBytes::Owned(bytes),
-        )
-        .unwrap();
-        let root: ElementRef = file.clone();
+        let root = walk_churn_file();
         let expected = reference_walk(&root);
         assert!(expected.len() > 20, "{}", expected.len());
         clear_walk_positions();
+        let visited: Vec<usize> = tree_walk(&root, |_| {})
+            .iter()
+            .map(|element| element.get_element_id())
+            .collect();
+        clear_walk_positions();
+        assert_eq!(visited, expected);
+    }
+
+    /// The walk of `Change persistent flag.pas` answered Yes over the
+    /// walk-churn fixture, as the release visits it (`persistent-walk.pas`,
+    /// parity #41): the references get the Persistent flag while the walk
+    /// runs and move to the persistent children group of their cell.
+    ///
+    /// The interior cell's node enumerated its one child (the temporary
+    /// group) before the moves, so the persistent group the moves create
+    /// under it has no node and `REFR 0000080B` is visited once; the
+    /// exterior cells the walk reaches later enumerate their children after
+    /// the moves, so the moved references are found there. `CELL[P]`, the
+    /// persistent cell the exterior moves create in the worldspace, has no
+    /// node either: the worldspace's children were enumerated before.
+    #[test]
+    fn a_container_enumerates_its_children_once() {
+        let _guard = xedit_core::interface::globals::test_lock();
+        xedit_core::implementation::clear_files_map();
+        xedit_core::implementation::reset_load_order_slots();
+        xedit_core::interface::clear_files();
+        let root = walk_churn_file();
+        clear_walk_positions();
+        clear_walk_tree();
+        let root_node = walk_root(&root);
+        let mut node = last_node(root_node);
         let mut visited = Vec::new();
-        let mut node = last_node(&root);
         loop {
-            visited.push(node.get_element_id());
-            if node.get_element_id() == root.get_element_id() {
+            if let Some(element) = walk_element(node)
+                && element.get_element_type() == ElementType::etMainRecord
+            {
+                let signature = element.get_has_signature().map(signature_text).unwrap_or_default();
+                let record = element.as_element_impl().and_then(ElementImpl::main_record_impl);
+                let id = record
+                    .as_ref()
+                    .map(|record| record.mr_struct().form_id.to_cardinal())
+                    .unwrap_or(0);
+                visited.push(format!("{signature} {id:08X}"));
+                if signature == "REFR"
+                    && let Some(record) = record
+                {
+                    record.set_is_persistent(true);
+                }
+            }
+            if node == root_node {
                 break;
             }
-            node = previous_node(&node).expect("a node below the root has a predecessor");
+            node = previous_node(node).expect("a node below the root has a predecessor");
         }
+        clear_walk_tree();
         clear_walk_positions();
+        // The release's walk (oracle log of `probes/persistent-walk.pas`,
+        // 2026-10-17): `REFR 0000080B` and `0000080A` once each, then the
+        // interior cell; `00000809` and `00000808` once each in the cell the
+        // walk reaches after the move; no `CELL[P]` and no re-visit.
+        let expected = [
+            "INFO 0000080E",
+            "INFO 0000080D",
+            "INFO 0000080C",
+            "DIAL 00000801",
+            "REFR 0000080B",
+            "REFR 0000080A",
+            "CELL 00000807",
+            "STAT 00000802",
+            "WRLD 0000080F",
+            "REFR 00000809",
+            "REFR 00000808",
+            "CELL 00000804",
+            "REFR 00000806",
+            "REFR 00000805",
+            "CELL 00000803",
+            "WRLD 00000800",
+            "TES4 00000000",
+        ];
         assert_eq!(visited, expected);
     }
 
