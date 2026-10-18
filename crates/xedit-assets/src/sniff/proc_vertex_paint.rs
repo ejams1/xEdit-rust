@@ -165,9 +165,17 @@ fn hsl2rgb(h: f64, s: f64, l: f64) -> (u8, u8, u8) {
 }
 
 /// `FloatColorToByte`.
+///
+/// UPSTREAM-QUIRK: upstream stores `Round(aValue * 255)` in a 32-bit
+/// `Integer`, so the `Int64` of `Round` is truncated to its low 32 bits
+/// before the 0 .. 255 clamp. A vertex colour that is not in the 0 .. 1
+/// range (Fallout NV's `nvdlc01smmartini.nif` has uninitialised floats in
+/// one shape) can therefore clamp differently: `15352481185792 * 255` is
+/// `0xDE890A8D00000`, whose low 32 bits are negative, and upstream gives
+/// 0 where a plain `Int64` clamp gives 255.
 fn float_color_to_byte(value: f64) -> u8 {
-    let c = round(value * 255.0).clamp(0, 255);
-    c as u8
+    let c = round(value * 255.0) as i32;
+    c.clamp(0, 255) as u8
 }
 
 /// `ByteColorToFloat`.
@@ -640,6 +648,38 @@ mod tests {
         adjust_color(&mut r, &mut g, &mut b, &mut a, 1, 0.5, 0.0, 0.0, 0.5);
         // A hue of 0.5 is cyan; the alpha is clamped to one.
         assert_eq!((r, g, b, a), (0, 255, 255, 1.0));
+    }
+
+    #[test]
+    fn float_color_to_byte_truncates_to_a_32_bit_integer() {
+        // The vertex colour of `nvdlc01smmartini.nif` (Fallout NV) that
+        // differed: uninitialised floats in a shape. `15352481185792 * 255`
+        // is `0xDE890A8D00000`; upstream's `Integer` keeps `0xA8D00000`,
+        // which is negative and clamps to 0, not to 255.
+        assert_eq!(float_color_to_byte(15_352_481_185_792.0), 0);
+        // `Round` out of the `Int64` range is the integer indefinite, whose
+        // low 32 bits are 0.
+        assert_eq!(float_color_to_byte(1.783_195_214_014_246_4e25), 0);
+        assert_eq!(float_color_to_byte(4.484_155_085_839_415e-44), 0);
+
+        // The same vertex through both adjust cases of `parity sniff`.
+        let mut channels = || {
+            (
+                float_color_to_byte(1.783_195_214_014_246_4e25),
+                float_color_to_byte(15_352_481_185_792.0),
+                float_color_to_byte(4.484_155_085_839_415e-44),
+            )
+        };
+        let (mut r, mut g, mut b) = channels();
+        let mut a = 1.0;
+        adjust_color(&mut r, &mut g, &mut b, &mut a, 0, 0.5, 1.2, 1.1, 0.9);
+        assert_eq!((r, g, b, a), (0, 0, 0, 0.9));
+        let (mut r, mut g, mut b) = channels();
+        let mut a = 1.0;
+        adjust_color(&mut r, &mut g, &mut b, &mut a, 1, 0.1, -0.2, 0.1, 0.0);
+        // Hue 0.1 and lightness 0.1: `Round(0.1 * 255)` is the tie 25.5,
+        // which rounds to even.
+        assert_eq!((r, g, b, a), (26, 26, 26, 1.0));
     }
 
     #[test]
