@@ -170,8 +170,10 @@ pub fn full_path_to_filename(text: &str) -> String {
     while index >= 1 {
         let at = index - 1;
         if chars.len() > index + 1 && chars[at] == ' ' && chars[at + 1] == '\\' && chars[at + 2] == ' ' {
-            chars.remove(at + 1);
+            // Upstream deletes the two spaces and keeps the separator
+            // (`Delete(s, i, 1)` then `Delete(s, i + 1, 1)`).
             chars.remove(at);
+            chars.remove(at + 1);
         } else if chars.len() > index && chars[at] == ' ' && chars[at + 1] == '\\' {
             chars.remove(at);
         } else if chars[at] == '"' {

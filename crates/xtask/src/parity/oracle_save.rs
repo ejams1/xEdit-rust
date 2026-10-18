@@ -1497,6 +1497,7 @@ fn check_edit(
                     button: answer.button.clone(),
                     text: answer.text.clone(),
                     control: answer.control.clone(),
+                    control_index: 0,
                     repeat: false,
                 })
                 .collect(),

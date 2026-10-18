@@ -2152,7 +2152,22 @@ fn port_run(
     // in order.
     let answers_file = dir.join("answers.json");
     if !task.answers.is_empty() {
-        let answers = serde_json::to_string(&task.answers)?;
+        // `{{WORK}}` stands for the run folder, as in the oracle's answers:
+        // an answer naming a path the script writes under it gets this
+        // side's folder, so the two sides' files compare.
+        let work_text = dir.display().to_string();
+        let answers: Vec<_> = task
+            .answers
+            .iter()
+            .cloned()
+            .map(|mut answer| {
+                if let Some(text) = &mut answer.text {
+                    *text = text.replace("{{WORK}}", &work_text);
+                }
+                answer
+            })
+            .collect();
+        let answers = serde_json::to_string(&answers)?;
         fs::write(&answers_file, answers)?;
     }
     let cache = dir.join("cache");

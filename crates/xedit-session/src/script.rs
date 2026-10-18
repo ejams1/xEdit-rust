@@ -342,7 +342,8 @@ pub struct ScriptAnswer {
     /// on the first edit, as the oracle harness does): the value an
     /// `InputQuery`/`InputBox` returns, the file a selection dialog picks
     /// (a name without a drive or a root is taken under the dialog's
-    /// `InitialDir`, as the common dialog resolves it).
+    /// `InitialDir`, as the common dialog resolves it). The parity harness
+    /// resolves its `{{WORK}}` before writing the answers.
     #[serde(default)]
     pub text: Option<String>,
     /// The class of the form's child control the text and the keys go to
@@ -352,6 +353,13 @@ pub struct ScriptAnswer {
     /// `repeat`.
     #[serde(default)]
     pub control: Option<String>,
+    /// The zero-based position among the form's children of the class
+    /// `control` the text and the keys go to (the parity harness's
+    /// `control_index`): a form with several controls of one class is
+    /// driven control by control this way. Zero without it, the first of
+    /// the class.
+    #[serde(default)]
+    pub control_index: usize,
     /// The answer goes to the same form as the answer before it: a form a
     /// scenario drives control by control is one window with several
     /// answers, each after the first naming `repeat` (the parity harness's
@@ -1589,7 +1597,7 @@ pub(crate) fn game_master_element() -> Option<ElementRef> {
 /// prefix (`[00] `) in front of the file name, the executable's name for the
 /// hardcoded file (`[00] SkyrimSE.exe`); every other element keeps its own
 /// `Name`.
-fn element_name(element: &ElementRef) -> String {
+pub(crate) fn element_name(element: &ElementRef) -> String {
     if element.get_element_type() != ElementType::etFile {
         return element.get_name();
     }

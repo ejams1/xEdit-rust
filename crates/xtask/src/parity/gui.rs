@@ -125,7 +125,8 @@ pub struct Answer {
     /// (`WM_SETTEXT`), such as the file name an `InputQuery` asks for: the
     /// first control of the class `control` when one is named (a
     /// `TComboBox` for the preset name of a selection dialog), else the
-    /// first edit control.
+    /// first edit control. `{{WORK}}` is replaced by the run folder, as in
+    /// the scripts the harness writes.
     #[serde(default)]
     pub text: Option<String>,
     /// The class of the child control the keys go to (`TVirtualStringTree`
@@ -135,6 +136,12 @@ pub struct Answer {
     /// Also the class `text` goes to.
     #[serde(default)]
     pub control: Option<String>,
+    /// The zero-based position among the window's children of the class
+    /// `control` the `text` and `keys` go to: the two `TLabeledEdit`s of
+    /// `Find cell in worldspace.pas` are driven control by control this
+    /// way. Zero without it, the first of the class.
+    #[serde(default)]
+    pub control_index: usize,
     /// The answer goes to the window again after an earlier answer of the
     /// same run: a dialog a scenario drives control by control (set the
     /// preset name, press Load, then press OK) is one window, and every
@@ -457,6 +464,7 @@ impl GuiRun<'_> {
             button: Some("OK".to_owned()),
             text: None,
             control: None,
+            control_index: 0,
             repeat: false,
         }];
         let mut dialogs = Vec::new();
@@ -920,8 +928,14 @@ fn watch(
                     // Let the dialog finish showing before it gets input.
                     std::thread::sleep(Duration::from_millis(300));
                     if let Some(text) = &answer.text {
+                        // `{{WORK}}` stands for the run folder, so an answer
+                        // can name a path the run's script writes under it
+                        // (`ExportImportTexts.pas`'s base path): the two
+                        // sides expand it to their own folders and the files
+                        // they write compare.
+                        let text = text.replace("{{WORK}}", &work.display().to_string());
                         ensure!(
-                            set_edit_text(&window, answer.control.as_deref(), text),
+                            set_edit_text(&window, answer.control.as_deref(), answer.control_index, &text),
                             "the dialog [{}] \"{}\" has no {} control: {}",
                             window.class,
                             window.title,
@@ -933,7 +947,7 @@ fn watch(
                     // focus (Down from the filter of the module selection
                     // into its list) sends the next to the new control.
                     for &key in &answer.keys {
-                        post_key(&window, answer.control.as_deref(), key);
+                        post_key(&window, answer.control.as_deref(), answer.control_index, key);
                         std::thread::sleep(Duration::from_millis(150));
                     }
                     if let Some(button) = &answer.button {
@@ -1286,28 +1300,32 @@ pub(super) fn click_button(window: &Window, caption: &str) -> bool {
     sent != 0
 }
 
-/// Sets the text of a control of a window: the first control of the class
-/// `control` when one is named (a `TComboBox`, whose `WM_SETTEXT` writes
-/// the edit of a drop-down combo box, which is what the dialog reads as its
-/// `Text`), else the first edit control (a VCL `TEdit`, or the `Edit` of a
-/// system dialog).
+/// Sets the text of a control of a window: the `control_index`-th control
+/// of the class `control` when one is named (a `TComboBox`, whose
+/// `WM_SETTEXT` writes the edit of a drop-down combo box, which is what the
+/// dialog reads as its `Text`), else the `control_index`-th edit control (a
+/// VCL `TEdit`, or the `Edit` of a system dialog).
 #[cfg(windows)]
-fn set_edit_text(window: &Window, control: Option<&str>, text: &str) -> bool {
+fn set_edit_text(window: &Window, control: Option<&str>, control_index: usize, text: &str) -> bool {
     use windows_sys::Win32::Foundation::HWND;
     use windows_sys::Win32::UI::WindowsAndMessaging::{EnumChildWindows, SendMessageW, WM_SETTEXT};
     let mut children: Vec<HWND> = Vec::new();
     // SAFETY: the callback only pushes into the vector passed as `LPARAM`.
     unsafe { EnumChildWindows(window.handle as HWND, Some(win::collect), (&raw mut children) as isize) };
-    let Some(edit) = children.into_iter().find(|&child| match control {
-        Some(class) => win::class(child) == class,
-        // A VCL `TEdit`, the `TLabeledEdit` of the edit forms (a
-        // `TCustomEdit` subclass with a class of its own), or the `Edit` of
-        // a system dialog.
-        None => matches!(
-            win::class(child).as_str(),
-            "TEdit" | "TLabeledEdit" | "TMaskEdit" | "Edit"
-        ),
-    }) else {
+    let Some(edit) = children
+        .into_iter()
+        .filter(|&child| match control {
+            Some(class) => win::class(child) == class,
+            // A VCL `TEdit`, the `TLabeledEdit` of the edit forms (a
+            // `TCustomEdit` subclass with a class of its own), or the `Edit`
+            // of a system dialog.
+            None => matches!(
+                win::class(child).as_str(),
+                "TEdit" | "TLabeledEdit" | "TMaskEdit" | "Edit"
+            ),
+        })
+        .nth(control_index)
+    else {
         return false;
     };
     let wide: Vec<u16> = text.encode_utf16().chain(std::iter::once(0)).collect();
@@ -1557,7 +1575,7 @@ pub(super) fn toggle_check_list_item(list: isize, index: usize) {
 pub(super) fn toggle_check_list_item(_list: isize, _index: usize) {}
 
 #[cfg(not(windows))]
-fn set_edit_text(_window: &Window, _control: Option<&str>, _text: &str) -> bool {
+fn set_edit_text(_window: &Window, _control: Option<&str>, _control_index: usize, _text: &str) -> bool {
     false
 }
 
@@ -1565,7 +1583,7 @@ fn set_edit_text(_window: &Window, _control: Option<&str>, _text: &str) -> bool 
 /// window itself when none has the focus), as the keyboard would deliver
 /// it: VCL forms with `KeyPreview` see it in their `OnKeyDown` first.
 #[cfg(windows)]
-fn post_key(window: &Window, control: Option<&str>, key: u16) {
+fn post_key(window: &Window, control: Option<&str>, control_index: usize, key: u16) {
     use windows_sys::Win32::Foundation::HWND;
     use windows_sys::Win32::UI::WindowsAndMessaging::{
         EnumChildWindows, GUITHREADINFO, GetGUIThreadInfo, GetWindowThreadProcessId, PostMessageW, WM_KEYDOWN, WM_KEYUP,
@@ -1575,7 +1593,11 @@ fn post_key(window: &Window, control: Option<&str>, key: u16) {
         let mut children: Vec<HWND> = Vec::new();
         // SAFETY: the callback only pushes into the vector passed as `LPARAM`.
         unsafe { EnumChildWindows(handle, Some(win::collect), (&raw mut children) as isize) };
-        if let Some(child) = children.into_iter().find(|&child| win::class(child) == control) {
+        if let Some(child) = children
+            .into_iter()
+            .filter(|&child| win::class(child) == control)
+            .nth(control_index)
+        {
             // SAFETY: plain messages without pointers.
             unsafe {
                 PostMessageW(child, WM_KEYDOWN, usize::from(key), 1);
@@ -1604,7 +1626,7 @@ fn post_key(window: &Window, control: Option<&str>, key: u16) {
 }
 
 #[cfg(not(windows))]
-fn post_key(_window: &Window, _control: Option<&str>, _key: u16) {}
+fn post_key(_window: &Window, _control: Option<&str>, _control_index: usize, _key: u16) {}
 
 /// The text of the message log of the main form: the first memo below
 /// it. Read with a timeout, as the GUI thread may be busy loading.

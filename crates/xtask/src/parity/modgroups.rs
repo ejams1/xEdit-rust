@@ -552,6 +552,7 @@ fn run_oracle(
                 button: answer.button.clone(),
                 text: answer.text.clone(),
                 control: answer.control.clone(),
+                control_index: 0,
                 repeat: answer.repeat,
             })
             .collect(),
