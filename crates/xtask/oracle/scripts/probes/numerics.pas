@@ -376,15 +376,15 @@ begin
   // byte for byte, and `parity nif --text` covers the 1596 definition
   // names).
   //
-  // The non-ASCII bytes do NOT match: the oracle hashes `Chr(160)` up to
-  // `Chr(255)` to 65533 for every one of them and `Chr(128)`..`Chr(159)` to
-  // 2016, the `?` of a character the ANSI code page cannot map, except at
-  // the five undefined CP1252 bytes (129, 141, 143, 144, 157), which are
-  // 65533 too. The port's ANSI conversion plus ASCII fold gives the
-  // `rotl5` of the byte there; the mechanism behind the oracle's constant
-  // was not solved (65533 is not the fold of any byte string of four bytes
-  // or fewer), so it is owed: the table is recorded here and in
-  // docs/PLAN.md, and those lines stay out of the comparison.
+  // The non-ASCII bytes: `HashName` leaves its ASCII loop at the first byte
+  // above 127 and decodes the rest from UTF-8 (code page 65001), with U+FFFD
+  // for bytes that form no valid sequence, then hashes the UTF-16 units with
+  // the rotation before the xor. A lone 1252 byte A0..FF is one U+FFFD, so
+  // it hashes to 65533; `Chr(128)`..`Chr(159)` are the `?` of a character
+  // the code page cannot map (2016, the hash of `?`), except the five
+  // undefined CP1252 bytes, which map to themselves and so to 65533. The
+  // port follows this and pins it with "e", "Ae", "eA" and a `?` character
+  // in `cargo xtask parity nif --text`.
   for i := 1 to 127 do
     Log('hash', 'c' + IntToStr(i) + '=' + IntToStr(dfCalcHash(Chr(i))));
   Log('hash', 'A=' + IntToStr(dfCalcHash('A')));

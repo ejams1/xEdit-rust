@@ -154,17 +154,30 @@ fn df_str_to_half_float(value: &str) -> R<f64> {
 /// exclusive or and the sum rotated left by five bits. Upstream finds
 /// elements by name by comparing these hashes only. (The form was found
 /// from the oracle's `dfCalcHash`, `cargo xtask parity nif --text`.)
+///
+/// After a byte above 127, `HashName` leaves that loop and hands the rest of
+/// the string to its UTF-8 variant: it decodes the bytes from code page
+/// 65001, with U+FFFD for the bytes that form no valid sequence, hashes the
+/// UTF-16 code units with the rotation before the xor, and drops the ASCII
+/// prefix hashed so far. `cargo xtask parity nif --text` pins the result:
+/// "Ae" hashes to U+FFFD and "eA" to `rotl5(U+FFFD) xor Ord('A')` (with `e`
+/// the 1252 byte `0xE9`).
 pub fn df_calc_hash(name: &str) -> u32 {
-    let hash = |bytes: &[u8]| {
-        bytes.iter().fold(0u32, |result, byte| {
-            (result ^ u32::from(byte.to_ascii_lowercase())).rotate_left(5)
-        })
-    };
+    let fold = |result: u32, byte: u8| (result ^ u32::from(byte.to_ascii_lowercase())).rotate_left(5);
     if name.is_ascii() {
-        hash(name.as_bytes())
-    } else {
-        hash(&Encoding::Mbcs(ANSI_CODE_PAGE).get_bytes(name))
+        return name.as_bytes().iter().fold(0u32, |result, &byte| fold(result, byte));
     }
+    let bytes = Encoding::Mbcs(ANSI_CODE_PAGE).get_bytes(name);
+    let mut result = 0u32;
+    for (index, &byte) in bytes.iter().enumerate() {
+        if byte > 0x7F {
+            return String::from_utf8_lossy(&bytes[index..])
+                .encode_utf16()
+                .fold(0u32, |result, unit| result.rotate_left(5) ^ u32::from(unit));
+        }
+        result = fold(result, byte);
+    }
+    result
 }
 
 /// The ANSI code page of the strings that upstream converts with
@@ -3166,6 +3179,19 @@ mod tests {
         assert_eq!(df_calc_hash("A"), 0xC20);
         assert_eq!(df_calc_hash("@"), 0x800);
         assert_eq!(df_calc_hash(".."), 0xBDC0);
+    }
+
+    /// `HashName` decodes the bytes from the first byte above 127 as UTF-8,
+    /// so 1252 `0xE9` (a lone byte, no valid sequence) becomes U+FFFD and the
+    /// ASCII prefix is dropped. A character the code page cannot map is `?`
+    /// and stays in the ASCII loop.
+    #[test]
+    fn hash_switches_to_utf8_on_a_high_byte() {
+        // Values of the oracle's dfCalcHash (`parity nif --text`, 1252).
+        assert_eq!(df_calc_hash("\u{e9}"), 0xFFFD);
+        assert_eq!(df_calc_hash("A\u{e9}"), 0xFFFD);
+        assert_eq!(df_calc_hash("\u{e9}A"), 0x1FFFE1);
+        assert_eq!(df_calc_hash("\u{4e2d}"), 0x7E0);
     }
 
     fn version_is_one(tree: &mut Tree, el: El) -> R<i32> {

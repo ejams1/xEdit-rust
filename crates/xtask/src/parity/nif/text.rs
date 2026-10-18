@@ -129,6 +129,16 @@ fn hash_names() -> Vec<String> {
         "{",
         "0123456789",
         "~!#$%^&*()_+-=",
+        // High characters: one the ANSI code page maps (1252: 0xE9), one it
+        // does not (a `?`), and both around ASCII, where `HashName` switches
+        // to its UTF-8 path and drops the ASCII prefix.
+        "\u{e9}",
+        "\u{c9}",
+        "A\u{e9}",
+        "\u{e9}A",
+        "\u{20ac}",
+        "\u{4e2d}",
+        "A\u{4e2d}",
     ] {
         names.push(extra.to_owned());
     }
