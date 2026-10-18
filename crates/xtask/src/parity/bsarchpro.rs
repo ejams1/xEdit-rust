@@ -28,10 +28,12 @@
 //!
 //! A case whose target is XBox over a PC texture with no `xtexconv.exe`
 //! reaches the same refusal on both sides (`DDS is not in XBox format`):
-//! the oracle puts it in a modal error dialog, whose body DirectUI draws
-//! and no window holds, so the check requires the dialog with no archive
-//! written and the port's message to equal one of the oracle executable's
-//! own UTF-16 strings (`oracle_utf16_strings`).
+//! the oracle shows it on its progress form (`TFormTaskProgress`, titled
+//! `Packing...`) and writes no archive worth comparing, so the check
+//! requires that dialog and the port's message to equal one of the oracle
+//! executable's own UTF-16 strings (`oracle_utf16_strings`). The mode
+//! starts no work on a desktop nothing displays: it runs on the user's
+//! desktop, shown (`HiddenCommand::visible`).
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -42,7 +44,6 @@ use anyhow::{Context, Result, bail, ensure};
 
 use xedit_io::dds::{self, Dxgi};
 
-use super::gui::visible_windows;
 use super::hidden::HiddenCommand;
 use super::{cache_dir, oracle_utf16_strings, required_var};
 
@@ -203,7 +204,13 @@ fn list_json(work: &Path, case: &Case, names: &[String], archive: &Path) -> Stri
     let assets: Vec<serde_json::Value> = names
         .iter()
         .map(|name| {
-            let file = work.join(name.replace('\\', "/"));
+            // The source of an asset is read from its own path, not from the
+            // work folder: `write_sources` puts every fixture below `src`
+            // (the folder the port packs), and the GUI's list named `src\
+            // misc\readme.txt` as `misc\readme.txt` and read
+            // `<work>\misc\readme.txt`, which does not exist (parity #41:
+            // the "Error reading source file" the run at a screen showed).
+            let file = work.join("src").join(name.replace('\\', "/"));
             serde_json::json!([1, name, file.display().to_string()])
         })
         .collect();
@@ -258,7 +265,10 @@ fn run_oracle(pro: &Path, work: &Path, case: &Case, names: &[String]) -> Result<
     let list = work.join("list.bsarch");
     fs::write(&list, list_json(work, case, names, &archive))?;
 
-    let mut command = HiddenCommand::new(&exe);
+    // The GUI's autopacking mode starts no work on the harness's own
+    // desktop, a desktop nothing displays (the parity #38 finding): it runs
+    // on the user's desktop, shown.
+    let mut command = HiddenCommand::new(&exe).visible();
     command
         .current_dir(&run)
         .arg(list.display().to_string())
@@ -270,9 +280,15 @@ fn run_oracle(pro: &Path, work: &Path, case: &Case, names: &[String]) -> Result<
     let start = Instant::now();
     let mut dialog = None;
     loop {
-        let dialog_up = if let Some(title) = visible_windows(child.id())
+        let dialog_up = if let Some(title) = super::gui::current_desktop_windows(child.id())
             .iter()
-            .find(|window| window.class == "#32770")
+            .filter(|window| window.visible)
+            // The per-file refusal of a `refusal` case is a box over the
+            // progress form the GUI titles `Packing...`; the run at a screen
+            // showed it (parity #41), and its class is the VCL form's, not
+            // `#32770`. Only those cases take it as the dialog: a successful
+            // pack opens the same form and closes it with the archive.
+            .find(|window| window.class == "#32770" || (case.refusal && window.title.starts_with("Packing")))
             .map(|window| format!("[{}] {}", window.class, window.title))
         {
             dialog = Some(title);
@@ -528,13 +544,18 @@ pub fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
                     &mut report,
                 );
             }
-            (None, Err(message)) if case.refusal => {
+            (_, Err(message)) if case.refusal => {
                 // The refusal: the dialog was up (the case says one is
-                // expected) and the port's message has to be the oracle's
-                // own string (`oracle_utf16_strings`: the dialog body is
-                // drawn and holds no text).
+                // expected) and the port's message is the line the GUI
+                // shows, `Error processing '<asset>': <reason>`. The reason
+                // has to be the oracle's own string (`oracle_utf16_strings`:
+                // the dialog body is drawn and holds no readable text, the
+                // executable's table does). The archive the oracle leaves is
+                // whatever it packed before the bad asset, never a compared
+                // result; the run at a screen showed the error on the
+                // progress form (parity #41).
                 let messages = oracle_utf16_strings(&pro, "not in XBox format")?;
-                if dialog.is_some() && messages.iter().any(|text| text == &message) {
+                if dialog.is_some() && messages.iter().any(|text| message.ends_with(text)) {
                     equal += 1;
                     say(
                         format!(

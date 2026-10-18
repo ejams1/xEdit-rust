@@ -63,6 +63,10 @@ pub struct HiddenCommand {
     args: Vec<String>,
     dir: Option<PathBuf>,
     env: Vec<(std::ffi::OsString, std::ffi::OsString)>,
+    /// Start the program on the user's desktop, shown: BSArchPro's
+    /// autopacking mode starts no work on a desktop nothing displays
+    /// (parity #41; the finding was parity #38's).
+    visible: bool,
 }
 
 impl HiddenCommand {
@@ -72,7 +76,14 @@ impl HiddenCommand {
             args: Vec::new(),
             dir: None,
             env: Vec::new(),
+            visible: false,
         }
+    }
+
+    /// Starts the program on the caller's desktop, shown.
+    pub fn visible(mut self) -> HiddenCommand {
+        self.visible = true;
+        self
     }
 
     pub fn arg(&mut self, arg: impl Into<String>) -> &mut HiddenCommand {
@@ -153,10 +164,14 @@ impl HiddenCommand {
         // SAFETY: plain data structures, zero is a valid value of each field.
         let mut startup: STARTUPINFOW = unsafe { std::mem::zeroed() };
         startup.cb = size_of::<STARTUPINFOW>() as u32;
-        startup.dwFlags = STARTF_USESHOWWINDOW;
-        startup.wShowWindow = SW_HIDE as u16;
-        if desktop().is_some() {
-            startup.lpDesktop = desktop_name.as_mut_ptr();
+        if self.visible {
+            startup.dwFlags = 0;
+        } else {
+            startup.dwFlags = STARTF_USESHOWWINDOW;
+            startup.wShowWindow = SW_HIDE as u16;
+            if desktop().is_some() {
+                startup.lpDesktop = desktop_name.as_mut_ptr();
+            }
         }
         let mut info: PROCESS_INFORMATION = unsafe { std::mem::zeroed() };
         // A Unicode environment block needs `CREATE_UNICODE_ENVIRONMENT`,
