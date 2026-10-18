@@ -86,7 +86,7 @@ The progress bar above counts merged phases of [docs/PLAN.md](docs/PLAN.md); it 
 | `filter` | 4 scenarios, 51 configurations | all equal (`sse-filters` 37 of 37) |
 | `merged` | 12 scenarios | 12 of 12 equal |
 | `resources` | 8 scenarios | 8 of 8 equal |
-| `discovery` | 3 runs | 3 of 3 equal |
+| `discovery` | 6 runs (2 games' own plugin lists, 4 module-list cases) | 6 of 6 equal |
 | `lodgen` | 20 scenarios | 20 of 20 equal |
 | `bsarch` | 1,472 pack/unpack/list checks | 1,472 equal |
 | `bsarchpro` | 6 GUI packing cases | 6 of 6 equal: five archives byte for byte with BSArchPro's own autopacking, and the XBox refusal `DDS is not in XBox format` |
@@ -101,7 +101,6 @@ The progress bar above counts merged phases of [docs/PLAN.md](docs/PLAN.md); it 
 - **25 xDump switch and report entries** (issue #79): the dump filters, the report switches and the save-dump switches of `xDump.exe`.
 - **Game modes not verified** (issues #7, #9, #80): Enderal and Oblivion Remastered are not installed on the development machine, and the 4.1.5q oracle cannot dump a Morrowind plugin (below).
 - **4 script registrations** (issue #81): the form runners that exist to run a form script headlessly, with the run cases the issue lists.
-- **The legacy module list** (issue #83): `wbLoadModules`' implicit actives, `loadorder.txt` and the missing-masters filter of the legacy load.
 
 ### Out of the oracle's reach
 

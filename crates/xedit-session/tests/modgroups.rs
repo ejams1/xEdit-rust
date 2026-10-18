@@ -14,7 +14,7 @@ use std::sync::Arc;
 use serde_json::{Value, json};
 use xedit_core::implementation::{FileImpl, wb_file};
 use xedit_core::interface::GameMode;
-use xedit_core::interface::globals::{set_data_path, test_lock};
+use xedit_core::interface::globals::{set_data_path, set_plugins_file_name, test_lock};
 use xedit_core::interface::types::FileStates;
 use xedit_io::temp::TempDir;
 use xedit_session::{Registry, Session};
@@ -402,11 +402,16 @@ fn setup_unloaded(test: &str) -> (TempDir, Session) {
     for name in ["Zeta.esp", "Alpha.esp"] {
         std::fs::write(dir.join(name), plugin(0, &["Skyrim.esm"], 3.0)).unwrap();
     }
+    // The plugin list the module order reads: Zeta.esp is the indexed one,
+    // Alpha.esp is not named and has no index.
+    let list = dir.join("plugins.txt");
+    std::fs::write(&list, "*Zeta.esp\r\n").unwrap();
     xedit_core::implementation::clear_files_map();
     xedit_core::implementation::reset_load_order_slots();
     xedit_core::interface::clear_files();
     xedit_session::dump::setup_game_for_edit("sse").unwrap();
     xedit_session::save::apply_edit_settings(GameMode::gmSSE);
+    set_plugins_file_name(list.to_str().unwrap());
     // Only the master and one plugin load; the other plugins stay modules
     // of the data folder (`mfHasFile` off).
     let files: Vec<Arc<FileImpl>> = ["Skyrim.esm", "Zeta.esp"]
@@ -491,11 +496,16 @@ fn creation_club_modules_follow_the_ccc_list() {
     // The list names ccZZZ.esm first; a name of the list without a file is
     // no module.
     std::fs::write(root.join("Skyrim.ccc"), "ccZZZ.esm\r\nccMissing.esm\r\nccAAA.esm\r\n").unwrap();
+    // The plugin list the module order reads: Zeta.esp is indexed, Alpha.esp
+    // is not named and has no index.
+    let list = dir.join("plugins.txt");
+    std::fs::write(&list, "*Zeta.esp\r\n").unwrap();
     xedit_core::implementation::clear_files_map();
     xedit_core::implementation::reset_load_order_slots();
     xedit_core::interface::clear_files();
     xedit_session::dump::setup_game_for_edit("sse").unwrap();
     xedit_session::save::apply_edit_settings(GameMode::gmSSE);
+    set_plugins_file_name(list.to_str().unwrap());
     let files: Vec<Arc<FileImpl>> = ["Skyrim.esm", "Zeta.esp"]
         .iter()
         .map(|name| wb_file(dir.join(name).to_str().unwrap(), i32::MAX, FileStates::empty()).unwrap())

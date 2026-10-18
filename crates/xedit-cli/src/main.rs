@@ -77,6 +77,9 @@ struct Cli {
     /// The xEdit settings file that keeps the saved mod group selection. Default: xEdit's: <AppName>Edit.ini next to the program when it exists, else Plugins.<app>viewsettings next to the game's Plugins.txt in the local application data.
     #[arg(long, global = true)]
     settings: Option<String>,
+    /// The game's plugin list (xEdit's -P:): a module's line in it is its Plugins.txt index for the module order, and the modules it marks active are the active ones of wbLoadModules. Default: none, so the modules the release activates without a plugin list (the game master, its official DLC, its Creation Club content) are active and no module has a Plugins.txt index.
+    #[arg(long, global = true)]
+    plugins_list: Option<String>,
     /// Language of the string tables of localized plugins (xEdit's -l:), such as English or En; the game's default when omitted.
     #[arg(long, global = true)]
     language: Option<String>,
@@ -3150,8 +3153,15 @@ fn run_legacy(run: xedit_session::tool_modes::LegacyRun) -> ExitCode {
         Some("quick_clean" | "quick_auto_clean")
     ));
     // A tool mode is an edit mode: `wbEditAllowed` is on and the mode's
-    // settings decide what the load does.
-    let mut session = match engine::open_session(Some(game), &run.plugins, true) {
+    // settings decide what the load does. A plugin mode loads the modules
+    // the command line names; every other mode loads the active modules of
+    // `wbLoadModules`, which the loader reads after the game is set up.
+    let opened = if run.plugin_mode {
+        engine::open_session(Some(game), &run.plugins, true)
+    } else {
+        engine::open_session_legacy(game, true)
+    };
+    let mut session = match opened {
         Ok(session) => session,
         Err(error) => {
             eprintln!("error: {error}");
@@ -3310,6 +3320,10 @@ fn real_main() -> ExitCode {
     };
     xedit_session::tool_modes::set_on_load(cli.switches.to_load_switches(tool_mode, tool_source));
     xedit_session::modgroups::set_file_options(cli.modgroups_file.as_deref(), cli.settings.as_deref());
+    // `-P:`: the plugin list the module order reads (`wbPluginsFileName`).
+    if let Some(path) = &cli.plugins_list {
+        xedit_core::interface::globals::set_plugins_file_name(path);
+    }
     // `-skipbsa`, `-forcebsa` and the inis of `DoInitPath`.
     xedit_session::resources::set_options(xedit_session::resources::ResourceOptions {
         load_bsas: if cli.skip_bsa {
