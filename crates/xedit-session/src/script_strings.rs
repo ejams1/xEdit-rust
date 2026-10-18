@@ -513,6 +513,19 @@ impl StringListObject {
     /// `AnsiExtractQuotedStr`, and two adjacent delimiters make an empty
     /// field.
     pub fn set_delimited_text(&mut self, text: &str) -> Result<(), ValueError> {
+        self.set_delimited_text_with(text, self.delimiter)
+    }
+
+    /// `TStrings.CommaText := value`: the `SetDelimitedText` parser with
+    /// `,` as the delimiter, whatever `Delimiter` holds
+    /// (`TStrings.SetCommaText` passes the comma, not the property), and
+    /// the list's `StrictDelimiter` deciding whether spaces also end a
+    /// field.
+    pub fn set_comma_text(&mut self, text: &str) -> Result<(), ValueError> {
+        self.set_delimited_text_with(text, ',')
+    }
+
+    fn set_delimited_text_with(&mut self, text: &str, delimiter: char) -> Result<(), ValueError> {
         let chars: Vec<char> = text.chars().collect();
         let mut index = 0usize;
         let strict = self.strict_delimiter;
@@ -528,7 +541,7 @@ impl StringListObject {
                 let start = index;
                 while index < chars.len()
                     && (strict || (chars[index] as u32) > b' ' as u32)
-                    && chars[index] != self.delimiter
+                    && chars[index] != delimiter
                 {
                     index += 1;
                 }
@@ -538,7 +551,7 @@ impl StringListObject {
             if !strict {
                 skip_leading(&chars, &mut index);
             }
-            if index < chars.len() && chars[index] == self.delimiter {
+            if index < chars.len() && chars[index] == delimiter {
                 if index + 1 >= chars.len() {
                     self.add(String::new())?;
                 }

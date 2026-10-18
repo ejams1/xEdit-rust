@@ -41,6 +41,7 @@
 //!   `CaseSensitive = False`, the RTL default.
 
 use std::cell::RefCell;
+use std::collections::BTreeMap;
 use std::rc::Rc;
 
 use xedit_script::adapter::{Adapter, Args};
@@ -302,6 +303,10 @@ pub struct CollectionItemState {
     pub id: i32,
     pub index: i32,
     pub display_name: String,
+    /// The published properties the item's real class adds over
+    /// `TCollectionItem` (`TListColumn.Caption`, `Width`, ...): the VCL
+    /// model's RTTI fallback stores and reads them here.
+    pub props: BTreeMap<String, Value>,
 }
 
 pub struct CollectionObject {
@@ -341,10 +346,16 @@ impl ScriptObject for CollectionItemObject {
 pub fn collection_of(value: &Value) -> Option<Rc<RefCell<CollectionState>>> {
     let object = value.as_object()?;
     let borrowed = object.borrow();
+    if let Some(collection) = borrowed.as_any().downcast_ref::<CollectionObject>() {
+        return Some(collection.state.clone());
+    }
+    // A VCL list view's `Columns` is a `TListColumns`, a `TCollection` whose
+    // members (`Add`, `Items`, `Count`, `Clear`) belong to this unit: the
+    // VCL object carries the same state.
     borrowed
         .as_any()
-        .downcast_ref::<CollectionObject>()
-        .map(|collection| collection.state.clone())
+        .downcast_ref::<crate::script_vcl::interactive::VclObject>()
+        .and_then(|object| object.collection.clone())
 }
 
 pub fn collection_item_of(value: &Value) -> Option<Rc<RefCell<CollectionItemState>>> {
@@ -862,6 +873,7 @@ fn register_collection(adapter: &mut Adapter, classes: &Classes, vcl: Rc<RefCell
                         id: 0,
                         index: 0,
                         display_name: String::new(),
+                        props: BTreeMap::new(),
                     })),
                 })));
                 Ok(())
@@ -972,6 +984,7 @@ fn register_collection(adapter: &mut Adapter, classes: &Classes, vcl: Rc<RefCell
                     id: index as i32,
                     index: index as i32,
                     display_name: String::new(),
+                    props: BTreeMap::new(),
                 })),
             })));
             collection.items.push(collection_item_of(&item).expect("just built"));
@@ -1448,9 +1461,20 @@ fn register_strings(adapter: &mut Adapter, classes: &Classes) {
     });
     setter_new(adapter, &classes.t_strings, "CommaText", &[EMPTY], |value, args| {
         let text = String::from_utf8_lossy(&to_str(value)?).into_owned();
-        let fields = xedit_assets::sniff::processor::comma_text(&text);
         let object = strings_arg(args)?;
         let mut borrowed = object.borrow_mut();
+        // The VCL string list the script builds is the port's `TStringList`
+        // object: its parser honours `StrictDelimiter` (and the comma-only
+        // delimiter of `CommaText`, not `Delimiter`), as `SetDelimitedText`
+        // does. `'Static LOD4'` stays one field of a strict list.
+        if let Some(list) = borrowed
+            .as_any_mut()
+            .downcast_mut::<crate::script_strings::StringListObject>()
+        {
+            list.set_comma_text(&text)?;
+            return Ok(());
+        }
+        let fields = xedit_assets::sniff::processor::comma_text(&text);
         let list = borrowed.string_list_mut().ok_or(ValueError::Variant)?;
         list.clear();
         for field in fields {

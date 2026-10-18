@@ -221,6 +221,69 @@ pub(super) fn windows_path(path: &Path) -> String {
     path.to_string_lossy().replace('/', "\\")
 }
 
+/// The desktop clipboard's text, for the script that copies to it
+/// (`TCustomEdit.CopyToClipboard`): the VCL writes `CF_TEXT`, which the
+/// system presents as `CF_UNICODETEXT` too; the port writes Unicode text
+/// directly.
+pub fn clipboard_text() -> String {
+    #[cfg(windows)]
+    {
+        use windows_sys::Win32::System::DataExchange::{CloseClipboard, GetClipboardData, OpenClipboard};
+        use windows_sys::Win32::System::Memory::{GlobalLock, GlobalSize, GlobalUnlock};
+        use windows_sys::Win32::System::Ole::{CF_TEXT, CF_UNICODETEXT};
+        // SAFETY: the clipboard is opened and closed around the read; each
+        // locked block is read within its `GlobalSize`.
+        unsafe {
+            if OpenClipboard(std::ptr::null_mut()) == 0 {
+                return String::new();
+            }
+            let mut text = String::new();
+            let handle = GetClipboardData(u32::from(CF_UNICODETEXT));
+            if !handle.is_null() {
+                let pointer = GlobalLock(handle) as *const u16;
+                if !pointer.is_null() {
+                    let len = GlobalSize(handle) / 2;
+                    let mut units: Vec<u16> = Vec::with_capacity(len);
+                    for index in 0..len {
+                        let unit = *pointer.add(index);
+                        if unit == 0 {
+                            break;
+                        }
+                        units.push(unit);
+                    }
+                    text = String::from_utf16_lossy(&units);
+                    GlobalUnlock(handle);
+                }
+            } else {
+                // The RTL's `CopyToClipboard` leaves only the ANSI format.
+                let handle = GetClipboardData(u32::from(CF_TEXT));
+                if !handle.is_null() {
+                    let pointer = GlobalLock(handle) as *const u8;
+                    if !pointer.is_null() {
+                        let len = GlobalSize(handle);
+                        let mut bytes: Vec<u8> = Vec::with_capacity(len);
+                        for index in 0..len {
+                            let byte = *pointer.add(index);
+                            if byte == 0 {
+                                break;
+                            }
+                            bytes.push(byte);
+                        }
+                        text = bytes.iter().map(|&byte| byte as char).collect();
+                        GlobalUnlock(handle);
+                    }
+                }
+            }
+            CloseClipboard();
+            text
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        String::new()
+    }
+}
+
 /// What a quick auto clean run left (`run_quick_clean`).
 pub struct QuickCleanResult {
     /// The plugin as the run left it in the private data folder: the
@@ -337,6 +400,7 @@ impl GuiRun<'_> {
             ended,
             peak,
             data,
+            clipboard: clipboard_text(),
             saved_log: if extras.close_after && closed {
                 Some(self.read_log()?)
             } else {
@@ -715,6 +779,9 @@ pub struct ScriptRun {
     pub peak: Option<u64>,
     /// The private data folder, which holds what a close saved.
     pub data: PathBuf,
+    /// The desktop clipboard after the run: what a script that copies to it
+    /// (`TCustomEdit.CopyToClipboard`) left.
+    pub clipboard: String,
     /// The message log the GUI wrote on close (`close_after` only).
     pub saved_log: Option<String>,
 }
