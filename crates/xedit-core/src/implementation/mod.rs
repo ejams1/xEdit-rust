@@ -23,6 +23,7 @@ pub mod form_ids;
 mod info_sort;
 pub mod injected;
 pub mod masters;
+pub(crate) mod member;
 pub mod moving;
 pub mod new_file;
 pub mod new_form_id;
@@ -73,6 +74,9 @@ macro_rules! element_common {
     };
     ($base:ident, own_path) => {
         element_common!(@common $base, with_values);
+    };
+    ($base:ident, own_path, $values:ident) => {
+        element_common!(@common $base, $values);
     };
     ($base:ident, $values:ident) => {
         element_common!(@common $base, $values);
@@ -4030,6 +4034,10 @@ pub trait ElementImpl: Element {
         None
     }
 
+    fn sub_record_struct_impl(&self) -> Option<&sub_record::SubRecordStructImpl> {
+        None
+    }
+
     fn value_impl(&self) -> Option<Arc<value::ValueImpl>> {
         None
     }
@@ -4875,12 +4883,42 @@ fn is_official_file(record: &MainRecordImpl) -> bool {
 }
 
 impl Element for MainRecordImpl {
-    element_common!(element_base, own_path);
+    element_common!(element_base, own_path, own_values);
 
     /// Port of `TwbMainRecord.GetPath`: the signature alone, so the path
     /// of an element in a record starts at its record.
     fn get_path(&self) -> String {
         self.mr_struct().signature.to_string()
+    }
+
+    /// Port of `TwbMainRecord.GetEditValue`: the FormID, as the load order
+    /// FormID when `wbDisplayLoadOrderFormID` is set (it is in the editor),
+    /// else the FormID as the file stores it.
+    fn get_edit_value(&self) -> String {
+        let form_id = if display_load_order_form_id() {
+            self.self_arc().get_load_order_form_id()
+        } else {
+            self.mr_struct().form_id
+        };
+        form_id.to_string(false)
+    }
+
+    /// Port of `TwbMainRecord.GetNativeValue`: the FormID as a cardinal.
+    fn get_native_value(&self) -> Variant {
+        let form_id = if display_load_order_form_id() {
+            self.self_arc().get_load_order_form_id()
+        } else {
+            self.mr_struct().form_id
+        };
+        Variant::UInt(u64::from(form_id.to_cardinal()))
+    }
+
+    fn get_value_def(&self) -> Option<Arc<dyn ValueDef>> {
+        None
+    }
+
+    fn get_links_to(&self) -> Option<ElementRef> {
+        None
     }
 
     fn get_check(&self) -> String {
@@ -5437,6 +5475,11 @@ impl MainRecord for MainRecordImpl {
             self.self_arc().quick_init();
         }
         self.mr_editor_id.read().unwrap().clone()
+    }
+
+    /// Port of `TwbMainRecord.SetEditorID`.
+    fn set_editor_id(&self, value: &str) -> Result<(), EditError> {
+        MainRecordImpl::set_editor_id(&self.self_arc(), value)
     }
 
     fn get_short_name(&self) -> String {

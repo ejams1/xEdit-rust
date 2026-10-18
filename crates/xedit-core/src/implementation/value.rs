@@ -1206,6 +1206,47 @@ impl Element for ValueImpl {
         }
     }
 
+    /// Port of `TwbArray.GetIsClearable`: an array of as many elements as
+    /// its definition leaves, with elements, all of them removable.
+    fn get_is_clearable(&self) -> bool {
+        if self.kind != ValueKind::Array {
+            return false;
+        }
+        let Some(array_def) = self.vb.vb_value_def.as_array_def() else {
+            return false;
+        };
+        if array_def.get_count() > 0 {
+            return false;
+        }
+        self.do_init();
+        let count = self.vb.container.element_count();
+        if count == 0 {
+            return false;
+        }
+        (0..count).all(|index| {
+            self.vb
+                .container
+                .element_at(index)
+                .is_some_and(|element| element.get_is_removable())
+        })
+    }
+
+    /// Port of `TwbArray.Clear`: the elements go from the last, each one
+    /// that is removable.
+    fn clear(&self) {
+        if !self.get_is_clearable() {
+            return;
+        }
+        self.do_init();
+        for index in (0..self.vb.container.element_count()).rev() {
+            if let Some(element) = self.vb.container.element_at(index)
+                && element.get_is_removable()
+            {
+                element.remove();
+            }
+        }
+    }
+
     fn get_def(&self) -> Option<Arc<dyn NamedDef>> {
         Some(self.vb.vb_value_def.clone() as Arc<dyn NamedDef>)
     }

@@ -97,7 +97,7 @@ The progress bar above counts merged phases of [docs/PLAN.md](docs/PLAN.md); it 
 
 `coverage/ledger.toml` lists every upstream GUI binding, switch, game mode, tool mode and script registration with its command; `cargo xtask check` refuses an open entry that names no owner. The open work:
 
-- **55 GUI bindings without a typed command** (issue #78): the view and navigation-tree popups, the information tab, the FormID reference change dialogs, the circular leveled-list check, the delta patch, the Oblivion helpers, the Log Analyzer and the asset list of BSArchPro.
+- **42 GUI bindings without a typed command** (issue #78): the information tab, the FormID reference change dialogs, the circular leveled-list check, the delta patch, the Oblivion helpers, the Log Analyzer and the asset list of BSArchPro. Parity #78's first batch covered 13 (view Clear, mark-modified, union members, copy-to-records, remove-from-records, the wrapper/spawn-rate/disabled copy variants).
 - **25 xDump switch and report entries** (issue #79): the dump filters, the report switches and the save-dump switches of `xDump.exe`.
 - **Game modes not verified** (issues #7, #9, #80): Enderal and Oblivion Remastered are not installed on the development machine, and the 4.1.5q oracle cannot dump a Morrowind plugin (below).
 - **4 script registrations** (issue #81): the form runners that exist to run a form script headlessly, with the run cases the issue lists.

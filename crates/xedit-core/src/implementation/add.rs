@@ -801,7 +801,7 @@ impl MainRecordImpl {
 
     /// Port of `TwbMainRecord.SetEditorID`: the editor ID subrecord takes the
     /// value, added when it is missing.
-    pub(crate) fn set_editor_id(self: &Arc<Self>, value: &str) -> Result<(), EditError> {
+    pub fn set_editor_id(self: &Arc<Self>, value: &str) -> Result<(), EditError> {
         let Some(def) = self.mr_def.clone() else {
             return Ok(());
         };

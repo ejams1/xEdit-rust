@@ -271,6 +271,20 @@ impl LoadSwitchArgs {
     }
 }
 
+/// The direction of `elements change-member`.
+#[derive(Clone, Copy, Debug, clap::ValueEnum)]
+enum CliMemberDirection {
+    Next,
+    Previous,
+}
+
+/// The mode of `elements copy-to-records`.
+#[derive(Clone, Copy, Debug, clap::ValueEnum)]
+enum CliCopyToRecordsMode {
+    Assign,
+    Copy,
+}
+
 #[derive(Subcommand)]
 enum Action {
     /// Print every command with its request and response JSON Schema.
@@ -976,6 +990,12 @@ enum FilesAction {
         #[arg(long)]
         regex: bool,
     },
+    /// Mark the header of every editable file without ONAM modified (files.mark_modified_headers, "Mark all files without ONAM as modified"). Needs --edit unless --dry-run.
+    MarkModifiedHeaders {
+        /// Report the files, but mark nothing.
+        #[arg(long)]
+        dry_run: bool,
+    },
     /// Make a new empty plugin in the data folder with the game master as its master (files.new, AddNewFile); it exists in memory until saved, so use it in batch or serve. Needs --edit unless --dry-run.
     New {
         /// File name; the extension is replaced by .esp, or .esl with --light, as xEdit does.
@@ -1672,6 +1692,18 @@ enum RecordsAction {
         /// Text removed from the end of the editor ID of the copy.
         #[arg(long, default_value = "")]
         suffix_remove: String,
+        /// Copy as the wrapper of a leveled list (xEdit's "Copy as wrapper"): a new record with --wrapper-editor-id, then an override whose single leveled list entry points to it. LVLB, LVLC, LVLI, LVLN, LVLP, LVSC and LVSP only.
+        #[arg(long)]
+        as_wrapper: bool,
+        /// The editor ID of the wrapper copy; required with --as-wrapper.
+        #[arg(long)]
+        wrapper_editor_id: Option<String>,
+        /// Adjust the copied leveled list's spawn rate (xEdit's "Copy as spawn rate override").
+        #[arg(long)]
+        as_spawn_rate: bool,
+        /// Copy as a disabled override (xEdit's "Copy as disabled override into"): the InitiallyDisabled flag of the copy is set.
+        #[arg(long)]
+        disable: bool,
         /// Report the masters the copy needs and whether the target has the record, but copy nothing.
         #[arg(long)]
         dry_run: bool,
@@ -1800,6 +1832,95 @@ enum ElementsAction {
         #[arg(long)]
         file: Option<String>,
         /// Report the element, but remove nothing.
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Clear an array value: every element of it goes (elements.clear, xEdit's Clear). Needs --edit unless --dry-run.
+    Clear {
+        /// Load order FormID of the record as hexadecimal digits.
+        form_id: String,
+        /// Path of the element inside the record, with \\ between the names.
+        path: String,
+        /// Plugin the record is seen from; the last loaded plugin when omitted.
+        #[arg(long)]
+        file: Option<String>,
+        /// Report the element, but clear nothing.
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Mark an element and everything below it modified (elements.mark_modified, MarkModifiedRecursive). Needs --edit unless --dry-run.
+    MarkModified {
+        /// Load order FormID of the record as hexadecimal digits.
+        form_id: String,
+        /// Path of the element inside the record, with \\ between the names; the record itself when omitted.
+        #[arg(long)]
+        path: Option<String>,
+        /// Plugin the record is seen from; the last loaded plugin when omitted.
+        #[arg(long)]
+        file: Option<String>,
+        /// Report the element, but mark nothing.
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Switch the union member of an element to the next or previous member (elements.change_member, Next Member and Previous Member). Needs --edit unless --dry-run.
+    ChangeMember {
+        /// Load order FormID of the record as hexadecimal digits.
+        form_id: String,
+        /// Path of the element inside the record, with \\ between the names.
+        path: String,
+        /// Plugin the record is seen from; the last loaded plugin when omitted.
+        #[arg(long)]
+        file: Option<String>,
+        /// The member to switch to; next when omitted.
+        #[arg(long, value_enum, default_value_t = CliMemberDirection::Next)]
+        direction: CliMemberDirection,
+        /// Report whether the member can change, but change nothing.
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Copy the focused element into the records of other view columns (elements.copy_to_records: PerformDrop's assign, or wbCopyElementToRecord). Needs --edit unless --dry-run.
+    CopyToRecords {
+        /// Load order FormID of the source record as hexadecimal digits.
+        form_id: String,
+        /// Path of the source element; the record itself when omitted.
+        #[arg(long)]
+        path: Option<String>,
+        /// Plugin the source record is seen from; the last loaded plugin when omitted.
+        #[arg(long)]
+        file: Option<String>,
+        /// Plugins of the target records (the other view columns), in order.
+        #[arg(long = "target", required = true)]
+        targets: Vec<String>,
+        /// How to copy: assign the same-path element (PerformDrop), or copy the element into the record (wbCopyElementToRecord).
+        #[arg(long, value_enum, default_value_t = CliCopyToRecordsMode::Assign)]
+        mode: CliCopyToRecordsMode,
+        /// With --mode copy: copy as a new record with a new FormID.
+        #[arg(long)]
+        as_new: bool,
+        /// With --mode copy: copy only the element, not the containers around it (the menu item copies them).
+        #[arg(long)]
+        shallow: bool,
+        /// With --mode copy and a source record without the element: remove the target's element at the path instead.
+        #[arg(long)]
+        remove_missing: bool,
+        /// Report what each target would do, but change nothing.
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Remove the focused row's element from every record of the view (elements.remove_from_records). Needs --edit unless --dry-run.
+    RemoveFromRecords {
+        /// Load order FormID of the source record as hexadecimal digits.
+        form_id: String,
+        /// Path of the focused row's element, with \\ between the names.
+        #[arg(long)]
+        path: String,
+        /// Plugin the source record is seen from; the last loaded plugin when omitted.
+        #[arg(long)]
+        file: Option<String>,
+        /// Plugins of the target records (the other view columns), in order.
+        #[arg(long = "target", required = true)]
+        targets: Vec<String>,
+        /// Report what each target would do, but remove nothing.
         #[arg(long)]
         dry_run: bool,
     },
@@ -2137,6 +2258,9 @@ fn command_of(action: Action) -> Result<(String, Value), CommandError> {
             json!({ "name_filter": name_filter, "regex": regex }),
         ),
         Action::Files {
+            action: FilesAction::MarkModifiedHeaders { dry_run },
+        } => ("files.mark_modified_headers".to_owned(), json!({ "dry_run": dry_run })),
+        Action::Files {
             action:
                 FilesAction::New {
                     file,
@@ -2459,13 +2583,19 @@ fn command_of(action: Action) -> Result<(String, Value), CommandError> {
                 suffix,
                 prefix_remove,
                 suffix_remove,
+                as_wrapper,
+                wrapper_editor_id,
+                as_spawn_rate,
+                disable,
                 dry_run,
             } => (
                 "records.copy".to_owned(),
                 json!({ "form_id": form_id, "to": to, "from": from, "as_new": as_new, "deep": deep,
                         "overwrite": overwrite, "remove_deleted": remove_deleted,
                         "prefix": prefix, "suffix": suffix, "prefix_remove": prefix_remove,
-                        "suffix_remove": suffix_remove, "dry_run": dry_run }),
+                        "suffix_remove": suffix_remove, "as_wrapper": as_wrapper,
+                        "wrapper_editor_id": wrapper_editor_id, "as_spawn_rate": as_spawn_rate,
+                        "disable": disable, "dry_run": dry_run }),
             ),
             RecordsAction::Delete { form_id, file, dry_run } => (
                 "records.delete".to_owned(),
@@ -2554,6 +2684,70 @@ fn command_of(action: Action) -> Result<(String, Value), CommandError> {
             } => (
                 "elements.remove".to_owned(),
                 json!({ "form_id": form_id, "path": path, "file": file, "dry_run": dry_run }),
+            ),
+            ElementsAction::Clear {
+                form_id,
+                path,
+                file,
+                dry_run,
+            } => (
+                "elements.clear".to_owned(),
+                json!({ "form_id": form_id, "path": path, "file": file, "dry_run": dry_run }),
+            ),
+            ElementsAction::MarkModified {
+                form_id,
+                path,
+                file,
+                dry_run,
+            } => (
+                "elements.mark_modified".to_owned(),
+                json!({ "form_id": form_id, "path": path, "file": file, "dry_run": dry_run }),
+            ),
+            ElementsAction::ChangeMember {
+                form_id,
+                path,
+                file,
+                direction,
+                dry_run,
+            } => (
+                "elements.change_member".to_owned(),
+                json!({ "form_id": form_id, "path": path, "file": file,
+                        "direction": match direction {
+                            CliMemberDirection::Next => "next",
+                            CliMemberDirection::Previous => "previous",
+                        },
+                        "dry_run": dry_run }),
+            ),
+            ElementsAction::CopyToRecords {
+                form_id,
+                path,
+                file,
+                targets,
+                mode,
+                as_new,
+                shallow,
+                remove_missing,
+                dry_run,
+            } => (
+                "elements.copy_to_records".to_owned(),
+                json!({ "form_id": form_id, "path": path, "file": file, "targets": targets,
+                        "mode": match mode {
+                            CliCopyToRecordsMode::Assign => "assign",
+                            CliCopyToRecordsMode::Copy => "copy",
+                        },
+                        "as_new": as_new, "deep": !shallow, "remove_missing": remove_missing,
+                        "dry_run": dry_run }),
+            ),
+            ElementsAction::RemoveFromRecords {
+                form_id,
+                path,
+                file,
+                targets,
+                dry_run,
+            } => (
+                "elements.remove_from_records".to_owned(),
+                json!({ "form_id": form_id, "path": path, "file": file, "targets": targets,
+                        "dry_run": dry_run }),
             ),
             ElementsAction::Assign {
                 form_id,
