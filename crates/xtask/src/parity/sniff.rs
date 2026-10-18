@@ -1147,12 +1147,21 @@ fn run_sniff(
     threads: usize,
     extensions: &[String],
 ) -> Result<Results> {
+    retry_crashes(|attempt| {
+        let threads = if attempt == 1 { threads } else { 1 };
+        run_sniff_once(sniff, work, case, source, input, path_filter, threads, extensions)
+    })
+}
+
+/// Calls `run` (with the number of the attempt, from 1) until it succeeds,
+/// fails with something other than a crash of the Sniff process, or has
+/// crashed three times; the last error is returned.
+fn retry_crashes<T>(mut run: impl FnMut(usize) -> Result<T>) -> Result<T> {
     let mut attempt = 1;
     loop {
-        let threads = if attempt == 1 { threads } else { 1 };
-        match run_sniff_once(sniff, work, case, source, input, path_filter, threads, extensions) {
+        match run(attempt) {
             Err(error) if attempt < 3 && format!("{error:#}").starts_with("Sniff ended with exit code 0xc") => {
-                eprintln!("oracle crashed ({error:#}); running {} again", input.display());
+                eprintln!("oracle crashed ({error:#}); running it again");
                 attempt += 1;
             }
             other => return other,
@@ -1809,9 +1818,26 @@ pub fn run(tag: &str, args: &[&str]) -> Result<()> {
                 let mut oracle = if cached.exists() && !options.refresh_oracle {
                     serde_json::from_slice::<Results>(&fs::read(&cached)?)?
                 } else {
-                    let mut results =
-                        run_sniff(&sniff, &work, case, &source, &input, None, options.threads, &extensions)?;
-                    rerun_crashes(&sniff, &work, case, &source, &input, &extensions, &mut results)?;
+                    // A Sniff that keeps crashing on this archive (the heap
+                    // corruption of `remove-nodes` on a Fallout 4 archive
+                    // ended a 610 minute run of parity #41) is this
+                    // archive's `oracle-failed`, not the end of the run.
+                    let results = run_sniff(&sniff, &work, case, &source, &input, None, options.threads, &extensions)
+                        .and_then(|mut results| {
+                            rerun_crashes(&sniff, &work, case, &source, &input, &extensions, &mut results)?;
+                            Ok(results)
+                        });
+                    let results = match results {
+                        Ok(results) => results,
+                        Err(error) => {
+                            say(
+                                format!("oracle failed {} {}: {error:#}", case.name, archive_path.display()),
+                                &mut report,
+                            );
+                            *totals.entry(Outcome::OracleFailed).or_default() += 1;
+                            continue;
+                        }
+                    };
                     fs::create_dir_all(cached.parent().unwrap())?;
                     fs::write(&cached, serde_json::to_vec(&results)?)?;
                     say(
@@ -2050,6 +2076,34 @@ pub fn run(tag: &str, args: &[&str]) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn a_crashed_sniff_is_run_again_and_a_persistent_crash_is_an_error() {
+        let mut runs = Vec::new();
+        let result = retry_crashes(|attempt| {
+            runs.push(attempt);
+            if attempt < 3 { bail!("Sniff ended with exit code 0xc0000374") } else { Ok(attempt) }
+        });
+        assert_eq!(result.unwrap(), 3);
+        assert_eq!(runs, [1, 2, 3]);
+
+        let mut runs = 0;
+        let error = retry_crashes::<()>(|_| {
+            runs += 1;
+            bail!("Sniff ended with exit code 0xc0000374")
+        })
+        .unwrap_err();
+        assert_eq!(runs, 3);
+        assert!(format!("{error:#}").contains("0xc0000374"));
+
+        // Another failure is not a crash of the process: no second run.
+        let mut runs = 0;
+        let _ = retry_crashes::<()>(|_| {
+            runs += 1;
+            bail!("Sniff did not finish within 600 s")
+        });
+        assert_eq!(runs, 1);
+    }
     use super::*;
 
     #[test]
