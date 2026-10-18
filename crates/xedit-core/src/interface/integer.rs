@@ -157,6 +157,12 @@ pub trait IntegerDefInterface: ValueDef {
     /// The formater for `element`, with formater unions resolved.
     fn get_formater(&self, element: ElementArg) -> Option<Arc<dyn IntegerDefFormater>>;
 
+    /// The `inFormater` field, without resolving a formater union. `Report`
+    /// shows this formater, not the one an element picks.
+    fn get_raw_formater(&self) -> Option<Arc<dyn IntegerDefFormater>> {
+        None
+    }
+
     fn get_formater_can_change(&self) -> bool;
 
     fn get_int_type(&self) -> IntType;
@@ -811,6 +817,10 @@ impl IntegerDefInterface for IntegerDef {
             result = decided;
         }
         result
+    }
+
+    fn get_raw_formater(&self) -> Option<Arc<dyn IntegerDefFormater>> {
+        self.in_formater()
     }
 
     fn get_formater_can_change(&self) -> bool {

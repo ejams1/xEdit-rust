@@ -227,6 +227,12 @@ impl EnumDef {
         self.en_dictionary.get(&dictionary_key(name)).copied()
     }
 
+    /// The `UnknownEnums` statistics of the report mode: for each unknown
+    /// value, the paths of the elements that hold it and their counts.
+    pub fn unknown_enums(&self) -> BTreeMap<String, BTreeMap<String, i32>> {
+        self.unknown_enums.lock().unwrap().clone()
+    }
+
     fn report_unknown(&self, value: &str, element: ElementArg) {
         if !(report_mode() && report_unknown_enums()) {
             return;

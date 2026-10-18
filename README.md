@@ -97,7 +97,7 @@ The progress bar above counts merged phases of [docs/PLAN.md](docs/PLAN.md); it 
 
 `coverage/ledger.toml` lists every upstream GUI binding, switch, game mode, tool mode and script registration with its command; `cargo xtask check` refuses an open entry that names no owner. The open work:
 
-- **10 xDump switch entries** (issue #79): the dump-side filters, element-output and report switches are in (`-dg`, `-dr`, `-xr`, `-xsr`, `-xg`, `-xcg`, `-xbloat`, `-top`, `-es`, `-dh`, `-more`/`-moreunknown`, `-sr`, `-sro`, `-sroe`, `-summary`; equal cases in `cargo xtask parity dump --switch`); what remains is `-do` (raw data pointers), `-bts`/`-btd` (save definitions), the `-dcr`/`-report` report walk and the save-side switches `-df`/`-xf`/`-dc`/`-xc`/`-xcbloat`.
+- **2 xDump switch entries** (issue #79): `-bts`/`-btd` change only Skyrim LE saves (the `Unused`/`Remaining` arrays are commented out in the FO4/FO3/FNV definitions), and a full TES5 save dump exceeds the harness timeouts, so no oracle case can witness them; the port takes both from the saves dump CLI and the parity saves mode. Every other switch is covered (`-do` is excluded: it prints raw pointers against `wbBaseOffset`, which only a scanned plugin has).
 - **Game modes not verified** (issues #7, #9, #80): Enderal and Oblivion Remastered are not installed on the development machine, and the 4.1.5q oracle cannot dump a Morrowind plugin (below).
 - **4 script registrations** (issue #81): the form runners that exist to run a form script headlessly, with the run cases the issue lists.
 

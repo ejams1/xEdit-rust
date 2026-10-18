@@ -235,6 +235,42 @@ impl DefBase {
         self.def_required.load(Ordering::Relaxed)
     }
 
+    /// Port of the `defPossiblyRequired` field: whether `PossiblyRequired` ran.
+    pub fn def_possibly_required(&self) -> bool {
+        self.def_possibly_required.load(Ordering::Relaxed)
+    }
+
+    /// Port of the `defNotRequired` field: whether `NotRequired` ran.
+    pub fn def_not_required(&self) -> bool {
+        self.def_not_required.load(Ordering::Relaxed)
+    }
+
+    /// Port of `TwbDef.defUsed`: whether `Used` ran in report mode.
+    pub fn def_used(&self) -> bool {
+        self.def_used.load(Ordering::Relaxed)
+    }
+
+    /// Port of `TwbDef.defReported`: whether `Report` walked this definition.
+    pub fn def_reported(&self) -> bool {
+        self.def_reported.load(Ordering::Relaxed)
+    }
+
+    /// Sets `defReported`, as `TwbDef.Report` does.
+    pub fn mark_reported(&self) {
+        self.def_reported.store(true, Ordering::Relaxed);
+    }
+
+    /// The `UnknownValues` of `TwbDef.Used`, sorted by value: the paths of the
+    /// elements that hold the unknown value.
+    pub fn unknown_values(&self) -> BTreeMap<String, Vec<String>> {
+        self.unknown_values
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|(value, paths)| (value.clone(), paths.iter().cloned().collect()))
+            .collect()
+    }
+
     pub fn def_internal_edit_only(&self) -> bool {
         self.def_flags.contains(DefFlag::dfInternalEditOnly)
     }

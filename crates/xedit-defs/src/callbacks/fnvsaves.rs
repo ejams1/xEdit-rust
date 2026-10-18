@@ -11,7 +11,7 @@
 pub use super::fnvsaves_stubs::*;
 
 use xedit_core::interface::globals::{
-    set_extract_info, set_file_chapters, set_file_header, set_file_magic, set_file_plugins,
+    chapters_to_skip_contains, set_extract_info, set_file_chapters, set_file_header, set_file_magic, set_file_plugins,
 };
 use xedit_core::interface::*;
 
@@ -138,7 +138,7 @@ fn relative_integer(
 
 /// Port of `ChangedFormGetType`: the type of the form without the size
 /// bits, with the changed form.
-fn changed_form_get_type(element: &ElementRef) -> (i32, ElementRef) {
+pub(crate) fn changed_form_get_type(element: &ElementRef) -> (i32, ElementRef) {
     let (kind, changed_form) = fo4saves::changed_form_get_raw_type(element);
     (if kind > 0 { kind & 0x3F } else { kind }, changed_form)
 }
@@ -713,7 +713,11 @@ pub fn changed_form_data_decider(_a_base_ptr: DataPtr, a_element: ElementArg) ->
         return 0;
     }
     let result = 1 + kind;
-    if result > 55 { 0 } else { result }
+    if result > 55 || chapters_to_skip_contains(&(CHANGED_FORM_OFFSET + result).to_string()) {
+        0
+    } else {
+        result
+    }
 }
 
 /// Upstream `ChangedFormDataLengthDecider`.
@@ -1000,14 +1004,22 @@ pub fn global_data_decider(_a_base_ptr: DataPtr, a_element: ElementArg) -> i32 {
         return 0;
     };
     let mut result = 0;
+    let mut a_type = 0;
     if let Some(kind) = container.get_element_by_name("Type") {
-        result = match native(Some(kind)) {
-            kind @ 0..=11 => kind as i32 + 1,
+        a_type = native(Some(kind)) as i32;
+        result = match a_type {
+            kind @ 0..=11 => kind + 1,
             1000 => 13,
             _ => 0,
         };
     }
-    if result > 12 { 0 } else { result }
+    if result > 12 {
+        result = 0;
+    }
+    if chapters_to_skip_contains(&a_type.to_string()) {
+        result = 0;
+    }
+    result
 }
 
 /// Upstream `HasDialogueItemsDecider`.

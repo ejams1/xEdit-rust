@@ -1032,6 +1032,27 @@ enum SavesAction {
         /// Data folder of the game, where the plugins the save lists are.
         #[arg(long)]
         data: String,
+        /// Chapter types to dump (-dc): a comma separated list of the numeric types, including the changed form ones.
+        #[arg(long)]
+        dc: Option<String>,
+        /// ChangedForm types to dump (-df): a comma separated list of the type values.
+        #[arg(long)]
+        df: Option<String>,
+        /// Chapter types to skip (-xc): a comma separated list of the numeric types.
+        #[arg(long)]
+        xc: Option<String>,
+        /// ChangedForm types to skip (-xf): a comma separated list of the type values.
+        #[arg(long)]
+        xf: Option<String>,
+        /// Skip the global data type 1001 (-xcbloat).
+        #[arg(long)]
+        xcbloat: bool,
+        /// Bytes the Unused array skips (-bts).
+        #[arg(long)]
+        bts: Option<i64>,
+        /// Bytes the Remaining array dumps (-btd).
+        #[arg(long)]
+        btd: Option<i64>,
         /// Path of the save or co-save.
         file: String,
     },
@@ -4252,10 +4273,32 @@ fn real_main() -> ExitCode {
         });
     }
     if let Action::Saves {
-        action: SavesAction::Dump { game, data, file },
+        action:
+            SavesAction::Dump {
+                game,
+                data,
+                dc,
+                df,
+                xc,
+                xf,
+                xcbloat,
+                bts,
+                btd,
+                file,
+            },
     } = cli.action
     {
         return run_dump(move |out| {
+            let options = xedit_session::dump::SaveDumpOptions {
+                dc,
+                df,
+                xc,
+                xf,
+                xcbloat,
+                bts,
+                btd,
+            };
+            xedit_session::dump::configure_save_dump(&options)?;
             let mode = xedit_session::dump::setup_saves(&game, &file)?;
             xedit_session::dump::dump_save(&file, &data, mode, out)
         });

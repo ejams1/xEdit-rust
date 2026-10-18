@@ -3632,12 +3632,12 @@ note = "wbLoadBSAs of xDump: xedit dump --bsa loads each module's own, interface
 [switch.btd]
 status = "pending"
 source = "xDump.dpr"
-note = "Owned by issue #79 (follow-up saves pass): -btd sets wbBytesToDump, read only by the save definitions (wbDefinitionsFO4Saves.pas:2514), so no plugin dump exercises it"
+note = "Owned by issue #79: -btd sets wbBytesToDump, which the port now takes from the saves dump CLI and the parity saves mode. The Remaining array is commented out in the FO4, FO3 and FNV definitions, so the switch only changes TES5 saves (wbDefinitionsTES5Saves.pas:6137); the FO4 case -btd:16 is equal, and TES5 has no usable oracle witness because its full save dumps exceed the harness timeouts"
 
 [switch.bts]
 status = "pending"
 source = "xDump.dpr"
-note = "Owned by issue #79 (follow-up saves pass): -bts sets wbBytesToSkip, read only by the save definitions (wbDefinitionsFO4Saves.pas:2509), so no plugin dump exercises it"
+note = "Owned by issue #79: -bts sets wbBytesToSkip, which the port now takes from the saves dump CLI and the parity saves mode. The Unused/Remaining arrays are commented out in the FO4, FO3 and FNV definitions, so the switch only changes TES5 saves (wbDefinitionsTES5Saves.pas:6136); the FO4 case -bts:4 is equal, and TES5 has no usable oracle witness because its full save dumps exceed the harness timeouts"
 
 [switch.c]
 status = "covered"
@@ -3687,14 +3687,16 @@ source = "xEdit/xeInit.pas"
 note = "wbDataPath: -D: names the data folder the load resolves modules, saves and the archives against (DoInitPath); without it the port finds the folder as the release does (\"parity discovery\")."
 
 [switch.dc]
-status = "pending"
+status = "covered"
+command = "saves.dump"
 source = "xDump.dpr"
-note = "Owned by issue #79 (xDump's dump filter and report switches): -dc:list, process only the listed global data IDs of a save"
+note = "DumpChapters keeps only the listed chapter types in WriteContainer (xDump.dpr:627); the oracle case -dc:0,1 on Autosave1_...SanctuaryHillsWorld...fos is equal (a 204 KB dump against the 7.9 MB full one)"
 
 [switch.dcr]
-status = "pending"
+status = "covered"
+command = "dump"
 source = "xDump.dpr"
-note = "Owned by issue #79 (follow-up pass): -dcr's dump lines, [ERROR:] lines and REPORT header are equal; the trailing ReportDefs walk (wbInterface.pas:5300, the unchecked FormID formatters) is unported, so parity differs in that tail"
+note = "Ports ReportDefs (the wbRecordDefs walk of wbInterface.pas) and the dump-side report output; the oracle case -dcr on ccswkfo4002-pipnuka.esl is equal, including the Unchecked FormID Formatter tail (MSWP twice on the OMOD Property union)"
 
 [switch.devmode]
 status = "presentation"
@@ -3702,9 +3704,10 @@ source = "xEdit/xeInit.pas"
 note = "wbDevMode swaps the program's CRC32 for the fixed development one (`wbHelpers.pas:621`), which only the GUI's start line prints; the port's logs do not print a program CRC."
 
 [switch.df]
-status = "pending"
+status = "covered"
+command = "saves.dump"
 source = "xDump.dpr"
-note = "Owned by issue #79 (xDump's dump filter and report switches): -df:list, dump only the listed ChangedForm types of a save"
+note = "DumpForms adds wbChangedFormOffset+c to DumpChapters (xDump.dpr:1303); the oracle case -df:5 on Autosave1_...SanctuaryHillsWorld...fos is equal (a 202 KB dump)"
 
 [switch.dg]
 status = "covered"
@@ -3719,9 +3722,9 @@ source = "xDump.dpr"
 note = "The port's --dump-hidden; the oracle case -dh on DLCworkshop01.esm is equal (the Unused lines and the hidden containers)"
 
 [switch.do]
-status = "pending"
+status = "excluded"
 source = "xDump.dpr"
-note = "Owned by issue #79 (follow-up pass): -do sets wbDumpOffset, which renders the raw data base and end pointers against wbBaseOffset (wbImplementation.pas:25014); the port's blocks carry no base address to subtract"
+note = "wbDumpOffset renders TwbValueBase.GetDisplayName offsets as raw pointer differences against wbBaseOffset (wbImplementation.pas, GetDisplayName), and wbBaseOffset is only assigned from a scanned plugin's memory view (TwbFileSource.Scan). Save data blocks come from a different buffer, so modes 1 and 3 print process-address values, with an absolute-pointer fallback branch; the address space layout makes them unstable between runs, and the port's DataPtr carries no base address. Mode 2's array count alone could be reproduced, but the switch as a whole has no stable oracle output to match, so it is excluded rather than pending."
 
 [switch.dontcache]
 status = "covered"
@@ -4161,9 +4164,10 @@ source = "xEdit/xeInit.pas"
 note = "-R:<file>: the legacy command line writes the startup lines and the messages of the run to the file (tool_modes.rs log_file)."
 
 [switch.report]
-status = "pending"
+status = "covered"
+command = "dump"
 source = "xDump.dpr"
-note = "The port sets wbReportMode, but xDump then walks wbRecordDefs printing Unchecked FormID Formatter lines (ReportDefs, wbInterface.pas:5300), which the port does not do; -report and -dcr differ from the oracle only in that tail on ccswkfo4002-pipnuka.esl. Owned by issue #79."
+note = "wbReportMode and the ReportDefs walk (wbInterface.pas); the oracle case -report on ccswkfo4002-pipnuka.esl is equal (the 154-byte Unchecked FormID Formatter output)"
 
 [switch.reportinjected]
 status = "covered"
@@ -4379,14 +4383,16 @@ source = "xDump.dpr"
 note = "-xbloat adds LAND,REGN,PGRD,SCEN,PACK,PERK,NAVI,CELL,WRLD to GroupToSkip unless -xg is given (it is an else if, xDump.dpr:1344); the oracle case -xbloat on DLCworkshop01.esm is equal"
 
 [switch.xc]
-status = "pending"
+status = "covered"
+command = "saves.dump"
 source = "xDump.dpr"
-note = "Owned by issue #79 (xDump's dump filter and report switches): -xc:list, exclude the listed global data IDs of a save"
+note = "ChaptersToSkip drops the listed chapter types in WriteContainer (xDump.dpr:632), and the deciders zero a skipped chapter's type; the oracle case -xc:1001 on Autosave1_...SanctuaryHillsWorld...fos is equal (a 865 KB dump)"
 
 [switch.xcbloat]
-status = "pending"
+status = "covered"
+command = "saves.dump"
 source = "xDump.dpr"
-note = "Owned by issue #79 (xDump's dump filter and report switches): -xcbloat, the global data exclusion list for bloat"
+note = "Adds the global data type 1001 to ChaptersToSkip unless -xc replaces the list (xDump.dpr:1344); the oracle case -xcbloat on Autosave1_...SanctuaryHillsWorld...fos is equal (a 865 KB dump, as -xc:1001)"
 
 [switch.xcg]
 status = "covered"
@@ -4395,9 +4401,10 @@ source = "xDump.dpr"
 note = "Child-group exclusion is checked in WriteElement only when -dg is assigned, but WriteContainer always skips the children (xDump.dpr:609, 671); the oracle cases -xcg:CELL and -dg:CELL -xcg:CELL on DLCworkshop01.esm are equal"
 
 [switch.xf]
-status = "pending"
+status = "covered"
+command = "saves.dump"
 source = "xDump.dpr"
-note = "Owned by issue #79 (xDump's dump filter and report switches): -xf:list, exclude the listed ChangedForm types of a save"
+note = "Adds wbChangedFormOffset+c to ChaptersToSkip after -xc/-xcbloat (xDump.dpr:1350); the oracle case -xf:30 on Autosave1_...SanctuaryHillsWorld...fos is equal (the 5980 FACT reactions chapters lose their children; the dump differs from the full one)"
 
 [switch.xg]
 status = "covered"

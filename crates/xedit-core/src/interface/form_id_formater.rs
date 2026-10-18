@@ -10,7 +10,8 @@
 //! Not ported yet: the lookup of actor value records (`FindRecordForAVCode`) of Fallout 3 and New Vegas, the report
 //! mode statistics and `GetEditInfo`.
 
-use std::sync::{Arc, RwLock, Weak};
+use std::collections::BTreeMap;
+use std::sync::{Arc, Mutex, RwLock, Weak};
 
 use super::def::{Def, DefBase, DefKind, DefRef, NamedDef, NamedDefBase};
 use super::element::{
@@ -19,7 +20,10 @@ use super::element::{
 use super::enum_def::EnumDef;
 use super::form_id::{FileID, FormID, MastersUpdate, UsedMasters, mark_used_master};
 use super::formaters::{editable_unless_internal_only, formater_impls, formater_plumbing};
-use super::globals::{disable_form_id_check, display_load_order_form_id, pretty_form_id};
+use super::globals::{
+    disable_form_id_check, display_load_order_form_id, pretty_form_id, report_form_id_not_allowed_references,
+    report_form_ids, report_mode,
+};
 use super::integer::{IntegerDefFormater, integer_def_formater_create};
 use super::misc::{EditError, Variant, int_to_hex64, str_to_int64};
 use super::string::to_comma_text;
@@ -92,6 +96,15 @@ pub struct FormIDDefFormater {
     fidc_valid_flst_refs: Vec<Signature>,
     fidc_persistent: bool,
     fidc_no_reach: bool,
+    /// `FoundSignatures`: the signatures the formater resolved to, with their
+    /// counts. Filled in report mode.
+    found_signatures: Mutex<BTreeMap<String, i32>>,
+    /// `NotResolved`: the raw FormIDs that could not be resolved, with their
+    /// counts, at most 50 of them. Filled in report mode.
+    not_resolved: Mutex<BTreeMap<String, i32>>,
+    /// `FoundNotAllowedReferences`: the names of the records a checked formater
+    /// resolved to that its valid references do not allow, with their counts.
+    found_not_allowed_references: Mutex<BTreeMap<String, i32>>,
 }
 
 fn sorted_set(signatures: &[Signature]) -> Vec<Signature> {
@@ -146,6 +159,9 @@ impl FormIDDefFormater {
             fidc_valid_flst_refs: sorted_set(valid_flst_refs),
             fidc_persistent: persistent,
             fidc_no_reach: no_reach,
+            found_signatures: Mutex::new(BTreeMap::new()),
+            not_resolved: Mutex::new(BTreeMap::new()),
+            found_not_allowed_references: Mutex::new(BTreeMap::new()),
         });
         DefBase::after_construction(&*this);
         // Port of the override of AfterConstruction.
@@ -167,6 +183,84 @@ impl FormIDDefFormater {
 
     pub fn class(&self) -> FormIDClass {
         self.class
+    }
+
+    /// Whether the report mode collects statistics for this formater.
+    fn reports(&self) -> bool {
+        report_mode() && report_form_ids() && !self.def.def_flags.contains(DefFlag::dfNoReport)
+    }
+
+    /// Port of the `FoundSignatures` recording of `TwbFormIDDefFormater.ToString`.
+    fn record_found_signature(&self, signature: &str) {
+        if !self.reports() {
+            return;
+        }
+        *self
+            .found_signatures
+            .lock()
+            .unwrap()
+            .entry(signature.to_owned())
+            .or_insert(0) += 1;
+    }
+
+    /// Port of the `NotResolved` recording of `TwbFormIDDefFormater.ToString`.
+    fn record_not_resolved(&self, form_id: FormID) {
+        if !self.reports() {
+            return;
+        }
+        let raw = form_id.to_string(false);
+        let mut not_resolved = self.not_resolved.lock().unwrap();
+        if not_resolved.len() < 50 || not_resolved.contains_key(&raw) {
+            *not_resolved.entry(raw).or_insert(0) += 1;
+        }
+    }
+
+    /// Port of the `FoundNotAllowedReferences` recording of
+    /// `TwbFormIDDefFormater.ToString`.
+    fn record_not_allowed_reference(&self, main_record: &dyn super::element::MainRecord) {
+        if !report_form_id_not_allowed_references() || self.class != FormIDClass::Checked {
+            return;
+        }
+        let signature = main_record.get_signature();
+        if self.fidc_valid_refs.contains(&signature) {
+            return;
+        }
+        *self
+            .found_not_allowed_references
+            .lock()
+            .unwrap()
+            .entry(main_record.get_name())
+            .or_insert(0) += 1;
+    }
+
+    /// The `FoundSignatures` statistics, sorted by signature.
+    pub fn found_signatures(&self) -> Vec<(String, i32)> {
+        self.found_signatures
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|(signature, count)| (signature.clone(), *count))
+            .collect()
+    }
+
+    /// The `NotResolved` statistics, sorted by FormID.
+    pub fn not_resolved(&self) -> Vec<(String, i32)> {
+        self.not_resolved
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|(form_id, count)| (form_id.clone(), *count))
+            .collect()
+    }
+
+    /// The `FoundNotAllowedReferences` statistics, sorted by record name.
+    pub fn found_not_allowed_references(&self) -> Vec<(String, i32)> {
+        self.found_not_allowed_references
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|(name, count)| (name.clone(), *count))
+            .collect()
     }
 
     /// Upstream `IwbFormIDChecked.SignatureCount`: number of valid signatures.
@@ -511,19 +605,24 @@ impl FormIDDefFormater {
         let result = if int == 0 {
             let id = form_id.to_string(false);
             if self.is_valid(TRGT) && !self.is_valid(NULL) {
+                self.record_found_signature("TRGT");
                 if for_summary {
                     "TARGET".to_owned()
                 } else {
                     format!("TARGET - Target Reference [{id}]")
                 }
-            } else if !for_summary {
-                format!("NULL - Null Reference [{id}]")
-            } else if self.def.def_flags.contains(DefFlag::dfSummaryExcludeNULL) {
-                String::new()
             } else {
-                "NULL".to_owned()
+                self.record_found_signature("NULL");
+                if !for_summary {
+                    format!("NULL - Null Reference [{id}]")
+                } else if self.def.def_flags.contains(DefFlag::dfSummaryExcludeNULL) {
+                    String::new()
+                } else {
+                    "NULL".to_owned()
+                }
             }
         } else if form_id.is_none() {
+            self.record_found_signature("FFFF");
             if for_summary {
                 "FFFF".to_owned()
             } else {
@@ -542,8 +641,12 @@ impl FormIDDefFormater {
                 None => {
                     let id = form_id.to_string(false);
                     if form_id.is_hardcoded() {
+                        self.record_found_signature("Hardcoded");
+                        self.record_not_resolved(form_id);
                         format!("[{id}] <Warning: Could not be resolved, but is possibly hardcoded in the engine>")
                     } else {
+                        self.record_found_signature("NotResolved");
+                        self.record_not_resolved(form_id);
                         format!("[{id}] <Error: Could not be resolved>")
                     }
                 }
@@ -1002,14 +1105,20 @@ impl FormIDDefFormater {
         } else {
             let main_record = match Self::record_for(form_id, file, masters_updated) {
                 Ok(main_record) => main_record,
-                Err(message) => return Some(error(*form_id, message)),
+                Err(message) => {
+                    self.record_found_signature("Error");
+                    return Some(error(*form_id, message));
+                }
             };
             if !form_id.is_hardcoded() && display_load_order_form_id() {
                 *form_id = match &main_record {
                     Some(main_record) => main_record.get_load_order_form_id(),
                     None => match file.file_form_id_to_load_order_form_id(*form_id, masters_updated) {
                         Ok(load_order_form_id) => load_order_form_id,
-                        Err(message) => return Some(error(*form_id, message)),
+                        Err(message) => {
+                            self.record_found_signature("Error");
+                            return Some(error(*form_id, message));
+                        }
                     },
                 };
             }
@@ -1027,6 +1136,8 @@ impl FormIDDefFormater {
             }
         }
         let main_record = main_record?;
+        self.record_found_signature(&main_record.get_signature().to_string());
+        self.record_not_allowed_reference(&*main_record);
         if !for_summary {
             return Some(main_record.get_name());
         }
@@ -1049,7 +1160,8 @@ impl FormIDDefFormater {
 
 #[cfg(test)]
 mod tests {
-    use super::super::globals::{set_disable_form_id_check, test_lock};
+    use super::super::def::DefSetters;
+    use super::super::globals::{set_disable_form_id_check, set_report_form_ids, set_report_mode, test_lock};
     use super::*;
 
     const WEAP: Signature = Signature::new(b"WEAP");
@@ -1146,5 +1258,47 @@ mod tests {
         let copy = FormIDDefFormater::clone_from(&def);
         assert_eq!(copy.class(), FormIDClass::CheckedST);
         assert_eq!(copy.get_signature_count(), 2);
+    }
+
+    /// The `FoundSignatures`/`NotResolved` statistics that `ReportDefs` reads.
+    #[test]
+    fn report_statistics() {
+        let _guard = test_lock();
+        let def = FormIDDefFormater::create();
+        // Without the report mode nothing is recorded.
+        IntegerDefFormater::to_string(&*def, 0x14, None, false);
+        assert!(def.found_signatures().is_empty());
+        assert!(def.not_resolved().is_empty());
+
+        set_report_mode(true);
+        IntegerDefFormater::to_string(&*def, 0, None, false);
+        IntegerDefFormater::to_string(&*def, 0xFFFF_FFFF, None, false);
+        IntegerDefFormater::to_string(&*def, 0x14, None, false);
+        IntegerDefFormater::to_string(&*def, 0x14, None, false);
+        IntegerDefFormater::to_string(&*def, 0x0001_2345, None, false);
+        assert_eq!(
+            def.found_signatures(),
+            [
+                ("FFFF".to_owned(), 1),
+                ("Hardcoded".to_owned(), 2),
+                ("NULL".to_owned(), 1),
+                ("NotResolved".to_owned(), 1),
+            ]
+        );
+        assert_eq!(
+            def.not_resolved(),
+            [("00000014".to_owned(), 2), ("00012345".to_owned(), 1)]
+        );
+
+        // `dfNoReport` and `wbReportFormIDs` gate the recording.
+        let quiet = FormIDDefFormater::create().include_flag(DefFlag::dfNoReport);
+        IntegerDefFormater::to_string(&*quiet, 0x14, None, false);
+        assert!(quiet.found_signatures().is_empty());
+        assert!(quiet.not_resolved().is_empty());
+        set_report_form_ids(false);
+        IntegerDefFormater::to_string(&*def, 0x14, None, false);
+        assert_eq!(def.found_signatures().len(), 4);
+        set_report_form_ids(true);
+        set_report_mode(false);
     }
 }

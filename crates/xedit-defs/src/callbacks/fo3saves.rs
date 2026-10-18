@@ -11,7 +11,7 @@
 pub use super::fo3saves_stubs::*;
 
 use xedit_core::interface::globals::{
-    set_extract_info, set_file_chapters, set_file_header, set_file_magic, set_file_plugins,
+    chapters_to_skip_contains, set_extract_info, set_file_chapters, set_file_header, set_file_magic, set_file_plugins,
 };
 use xedit_core::interface::*;
 
@@ -25,6 +25,10 @@ use crate::fo3saves::{
 /// Upstream `ExtractInfoSave`: the chapters of a save that are initialized
 /// while it loads.
 const EXTRACT_INFO_SAVE: [u8; 2] = [3, 4];
+
+/// Upstream `wbChangedFormOffset`: the chapter types of the changed forms
+/// start here.
+const CHANGED_FORM_OFFSET: i32 = 10000;
 
 /// Port of `DefineFO3SavesA`: the labels of the actor value arrays.
 pub fn define_fo3_saves_a() {
@@ -57,10 +61,17 @@ pub fn switch_to_fo3_co_save() {
 }
 
 /// Upstream `ChangedFormDataDecider`: the 42 form types of Fallout 3.
-pub fn changed_form_data_decider(a_base_ptr: DataPtr, a_element: ElementArg) -> i32 {
-    match fnvsaves::changed_form_data_decider(a_base_ptr, a_element) {
-        result if result > 42 => 0,
-        result => result,
+pub fn changed_form_data_decider(_a_base_ptr: DataPtr, a_element: ElementArg) -> i32 {
+    let Some(element) = a_element else { return 0 };
+    let (kind, changed_form) = fnvsaves::changed_form_get_type(element);
+    if kind < 0 || changed_form.as_data_container().is_none() {
+        return 0;
+    }
+    let result = 1 + kind;
+    if result > 42 || chapters_to_skip_contains(&(CHANGED_FORM_OFFSET + result).to_string()) {
+        0
+    } else {
+        result
     }
 }
 

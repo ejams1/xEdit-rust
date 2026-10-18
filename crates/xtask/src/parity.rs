@@ -348,8 +348,9 @@ struct Case {
 
 /// Maps `--switch` specs (`dr:WEAP`, `top:3`, `dcr`) to the oracle's
 /// switches and the port's options. Returns an error for a name the port has
-/// no option for.
-fn switch_args(specs: &[String]) -> Result<(Vec<String>, Vec<String>, String)> {
+/// no option for. `saves` selects the `xDump -saves` switches, which the
+/// plugin dump options do not take (and the other way round).
+fn switch_args(specs: &[String], saves: bool) -> Result<(Vec<String>, Vec<String>, String)> {
     let mut oracle = Vec::new();
     let mut port = Vec::new();
     let mut tag = Vec::new();
@@ -358,6 +359,24 @@ fn switch_args(specs: &[String]) -> Result<(Vec<String>, Vec<String>, String)> {
             Some((name, value)) => (name, Some(value)),
             None => (spec.as_str(), None),
         };
+        if saves {
+            match name {
+                "dc" | "df" | "xc" | "xf" | "bts" | "btd" => {
+                    let value = value.with_context(|| format!("--switch {spec}: {name} needs a value"))?;
+                    oracle.push(format!("-{name}:{value}"));
+                    port.push(format!("--{name}"));
+                    port.push(value.to_owned());
+                }
+                "xcbloat" => {
+                    ensure!(value.is_none(), "--switch {spec}: {name} takes no value");
+                    oracle.push(format!("-{name}"));
+                    port.push("--xcbloat".to_owned());
+                }
+                _ => bail!("--switch {spec}: no port option for this saves switch"),
+            }
+            tag.push(spec.replace(':', "-"));
+            continue;
+        }
         match name {
             "dg" | "dr" | "xcg" | "xr" | "xsr" | "xg" => {
                 let value = value.with_context(|| format!("--switch {spec}: a signature list needs a value"))?;
@@ -397,6 +416,9 @@ fn switch_args(specs: &[String]) -> Result<(Vec<String>, Vec<String>, String)> {
                     _ => unreachable!(),
                 };
                 port.push(option.to_owned());
+            }
+            "dc" | "df" | "xc" | "xf" | "bts" | "btd" | "xcbloat" => {
+                bail!("--switch {spec}: a saves switch; pass --saves")
             }
             _ => bail!("--switch {spec}: no port option for this switch"),
         }
@@ -546,10 +568,10 @@ pub fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
 
     let mut cases = Vec::new();
     ensure!(
-        options.switches.is_empty() || (!options.saves && !check_dump()),
-        "--switch applies to plugin dumps only"
+        options.switches.is_empty() || !check_dump(),
+        "--switch applies to dumps only"
     );
-    let (oracle_switches, port_switches, switch_tag) = switch_args(&options.switches)?;
+    let (oracle_switches, port_switches, switch_tag) = switch_args(&options.switches, options.saves)?;
     for &game in &options.games {
         // Without `--game`, the games whose data directory is not set are
         // skipped and named, so a partial run is visible.
@@ -586,9 +608,9 @@ pub fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
                         name,
                         data: data.clone(),
                         saves: true,
-                        oracle_switches: Vec::new(),
-                        port_switches: Vec::new(),
-                        switch_tag: String::new(),
+                        oracle_switches: oracle_switches.clone(),
+                        port_switches: port_switches.clone(),
+                        switch_tag: switch_tag.clone(),
                     });
                 }
             }
@@ -1722,6 +1744,7 @@ fn check(case: &Case, runner: &Runner) -> Result<Outcome> {
         command
             .args(["saves", "dump", "--game", case.game.mode, "--data"])
             .arg(&case.data);
+        command.args(&case.port_switches);
     } else {
         command.args(["dump", "--game", case.game.mode]);
         if check_dump() {
@@ -2024,14 +2047,48 @@ mod tests {
 
     #[test]
     fn switch_specs_map_to_the_oracle_and_the_port() {
-        let (oracle, port, tag) = switch_args(&["dg:KYWD".to_owned(), "top:3".to_owned(), "dcr".to_owned()]).unwrap();
+        let (oracle, port, tag) =
+            switch_args(&["dg:KYWD".to_owned(), "top:3".to_owned(), "dcr".to_owned()], false).unwrap();
         assert_eq!(oracle, ["-dg:KYWD", "-top:3", "-dcr"]);
         assert_eq!(port, ["--dump-groups", "KYWD", "--top", "3", "--dcr"]);
         assert_eq!(tag, "dg-KYWD.top-3.dcr");
-        assert!(switch_args(&["dg".to_owned()]).is_err());
-        assert!(switch_args(&["top".to_owned()]).is_err());
-        assert!(switch_args(&["es:1".to_owned()]).is_err());
-        assert!(switch_args(&["unknown".to_owned()]).is_err());
+        assert!(switch_args(&["dg".to_owned()], false).is_err());
+        assert!(switch_args(&["top".to_owned()], false).is_err());
+        assert!(switch_args(&["es:1".to_owned()], false).is_err());
+        assert!(switch_args(&["unknown".to_owned()], false).is_err());
+        assert!(switch_args(&["dc:1".to_owned()], false).is_err());
+    }
+
+    #[test]
+    fn saves_switch_specs_map_to_the_oracle_and_the_port() {
+        let specs = ["dc:1,2", "df:5", "xc:7", "xf:3", "xcbloat", "bts:4", "btd:8"].map(str::to_owned);
+        let (oracle, port, tag) = switch_args(&specs, true).unwrap();
+        assert_eq!(
+            oracle,
+            ["-dc:1,2", "-df:5", "-xc:7", "-xf:3", "-xcbloat", "-bts:4", "-btd:8"]
+        );
+        assert_eq!(
+            port,
+            [
+                "--dc",
+                "1,2",
+                "--df",
+                "5",
+                "--xc",
+                "7",
+                "--xf",
+                "3",
+                "--xcbloat",
+                "--bts",
+                "4",
+                "--btd",
+                "8"
+            ]
+        );
+        assert_eq!(tag, "dc-1,2.df-5.xc-7.xf-3.xcbloat.bts-4.btd-8");
+        assert!(switch_args(&["dc".to_owned()], true).is_err());
+        assert!(switch_args(&["xcbloat:1".to_owned()], true).is_err());
+        assert!(switch_args(&["dg:KYWD".to_owned()], true).is_err());
     }
 
     #[test]
