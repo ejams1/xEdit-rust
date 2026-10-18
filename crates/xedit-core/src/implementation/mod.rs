@@ -2408,6 +2408,33 @@ impl GroupRecordImpl {
         self.gr_struct().label
     }
 
+    /// Port of `TwbGroupRecord.GetShortName`: a top level group is named by
+    /// its label signature's record definition, a block or sub-block by its
+    /// coordinates, a children group by its label.
+    pub fn get_short_name(&self) -> String {
+        let gr = self.gr_struct();
+        match gr.group_type {
+            0 => {
+                let signature = gr.label_signature();
+                find_record_def(signature)
+                    .map(|def| def.get_name().to_owned())
+                    .unwrap_or_else(|| signature.to_string())
+            }
+            1 => format!("World Children of {:08X}", self.get_group_label()),
+            2 => format!("Block {}", gr.label),
+            3 => format!("Sub-Block {}", gr.label),
+            // `LongRecSmall(grsLabel).Hi` first, then `.Lo`, both signed.
+            4 => format!("Block {}, {}", (gr.label >> 16) as i16, gr.label as i16),
+            5 => format!("Sub-Block {}, {}", (gr.label >> 16) as i16, gr.label as i16),
+            6 | 7 => format!("Children of {:08X}", self.get_group_label()),
+            8 => "Persistent".to_owned(),
+            9 => "Temporary".to_owned(),
+            10 if vwd_as_quest_children() => format!("Children of {:08X}", self.get_group_label()),
+            10 => "Visible when Distant".to_owned(),
+            other => format!(" Unknown type: {other}"),
+        }
+    }
+
     /// Port of `ChildrenOf`: the record the group holds the children of,
     /// for the group types whose label is a FormID and the exterior blocks.
     pub fn children_of(&self) -> Option<Arc<MainRecordImpl>> {

@@ -541,11 +541,39 @@ impl VclModel {
 
     /// The first child of `id` whose class chain contains `name`.
     fn first_child_of_class(&self, id: i64, name: &str) -> Option<Rc<RefCell<VclObject>>> {
-        let children = self.objects.get(&id)?.borrow().children.clone();
-        children.into_iter().find_map(|child| {
-            let object = self.objects.get(&child).cloned()?;
-            if self.is_a(&object, name) { Some(object) } else { None }
-        })
+        self.child_of_class(id, name, 0)
+    }
+
+    /// The child of `id` at `index` among those whose class chain contains
+    /// `name` (the answer's `control_index`).
+    fn child_of_class(&self, id: i64, name: &str, index: usize) -> Option<Rc<RefCell<VclObject>>> {
+        self.descendants(id)
+            .into_iter()
+            .filter(|object| self.is_a(object, name))
+            .nth(index)
+    }
+
+    /// The descendants of `id` in the order the oracle harness sees a form's
+    /// child windows (`EnumChildWindows`): depth first, and at each level the
+    /// children in reverse creation order, because a newly created child
+    /// sits above the older ones in the z-order.
+    fn descendants(&self, id: i64) -> Vec<Rc<RefCell<VclObject>>> {
+        let mut found = Vec::new();
+        self.collect_descendants(id, &mut found);
+        found
+    }
+
+    fn collect_descendants(&self, id: i64, found: &mut Vec<Rc<RefCell<VclObject>>>) {
+        let Some(object) = self.objects.get(&id) else {
+            return;
+        };
+        let children = object.borrow().children.clone();
+        for child in children.into_iter().rev() {
+            if let Some(child_object) = self.objects.get(&child).cloned() {
+                found.push(child_object);
+                self.collect_descendants(child, found);
+            }
+        }
     }
 
     /// The lazily created `Items`/`Lines` value of a control: the `Classes`
@@ -1083,12 +1111,14 @@ impl VclModel {
     /// One recorded answer applied to an open form: text into the first edit
     /// control, keys to the active control, then the button click (the order
     /// the oracle harness uses). An answer's `control` names the class of
-    /// the child the text and the keys go to instead (the harness posts to
-    /// that child: a form on its desktop has no focused control).
+    /// the child the text and the keys go to instead, and its
+    /// `control_index` the position among the children of that class (the
+    /// harness posts to that child: a form on its desktop has no focused
+    /// control).
     fn apply_answer(&mut self, form_id: i64, answer: &ScriptAnswer) -> Result<(), ValueError> {
         let target = match &answer.control {
             Some(class) => {
-                let Some(control) = self.first_child_of_class(form_id, class) else {
+                let Some(control) = self.child_of_class(form_id, class, answer.control_index) else {
                     let form = self.object(form_id)?;
                     let title = self.caption_of(&form);
                     return Err(self.model_error(format!("the form \"{title}\" has no {class} control")));
@@ -1111,17 +1141,14 @@ impl VclModel {
         Ok(())
     }
 
-    /// The first child that is an edit-shaped control (the oracle harness's
-    /// `set_edit_text` targets the first edit control of the window).
+    /// The first edit-shaped control (the oracle harness's `set_edit_text`
+    /// targets the first edit control of the window).
     fn first_edit_child(&self, form_id: i64) -> Option<Rc<RefCell<VclObject>>> {
-        let children = self.objects.get(&form_id)?.borrow().children.clone();
-        children.into_iter().find_map(|child| {
-            let object = self.objects.get(&child).cloned()?;
-            let edit = self.is_a(&object, "TCustomEdit")
-                || self.is_a(&object, "TLabeledEdit")
-                || self.is_a(&object, "TMemo")
-                || self.is_a(&object, "TCustomComboBox");
-            if edit { Some(object) } else { None }
+        self.descendants(form_id).into_iter().find(|object| {
+            self.is_a(object, "TCustomEdit")
+                || self.is_a(object, "TLabeledEdit")
+                || self.is_a(object, "TMemo")
+                || self.is_a(object, "TCustomComboBox")
         })
     }
 
@@ -1225,13 +1252,8 @@ impl VclModel {
     }
 
     fn button_children(&self, form_id: i64) -> Vec<Rc<RefCell<VclObject>>> {
-        let children = match self.objects.get(&form_id) {
-            Some(form) => form.borrow().children.clone(),
-            None => return Vec::new(),
-        };
-        children
+        self.descendants(form_id)
             .into_iter()
-            .filter_map(|child| self.objects.get(&child).cloned())
             .filter(|object| self.is_a(object, "TButton") || self.is_a(object, "TBitBtn"))
             .collect()
     }

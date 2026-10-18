@@ -21,7 +21,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use xedit_core::implementation::write::ElementState;
-use xedit_core::implementation::{moving, template};
+use xedit_core::implementation::{ElementImpl, moving, template};
 use xedit_core::interface::types::PascalEnum;
 use xedit_core::interface::{Element, ElementType};
 use xedit_script::adapter::{Adapter, Args};
@@ -821,7 +821,12 @@ fn short_name(element: &xedit_core::interface::ElementRef) -> String {
             .as_main_record()
             .map(|record| record.get_short_name())
             .unwrap_or_default(),
-        ElementType::etFile => element.get_name(),
+        ElementType::etFile => crate::script::element_name(element),
+        ElementType::etGroupRecord => element
+            .as_element_impl()
+            .and_then(ElementImpl::group_record_impl)
+            .map(|group| group.get_short_name())
+            .unwrap_or_default(),
         _ => element.get_name(),
     }
 }

@@ -1199,6 +1199,81 @@
         {"class": "TfrmFileSelect", "title": "Select plugin(s) to merge into", "button": "OK"}
       ],
       "note": "parity #41, a form script: frmFileSelect answered OK with nothing checked (merge into the masters only), so every override of the merge-overrides.esp fixture is merged into its master, the refs-edit fixture (ConflictAllForElements, ElementAssign of a changed game setting, keyword colour and activator name and keywords, SetElementNativeValues of the record flags, Add and ElementAssign of the name, keywords and marker colour an activator of the master lacks, Remove of the marker colour the override drops); the saved master is compared. Over real masters the release ran past 60 minutes (Fallout 3 with Anchorage.esm, Skyrim SE with Update.esm), hence the fixtures"
+    },
+    {
+      "script": "Add into container.pas",
+      "master": "tests/fixtures/parity/add-container.esm",
+      "plugins": ["tests/fixtures/parity/add-container.esp"],
+      "close_after": true,
+      "save": ["add-container.esp"],
+      "answers": [
+        {"class": "TfrmFileSelect", "title": "Add into container", "control": "TCheckListBox", "keys": [40, 32], "button": "OK"},
+        {"class": "TInputQueryForm", "title": "Enter", "text": "ParityChest", "button": "OK"}
+      ],
+      "note": "issue #81, a file and input form: frmFileSelect named Add into container answered with <new container> checked (Down, Space), its InputQuery Enter answered ParityChest; the CONT template 0x0001D13C of the fixture master is copied as the new record (its CNTO removed) into the empty add-container.esp, and the walk adds the master's WEAP, AMMO (Count 50) and ALCH (Count 10) records before it reaches the CONT template itself, which CNTO cannot link to, so the release raises its signature exception and aborts; the abort and the saved plugin are compared. The template CONT cannot be kept out of the walk in script mode, which selects every loaded file"
+    },
+    {
+      "script": "Copy version control info from another plugin.pas",
+      "master": "tests/fixtures/parity/vcs-master.esm",
+      "plugins": ["tests/fixtures/parity/vcs-a.esp", "tests/fixtures/parity/vcs-b.esp"],
+      "close_after": true,
+      "save": ["vcs-a.esp"],
+      "answers": [
+        {"class": "TfrmFileSelect", "title": "Select plugin to copy from", "control": "TCheckListBox", "keys": [40, 32], "button": "OK"}
+      ],
+      "note": "issue #81, a file form: the first element the backwards walk runs Process on is the file header of the empty fixture game master, so the script's list, which skips the current file (Skyrim.esm) and every other file because of the Inc(i) inside the for, holds SkyrimSE.exe and vcs-b.esp; Down and Space check the first entry, SkyrimSE.exe, whose masters list (Skyrim.esm) differs from the game master's empty one, and the script logs its mismatch message and terminates with Result=1 before any copy; the abort and the unchanged saved vcs-a.esp are compared. Arrow keys did not change the checked entry (1, 2 and 5 Downs all ended on the first entry), so the successful copy branch is not reachable through the recorded answers on this form; unlike Add into container, a source record cannot be placed in the fixture game master without the walk reaching it before the form"
+    },
+    {
+      "script": "SaveAs.pas",
+      "master": "tests/fixtures/parity/saveas-master.esm",
+      "plugins": ["tests/fixtures/parity/saveas.esp"],
+      "close_after": true,
+      "note": "issue #81: script mode selects every loaded file, and the first element the backwards walk runs Process on is the file header of the game master (the master's first tree child); GetLoadOrder is 0 there, so the script prints 'Can't save the game master file.', returns 1 and the walk aborts before any plugin record is reached; the form is therefore not reachable in a run case and the recorded case is this abort, compared line by line. The form itself (TLabeledEdit, TButton, TCheckBox) stays with the port's form shim"
+    },
+    {
+      "script": "Find cell in worldspace.pas",
+      "master": "tests/fixtures/parity/find-cell.esm",
+      "plugins": [],
+      "close_after": true,
+      "answers": [
+        {"class": "TForm", "title": "Find cell in worldspace", "control": "TLabeledEdit", "control_index": 0, "text": "0", "repeat": true},
+        {"class": "TForm", "title": "Find cell in worldspace", "control": "TLabeledEdit", "control_index": 1, "text": "0", "button": "OK", "repeat": true}
+      ],
+      "note": "issue #81, a form: the list is filled from the WRLD groups of every file and Tamriel (0, 0) is preselected, the X and Y edits are set to 0 by their position among the TLabeledEdit controls (the harness's control_index), and OK runs FindCell, which walks the worldspace's child groups: the group ShortName ('Block 0, 0', 'Sub-Block 0, 0') selects the block and sub-block, XCLC matches the CELL and JumpTo ends the walk before 'Cell not found!'; the log is compared (the run writes nothing)"
+    },
+    {
+      "script": "ExportImportTexts.pas",
+      "master": "tests/fixtures/parity/export-texts.esm",
+      "plugins": [],
+      "answers": [
+        {"class": "TForm", "title": "Export/Import Texts", "button": "OK"},
+        {"class": "TForm", "title": "Export texts to", "control": "TEdit", "text": "{{WORK}}\\out", "button": "OK", "control_index": 1}
+      ],
+      "note": "issue #81, two forms: the direction form is answered with its defaults (Export, All texts), and the path form's base path is the run's out folder (the harness's {{WORK}} in an answer text), its extension the '.txt' default; the base path has no trailing backslash because the script prefixes it with the extended-length marker and a doubled separator makes DirectoryExists refuse the folder; the script then exports every string element of the fixture's WEAP record (EDID) and of the hardcoded game file's records under out (PathName and the edit value of each), and the exported files and the 'Using directory' log line are compared"
+    },
+    {
+      "script": "FUZer.pas",
+      "master": "tests/fixtures/parity/saveas-master.esm",
+      "plugins": [],
+      "close_after": true,
+      "data_files": ["tests/fixtures/parity/fuzer/sounds/one.xwm:sounds/one.xwm", "tests/fixtures/parity/fuzer/sounds/one.lip:sounds/one.lip"],
+      "answers": [
+        {"class": "TForm", "title": "FUZer", "control": "TLabeledEdit", "control_index": 0, "text": "{{WORK}}\\Data\\", "repeat": true},
+        {"class": "TForm", "title": "FUZer", "control": "TLabeledEdit", "control_index": 1, "text": "{{WORK}}\\Data\\", "button": "OK", "repeat": true}
+      ],
+      "note": "issue #81, a form and file batch: both TLabeledEdits (source and destination) are answered with the run's private Data folder ({{WORK}}\\Data\\, which the harness fills from data_files), so the comparison does not depend on how each side spells wbDataPath; the LIP + XWM to FUZ direction is the form's checked default, and the run combines sounds/one.lip and sounds/one.xwm into sounds/one.fuz; the saved FUZ (LIP Size and both payloads byte for byte) and the 'Processing files', 'Saved:' and 'Processed Files: 1' log lines are compared"
+    },
+    {
+      "script": "probes/export-texts-dir.pas",
+      "synthetic_master": true,
+      "timeout_minutes": 6,
+      "note": "issue #81: the extended-length path spelling ExportImportTexts.pas builds (the \\\\?\\ prefix plus the base path) with and without the trailing backslash its ExtractFilePath leaves, and ForceDirectories over it; the release's DirectoryExists answers decide whether the export writes any file at all"
+    },
+    {
+      "script": "probes/save-extended-path.pas",
+      "synthetic_master": true,
+      "timeout_minutes": 6,
+      "note": "issue #81: TStringList.SaveToFile over the extended-length spelling ExportImportTexts.pas builds (the \\?\\ prefix plus the base path), with spaces and brackets in the file name and into a folder ForceDirectories made through its extended path; a silent exception in its try/except would explain an export run that writes no file"
     }
   ]
 }
