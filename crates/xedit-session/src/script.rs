@@ -2593,6 +2593,48 @@ impl Drop for ProgressRelay {
     }
 }
 
+/// The host hooks of an interpreter over a run: the VCL model's
+/// published-property surface (upstream's `GetValueRTTI`/`SetValueRTTI`,
+/// which answer a control's published property whichever class the
+/// registration tables carry it on) and, for the run's own program, the
+/// script variables (`FilterByName := ...`) for a bare identifier.
+///
+/// The fresh program `JvInterpreterRunUnit` compiles in gets the RTTI half
+/// only: upstream's `TJvInterpreterFm` has no `OnSetValue` hook, so a bare
+/// identifier there is the interpreter's undeclared-identifier error.
+fn install_host_hooks(
+    interpreter: &mut Interpreter,
+    state: &Rc<RefCell<ScriptRunState>>,
+    model: &Rc<RefCell<crate::script_vcl::interactive::VclModel>>,
+    variables: bool,
+) {
+    let setter_state = state.clone();
+    let setter_model = model.clone();
+    interpreter.on_set_value = Some(Box::new(move |identifier, value, args| {
+        if args.obj.is_some() {
+            return setter_model
+                .borrow_mut()
+                .rtti_set(identifier, value, args)
+                .map_err(hook_error);
+        }
+        if variables {
+            set_variable(&setter_state, identifier, value)
+        } else {
+            Ok(false)
+        }
+    }));
+    let getter_model = model.clone();
+    interpreter.on_get_value = Some(Box::new(move |identifier, value, args| {
+        if args.obj.is_none() {
+            return Ok(false);
+        }
+        getter_model
+            .borrow_mut()
+            .rtti_get(identifier, value, args)
+            .map_err(hook_error)
+    }));
+}
+
 /// The loop: `Initialize` (a non-zero result stops the run with
 /// `Script terminated itself, Result=<n>`), `Process` for every selected
 /// element [`ScriptRunState::can_process`] accepts (each call's result
@@ -2703,32 +2745,28 @@ pub fn run_script(
     let vcl: Rc<RefCell<dyn crate::script_rtl::Vcl>> = model.clone();
     register_functions(&mut interpreter.adapter, &state, vcl);
     crate::script_units::register_units(&mut interpreter.adapter, &state);
+    install_host_hooks(&mut interpreter, &state, &model, true);
     {
-        // The host hooks run after the adapters: the published-property
-        // surface of the VCL model (upstream's `GetValueRTTI`/`SetValueRTTI`,
-        // which answer a control's published property whichever class the
-        // registration tables carry it on), then the script variables
-        // (`FilterByName := ...`) for a bare identifier.
-        let state = state.clone();
-        let setter_model = model.clone();
-        interpreter.on_set_value = Some(Box::new(move |identifier, value, args| {
-            if args.obj.is_some() {
-                return setter_model
-                    .borrow_mut()
-                    .rtti_set(identifier, value, args)
-                    .map_err(hook_error);
-            }
-            set_variable(&state, identifier, value)
-        }));
-        let getter_model = model.clone();
-        interpreter.on_get_value = Some(Box::new(move |identifier, value, args| {
-            if args.obj.is_none() {
-                return Ok(false);
-            }
-            getter_model
-                .borrow_mut()
-                .rtti_get(identifier, value, args)
-                .map_err(hook_error)
+        // The fresh interpreter `JvInterpreterMakeForm`/`JvInterpreterRunUnit`
+        // compile their unit in (upstream's `TJvInterpreterFm.Create`): the
+        // same registrations and the VCL model's published-property surface,
+        // over a model of its own that shares this run's answers queue, so a
+        // dialog of the compiled unit takes the next recorded answer. A bare
+        // variable is undeclared there, as the fresh program has no
+        // `OnSetValue` hook upstream.
+        let factory_state = state.clone();
+        let factory_name = name.clone();
+        model.borrow_mut().set_fresh_program(Box::new(move |answers| {
+            let mut program = Interpreter::new();
+            let fresh = Rc::new(RefCell::new(crate::script_vcl::interactive::VclModel::with_answers(
+                factory_name.clone(),
+                answers,
+            )));
+            let fresh_vcl: Rc<RefCell<dyn crate::script_rtl::Vcl>> = fresh.clone();
+            register_functions(&mut program.adapter, &factory_state, fresh_vcl);
+            crate::script_units::register_units(&mut program.adapter, &factory_state);
+            install_host_hooks(&mut program, &factory_state, &fresh, false);
+            (program, fresh)
         }));
     }
     interpreter.on_statement = Some(Box::new(|_pos| {

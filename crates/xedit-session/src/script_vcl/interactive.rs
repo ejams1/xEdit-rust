@@ -47,9 +47,17 @@
 //!   paint members keep their state but draw nothing; the ledger marks them
 //!   `presentation`.
 //! * **`JvInterpreterMakeForm`/`RunForm`/`RunFormModal`/`RunUnit`** compile a
-//!   second unit through a fresh interpreter; the model refuses them with
-//!   the step-9 `EVclUnavailable` text until the GUI phase wires the form
-//!   runner (no corpus script calls them).
+//!   unit in a fresh interpreter, exactly as `JvInterpreterFm.pas` does
+//!   (issue #81): the unit's source is read from the file name (or its unit
+//!   name), compiled by the fresh program the run installs
+//!   ([`VclModel::set_fresh_program`]), and `MakeForm`/`RunForm`/
+//!   `RunFormModal` read the unit's `.dfm` (the text form, [`super::dfm`])
+//!   into a `TJvInterpreterForm`-shaped object. `RunFormModal` drives the
+//!   same recorded-answer modal loop as a script-built form, and `RunUnit`
+//!   runs the compiled unit's `main` routine. What is not modelled: the DFM's
+//!   event properties are stored (not fired, as every event of the model),
+//!   including `OnCreate`, which upstream calls at the end of `LoadForm`;
+//!   and a binary (`TPF0`) DFM is refused with a message naming it.
 //!
 //! # The bridge
 //!
@@ -75,9 +83,12 @@
 
 use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap, VecDeque};
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
+use xedit_script::Interpreter;
 use xedit_script::adapter::Args;
+use xedit_script::error::IE_DFM_NOT_FOUND;
 use xedit_script::values::{ClassDef, ScriptObject, Value, ValueError};
 
 use super::{MemberKind, VCL_ERROR_CLASS, Vcl};
@@ -244,6 +255,14 @@ fn is_event_name(name: &str) -> bool {
     name.len() > 2 && name.starts_with("On") && name.as_bytes()[2].is_ascii_uppercase()
 }
 
+/// The factory of the interpreter the form runner compiles a unit in
+/// (upstream's `TJvInterpreterFm.Create(Application)`): a fresh program with
+/// the run's registrations (upstream's own adapter is empty and every lookup
+/// falls back to the global one, which carries the same surface) and the VCL
+/// model its calls go through. It shares the answers queue of the calling
+/// run, so a dialog of the compiled unit takes the next recorded answer.
+pub type FreshProgram = Box<dyn FnMut(Rc<RefCell<VecDeque<ScriptAnswer>>>) -> (Interpreter, Rc<RefCell<VclModel>>)>;
+
 /// The headless VCL object model (the [`Vcl`] seam of issue #26).
 pub struct VclModel {
     /// The script being run, for the error texts.
@@ -253,8 +272,10 @@ pub struct VclModel {
     /// Every live object by id; the object value a script holds is the same
     /// cell.
     objects: HashMap<i64, Rc<RefCell<VclObject>>>,
-    /// The recorded answers not consumed yet, in order.
-    answers: VecDeque<ScriptAnswer>,
+    /// The recorded answers not consumed yet, in order. Shared with the
+    /// fresh model a `JvInterpreterRunUnit` creates, as the GUI has one
+    /// answer stream for every interpreter of the run.
+    answers: Rc<RefCell<VecDeque<ScriptAnswer>>>,
     /// The dialog the run stopped on, when it did.
     pending: Option<ScriptInteraction>,
     next_id: i64,
@@ -266,21 +287,39 @@ pub struct VclModel {
     /// The main form (`frmMain` of the script host, issue #25), made on
     /// first use.
     main_form: Option<i64>,
+    /// Builds the interpreter `JvInterpreterMakeForm`/`RunUnit` compile in;
+    /// `None` in a caller that registered no host surface (the tests and the
+    /// standalone registrations), whose calls then refuse.
+    fresh_program: Option<FreshProgram>,
 }
 
 impl VclModel {
     pub fn new(script: impl Into<String>, answers: Vec<ScriptAnswer>) -> VclModel {
+        VclModel::with_answers(script, Rc::new(RefCell::new(answers.into())))
+    }
+
+    /// A model over an answers queue shared with another model (the one a
+    /// `JvInterpreterRunUnit` creates).
+    pub fn with_answers(script: impl Into<String>, answers: Rc<RefCell<VecDeque<ScriptAnswer>>>) -> VclModel {
         VclModel {
             script: script.into(),
             classes: HashMap::new(),
             objects: HashMap::new(),
-            answers: answers.into(),
+            answers,
             pending: None,
             next_id: 0,
             screen: None,
             modal_stack: Vec::new(),
             main_form: None,
+            fresh_program: None,
         }
+    }
+
+    /// Installs the factory of the fresh interpreter (`JvInterpreterFm.pas`'s
+    /// form runner). The run that registers the script host's surface places
+    /// it; a model without one refuses the four functions.
+    pub fn set_fresh_program(&mut self, factory: FreshProgram) {
+        self.fresh_program = Some(factory);
     }
 
     /// The pending question, for `script.run`'s response; consumed once.
@@ -293,7 +332,7 @@ impl VclModel {
     /// harness fails a run the same way: "the oracle did not show the
     /// expected dialog").
     pub fn leftover(&self) -> Option<ScriptAnswer> {
-        self.answers.front().cloned()
+        self.answers.borrow().front().cloned()
     }
 
     /// The published-property surface upstream reads before its registration
@@ -831,6 +870,214 @@ impl VclModel {
         Ok(Value::Object(form))
     }
 
+    //=== The form runner (JvInterpreterFm.pas) ===============================
+
+    /// A program for `MakeForm`/`RunUnit` to compile in, or the step-9
+    /// refusal when the caller registered no factory.
+    fn fresh_program(&mut self, function: &str) -> Result<(Interpreter, Rc<RefCell<VclModel>>), ValueError> {
+        match self.fresh_program.as_mut() {
+            Some(factory) => Ok(factory(self.answers.clone())),
+            None => Err(ValueError::external_class(
+                VCL_ERROR_CLASS,
+                format!("{function} is not available without a GUI (script \"{}\")", self.script),
+            )),
+        }
+    }
+
+    /// `TJvInterpreterForm.CreateNew(Application)`: the form a unit's DFM is
+    /// read into. Its runtime class -- and so its window class, which the
+    /// recorded answers name -- is `TJvInterpreterForm`, not the DFM's root
+    /// class (upstream reads the DFM into this instance).
+    fn new_interpreter_form(&mut self) -> Result<Rc<RefCell<VclObject>>, ValueError> {
+        self.create_form_of_class("JvInterpreterFm", "TJvInterpreterForm")
+    }
+
+    /// `TJvInterpreterFm.LoadForm`: the DFM's root properties and its
+    /// components, owned by the form.
+    fn load_dfm(&mut self, text: &[u8], form: &Rc<RefCell<VclObject>>) -> Result<(), ValueError> {
+        let component = super::dfm::parse(text).map_err(|message| ValueError::external_class("Exception", message))?;
+        self.apply_dfm_properties(form, &component.properties)?;
+        for child in &component.children {
+            self.add_dfm_component(form, child)?;
+        }
+        Ok(())
+    }
+
+    /// One nested DFM component: owned by the form (`TReader` reads every
+    /// nested component with the root as its owner), parented to the
+    /// component that holds it when it is a control, then its properties and
+    /// children.
+    fn add_dfm_component(
+        &mut self,
+        owner: &Rc<RefCell<VclObject>>,
+        spec: &super::dfm::Component,
+    ) -> Result<(), ValueError> {
+        let value = self.create_object(&spec.class_name, None)?;
+        let id = Self::id_of(&value).ok_or_else(|| self.model_error("the component was not made".to_owned()))?;
+        let object = self.object(id)?;
+        if !spec.name.is_empty() {
+            object.borrow().component.borrow_mut().name = spec.name.clone();
+        }
+        {
+            let owner_state = owner.borrow().component.clone();
+            let state = object.borrow().component.clone();
+            insert_component(&owner_state, &state);
+        }
+        if self.is_a(&object, "TControl") {
+            self.dispatch_set(&object, "Parent", &Value::Object(owner.clone()))?;
+        }
+        self.apply_dfm_properties(&object, &spec.properties)?;
+        for child in &spec.children {
+            self.add_dfm_component(&object, child)?;
+        }
+        Ok(())
+    }
+
+    /// The design-time properties of one DFM component. A method value
+    /// (`OnCreate = FormCreate`) goes to the object's event slot; a string
+    /// list fills the control's `Items`/`Lines`; anything else is the
+    /// model's ordinary property state.
+    fn apply_dfm_properties(
+        &mut self,
+        object: &Rc<RefCell<VclObject>>,
+        properties: &[(String, super::dfm::Value)],
+    ) -> Result<(), ValueError> {
+        for (name, value) in properties {
+            match name.as_str() {
+                "Name" => {
+                    if let super::dfm::Value::Str(text) = value {
+                        object.borrow().component.borrow_mut().name = String::from_utf8_lossy(text).into_owned();
+                    }
+                }
+                "Tag" => {
+                    if let super::dfm::Value::Integer(tag) = value {
+                        object.borrow().component.borrow_mut().tag = *tag as i32;
+                    }
+                }
+                "Items.Strings" | "Lines.Strings" => {
+                    if let super::dfm::Value::List(lines) = value {
+                        let items = self.items_of(object)?;
+                        if let Some(list) = crate::script_strings::list_of(&items) {
+                            for line in lines {
+                                crate::script_strings::borrow_list_mut(&list).add_bytes(line.clone())?;
+                            }
+                        }
+                    }
+                }
+                _ if is_event_name(name) => {
+                    if let super::dfm::Value::Ident(handler) = value {
+                        object.borrow_mut().events.insert(name.clone(), handler.clone());
+                    }
+                }
+                _ => {
+                    if let Some(value) = dfm_value(value) {
+                        self.set_prop(object, name, value);
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// `TJvInterpreterFm.GetUnitSource`: the unit file the form runner
+    /// compiles. The file name as given (with `.pas` when it has no
+    /// extension) is read when it exists, else its base name is looked up in
+    /// the file's folder and on the `PATH`; the same is then tried with the
+    /// unit name (`ChangeFileExt(ExtractFileName(FileName), '')`).
+    fn unit_file(file_name: &str) -> Option<PathBuf> {
+        let with_extension = |name: &str| match Path::new(name).extension() {
+            Some(_) => name.to_owned(),
+            None => format!("{name}.pas"),
+        };
+        let directory = Path::new(file_name)
+            .parent()
+            .map(|parent| parent.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        let first = with_extension(file_name);
+        if Path::new(&first).is_file() {
+            return Some(PathBuf::from(first));
+        }
+        if let Some(base) = Path::new(&first)
+            .file_name()
+            .map(|base| base.to_string_lossy().into_owned())
+            && let Some(found) = find_in_path(&base, &directory)
+        {
+            return Some(found);
+        }
+        let unit = unit_name(file_name);
+        let second = format!("{unit}.pas");
+        if Path::new(&second).is_file() {
+            return Some(PathBuf::from(second));
+        }
+        find_in_path(&second, &directory)
+    }
+
+    /// `CreateDfmStream`'s lookup:
+    /// `FindInPath(ChangeFileExt(UnitName, '.dfm'), ExtractFilePath(FileName))`.
+    fn dfm_file(file_name: &str) -> Option<PathBuf> {
+        let directory = Path::new(file_name)
+            .parent()
+            .map(|parent| parent.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        find_in_path(&format!("{}.dfm", unit_name(file_name)), &directory)
+    }
+
+    /// `JvInterpreterMakeForm`: compile the unit in a fresh program and read
+    /// its DFM into a new interpreter form. The form is invisible until
+    /// `Show`.
+    fn interpreter_make_form(&mut self, file_name: &str) -> Result<Value, ValueError> {
+        let unit = unit_name(file_name);
+        let Some(path) = Self::unit_file(file_name) else {
+            return Err(ValueError::interp_n(xedit_script::error::IE_UNIT_NOT_FOUND, unit));
+        };
+        let source = std::fs::read(&path)
+            .map(|bytes| xedit_script::host::source_text(&bytes))
+            .map_err(|error| ValueError::external_class("EFOpenError", format!("{}: {error}", path.display())))?;
+        let (mut program, _model) = self.fresh_program("JvInterpreterMakeForm")?;
+        // The fresh program has no host unit source hook: a `uses` of the
+        // unit resolves to the empty `unit X; end.` its interface section
+        // gets in `TJvInterpreterFm.GetUnitSource`.
+        program.set_unit_source(|name| Some(xedit_script::host::host_unit_stub(name)));
+        program.compile(&source).map_err(exec_error)?;
+        // `Compile` comes first: a unit that does not compile never looks its
+        // DFM up (`MakeForm` then `LoadForm` -> `CreateDfmStream`).
+        let Some(dfm) = Self::dfm_file(file_name) else {
+            return Err(ValueError::interp_n(IE_DFM_NOT_FOUND, unit));
+        };
+        let dfm_text = std::fs::read(&dfm)
+            .map_err(|error| ValueError::external_class("EFOpenError", format!("{}: {error}", dfm.display())))?;
+        let form = self.new_interpreter_form()?;
+        self.load_dfm(&dfm_text, &form)?;
+        self.set_prop(&form, "Visible", Value::Bool(false));
+        Ok(Value::Object(form))
+    }
+
+    /// `JvInterpreterRunUnit`: compile the unit's source in a fresh program
+    /// and run its `main` routine. The function's result is unassigned, as
+    /// upstream's `RunUnit` never assigns one.
+    fn interpreter_run_unit(&mut self, file_name: &str) -> Result<Value, ValueError> {
+        let unit = unit_name(file_name);
+        let Some(path) = Self::unit_file(file_name) else {
+            return Err(ValueError::interp_n(xedit_script::error::IE_UNIT_NOT_FOUND, unit));
+        };
+        let source = std::fs::read(&path)
+            .map(|bytes| xedit_script::host::source_text(&bytes))
+            .map_err(|error| ValueError::external_class("EFOpenError", format!("{}: {error}", path.display())))?;
+        let (mut program, model) = self.fresh_program("JvInterpreterRunUnit")?;
+        program.set_unit_source(|name| Some(xedit_script::host::host_unit_stub(name)));
+        let result = match program.compile(&source) {
+            Ok(()) => program.run_main(),
+            Err(error) => Err(error),
+        };
+        // A dialog of the unit carries its question to the calling run, so
+        // `script.resume` can answer it and run the registry again.
+        if let Some(pending) = model.borrow_mut().take_pending() {
+            self.pending = Some(pending);
+        }
+        result.map_err(exec_error)?;
+        Ok(Value::Empty)
+    }
+
     //=== The interaction bridge ==============================================
 
     /// Answers the next dialog, in the oracle harness's rule: the next
@@ -854,7 +1101,8 @@ impl VclModel {
             buttons,
             default,
         };
-        let Some(answer) = self.answers.front() else {
+        let next = self.answers.borrow().front().cloned();
+        let Some(answer) = next else {
             let detail = if question.text.is_empty() {
                 format!("[{}] \"{}\"", question.class, question.title)
             } else {
@@ -870,7 +1118,7 @@ impl VclModel {
             ));
         };
         if answer.class == class && title.contains(answer.title.as_str()) {
-            let answer = self.answers.pop_front().expect("checked above");
+            self.answers.borrow_mut().pop_front();
             Ok(answer)
         } else {
             let message = format!(
@@ -1130,13 +1378,17 @@ impl VclModel {
         // several answers (the harness's `repeat`): while the form stays
         // open and the next recorded answer names it again, that answer is
         // applied too.
-        while modal_result(&form) == 0
-            && self
-                .answers
-                .front()
-                .is_some_and(|next| next.repeat && next.class == class_name && title.contains(next.title.as_str()))
-        {
-            let next = self.answers.pop_front().expect("checked above");
+        loop {
+            if modal_result(&form) != 0 {
+                break;
+            }
+            let next = self.answers.borrow().front().and_then(|next| {
+                (next.repeat && next.class == class_name && title.contains(next.title.as_str())).then(|| next.clone())
+            });
+            let Some(next) = next else {
+                break;
+            };
+            self.answers.borrow_mut().pop_front();
             self.apply_answer(form_id, &next)?;
         }
         let result = modal_result(&form);
@@ -1981,45 +2233,93 @@ fn property_default(name: &str) -> Value {
     }
 }
 
+/// `ChangeFileExt(ExtractFileName(FileName), '')`: the unit name a form
+/// runner reports and looks its `.dfm` up by.
+fn unit_name(file_name: &str) -> String {
+    Path::new(file_name)
+        .file_stem()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_default()
+}
+
+/// `JvJCLUtils.FindInPath`: the file in `directory` first, then in every
+/// `PATH` entry. Upstream does not check the current directory here (the
+/// callers' `FileExists` does that first).
+fn find_in_path(name: &str, directory: &str) -> Option<PathBuf> {
+    if !directory.is_empty() {
+        let candidate = Path::new(directory).join(name);
+        if candidate.is_file() {
+            return Some(candidate);
+        }
+    }
+    let path = std::env::var_os("PATH")?;
+    std::env::split_paths(&path)
+        .map(|entry| entry.join(name))
+        .find(|candidate| candidate.is_file())
+}
+
+/// One DFM property value as the model's value; `None` for the kinds the
+/// model keeps no state for (a collection, a binary blob).
+fn dfm_value(value: &super::dfm::Value) -> Option<Value> {
+    Some(match value {
+        super::dfm::Value::Str(text) => Value::Str(text.clone()),
+        super::dfm::Value::Integer(integer) => match i32::try_from(*integer) {
+            Ok(integer) => Value::Integer(integer),
+            Err(_) => Value::Int64(*integer),
+        },
+        super::dfm::Value::Float(float) => Value::Double(*float),
+        super::dfm::Value::Ident(ident) if ident.eq_ignore_ascii_case("nil") => Value::Null,
+        super::dfm::Value::Ident(ident) if ident.eq_ignore_ascii_case("true") => Value::Bool(true),
+        super::dfm::Value::Ident(ident) if ident.eq_ignore_ascii_case("false") => Value::Bool(false),
+        super::dfm::Value::Ident(ident) => Value::Str(ident.clone().into_bytes()),
+        super::dfm::Value::Set(members) => Value::Str(members.join(",").into_bytes()),
+        super::dfm::Value::List(lines) => Value::Str(lines.concat()),
+        super::dfm::Value::Collection(_) | super::dfm::Value::Binary(_) => return None,
+    })
+}
+
+/// An error of the fresh program a form runner compiles in, as the calling
+/// script sees it: the oracle's `EJvInterpreterError` (or the exception the
+/// unit raised) with its message, which already carries the unit and line
+/// of a compile failure.
+fn exec_error(error: xedit_script::ExecError) -> ValueError {
+    // An interpreter error keeps its class; another exception of the fresh
+    // run (`EConvertError`, ...) has a dynamic class name the `ValueError`
+    // shape cannot carry, so it reports as `Exception` with its message.
+    let class = if error.class_name() == "EJvInterpreterError" {
+        "EJvInterpreterError"
+    } else {
+        "Exception"
+    };
+    ValueError::external_class(class, error.message)
+}
+
 impl Vcl for VclModel {
-    fn make_form(&mut self, _file_name: &str) -> Result<Value, ValueError> {
-        Err(ValueError::external_class(
-            VCL_ERROR_CLASS,
-            format!(
-                "JvInterpreterMakeForm is not available without a GUI (script \"{}\")",
-                self.script
-            ),
-        ))
+    fn make_form(&mut self, file_name: &str) -> Result<Value, ValueError> {
+        self.interpreter_make_form(file_name)
     }
 
-    fn run_form(&mut self, _file_name: &str) -> Result<Value, ValueError> {
-        Err(ValueError::external_class(
-            VCL_ERROR_CLASS,
-            format!(
-                "JvInterpreterRunForm is not available without a GUI (script \"{}\")",
-                self.script
-            ),
-        ))
+    fn run_form(&mut self, file_name: &str) -> Result<Value, ValueError> {
+        let value = self.interpreter_make_form(file_name)?;
+        // `Result := MakeForm(FileName); Result.Show;`
+        if let Some(id) = Self::id_of(&value) {
+            let form = self.object(id)?;
+            self.set_prop(&form, "Visible", Value::Bool(true));
+        }
+        Ok(value)
     }
 
-    fn run_form_modal(&mut self, _file_name: &str) -> Result<i64, ValueError> {
-        Err(ValueError::external_class(
-            VCL_ERROR_CLASS,
-            format!(
-                "JvInterpreterRunFormModal is not available without a GUI (script \"{}\")",
-                self.script
-            ),
-        ))
+    fn run_form_modal(&mut self, file_name: &str) -> Result<i64, ValueError> {
+        // `with MakeForm(FileName) do try Result := ShowModal; finally Free; end;`
+        let value = self.interpreter_make_form(file_name)?;
+        let id = Self::id_of(&value).ok_or_else(|| self.model_error("the form was not made".to_owned()))?;
+        let result = self.show_modal(id);
+        self.release(id);
+        result.map(i64::from)
     }
 
-    fn run_unit(&mut self, _file_name: &str) -> Result<Value, ValueError> {
-        Err(ValueError::external_class(
-            VCL_ERROR_CLASS,
-            format!(
-                "JvInterpreterRunUnit is not available without a GUI (script \"{}\")",
-                self.script
-            ),
-        ))
+    fn run_unit(&mut self, file_name: &str) -> Result<Value, ValueError> {
+        self.interpreter_run_unit(file_name)
     }
 
     fn install_classes(&mut self, classes: HashMap<String, Rc<ClassDef>>) {

@@ -191,6 +191,15 @@ const CASES: &[Case] = &[
         prep: Prep::None,
     },
     Case {
+        // The configuration of `Tools/NifTangentsBinormalsUpdater/niftbupd.dpr`
+        // (`SpellAddUpdateTangents` alone: add the missing tangents and
+        // binormals, do not touch the normals).
+        name: "tangents-tool",
+        operation: "Update tangents and binormals",
+        settings: &[("bAddIfMissing", "1")],
+        prep: Prep::None,
+    },
+    Case {
         name: "bounds",
         operation: "Update bounds",
         settings: &[],

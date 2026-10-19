@@ -28,6 +28,9 @@ pub const IE_USER_BREAK: i32 = 3;
 pub const IE_ERROR_POS: i32 = 5;
 /// `ieUnitNotFound`.
 pub const IE_UNIT_NOT_FOUND: i32 = 56;
+/// `ieDfmNotFound` -- `JvInterpreterFm.pas` raises it when the `.dfm` of the
+/// unit a form runner compiles is not found (`DFM '%s' not found`).
+pub const IE_DFM_NOT_FOUND: i32 = 58;
 /// `ieBadRemark` -- raised by the tokenizer for a bad remark.
 pub const IE_BAD_REMARK: i32 = 101;
 /// `ieExpected`.

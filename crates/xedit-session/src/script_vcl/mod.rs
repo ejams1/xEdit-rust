@@ -52,6 +52,7 @@
 //! seam, and the `streams.pas` probe witnesses every typed read and write
 //! against the oracle; [`misc_vcl::ledger_keys`] carries their ledger keys.
 
+pub mod dfm;
 pub mod helpers;
 pub mod interactive;
 pub mod misc_vcl;

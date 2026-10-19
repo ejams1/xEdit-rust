@@ -4612,24 +4612,28 @@ source = "External/jvcl/jvcl/run/JvInterpreter.pas"
 note = "A function a script declares external is called in its library (CallDll, CallDllIns): integer, boolean and small integer arguments and results, string and var arguments, procedures; the other types are refused with ieDllInvalidArgument/ieDllInvalidResult where the release faults re-raising a freed exception (probes host-extfun, host-extfun-double, host-extfun-result)."
 
 [script."JvInterpreterFm:cJvInterpreterFm.JvInterpreterMakeForm:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "JvInterpreter_JvInterpreterMakeForm"
-note = "Owned by issue #81 (form scripts): JvInterpreterMakeForm builds a form from a unit and its DFM file (TJvInterpreterFm.MakeForm); the headless VCL model refuses it with [EVclUnavailable] JvInterpreterMakeForm is not available without a GUI (script_vcl/interactive.rs), so the ledger's earlier covered was a refusal, not the operation (parity #41 audit). No script of the corpus calls it."
+note = "The fixture probe `probes/jvfm.pas` writes a unit and its text DFM and calls it: the unit compiles in a fresh interpreter and the DFM is read into a `TJvInterpreterForm` object whose caption, ClientWidth and nested Button1 are read back (`makeform: Fixture Form visible=False width=320`, `makeform: Button1 caption=OK`); `cargo xtask parity script --phase run --script jvfm --jobs 1` is equal (2026-10-18). Remaining, recorded in script_vcl::dfm: a binary (TPF0) DFM is refused, named, and the DFM's event properties (OnCreate included) are stored, not fired as the model does for every event."
 
 [script."JvInterpreterFm:cJvInterpreterFm.JvInterpreterRunForm:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "JvInterpreter_JvInterpreterRunForm"
-note = "Owned by issue #81 (form scripts): JvInterpreterRunForm builds and shows a form from a unit and its DFM file; the headless VCL model refuses it with [EVclUnavailable] JvInterpreterRunForm is not available without a GUI (script_vcl/interactive.rs), so the ledger's earlier covered was a refusal, not the operation (parity #41 audit). No script of the corpus calls it."
+note = "The same case (`probes/jvfm.pas`, `cargo xtask parity script --phase run --script jvfm --jobs 1` equal 2026-10-18): MakeForm's form is shown and reads `Visible = True`; the script frees it."
 
 [script."JvInterpreterFm:cJvInterpreterFm.JvInterpreterRunFormModal:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "JvInterpreter_JvInterpreterRunFormModal"
-note = "Owned by issue #81 (form scripts): JvInterpreterRunFormModal builds a form from a unit and its DFM file and shows it modally; the headless VCL model refuses it with [EVclUnavailable] JvInterpreterRunFormModal is not available without a GUI (script_vcl/interactive.rs), so the ledger's earlier covered was a refusal, not the operation (parity #41 audit). No script of the corpus calls it."
+note = "The same case: the run's recorded answer (`class TJvInterpreterForm`, title `Fixture Form`, button `OK`) drives the modal loop, the fixture's default button closes it with `ModalResult = 1`, the runner frees the form and the result line (`runformmodal: 1`) is equal (2026-10-18). The probe phase without answers ends on the same window as `oracle-dialog` `[TJvInterpreterForm] \"Fixture Form\": OK`, the class not a difference."
 
 [script."JvInterpreterFm:cJvInterpreterFm.JvInterpreterRunUnit:function"]
-status = "pending"
+status = "covered"
+command = "script.run"
 source = "JvInterpreter_JvInterpreterRunUnit"
-note = "Owned by issue #81 (form scripts): JvInterpreterRunUnit compiles a unit's source in a new form interpreter and runs its main block; the headless VCL model refuses it with [EVclUnavailable] JvInterpreterRunUnit is not available without a GUI (script_vcl/interactive.rs), so the ledger's earlier covered was a refusal, not the operation (parity #41 audit). No script of the corpus calls it."
+note = "The same case: the fixture unit's `main` routine runs in a fresh interpreter (the RTL and host registrations over a new VCL model that shares the run's answers), its `AddMessage` line reaches the run's log (`rununit: the unit main routine ran`) and the function's own result is Unassigned (`VarType = 0`); `cargo xtask parity script --phase run --script jvfm --jobs 1` equal (2026-10-18)."
 
 [script."JvInterpreter_Buttons:TBitBtn.Click:get"]
 status = "covered"

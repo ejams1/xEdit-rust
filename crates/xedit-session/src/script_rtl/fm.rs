@@ -11,9 +11,12 @@
 //! All four build or run a form: `MakeForm` (through `TJvInterpreterFm`),
 //! `RunForm` (the form shown), `RunFormModal` (shown modally) and
 //! `RunUnit`, which compiles a unit's source in a fresh interpreter and runs
-//! its main block -- the form interpreter's own entry point. They route
-//! through the [`Vcl`](super::Vcl) seam; headless, the seam's default
-//! answers with the clear `forms are not available in this build` error.
+//! its `main` routine -- the form interpreter's own entry point. They route
+//! through the [`Vcl`](super::Vcl) seam; the headless VCL model implements
+//! them (issue #81: `script_vcl::interactive::VclModel` with the text DFM
+//! reader of `script_vcl::dfm`), while the seam's [`NoVcl`](super::NoVcl)
+//! default, used by callers without a model, answers with the clear
+//! `<function>: forms are not available without a GUI` error.
 
 use std::cell::RefCell;
 use std::rc::Rc;
