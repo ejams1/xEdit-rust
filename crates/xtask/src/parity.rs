@@ -1541,21 +1541,87 @@ fn is_vanilla(game: &Game, lower_name: &str) -> bool {
 }
 
 pub(super) fn build_port(root: &Path) -> Result<PathBuf> {
-    let status = Command::new(env!("CARGO"))
-        .args(["build", "--release", "--package", "xedit-cli"])
+    let mut child = Command::new(env!("CARGO"))
+        .args([
+            "build",
+            "--release",
+            "--package",
+            "xedit-cli",
+            "--message-format=json-render-diagnostics",
+        ])
         .current_dir(root)
-        .status()?;
+        .stdout(Stdio::piped())
+        .stderr(Stdio::inherit())
+        .spawn()?;
+    let stdout = child.stdout.take().context("Cargo stdout was not captured")?;
+    let mut artifact = None;
+    for line in BufReader::new(stdout).lines() {
+        let line = line?;
+        let message: serde_json::Value = match serde_json::from_str(&line) {
+            Ok(message) => message,
+            Err(_) => {
+                eprintln!("{line}");
+                continue;
+            }
+        };
+        if message["reason"] == "compiler-message"
+            && let Some(rendered) = message["message"]["rendered"].as_str()
+        {
+            eprint!("{rendered}");
+        }
+        if message["reason"] == "compiler-artifact"
+            && message["target"]["name"] == "xedit"
+            && message["target"]["kind"]
+                .as_array()
+                .is_some_and(|kinds| kinds.iter().any(|kind| kind == "bin"))
+            && message["executable"].is_string()
+        {
+            artifact = Some(message);
+        }
+    }
+    let status = child.wait()?;
     ensure!(status.success(), "building xedit-cli failed");
-    // Cargo builds into `CARGO_TARGET_DIR` when it is set, which lets two
-    // harness runs use separate port binaries.
-    let target = match std::env::var_os("CARGO_TARGET_DIR").map(PathBuf::from) {
-        Some(dir) if dir.is_relative() => root.join(dir),
-        Some(dir) => dir,
-        None => root.join("target"),
-    };
-    Ok(target
-        .join("release")
-        .join(format!("xedit{}", std::env::consts::EXE_SUFFIX)))
+    let artifact = artifact.context("Cargo did not report the xedit executable artifact")?;
+    let executable = PathBuf::from(
+        artifact["executable"]
+            .as_str()
+            .context("Cargo reported an xedit artifact without an executable path")?,
+    );
+    ensure!(
+        executable.is_file(),
+        "Cargo-reported xedit executable does not exist: {}",
+        executable.display()
+    );
+    let rustflags = std::env::var("CARGO_ENCODED_RUSTFLAGS")
+        .or_else(|_| std::env::var("RUSTFLAGS"))
+        .unwrap_or_default();
+    let rustc = std::env::var_os("RUSTC").unwrap_or_else(|| "rustc".into());
+    let rustc_version = Command::new(rustc).arg("-vV").output()?;
+    ensure!(
+        rustc_version.status.success(),
+        "rustc -vV failed while recording build inputs"
+    );
+    let rustc_version = String::from_utf8_lossy(&rustc_version.stdout).into_owned();
+    let host = rustc_version
+        .lines()
+        .find_map(|line| line.strip_prefix("host: "))
+        .unwrap_or("unknown");
+    let receipt = serde_json::json!({
+        "schema": 1,
+        "rustc_version": rustc_version,
+        "target_triple": std::env::var("CARGO_BUILD_TARGET").unwrap_or_else(|_| host.to_owned()),
+        "package_id": artifact["package_id"],
+        "target": artifact["target"],
+        "profile": artifact["profile"],
+        "features": artifact["features"],
+        "executable": executable,
+        "executable_fnv1a64": format!("{:016x}", content_hash(&executable)?),
+        "rustflags": rustflags,
+    });
+    let receipt_path = executable.with_extension("build.json");
+    fs::write(&receipt_path, serde_json::to_vec_pretty(&receipt)?)
+        .with_context(|| format!("writing build receipt {}", receipt_path.display()))?;
+    Ok(executable)
 }
 
 /// FNV-1a over the file content. Identifies an input file in the cache.

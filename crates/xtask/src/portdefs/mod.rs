@@ -29,6 +29,15 @@ use self::resolve::{Resolver, Scope};
 use crate::pascal::ast::{Decl, Expr, Routine, Stmt, Unit};
 use crate::pascal::parser::parse_unit;
 
+/// Preserve output mtimes when a regeneration produces identical bytes.
+fn write_if_changed(path: &Path, bytes: impl AsRef<[u8]>) -> Result<()> {
+    let bytes = bytes.as_ref();
+    if std::fs::read(path).is_ok_and(|existing| existing == bytes) {
+        return Ok(());
+    }
+    std::fs::write(path, bytes).with_context(|| format!("writing {}", path.display()))
+}
+
 pub const DEFINES: &[&str] = &["WIN64", "MSWINDOWS", "CPUX64"];
 
 /// Reads a unit of the upstream checkout. The sources are in code page 1252.
@@ -410,7 +419,7 @@ fn emit_builders(upstream: &Path, out: &Path) -> Result<()> {
         text.push('\n');
         text.push_str(function);
     }
-    std::fs::write(out, text).with_context(|| format!("writing {}", out.display()))?;
+    write_if_changed(out, text)?;
     println!("{} functions written, {} not written", functions.len(), failures.len());
     for failure in &failures {
         println!("  {failure}");
@@ -467,7 +476,7 @@ fn emit_signatures(upstream: &Path, out: &Path) -> Result<()> {
             count += 1;
         }
     }
-    std::fs::write(out, text).with_context(|| format!("writing {}", out.display()))?;
+    write_if_changed(out, text)?;
     println!("{count} signatures written");
     Ok(())
 }
@@ -657,7 +666,7 @@ fn emit_unit(upstream: &Path, unit_name: &str, out: &Path, stubs: &Path, ported:
             }
         }
     }
-    std::fs::write(out, &text).with_context(|| format!("writing {}", out.display()))?;
+    write_if_changed(out, &text)?;
 
     // The Common unit also stubs the Common callbacks that only the game
     // units name, so that each has one stub, in `common_stubs.rs`.
@@ -705,7 +714,7 @@ fn emit_unit(upstream: &Path, unit_name: &str, out: &Path, stubs: &Path, ported:
             None => failures.push(format!("{pascal}: callback type {callback_type} has no stub form")),
         }
     }
-    std::fs::write(stubs, stub_text).with_context(|| format!("writing {}", stubs.display()))?;
+    write_if_changed(stubs, &stub_text)?;
 
     println!(
         "{unit_name}: {written} routines and {stub_count} callback stubs written, {} failures",
