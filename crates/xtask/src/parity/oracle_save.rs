@@ -10,8 +10,8 @@
 //! that the GUI's save runs. The saved bytes are cached zstd-compressed as
 //! `<cache>/<tag>/<MODE>-oracle-save/<file>.<key>.saved.zst`, or the
 //! message of the exception the save raised as `<file>.<key>.error`; the
-//! key hashes the plugin, its masters and the script. The port saves the
-//! same plugin (`xedit save`, as the round trip) and the two files are
+//! key hashes the plugin, its masters, the script and the release executable.
+//! The port saves the same plugin (`xedit save`, as the round trip) and the two files are
 //! compared byte for byte: `equal` whatever the save changed in the input,
 //! `equal-error` when both refused the save with the same message,
 //! `different` otherwise.
@@ -148,7 +148,7 @@ pub(super) fn load_list(game: &Game, data: &Path, names: &[&str]) -> Result<Vec<
 }
 
 /// The cache key of an oracle run: the contents of the plugins it loads,
-/// the script and the executable's name.
+/// the script and the release executable's contents.
 pub(super) fn oracle_key(runner: &Runner, plugins: &[PathBuf], script: &str, exe: &str) -> Result<u64> {
     let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
     let mut mix = |value: u64| {
@@ -169,7 +169,8 @@ pub(super) fn oracle_key(runner: &Runner, plugins: &[PathBuf], script: &str, exe
         mix(value);
     }
     mix(text_hash(script));
-    mix(text_hash(exe));
+    let executable = runner.oracle_dir.join(exe);
+    mix(content_hash(&executable).with_context(|| format!("hashing oracle executable {}", executable.display()))?);
     Ok(hash)
 }
 

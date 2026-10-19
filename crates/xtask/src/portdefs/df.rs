@@ -2034,8 +2034,8 @@ pub fn emit_df(upstream: &Path, unit_name: &str, out: &Path, stubs: &Path, hand:
         hand_written.extend(hand_names(Path::new(path))?);
     }
     let generated = generate(&types_unit, &unit, unit_name, &hand_written)?;
-    std::fs::write(out, &generated.text).with_context(|| format!("writing {}", out.display()))?;
-    std::fs::write(stubs, &generated.stubs).with_context(|| format!("writing {}", stubs.display()))?;
+    super::write_if_changed(out, &generated.text)?;
+    super::write_if_changed(stubs, &generated.stubs)?;
     println!(
         "{unit_name}: {} routines written, {} callback stubs, {} failures",
         generated.written,
