@@ -27,6 +27,8 @@ done
 
 The last argument is the hand file: every `pub fn` it defines is left out of the stubs. The stub exclusion reads function names from the source text, so define ported callbacks as explicit `pub fn` items, not through macros. The command prints the number of routines translated, the number of stubs written and the number of routines it failed to translate; the failures are listed in the output with their line and are ported by hand like callbacks.
 
+Each `emit-unit` run also writes an ignored `target/portdefs/<unit>.json` receipt with the upstream commit, defines, generator and source hashes, output hashes, handwritten names, stubs, unresolved references, failures, and added/resolved coverage since its previous receipt. The first receipt records that no prior coverage baseline exists; it does not label all current obligations as new.
+
 Regenerate every unit after a transpiler change, all fifteen of them: the Common unit decides which routines the game units import, and a name several units declare is named after the unit that resolves (see below). `Common TES3 TES4 FO3 FNV TES5 FO4 FO76 SF1 Reflection TES4Saves FO3Saves FNVSaves TES5Saves FO4Saves` with `$l=$(echo $u | sed 's/\([A-Z]\)/\L\1/g')` is the list; end with `cargo fmt --all` (the emitter writes one long line per statement), and read `git diff` before committing.
 
 ## One name in several units
