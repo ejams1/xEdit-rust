@@ -698,7 +698,7 @@ pub fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
                     let outcome = checked.unwrap_or_else(|error| Outcome {
                         game: case.game.name,
                         file: case.name.clone(),
-                        status: "oracle-failed",
+                        status: error_status(&error),
                         detail: Some(format!("{error:#}")),
                         oracle_bytes: 0,
                         port_bytes: 0,
@@ -805,6 +805,16 @@ pub fn run(root: &Path, tag: &str, args: &[&str]) -> Result<()> {
         ensure!(equal + unsupported == outcomes.len(), "parity does not hold");
     }
     Ok(())
+}
+
+fn error_status(error: &anyhow::Error) -> &'static str {
+    if error.chain().any(|cause| cause.to_string() == "parity stage: oracle") {
+        "oracle-failed"
+    } else if error.chain().any(|cause| cause.to_string() == "parity stage: port") {
+        "port-failed"
+    } else {
+        "harness-error"
+    }
 }
 
 /// How a save of the port ended.
@@ -915,7 +925,7 @@ fn check_roundtrip(case: &Case, runner: &Runner) -> Result<Outcome> {
     };
     let saved = dir.join(format!("{stem}.saved"));
     let port_log = dir.join(format!("{stem}.port.log"));
-    match port_save(case, runner, &saved, &port_log, &mut outcome)? {
+    match port_save(case, runner, &saved, &port_log, &mut outcome).context("parity stage: port")? {
         PortSave::Written => {}
         PortSave::Stopped => return Ok(outcome),
         // A refusal is confirmed by the oracle's refusal with the same
@@ -1797,7 +1807,7 @@ fn check(case: &Case, runner: &Runner) -> Result<Outcome> {
     let oracle_out = match OracleOutput::find(&dir, &stem) {
         Some(output) => output,
         None => {
-            outcome.oracle_peak = run_oracle(case, runner, &dir, &stem)?;
+            outcome.oracle_peak = run_oracle(case, runner, &dir, &stem).context("parity stage: oracle")?;
             OracleOutput::find(&dir, &stem).context("oracle output missing after the run")?
         }
     };
@@ -1858,7 +1868,8 @@ fn check(case: &Case, runner: &Runner) -> Result<Outcome> {
             let needed = difference.is_none();
             Ok((difference, needed))
         },
-    )?;
+    )
+    .context("parity stage: port")?;
     outcome.port_bytes = port_bytes;
     outcome.port_peak = peak;
     let difference = difference?;
@@ -2112,6 +2123,16 @@ mod tests {
             Some(r#"Expected header Magic FO3SAVEGAME, found TES4SAVEGAM in file "C:\Saves\Save 1.ess""#)
         );
         assert_eq!(oracle_error_message("<00:00:01.000> All Done."), None);
+    }
+
+    #[test]
+    fn fallible_case_stages_keep_their_own_status() {
+        let oracle = anyhow::anyhow!("failed").context("parity stage: oracle");
+        let port = anyhow::anyhow!("failed").context("parity stage: port");
+        let harness = anyhow::anyhow!("failed");
+        assert_eq!(error_status(&oracle), "oracle-failed");
+        assert_eq!(error_status(&port), "port-failed");
+        assert_eq!(error_status(&harness), "harness-error");
     }
 
     fn diff_files(oracle: &Path, port: &Path, prefix: bool) -> Result<Option<String>> {

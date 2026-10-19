@@ -502,7 +502,8 @@ pub(super) fn check(case: &Case, runner: &Runner) -> Result<Outcome> {
                 .join("oracle-work")
                 .join(format!("{stem}.{}", std::process::id()));
             let peak_file = dir.join(format!("{stem}.oracle.{}.peak", std::process::id()));
-            let result = run_gui(runner, case.game, plugins, script, false, work.clone(), &peak_file)?;
+            let result = run_gui(runner, case.game, plugins, script, false, work.clone(), &peak_file)
+                .context("parity stage: oracle")?;
             outcome.oracle_peak = result.peak;
             let kept = keep_result(&result.status, &result.out.join("saved"), &dir, &stem);
             fs::write(dir.join(format!("{stem}.oracle.log")), result.status.join("\n"))?;
@@ -527,7 +528,7 @@ pub(super) fn check(case: &Case, runner: &Runner) -> Result<Outcome> {
     );
     let saved = port_dir.join(format!("{port_stem}.port.saved"));
     let port_log = port_dir.join(format!("{port_stem}.port.log"));
-    match port_save(case, runner, &saved, &port_log, &mut outcome)? {
+    match port_save(case, runner, &saved, &port_log, &mut outcome).context("parity stage: port")? {
         PortSave::Written => {
             let (status, detail) = compare(case, &oracle, &saved, &port_dir, &port_stem)?;
             outcome.status = status;
