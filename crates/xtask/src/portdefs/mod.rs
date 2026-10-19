@@ -20,7 +20,8 @@ pub mod model;
 pub mod resolve;
 
 use std::collections::{BTreeMap, HashSet};
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::process::Command;
 
 use anyhow::{Context, Result, bail, ensure};
 
@@ -31,11 +32,208 @@ use crate::pascal::parser::parse_unit;
 
 /// Preserve output mtimes when a regeneration produces identical bytes.
 fn write_if_changed(path: &Path, bytes: impl AsRef<[u8]>) -> Result<()> {
-    let bytes = bytes.as_ref();
+    use std::io::Write;
+    use std::process::Stdio;
+
+    let config = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").join("rustfmt.toml");
+    let mut child = Command::new("rustfmt")
+        .args(["--emit", "stdout", "--edition", "2024", "--config-path"])
+        .arg(config)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .context("starting rustfmt for generated definitions")?;
+    child
+        .stdin
+        .take()
+        .context("opening rustfmt input")?
+        .write_all(bytes.as_ref())?;
+    let formatted = child.wait_with_output()?;
+    ensure!(
+        formatted.status.success(),
+        "rustfmt could not format generated output: {}",
+        String::from_utf8_lossy(&formatted.stderr).trim()
+    );
+    let bytes = formatted.stdout;
     if std::fs::read(path).is_ok_and(|existing| existing == bytes) {
         return Ok(());
     }
     std::fs::write(path, bytes).with_context(|| format!("writing {}", path.display()))
+}
+
+fn hash_file(path: &Path) -> Result<String> {
+    let mut hash = 0xcbf2_9ce4_8422_2325u64;
+    for byte in std::fs::read(path).with_context(|| format!("hashing {}", path.display()))? {
+        hash = (hash ^ u64::from(byte)).wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    Ok(format!("{hash:016x}"))
+}
+
+fn coverage_delta(current: &[String], previous: Option<&serde_json::Value>) -> Vec<String> {
+    let Some(previous) = previous else {
+        return Vec::new();
+    };
+    let previous: HashSet<&str> = Some(previous)
+        .and_then(serde_json::Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(serde_json::Value::as_str)
+        .collect();
+    current
+        .iter()
+        .filter(|item| !previous.contains(item.as_str()))
+        .cloned()
+        .collect()
+}
+
+fn coverage_resolved(current: &[String], previous: Option<&serde_json::Value>) -> Vec<String> {
+    let current: HashSet<&str> = current.iter().map(String::as_str).collect();
+    previous
+        .and_then(serde_json::Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(serde_json::Value::as_str)
+        .filter(|item| !current.contains(item))
+        .map(str::to_owned)
+        .collect()
+}
+
+fn write_generation_manifest(
+    upstream: &Path,
+    unit_name: &str,
+    out: &Path,
+    stubs: &Path,
+    handwritten: &[PathBuf],
+    coverage: serde_json::Value,
+) -> Result<()> {
+    let workspace = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let manifest_dir = std::env::var_os("CARGO_TARGET_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| workspace.join("target"))
+        .join("portdefs");
+    std::fs::create_dir_all(&manifest_dir)?;
+    let manifest_path = manifest_dir.join(format!("{unit_name}.json"));
+    let previous: Option<serde_json::Value> = std::fs::read(&manifest_path)
+        .ok()
+        .and_then(|bytes| serde_json::from_slice(&bytes).ok());
+
+    let mut source_units = BTreeMap::<String, PathBuf>::new();
+    for unit in [
+        "wbInterface",
+        "wbDefinitionsSignatures",
+        "wbDefinitionsCommon",
+        unit_name,
+    ] {
+        let path = PathBuf::from(format!("Core/{unit}.pas"));
+        if upstream.join(&path).is_file() {
+            source_units.insert(path.to_string_lossy().replace('\\', "/"), upstream.join(path));
+        }
+    }
+    if unit_name == "wbDefinitionsSF1" {
+        let path = PathBuf::from("Core/wbDefinitionsReflection.pas");
+        source_units.insert(path.to_string_lossy().replace('\\', "/"), upstream.join(path));
+    }
+    if let Some(game) = save_game_unit(unit_name) {
+        let path = PathBuf::from("Core/wbSaveInterface.pas");
+        source_units.insert(path.to_string_lossy().replace('\\', "/"), upstream.join(path));
+        let path = PathBuf::from(format!("Core/{game}.pas"));
+        source_units.insert(path.to_string_lossy().replace('\\', "/"), upstream.join(path));
+    }
+    if unit_name == "wbDefinitionsCommon" {
+        for game in GAME_UNITS {
+            let path = PathBuf::from(format!("Core/{game}.pas"));
+            source_units.insert(path.to_string_lossy().replace('\\', "/"), upstream.join(path));
+        }
+    }
+    let upstream_inputs: serde_json::Map<String, serde_json::Value> = source_units
+        .iter()
+        .map(|(label, path)| Ok((label.clone(), serde_json::Value::String(hash_file(path)?))))
+        .collect::<Result<_>>()?;
+
+    let crate_src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let generator_paths = [
+        "portdefs/mod.rs",
+        "portdefs/emit.rs",
+        "portdefs/model.rs",
+        "portdefs/resolve.rs",
+        "pascal/ast.rs",
+        "pascal/lexer.rs",
+        "pascal/parser.rs",
+    ];
+    let generator_inputs: serde_json::Map<String, serde_json::Value> = generator_paths
+        .iter()
+        .map(|relative| {
+            let path = crate_src.join(relative);
+            Ok((relative.to_string(), serde_json::Value::String(hash_file(&path)?)))
+        })
+        .collect::<Result<_>>()?;
+    let handwritten_inputs: serde_json::Map<String, serde_json::Value> = handwritten
+        .iter()
+        .filter(|path| path.is_file())
+        .map(|path| {
+            let label = path.file_name().unwrap_or_default().to_string_lossy().into_owned();
+            Ok((label, serde_json::Value::String(hash_file(path)?)))
+        })
+        .collect::<Result<_>>()?;
+    let upstream_commit = Command::new("git")
+        .arg("-C")
+        .arg(upstream)
+        .args(["rev-parse", "HEAD"])
+        .output()
+        .ok()
+        .filter(|output| output.status.success())
+        .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_owned());
+
+    let mut document = serde_json::json!({
+        "schema": 1,
+        "unit": unit_name,
+        "upstream_commit": upstream_commit,
+        "defines": DEFINES,
+        "generator_inputs": generator_inputs,
+        "upstream_inputs": upstream_inputs,
+        "handwritten_inputs": handwritten_inputs,
+        "outputs": {
+            "unit_fnv1a64": hash_file(out)?,
+            "stubs_fnv1a64": hash_file(stubs)?,
+        },
+        "coverage": coverage,
+    });
+    let previous_coverage = previous.as_ref().and_then(|value| value.get("coverage"));
+    if let Some(coverage) = document.get_mut("coverage") {
+        for key in ["stub_names", "unresolved", "failures"] {
+            let current: Vec<String> = coverage
+                .get(key)
+                .and_then(serde_json::Value::as_array)
+                .into_iter()
+                .flatten()
+                .filter_map(serde_json::Value::as_str)
+                .map(str::to_owned)
+                .collect();
+            let prior = previous_coverage.and_then(|value| value.get(key));
+            let delta = coverage_delta(&current, prior);
+            coverage[format!("new_{key}")] = serde_json::json!(delta);
+            let resolved = coverage_resolved(&current, prior);
+            let resolved_key = if key == "stub_names" {
+                "removed_stub_names".to_owned()
+            } else {
+                format!("resolved_{key}")
+            };
+            coverage[resolved_key] = serde_json::json!(resolved);
+        }
+        coverage["has_previous_baseline"] = serde_json::Value::Bool(previous_coverage.is_some());
+    }
+    let temporary = manifest_path.with_extension(format!("{}.partial", std::process::id()));
+    std::fs::write(&temporary, serde_json::to_vec_pretty(&document)?)?;
+    std::fs::rename(&temporary, &manifest_path).or_else(|error| {
+        if manifest_path.exists() {
+            std::fs::remove_file(&temporary)?;
+            Ok(())
+        } else {
+            Err(error)
+        }
+    })?;
+    Ok(())
 }
 
 pub const DEFINES: &[&str] = &["WIN64", "MSWINDOWS", "CPUX64"];
@@ -728,16 +926,38 @@ fn emit_unit(upstream: &Path, unit_name: &str, out: &Path, stubs: &Path, ported:
         .filter_map(|line| line.strip_prefix("pub fn ")?.split('(').next())
         .collect();
     println!("referenced and not written:");
-    for (name, what) in emitter.references.borrow().iter() {
-        if !emitter.callbacks.borrow().contains_key(name)
-            && !written.contains(name.as_str())
-            && !ported.contains(name)
-            && !what.starts_with("wbInterface:")
-            && !(what.starts_with("wbDefinitionsCommon:") && unit_name != "wbDefinitionsCommon")
-        {
-            println!("  {name}: {what}");
-        }
+    let unresolved: Vec<String> = emitter
+        .references
+        .borrow()
+        .iter()
+        .filter(|(name, what)| {
+            !emitter.callbacks.borrow().contains_key(*name)
+                && !written.contains(name.as_str())
+                && !ported.contains(*name)
+                && !what.starts_with("wbInterface:")
+                && !(what.starts_with("wbDefinitionsCommon:") && unit_name != "wbDefinitionsCommon")
+        })
+        .map(|(name, what)| format!("{name}: {what}"))
+        .collect();
+    for reference in &unresolved {
+        println!("  {reference}");
     }
+    let mut handwritten: Vec<_> = ported.into_iter().collect();
+    handwritten.sort();
+    let stub_names: Vec<String> = stub_text
+        .lines()
+        .filter_map(|line| line.strip_prefix("pub fn ")?.split('(').next().map(str::to_owned))
+        .collect();
+    let mut failures = failures;
+    failures.sort();
+    let coverage = serde_json::json!({
+        "written_routines": written.len(),
+        "stub_names": stub_names,
+        "handwritten_names": handwritten,
+        "unresolved": unresolved,
+        "failures": failures,
+    });
+    write_generation_manifest(upstream, unit_name, out, stubs, &ported_files, coverage)?;
     Ok(())
 }
 
@@ -877,6 +1097,14 @@ fn resolve_definitions(upstream: &Path, unit_name: &str) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn generation_coverage_reports_added_and_resolved_items() {
+        let previous = serde_json::json!(["a", "b"]);
+        assert_eq!(coverage_delta(&["b".into(), "c".into()], Some(&previous)), ["c"]);
+        assert_eq!(coverage_resolved(&["b".into(), "c".into()], Some(&previous)), ["a"]);
+        assert!(coverage_delta(&["c".into()], None).is_empty());
+    }
 
     const SOURCE: &str = "unit wbTest;
         interface
