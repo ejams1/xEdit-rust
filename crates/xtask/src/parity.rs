@@ -897,7 +897,12 @@ fn port_save(case: &Case, runner: &Runner, saved: &Path, port_log: &Path, outcom
 fn check_roundtrip(case: &Case, runner: &Runner) -> Result<Outcome> {
     let dir = runner.scratch.join(format!("{}-roundtrip", case.game.mode));
     fs::create_dir_all(&dir)?;
-    let stem = format!("{}.{:016x}", case.name, content_hash(&case.input)?);
+    let stem = format!(
+        "{}.{:016x}.{}",
+        case.name,
+        content_hash(&case.input)?,
+        std::process::id()
+    );
     let mut outcome = Outcome {
         game: case.game.name,
         file: case.name.clone(),
@@ -1803,8 +1808,9 @@ fn check(case: &Case, runner: &Runner) -> Result<Outcome> {
 
     // The port output is compared while it is produced and kept, compressed,
     // only when it differs.
-    let port_out = dir.join(format!("{stem}.port.txt.zst"));
-    let port_log = dir.join(format!("{stem}.port.log"));
+    let run_stem = format!("{stem}.port.{}", std::process::id());
+    let port_out = dir.join(format!("{run_stem}.txt.zst"));
+    let port_log = dir.join(format!("{run_stem}.log"));
     let mut command = Command::new(port);
     if case.saves {
         command
@@ -1828,7 +1834,7 @@ fn check(case: &Case, runner: &Runner) -> Result<Outcome> {
         runner,
         case,
         &mut command,
-        &dir.join(format!("{stem}.port.peak")),
+        &dir.join(format!("{run_stem}.peak")),
         |child| {
             let mut tee = Tee {
                 reader: child.stdout.take().unwrap(),
@@ -1931,7 +1937,7 @@ fn run_oracle(case: &Case, runner: &Runner, dir: &Path, stem: &str) -> Result<Op
         runner,
         case,
         &mut command,
-        &dir.join(format!("{stem}.oracle.peak")),
+        &dir.join(format!("{stem}.oracle.{}.peak", std::process::id())),
         |child| {
             let mut encoder = zstd::Encoder::new(File::create(&partial)?, 3)?;
             let mut stdout = child.stdout.take().unwrap();
@@ -1989,7 +1995,7 @@ fn run_oracle(case: &Case, runner: &Runner, dir: &Path, stem: &str) -> Result<Op
         keep_partial(&partial, &dir.join(format!("{stem}.oracle.txt.zst")))?;
     } else if last.contains("Unexpected Error") {
         keep_partial(&partial, &dir.join(format!("{stem}.oracle.crashed.txt.zst")))?;
-        fs::write(dir.join(format!("{stem}.oracle.error")), last)?;
+        write_immutable(&dir.join(format!("{stem}.oracle.error")), last.as_bytes())?;
     } else {
         bail!("oracle did not finish: last log line: {last}");
     }
@@ -1999,12 +2005,26 @@ fn run_oracle(case: &Case, runner: &Runner, dir: &Path, stem: &str) -> Result<Op
 /// Moves a finished oracle output into the cache, unless another run put it
 /// there first.
 fn keep_partial(partial: &Path, cached: &Path) -> Result<()> {
-    if cached.exists() {
-        fs::remove_file(partial)?;
-        return Ok(());
+    publish_once(partial, cached)
+}
+
+/// Publishes a complete immutable cache file atomically; concurrent writers
+/// keep the first complete winner and discard their own temporary file.
+fn publish_once(partial: &Path, cached: &Path) -> Result<()> {
+    match fs::hard_link(partial, cached) {
+        Ok(()) => fs::remove_file(partial).with_context(|| format!("removing {}", partial.display())),
+        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+            fs::remove_file(partial).with_context(|| format!("removing losing cache partial {}", partial.display()))
+        }
+        Err(error) => Err(error).with_context(|| format!("publishing immutable cache file {}", cached.display())),
     }
-    fs::rename(partial, cached)?;
-    Ok(())
+}
+
+/// Writes a small immutable cache record through a run-owned partial file.
+fn write_immutable(path: &Path, bytes: impl AsRef<[u8]>) -> Result<()> {
+    let partial = path.with_extension(format!("{}.partial", std::process::id()));
+    fs::write(&partial, bytes)?;
+    publish_once(&partial, path)
 }
 
 /// The message of the exception that ended an oracle run, from the last line
@@ -2182,5 +2202,19 @@ mod tests {
         assert!(diff_files(&oracle, &port, false).unwrap().is_some());
         fs::write(&port, "one\r\ntwo\r\nfour\r\n").unwrap();
         assert!(diff_files(&oracle, &port, true).unwrap().unwrap().contains("line 3"));
+    }
+
+    #[test]
+    fn immutable_cache_publication_keeps_one_complete_winner() {
+        let dir = xedit_io::temp::TempDir::new(format!("xtask-parity-publish-{}", std::process::id()));
+        let first = dir.join("first.partial");
+        let second = dir.join("second.partial");
+        let cached = dir.join("oracle.zst");
+        fs::write(&first, b"complete first value").unwrap();
+        fs::write(&second, b"complete second value").unwrap();
+        publish_once(&first, &cached).unwrap();
+        publish_once(&second, &cached).unwrap();
+        assert_eq!(fs::read(&cached).unwrap(), b"complete first value");
+        assert!(!first.exists() && !second.exists());
     }
 }

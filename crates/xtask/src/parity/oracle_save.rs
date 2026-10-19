@@ -156,7 +156,16 @@ pub(super) fn oracle_key(runner: &Runner, plugins: &[PathBuf], script: &str, exe
             hash = (hash ^ u64::from(byte)).wrapping_mul(0x0000_0100_0000_01b3);
         }
     };
+    // Bump this when the raw-evidence identity closure changes. Older cache
+    // entries remain on disk but cannot certify a result under this schema.
+    mix(2);
     for plugin in plugins {
+        let name = plugin
+            .file_name()
+            .context("a plugin path without a file name")?
+            .to_string_lossy()
+            .to_ascii_lowercase();
+        mix(text_hash(&name));
         let known = runner.hashes.lock().unwrap().get(plugin).copied();
         let value = match known {
             Some(value) => value,
@@ -431,12 +440,7 @@ pub(super) fn keep_compressed(source: &Path, cached: &Path) -> Result<()> {
     let mut encoder = zstd::Encoder::new(File::create(&partial)?, 3)?;
     std::io::copy(&mut File::open(source)?, &mut encoder)?;
     encoder.finish()?;
-    if cached.exists() {
-        fs::remove_file(&partial)?;
-    } else {
-        fs::rename(&partial, cached)?;
-    }
-    Ok(())
+    super::publish_once(&partial, cached)
 }
 
 /// Moves the outcome of a script into the cache: the file it saved as
@@ -451,8 +455,7 @@ fn keep_result(status: &[String], saved: &Path, dir: &Path, stem: &str) -> Resul
         );
         keep_compressed(saved, &dir.join(format!("{stem}.saved.zst")))
     } else if let Some(message) = last.strip_prefix("error: ") {
-        fs::write(dir.join(format!("{stem}.error")), message)?;
-        Ok(())
+        super::write_immutable(&dir.join(format!("{stem}.error")), message.as_bytes())
     } else {
         bail!("the script ended without a result: {}", status.join(" / "))
     }
@@ -498,7 +501,7 @@ pub(super) fn check(case: &Case, runner: &Runner) -> Result<Outcome> {
                 .scratch
                 .join("oracle-work")
                 .join(format!("{stem}.{}", std::process::id()));
-            let peak_file = dir.join(format!("{stem}.oracle.peak"));
+            let peak_file = dir.join(format!("{stem}.oracle.{}.peak", std::process::id()));
             let result = run_gui(runner, case.game, plugins, script, false, work.clone(), &peak_file)?;
             outcome.oracle_peak = result.peak;
             let kept = keep_result(&result.status, &result.out.join("saved"), &dir, &stem);
@@ -516,7 +519,12 @@ pub(super) fn check(case: &Case, runner: &Runner) -> Result<Outcome> {
     }
     let port_dir = runner.scratch.join(format!("{}-oracle-save", case.game.mode));
     fs::create_dir_all(&port_dir)?;
-    let port_stem = format!("{}.{:016x}", case.name, content_hash(&case.input)?);
+    let port_stem = format!(
+        "{}.{:016x}.{}",
+        case.name,
+        content_hash(&case.input)?,
+        std::process::id()
+    );
     let saved = port_dir.join(format!("{port_stem}.port.saved"));
     let port_log = port_dir.join(format!("{port_stem}.port.log"));
     match port_save(case, runner, &saved, &port_log, &mut outcome)? {
@@ -1484,7 +1492,7 @@ fn check_edit(
             .scratch
             .join("oracle-work")
             .join(format!("{oracle_stem}.{}", std::process::id()));
-        let peak_file = dir.join(format!("{oracle_stem}.oracle.peak"));
+        let peak_file = dir.join(format!("{oracle_stem}.oracle.{}.peak", std::process::id()));
         // The string tables go into the private data folder.
         let mut extras = gui::GuiExtras {
             close_after: sequence.strings,

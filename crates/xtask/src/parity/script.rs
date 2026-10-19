@@ -2157,12 +2157,13 @@ fn port_run(
     oracle_dir: &Path,
     mut outcome: ScriptOutcome,
 ) -> Result<ScriptOutcome> {
-    let dir = runner.scratch.join(format!("{}-port", task.game.mode)).join(&task.stem);
-    // A folder kept from an earlier run of a different recipe must not leak
-    // files into this run's capture.
-    if dir.exists() {
-        fs::remove_dir_all(&dir)?;
-    }
+    let dir =
+        runner
+            .scratch
+            .join(format!("{}-port", task.game.mode))
+            .join(format!("{}.{}", task.stem, std::process::id()));
+    // Every process owns its run folder so cleanup cannot remove another
+    // process's outputs or captured diagnostics.
     fs::create_dir_all(&dir)?;
     let out = dir.join("out");
     let data = dir.join("Data");
