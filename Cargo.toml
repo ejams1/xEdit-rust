@@ -16,10 +16,19 @@ repository = "https://github.com/ejams1/xEdit-rust"
 # and the parity work rarely needs more than line tables for a backtrace.
 # Dependencies get none: their frames are not what a failing port test reads.
 [workspace.dependencies]
-# Decision 1 of `docs/PLAN.md`: the GUI toolkit. An egui application with a
-# custom virtualised tree and grid; MIT OR Apache-2.0, so the licence gate
-# stays green.
-eframe = "0.37"
+# Decision 1 of `docs/PLAN.md`: the GUI toolkit. Use the operating-system
+# font provider so the executable does not bundle epaint's separately
+# licensed default fonts.
+eframe = { version = "0.37", default-features = false, features = [
+    "accesskit",
+    "clipboard",
+    "links",
+    "system_fonts",
+    "wayland",
+    "web_screen_reader",
+    "wgpu",
+    "x11",
+] }
 
 [profile.dev]
 debug = 1
