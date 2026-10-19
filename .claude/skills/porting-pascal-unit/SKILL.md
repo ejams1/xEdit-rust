@@ -1,6 +1,6 @@
 ---
 name: porting-pascal-unit
-description: Use when porting an upstream xEdit Pascal unit (or part of one) to Rust in this repository, or when merging an upstream change into an already ported unit, including a Sniff processor of Sniff/Proc. Covers file placement, naming, the license header, the upstream map entry, the session command and the parity test, and for Sniff processors the frame, the settings, the Delphi number semantics and the parity sniff check.
+description: Port an upstream xEdit Pascal unit or Sniff processor to Rust while preserving its layout, origin, semantics, and parity checks.
 ---
 
 # Porting a Pascal unit

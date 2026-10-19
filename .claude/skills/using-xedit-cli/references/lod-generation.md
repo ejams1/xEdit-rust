@@ -1,0 +1,12 @@
+## LOD generation
+
+`xedit lodgen` runs xEdit's LODGen mode (`-lodgen`, the LODGen form and `wbLOD`) on the loaded plugins: Oblivion's distant LOD (`.lod` and `.cmp` files of every worldspace), the trees LOD (billboard atlas, `.lst` list, `.btt` or `.dtl` blocks) and objects LOD of Skyrim and the Fallouts, and the objects LOD of Fallout 4. Load every plugin of the load order with `--load` (in load order) and give `--game`.
+
+| CLI | Command | What it does |
+| --- | --- | --- |
+| `lodgen [--worldspace EDITORID]... [--set NAME=VALUE]... [--settings INI] [--output DIR] [--scripts DIR] [--temp DIR] [--data DIR] [--game-ini INI] [--seed N] [--split-trees] [--dry-run]` | `lodgen.generate` | Generates the LOD of the worldspaces (without `--worldspace`, the default one the form checks; Oblivion does all). `--set` sets an option of the form by its name in `[<APP> LOD Options]` of `<APP>LODGen.ini` (`ObjectsLOD`, `TreesLOD`, `Trees3D`, `BuildAtlas`, `AtlasWidth`, `AtlasDiffuseFormat=DXT5`, `Chunk`, `LODLevel`, `TreesBrightness`, ...; the schema lists them); `--settings` is that ini, read first and written back as the form does. The output goes below `--output` (the data folder by default, so give it). `--scripts` is the `Edit Scripts` folder with `LODGenx64.exe`, `Texconvx64.exe`, `LODGen_flat_lod.nif` and the atlas maps: the objects LOD meshes are built by `LODGenx64.exe` from the `LODGen.txt` the command writes there. `--game-ini` is the game's ini whose archive lists load before the plugins' archives. The response lists the worldspaces with their checks, every option, the archives loaded and the messages of the log. Needs `--edit` unless `--dry-run` (which lists the worldspaces and options and writes nothing). |
+
+- `--seed` sets the `RandSeed` of the tree rotations; upstream seeds from the clock, so two runs differ there unless the seed is given (the response has the seed used).
+- `--split-trees` splits the trees LOD atlas of each worldspace into one billboard `.dds` and `.txt` per tree (the form's hidden `Split LOD Atlas` button), below `<output>Textures/Terrain/LODGen/AtlasSplit_<atlas>/`; Skyrim, Fallout 3 and New Vegas.
+- Fallout 4 and Skyrim objects LOD find no LOD models in the 4.1.5q definitions (an upstream quirk: the LOD model path it reads does not exist), so they end with `no valid references found`, as the oracle does. Fallout 76 and Starfield are refused (`unsupported`).
+- `cargo xtask parity lodgen` compares the output files and the log with the xEdit GUI's LODGen mode.

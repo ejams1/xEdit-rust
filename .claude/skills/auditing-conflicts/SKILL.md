@@ -1,6 +1,6 @@
 ---
 name: auditing-conflicts
-description: Use when a load order's record conflicts have to be audited with the native xedit CLI of this repository - which override of a FormID wins and what xEdit's conflict statuses mean, narrowing the list to the records a plugin wins or loses, comparing a record's overrides side by side, the mod groups that hide records from the comparison, and the reference index that shows what a conflicting record is used by. The native replacement for the xEdit-llm daemon's comparison routes (comparisons.records, records.conflict_status).
+description: Audit Bethesda plugin override winners, conflict statuses, comparisons, mod groups, and reference usage with the native xedit CLI.
 ---
 
 # Auditing conflicts

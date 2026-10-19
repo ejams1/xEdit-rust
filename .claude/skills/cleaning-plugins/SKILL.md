@@ -1,6 +1,6 @@
 ---
 name: cleaning-plugins
-description: Use when a Bethesda plugin has to be cleaned with the native xedit CLI of this repository - removing the records identical to their master (ITM), undeleting and disabling the deleted references (UDR), cleaning up records that refer to injected records, or running xEdit's quick auto clean mode (-quickautoclean) as a mod manager's "QuickAutoClean" does. The native replacement for the xEdit-llm daemon's cleaning routes (cleaning.quick_auto_clean, cleaning.remove_itm, cleaning.undelete_and_disable_refs, cleaning.cleanup_injected_references).
+description: Clean Bethesda plugins with native xedit ITM removal, UDR handling, injected-reference cleanup, or quick auto clean.
 ---
 
 # Cleaning plugins

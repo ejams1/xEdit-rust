@@ -1,0 +1,23 @@
+## Filtering the navigation tree
+
+`filter` is xEdit's filter of the navigation tree: it walks the tree of the loaded plugins, computes the conflict status, and reports what a filter keeps. The GUI applies one to what its navigation tree shows and lets the cleaning functions run over what is left; the CLI applies it to a tree it builds and reports the counts, which is how `cargo xtask parity filter` checks it against the GUI.
+
+- `filter apply` runs one filter. The options are the ones of xEdit's filter dialog, either in the request (`options`) or read from a `[Filter <name>]` preset of xEdit's settings file (`--preset`, with `--settings` naming another file). Without either, the defaults are the dialog's: no filter but the conflict status inherited by parent.
+- The option flags mirror the dialog's checkboxes: `--conflict-all` and `--conflict-this` (the statuses a record may have), `--by-inject-status`, `--by-references-injected-status`, `--editor-id`, `--name`, `--element-value` (searches the values of the record and of every element below it), `--base-editor-id` (8 or 9 characters are the FormID of a base record), `--base-name`, `--scaled-actors`, `--signature`, `--base-signature`, `--by-persistent` with `--persistent=<bool>`, `--unnecessary-persistent`, `--master-is-temporary`, `--is-master`, `--persistent-pos-changed`, `--deleted`, `--by-vwd`, `--by-has-vwd-mesh`, `--by-has-precombined-mesh`, `--flatten-blocks`, `--flatten-cell-childs`, `--assign-pers-wrld-child`, `--inherit-conflict-by-parent=<bool>` and `--scripted` ("Apply custom scripted filter", `cbScriptedFilter`). `--regex-comparison` reads the texts as regular expressions (case-insensitive, multi-line).
+
+The flags the dialog has no checkbox for are `--conflict-only` (the very quick conflicts mode), `--only-one` ("Filter for only one") and `--no-game-master`.
+- `--scripted` is the `Filter` function of the script a run is inside: inside `script.run` the filter calls it through the run's interpreter for every main record node the walk reaches, in the walk's own order, and a record it rejects leaves the tree (a script that raises aborts the run). Outside a script there is none, so the flag rejects every record, as the GUI's nil `Script` does -- the same as writing `FilterScripted := True` without a `Filter` function, which is what the GUI does.
+- An option whose checkbox is on but whose set or list is empty empties the tree (xEdit's rule: a `[Pass 1] Processed Records: 0`), and a set that holds every status is turned off, as xEdit does. `--by-not-reachable-status` has no effect until `refs build-reachable` ran (xEdit's dialog disables its checkbox until "Build Reachable Info" did; the response's `reachable_build` says whether it ran). `--unnecessary-persistent` and `--by-references-injected-status` build the reference index first, as xEdit's `BuildAllRef` does.
+- The report is what the GUI writes to its message log: `pass1`, `pass2`, `unfiltered` (the two passes and the nodes left), `files` with the records and the records the filter took out of each file (`filtered`; the line `[file] Filtered n of m records` is written only for a partial count, which `logged` says), and `messages`. `--list-records` adds the names of the records the tree keeps, in the order of the tree.
+- `--modgroups NAME`, `--all-modgroups` and `--saved-modgroups` activate mod groups, so the records they hide leave the comparison (and the tree) as in the GUI.
+- `filter remove` takes the filter off: the tree holds the loaded files again (xEdit's "Remove Filter").
+- `filter presets` lists the `[Filter <name>]` presets of xEdit's settings file and the last used one; `filter save --name X [--options <json>]` writes one (it is a mutating command: without `--edit` only `--dry-run`, which reports whether the preset changes the stored one, xEdit's "The Filter has changed from the preset" question); `filter delete --name X` removes one.
+
+```
+xedit --game sse --load "<Data>\Skyrim.esm" --load "<Data>\Update.esm" filter apply --conflict-this ctConflictLoses,ctConflictWins --conflict-only
+xedit --game sse --load "<Data>\Skyrim.esm" filter apply --preset "my preset" --settings "%LOCALAPPDATA%\Skyrim Special Edition\Plugins.sseviewsettings"
+xedit --game sse --load "<Data>\Skyrim.esm" filter apply --editor-id "^DLC01" --regex-comparison --signature WEAP,ARMO --list-records
+xedit --game sse --load "<Data>\Skyrim.esm" filter apply --by-persistent --persistent=false --signature REFR
+xedit --game sse --load "<Data>\Skyrim.esm" refs build-reachable
+xedit --game sse --load "<Data>\Skyrim.esm" filter apply --by-not-reachable-status=true
+```

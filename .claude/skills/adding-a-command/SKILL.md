@@ -1,6 +1,6 @@
 ---
 name: adding-a-command
-description: Use when adding a session command to xedit-session so the CLI, the serve daemon and the MCP server all offer it. Covers the request and response structs with their JSON Schema, registering the command (name rules, mutates and dry_run, the edit gate), the CLI subcommand, keeping stdout clean, the tests that pick the command up automatically, the coverage ledger entry, the upstream map and the docs to update.
+description: Add an xedit-session command and expose its typed request, response, schema, edit gate, and CLI across CLI, serve, and MCP.
 ---
 
 # Adding a command

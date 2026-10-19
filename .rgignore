@@ -1,0 +1,10 @@
+# Exploratory Bash rg searches only. Explicit reads remain available.
+/target/
+/docs/history/
+/coverage/ledger.toml
+/upstream-map.toml
+/crates/xedit-defs/src/*.rs
+!/crates/xedit-defs/src/lib.rs
+!/crates/xedit-defs/src/callbacks.rs
+/crates/xedit-defs/src/callbacks/*_stubs.rs
+/crates/xedit-session/src/script_vcl/tables.rs

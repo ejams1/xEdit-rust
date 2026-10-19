@@ -1,6 +1,6 @@
 ---
 name: porting-definitions
-description: Use when porting or updating a game definition unit (wbDefinitionsCommon, wbDefinitionsFO4, wbDefinitionsTES5 and the units of later games) from upstream xEdit: running the transpiler, porting the callbacks it cannot translate, and verifying the result against the oracle dump.
+description: Regenerate xEdit game definitions, port untranslated callbacks, and check the result against the release oracle.
 ---
 
 # Porting a definition unit
