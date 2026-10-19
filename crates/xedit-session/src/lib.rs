@@ -275,11 +275,11 @@ impl Registry {
 }
 
 /// A request without parameters.
-#[derive(Deserialize, JsonSchema)]
+#[derive(Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct NoParams {}
 
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 pub struct Version {
     /// Version of xEdit-rust.
     pub version: String,

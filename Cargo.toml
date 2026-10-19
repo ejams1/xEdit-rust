@@ -15,6 +15,12 @@ repository = "https://github.com/ejams1/xEdit-rust"
 # Debug information is the largest per-crate cost of a debug or test build,
 # and the parity work rarely needs more than line tables for a backtrace.
 # Dependencies get none: their frames are not what a failing port test reads.
+[workspace.dependencies]
+# Decision 1 of `docs/PLAN.md`: the GUI toolkit. An egui application with a
+# custom virtualised tree and grid; MIT OR Apache-2.0, so the licence gate
+# stays green.
+eframe = "0.37"
+
 [profile.dev]
 debug = 1
 

@@ -1,0 +1,23 @@
+[package]
+name = "xedit-gui"
+version = "0.1.0"
+description = "The xEdit graphical editor: the main form, its dialogs and the widgets of the Delphi GUI"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "xedit-gui"
+path = "src/main.rs"
+
+[lib]
+name = "xedit_gui"
+path = "src/lib.rs"
+
+[dependencies]
+eframe = { workspace = true }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+xedit-core = { path = "../xedit-core" }
+xedit-loadorder = { path = "../xedit-loadorder" }
+xedit-session = { path = "../xedit-session" }

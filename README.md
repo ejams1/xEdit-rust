@@ -61,6 +61,7 @@ The progress bar above counts merged phases of [docs/PLAN.md](docs/PLAN.md); it 
 - **Analysis**: conflict status and the view (`xedit conflicts`, `xedit compare`, `--compare-to`), the reference index and its cache files (`xedit refs`), the filter of the navigation tree with its presets and the scripted filter (`xedit filter`), the quick auto clean and its steps with the Cleaning options (`xedit clean`), mod groups and their presets (`xedit modgroups`), the merged patch (`xedit patch merged`), and the tool modes and legacy switches of `xeInit.pas` (`xedit tool modes|run`, and the command line a mod manager passes to xEdit).
 - **Assets**: BSA and BA2 archives (`xedit archive`, the `bsarch` binary, BSArchPro's XBox target), NIF, KF, materials and the other asset formats (`xedit assets`), Sniff's 50 batch operations (`xedit sniff`, the `sniff` binary) and LODGen (`xedit lodgen`).
 - **Scripting**: the JvInterpreter Pascal of the `Edit Scripts` folder (`xedit script list|check|run` and `script.resume`), with the script API of `xEditAPI.pas` and the JVCL units bound, and a headless VCL object model that runs forms and dialogs from recorded answers.
+- **GUI shell** (phase 7 step 1): `cargo run -p xedit-gui` (binary `xedit-gui`) opens the main form of `xeMainForm` with the per-game window title and icon, the hamburger `pmuMain` menu and the form's popup menus, the navigation pane with its splitter, the tabbed view with the Messages page, the status bar with the load gauge, and the game select -> module select -> load startup flow, all through the same command registry as the CLI. The tree, the view and the dialogs of steps 2-9 are placeholders.
 - **One command layer**: the same typed commands drive the CLI, `xedit batch`, `xedit serve` (JSON-RPC over stdio or a named pipe) and `xedit mcp` (MCP tools), with `--json` output and `xedit schema`; a test checks that the three list the same commands. The skills under `.claude/skills` describe how to use them.
 
 ### Verified against the release
@@ -120,7 +121,7 @@ The port reproduces upstream's quirks (`UPSTREAM-QUIRK` in the code). An upstrea
 - **The scale the cleaning's scale step leaves behind** (parity #35): the release keeps a scale where the port removes it, data the release loses; the clean case is `known-difference` for that file.
 - **`Find textures` prints an uninitialised `XBOX` flag on BA2 DDS archives**: the release's local record in `ProcessFile` is never assigned in the BA2 DDS branch, and its report prints `XBOX` from whatever the stack holds (every line of a DDS-type BA2 archive on the corpus). The port prints nothing. No saved bytes differ; the log of `sniff --case find-textures` and `-filter` counts as a log difference on those archives, never a failing output.
 
-Later phases (GUI, performance, release) have not started.
+Later phases (performance and release) have not started; the GUI is at phase 7 step 1 of 9 (the shell above).
 
 ## License
 

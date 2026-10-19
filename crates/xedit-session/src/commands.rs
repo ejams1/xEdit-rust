@@ -338,7 +338,7 @@ pub(crate) fn parse_form_id(text: &str) -> Result<FormID, CommandError> {
 }
 
 /// `session.info`.
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 pub struct SessionInfo {
     /// Game tag as given to `--game`.
     pub game: String,
@@ -361,7 +361,7 @@ fn session_info(session: &mut Session, _: NoParams) -> Result<SessionInfo, Comma
 }
 
 /// `session.load`: the request.
-#[derive(Deserialize, JsonSchema)]
+#[derive(Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct SessionLoadRequest {
     /// The plugins to load, in load order, as full paths (a name resolves
@@ -385,12 +385,12 @@ pub struct SessionLoadRequest {
 }
 
 /// `session.load`: the response.
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 pub struct SessionLoadResponse {
     /// The game tag of the session, which a load does not change.
     pub game: String,
     /// The tool mode the load applies, when `mode` named one.
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub mode: Option<String>,
     pub dry_run: bool,
     /// The plugins the load would put in the session, in load order, with
@@ -403,7 +403,7 @@ pub struct SessionLoadResponse {
     /// `wbSimpleRecords` and the rest).
     pub settings: Vec<String>,
     /// What the load does not do in this build.
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub note: Option<String>,
 }
 

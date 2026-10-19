@@ -22,9 +22,70 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use xedit_core::interface::globals::data_path;
 use xedit_loadorder::ini_files::{MemIniFile, comma_text, parse_comma_text, same_text};
-use xedit_loadorder::load_order::Modules;
+pub use xedit_loadorder::load_order::{ModuleInfo, Modules};
 
 use crate::{CommandError, Registry, Session};
+
+/// The modules the selection dialog lists, and the data folder
+/// `DoInitPath` found them in.
+///
+/// Port of `wbLoadModules` as the GUI's dialog reads it before a session
+/// exists: the game is set up (`xeInit.pas` `_DoInitPath` and the
+/// definitions), the data folder is found (`CheckAppPath`, the Steam
+/// library, the registry), the game's own plugin list and settings file are
+/// set, and the modules of the data folder are scanned. The dialog's check
+/// state and `SimulateLoad` are the GUI's; this only opens the list.
+///
+/// This is not a command: it is the data source of a dialog, as
+/// [`Modules::load`] is for a loaded session.
+pub struct SelectableModules {
+    pub game: xedit_core::interface::globals::GameMode,
+    /// The data folder with its trailing separator.
+    pub data_path: String,
+    /// The module list (not `Debug`: it holds the loaded files).
+    pub modules: Modules,
+}
+
+/// Opens the module list of a game for the selection dialog.
+pub fn selectable_modules(game: &str) -> Result<SelectableModules, CommandError> {
+    use xedit_core::interface::globals;
+    let mode =
+        crate::dump::setup_game_for_edit(game).map_err(|message| CommandError::new("invalid_params", message))?;
+    let folder = crate::game_paths::discover_game_folder(mode);
+    if folder.is_empty() {
+        return Err(CommandError::new(
+            "game_folder",
+            crate::game_paths::missing_install_message(mode),
+        ));
+    }
+    let data_path = crate::game_paths::data_path_of(&folder, mode);
+    if !Path::new(&data_path).is_dir() {
+        return Err(CommandError::new("game_folder", format!("{data_path} is not a folder")));
+    }
+    // `DoInitPath`: the data folder, the game's own plugin list (unless a
+    // command line named one), the inis of `My Games` and the settings
+    // file, which the module scan and the dialog read.
+    if globals::data_path().is_empty() {
+        globals::set_data_path(&data_path);
+    }
+    if globals::plugins_file_name().is_empty() {
+        globals::set_plugins_file_name(&crate::game_paths::default_plugins_file(mode, &data_path));
+    }
+    crate::resources::init_game_paths(mode, &data_path);
+    let settings = crate::game_paths::settings_file_name(
+        crate::game_paths::app_name(mode),
+        "Edit",
+        &globals::program_path(),
+        &globals::plugins_file_name(),
+    );
+    globals::set_settings_file_name(&settings);
+    let modules = Modules::load_data_folder(&data_path);
+    Ok(SelectableModules {
+        game: mode,
+        data_path,
+        modules,
+    })
+}
 
 /// Port of `TfrmModuleSelect.GetPresetsSection` for the module selection
 /// menu item: `Name + '_' + PresetCategory + '_Presets'`.
