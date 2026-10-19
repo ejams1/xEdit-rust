@@ -737,7 +737,7 @@ fn records_set_hidden(
 }
 
 /// A record in a list.
-#[derive(Serialize, JsonSchema)]
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct RecordSummary {
     /// Load order FormID as eight hexadecimal digits.
     pub form_id: String,
@@ -848,7 +848,7 @@ pub struct RecordsGetRequest {
 }
 
 /// An element of the tree.
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 pub struct ElementNode {
     pub name: String,
     /// Name as xEdit displays it, when it differs from `name`.
@@ -938,7 +938,7 @@ fn records_get(session: &mut Session, request: RecordsGetRequest) -> Result<Reco
     })
 }
 
-#[derive(Deserialize, JsonSchema)]
+#[derive(Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ElementsGetRequest {
     /// Load order FormID of the record as hexadecimal digits.
@@ -952,7 +952,7 @@ pub struct ElementsGetRequest {
     pub depth: Option<usize>,
 }
 
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 pub struct ElementDetail {
     /// Full path of the element, in the upstream `FullPath` shape
     /// (`wbImplementation.pas:19641-19652`).
@@ -976,7 +976,7 @@ fn elements_get(session: &mut Session, request: ElementsGetRequest) -> Result<El
 }
 
 /// `elements.set`: the request.
-#[derive(Deserialize, JsonSchema)]
+#[derive(Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ElementsSetRequest {
     /// Load order FormID of the record as hexadecimal digits.
@@ -998,7 +998,7 @@ pub struct ElementsSetRequest {
 }
 
 /// `elements.set`: the response.
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 pub struct ElementsSetResponse {
     /// Full path of the element, in the upstream `FullPath` shape
     /// (`wbImplementation.pas:19641-19652`).

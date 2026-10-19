@@ -84,7 +84,7 @@ fn the_oracle_corpus_has_150_scripts() {
         return;
     };
     let folder = std::path::PathBuf::from(oracle).join("Edit Scripts");
-    let scripts = xedit_session::script::list_scripts(&folder).unwrap();
+    let scripts = xedit_session::script::list_scripts(&folder, false).unwrap();
     assert_eq!(scripts.len(), 150);
     assert!(scripts.iter().any(|script| script.name == "xEditAPI.pas"));
     let api = scripts.iter().find(|script| script.name == "xEditAPI.pas").unwrap();
@@ -3085,4 +3085,92 @@ fn the_host_dialogs_take_the_recorded_answers() {
             "checked HostAsk25b.esp"
         ]
     );
+}
+
+#[test]
+fn list_with_subdirectories_reports_the_relative_names() {
+    let dir = temp_dir("list-subdirs");
+    std::fs::write(dir.join("top.pas"), "begin\nend.\n").unwrap();
+    std::fs::create_dir_all(dir.join("sub")).unwrap();
+    std::fs::write(dir.join("sub").join("nested.pas"), "begin\nend.\n").unwrap();
+
+    let result = Registry::standard()
+        .call(
+            &mut Session::default(),
+            "script.list",
+            json!({ "scripts": dir.display().to_string(), "subdirectories": true }),
+        )
+        .unwrap();
+    let names: Vec<&str> = result["scripts"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|script| script["name"].as_str().unwrap())
+        .collect();
+    assert_eq!(names, ["sub\\nested.pas", "top.pas"]);
+}
+
+#[test]
+fn read_reports_the_text_and_the_unit_name() {
+    let dir = temp_dir("read");
+    std::fs::write(dir.join("hello.pas"), "unit hello;\nbegin\nend.\n").unwrap();
+    let result = Registry::standard()
+        .call(
+            &mut Session::default(),
+            "script.read",
+            json!({ "file": "hello.pas", "scripts": dir.display().to_string() }),
+        )
+        .unwrap();
+    assert_eq!(result["text"], "unit hello;\r\nbegin\r\nend.\r\n");
+    assert_eq!(result["script"], "hello");
+    assert_eq!(result["lines"], 3);
+    let error = Registry::standard()
+        .call(
+            &mut Session::default(),
+            "script.read",
+            json!({ "file": "missing.pas", "scripts": dir.display().to_string() }),
+        )
+        .unwrap_err();
+    assert_eq!(error.code, "io");
+}
+
+#[test]
+fn save_replaces_tabs_backs_the_old_file_up_and_writes_crlf() {
+    let dir = temp_dir("save");
+    let target = dir.join("edit.pas");
+    std::fs::write(&target, "old\n").unwrap();
+    let mut session = Session::default();
+    session.allow_edit(true);
+    let result = Registry::standard()
+        .call(
+            &mut session,
+            "script.save",
+            json!({
+                "file": "edit.pas",
+                "text": "begin\n\tx := 1;\nend.",
+                "scripts": dir.display().to_string()
+            }),
+        )
+        .unwrap();
+    assert_eq!(result["written"], true);
+    assert!(result["backup"].as_str().unwrap().contains(".backup."));
+    let written = std::fs::read_to_string(&target).unwrap();
+    assert_eq!(written, "begin\r\n  x := 1;\r\nend.\r\n");
+    // The backup holds the previous text.
+    let backup = std::fs::read_to_string(result["backup"].as_str().unwrap()).unwrap();
+    assert_eq!(backup, "old\n");
+    // A fresh file is written without a backup.
+    let nested = Registry::standard()
+        .call(
+            &mut session,
+            "script.save",
+            json!({
+                "file": "fresh.pas",
+                "text": "",
+                "scripts": dir.display().to_string()
+            }),
+        )
+        .unwrap();
+    assert!(nested["backup"].is_null());
+    assert_eq!(std::fs::read_to_string(dir.join("fresh.pas")).unwrap(), "");
 }

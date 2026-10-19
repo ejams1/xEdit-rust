@@ -700,7 +700,7 @@ fn capped_exit_code(count: u64) -> u32 {
 }
 
 /// One loaded file a tool mode acted on.
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 pub struct ToolModeFile {
     /// File name of the plugin.
     pub name: String,
@@ -1582,6 +1582,7 @@ fn tool_run(session: &mut Session, request: ToolRunRequest) -> Result<ToolRunRes
                 crate::script::ScriptRunRequest {
                     file: script,
                     scripts: request.scripts.clone(),
+                    source: None,
                     save: true,
                     dry_run: request.dry_run,
                     // The mode builds no references; a script that reads

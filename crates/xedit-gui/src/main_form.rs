@@ -27,12 +27,20 @@ use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 use eframe::egui;
+use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
-use xedit_core::interface::globals::GameMode;
+use xedit_core::interface::globals::{GameMode, data_path, my_games_the_game_path};
+use xedit_session::commands::{ElementsSetRequest, ElementsSetResponse};
 use xedit_session::filter::{
     FilterApplyRequest, FilterApplyResponse, FilterPresetDeleteRequest, FilterPresetSaveRequest, FilterPresetsRequest,
     FilterPresetsResponse, SignaturesListRequest, SignaturesListResponse,
 };
+use xedit_session::localization::{
+    LocalizationExportRequest, LocalizationFilesRequest, LocalizationFilesResponse, LocalizationSetRequest,
+    LocalizationSetResponse, LocalizationStringsRequest, LocalizationStringsResponse, LocalizationSwitchRequest,
+    LocalizationSwitchResponse,
+};
+use xedit_session::log_analyzer::{LogType, LogsAnalyzeRequest, LogsAnalyzeResponse};
 use xedit_session::modgroups::{
     ChangeResponse as ModGroupChangeResponse, EditRequest as ModGroupEditRequest, ListRequest as ModGroupListRequest,
     ListResponse as ModGroupListResponse, PresetDeleteRequest as ModGroupPresetDeleteRequest,
@@ -46,20 +54,33 @@ use xedit_session::module_select::{
     PresetSaveRequest as ModulePresetSaveRequest, PresetsRequest as ModulePresetsRequest,
     PresetsResponse as ModulePresetsResponse,
 };
+use xedit_session::script::{
+    ScriptListRequest, ScriptListResponse, ScriptReadRequest, ScriptReadResponse, ScriptRunRequest, ScriptRunResponse,
+    ScriptSaveRequest, ScriptSaveResponse,
+};
 use xedit_session::settings::{SettingsGetRequest, SettingsGetResponse, SettingsSetRequest, SettingsSetResponse};
 
 use xedit_core::interface::types::{ConflictAll, ConflictThis};
 use xedit_session::{CommandError, Session};
 
 use crate::command::{self, CommandBridge};
+use crate::dialogs::developer_message_form::{DeveloperMessageAction, DeveloperMessageState};
 use crate::dialogs::file_select_form::{self, FileSelectAction, FileSelectState};
 use crate::dialogs::filter_options_form::{
     self as filter_options_form, FilterOptionsAction, FilterOptionsState, FilterQuestion,
 };
+use crate::dialogs::localization_form::{LocalizationAction, LocalizationState};
+use crate::dialogs::localize_plugin_form::{LocalizePluginAction, LocalizePluginState};
+use crate::dialogs::log_analyzer_form::{LogAnalyzerAction, LogAnalyzerState};
 use crate::dialogs::mod_group_edit_form::{self as mod_group_edit_form, ModGroupEditAction, ModGroupEditState};
 use crate::dialogs::mod_group_select_form::{self as mod_group_select_form, ModGroupSelectAction, ModGroupSelectState};
 use crate::dialogs::module_select_form::{self as module_select_form, ModuleSelectAction};
+use crate::dialogs::rich_edit_form::{RichEditAction, RichEditState};
+use crate::dialogs::script_form::{ScriptFormAction, ScriptFormState};
 use crate::dialogs::selection::DialogPlacement;
+use crate::dialogs::tip_form::{TipAction, TipState};
+use crate::dialogs::view_elements_form::{ElementTab, ViewElementsAction, ViewElementsState};
+use crate::dialogs::{DialogHost, DialogKind, setting_get_bool, setting_get_integer, setting_get_string, setting_set};
 use crate::menu_model::{self, MenuItem, MenuKind, MenuTree};
 use crate::nav_tree::{NavAction, NavSource, SearchState};
 use crate::selection::Selection;
@@ -193,10 +214,17 @@ pub struct TfrmMain {
     /// `mniNavEditModGroupClick`'s two dialogs: the selection opens the
     /// edit form instead of activating the groups.
     pub edit_group_flow: bool,
+    /// The step-6 dialogs.
+    pub dialogs: DialogHost,
     /// `--dialog <name>`: the dialog the harness asks to open once loaded.
+    /// The names of [`DialogKind`] open a step-6 viewer or editor; the
+    /// step-5 selection dialogs are opened by [`TfrmMain::open_pending_dialog`].
     pub pending_dialog: Option<String>,
     /// `--dialog-arg <name>`: the mod group the edit dialog opens for.
     pub dialog_arg: Option<String>,
+    /// `--dialog` draws a step-6 viewer or editor alone (the phase-7 screen
+    /// check), without the shell's panels behind it.
+    pub dialog_only: bool,
     /// The load running on its worker thread.
     load_rx: Option<Receiver<Result<Session, CommandError>>>,
     /// The progress callback's buffer while a load runs.
@@ -229,7 +257,13 @@ impl TfrmMain {
             settings: GuiSettings::default(),
             startup: Startup::game_select(),
             game: None,
-            bridge: None,
+            // The dialogs that need no loaded plugins (the script list, the
+            // RTF viewers, the tips) answer over an empty session; the load
+            // replaces it.
+            bridge: Some(CommandBridge::new(Session::default())),
+            dialogs: DialogHost::default(),
+            pending_dialog: None,
+            dialog_only: false,
             messages: Vec::new(),
             messages_autoscroll: true,
             active_tab: Tab::Messages,
@@ -248,7 +282,6 @@ impl TfrmMain {
             module_bridge: None,
             dialog: None,
             edit_group_flow: false,
-            pending_dialog: None,
             dialog_arg: None,
             load_rx: None,
             progress: None,
@@ -433,10 +466,22 @@ impl TfrmMain {
                 self.bridge = Some(bridge);
                 self.startup = Startup::Loaded;
                 self.active_tab = Tab::Messages;
-                // `--dialog`: the screen-check harness opens one dialog of
-                // step 5 without walking the menus.
-                if let Some(dialog) = self.pending_dialog.take() {
-                    self.open_pending_dialog(&dialog);
+                // `--dialog`: the screen-check harness opens one dialog
+                // without walking the menus. A step-6 viewer or editor is
+                // taken by `show_dialogs` (it answers over the shell too);
+                // the step-5 selection dialogs need the loaded session, so
+                // they open here, and the developer message and the tip
+                // wait for a later run as they do for the screen check.
+                let pending_step5 = self
+                    .pending_dialog
+                    .as_deref()
+                    .is_some_and(|name| DialogKind::from_name(name).is_none());
+                if pending_step5 {
+                    if let Some(dialog) = self.pending_dialog.take() {
+                        self.open_pending_dialog(&dialog);
+                    }
+                } else {
+                    self.startup_dialogs();
                 }
             }
             Err(error) => {
@@ -931,6 +976,11 @@ impl TfrmMain {
                 // `mniNavEditModGroupClick`: the selection dialog, then the
                 // edit dialog and `modgroups.edit`.
                 "modgroups.edit" => self.open_mod_group_select(GroupSelectFlow::Edit),
+                // Step 6's viewers and editors.
+                "script.run" => self.open_dialog(DialogKind::Script),
+                "logs.analyze" => self.open_dialog(DialogKind::LogAnalyzer),
+                "localization.files" => self.open_dialog(DialogKind::Localization),
+                "localization.localize" => self.open_dialog(DialogKind::LocalizePlugin),
                 // Every other action is a session command (design rule 1);
                 // the request of the `pmuMain` and button-strip items
                 // carries no parameters.
@@ -2296,6 +2346,538 @@ fn draw_items(
     }
 }
 
+impl TfrmMain {
+    /// Runs one typed command through the bridge; a failure goes to the
+    /// message log and answers `None`.
+    fn call<Q, R>(&mut self, name: &str, request: &Q) -> Option<R>
+    where
+        Q: serde::Serialize,
+        R: DeserializeOwned,
+    {
+        let Some(bridge) = self.bridge.as_mut() else {
+            self.messages.push("No session".to_owned());
+            return None;
+        };
+        match bridge.request::<Q, R>(name, request) {
+            Ok(response) => Some(response),
+            Err(error) => {
+                self.messages.push(format!("{name}: {}", error.message));
+                None
+            }
+        }
+    }
+
+    /// Opens one of the step-6 dialogs (a menu command, `--dialog`, or the
+    /// startup flow).
+    pub fn open_dialog(&mut self, kind: DialogKind) {
+        if self.dialogs.is_open(kind) {
+            return;
+        }
+        match kind {
+            DialogKind::LogAnalyzer => {
+                let mut state = LogAnalyzerState::new(LogType::Papyrus);
+                state.set_default_file(&data_path(), &my_games_the_game_path());
+                self.dialogs.log_analyzer = Some(state);
+            }
+            DialogKind::Script => {
+                let Some(bridge) = self.bridge.as_mut() else {
+                    return;
+                };
+                let last_used = setting_get_string(bridge, "View", "LastUsedScript", "");
+                let subdirectories = setting_get_bool(bridge, "View", "IncludeScriptsFromSubDir", false);
+                self.dialogs.script = Some(ScriptFormState::new(None, last_used, subdirectories));
+            }
+            DialogKind::ViewElements => {
+                // The view's "View elements" arrives with phase 7 step 3;
+                // this is the shell's page set (the DFM opens one page per
+                // plugin of the element).
+                let mut state = ViewElementsState::default();
+                if let Some(bridge) = self.bridge.as_mut() {
+                    state.compare_cmdline =
+                        setting_get_string(bridge, "External", "CompareCommandLine", "bcompare.exe %1 %2");
+                    state.placement.left = setting_get_integer(bridge, "frmViewElements", "Left", 0) as i32;
+                    state.placement.top = setting_get_integer(bridge, "frmViewElements", "Top", 0) as i32;
+                    state.placement.width =
+                        setting_get_integer(bridge, "frmViewElements", "Width", 565).max(200) as i32;
+                    state.placement.height =
+                        setting_get_integer(bridge, "frmViewElements", "Height", 325).max(150) as i32;
+                    state.placement_loaded = true;
+                }
+                let text =
+                    "No element is selected.\r\n\r\nThe view's \"View elements\" action arrives with phase 7 step 3.";
+                state.tabs.push(ElementTab {
+                    caption: "Skyrim.esm".to_owned(),
+                    file: "Skyrim.esm".to_owned(),
+                    text: text.to_owned(),
+                    edited: text.to_owned(),
+                    editable: true,
+                    modified: false,
+                    form_id: String::new(),
+                    path: String::new(),
+                });
+                state.tabs.push(ElementTab {
+                    caption: "Update.esm".to_owned(),
+                    file: "Update.esm".to_owned(),
+                    text: text.to_owned(),
+                    edited: text.to_owned(),
+                    editable: false,
+                    modified: false,
+                    form_id: String::new(),
+                    path: String::new(),
+                });
+                self.dialogs.view_elements = Some(state);
+            }
+            DialogKind::RichEdit => {
+                let Some(bridge) = self.bridge.as_mut() else {
+                    return;
+                };
+                let toc = setting_get_bool(bridge, "frmRichEdit", "TOC", false);
+                let toc_width = setting_get_integer(bridge, "frmRichEdit", "TOCWidth", 185) as i32;
+                let zoom = setting_get_integer(bridge, "frmRichEdit", "Zoom", 100) as i32;
+                let document = crate::dialogs::viewers::parse_rtf(crate::dialogs::rich_edit_form::WHATS_NEW_RTF);
+                self.dialogs.rich_edit = Some(RichEditState::new("What's New?", document, toc, toc_width, zoom));
+            }
+            DialogKind::Localization => {
+                self.dialogs.localization = Some(LocalizationState::new());
+            }
+            DialogKind::DeveloperMessage => {
+                let Some(bridge) = self.bridge.as_mut() else {
+                    return;
+                };
+                let patron = setting_get_bool(bridge, "Options", "Patron", false);
+                self.dialogs.developer_message = Some(DeveloperMessageState::new(patron));
+            }
+            DialogKind::Tip => {
+                let show_tip = self
+                    .bridge
+                    .as_mut()
+                    .map(|bridge| setting_get_bool(bridge, "Options", "ShowTip", true))
+                    .unwrap_or(true);
+                let app_name = self.game.map(xedit_session::game_paths::app_name).unwrap_or_default();
+                let folder = self.program.parent().map(PathBuf::from).unwrap_or_default();
+                self.dialogs.tip = Some(TipState::new(&folder, app_name, show_tip));
+            }
+            DialogKind::LocalizePlugin => {
+                let tables = self
+                    .call::<_, xedit_session::localization::LocalizationLanguagesResponse>(
+                        "localization.languages",
+                        &xedit_session::NoParams {},
+                    )
+                    .map(|response| response.tables)
+                    .unwrap_or_default();
+                self.dialogs.localize_plugin = Some(LocalizePluginState::new(tables));
+            }
+        }
+    }
+
+    /// `DoInit`'s developer message and `ShowTip` after the load.
+    fn startup_dialogs(&mut self) {
+        if self.pending_dialog.is_some() {
+            return;
+        }
+        const DEVELOPER_MESSAGE_VERSION: i64 = 1;
+        let Some(bridge) = self.bridge.as_mut() else {
+            return;
+        };
+        let patron = setting_get_bool(bridge, "Options", "Patron", false);
+        let version = setting_get_integer(bridge, "DeveloperMessage", "Version", 0);
+        let last_shown = setting_get_integer(bridge, "DeveloperMessage", "LastShownOn", 0);
+        let show_tip = setting_get_bool(bridge, "Options", "ShowTip", true);
+        let today = xedit_session::script_rtl::datetime::today() as i64;
+        if version < DEVELOPER_MESSAGE_VERSION || (!patron && last_shown + 14 <= today) {
+            self.open_dialog(DialogKind::DeveloperMessage);
+        }
+        if show_tip {
+            self.open_dialog(DialogKind::Tip);
+        }
+    }
+
+    /// Draws every open dialog and runs its action.
+    fn show_dialogs(&mut self, ctx: &egui::Context) {
+        // `--dialog <name>`: a step-6 viewer or editor opens itself here.
+        // The step-5 selection dialogs keep their own `--dialog` names and
+        // are opened by `open_pending_dialog` once the session is loaded.
+        if let Some(kind) = self.pending_dialog.as_deref().and_then(DialogKind::from_name) {
+            self.pending_dialog = None;
+            self.open_dialog(kind);
+        }
+        if self.dialogs.any_open() {
+            // A dialog repaints while it is open, as a modal form does: the
+            // screen check captures a painted frame, not an empty backbuffer.
+            ctx.request_repaint_after(std::time::Duration::from_millis(250));
+        }
+        if let Some(mut state) = self.dialogs.log_analyzer.take() {
+            let action = crate::dialogs::log_analyzer_form::show(ctx, &mut state);
+            if self.handle_log_analyzer(&mut state, action) {
+                self.dialogs.log_analyzer = Some(state);
+            }
+        }
+        if let Some(mut state) = self.dialogs.script.take() {
+            let action = crate::dialogs::script_form::show(ctx, &mut state);
+            if self.handle_script(&mut state, action) {
+                self.dialogs.script = Some(state);
+            }
+        }
+        if let Some(mut state) = self.dialogs.view_elements.take() {
+            let action = crate::dialogs::view_elements_form::show(ctx, &mut state);
+            if self.handle_view_elements(&mut state, action) {
+                self.dialogs.view_elements = Some(state);
+            }
+        }
+        if let Some(mut state) = self.dialogs.localization.take() {
+            let action = crate::dialogs::localization_form::show(ctx, &mut state);
+            if self.handle_localization(&mut state, action) {
+                self.dialogs.localization = Some(state);
+            }
+        }
+        if let Some(mut state) = self.dialogs.rich_edit.take() {
+            let action = crate::dialogs::rich_edit_form::show(ctx, &mut state);
+            if self.handle_rich_edit(action) {
+                self.dialogs.rich_edit = Some(state);
+            }
+        }
+        if let Some(mut state) = self.dialogs.developer_message.take() {
+            let action = crate::dialogs::developer_message_form::show(ctx, &mut state);
+            if self.handle_developer_message(ctx, &state, action) {
+                self.dialogs.developer_message = Some(state);
+            }
+        }
+        if let Some(mut state) = self.dialogs.tip.take() {
+            let action = crate::dialogs::tip_form::show(ctx, &mut state);
+            if self.handle_tip(action) {
+                self.dialogs.tip = Some(state);
+            }
+        }
+        if let Some(mut state) = self.dialogs.localize_plugin.take() {
+            let action = crate::dialogs::localize_plugin_form::show(ctx, &mut state);
+            if self.handle_localize_plugin(action) {
+                self.dialogs.localize_plugin = Some(state);
+            }
+        }
+    }
+
+    fn handle_log_analyzer(&mut self, state: &mut LogAnalyzerState, action: Option<LogAnalyzerAction>) -> bool {
+        match action {
+            None => true,
+            Some(LogAnalyzerAction::Closed) => false,
+            Some(LogAnalyzerAction::JumpTo { form_id, file }) => {
+                self.messages
+                    .push(format!("Jumping to [{form_id}] in {file} arrives with phase 7 step 3"));
+                true
+            }
+            Some(LogAnalyzerAction::Analyze { file, max_size_mb }) => {
+                let request = LogsAnalyzeRequest {
+                    log: state.log,
+                    file: Some(file),
+                    max_size_mb: Some(max_size_mb),
+                };
+                if let Some(response) = self.call::<_, LogsAnalyzeResponse>("logs.analyze", &request) {
+                    state.apply_analysis(response);
+                }
+                true
+            }
+        }
+    }
+
+    fn handle_script(&mut self, state: &mut ScriptFormState, action: Option<ScriptFormAction>) -> bool {
+        match action {
+            None => true,
+            Some(ScriptFormAction::Cancelled) => false,
+            Some(ScriptFormAction::List { folder, subdirectories }) => {
+                let request = ScriptListRequest {
+                    scripts: folder,
+                    subdirectories,
+                };
+                match self.call::<_, ScriptListResponse>("script.list", &request) {
+                    Some(response) => match state.apply_list(response) {
+                        Some(next) => self.handle_script(state, Some(next)),
+                        None => true,
+                    },
+                    None => {
+                        state.error = Some("Could not read the scripts folder".to_owned());
+                        true
+                    }
+                }
+            }
+            Some(ScriptFormAction::Read { file }) => self.script_read(state, file),
+            Some(ScriptFormAction::Save { file, text }) => {
+                self.script_save(state, file, text);
+                true
+            }
+            Some(ScriptFormAction::SaveThenRead { file, text, read }) => {
+                if self.script_save(state, file, text) {
+                    self.script_read(state, read)
+                } else {
+                    true
+                }
+            }
+            Some(ScriptFormAction::SaveThenOk { file, text, name }) => {
+                if self.script_save(state, file, text.clone()) {
+                    self.script_run(name, text)
+                } else {
+                    true
+                }
+            }
+            Some(ScriptFormAction::Ok { name, text }) => self.script_run(name, text),
+        }
+    }
+
+    fn script_read(&mut self, state: &mut ScriptFormState, file: String) -> bool {
+        let request = ScriptReadRequest { file, scripts: None };
+        match self.call::<_, ScriptReadResponse>("script.read", &request) {
+            Some(response) => state.apply_read(response),
+            None => {
+                state.error = Some(format!("Could not read {}", request.file));
+            }
+        }
+        true
+    }
+
+    /// Saves a script; whether it was written.
+    fn script_save(&mut self, state: &mut ScriptFormState, file: String, text: String) -> bool {
+        let request = ScriptSaveRequest {
+            file,
+            text,
+            scripts: None,
+            dry_run: false,
+        };
+        match self.call::<_, ScriptSaveResponse>("script.save", &request) {
+            Some(response) => {
+                state.apply_save(response);
+                true
+            }
+            None => {
+                state.error = Some(format!("Could not save {}", request.file));
+                false
+            }
+        }
+    }
+
+    /// `FormClose` with `mrOk`: runs the editor text with `script.run` and
+    /// writes the `[View] LastUsedScript` key the form writes.
+    fn script_run(&mut self, name: String, text: String) -> bool {
+        let dry_run = !self.edit_allowed;
+        let request = ScriptRunRequest {
+            file: format!("{name}.pas"),
+            scripts: None,
+            source: Some(text),
+            save: !dry_run,
+            dry_run,
+            build_refs: false,
+            answers: Vec::new(),
+        };
+        if let Some(response) = self.call::<_, ScriptRunResponse>("script.run", &request) {
+            for message in response.messages {
+                self.messages.push(message);
+            }
+            self.add_message(&format!("Applied script \"{name}\""));
+        }
+        if let Some(bridge) = self.bridge.as_mut() {
+            let _ = setting_set(
+                bridge,
+                "View",
+                "LastUsedScript",
+                serde_json::Value::String(name),
+                "string",
+            );
+        }
+        false
+    }
+
+    fn handle_view_elements(&mut self, _state: &mut ViewElementsState, action: Option<ViewElementsAction>) -> bool {
+        match action {
+            None => true,
+            Some(ViewElementsAction::Closed) => false,
+            Some(ViewElementsAction::Save { updates }) => {
+                for update in updates {
+                    let request = ElementsSetRequest {
+                        form_id: update.form_id,
+                        path: update.path,
+                        file: update.file,
+                        value: serde_json::Value::String(update.text),
+                        dry_run: false,
+                    };
+                    if let Some(response) = self.call::<_, ElementsSetResponse>("elements.set", &request) {
+                        self.messages.push(format!(
+                            "{}: {}",
+                            response.path,
+                            if response.changed { "changed" } else { "unchanged" }
+                        ));
+                    }
+                }
+                false
+            }
+        }
+    }
+
+    fn handle_localization(&mut self, state: &mut LocalizationState, action: Option<LocalizationAction>) -> bool {
+        match action {
+            None => true,
+            Some(LocalizationAction::Closed) => false,
+            Some(LocalizationAction::Files) => {
+                let request = LocalizationFilesRequest { file: None, load: true };
+                match self.call::<_, LocalizationFilesResponse>("localization.files", &request) {
+                    Some(response) => state.apply_files(response.tables),
+                    None => state.error = Some("Could not list the string tables".to_owned()),
+                }
+                true
+            }
+            Some(LocalizationAction::Strings { table }) => {
+                let request = LocalizationStringsRequest {
+                    table: table.clone(),
+                    offset: 0,
+                    limit: Some(100_000),
+                };
+                match self.call::<_, LocalizationStringsResponse>("localization.strings", &request) {
+                    Some(response) => state.apply_strings(&table, response),
+                    None => state.error = Some(format!("Could not read the strings of {table}")),
+                }
+                true
+            }
+            Some(LocalizationAction::Set { table, id, text }) => {
+                let request = LocalizationSetRequest {
+                    table: Some(table),
+                    id: Some(id),
+                    form_id: None,
+                    path: None,
+                    file: None,
+                    text,
+                    editor_text: true,
+                    dry_run: false,
+                };
+                if let Some(response) = self.call::<_, LocalizationSetResponse>("localization.set", &request) {
+                    state.apply_save(&response.table, &response.id, response.new);
+                }
+                true
+            }
+            Some(LocalizationAction::Export { table, output }) => {
+                let request = LocalizationExportRequest {
+                    table,
+                    output,
+                    dry_run: false,
+                };
+                if let Some(response) = self
+                    .call::<_, xedit_session::localization::LocalizationExportResponse>("localization.export", &request)
+                {
+                    self.messages.push(format!(
+                        "Exported {} strings of {} to {}",
+                        response.strings, response.table, response.output
+                    ));
+                }
+                true
+            }
+        }
+    }
+
+    fn handle_rich_edit(&mut self, action: Option<RichEditAction>) -> bool {
+        match action {
+            None => true,
+            Some(RichEditAction::Closed) => false,
+            Some(RichEditAction::Ok { dont_show_again }) => {
+                if dont_show_again && let Some(bridge) = self.bridge.as_mut() {
+                    // `wbWhatsNewVersion`.
+                    let _ = setting_set(bridge, "WhatsNew", "Version", serde_json::Value::from(1), "integer");
+                }
+                false
+            }
+            Some(RichEditAction::Settings { toc, toc_width, zoom }) => {
+                if let Some(bridge) = self.bridge.as_mut() {
+                    let _ = setting_set(bridge, "frmRichEdit", "TOC", serde_json::Value::Bool(toc), "bool");
+                    let _ = setting_set(
+                        bridge,
+                        "frmRichEdit",
+                        "TOCWidth",
+                        serde_json::Value::from(toc_width),
+                        "integer",
+                    );
+                    let _ = setting_set(bridge, "frmRichEdit", "Zoom", serde_json::Value::from(zoom), "integer");
+                }
+                true
+            }
+        }
+    }
+
+    fn handle_developer_message(
+        &mut self,
+        ctx: &egui::Context,
+        _state: &DeveloperMessageState,
+        action: Option<DeveloperMessageAction>,
+    ) -> bool {
+        match action {
+            None => true,
+            Some(DeveloperMessageAction::Timer) => true,
+            Some(DeveloperMessageAction::Closed {
+                choice,
+                dont_show_again,
+                patron_cleared,
+                open_url,
+            }) => {
+                if open_url {
+                    ctx.open_url(egui::OpenUrl::new_tab(choice.url()));
+                }
+                let today = xedit_session::script_rtl::datetime::today() as i64;
+                if let Some(bridge) = self.bridge.as_mut() {
+                    let _ = setting_set(
+                        bridge,
+                        "DeveloperMessage",
+                        "LastShownOn",
+                        serde_json::Value::from(today),
+                        "integer",
+                    );
+                    let _ = setting_set(
+                        bridge,
+                        "DeveloperMessage",
+                        "Version",
+                        serde_json::Value::from(if dont_show_again { 1 } else { 0 }),
+                        "integer",
+                    );
+                    if patron_cleared {
+                        let _ = setting_set(bridge, "Options", "Patron", serde_json::Value::Bool(false), "bool");
+                    }
+                }
+                false
+            }
+        }
+    }
+
+    fn handle_tip(&mut self, action: Option<TipAction>) -> bool {
+        match action {
+            None => true,
+            Some(TipAction::Closed { show_tip }) => {
+                if let Some(bridge) = self.bridge.as_mut() {
+                    let _ = setting_set(bridge, "Options", "ShowTip", serde_json::Value::Bool(show_tip), "bool");
+                }
+                false
+            }
+        }
+    }
+
+    fn handle_localize_plugin(&mut self, action: Option<LocalizePluginAction>) -> bool {
+        match action {
+            None => true,
+            Some(LocalizePluginAction::Cancelled) => false,
+            Some(LocalizePluginAction::Localize {
+                translate_from,
+                translate_to,
+            }) => {
+                let request = LocalizationSwitchRequest {
+                    file: None,
+                    translate_from,
+                    translate_to,
+                    dry_run: false,
+                };
+                if let Some(response) = self.call::<_, LocalizationSwitchResponse>("localization.localize", &request) {
+                    self.messages.push(format!(
+                        "{}: {} localizable strings, {} translated",
+                        response.file, response.localizable, response.translated
+                    ));
+                }
+                false
+            }
+        }
+    }
+}
+
 impl eframe::App for TfrmMain {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
@@ -2332,7 +2914,7 @@ impl eframe::App for TfrmMain {
                 ctx.send_viewport_cmd(egui::ViewportCommand::Icon(Some(Arc::new(icon))));
             }
         }
-        if !self.window_placed {
+        if !self.window_placed && !self.dialog_only {
             self.window_placed = true;
             // The ini holds the physical pixels `TForm.Left/Width` are, as
             // the Delphi build writes them; egui's viewport commands take
@@ -2382,6 +2964,17 @@ impl eframe::App for TfrmMain {
             self.save_settings(&ctx);
         }
 
+        if self.dialog_only {
+            // `--dialog`: the dialog alone, so the screen check sees it
+            // without the shell behind it. One point is one pixel, so the
+            // dialogs' point sizes fit the window whole. The empty central
+            // panel gives the frame its surface; the dialog's Areas draw
+            // over it.
+            ctx.set_zoom_factor(1.0);
+            egui::CentralPanel::default_margins().show(ui, |_ui| {});
+            self.show_dialogs(&ctx);
+            return;
+        }
         // The screen is copied out first: the arms below take `&mut self`.
         let screen = match &self.startup {
             Startup::GameSelect(_) => Screen::GameSelect,
@@ -2440,7 +3033,10 @@ impl eframe::App for TfrmMain {
                 self.load_visible_conflicts(&ctx);
             }
         }
+        // The step-5 selection dialogs and the step-6 viewers and editors
+        // draw over whichever screen the shell shows.
         self.draw_dialogs(&ctx);
+        self.show_dialogs(&ctx);
         self.confirm_window(&ctx);
     }
 }

@@ -4800,6 +4800,7 @@ dependencies = [
  "windows-sys 0.61.2",
  "xedit-core",
  "xedit-loadorder",
+ "xedit-script",
  "xedit-session",
 ]
 

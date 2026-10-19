@@ -14,6 +14,7 @@ use std::io::Write;
 
 use eframe::egui;
 use xedit_gui::TfrmMain;
+use xedit_gui::dialogs::DialogKind;
 use xedit_gui::startup::GAME_MODES;
 
 /// `XEDIT_GUI_LOG=<path>`: the shutdown, panic and startup lines of a
@@ -60,9 +61,10 @@ fn main() -> eframe::Result {
                     plugins.push(plugin);
                 }
             }
-            // The screen-check harness opens one dialog of step 5 after the
-            // load instead of walking the menus (upstream has no Win32
-            // menu to drive).
+            // The screen-check harness opens one dialog after the load
+            // instead of walking the menus (upstream has no Win32 menu to
+            // drive): one of the step-5 selection dialogs or one of the
+            // step-6 viewers and editors.
             "--dialog" => dialog = args.next(),
             "--dialog-arg" => dialog_arg = args.next(),
             "--view" => edit = false,
@@ -75,7 +77,10 @@ fn main() -> eframe::Result {
                 println!("xedit-gui: the xEdit graphical editor");
                 println!("  --game <tag>   the game mode (fo4, sse, tes5, ...); the selection dialog without it");
                 println!("  --load <file>  a plugin to load (repeatable); the module selection dialog without any");
-                println!("  --dialog <name>  open a dialog after the load: filter, modgroups, modgroup-edit, files");
+                println!(
+                    "  --dialog <name>  open a dialog after the load: filter, modgroups, modgroup-edit, files, {}",
+                    DialogKind::NAMES.join(", ")
+                );
                 println!("  --dialog-arg <name>  the mod group the edit dialog opens for");
                 println!("  --view         open without the edit gate");
                 println!("  --version      print the version and exit");
@@ -110,10 +115,15 @@ fn main() -> eframe::Result {
             }
         },
     };
+    // `--dialog`: one of the viewers and editors gets a window that holds
+    // it whole for the screen check; the main form's own placement takes
+    // over otherwise.
+    let dialog_only = dialog.as_deref().and_then(DialogKind::from_name).is_some();
+    let size = if dialog_only { [1500.0, 980.0] } else { [1370.0, 663.0] };
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_title("xEdit")
-            .with_inner_size([1370.0, 663.0])
+            .with_inner_size(size)
             .with_min_inner_size([640.0, 400.0])
             .with_clamp_size_to_monitor_size(true),
         ..Default::default()
@@ -125,6 +135,7 @@ fn main() -> eframe::Result {
             let mut form = TfrmMain::new(game, plugins, edit);
             form.pending_dialog = dialog;
             form.dialog_arg = dialog_arg;
+            form.dialog_only = dialog_only;
             Ok(Box::new(form))
         }),
     );

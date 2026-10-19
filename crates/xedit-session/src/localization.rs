@@ -69,7 +69,7 @@ fn load_tables(session: &Session) {
 }
 
 /// A string table as the localization editor lists it.
-#[derive(Serialize, JsonSchema)]
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct TableInfo {
     /// Position in the editor's list (sorted by name ignoring case).
     pub index: usize,
@@ -97,7 +97,7 @@ fn table_info(index: usize, file: &LocalizationFile) -> TableInfo {
 }
 
 /// `localization.files`: the request.
-#[derive(Deserialize, JsonSchema)]
+#[derive(Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct LocalizationFilesRequest {
     /// List only the tables of this plugin.
@@ -114,7 +114,7 @@ fn default_true() -> bool {
 }
 
 /// `localization.files`: the response.
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 pub struct LocalizationFilesResponse {
     /// The language of the tables (`wbLanguage`).
     pub language: String,
@@ -161,7 +161,7 @@ fn table_index(handler: &LocalizationHandlerImpl, name: &str) -> Result<usize, C
 }
 
 /// `localization.strings`: the request.
-#[derive(Deserialize, JsonSchema)]
+#[derive(Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct LocalizationStringsRequest {
     /// File name of the table, such as `Dawnguard_English.STRINGS`.
@@ -174,7 +174,7 @@ pub struct LocalizationStringsRequest {
 }
 
 /// A string of a table.
-#[derive(Serialize, JsonSchema)]
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct StringEntry {
     /// The string ID, hexadecimal.
     pub id: String,
@@ -182,7 +182,7 @@ pub struct StringEntry {
 }
 
 /// `localization.strings`: the response.
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 pub struct LocalizationStringsResponse {
     pub table: TableInfo,
     /// The strings in the order of the table.
@@ -216,7 +216,7 @@ fn localization_strings(
 }
 
 /// Where a string is: a table and an ID, or a localized string element.
-#[derive(Deserialize, JsonSchema)]
+#[derive(Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct StringTarget {
     /// File name of the table. With `id`; instead of `form_id` and `path`.
@@ -292,7 +292,7 @@ fn resolve_target(
 }
 
 /// `localization.get`: the response.
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 pub struct LocalizationGetResponse {
     pub table: String,
     /// The string ID, hexadecimal.
@@ -322,7 +322,7 @@ fn localization_get(session: &mut Session, request: StringTarget) -> Result<Loca
 }
 
 /// `localization.set`: the request.
-#[derive(Deserialize, JsonSchema)]
+#[derive(Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct LocalizationSetRequest {
     /// File name of the table. With `id`; instead of `form_id` and `path`.
@@ -347,7 +347,7 @@ pub struct LocalizationSetRequest {
 }
 
 /// `localization.set`: the response.
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 pub struct LocalizationSetResponse {
     pub table: String,
     /// The string ID, hexadecimal.
@@ -424,7 +424,7 @@ fn localization_set(
 }
 
 /// `localization.export`: the request.
-#[derive(Deserialize, JsonSchema)]
+#[derive(Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct LocalizationExportRequest {
     /// File name of the table.
@@ -438,7 +438,7 @@ pub struct LocalizationExportRequest {
 }
 
 /// `localization.export`: the response.
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 pub struct LocalizationExportResponse {
     pub table: String,
     pub output: String,
@@ -474,7 +474,7 @@ fn localization_export(
 }
 
 /// `localization.languages`: the response.
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 pub struct LocalizationLanguagesResponse {
     /// The language of the session (`wbLanguage`).
     pub language: String,
@@ -568,7 +568,7 @@ fn localization_language(
 }
 
 /// `localization.localize` and `localization.delocalize`: the request.
-#[derive(Deserialize, JsonSchema)]
+#[derive(Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct LocalizationSwitchRequest {
     /// Name of the loaded plugin; the only loaded plugin when omitted.
@@ -591,7 +591,7 @@ pub struct LocalizationSwitchRequest {
 }
 
 /// `localization.localize` and `localization.delocalize`: the response.
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 pub struct LocalizationSwitchResponse {
     pub file: String,
     /// Whether the plugin is localized afterwards (for a dry run, before).

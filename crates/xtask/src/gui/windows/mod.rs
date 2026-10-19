@@ -678,20 +678,76 @@ fn session(args: &[&str]) -> Result<()> {
         at += 1;
     }
     let session_path = session_path.context("usage: cargo xtask gui session <file> --exe <program> ...")?;
-    let outcome = run_session(
-        &session_path,
-        Path::new(exe.as_deref().context("--exe names the program to start")?),
-        &program_args,
-        desktop.as_deref().context("--desktop names the private desktop")?,
-        Path::new(ready.as_deref().context("--ready names the ready file")?),
-        Path::new(stop.as_deref().context("--stop names the stop file")?),
-        wait,
-        timeout,
-    );
+    let stop_path = stop.as_deref().context("--stop names the stop file")?.to_path_buf();
+    let ready_path = ready.as_deref().context("--ready names the ready file")?.to_path_buf();
+    // The helper outlives the `launch` command that started it, and it has
+    // no stdio of its own: the caller's pipe is closed as soon as `launch`
+    // returns. The default panic hook would then fail writing the message
+    // to the closed stderr and abort the helper, which closes the desktop
+    // and leaves the program's windows gone. Record panics in the session's
+    // `.error` file instead, and keep the desktop (and so the program's
+    // windows) open while the process lives after one.
+    {
+        let panic_path = beside(&session_path, ".error");
+        std::panic::set_hook(Box::new(move |info| {
+            let _ = fs::write(&panic_path, format!("the session helper panicked: {info}\n"));
+        }));
+    }
+    let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        run_session(
+            &session_path,
+            Path::new(exe.as_deref().context("--exe names the program to start")?),
+            &program_args,
+            desktop.as_deref().context("--desktop names the private desktop")?,
+            &ready_path,
+            &stop_path,
+            wait,
+            timeout,
+        )
+    }));
+    let outcome = match outcome {
+        Ok(outcome) => outcome,
+        Err(_) => {
+            // The desktop handle of the unwound frame is a raw handle, so
+            // it is still open: the process only loses the desktop when it
+            // exits. Hold it until `close`, the stop file or the timeout,
+            // so a later `shot` still finds the program's windows.
+            if ready_path.exists() {
+                let desktop = desktop.as_deref().unwrap_or(DEFAULT_DESKTOP);
+                hold_desktop(desktop, &stop_path, timeout);
+            }
+            Err(anyhow::anyhow!(
+                "the session helper panicked; see {}",
+                beside(&session_path, ".error").display()
+            ))
+        }
+    };
     if let Err(error) = &outcome {
         let _ = fs::write(beside(&session_path, ".error"), format!("{error:#}"));
     }
     outcome
+}
+
+/// Holds a session's desktop open after a panic until `close` or the
+/// timeout: Windows destroys a desktop when its last handle closes, and the
+/// program on it keeps running with no windows once that happens.
+fn hold_desktop(desktop: &str, stop: &Path, timeout: Duration) {
+    let _handle = hidden::open_or_create_desktop(desktop).ok();
+    let end = Instant::now() + timeout;
+    while Instant::now() < end && !stop.exists() {
+        std::thread::sleep(REQUEST_POLL);
+    }
+}
+
+/// The text of a caught panic.
+fn panic_text(panic: &(dyn std::any::Any + Send)) -> String {
+    if let Some(text) = panic.downcast_ref::<&str>() {
+        (*text).to_owned()
+    } else if let Some(text) = panic.downcast_ref::<String>() {
+        text.clone()
+    } else {
+        "a panic without a message".to_owned()
+    }
 }
 
 /// The helper's work: the desktop, the program, the session file and the
@@ -779,9 +835,23 @@ fn run_session(
     let end = Instant::now() + timeout;
     while Instant::now() < end {
         if let Some(request) = take_request(&request_path) {
-            let (result, done) = match handle_request(&session, &request) {
-                Ok(result) => (result, request.command == "close"),
-                Err(error) => (json!({ "error": error }), false),
+            // One bad request must not end the session: a panic in a
+            // handler is answered as an error, and the desktop, the
+            // program and the next request stay.
+            let handled = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| handle_request(&session, &request)));
+            let (result, done) = match handled {
+                Ok(Ok(result)) => (result, request.command == "close"),
+                Ok(Err(error)) => (json!({ "error": error }), false),
+                Err(panic) => (
+                    json!({
+                        "error": format!(
+                            "the session helper panicked on {:?}: {}",
+                            request.command,
+                            panic_text(panic.as_ref())
+                        )
+                    }),
+                    false,
+                ),
             };
             let ok = result.get("error").is_none();
             let response = if ok {

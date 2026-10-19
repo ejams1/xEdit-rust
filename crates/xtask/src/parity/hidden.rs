@@ -294,11 +294,14 @@ impl HiddenCommand {
         if let Some(name) = desktop_name.as_mut() {
             startup.lpDesktop = name.as_mut_ptr();
         }
-        if self.desktop.is_some() {
+        if self.desktop.is_some() || self.detached {
             // The program inherits the session's desktop handle, and it must
             // not inherit the caller's stdio with it: a caller that captures
             // the command's output reads until every writer closes, and a
-            // program that outlives the command would hold that pipe open.
+            // program that outlives the command would hold that pipe open
+            // (or, once the caller closes it, fail every write to stdout or
+            // stderr). A detached program gets null handles for the same
+            // reason, even when it keeps the caller's desktop.
             startup.dwFlags |= STARTF_USESTDHANDLES;
             startup.hStdInput = std::ptr::null_mut();
             startup.hStdOutput = std::ptr::null_mut();
