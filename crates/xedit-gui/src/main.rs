@@ -11,10 +11,12 @@
 //! (`--game <tag>` and `--load <plugin>`).
 
 use std::io::Write;
+use std::time::Duration;
 
 use eframe::egui;
 use xedit_gui::TfrmMain;
 use xedit_gui::dialogs::DialogKind;
+use xedit_gui::screenshot::{DEFAULT_FRAMES, ScreenshotPlan, ScreenshotState};
 use xedit_gui::startup::GAME_MODES;
 
 /// `XEDIT_GUI_LOG=<path>`: the shutdown, panic and startup lines of a
@@ -52,6 +54,14 @@ fn main() -> eframe::Result {
     let mut edit = true;
     let mut dialog: Option<String> = None;
     let mut dialog_arg: Option<String> = None;
+    // `--screenshot`: the app captures its own frame through egui. The
+    // screen-check desktop cannot read a wgpu surface with `PrintWindow` or
+    // `BitBlt` (both return a black client area), so the loaded window and
+    // every `--dialog` view are witnessed by the app's own capture.
+    let mut screenshot_path: Option<String> = None;
+    let mut screenshot_frames = DEFAULT_FRAMES;
+    let mut screenshot_delay = Duration::ZERO;
+    let mut exit = false;
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
         match arg.as_str() {
@@ -67,6 +77,40 @@ fn main() -> eframe::Result {
             // step-6 viewers and editors.
             "--dialog" => dialog = args.next(),
             "--dialog-arg" => dialog_arg = args.next(),
+            "--screenshot" => match args.next() {
+                Some(path) => screenshot_path = Some(path),
+                None => {
+                    eprintln!("xedit-gui: --screenshot takes a path");
+                    std::process::exit(2);
+                }
+            },
+            "--screenshot-frames" => {
+                let Some(value) = args.next() else {
+                    eprintln!("xedit-gui: --screenshot-frames takes a frame count");
+                    std::process::exit(2);
+                };
+                match value.parse() {
+                    Ok(frames) => screenshot_frames = frames,
+                    Err(_) => {
+                        eprintln!("xedit-gui: --screenshot-frames takes a frame count, not {value:?}");
+                        std::process::exit(2);
+                    }
+                }
+            }
+            "--screenshot-delay" => {
+                let Some(value) = args.next() else {
+                    eprintln!("xedit-gui: --screenshot-delay takes milliseconds");
+                    std::process::exit(2);
+                };
+                match value.parse::<u64>() {
+                    Ok(milliseconds) => screenshot_delay = Duration::from_millis(milliseconds),
+                    Err(_) => {
+                        eprintln!("xedit-gui: --screenshot-delay takes milliseconds, not {value:?}");
+                        std::process::exit(2);
+                    }
+                }
+            }
+            "--exit" => exit = true,
             "--view" => edit = false,
             "--edit" => edit = true,
             "--version" => {
@@ -82,6 +126,10 @@ fn main() -> eframe::Result {
                     DialogKind::NAMES.join(", ")
                 );
                 println!("  --dialog-arg <name>  the mod group the edit dialog opens for");
+                println!("  --screenshot <path>  write a PNG of the window once its screen is ready");
+                println!("  --screenshot-frames <n>  painted frames to wait for (default {DEFAULT_FRAMES})");
+                println!("  --screenshot-delay <ms>  a further wait after those frames");
+                println!("  --exit         close the window once the PNG is written");
                 println!("  --view         open without the edit gate");
                 println!("  --version      print the version and exit");
                 return Ok(());
@@ -92,6 +140,19 @@ fn main() -> eframe::Result {
             }
         }
     }
+    let screenshot = match screenshot_path {
+        Some(path) => Some(ScreenshotState::new(ScreenshotPlan {
+            path: path.into(),
+            frames: screenshot_frames,
+            delay: screenshot_delay,
+            exit,
+        })),
+        None if exit => {
+            eprintln!("xedit-gui: --exit needs --screenshot <path>");
+            std::process::exit(2);
+        }
+        None => None,
+    };
     xedit_core::interface::globals::set_program_path(
         &std::env::current_exe()
             .ok()
@@ -136,6 +197,7 @@ fn main() -> eframe::Result {
             form.pending_dialog = dialog;
             form.dialog_arg = dialog_arg;
             form.dialog_only = dialog_only;
+            form.screenshot = screenshot;
             Ok(Box::new(form))
         }),
     );

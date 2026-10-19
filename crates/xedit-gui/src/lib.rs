@@ -23,6 +23,7 @@ pub mod icon;
 pub mod main_form;
 pub mod menu_model;
 pub mod nav_tree;
+pub mod screenshot;
 pub mod selection;
 pub mod settings;
 pub mod startup;

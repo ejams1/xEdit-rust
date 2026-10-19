@@ -83,6 +83,7 @@ use crate::dialogs::view_elements_form::{ElementTab, ViewElementsAction, ViewEle
 use crate::dialogs::{DialogHost, DialogKind, setting_get_bool, setting_get_integer, setting_get_string, setting_set};
 use crate::menu_model::{self, MenuItem, MenuKind, MenuTree};
 use crate::nav_tree::{NavAction, NavSource, SearchState};
+use crate::screenshot::{ScreenshotOutcome, ScreenshotState};
 use crate::selection::Selection;
 use crate::settings::{GuiSettings, NAV_COLUMN_WIDTHS, WindowState};
 use crate::startup::{ModuleSelectMode, ModuleSelectState, Startup, application_title};
@@ -225,6 +226,9 @@ pub struct TfrmMain {
     /// `--dialog` draws a step-6 viewer or editor alone (the phase-7 screen
     /// check), without the shell's panels behind it.
     pub dialog_only: bool,
+    /// `--screenshot <path>`: the app's own capture of the window, written
+    /// as PNG through egui's screenshot path (see `screenshot.rs`).
+    pub screenshot: Option<ScreenshotState>,
     /// The load running on its worker thread.
     load_rx: Option<Receiver<Result<Session, CommandError>>>,
     /// The progress callback's buffer while a load runs.
@@ -234,6 +238,11 @@ pub struct TfrmMain {
     load_started: Instant,
     theme_applied: bool,
     window_placed: bool,
+    /// Whether the native window's title and icon have been sent. Both go
+    /// through `ViewportCommand`, and every `send_viewport_cmd` requests a
+    /// repaint of its viewport (`Context::send_viewport_cmd_to`): sending
+    /// them once per pass repaints the window forever.
+    window_titled: bool,
     /// The screen the last frame logged under `XEDIT_GUI_LOG`.
     logged_screen: Option<&'static str>,
     /// The frames drawn, for the periodic geometry line.
@@ -283,12 +292,14 @@ impl TfrmMain {
             dialog: None,
             edit_group_flow: false,
             dialog_arg: None,
+            screenshot: None,
             load_rx: None,
             progress: None,
             previous_callback: None,
             load_started: Instant::now(),
             theme_applied: false,
             window_placed: false,
+            window_titled: false,
             logged_screen: None,
             frame_count: 0,
             edit_allowed: edit,
@@ -398,6 +409,28 @@ impl TfrmMain {
             .unwrap_or_default();
         for message in drained {
             self.add_message(&message);
+        }
+    }
+
+    /// A `--screenshot` run's frame, captured through the app's own egui
+    /// screenshot path. `frame_drawn` counts the painted frames the switch
+    /// `--screenshot-frames` waits for; a hidden window's logic ticks pass
+    /// `false`, so the count is of frames that were really drawn.
+    fn poll_screenshot(&mut self, ctx: &egui::Context, frame_drawn: bool) {
+        let Some(shot) = self.screenshot.as_mut() else {
+            return;
+        };
+        // The screen the capture waits for: the load has finished (or
+        // failed), or a startup dialog is up. `finish_load` opens
+        // `--dialog` before it sets `Startup::Loaded`, so a loaded screen
+        // with a dialog requested already has that dialog open.
+        let ready = !matches!(self.startup, Startup::Loading);
+        let (outcome, exit) = (shot.poll(ctx, ready, frame_drawn), shot.exit_when_done());
+        if matches!(outcome, ScreenshotOutcome::Finished | ScreenshotOutcome::TimedOut) && exit {
+            // `--exit`: close the window once the PNG is on disk (or the
+            // screen never came), so a screen-check run cannot hang.
+            self.closing = true;
+            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
         }
     }
 
@@ -2878,7 +2911,30 @@ impl TfrmMain {
     }
 }
 
+/// The window's loop. Repaint policy: egui calls `ui` only when a repaint
+/// is requested, and nothing here requests one per frame. A
+/// `ViewportCommand` requests a repaint of its viewport
+/// (`Context::send_viewport_cmd_to`), so each is sent once, on change — the
+/// title and icon were sent per frame once and idled a full CPU core on the
+/// screen-check desktop. `request_repaint_after` is scheduled only while
+/// something animates (the loading gauge) or a job is waited on (the load,
+/// `--screenshot`).
+///
+/// A hidden window runs no `ui` pass in this eframe: the integration runs
+/// `logic` only, on each repaint request. The screen-check launches every
+/// window hidden, so the load result (which would otherwise be polled for
+/// the first time in `ui`) and the `--screenshot` state machine are polled
+/// here too; a `RequestPaintWhileHidden` from the capture asks for the
+/// painted frame it waits on.
 impl eframe::App for TfrmMain {
+    fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.poll_load();
+        self.poll_screenshot(ctx, false);
+        if matches!(self.startup, Startup::Loading) {
+            ctx.request_repaint_after(std::time::Duration::from_millis(100));
+        }
+    }
+
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
         // `XEDIT_GUI_SCALE`: the screen-check harness renders the logical
@@ -2905,10 +2961,18 @@ impl eframe::App for TfrmMain {
         }
         self.drain_progress();
         self.poll_load();
+        self.poll_screenshot(&ctx, true);
         self.apply_theme(&ctx);
 
         // The native window: the title and the icon of the chosen game.
-        if let Some(game) = self.game {
+        // Both are `ViewportCommand`s, and sending one asks egui for a
+        // repaint: they are sent once, when the game is chosen, not every
+        // frame (a per-frame send idles a CPU core, seen on the
+        // screen-check desktop before this).
+        if !self.window_titled
+            && let Some(game) = self.game
+        {
+            self.window_titled = true;
             ctx.send_viewport_cmd(egui::ViewportCommand::Title(application_title(game)));
             if let Some(icon) = crate::icon::icon_for_game(game) {
                 ctx.send_viewport_cmd(egui::ViewportCommand::Icon(Some(Arc::new(icon))));

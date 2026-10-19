@@ -302,6 +302,27 @@ cargo xtask gui close  M:/projects/scratch/p7-screen-evidence/fo4edit-session.js
 
 `--json` prints the same result as the text output as JSON on every command.
 
+### Capturing the Rust GUI (`xedit-gui --screenshot`)
+
+Our GUI paints through eframe/wgpu, and on the private desktop `gui shot` cannot witness it: the window is hidden and has no composited surface, so `PrintWindow` and the `BitBlt` fallback both return a black client area. The app captures itself instead, through egui's own screenshot path (`ViewportCommand::Screenshot`, which renders the frame to a capture texture and reads it back to the CPU even when the window is hidden):
+
+```
+cargo xtask gui launch D:\projects\xedit-target-p7-shot\debug\xedit-gui.exe \
+    --args --game --args sse --args --load --args Update.esm \
+    --args --screenshot --args 'M:\projects\scratch\p7-shot-evidence\sse-main.png' --args --exit \
+    --session M:/projects/scratch/p7-shot-evidence/sse-main-session.json --desktop xedit-shot-sse --wait 90
+cargo xtask gui close M:/projects/scratch/p7-shot-evidence/sse-main-session.json
+```
+
+- `--screenshot <path>` writes one PNG of the window. It waits for the screen the other switches name: with `--load`, until the load finishes; with `--dialog <name>`, the dialog is opened as part of that same finish, so it is in the capture; with neither, the game or module selection dialog. It also captures the `Fatal:` screen of a failed load.
+- `--screenshot-frames <n>` (default 2) is the number of painted frames to wait after the screen is ready, and `--screenshot-delay <ms>` a further wall-clock wait, for content that arrives on a worker thread.
+- `--exit` closes the window once the PNG is written, so a test cannot hang; a screen that is not ready after 180 s closes without a PNG (the `XEDIT_GUI_LOG` line says why). The exit costs one `ViewportCommand::Close`; settings are saved on the close request as usual.
+- The capture is the app's own pixels, so it proves what egui laid out, not what a Win32 compositor would show. Use `gui windows`/`gui keys`/`gui close` against the process as normal; only `gui shot` is replaced. `xtask gui shot` stays the right tool for the 4.1.5q Delphi binary and its GDI dialogs.
+- A blank or black PNG means the app's frame was not painted before the read-back (or the GPU adapter refused the capture): check `XEDIT_GUI_LOG` for `screenshot: wrote <path>` and `screenshot: could not write ...`. The file only appears once the callback has run.
+- On this machine the loaded screen opens the upstream developer message (step 6's `startup_dialogs`) on the first ready frame: the SSE settings file does not exist and FO4's has `[DeveloperMessage] Version=0`. The `--dialog <step-5 name>` runs suppress it (their dialog opens inside `finish_load`), and an unknown `--dialog main` opens nothing and leaves the bare shell; capture both states when the gate needs the shell without a modal. `sse-main-developer-message.png` and `sse-main.png` in the phase-7 evidence are the two. A step-6 `--dialog` name (`tip`, `script`, ...) is not capturable alone yet: the dialog-only path's `show_dialogs` consumes the pending name on a Loading pass, so `finish_load` sees none and `startup_dialogs` opens the developer message over the viewer; fix step 6's ordering before the gate uses those views.
+
+Idle rule that the capture work exposed: eframe 0.37 calls `App::ui` only when a repaint is requested, so an idle window costs no CPU — but every `send_viewport_cmd` requests a repaint of its viewport. Sending the window title/icon per frame repainted the loaded window continuously at a full core on the private desktop; they are now sent once. When adding a viewport command, send it on change, not per pass, and schedule `request_repaint_after` only while an animation or a job is in flight. A hidden window runs `App::logic` only; `--screenshot` polls the load and its own state there, and asks for painted frames with `ViewportCommand::RequestPaintWhileHidden`.
+
 ## Inputs
 
 - **Corpus:** vanilla master files from the local game installs, found through `XEDIT_FO4_DATA` and `XEDIT_SSE_DATA` (each is the game's `Data` directory). Never commit game files. Small synthetic plugins live in `tests/fixtures` and are committed.
