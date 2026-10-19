@@ -14,9 +14,13 @@
 //!
 //! `cargo xtask parity dump` and `parity saves` compare the port with the oracle. See `parity`.
 //!
+//! `cargo xtask gui launch|windows|shot|keys|click|menus|close` drives a GUI
+//! program on a private desktop (a session) for the phase-7 screen checks.
+//!
 //! `cargo xtask pascal-check <file>...` parses upstream Pascal units with the
 //! reader of the definition transpiler and reports the files that fail.
 
+mod gui;
 mod memory;
 mod parity;
 mod pascal;
@@ -154,6 +158,7 @@ fn main() -> Result<()> {
             sync(&upstream, rest.first().copied())
         }
         ["port-defs", rest @ ..] => portdefs::run(rest),
+        ["gui", rest @ ..] => gui::run(rest),
         ["pascal-check", files @ ..] if !files.is_empty() => {
             let files: Vec<String> = files.iter().map(|file| (*file).to_owned()).collect();
             pascal::parser::check_files(&files)
@@ -165,7 +170,7 @@ fn main() -> Result<()> {
             parity::run(&root, &map.upstream.tag, rest)
         }
         _ => bail!(
-            "usage: cargo xtask check | cargo xtask sync <upstream checkout> [commit] | cargo xtask parity dump|saves [options]"
+            "usage: cargo xtask check | cargo xtask sync <upstream checkout> [commit] | cargo xtask parity <mode> [options] | cargo xtask gui help"
         ),
     }
 }

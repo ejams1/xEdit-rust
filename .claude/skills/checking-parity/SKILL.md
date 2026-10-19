@@ -261,6 +261,47 @@ A whole-file dump of `Fallout4.esm` (`-FO4 -q`) wrote 12.4 GB in 1 h 53 min and 
 
 The `xEdit-llm` automation build is a secondary oracle for conflict, reference and cleaning results as JSON. It is a fork at a different upstream commit: use it to cross-check, never to close a gate.
 
+## Screen checks (`cargo xtask gui`)
+
+The phase-7 gate witnesses a GUI claim with a screenshot or a scripted screen interaction against the 4.1.5q binary. `cargo xtask gui` starts a program on a private desktop of the current window station, which is never shown: nothing it draws reaches the user's desktop. A **session** is a JSON file; a helper process (`gui session`, started by `launch` and run from a copy of `xtask`) creates the desktop, starts the program on it, holds the desktop open and serves the other commands through request files beside the session. Windows belong to their desktop, so every list, capture, key, click, menu and close request is executed by that helper, not by the command's own process.
+
+| Command | What it does |
+| --- | --- |
+| `gui launch <exe> [--args <arg>]... [--desktop <name>] [--session <file>] [--wait <seconds>] [--json]` | Starts the program, waits for its first visible window, writes the session (default `$XEDIT_GUI_SESSIONS`, else `$XEDIT_PARITY_SCRATCH/gui`, else `<cwd>/.xtask-gui/session.json`). A program that exits during startup fails the launch with its exit code. |
+| `gui windows <session> [--json]` | Every top-level window of the desktop: handle, pid, class, title, rect, visible, and whether it belongs to the session's program. |
+| `gui shot <session> (--title <substr>|--handle <hwnd>)... --out <png> [--json]` | Captures every matching window with `PrintWindow` (BitBlt fallback), writes PNGs. Several matches write `<stem>-<handle>.png`. |
+| `gui keys <session> (--title|--handle) --keys "ctrl+s,enter,text:FO4" [--control <class>] [--delay <ms>]` | Posts keys with `WM_KEYDOWN`/`WM_CHAR`/`WM_KEYUP`, modifiers in the target thread's keyboard state. `alt+f` sends `SC_KEYMENU` (a posted Alt+letter never opens a menu). `--control` names the control class that receives the keys (`TLabeledEdit`, `TVirtualStringTree`): **a dialog on a private desktop has no focused control**, so without it the keys go to the form and text is lost. |
+| `gui click <session> (--title|--handle) --at <x>,<y> [--button left|right|middle]` | Posts a mouse click at a client point, passed down to the deepest child under it. |
+| `gui click <session> (--title|--handle) --click-button <caption>` | Finds a `TButton`/`Button`/`TSpeedButton` child by caption (an `&` is ignored) and sends `BM_CLICK`. Use it where the dialog is DPI-clipped and the button is outside the visible client area. |
+| `gui menus <session> (--title|--handle) [--json]` | The window's Win32 menu tree (`GetMenu`/`GetMenuItemInfoW`): text, id, enabled, checked, nested submenus. |
+| `gui close <session> [--timeout <seconds>]` | `WM_CLOSE` to the program's windows, then `TerminateProcess` on exactly that pid (checked by its creation time), then ends the helper and removes the session. |
+
+Notes paid for on the first run (2026-10-19):
+
+- The helper runs from a **copy** of `xtask` beside the session, so a rebuild while a session runs is safe, but a command whose protocol changed needs a **new session** (close and launch again).
+- `xEdit 4.1.5q` has **no Win32 menu**: its File/View/... menu is `pmuMain`, a popup menu on the `bnMainMenu` hamburger speed button (`Caption = #926`), a `TGraphicControl` with no window handle. `gui menus` therefore answers `has no menu` for it, and `GetMenu` cannot be used for the walkthrough. The button is disabled until a file is loaded; the gate has to open the popup from the main form after loading and capture the `#32768` menu window.
+- At 150 % display scaling the 4.1.5q dialogs are clipped: their OK/Cancel buttons lie outside the visible client area, so click them with `--click-button`, not `--at`.
+- `C:\Windows\System32\notepad.exe` on Windows 11 is the packaged Notepad (a hardlink into `WindowsApps`): launched directly it exits with code 0 without a window (`launch` reports `the program exited during startup`). Use a classic Win32 target (`dxdiag.exe`, `charmap.exe`) for a screen-check smoke test on this machine.
+
+Worked example (the oracle's module selection, evidence in `M:\projects\scratch\p7-screen-evidence`):
+
+```
+W='M:\projects\scratch\p7-screen-evidence\oracle-private'   # Data\, plugins.txt, temp\, cache\, backup\, mygames\
+cargo xtask gui launch "$XEDIT_ORACLE_DIR/xFOEdit.exe" \
+    --args -FO4 --args "-D:$W\Data\\" --args "-P:$W\plugins.txt" --args "-T:$W\temp\\" \
+    --args "-C:$W\cache\\" --args "-B:$W\backup\\" --args "-S:$W\\" \
+    --args "-M:$W\mygames\\" --args "-I:$W\mygames\game.ini" --args "-G:$W\mygames\Saves\\" \
+    --session M:/projects/scratch/p7-screen-evidence/fo4edit-session.json --desktop xedit-gui-fo4 --wait 40
+cargo xtask gui windows M:/projects/scratch/p7-screen-evidence/fo4edit-session.json   # TfrmMain + TfrmModuleSelect
+cargo xtask gui click  M:/projects/scratch/p7-screen-evidence/fo4edit-session.json --title "What's New" --at 820,600
+cargo xtask gui shot   M:/projects/scratch/p7-screen-evidence/fo4edit-session.json --title "Module Selection" --out module-selection.png
+cargo xtask gui keys   M:/projects/scratch/p7-screen-evidence/fo4edit-session.json --title "Module Selection" \
+                       --control TLabeledEdit --keys "text:FO4"           # the filter box shows FO4
+cargo xtask gui close  M:/projects/scratch/p7-screen-evidence/fo4edit-session.json
+```
+
+`--json` prints the same result as the text output as JSON on every command.
+
 ## Inputs
 
 - **Corpus:** vanilla master files from the local game installs, found through `XEDIT_FO4_DATA` and `XEDIT_SSE_DATA` (each is the game's `Data` directory). Never commit game files. Small synthetic plugins live in `tests/fixtures` and are committed.
