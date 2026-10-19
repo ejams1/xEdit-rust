@@ -29,7 +29,9 @@ use xedit_session::module_select::{
 use xedit_session::settings::{SettingsGetRequest, SettingsSetRequest};
 
 fn scratch(name: &str) -> std::path::PathBuf {
-    let dir = std::path::PathBuf::from(r"M:\projects\xedit-parity-scratch-p7-step5").join(name);
+    let dir = std::env::temp_dir()
+        .join(format!("xedit-parity-scratch-p7-step5-{}", std::process::id()))
+        .join(name);
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     dir
