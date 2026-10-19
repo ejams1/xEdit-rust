@@ -20,3 +20,10 @@
 ## Validation and docs
 
 Run checks appropriate to the changed crate and the phase gate; preserve required upstream and parity checks. Update the affected skill and `README.md` progress when functionality or phase status changes. Keep `docs/PLAN.md` an overview: detailed run evidence belongs in `docs/history/` or the issue that owns it.
+
+
+## Session entry and ownership
+
+Use [the session workflow](docs/AGENT-SESSIONS.md) when starting or handing off a task. Copy the [brief](docs/agent/task-brief.md) and [handoff](docs/agent/handoff.md) templates into the task's ignored or external scratch directory; fill only the fields needed for the assignment. One session owns one issue or batch and its named paths. Expand shared-file ownership with the coordinator before editing; do not revert another session's work.
+
+Keep complete command logs and their exit statuses in the task directory. Read them with `python tools/log_excerpt.py LOG --max-lines 80 --max-chars 8000`; continue from the returned byte `next_offset` only when needed. The helper bounds its entire JSON response and does not execute commands. Keep detailed histories and machine-specific launch settings out of the startup instructions.
