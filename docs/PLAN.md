@@ -307,6 +307,26 @@ Results: #41 (branch `parity-41`, PR #77) closed the parity backlog: the full-co
 - **Skills:** None new. The coverage ledger must show every GUI binding as covered or presentation-only.
 - **Gate:** Ledger complete. Manual walkthrough of the upstream menus against the Delphi build.
 
+Premises, measured 2026-10-18 before the phase started:
+
+- *Toolkit.* Decision 1 fixes egui with a custom virtualised tree and grid: `eframe` 0.37, MIT OR Apache-2.0, so `cargo deny check licenses` stays green without a GPL dependency (Slint would have forced one).
+- *Scope.* The upstream GUI of `xEdit.dpr` is 22 forms: `xeMainForm.pas` 22,674 lines plus 9,564 lines across 21 forms (`xeModuleSelectForm` 1,069, `xeModGroupSelectForm` 957, `xeLogAnalyzerForm` 764, `xeFilterOptionsForm` 631, `xeModGroupEditForm` 621, `xeScriptForm` 496, `xeViewElementsForm` 442, `xeRichEditForm` 397, `xeOptionsForm` 366, `xeLODGenForm` 267, `xeWaitForm` 257, `xeLocalizationForm` 245, `xeDeveloperMessageForm` 238, `xeLegendForm` 209, `xeFileSelectForm` 186, `xeTipForm` 147, `xePushLikeButton` 139, `xeGameSelectForm` 126, `xeScriptHost` 103, `xeLocalizePluginForm` 89, `xeEditWarningForm` 79, `xeWorldspaceCellDetailsForm` 73). BSArchPro's own GUI stays in the `bsarch` binary's realm; its packing route is already a typed command with screen-checked parity (PR #87).
+- *Command layer.* All 661 `gui.*` ledger bindings are already `covered` (228, each naming its command), `presentation` (425) or `excluded` (8); the GUI adds no new command and calls the same registry as the CLI.
+
+Steps:
+
+1. **Crate and main window** (Opus): the `xedit-gui` crate and binary; the in-process bridge onto the `xedit-session` command registry; the main window frame (per-game title and icon, the menu bar built from `xeMainForm`'s menu tree, toolbar, status bar with progress gauge), theme and fonts, the GUI keys of `xEdit.ini`; the virtualised tree and grid widget primitives with conflict colour roles; the startup flow (game select, module select, load) to the depth the shell needs.
+2. **Navigation tree** (Opus): `xeMainForm`'s tree builder — Files, groups, records, Record Header, Referenced By, Conflicted, Filter tabs; lazy expansion over the session's queries; conflict icons and colours; context menus, jump and bookmarks; refresh after edits, clean and save.
+3. **View tab** (Opus): the record grid on the widget primitives — definition-ordered columns, per-signature render formats, conflict colouring, cell editing routed through `elements set`, row menus, selection sync with the tree and the panes.
+4. **Record panes** (Sonnet): information, details, messages and referenced-by panes; the element detail editor (`xeElementDetailForm` rules) and the localization view.
+5. **Dialogs A** (Sonnet): game select, module select (checkboxes, masters, order, select-none and scripted), file select, wait and progress with cancel, edit warning, developer message, error dialog.
+6. **Dialogs B** (Sonnet): filter options, filter application progress, mod group select and edit, options form and settings files, legend, tip.
+7. **Dialogs C** (Sonnet): view elements, script form, log analyzer, rich edit, localization forms, LODGen, worldspace cell details, push-like button.
+8. **Menu and binding audit** (Sonnet): every covered `gui.*` binding is reachable from a rendered control that calls its command; the audit table names the control for each binding and is checked by `cargo xtask check`.
+9. **Gate** (Opus): screen-checks of every menu and dialog against the 4.1.5q binary on the private desktop through the hidden GUI helper, the walkthrough record, README/PLAN/skills, and the full parity harness rerun at the phase tip.
+
+Status: started 2026-10-18 from `main` `6d9646d` (`phase-7-gui`).
+
 ### Phase 8: Performance
 
 - **Model:** Fable 5.1. SIMD, `unsafe` and concurrency changes must keep output identical, and errors here are silent.
