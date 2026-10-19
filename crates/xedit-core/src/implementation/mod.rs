@@ -339,6 +339,24 @@ thread_local! {
     /// The record that builds on this thread for its names only
     /// (`mrsQuickInit`), by its address; 0 for none.
     static QUICK_INIT: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+
+    /// The number of record names this thread read while the record's init
+    /// ran on another thread and was not waited out (two builds need each
+    /// other, see `crate::threads::init_cycles`). A name computed from one
+    /// of them is partial, and the name caches do not keep it (issue #99).
+    static PARTIAL_NAMES: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+/// The number of partial names this thread read so far (see
+/// [`PARTIAL_NAMES`]).
+fn partial_names() -> u64 {
+    PARTIAL_NAMES.with(std::cell::Cell::get)
+}
+
+/// Notes that a getter read a name that is not final yet, so that a name
+/// computed meanwhile is not cached.
+fn note_partial_name() {
+    PARTIAL_NAMES.with(|names| names.set(names.get().wrapping_add(1)));
 }
 
 /// The bytes an element reads its data from: the file, or the decompressed
@@ -2884,6 +2902,16 @@ impl MainRecordImpl {
                 return "<FullName not yet available: init still running>".to_owned();
             }
             self.self_arc().quick_init();
+            if !self.mr_names_known.load(Ordering::Acquire)
+                && self.mr_init.is_running()
+                && !self.mr_init.is_running_here()
+            {
+                // The init runs on another thread and was not waited out
+                // (two builds need each other): the name read now is what
+                // that init read so far.
+                note_partial_name();
+                return "<FullName not yet available: init still running>".to_owned();
+            }
         }
         self.mr_full_name.read().unwrap().clone()
     }
@@ -2894,7 +2922,7 @@ impl MainRecordImpl {
     /// again and forgets its display name.
     fn check_l_generation(&self) {
         let generation = crate::localization::localization_generation();
-        if self.mr_l_generation.load(Ordering::Relaxed) == generation {
+        if self.mr_l_generation.load(Ordering::Acquire) == generation {
             return;
         }
         self.invalidate_name_cache();
@@ -2907,25 +2935,35 @@ impl MainRecordImpl {
     /// record cached before one of its elements changed (the injection notes
     /// of a load, which name the cell and worldspace a navmesh is in) is
     /// built again with what the record and its parents hold now.
+    ///
+    /// The full name is read again only when the names are known
+    /// (`mr_names_known`, upstream's `mrsQuickInitDone`). While a build
+    /// runs on another thread, the flag is not set yet, and the build may
+    /// have read the full name already and will not read it again: clearing
+    /// it then would lose the name for good (issue #99: the name of a
+    /// `QUST` of `Skyrim.esm` stayed without its `FULL` after a concurrent
+    /// read invalidated the cache between the subrecord and the flag).
+    /// The generation is published after the names, so a thread that sees it
+    /// also sees the full name read with it.
     pub(crate) fn invalidate_name_cache(&self) {
-        self.mr_l_generation
-            .store(crate::localization::localization_generation(), Ordering::Relaxed);
         if !self.file_impl().is_some_and(|file| file.get_is_localized()) {
+            self.mr_l_generation
+                .store(crate::localization::localization_generation(), Ordering::Release);
             return;
         }
-        *self.mr_display_name.write().unwrap() = None;
-        *self.mr_name.write().unwrap() = String::new();
-        *self.mr_short_name.write().unwrap() = String::new();
-        let mut full_name = String::new();
         if self.mr_names_known.load(Ordering::Acquire)
             && let Some(def) = &self.mr_def
         {
             let signature = def.known_sub_record_signatures()[KnownSubRecord::ksrFullName.ord()];
             if let Some(record) = self.get_record_by_signature(signature) {
-                full_name = record.get_edit_value();
+                self.set_full_name(record.get_edit_value());
             }
         }
-        self.set_full_name(full_name);
+        *self.mr_display_name.write().unwrap() = None;
+        *self.mr_name.write().unwrap() = String::new();
+        *self.mr_short_name.write().unwrap() = String::new();
+        self.mr_l_generation
+            .store(crate::localization::localization_generation(), Ordering::Release);
     }
 
     /// Port of `GetCanHaveEditorID` and `GetCanHaveFullName`.
@@ -3289,6 +3327,7 @@ impl MainRecordImpl {
     /// record is `EditorID [SIG:FormID]`.
     fn short_name_internal(&self, a_for_name: bool) -> String {
         self.check_l_generation();
+        let partial = partial_names();
         if crate::interface::globals::display_shorter_names() {
             // `CanCache := (not aForName) or not wbNoFullInShortName`.
             let can_cache = !a_for_name || !crate::interface::globals::no_full_in_short_name();
@@ -3319,7 +3358,9 @@ impl MainRecordImpl {
                 self.mr_struct().form_id
             };
             result.push_str(&format!("[{}:{}]", self.mr_struct().signature, form_id.to_string(true)));
-            if can_cache && is_official_file(self) {
+            // A partial name (another thread's init was not waited out) is
+            // not kept (issue #99).
+            if can_cache && is_official_file(self) && partial_names() == partial {
                 *self.mr_short_name.write().unwrap() = result.clone();
             }
             return result;
@@ -4986,6 +5027,7 @@ impl Element for MainRecordImpl {
         if !cached.is_empty() {
             return cached;
         }
+        let partial = partial_names();
         let mut result = self.short_name_internal(true);
         if let Some(def) = &self.mr_def
             && let Some(main_record) = self.self_ref.upgrade().map(|record| record as MainRecordRef)
@@ -4996,7 +5038,11 @@ impl Element for MainRecordImpl {
                 result = format!("{result} ({info})");
             }
         }
-        if is_official_file(self) {
+        // A name read while the init of another thread runs (`quick_init`
+        // gave its wait up) is partial: keeping it would outlive the build
+        // that completes the record (issue #99, `mr_name` of an official
+        // file).
+        if is_official_file(self) && partial_names() == partial {
             *self.mr_name.write().unwrap() = result.clone();
         }
         result
@@ -5013,6 +5059,7 @@ impl Element for MainRecordImpl {
         if let Some(cached) = self.mr_display_name.read().unwrap().as_ref() {
             return cached.clone();
         }
+        let partial = partial_names();
         let mut result = self.get_full_name();
         let signature = self.mr_struct().signature;
         if result.is_empty() {
@@ -5074,9 +5121,12 @@ impl Element for MainRecordImpl {
         if result.is_empty() {
             result = self.get_summary();
         }
+        // A display name built from a partial name (another thread's init
+        // was not waited out) is not kept (issue #99).
         if self
             .file_impl()
             .is_some_and(|file| file.get_file_states().contains(FileState::fsIsOfficial))
+            && partial_names() == partial
         {
             *self.mr_display_name.write().unwrap() = Some(result.clone());
         }
@@ -5535,6 +5585,16 @@ impl MainRecord for MainRecordImpl {
                 return "<EditorID not yet available: init still running>".to_owned();
             }
             self.self_arc().quick_init();
+            if !self.mr_names_known.load(Ordering::Acquire)
+                && self.mr_init.is_running()
+                && !self.mr_init.is_running_here()
+            {
+                // The init runs on another thread and was not waited out
+                // (two builds need each other): the editor ID read now is
+                // what that init read so far.
+                note_partial_name();
+                return "<EditorID not yet available: init still running>".to_owned();
+            }
         }
         self.mr_editor_id.read().unwrap().clone()
     }
