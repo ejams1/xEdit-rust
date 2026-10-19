@@ -1477,6 +1477,14 @@
         {"class": "TForm", "title": "Assets Browser", "keys": [27]}
       ],
       "note": "issue #81, the browser form: Initialize builds the form (the container combo, the asset TListView with its two columns and the owner-data Items.Count, the info memo) over the private Data folder and shows it; the form has no OK/Cancel button, and an Esc reaches its KeyPreview FormKeyDown (line 401), which sets mrOk and closes it. Nothing is selected or opened, so the run compares the log of the construction and close only; the actions (popup menu, double click, drag and drop, Ctrl+C) are out of the answers' reach"
+    },
+    {
+      "script": "probes/jvfm.pas",
+      "synthetic_master": true,
+      "answers": [
+        {"class": "TJvInterpreterForm", "title": "Fixture Form", "button": "OK"}
+      ],
+      "note": "issue #81, form runner: the script writes a fixture unit and its text DFM, then calls JvInterpreterMakeForm (caption, width and the nested button read back), JvInterpreterRunForm (shown), JvInterpreterRunFormModal (the recorded answer clicks the default button, ModalResult 1) and JvInterpreterRunUnit (the unit's main routine adds a line in a fresh interpreter). The log and the files the script wrote are compared."
     }
   ]
 }

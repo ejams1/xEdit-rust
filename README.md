@@ -99,7 +99,8 @@ The progress bar above counts merged phases of [docs/PLAN.md](docs/PLAN.md); it 
 
 - **2 xDump switch entries** (issue #79): `-bts`/`-btd` change only Skyrim LE saves (the `Unused`/`Remaining` arrays are commented out in the FO4/FO3/FNV definitions), and a full TES5 save dump exceeds the harness timeouts, so no oracle case can witness them; the port takes both from the saves dump CLI and the parity saves mode. Every other switch is covered (`-do` is excluded: it prints raw pointers against `wbBaseOffset`, which only a scanned plugin has).
 - **Game modes not verified** (issues #7, #9, #80): Enderal and Oblivion Remastered are not installed on the development machine, and the 4.1.5q oracle cannot dump a Morrowind plugin (below).
-- **4 script registrations** (issue #81): the form runners that exist to run a form script headlessly, with the run cases the issue lists.
+
+The four `JvInterpreterFm` form runners (issue #81), the last open script registrations, landed 2026-10-18: the `jvfm` run case compares `JvInterpreterMakeForm`/`RunForm`/`RunFormModal`/`RunUnit` over a fixture unit and its DFM with the oracle (`cargo xtask parity script --phase run --script jvfm` equal).
 
 ### Out of the oracle's reach
 

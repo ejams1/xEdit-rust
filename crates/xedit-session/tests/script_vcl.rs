@@ -59,6 +59,23 @@ fn run(session: &mut Session, folder: &Path, name: &str) -> serde_json::Value {
         .unwrap_or_else(|error| panic!("{error}"))
 }
 
+/// [`run`] with recorded dialog answers (`script.run`'s `answers`).
+fn run_with_answers(session: &mut Session, folder: &Path, name: &str, answers: serde_json::Value) -> serde_json::Value {
+    session.allow_edit(true);
+    Registry::standard()
+        .call(
+            session,
+            "script.run",
+            json!({
+                "file": format!("{name}.pas"),
+                "scripts": folder.display().to_string(),
+                "save": false,
+                "answers": answers,
+            }),
+        )
+        .unwrap_or_else(|error| panic!("{error}"))
+}
+
 /// The messages without the `[mm:ss]` prefixes the lines of the action carry.
 fn lines(result: &serde_json::Value) -> Vec<String> {
     result["messages"]
@@ -520,6 +537,48 @@ fn a_list_view_columns_and_item_count_are_modelled_by_the_object_model() {
     let lines = lines(&result);
     assert!(
         lines.iter().any(|line| line == "col0=File Name width=320 count=3"),
+        "{lines:?}"
+    );
+}
+
+//=== The form runner of JvInterpreterFm.pas (issue #81) =====================
+
+/// The four host functions of `JvInterpreterFm.pas` over the fixture unit
+/// and DFM the script writes: `MakeForm` compiles the unit and reads its
+/// text DFM into a hidden interpreter form, `RunForm` shows it, the
+/// recorded answer drives `RunFormModal`'s modal loop and clicks the default
+/// button, and `RunUnit` runs the unit's main block in a fresh interpreter.
+/// The same script is `crates/xtask/oracle/scripts/probes/jvfm.pas`, whose
+/// run case (`runs.json`) compares these lines with the oracle's.
+#[test]
+fn the_form_runner_builds_shows_and_runs_a_unit() {
+    let _guard = test_lock();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let text = std::fs::read_to_string(root.join("crates/xtask/oracle/scripts/probes/jvfm.pas"))
+        .expect("the parity probe script is in the repository");
+    let folder = script_folder("Jvfm", &text);
+    let mut session = open_session();
+    let result = run_with_answers(
+        &mut session,
+        &folder,
+        "Jvfm",
+        json!([{"class": "TJvInterpreterForm", "title": "Fixture Form", "button": "OK"}]),
+    );
+    assert_eq!(result["aborted"], false, "{result:#}");
+    let lines = lines(&result);
+    assert_eq!(
+        &lines[1..6],
+        &[
+            "makeform: Fixture Form visible=False width=320".to_owned(),
+            "makeform: Button1 caption=OK".to_owned(),
+            "runform: visible=True".to_owned(),
+            "runformmodal: 1".to_owned(),
+            "rununit: the unit main routine ran".to_owned(),
+        ]
+    );
+    assert!(lines.iter().any(|line| line == "rununit: result type 0"), "{lines:?}");
+    assert!(
+        lines.iter().any(|line| line == "You can close this application now."),
         "{lines:?}"
     );
 }
