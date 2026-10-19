@@ -134,6 +134,7 @@ mod tests {
         // fields the GUI will send are the CLI's.
         let request = xedit_session::commands::SessionLoadRequest {
             plugins: vec!["a.esp".to_owned()],
+            compare_to: None,
             mode: None,
             force: false,
             dry_run: true,

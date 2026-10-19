@@ -51,6 +51,7 @@ pub mod script_rtl;
 pub mod script_strings;
 pub(crate) mod script_units;
 pub mod script_vcl;
+pub mod settings;
 pub mod sniff;
 pub mod tool_modes;
 
@@ -182,6 +183,7 @@ impl Registry {
         check::register(&mut registry);
         modgroups::register(&mut registry);
         module_select::register(&mut registry);
+        settings::register(&mut registry);
         bsarchpro::register(&mut registry);
         localization::register(&mut registry);
         new_file::register(&mut registry);

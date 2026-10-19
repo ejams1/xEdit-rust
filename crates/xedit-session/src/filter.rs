@@ -5,9 +5,10 @@
 // Ported from xEdit: xEdit/xeFilterOptionsForm.pas (FormCreate,
 // FilterListPresets, FilterLoadPreset, FilterSavePreset,
 // FilterHasPresetChanged, btnFilterDelClick, mniSelectionClick,
-// cmbPresetSelect, the RecordSignatures and BaseRecordSignatures properties)
-// and xEdit/xeMainForm.pas (mniNavFilterApplyClick, mniNavFilterRemoveClick,
-// ReInitTree)
+// cmbPresetSelect, the RecordSignatures and BaseRecordSignatures properties,
+// the wbRecordDefs loop that fills clbRecordSignatures and
+// clbBaseRecordSignatures) and xEdit/xeMainForm.pas (mniNavFilterApplyClick,
+// mniNavFilterRemoveClick, ReInitTree)
 
 //! `filter.apply`, `filter.remove` and the filter presets of the options
 //! dialog (`TfrmFilterOptions`).
@@ -1003,7 +1004,82 @@ fn refs_build_reachable(
     })
 }
 
+/// One entry of the dialog's signature lists: `DefaultSignature + ' - ' +
+/// GetName` as the list holds it, with the parts.
+#[derive(Serialize, JsonSchema)]
+pub struct SignatureEntry {
+    /// `DefaultSignature`: the signature of the record as text (`WEAP`).
+    pub signature: String,
+    /// `GetName`: the name of the record definition (`Weapon`).
+    pub name: String,
+    /// The entry as the list holds it, `SIGNATURE - Name`.
+    pub text: String,
+    /// `ReferenceSignatureCount`: the reference records that can have this
+    /// record as their base. The base-record list holds the entries above 0.
+    pub reference_signature_count: i32,
+}
+
+/// `signatures.list`: the response.
+#[derive(Serialize, JsonSchema)]
+pub struct SignaturesListResponse {
+    /// `clbRecordSignatures`: every record definition of the game,
+    /// `SIGNATURE - Name`, sorted as the list sorts them.
+    pub records: Vec<SignatureEntry>,
+    /// `clbBaseRecordSignatures`: the definitions whose
+    /// `ReferenceSignatureCount` is above 0 (a record that a reference can
+    /// name as its base), in the same shape and order.
+    pub base_records: Vec<SignatureEntry>,
+}
+
+/// `signatures.list`: the signatures of the record definitions of the
+/// active game (`wbRecordDefs`), the two lists `TfrmFilterOptions.FormCreate`
+/// fills (`clbRecordSignatures` and `clbBaseRecordSignatures`).
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct SignaturesListRequest {}
+
+fn signatures_list(session: &mut Session, _: SignaturesListRequest) -> Result<SignaturesListResponse, CommandError> {
+    use xedit_core::interface::{NamedDef, SignatureDef, record_defs};
+    session.mode()?;
+    let mut entries: Vec<SignatureEntry> = record_defs()
+        .iter()
+        .map(|(_, def)| {
+            let signature = def.get_default_signature().to_string();
+            let name = def.get_name().to_owned();
+            SignatureEntry {
+                text: format!("{signature} - {name}"),
+                signature,
+                name,
+                reference_signature_count: def.get_reference_signature_count(),
+            }
+        })
+        .collect();
+    // `clbRecordSignatures.Sorted := True`: by the text, without regard to
+    // case (the signature prefix alone tells two entries apart).
+    entries.sort_by(|a, b| xedit_loadorder::mod_groups::compare_text(&a.text, &b.text));
+    let base_records = entries
+        .iter()
+        .filter(|entry| entry.reference_signature_count > 0)
+        .map(|entry| SignatureEntry {
+            signature: entry.signature.clone(),
+            name: entry.name.clone(),
+            text: entry.text.clone(),
+            reference_signature_count: entry.reference_signature_count,
+        })
+        .collect();
+    Ok(SignaturesListResponse {
+        records: entries,
+        base_records,
+    })
+}
+
 pub fn register(registry: &mut Registry) {
+    registry.register(
+        "signatures.list",
+        "List the record and base-record signatures of the game's definitions (wbRecordDefs), the two lists of the filter options dialog.",
+        false,
+        signatures_list,
+    );
     registry.register(
         "filter.apply",
         "Apply a filter to the navigation tree of the loaded files (mniNavFilterApplyClick, with the options of TfrmFilterOptions in the request or in a preset of the settings file) and report the nodes it left.",

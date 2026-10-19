@@ -744,7 +744,7 @@ note = "Writes View|LastUsedFilter and, when the checkboxes differ from the pres
 [gui."xEdit/xeFilterOptionsForm.dfm:frmFilterOptions:OnCreate"]
 status = "presentation"
 source = "FormCreate"
-note = "Fills the checklists with the conflict statuses and the signatures of the loaded definitions; filter.apply takes the names and signatures directly."
+note = "Fills the checklists with the conflict statuses (`clbConflictAll`/`clbConflictThis`) and the signatures of the loaded definitions (`clbRecordSignatures`/`clbBaseRecordSignatures`, the `wbRecordDefs` loop); signatures.list is that list (`SIGNATURE - Name`, both lists) and filter.apply takes the names and signatures directly."
 
 [gui."xEdit/xeFilterOptionsForm.dfm:frmFilterOptions:OnKeyDown"]
 status = "presentation"
@@ -1319,7 +1319,7 @@ note = "FormClose asks to save the changed modules (SaveChanged); files.save sav
 [gui."xEdit/xeMainForm.dfm:frmMain:OnCreate"]
 status = "presentation"
 source = "FormCreate"
-note = "Window setup and keyboard handling of the main form; the session settings FormCreate sets (wbDisplayShorterNames, the settings file) are the editor session's defaults."
+note = "Window setup and keyboard handling of the main form; the session settings FormCreate sets (wbDisplayShorterNames, the settings file) are the editor session's defaults. The placement, splitter and column keys it reads (`[frmMain] Left`, `Top`, `Width`, `Height`, `WindowState`, `pnlNavWidth`, `vstNavColumnWidth<i>`) and FormClose writes are `settings.get`/`settings.set`."
 
 [gui."xEdit/xeMainForm.dfm:frmMain:OnKeyDown"]
 status = "presentation"
@@ -1678,7 +1678,7 @@ note = "The selected records are the request's records; the GUI's own limit of f
 status = "covered"
 command = "records.compare"
 source = "mniNavCompareToClick"
-note = "`--compare-to <path>` loads the file in the place of the last `--load` plugin (wbFile with aCompareTo, AddMaster(flCompareTo), fsCompareToHasSameMasters); the GUI's copy into the data folder is the requirement that both files sit in one folder."
+note = "The click chooses a file and loads it as a compare load (`session.load` with `compare_to`, or the startup `--compare-to`): it loads in the place of the last plugin, which it takes the load order of (wbFile with aCompareTo, AddMaster(flCompareTo), fsCompareToHasSameMasters), and records.compare and conflicts.list then compare it. The GUI's copy into the data folder is the requirement that both files sit in one folder."
 
 [gui."xEdit/xeMainForm.dfm:mniNavCopyAsNewRecord:OnClick"]
 status = "covered"
@@ -2868,7 +2868,7 @@ note = "Display and keyboard handling of the edit dialog."
 status = "covered"
 command = "modgroups.edit"
 source = "vstModGroupItemsKeyDown"
-note = "Adding, removing and moving items, their flags and CRC32s: the items parameter, each item as a line of a mod group file."
+note = "Adding, removing and moving items, their flags and CRC32s: the items parameter, each item as a line of a mod group file. Insert opens the module selection over the valid modules that are not in the group (mfEphemeralModGroupTagged); modules.list is that list."
 
 [gui."xEdit/xeModGroupEditForm.dfm:vstModGroupItems:OnNodeClick"]
 status = "covered"
@@ -3106,7 +3106,7 @@ note = "Display, filter, selection helpers and keyboard handling of the module s
 [gui."xEdit/xeModuleSelectForm.dfm:frmModuleSelect:OnShow"]
 status = "presentation"
 source = "FormShow"
-note = "Display, filter, selection helpers and keyboard handling of the module selection dialog; session.load takes the list."
+note = "Display, filter, selection helpers and keyboard handling of the module selection dialog; modules.list is the tree's data (wbModulesByLoadOrder with the flags the check states read) and session.load takes the list."
 
 [gui."xEdit/xeModuleSelectForm.dfm:mniInvertSelection:OnClick"]
 status = "presentation"
@@ -3153,7 +3153,7 @@ note = "Display, filter, selection helpers and keyboard handling of the module s
 [gui."xEdit/xeModuleSelectForm.dfm:vstModules:OnGetText"]
 status = "presentation"
 source = "vstModulesGetText"
-note = "Display, filter, selection helpers and keyboard handling of the module selection dialog; session.load takes the list."
+note = "The tree cells (name, the load order and FileID columns, the ESM, light, update and medium columns, the masters as children) come from modules.list; the check states, the filter and the keyboard handling are presentation, and session.load takes the list."
 
 [gui."xEdit/xeModuleSelectForm.dfm:vstModules:OnHeaderClick"]
 status = "presentation"
@@ -3168,12 +3168,12 @@ note = "Display, filter, selection helpers and keyboard handling of the module s
 [gui."xEdit/xeModuleSelectForm.dfm:vstModules:OnInitChildren"]
 status = "presentation"
 source = "vstModulesInitChildren"
-note = "Display, filter, selection helpers and keyboard handling of the module selection dialog; session.load takes the list."
+note = "The tree cells (name, the load order and FileID columns, the ESM, light, update and medium columns, the masters as children) come from modules.list; the check states, the filter and the keyboard handling are presentation, and session.load takes the list."
 
 [gui."xEdit/xeModuleSelectForm.dfm:vstModules:OnInitNode"]
 status = "presentation"
 source = "vstModulesInitNode"
-note = "Display, filter, selection helpers and keyboard handling of the module selection dialog; session.load takes the list."
+note = "The tree cells (name, the load order and FileID columns, the ESM, light, update and medium columns, the masters as children) come from modules.list; the check states, the filter and the keyboard handling are presentation, and session.load takes the list."
 
 [gui."xEdit/xeModuleSelectForm.dfm:vstModules:OnKeyDown"]
 status = "presentation"
@@ -3514,13 +3514,13 @@ note = "The wait window of a long action and its Cancel button."
 status = "covered"
 command = "elements.add"
 source = "FormCreate"
-note = "wbGetCellDetailsForWorldspace asks whether a world cell added to a worldspace is persistent or which grid cell it takes; elements.add takes CELL[P] or CELL[x,y] (add.rs), the silent form of the same Add."
+note = "The form is installed as `wbGetCellDetailsForWorldspaceCallback` (`interface::globals`); its answer is the grid cell the add of a world cell uses. The headless default keeps the error (the add needs CELL[P] or CELL[x,y]), which elements.add takes as the silent form of the same Add."
 
 [gui."xEdit/xeWorldspaceCellDetailsForm.dfm:rbTemporary:OnClick"]
 status = "covered"
 command = "elements.add"
 source = "rbTemporaryClick"
-note = "wbGetCellDetailsForWorldspace asks whether a world cell added to a worldspace is persistent or which grid cell it takes; elements.add takes CELL[P] or CELL[x,y] (add.rs), the silent form of the same Add."
+note = "The form is installed as `wbGetCellDetailsForWorldspaceCallback` (`interface::globals`); its answer is the grid cell the add of a world cell uses. The headless default keeps the error (the add needs CELL[P] or CELL[x,y]), which elements.add takes as the silent form of the same Add."
 
 [switch."?"]
 status = "presentation"

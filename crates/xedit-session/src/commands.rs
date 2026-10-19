@@ -92,7 +92,8 @@ pub fn set_language_on_load(language: Option<&str>) {
 
 /// The `--compare-to` file of the next load (the GUI's "Compare to..."): the
 /// file loads as a compare load of the last plugin of `--load`, takes its
-/// load order, and is compared with it record by record.
+/// load order, and is compared with it record by record. A `compare_to` of
+/// [`SessionLoadRequest`] takes precedence over it (`Session::load`).
 static COMPARE_TO_ON_LOAD: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
 
 /// Sets the path of the compare load of the sessions loaded afterwards.
@@ -115,8 +116,10 @@ pub(crate) fn refuse_in_translate_mode(command: &str) -> Result<(), CommandError
 
 impl Session {
     /// Loads the plugins of a game in the order given, with their masters.
+    /// The compare load is the `--compare-to` file of the process, if one
+    /// was set (`set_compare_to_on_load`).
     pub fn load(game: &str, plugins: &[String]) -> Result<Self, String> {
-        Self::load_with(game, |_mode| Ok(plugins.to_vec()))
+        Self::load_with_compare_to(game, None, |_mode| Ok(plugins.to_vec()))
     }
 
     /// Port of the module selection of a legacy command line: the plugins
@@ -125,12 +128,31 @@ impl Session {
     /// `wbLoadModules` needs its tables (the game master, the official DLC,
     /// the Creation Club list, `Plugins.txt`).
     pub fn load_legacy(game: &str) -> Result<Self, String> {
-        Self::load_with(game, |_mode| crate::tool_modes::legacy_load_order())
+        Self::load_with_compare_to(game, None, |_mode| crate::tool_modes::legacy_load_order())
+    }
+
+    /// [`Self::load`] with the compare file of the request: a compare file
+    /// the request names takes precedence over the `--compare-to` file of
+    /// the process (which is consumed then).
+    fn load_with_compare_to(
+        game: &str,
+        compare_to: Option<String>,
+        plugins: impl FnOnce(GameMode) -> Result<Vec<String>, String>,
+    ) -> Result<Self, String> {
+        // The process's `--compare-to` file is consumed either way: the
+        // request's own compare file takes precedence (upstream has no
+        // compare-to switch; the GUI's dialog is per load).
+        let pending = COMPARE_TO_ON_LOAD.lock().unwrap().take();
+        Self::load_with(game, compare_to.or(pending), plugins)
     }
 
     /// [`Self::load`] with the plugin list computed once the game is set
     /// up (`wbLoadModules`).
-    fn load_with(game: &str, plugins: impl FnOnce(GameMode) -> Result<Vec<String>, String>) -> Result<Self, String> {
+    fn load_with(
+        game: &str,
+        compare_to: Option<String>,
+        plugins: impl FnOnce(GameMode) -> Result<Vec<String>, String>,
+    ) -> Result<Self, String> {
         // `xeInit.pas` sets `wbStartTime := Now` right before the loader
         // thread starts: the `[mm:ss]` prefixes of the message log count
         // from the load's start.
@@ -247,7 +269,7 @@ impl Session {
         // file into the data folder, the compare load has to sit in the
         // folder of that plugin, so that the masters resolve to the same
         // files.
-        if let Some(path) = COMPARE_TO_ON_LOAD.lock().unwrap().take() {
+        if let Some(path) = compare_to {
             let compare_to = files
                 .last()
                 .ok_or_else(|| "--compare-to needs a plugin loaded with --load".to_owned())?;
@@ -368,6 +390,13 @@ pub struct SessionLoadRequest {
     /// against the data folder of the session). Masters load with them, as
     /// they do for `--load`.
     pub plugins: Vec<String>,
+    /// Load this file as a compare load of the last plugin, as the
+    /// navigation tree's "Compare to..." does (`mniNavCompareToClick`,
+    /// `wbFileCompareTo`): it takes that plugin's load order and is
+    /// compared with it record by record. It has to sit in the folder of
+    /// that plugin (the GUI copies a chosen file there first). Takes
+    /// precedence over the process's `--compare-to`.
+    pub compare_to: Option<String>,
     /// The tool mode whose load settings apply, as `xeInit.pas` applies them
     /// before anything loads (`quickclean`, `quickautoclean`,
     /// `checkforerrors`, `translate`, `edit`). The settings of the mode are
@@ -396,6 +425,10 @@ pub struct SessionLoadResponse {
     /// The plugins the load would put in the session, in load order, with
     /// their masters.
     pub files: Vec<String>,
+    /// The compare file the load used (the request's, or the process's
+    /// `--compare-to`), the file the last plugin is compared with.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub compare_to: Option<String>,
     /// The plugins whose unsaved changes the reload discards.
     pub discarded: Vec<String>,
     /// The load settings the mode applies, as `xeInit.pas` sets them
@@ -494,6 +527,7 @@ fn session_load(session: &mut Session, request: SessionLoadRequest) -> Result<Se
                         .map_or_else(|| path.clone(), |name| name.to_string_lossy().into_owned())
                 })
                 .collect(),
+            compare_to: request.compare_to.clone(),
             discarded,
             settings,
             note: None,
@@ -510,19 +544,22 @@ fn session_load(session: &mut Session, request: SessionLoadRequest) -> Result<Se
     crate::commands::set_translate_on_load(translate);
     crate::commands::set_check_on_load(check);
     let edit_allowed = session.edit_allowed;
-    let reloaded = match Session::load(crate::dump::game_tag(game), &request.plugins) {
-        Ok(reloaded) => reloaded,
-        Err(message) => {
-            // `Session::load` clears the process-wide file list before it
-            // loads, so a failed load leaves the session with no plugin at
-            // all; the caller has to load again.
-            session.files.clear();
-            return Err(CommandError::new(
-                "load_failed",
-                format!("{message} (the session has no plugins now)"),
-            ));
-        }
-    };
+    let reloaded =
+        match Session::load_with_compare_to(crate::dump::game_tag(game), request.compare_to.clone(), |_mode| {
+            Ok(request.plugins.clone())
+        }) {
+            Ok(reloaded) => reloaded,
+            Err(message) => {
+                // `Session::load` clears the process-wide file list before it
+                // loads, so a failed load leaves the session with no plugin at
+                // all; the caller has to load again.
+                session.files.clear();
+                return Err(CommandError::new(
+                    "load_failed",
+                    format!("{message} (the session has no plugins now)"),
+                ));
+            }
+        };
     let files: Vec<String> = reloaded.files.iter().map(|file| file.get_name()).collect();
     *session = reloaded;
     session.edit_allowed = edit_allowed;
@@ -531,6 +568,7 @@ fn session_load(session: &mut Session, request: SessionLoadRequest) -> Result<Se
         mode: request.mode.clone(),
         dry_run: false,
         files,
+        compare_to: request.compare_to,
         discarded,
         settings,
         note: None,
