@@ -135,6 +135,14 @@ pub struct ConflictsRequest {
     /// settings file.
     #[serde(default)]
     pub saved_mod_groups: bool,
+    /// The records to classify, each as its node of the navigation tree (a
+    /// load order FormID and the plugin whose version is shown); the GUI
+    /// asks for the rows it paints. When non-empty only the FormID groups of
+    /// these records are compared (`conflict_statuses_of`) and only they are
+    /// listed; the file entries keep their record counts and report what
+    /// that comparison classified.
+    #[serde(default)]
+    pub records: Vec<SelectedRecord>,
     /// Listed records to skip.
     #[serde(default)]
     pub offset: usize,
@@ -144,7 +152,7 @@ pub struct ConflictsRequest {
 
 /// The conflicts of one loaded file, as the navigation tree shows the file:
 /// the highest status of its records (`InheritStateFromChildren`).
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 pub struct FileConflicts {
     pub name: String,
     pub load_order: i32,
@@ -163,7 +171,7 @@ pub struct FileConflicts {
 }
 
 /// The conflict status of one record.
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 pub struct RecordConflict {
     /// File that holds this version of the record.
     pub file: String,
@@ -177,7 +185,7 @@ pub struct RecordConflict {
     pub conflict_this: ConflictThisName,
 }
 
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 pub struct ConflictsResponse {
     /// Every loaded file in load order, with the counts of its records.
     pub files: Vec<FileConflicts>,
@@ -185,14 +193,14 @@ pub struct ConflictsResponse {
     pub total: usize,
     pub records: Vec<RecordConflict>,
     /// The warnings xEdit writes to its message log while it compares.
-    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub messages: Vec<String>,
     /// The activated mod groups.
-    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub mod_groups: Vec<String>,
     /// What the activated mod groups hide: for each module, the modules
     /// whose records its records hide.
-    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub mod_group_hides: Vec<ModGroupHides>,
 }
 
@@ -232,11 +240,71 @@ fn conflicts_list(session: &mut Session, request: ConflictsRequest) -> Result<Co
         mod_groups: active.filter,
         ..Default::default()
     };
-    let results = conflict::conflict_statuses(&files, &options);
-    let mut response = list(&files, &results, &request);
+    let mut resolved = Vec::new();
+    for selected in &request.records {
+        let record = session.record(&selected.form_id, selected.file.as_deref())?;
+        let record = record
+            .as_element_impl()
+            .and_then(ElementImpl::main_record_impl)
+            .ok_or_else(|| CommandError::new("internal", "the record is not a main record of a file"))?;
+        resolved.push(record);
+    }
+    let results = if resolved.is_empty() {
+        conflict::conflict_statuses(&files, &options)
+    } else {
+        conflict::conflict_statuses_of(&resolved, &files, &options)
+    };
+    let mut response = if resolved.is_empty() {
+        list(&files, &results, &request)
+    } else {
+        list_requested(&files, &resolved, &results, &request)
+    };
     response.mod_groups = active.names;
     response.mod_group_hides = active.hides;
     Ok(response)
+}
+
+/// [`list`] for the `records` of the request: those records alone, in the
+/// order given, with the file entries built from the record counts and the
+/// statuses the comparison classified.
+fn list_requested(
+    files: &[Arc<FileImpl>],
+    records: &[Arc<MainRecordImpl>],
+    results: &ConflictResults,
+    request: &ConflictsRequest,
+) -> ConflictsResponse {
+    let mut response = ConflictsResponse {
+        files: files
+            .iter()
+            .map(|file| FileConflicts {
+                name: file.get_name(),
+                load_order: file.load_order(),
+                records: file.records().len(),
+                single: 0,
+                conflict_all: ConflictAllName::caUnknown,
+                conflict_this: ConflictThisName::ctUnknown,
+                by_conflict_all: BTreeMap::new(),
+                by_conflict_this: BTreeMap::new(),
+            })
+            .collect(),
+        total: 0,
+        records: Vec::new(),
+        messages: results.messages.clone(),
+        mod_groups: Vec::new(),
+        mod_group_hides: Vec::new(),
+    };
+    let limit = request.limit.unwrap_or(usize::MAX);
+    for record in records {
+        let status = results.status(record);
+        if !matches(record, status, request) {
+            continue;
+        }
+        response.total += 1;
+        if response.total > request.offset && response.records.len() < limit {
+            response.records.push(record_conflict(record, status));
+        }
+    }
+    response
 }
 
 fn is_single(status: ConflictStatus) -> bool {

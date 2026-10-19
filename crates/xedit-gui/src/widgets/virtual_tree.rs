@@ -283,7 +283,7 @@ pub enum TreeKeyAction {
 }
 
 /// What the user did to the tree this repaint.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default)]
 pub struct TreeOutput {
     /// The row clicked with the left button.
     pub clicked: Option<usize>,
@@ -307,6 +307,8 @@ pub struct TreeOutput {
     pub header_clicked: Option<usize>,
     /// A key action against the source.
     pub key: Option<TreeKeyAction>,
+    /// The header row, for `Header.PopupMenu` (`pmuNavHeaderPopup`).
+    pub header_response: Option<egui::Response>,
 }
 
 /// The `TVirtualEditTree` of the main form drawn over a [`TreeSource`].
@@ -335,7 +337,9 @@ impl<'a> TreeView<'a> {
         state.set_column_widths(&source.columns().iter().map(|column| column.width).collect::<Vec<_>>());
 
         if header {
-            output.header_clicked = show_header(id, ui, source, state, &font, &visual);
+            let (response, clicked) = show_header(id, ui, source, state, &font, &visual);
+            output.header_response = Some(response);
+            output.header_clicked = clicked;
         }
 
         let row_height = state.row_height;
@@ -445,7 +449,9 @@ impl<'a> TreeView<'a> {
     }
 }
 
-/// The header row, with a drag handle between two columns.
+/// The header row, with a drag handle between two columns. Returns the
+/// header's response (for `Header.PopupMenu`, `pmuNavHeaderPopup`) and the
+/// column whose header was clicked.
 fn show_header(
     id: egui::Id,
     ui: &mut egui::Ui,
@@ -453,7 +459,7 @@ fn show_header(
     state: &mut TreeState,
     font: &egui::FontId,
     visual: &egui::Visuals,
-) -> Option<usize> {
+) -> (egui::Response, Option<usize>) {
     let height = state.row_height + 3.0;
     let widths: Vec<f32> = state.column_widths.clone();
     let (rect, header_response) = ui.allocate_exact_size(
@@ -509,7 +515,7 @@ fn show_header(
         [rect.left_bottom(), rect.right_bottom()],
         egui::Stroke::new(1.0, visual.widgets.noninteractive.bg_stroke.color),
     );
-    clicked
+    (header_response, clicked)
 }
 
 /// Paints one row: the conflict background, the selection blend, the

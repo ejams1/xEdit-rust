@@ -202,6 +202,18 @@ impl Default for ViewSettings {
     }
 }
 
+/// The `[Options]` keys the navigation tree reads (`FormShow`); the options
+/// dialog of step 7 writes them.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct OptionsSettings {
+    /// `Options.ShowFileFlags`: the `Flags` column of the file roots.
+    pub show_file_flags: bool,
+    /// `Options.ShowGroupRecordCount`: the `Child Count` column of a group.
+    pub show_group_record_count: bool,
+    /// `Options.ConvertIntFormID`: accept a decimal FormID in the search box.
+    pub convert_int_form_id: bool,
+}
+
 /// The GUI settings, read from the file when the game is chosen (the file
 /// name depends on the game and the plugin list).
 #[derive(Clone, Debug, PartialEq)]
@@ -218,6 +230,8 @@ pub struct GuiSettings {
     pub fonts: crate::theme::Fonts,
     pub colors: ConflictColors,
     pub view: ViewSettings,
+    /// The `[Options]` keys the tree reads.
+    pub options: OptionsSettings,
 }
 
 /// The navigation tree's columns in `xeMainForm.dfm`: FormID 201,
@@ -235,6 +249,7 @@ impl Default for GuiSettings {
             fonts: crate::theme::Fonts::default(),
             colors: ConflictColors::default(),
             view: ViewSettings::default(),
+            options: OptionsSettings::default(),
         }
     }
 }
@@ -295,6 +310,11 @@ impl GuiSettings {
             column_width: ColumnWidthMode::from_setting(read_i64(ini, "View", "ColumnWidth", 0)),
             files_sort: FilesSort::from_setting(read_i64(ini, "Nav", "FilesSort", 0)),
             info_sort: InfoSort::from_setting(read_i64(ini, "Nav", "INFOSort", 0)),
+        };
+        settings.options = OptionsSettings {
+            show_file_flags: ini.read_bool("Options", "ShowFileFlags", false),
+            show_group_record_count: ini.read_bool("Options", "ShowGroupRecordCount", false),
+            convert_int_form_id: ini.read_bool("Options", "ConvertIntFormID", false),
         };
         settings
     }

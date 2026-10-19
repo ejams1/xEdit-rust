@@ -27,6 +27,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 use eframe::egui;
+use serde_json::{Value, json};
 use xedit_core::interface::globals::GameMode;
 use xedit_session::filter::{
     FilterApplyRequest, FilterApplyResponse, FilterPresetDeleteRequest, FilterPresetSaveRequest, FilterPresetsRequest,
@@ -46,6 +47,8 @@ use xedit_session::module_select::{
     PresetsResponse as ModulePresetsResponse,
 };
 use xedit_session::settings::{SettingsGetRequest, SettingsGetResponse, SettingsSetRequest, SettingsSetResponse};
+
+use xedit_core::interface::types::{ConflictAll, ConflictThis};
 use xedit_session::{CommandError, Session};
 
 use crate::command::{self, CommandBridge};
@@ -58,10 +61,12 @@ use crate::dialogs::mod_group_select_form::{self as mod_group_select_form, ModGr
 use crate::dialogs::module_select_form::{self as module_select_form, ModuleSelectAction};
 use crate::dialogs::selection::DialogPlacement;
 use crate::menu_model::{self, MenuItem, MenuKind, MenuTree};
+use crate::nav_tree::{NavAction, NavSource, SearchState};
+use crate::selection::Selection;
 use crate::settings::{GuiSettings, NAV_COLUMN_WIDTHS, WindowState};
 use crate::startup::{ModuleSelectMode, ModuleSelectState, Startup, application_title};
 use crate::widgets::grid::{Grid, GridColumn, GridSource, GridState};
-use crate::widgets::virtual_tree::{TreeCell, TreeColumn, TreeRow, TreeSource, TreeState, TreeView};
+use crate::widgets::virtual_tree::{TreeSource, TreeState, TreeView};
 use crate::widgets::{MenuCommand, apply_font_and_scale, vcl_styles_system_menu};
 
 /// The tabs of `pgMain`, in DFM order (`TabPosition = tpBottom`).
@@ -111,43 +116,8 @@ enum Screen {
     Loaded,
 }
 
-/// The navigation tree of step 1: the loaded files, before step 2 builds
-/// the real tree (`vstNavInitNode`/`vstNavInitChildren`).
-struct FilesSource {
-    files: Vec<String>,
-    columns: Vec<TreeColumn>,
-}
-
-impl FilesSource {
-    fn new(files: Vec<String>) -> Self {
-        Self {
-            files,
-            columns: NAV_COLUMN_WIDTHS
-                .iter()
-                .zip(["FormID", "EditorID", "Name"])
-                .map(|(width, title)| TreeColumn::new(title, *width))
-                .collect(),
-        }
-    }
-}
-
-impl TreeSource for FilesSource {
-    fn row_count(&self) -> usize {
-        self.files.len()
-    }
-
-    fn columns(&self) -> &[TreeColumn] {
-        &self.columns
-    }
-
-    fn row(&self, index: usize, out: &mut TreeRow) {
-        let name = &self.files[index];
-        out.id = index as u64;
-        out.depth = 1;
-        out.icon = Some('\u{25A4}');
-        out.cells = vec![TreeCell::new(""), TreeCell::new(""), TreeCell::new(name.clone())];
-    }
-}
+/// `lblFilterHint.Caption` (`xeMainForm.dfm`, spelling kept).
+const FILTER_HINT: &str = "A filter has been applied. The treeview contents is fossilized and will not adjust structure to changes.  Please remove or re-apply the filter if necessary.";
 
 /// The empty view of step 1: the two columns of `vstView` (`Labels` 250,
 /// `Values` 233) and no rows before step 3 builds the record grid.
@@ -175,6 +145,13 @@ pub enum Dialog {
     FileSelect(Box<FileSelectState>),
 }
 
+/// A `MessageDlg` in front of the actions of a menu item: Remove asks
+/// before it deletes, Compact FormIDs before it renumbers.
+pub struct ConfirmState {
+    pub message: String,
+    pub actions: Vec<NavAction>,
+}
+
 /// The main form.
 pub struct TfrmMain {
     /// `Application.Title` and the native window data.
@@ -188,7 +165,13 @@ pub struct TfrmMain {
     /// `mniMessagesAutoscroll.Checked`.
     pub messages_autoscroll: bool,
     pub active_tab: Tab,
+    pub nav: NavSource,
     pub nav_state: TreeState,
+    /// `vstNav.GetSortedSelection(True)` and the focused node, for the view
+    /// grid (step 3) and the menus.
+    pub selection: Selection,
+    /// The open confirmation dialog.
+    pub confirm: Option<ConfirmState>,
     pub view_state: GridState,
     pub files: Vec<String>,
     pub data_path: String,
@@ -250,7 +233,10 @@ impl TfrmMain {
             messages: Vec::new(),
             messages_autoscroll: true,
             active_tab: Tab::Messages,
+            nav: NavSource::new(Vec::new()),
             nav_state: TreeState::new(NAV_COLUMN_WIDTHS.to_vec()),
+            selection: Selection::default(),
+            confirm: None,
             view_state: GridState::new(vec![250.0, 233.0]),
             files: Vec::new(),
             data_path: String::new(),
@@ -296,6 +282,9 @@ impl TfrmMain {
         self.settings = GuiSettings::load(&path).unwrap_or_default();
         self.settings.path = Some(path);
         self.nav_state.column_widths = self.settings.nav_column_widths.clone();
+        // `FormShow`: the `[Options]` keys of the tree.
+        self.nav.show_file_flags = self.settings.options.show_file_flags;
+        self.nav.show_group_record_count = self.settings.options.show_group_record_count;
         self.theme_applied = false;
         self.add_message(&format!("{} starting session", application_title(game)));
     }
@@ -431,6 +420,16 @@ impl TfrmMain {
                     self.files.len(),
                     self.load_started.elapsed().as_secs_f32()
                 ));
+                // `AddFileInternal` per loaded file and `DoInit`'s tree
+                // options: the navigation tree starts again from the files.
+                self.nav = NavSource::from_loaded();
+                self.nav.show_file_flags = self.settings.options.show_file_flags;
+                self.nav.show_group_record_count = self.settings.options.show_group_record_count;
+                self.nav.sort_roots(self.settings.view.files_sort);
+                self.nav_state.selected.clear();
+                self.nav_state.focused = None;
+                self.nav_state.anchor = None;
+                self.selection = Selection::default();
                 self.bridge = Some(bridge);
                 self.startup = Startup::Loaded;
                 self.active_tab = Tab::Messages;
@@ -501,7 +500,7 @@ impl TfrmMain {
             ui.horizontal(|ui| {
                 // `bnMainMenu`: the hamburger opens `pmuMain`.
                 ui.menu_button("\u{2630}", |ui| {
-                    command = draw_menu(ui, &menu_model::PMU_MAIN, 1, self);
+                    command = draw_menu(ui, &menu_model::PMU_MAIN, 2, self);
                 })
                 .response
                 .on_hover_text("Main menu");
@@ -567,26 +566,41 @@ impl TfrmMain {
         command
     }
 
-    /// The `lblPath` text: the selected navigation row's name.
+    /// The `lblPath` text: the focused node and its ancestors
+    /// (`vstNavChange`).
     fn selected_path_text(&self) -> String {
-        self.nav_state
-            .focused
-            .and_then(|index| self.files.get(index).cloned())
-            .unwrap_or_default()
+        self.nav.path_text(&self.nav_state)
     }
 
-    /// `pnlNav` with `vstNav`.
-    fn nav_panel(&mut self, ui: &mut egui::Ui) -> Option<MenuCommand> {
-        let mut command = None;
+    /// `pnlNav`: `pnlSearch` at the top, `lblFilterHint` under it when a
+    /// filter is applied, `pnlNavBottom` at the bottom and `vstNav` between
+    /// (the DFM align order).
+    fn nav_panel(&mut self, ui: &mut egui::Ui) -> Vec<NavAction> {
+        let mut actions = Vec::new();
         let panel = egui::Panel::left("pnlNav")
             .resizable(true)
             .default_size(self.settings.nav_width)
             .min_size(50.0)
             .show(ui, |ui| {
-                let mut source = FilesSource::new(self.files.clone());
+                let tree_id = ui.scope_id().with("vstNav");
+                egui::Panel::top("pnlNavSearch").show(ui, |ui| {
+                    self.nav_search_panel(ui);
+                });
+                egui::Panel::bottom("pnlNavBottom").show(ui, |ui| {
+                    self.nav_bottom_panel(ui, tree_id);
+                });
+                if self.nav.filter.applied {
+                    // `lblFilterHint`.
+                    ui.add(egui::Label::new(FILTER_HINT).wrap());
+                }
+                let selection = self.nav.selection(&self.nav_state);
+                let add_list = self.nav.add_list(&self.nav_state);
+                let hidden = crate::nav_tree::hidden_checked(&self.nav, &self.nav_state);
+                let kind = self.nav.focused_kind(&self.nav_state);
+                self.nav.prepare(kind);
                 let output = TreeView {
-                    id: ui.scope_id().with("vstNav"),
-                    source: &mut source,
+                    id: tree_id,
+                    source: &mut self.nav,
                     state: &mut self.nav_state,
                     colors: &self.settings.colors,
                     header: true,
@@ -594,12 +608,223 @@ impl TfrmMain {
                 .show(ui);
                 let response = ui.response();
                 response.context_menu(|ui| {
-                    command = draw_menu(ui, &menu_model::PMU_NAV, 2, self);
+                    actions.extend(draw_nav_menu(
+                        ui,
+                        &menu_model::PMU_NAV,
+                        &selection,
+                        hidden,
+                        self.edit_allowed,
+                        &add_list,
+                    ));
                 });
-                let _ = output;
+                // `Header.PopupMenu = pmuNavHeaderPopup`.
+                if let Some(header) = output.header_response {
+                    header.context_menu(|ui| {
+                        actions.extend(draw_nav_menu(
+                            ui,
+                            &menu_model::PMU_NAV_HEADER_POPUP,
+                            &selection,
+                            hidden,
+                            self.edit_allowed,
+                            &add_list,
+                        ));
+                    });
+                }
             });
         self.settings.nav_width = panel.response.rect.width();
-        command
+        actions
+    }
+
+    /// `pnlSearch`: `edFormIDSearch` and `edEditorIDSearch`.
+    fn nav_search_panel(&mut self, ui: &mut egui::Ui) {
+        let dark = ui.visuals().dark_mode;
+        ui.horizontal(|ui| {
+            ui.label("FormID");
+            let mut edit = egui::TextEdit::singleline(&mut self.nav.search.form_id).desired_width(80.0);
+            if let Some(color) = self.nav.search.form_id_state.color(dark) {
+                edit = edit.background_color(color);
+            }
+            let response = ui.add(edit);
+            if response.changed() {
+                // `edFormIDSearchChange`: the box turns back to `clWindow`.
+                self.nav.search.form_id_state = SearchState::Normal;
+            }
+            if response.lost_focus() && ui.input(|input| input.key_pressed(egui::Key::Enter)) {
+                self.run_form_id_search();
+            }
+        });
+        ui.horizontal(|ui| {
+            ui.label("Editor ID");
+            let width = (ui.available_width() - 70.0).max(60.0);
+            let mut edit = egui::TextEdit::singleline(&mut self.nav.search.editor_id).desired_width(width);
+            if let Some(color) = self.nav.search.editor_id_state.color(dark) {
+                edit = edit.background_color(color);
+            }
+            let response = ui.add(edit);
+            if response.changed() {
+                self.nav.search.editor_id_state = SearchState::Normal;
+            }
+            if response.lost_focus() && ui.input(|input| input.key_pressed(egui::Key::Enter)) {
+                self.run_editor_id_search();
+            }
+        });
+    }
+
+    /// `pnlNavBottom`: `edFileNameFilter` and `cbRegExFilter`.
+    fn nav_bottom_panel(&mut self, ui: &mut egui::Ui, tree_id: egui::Id) {
+        let dark = ui.visuals().dark_mode;
+        let mut changed = false;
+        let mut focus_tree = false;
+        ui.horizontal(|ui| {
+            ui.label("Filter by filename:");
+            let width = (ui.available_width() - 70.0).max(60.0);
+            let mut edit = egui::TextEdit::singleline(&mut self.nav.search.file_name).desired_width(width);
+            if let Some(color) = self.nav.search.file_state.color(dark) {
+                edit = edit.background_color(color);
+            }
+            let response = ui.add(edit);
+            if response.changed() {
+                changed = true;
+            }
+            if response.lost_focus()
+                && ui.input(|input| input.key_pressed(egui::Key::Enter) || input.key_pressed(egui::Key::ArrowUp))
+            {
+                // `edFileNameFilterKeyDown`.
+                focus_tree = true;
+            }
+            if ui.checkbox(&mut self.nav.search.file_regex, "RegEx").changed() {
+                // `cbRegExFilterClick`: the text is read again.
+                self.nav.search.file_state = SearchState::Normal;
+                changed = true;
+            }
+        });
+        if changed {
+            self.run_file_name_filter();
+        }
+        if focus_tree {
+            ui.memory_mut(|memory| memory.request_focus(tree_id));
+            if self.nav_state.focused.is_none_or(|row| row >= self.nav.row_count()) {
+                self.nav_state.select_only(0);
+            }
+        }
+    }
+
+    /// `edFileNameFilterChange`: `files.list` with the text as `name_filter`.
+    fn run_file_name_filter(&mut self) {
+        let text = self.nav.search.file_name.clone();
+        if text.is_empty() {
+            self.nav.set_file_visibility(Vec::new());
+            self.nav.search.file_state = SearchState::Normal;
+            return;
+        }
+        let regex = self.nav.search.file_regex;
+        match self.call_session("files.list", json!({ "name_filter": text, "regex": regex })) {
+            Ok(value) => {
+                let names: Vec<String> = value["files"]
+                    .as_array()
+                    .map(|files| {
+                        files
+                            .iter()
+                            .filter_map(|file| file["name"].as_str().map(str::to_owned))
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                self.nav.set_file_visibility(names);
+                self.nav.search.file_state = SearchState::Normal;
+            }
+            // `ERegularExpressionError` while typing: the box turns red and
+            // the previous visibility stays.
+            Err(_) => self.nav.search.file_state = SearchState::NotFound,
+        }
+    }
+
+    /// `edFormIDSearchKeyDown`: `records.get` for the FormID, then the node
+    /// of the record is revealed and selected.
+    fn run_form_id_search(&mut self) {
+        let text = self.nav.search.form_id.trim().to_owned();
+        if text.is_empty() {
+            self.nav.search.form_id_state = SearchState::NotFound;
+            return;
+        }
+        let mut text = text;
+        if self.settings.options.convert_int_form_id && !text.starts_with('0') && !text.starts_with("0x") {
+            text = match text.parse::<u32>() {
+                Ok(value) => format!("{value:08X}"),
+                Err(_) => "00000000".to_owned(),
+            };
+        }
+        if let Some(rest) = text.strip_prefix("0x").or_else(|| text.strip_prefix("0X")) {
+            text = rest.to_owned();
+        }
+        let typed = format!("{:0>8}", text.to_uppercase());
+        match self.call_session("records.get", json!({ "form_id": typed, "depth": 0 })) {
+            Ok(value) => {
+                let file = value["summary"]["file"].as_str().unwrap_or_default().to_owned();
+                let form_id = value["summary"]["form_id"].as_str().unwrap_or(&typed).to_owned();
+                if let Some(node) = self.nav.find_record(&form_id, Some(&file))
+                    && let Some(row) = self.nav.reveal(node)
+                {
+                    self.nav_state.select_only(row);
+                    self.nav_state.scroll_to = Some(row);
+                    self.nav.search.form_id_state = SearchState::Found;
+                    return;
+                }
+                // `JumpTo(MainRecord, False)` shows the record in the view;
+                // without a node the box turns yellow.
+                self.nav.search.form_id_state = SearchState::NotInTree;
+            }
+            Err(_) => self.nav.search.form_id_state = SearchState::NotFound,
+        }
+    }
+
+    /// `edEditorIDSearchKeyDown`: `records.find` for the editor ID, starting
+    /// after the focused node, and the first matching node is revealed.
+    ///
+    /// UPSTREAM-QUIRK: the upstream loop walks the initialised nodes only,
+    /// so a record inside a collapsed group is not found either.
+    fn run_editor_id_search(&mut self) {
+        let text = self.nav.search.editor_id.trim().to_owned();
+        if text.is_empty() {
+            self.nav.search.editor_id_state = SearchState::NotFound;
+            return;
+        }
+        let lower = text.to_lowercase();
+        let focused_row = self.nav_state.focused;
+        match self.call_session("records.find", json!({ "editor_id": text, "limit": 1000 })) {
+            Ok(value) => {
+                let mut chosen = None;
+                for record in value["records"].as_array().into_iter().flatten() {
+                    let editor_id = record["editor_id"].as_str().unwrap_or_default().to_lowercase();
+                    if !editor_id.starts_with(&lower) {
+                        continue;
+                    }
+                    let form_id = record["form_id"].as_str().unwrap_or_default();
+                    let file = record["file"].as_str().unwrap_or_default();
+                    let Some(node) = self.nav.find_record(form_id, Some(file)) else {
+                        continue;
+                    };
+                    let Some(row) = self.nav.reveal(node) else {
+                        continue;
+                    };
+                    if chosen.is_none() {
+                        chosen = Some(row);
+                    }
+                    if focused_row.is_none_or(|focused| row > focused) {
+                        chosen = Some(row);
+                        break;
+                    }
+                }
+                match chosen {
+                    Some(row) => {
+                        self.nav_state.select_only(row);
+                        self.nav_state.scroll_to = Some(row);
+                        self.nav.search.editor_id_state = SearchState::Found;
+                    }
+                    None => self.nav.search.editor_id_state = SearchState::NotInTree,
+                }
+            }
+            Err(_) => self.nav.search.editor_id_state = SearchState::NotFound,
+        }
     }
 
     /// `pgMain` with the tab strip at the bottom (`TabPosition = tpBottom`).
@@ -706,7 +931,10 @@ impl TfrmMain {
                 // `mniNavEditModGroupClick`: the selection dialog, then the
                 // edit dialog and `modgroups.edit`.
                 "modgroups.edit" => self.open_mod_group_select(GroupSelectFlow::Edit),
-                _ => self.add_message(&format!("{name} is not wired by this step")),
+                // Every other action is a session command (design rule 1);
+                // the request of the `pmuMain` and button-strip items
+                // carries no parameters.
+                _ => self.run_session_command(name, json!({}), None),
             },
             MenuCommand::Presentation(id) => match id {
                 "mniMessagesClear" => self.messages.clear(),
@@ -731,13 +959,16 @@ impl TfrmMain {
                 "mniViewStickAuto" => self.stick_follows_selection = false,
                 "mniViewStickSelected" => self.stick_follows_selection = true,
                 "mniNavHeaderFilesDefault" => {
-                    self.settings.view.files_sort = crate::settings::FilesSort::AsSelected
+                    self.settings.view.files_sort = crate::settings::FilesSort::AsSelected;
+                    self.nav.sort_roots(self.settings.view.files_sort);
                 }
                 "mniNavHeaderFilesLoadOrder" => {
-                    self.settings.view.files_sort = crate::settings::FilesSort::LoadOrder
+                    self.settings.view.files_sort = crate::settings::FilesSort::LoadOrder;
+                    self.nav.sort_roots(self.settings.view.files_sort);
                 }
                 "mniNavHeaderFilesFileName" => {
-                    self.settings.view.files_sort = crate::settings::FilesSort::FileName
+                    self.settings.view.files_sort = crate::settings::FilesSort::FileName;
+                    self.nav.sort_roots(self.settings.view.files_sort);
                 }
                 "mniNavHeaderINFObyPreviousINFO" => {
                     self.settings.view.info_sort = crate::settings::InfoSort::ByPreviousInfo
@@ -754,6 +985,230 @@ impl TfrmMain {
             MenuCommand::Excluded => {
                 self.add_message("This integration is not offered by the port (see the coverage ledger).")
             }
+        }
+    }
+
+    /// Runs one session command and reports its result to the message log.
+    fn call_session(&mut self, name: &str, params: Value) -> Result<Value, CommandError> {
+        let Some(bridge) = self.bridge.as_mut() else {
+            return Err(CommandError::new("no_session", "no session is loaded"));
+        };
+        bridge.call(name, params)
+    }
+
+    /// [`TfrmMain::call_session`] with the messages every action writes.
+    fn run_session_command(&mut self, command: &'static str, params: Value, message: Option<String>) {
+        match self.call_session(command, params) {
+            Ok(value) => {
+                if let Some(message) = message {
+                    self.add_message(&message);
+                }
+                self.after_command(command, &value);
+            }
+            Err(error) => {
+                let error = format!("{command}: {}", error.message);
+                self.add_message(&error);
+            }
+        }
+    }
+
+    /// What the form does with a finished command: the filter view, the
+    /// message lines, and the `NavUpdate` after a command that changed the
+    /// tree.
+    fn after_command(&mut self, command: &str, value: &Value) {
+        match command {
+            "filter.apply" => {
+                match serde_json::from_value::<xedit_session::filter::FilterApplyResponse>(value.clone()) {
+                    Ok(response) => {
+                        for message in &response.messages {
+                            self.add_message(message);
+                        }
+                        self.add_message(&format!(
+                            "[Pass 1] Processed Records: {}, [Pass 2] Processed Records: {}, Remaining unfiltered nodes: {}",
+                            response.pass1, response.pass2, response.unfiltered
+                        ));
+                        let statuses = response
+                            .node_conflicts
+                            .iter()
+                            .map(|node| {
+                                (
+                                    node.element,
+                                    ConflictAll::from(node.conflict_all),
+                                    ConflictThis::from(node.conflict_this),
+                                )
+                            })
+                            .collect();
+                        self.nav.install_filter(response.nodes.clone(), statuses);
+                        // `ReInitTree` cleared the tree, so the selection
+                        // does not survive the filter.
+                        self.nav_state.selected.clear();
+                        self.nav_state.focused = None;
+                        self.nav_state.anchor = None;
+                    }
+                    Err(error) => self.add_message(&format!("filter.apply: {error}")),
+                }
+                return;
+            }
+            "filter.remove" => {
+                self.nav.remove_filter();
+                self.nav_state.selected.clear();
+                self.nav_state.focused = None;
+                self.nav_state.anchor = None;
+                self.add_message("Filter removed");
+                return;
+            }
+            "leveled_lists.check_circular" => {
+                if let Some(cycles) = value["cycles"].as_array() {
+                    for cycle in cycles {
+                        if let Some(cycle) = cycle.as_str() {
+                            self.add_message(cycle);
+                        }
+                    }
+                }
+                self.add_message(&format!(
+                    "Checked {} leveled lists",
+                    value["checked"].as_u64().unwrap_or_default()
+                ));
+            }
+            "files.save" => {
+                let saved = value["saved"].as_array().cloned().unwrap_or_default();
+                if saved.is_empty() {
+                    self.add_message("No plugin needed saving");
+                } else {
+                    for file in saved {
+                        if let Some(file) = file.as_str() {
+                            self.add_message(&format!("Saving: {file}"));
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+        // The commands of the tree write the lines xEdit prints (`messages`
+        // of `files.clean`, `files.check`, `files.dirty_info`, `refs.build`
+        // and the rest).
+        if !matches!(command, "filter.apply" | "filter.remove")
+            && let Some(messages) = value["messages"].as_array()
+        {
+            for message in messages {
+                if let Some(text) = message.as_str() {
+                    self.add_message(text);
+                }
+            }
+        }
+        // `NavUpdate(True)` after an edit: a collapsed or expanded subtree
+        // that changed is rebuilt when it is next shown.
+        let mutates = self
+            .bridge
+            .as_ref()
+            .and_then(|bridge| bridge.mutates(command))
+            .unwrap_or(false);
+        // `mniNavHiddenClick` also resets the conflict colours of the
+        // nodes (`NodeData.ConflictAll := caUnknown`).
+        if (mutates || command == "records.set_hidden") && command != "files.save" {
+            self.nav.refresh();
+        }
+    }
+
+    /// Runs the actions a navigation menu item resolved into.
+    fn run_nav_actions(&mut self, ctx: &egui::Context, actions: Vec<NavAction>) {
+        for action in actions {
+            match action {
+                NavAction::Command {
+                    command,
+                    params,
+                    message,
+                } => self.run_session_command(command, params, message),
+                NavAction::Confirm { message, then } => {
+                    self.confirm = Some(ConfirmState { message, actions: then });
+                }
+                NavAction::Placeholder(placeholder) => match placeholder.name {
+                    // Step 5 landed these dialogs; the placeholder is the
+                    // name of the opener to call.
+                    "filter_options" => self.open_filter_options(),
+                    "modgroup_editor" => self.open_mod_group_select(GroupSelectFlow::Edit),
+                    _ => {
+                        let message = placeholder.message();
+                        self.add_message(&message);
+                    }
+                },
+                NavAction::Presentation(id) => self.run_menu_command(ctx, MenuCommand::Presentation(id)),
+                NavAction::Message(text) => {
+                    for line in text.split("\r\n") {
+                        self.add_message(line);
+                    }
+                }
+                NavAction::None => {}
+            }
+        }
+    }
+
+    /// The `MessageDlg` of a queued confirmation, drawn as a modal window.
+    fn confirm_window(&mut self, ctx: &egui::Context) {
+        let Some(confirm) = &mut self.confirm else {
+            return;
+        };
+        let mut answer = None;
+        egui::Window::new("xEdit")
+            .id(egui::Id::unique("confirm"))
+            .collapsible(false)
+            .resizable(false)
+            .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
+            .show(ctx, |ui| {
+                ui.label(&confirm.message);
+                ui.horizontal(|ui| {
+                    if ui.button("Yes").clicked() {
+                        answer = Some(true);
+                    }
+                    if ui.button("No").clicked() {
+                        answer = Some(false);
+                    }
+                });
+            });
+        match answer {
+            Some(true) => {
+                let confirm = self.confirm.take().expect("checked above");
+                self.run_nav_actions(ctx, confirm.actions);
+            }
+            Some(false) => self.confirm = None,
+            None => {}
+        }
+    }
+
+    /// The conflict statuses of the rows the tree just painted, asked for in
+    /// one `conflicts.list` request per frame.
+    fn load_visible_conflicts(&mut self, ctx: &egui::Context) {
+        let pending = self.nav.pending_conflicts();
+        if pending.is_empty() {
+            return;
+        }
+        let records: Vec<Value> = pending
+            .iter()
+            .map(|(form_id, file)| json!({ "form_id": form_id, "file": file }))
+            .collect();
+        let full = pending.len() >= crate::nav_tree::PENDING_CONFLICT_BATCH;
+        match self.call_session("conflicts.list", json!({ "records": records, "limit": null })) {
+            Ok(value) => {
+                if let Ok(response) = serde_json::from_value::<xedit_session::conflicts::ConflictsResponse>(value) {
+                    let statuses: Vec<(String, String, ConflictAll, ConflictThis)> = response
+                        .records
+                        .iter()
+                        .map(|record| {
+                            (
+                                record.file.clone(),
+                                record.form_id.clone(),
+                                ConflictAll::from(record.conflict_all),
+                                ConflictThis::from(record.conflict_this),
+                            )
+                        })
+                        .collect();
+                    self.nav.apply_conflicts(&statuses);
+                }
+            }
+            Err(error) => self.add_message(&format!("conflicts.list: {}", error.message)),
+        }
+        if full {
+            ctx.request_repaint();
         }
     }
 
@@ -1600,6 +2055,22 @@ impl TfrmMain {
                 self.add_message(&format!("[Pass 1] Processed Records: {}", response.pass1));
                 self.add_message(&format!("[Pass 2] Processed Records: {}", response.pass2));
                 self.add_message(&format!("Remaining unfiltered nodes: {}", response.unfiltered));
+                // The filtered tree of the Conflicted and Filter views.
+                let statuses = response
+                    .node_conflicts
+                    .iter()
+                    .map(|node| {
+                        (
+                            node.element,
+                            ConflictAll::from(node.conflict_all),
+                            ConflictThis::from(node.conflict_this),
+                        )
+                    })
+                    .collect();
+                self.nav.install_filter(response.nodes.clone(), statuses);
+                self.nav_state.selected.clear();
+                self.nav_state.focused = None;
+                self.nav_state.anchor = None;
             }
             Err(error) => self.add_message(&format!("Fatal: {}", error.message)),
         }
@@ -1651,6 +2122,122 @@ fn draw_menu(ui: &mut egui::Ui, tree: &'static MenuTree, step: u8, form: &mut Tf
     let mut chosen = None;
     draw_items(ui, tree.items, step, form, &mut chosen);
     chosen
+}
+
+/// Draws `pmuNav` and `pmuNavHeaderPopup`: every item resolves through
+/// [`crate::nav_tree::nav_actions`]. An item the selection does not apply to
+/// is disabled; an item whose dialog belongs to a later step stays enabled
+/// and its tooltip names that dialog.
+fn draw_nav_menu(
+    ui: &mut egui::Ui,
+    tree: &'static MenuTree,
+    selection: &Selection,
+    hidden_checked: bool,
+    edit_allowed: bool,
+    add_list: &[String],
+) -> Vec<NavAction> {
+    let mut actions = Vec::new();
+    draw_nav_items(
+        ui,
+        tree.items,
+        selection,
+        hidden_checked,
+        edit_allowed,
+        add_list,
+        &mut actions,
+    );
+    actions
+}
+
+#[allow(clippy::too_many_arguments)]
+fn draw_nav_items(
+    ui: &mut egui::Ui,
+    items: &'static [MenuItem],
+    selection: &Selection,
+    hidden_checked: bool,
+    edit_allowed: bool,
+    add_list: &[String],
+    actions: &mut Vec<NavAction>,
+) {
+    for item in items {
+        if !item.visible {
+            continue;
+        }
+        match item.kind {
+            MenuKind::Separator => {
+                ui.separator();
+            }
+            MenuKind::Submenu => {
+                ui.menu_button(item.caption, |ui| {
+                    draw_nav_items(
+                        ui,
+                        item.children,
+                        selection,
+                        hidden_checked,
+                        edit_allowed,
+                        add_list,
+                        actions,
+                    );
+                });
+            }
+            MenuKind::Action => {
+                if item.id == "mniNavAdd" {
+                    // `mniNavAddClick`: one item per `Container.GetAddList`
+                    // entry; the caption is what `elements.add` receives.
+                    if add_list.is_empty() {
+                        ui.add_enabled(false, egui::Button::new(item.caption))
+                            .on_disabled_hover_text("Nothing can be added to the focused element");
+                    } else {
+                        ui.menu_button(item.caption, |ui| {
+                            for caption in add_list {
+                                if ui.button(caption).clicked() {
+                                    actions.push(crate::nav_tree::add_item_action(caption, selection));
+                                    ui.close();
+                                }
+                            }
+                        });
+                    }
+                    continue;
+                }
+                let item_actions = crate::nav_tree::nav_actions(item, selection, edit_allowed);
+                let placeholder = item_actions.iter().find_map(|action| match action {
+                    NavAction::Placeholder(placeholder) => Some(placeholder.clone()),
+                    _ => None,
+                });
+                let applicable = !matches!(item_actions.first(), Some(NavAction::None));
+                let later = item.step.is_some_and(|step| step > 2);
+                let enabled = item.enabled && applicable && !later;
+                let checked = if item.id == "mniNavHidden" {
+                    hidden_checked
+                } else {
+                    item.checked
+                };
+                let mut button = egui::Button::new(item.caption).selected(checked);
+                if let Some(shortcut) = item.shortcut {
+                    button = button.shortcut_text(shortcut);
+                }
+                let response = ui.add_enabled(enabled, button);
+                let response = if later {
+                    let tooltip = match (item.step, item.command) {
+                        (Some(step), Some(command)) => format!("phase 7 step {step}: {command}"),
+                        (Some(step), None) => format!("phase 7 step {step}"),
+                        _ => String::new(),
+                    };
+                    response.on_disabled_hover_text(tooltip)
+                } else if !applicable {
+                    response.on_disabled_hover_text("Not applicable to the current selection")
+                } else if let Some(placeholder) = placeholder {
+                    response.on_hover_text(placeholder.tooltip())
+                } else {
+                    response
+                };
+                if enabled && response.clicked() {
+                    actions.extend(item_actions);
+                    ui.close();
+                }
+            }
+        }
+    }
 }
 
 fn draw_items(
@@ -1840,14 +2427,20 @@ impl eframe::App for TfrmMain {
             }
             Screen::Loaded => {
                 let top = self.top_bar(ui);
-                let nav = self.nav_panel(ui);
+                let nav_actions = self.nav_panel(ui);
                 self.status_bar(ui);
                 let view = self.view_area(ui);
-                if let Some(command) = top.or(nav).or(view) {
+                if let Some(command) = top.or(view) {
                     self.run_menu_command(&ctx, command);
                 }
+                self.run_nav_actions(&ctx, nav_actions);
+                // The selection the view grid (step 3) and the menus read.
+                self.selection = self.nav.selection(&self.nav_state);
+                // The conflict colours of the rows the tree painted.
+                self.load_visible_conflicts(&ctx);
             }
         }
         self.draw_dialogs(&ctx);
+        self.confirm_window(&ctx);
     }
 }

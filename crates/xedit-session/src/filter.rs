@@ -304,11 +304,31 @@ pub struct FilterApplyResponse {
     pub messages: Vec<String>,
     /// The records the tree still shows, per file, when `list_records` was
     /// asked for: the record names in the order of the tree.
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub records: Option<Vec<String>>,
     /// The activated mod groups.
-    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub mod_groups: Vec<String>,
+    /// The elements of the nodes the filtered tree keeps, in tree order, as
+    /// `Element::get_element_id` numbers them. The identities are
+    /// process-local and serve an in-process client (the GUI, which
+    /// installs the filtered tree); a client that serialises the response
+    /// between processes cannot use them.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub nodes: Vec<usize>,
+    /// The conflict status the filter left on its nodes (`NodeData.ConflictAll`
+    /// and `ConflictThis` after `InheritStateFromChildren`), by element id.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub node_conflicts: Vec<FilterNodeConflict>,
+}
+
+/// The status of one node of the filtered tree.
+#[derive(Serialize, Deserialize, JsonSchema)]
+pub struct FilterNodeConflict {
+    /// The element id of the node's element (`Element::get_element_id`).
+    pub element: usize,
+    pub conflict_all: ConflictAllName,
+    pub conflict_this: ConflictThisName,
 }
 
 fn default_options() -> FilterRequestOptions {
@@ -516,15 +536,28 @@ pub(crate) fn filter_apply_scripted(
             .iter()
             .any(|kept| kept.get_name().eq_ignore_ascii_case(&file.name))
     });
-    let nodes = tree
+    let nodes: Vec<xedit_core::interface::ElementRef> = tree
         .roots()
         .into_iter()
         .flat_map(|root| node_elements_below(&tree, root))
         .collect();
     let conflicts = node_conflicts(&tree);
     let walk = filtered_walk(&mut tree);
+    let mut response = response_of(&tree, &options, request.list_records, report, &active);
+    // The filtered tree for the in-process client (the GUI installs it as
+    // the Conflicted and Filter views); a script run leaves them out of its
+    // response, which the run serialises between processes.
+    response.nodes = nodes.iter().map(|element| element.get_element_id()).collect();
+    response.node_conflicts = conflicts
+        .iter()
+        .map(|(element, all, this)| FilterNodeConflict {
+            element: *element,
+            conflict_all: (*all).into(),
+            conflict_this: (*this).into(),
+        })
+        .collect();
     Ok(AppliedFilter {
-        response: response_of(&tree, &options, request.list_records, report, &active),
+        response,
         nodes,
         conflicts,
         walk,
@@ -567,6 +600,8 @@ fn response_of(
         messages,
         records,
         mod_groups: active.names.clone(),
+        nodes: Vec::new(),
+        node_conflicts: Vec::new(),
     }
 }
 
