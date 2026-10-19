@@ -948,7 +948,6 @@ fn emit_unit(upstream: &Path, unit_name: &str, out: &Path, stubs: &Path, ported:
         .lines()
         .filter_map(|line| line.strip_prefix("pub fn ")?.split('(').next().map(str::to_owned))
         .collect();
-    let mut failures = failures;
     failures.sort();
     let coverage = serde_json::json!({
         "written_routines": written.len(),
