@@ -1,6 +1,6 @@
 ---
 name: handling-archives
-description: Use when a Bethesda archive (BSA or BA2) has to be read, unpacked, built or checked with this repository - listing what an archive holds and its format, extracting it, packing folders, files or other archives into one, the texture (DX10) archives, or running BSArch's own console tool as the `bsarch` binary.
+description: List, extract, build, or verify BSA and BA2 archives with the native xedit CLI or bsarch binary.
 ---
 
 # Handling archives

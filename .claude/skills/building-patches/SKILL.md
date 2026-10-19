@@ -1,6 +1,6 @@
 ---
 name: building-patches
-description: Use when a conflict found in a load order has to be resolved by building a patch plugin with the native xedit CLI of this repository - xEdit's "Create Merged Patch" for the leveled lists, containers, factions, form lists and keywords several plugins change, or a purpose-built override patch made with files new, records copy and elements set. The native replacement for the xEdit-llm daemon's patch routes (patches.merge, patches.delta).
+description: Resolve Bethesda plugin conflicts with a native merged patch or a targeted override patch using the xedit CLI.
 ---
 
 # Building patches

@@ -1,6 +1,6 @@
 ---
 name: nif-batch-operations
-description: Use when many NIF meshes, KF animations, BGSM or BGEM materials, or DDS textures have to be processed in one go with this repository - updating tangents or bounds, applying and adjusting transforms, the universal tweaker and fixer, converting to and from JSON, replacing asset paths, copying, merging, grouping and painting geometry, the animation and collision operations, the reports (check for errors, find textures, draw calls, UVs), or generating LOD from the meshes of a load order (`xedit lodgen`).
+description: Process batches of NIF meshes, animations, materials, textures, or LOD with the native xedit asset and Sniff operations.
 ---
 
 # NIF batch operations
