@@ -82,3 +82,63 @@ fn one_thread_and_eight_save_the_same_bytes() {
         );
     }
 }
+
+/// The dump of `path` on `threads` threads, hashed while it is written:
+/// the dump of `Skyrim.esm` is 8.3 GB, too much to keep in memory.
+fn dump_hash(threads: usize, game: &str, path: &Path) -> u64 {
+    use std::hash::Hasher;
+    use std::io::Read;
+    use std::process::Stdio;
+
+    let mut child = Command::new(env!("CARGO_BIN_EXE_xedit"))
+        .arg("--threads")
+        .arg(threads.to_string())
+        .args(["dump", "--game", game])
+        .arg(path)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("xedit runs");
+    let mut stdout = child.stdout.take().unwrap();
+    let mut buffer = vec![0u8; 1 << 20];
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    loop {
+        let read = stdout.read(&mut buffer).expect("the dump is read");
+        if read == 0 {
+            break;
+        }
+        hasher.write(&buffer[..read]);
+    }
+    let status = child.wait().expect("xedit ends");
+    assert!(status.success(), "{}: the dump failed", path.display());
+    hasher.finish()
+}
+
+/// Issue #99: a name read during another thread's quick init was cached
+/// partial, so `Skyrim.esm` dumped differently on each multithreaded run.
+/// The 8.3 GB dump is a release-scale run: a debug build is far slower, so
+/// the test is ignored there (`cargo test --release --test threads`).
+#[test]
+#[cfg_attr(
+    debug_assertions,
+    ignore = "3 dumps of 8.3 GB: run in a release build with `cargo test --release --test threads`"
+)]
+fn the_dump_of_skyrim_esm_is_the_same_on_every_multithreaded_run() {
+    let Some(data) = std::env::var_os("XEDIT_SSE_DATA") else {
+        return;
+    };
+    let path = Path::new(&data).join("Skyrim.esm");
+    if !path.is_file() {
+        return;
+    }
+    let first = dump_hash(8, "sse", &path);
+    for run in 1..3 {
+        assert_eq!(
+            dump_hash(8, "sse", &path),
+            first,
+            "run {run} of the {} dump differs from the first",
+            path.display()
+        );
+    }
+}
