@@ -169,7 +169,7 @@ fn number_of(value: &Value) -> Option<serde_json::Number> {
 }
 
 /// `settings.get`: the request.
-#[derive(Deserialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct SettingsGetRequest {
     /// The section, such as `Options`, `View`, `Nav`, `ColorConflictThis`,
@@ -189,7 +189,7 @@ pub struct SettingsGetRequest {
 }
 
 /// One setting of the file.
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 pub struct SettingEntry {
     pub section: String,
     pub key: String,
@@ -201,7 +201,7 @@ pub struct SettingEntry {
 }
 
 /// `settings.get`: the response.
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 pub struct SettingsGetResponse {
     /// The settings file (`xeSettingsFileName`).
     pub settings: String,
@@ -253,7 +253,7 @@ fn settings_get(_session: &mut Session, request: SettingsGetRequest) -> Result<S
 }
 
 /// `settings.set`: the request.
-#[derive(Deserialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct SettingsSetRequest {
     /// The section, such as `frmMain`, `ColorConflictThis` or `View`; a
@@ -275,7 +275,7 @@ pub struct SettingsSetRequest {
 }
 
 /// `settings.set`: the response.
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 pub struct SettingsSetResponse {
     pub section: String,
     pub key: String,

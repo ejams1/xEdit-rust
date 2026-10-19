@@ -170,7 +170,7 @@ fn filtered_modules(modules: &Modules, checked: &[bool]) -> Result<Vec<usize>, C
 /// One module of the dialogs' trees: `TwbModuleInfo` with the fields the
 /// module selection's columns read (`vstModulesGetText`) and the flags the
 /// mod group editor's Insert filters on.
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema, Clone)]
 pub struct ModuleEntry {
     /// The position of the module in `wbModulesByLoadOrder`, the order the
     /// dialog lists its nodes; the positions are of the whole list, so a
@@ -313,7 +313,7 @@ fn module_entry(index: usize, module: &xedit_loadorder::load_order::ModuleInfo) 
 /// `modules.list`: the modules the module selection dialog and the mod
 /// group editor's Insert list build their trees from
 /// (`wbModulesByLoadOrder`), in the load order the dialogs list them.
-#[derive(Deserialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ModulesListRequest {
     /// Keep only the valid modules, as both dialogs do
@@ -336,7 +336,7 @@ fn default_true() -> bool {
 }
 
 /// `modules.list`: the response.
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema, Clone)]
 pub struct ModulesListResponse {
     /// The data folder the modules were read from (`wbDataPath`, with its
     /// trailing separator).
@@ -386,12 +386,12 @@ fn unknown_preset(preset: &str) -> CommandError {
     CommandError::new("unknown_preset", format!("there is no preset named \"{preset}\""))
 }
 
-#[derive(Deserialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct PresetsRequest {}
 
 /// The presets of the module selection dialog (`PresetsUpdate`).
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 pub struct PresetsResponse {
     /// The preset names in the order the combo box holds them: the settings
     /// section's keys with `<plugins.txt>` first.
@@ -422,7 +422,7 @@ fn modules_presets(session: &mut Session, _: PresetsRequest) -> Result<PresetsRe
 /// `PresetLoad`: the preset's modules checked, then `SimulateLoad`. The
 /// command is read-only: the dialog only changes its in-memory check state
 /// and `LoadedPreset`; nothing is written to the settings file.
-#[derive(Deserialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct PresetLoadRequest {
     /// The name of the preset, or `<plugins.txt>` for the modules the plugin
@@ -430,7 +430,7 @@ pub struct PresetLoadRequest {
     pub preset: String,
 }
 
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 pub struct PresetLoadResponse {
     /// The preset that was loaded (`LoadedPreset`; empty for
     /// `<plugins.txt>`, which `IsPresetDifferent` skips).
@@ -499,7 +499,7 @@ fn modules_preset_load(session: &mut Session, request: PresetLoadRequest) -> Res
 /// ...?", or the changed-selection question with `after_modal`); `confirm`
 /// is its answer, its default button when omitted (Yes, No with
 /// `after_modal`).
-#[derive(Deserialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct PresetSaveRequest {
     /// The name of the preset to write.
@@ -520,7 +520,7 @@ pub struct PresetSaveRequest {
     pub dry_run: bool,
 }
 
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 pub struct PresetSaveResponse {
     pub preset: String,
     /// The value written, the filtered modules as a comma text.
@@ -587,7 +587,7 @@ fn modules_preset_save(session: &mut Session, request: PresetSaveRequest) -> Res
 /// `PresetDelete`: the question "Are you sure you want to delete preset
 /// ...?", then `DeleteKey` and `UpdateFile` (the combo box is refilled from
 /// the section, which the next `modules.presets` shows).
-#[derive(Deserialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct PresetDeleteRequest {
     /// The name of the preset to delete.
@@ -600,7 +600,7 @@ pub struct PresetDeleteRequest {
     pub dry_run: bool,
 }
 
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 pub struct PresetDeleteResponse {
     pub preset: String,
     /// Whether the preset was deleted (the question can stop it).

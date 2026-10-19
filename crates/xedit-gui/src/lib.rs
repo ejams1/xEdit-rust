@@ -29,6 +29,22 @@ pub mod widgets;
 
 pub use main_form::TfrmMain;
 
+/// `XEDIT_GUI_LOG=<path>`: the screen changes of a headless screen-check
+/// run, which the private desktop otherwise hides. Silent when unset.
+pub fn log_screen(name: &str, messages: &[String]) {
+    let Ok(path) = std::env::var("XEDIT_GUI_LOG") else {
+        return;
+    };
+    use std::io::Write as _;
+    if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open(path) {
+        let _ = writeln!(
+            file,
+            "screen {name}: {}",
+            messages.last().map(String::as_str).unwrap_or("")
+        );
+    }
+}
+
 /// The load hands its session to the UI thread, so the session must be
 /// `Send`; this asserts it at compile time rather than at the first load.
 const _: fn() = || {

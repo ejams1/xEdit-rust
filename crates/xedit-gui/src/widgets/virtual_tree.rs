@@ -133,6 +133,8 @@ pub struct TreeState {
     pub anchor: Option<usize>,
     /// The row with the focus; the keyboard moves it.
     pub focused: Option<usize>,
+    /// `FocusedColumn`: the column a click focused (`vstModGroupItemsNodeClick`).
+    pub focused_column: usize,
     /// The runtime column widths, from `frmMain.vstNavColumnWidth<i>`.
     pub column_widths: Vec<f32>,
     pub row_height: f32,
@@ -147,6 +149,7 @@ impl TreeState {
             selected: Vec::new(),
             anchor: None,
             focused: None,
+            focused_column: 0,
             column_widths,
             row_height: 18.0,
             indent: 16.0,
@@ -290,6 +293,18 @@ pub struct TreeOutput {
     pub double_clicked: Option<usize>,
     /// The row activated (Enter or a double click without children).
     pub activated: Option<usize>,
+    /// The row whose check glyph was clicked (`toCheckSupport` of the
+    /// selection dialogs): the click is left of the first cell's text, on
+    /// the `icon` the row paints.
+    pub check_clicked: Option<usize>,
+    /// The column the clicked row was clicked in (`vstModGroupItemsNodeClick`
+    /// toggles the flag of `HitColumn`).
+    pub clicked_column: Option<usize>,
+    /// The row whose expander triangle was clicked (`toToggleOnDblClick`
+    /// and the tree's button).
+    pub expander_clicked: Option<usize>,
+    /// The column whose header was clicked (`vstModulesHeaderClick`).
+    pub header_clicked: Option<usize>,
     /// A key action against the source.
     pub key: Option<TreeKeyAction>,
 }
@@ -320,7 +335,7 @@ impl<'a> TreeView<'a> {
         state.set_column_widths(&source.columns().iter().map(|column| column.width).collect::<Vec<_>>());
 
         if header {
-            show_header(id, ui, source, state, &font, &visual);
+            output.header_clicked = show_header(id, ui, source, state, &font, &visual);
         }
 
         let row_height = state.row_height;
@@ -349,14 +364,40 @@ impl<'a> TreeView<'a> {
                             response.request_focus();
                         }
                         state.on_click(index, modifiers);
+                        if let Some(pos) = response.interact_pointer_pos() {
+                            let mut left = rect.left();
+                            for (column, width) in columns.iter().enumerate() {
+                                if pos.x >= left && pos.x < left + width {
+                                    state.focused_column = column;
+                                    output.clicked_column = Some(column);
+                                    break;
+                                }
+                                left += width;
+                            }
+                        }
                         // A click on the expander triangle toggles the node
                         // (`toToggleOnDblClick` and the tree's button click).
                         let on_expander = row.has_children
-                            && response
-                                .interact_pointer_pos()
-                                .is_some_and(|pos| pos.x <= rect.left() + (row.depth as f32 + 1.0) * indent);
+                            && response.interact_pointer_pos().is_some_and(|pos| {
+                                let expander_left = rect.left() + 3.0 + row.depth as f32 * indent;
+                                pos.x >= expander_left - 2.0 && pos.x <= expander_left + font.size + 2.0
+                            });
                         if on_expander {
                             state.toggle_row(index, source);
+                            output.expander_clicked = Some(index);
+                        } else if row.icon.is_some()
+                            && response.interact_pointer_pos().is_some_and(|pos| {
+                                // The glyph `paint_row` draws after the
+                                // indentation and the expander.
+                                let glyph_left = rect.left()
+                                    + 3.0
+                                    + row.depth as f32 * indent
+                                    + if row.has_children { indent * 0.75 } else { 0.0 };
+                                pos.x >= glyph_left - 2.0 && pos.x <= glyph_left + font.size + 2.0
+                            })
+                        {
+                            // `vstModulesChecked`: a click on the check box.
+                            output.check_clicked = Some(index);
                         }
                         output.clicked = Some(index);
                     }
@@ -412,13 +453,26 @@ fn show_header(
     state: &mut TreeState,
     font: &egui::FontId,
     visual: &egui::Visuals,
-) {
+) -> Option<usize> {
     let height = state.row_height + 3.0;
     let widths: Vec<f32> = state.column_widths.clone();
-    let (rect, _) = ui.allocate_exact_size(
+    let (rect, header_response) = ui.allocate_exact_size(
         egui::vec2(ui.available_width().max(widths.iter().sum()), height),
-        egui::Sense::hover(),
+        egui::Sense::click(),
     );
+    let mut clicked = None;
+    if header_response.clicked()
+        && let Some(pos) = header_response.interact_pointer_pos()
+    {
+        let mut left = rect.left();
+        for (index, width) in widths.iter().enumerate() {
+            if pos.x >= left && pos.x < left + width {
+                clicked = Some(index);
+                break;
+            }
+            left += width;
+        }
+    }
     let mut x = rect.left();
     for (index, width) in widths.iter().enumerate() {
         if index < source.columns().len() {
@@ -455,6 +509,7 @@ fn show_header(
         [rect.left_bottom(), rect.right_bottom()],
         egui::Stroke::new(1.0, visual.widgets.noninteractive.bg_stroke.color),
     );
+    clicked
 }
 
 /// Paints one row: the conflict background, the selection blend, the

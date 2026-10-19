@@ -14,6 +14,12 @@ path = "src/main.rs"
 name = "xedit_gui"
 path = "src/lib.rs"
 
+[target.'cfg(windows)'.dependencies]
+# `XEDIT_GUI_DPI_UNAWARE` (the screen-check harness): the private desktop
+# reports a 250% system scale whose window sizing does not match its own
+# surface; the process runs DPI unaware there, as a 96 DPI program.
+windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_UI_HiDpi"] }
+
 [dependencies]
 eframe = { workspace = true }
 serde = { version = "1.0.229", features = ["derive"] }

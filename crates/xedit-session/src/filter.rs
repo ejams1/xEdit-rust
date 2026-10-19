@@ -58,7 +58,7 @@ fn io_error(error: std::io::Error, path: &Path) -> CommandError {
 
 /// The options of the dialog as the request gives them: `None` is a
 /// checkbox that is off, `Some` one that is on with that value.
-#[derive(Serialize, Deserialize, JsonSchema, Clone, Default)]
+#[derive(Serialize, Deserialize, JsonSchema, Clone, Default, PartialEq, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct FilterRequestOptions {
     /// `cbConflictAll` with `clbConflictAll`: keep the records whose
@@ -225,7 +225,7 @@ impl FilterRequestOptions {
 }
 
 /// `filter.apply`: the request.
-#[derive(Deserialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct FilterApplyRequest {
     /// The files of the tree in load order; every loaded file when omitted
@@ -267,7 +267,7 @@ pub struct FilterApplyRequest {
 }
 
 /// One file of the response.
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 pub struct FilterFile {
     pub name: String,
     pub load_order: i32,
@@ -281,7 +281,7 @@ pub struct FilterFile {
 }
 
 /// `filter.apply`: the response.
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 pub struct FilterApplyResponse {
     /// The options the filter ran with, after the sets and the signatures
     /// were resolved (`FilterPreset` after the dialog).
@@ -575,12 +575,12 @@ fn edit_failed(message: String) -> CommandError {
 }
 
 /// `filter.remove`: the request.
-#[derive(Deserialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct FilterRemoveRequest {}
 
 /// `filter.remove`: the response.
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 pub struct FilterRemoveResponse {
     /// The tree without a filter: one node per loaded file (`ReInitTree`).
     pub files: Vec<FilterFile>,
@@ -617,12 +617,12 @@ pub(crate) fn filter_remove(
 }
 
 /// `filter.presets`: the request.
-#[derive(Deserialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct FilterPresetsRequest {}
 
 /// `filter.presets`: the response.
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 pub struct FilterPresetsResponse {
     /// The names of the `[Filter <name>]` sections, sorted, with the empty
     /// name first (`FilterListPresets`).
@@ -729,7 +729,7 @@ fn pascal_enum_name<T: PascalEnum + std::fmt::Debug>(value: T) -> String {
 }
 
 /// `filter.preset.save`: the request.
-#[derive(Deserialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct FilterPresetSaveRequest {
     /// The name of the preset to write; the empty name is the defaults
@@ -745,7 +745,7 @@ pub struct FilterPresetSaveRequest {
 }
 
 /// `filter.preset.save`: the response.
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 pub struct FilterPresetSaveResponse {
     pub name: String,
     pub settings: String,
@@ -894,7 +894,7 @@ fn write_preset(ini: &mut MemIniFile, name: &str, options: &FilterOptions) {
 }
 
 /// `filter.preset.delete`: the request.
-#[derive(Deserialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct FilterPresetDeleteRequest {
     /// The name of the preset to remove; the empty name is the defaults
@@ -906,7 +906,7 @@ pub struct FilterPresetDeleteRequest {
 }
 
 /// `filter.preset.delete`: the response.
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 pub struct FilterPresetDeleteResponse {
     pub name: String,
     pub section: String,
@@ -939,7 +939,7 @@ fn filter_preset_delete(
 }
 
 /// `refs.build_reachable`: the request.
-#[derive(Deserialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct BuildReachableRequest {
     /// Build the references of the files that have none first
@@ -953,7 +953,7 @@ fn default_true() -> bool {
 }
 
 /// `refs.build_reachable`: the response.
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 pub struct BuildReachableResponse {
     /// `ReachableBuild` of the session.
     pub reachable_build: bool,
@@ -1006,7 +1006,7 @@ fn refs_build_reachable(
 
 /// One entry of the dialog's signature lists: `DefaultSignature + ' - ' +
 /// GetName` as the list holds it, with the parts.
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 pub struct SignatureEntry {
     /// `DefaultSignature`: the signature of the record as text (`WEAP`).
     pub signature: String,
@@ -1020,7 +1020,7 @@ pub struct SignatureEntry {
 }
 
 /// `signatures.list`: the response.
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 pub struct SignaturesListResponse {
     /// `clbRecordSignatures`: every record definition of the game,
     /// `SIGNATURE - Name`, sorted as the list sorts them.
@@ -1034,7 +1034,7 @@ pub struct SignaturesListResponse {
 /// `signatures.list`: the signatures of the record definitions of the
 /// active game (`wbRecordDefs`), the two lists `TfrmFilterOptions.FormCreate`
 /// fills (`clbRecordSignatures` and `clbBaseRecordSignatures`).
-#[derive(Deserialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct SignaturesListRequest {}
 
