@@ -20,7 +20,7 @@ Overall: 7 of 10 phases merged.
 | 4 | Analysis and tool modes | `[##########]` 10 of 10 steps | Merged (PR #13) |
 | 5 | Archives, assets and LOD | `[##########]` | Merged (PR #14) |
 | 6 | Scripting | `[##########]` 11 of 11 steps | Merged (PR #20) |
-| 7 | GUI | `[..........]` | Not started |
+| 7 | GUI | `[..........]` 0 of 9 steps | In progress, draft PR #101 |
 | 8 | Performance | `[..........]` | Not started |
 | 9 | Release and cutover | `[..........]` | Not started |
 
