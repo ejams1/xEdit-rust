@@ -2284,14 +2284,15 @@ impl<'a> Vm<'a> {
     }
 
     /// Decodes one character at `pos`, with its byte length.
+    ///
+    /// Only the bytes of the character are read: the subject is a slice of
+    /// a `String` (the wrapper takes a `&str`), so it is valid UTF-8 and
+    /// the whole rest of it does not have to be validated on every step.
     fn char_at(&self, pos: usize) -> Option<(u32, usize)> {
         if pos >= self.end {
             return None;
         }
-        let rest = &self.subject[pos..self.end];
-        let text = std::str::from_utf8(rest).ok()?;
-        let ch = text.chars().next()?;
-        Some((ch as u32, ch.len_utf8()))
+        decode(&self.subject[pos..self.end])
     }
 
     /// The byte offset `count` characters before `pos`.
@@ -2567,8 +2568,26 @@ impl<'a> Vm<'a> {
     }
 }
 
+/// Decodes the first character of `bytes`, with its byte length.
+///
+/// Only the bytes of the character are read: `bytes` is a slice of a
+/// `String` (the wrapper takes a `&str`), so it is valid UTF-8 and the
+/// whole of it does not have to be validated to read its first character.
 fn decode(bytes: &[u8]) -> Option<(u32, usize)> {
-    let text = std::str::from_utf8(bytes).ok()?;
+    let first = *bytes.first()?;
+    // The length of the character from its first byte. A byte that starts
+    // no character (a continuation byte, or one of the bytes of the UTF-8
+    // that is not valid) is not a character: the slice is then invalid and
+    // the character is none, as it was when the whole slice was validated.
+    let len = match first {
+        0x00..=0x7F => 1,
+        0xC0..=0xDF => 2,
+        0xE0..=0xEF => 3,
+        0xF0..=0xF7 => 4,
+        _ => 1,
+    };
+    let len = len.min(bytes.len());
+    let text = std::str::from_utf8(&bytes[..len]).ok()?;
     let ch = text.chars().next()?;
     Some((ch as u32, ch.len_utf8()))
 }
@@ -2599,6 +2618,52 @@ mod tests {
             }
         }
         found
+    }
+
+    /// The search of a long subject does not take a time that grows with
+    /// the square of its length.
+    ///
+    /// The engine read the whole rest of the subject on every step of the
+    /// match, so a match that walks over the whole of a subject took a time
+    /// that grew with the square of its length; the character at a position
+    /// is now read from its own bytes.
+    ///
+    /// The test is a guard, not a measurement of a speed: the time of a
+    /// match over a subject of a tenth of the length is the reference, and
+    /// the quadratic search could not hold a tenth of the work for a tenth
+    /// of the subject.
+    #[test]
+    fn a_long_subject_is_not_searched_quadratically() {
+        // A subject of a few kilobytes of ASCII. The pattern walks over the
+        // whole of it and matches at its end, so every character of the
+        // subject is read once.
+        let long = "x".repeat(200_000) + "needle";
+        let short = "x".repeat(20_000) + "needle";
+        let pattern = ".*needle";
+        let measure = |subject: &str| {
+            let regex = Regex::compile(pattern, Flags::default()).expect("a pattern");
+            let bytes = subject.as_bytes();
+            let exec = ExecFlags {
+                anchored: true,
+                ..ExecFlags::default()
+            };
+            let start = std::time::Instant::now();
+            let found = regex.exec(bytes, 0, bytes.len(), exec);
+            (start.elapsed(), found.map(|captures| captures[0].expect("the whole match")))
+        };
+        let (long_time, long_found) = measure(&long);
+        let (short_time, short_found) = measure(&short);
+        // The match is the same, at the end of the subject.
+        assert_eq!(long_found.map(|(start, end)| (start, end)), Some((0, 200_006)));
+        assert_eq!(short_found.map(|(start, end)| (start, end)), Some((0, 20_006)));
+        // The search of the long subject may not take the hundred times
+        // the work of the short one: the quadratic search would.
+        assert!(
+            long_time < short_time * 50,
+            "the search of {} bytes took {long_time:?}, the search of {} bytes took {short_time:?}",
+            long.len(),
+            short.len()
+        );
     }
 
     /// The offsets and lengths the 4.1.5q release reports for one of the
