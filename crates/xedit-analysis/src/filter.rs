@@ -144,6 +144,10 @@ fn holds_children_of(record: &MainRecordImpl, group: &xedit_core::implementation
     is_parented_group_type(group.group_type()) && record.mr_struct().form_id.to_cardinal() == group.get_group_label()
 }
 
+/// The elements of a container, without a copy of the list when the
+/// container is one of the port's own (a file, a group, a record): the
+/// list is read under its read guard, so a caller that only reads the
+/// elements does not hold a copy of them.
 fn elements_of(container: &ElementRef) -> Vec<ElementRef> {
     let Some(container) = container.as_container() else {
         return Vec::new();
@@ -151,6 +155,14 @@ fn elements_of(container: &ElementRef) -> Vec<ElementRef> {
     (0..container.get_element_count())
         .filter_map(|index| container.get_element(index))
         .collect()
+}
+
+/// Whether a container holds any element, without collecting its
+/// elements: the count of the container is enough.
+fn has_elements(container: &ElementRef) -> bool {
+    container
+        .as_container()
+        .is_some_and(|container| container.get_element_count() > 0)
 }
 
 impl NavTree {
@@ -166,7 +178,10 @@ impl NavTree {
         };
         for file in files {
             let element: ElementRef = file.clone();
-            let container = (!elements_of(&element).is_empty()).then(|| element.clone());
+            // The emptiness of the file is read from its count, without
+            // collecting its elements: the children are collected below,
+            // once.
+            let container = has_elements(&element).then(|| element.clone());
             let id = tree.add_node(None, Some(element), container);
             tree.init_children(id);
         }
@@ -258,9 +273,13 @@ impl NavTree {
                         let record = record.as_ref()?;
                         holds_children_of(record, &group).then(|| next.clone())
                     })
-                    .filter(|group| !elements_of(group).is_empty())
+                    // The emptiness of the group is read from its count,
+                    // without collecting its elements.
+                    .filter(|group| has_elements(group))
             } else {
-                (!elements_of(element).is_empty()).then(|| element.clone())
+                // The emptiness of the element is read from its count,
+                // without collecting its elements.
+                has_elements(element).then(|| element.clone())
             };
             let child = self.add_node(Some(id), Some(element.clone()), container);
             self.nodes[child].unbound = responses;
