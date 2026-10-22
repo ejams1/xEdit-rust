@@ -1,9 +1,9 @@
 {
   "schema": 1,
   "date": "2026-10-22",
-  "commit": "874fb30a4f5d6a0c5813d1ef6ad686a409a97851",
+  "commit": "effd9403366641c7c426937bf28118816cb03da2",
   "profile": "release",
-  "provisional": true,
+  "provisional": false,
   "machine": {
     "cpu": "AMD Ryzen 7 9800X3D 8-Core Processor",
     "logical_cpus": 16,
@@ -25,23 +25,23 @@
           "measurement": {
             "runs": [
               {
-                "seconds": 1.4485248,
-                "peak_bytes": 2241105920,
+                "seconds": 1.2701693,
+                "peak_bytes": 2153627648,
                 "code": 0
               },
               {
-                "seconds": 1.4809098,
-                "peak_bytes": 2260426752,
+                "seconds": 1.2821652000000001,
+                "peak_bytes": 2144354304,
                 "code": 0
               },
               {
-                "seconds": 1.435815,
-                "peak_bytes": 2150137856,
+                "seconds": 1.3329344,
+                "peak_bytes": 2139738112,
                 "code": 0
               }
             ],
-            "median_seconds": 1.4485248,
-            "peak_bytes": 2260426752
+            "median_seconds": 1.2821652000000001,
+            "peak_bytes": 2153627648
           }
         },
         {
@@ -52,23 +52,23 @@
           "measurement": {
             "runs": [
               {
-                "seconds": 1.7418794,
-                "peak_bytes": 1879773184,
+                "seconds": 1.6322208,
+                "peak_bytes": 1644060672,
                 "code": 0
               },
               {
-                "seconds": 1.7234646,
-                "peak_bytes": 1879789568,
+                "seconds": 1.5666176,
+                "peak_bytes": 1644072960,
                 "code": 0
               },
               {
-                "seconds": 1.6703691,
-                "peak_bytes": 1879777280,
+                "seconds": 1.5375798999999999,
+                "peak_bytes": 1644081152,
                 "code": 0
               }
             ],
-            "median_seconds": 1.7234646,
-            "peak_bytes": 1879789568
+            "median_seconds": 1.5666176,
+            "peak_bytes": 1644081152
           }
         },
         {
@@ -79,23 +79,23 @@
           "measurement": {
             "runs": [
               {
-                "seconds": 1.4526414,
-                "peak_bytes": 2206031872,
+                "seconds": 1.1958469,
+                "peak_bytes": 2165428224,
                 "code": 0
               },
               {
-                "seconds": 1.4406504,
-                "peak_bytes": 2211741696,
+                "seconds": 1.1612031,
+                "peak_bytes": 2127720448,
                 "code": 0
               },
               {
-                "seconds": 1.4494862,
-                "peak_bytes": 2239287296,
+                "seconds": 1.1723655,
+                "peak_bytes": 2135334912,
                 "code": 0
               }
             ],
-            "median_seconds": 1.4494862,
-            "peak_bytes": 2239287296
+            "median_seconds": 1.1723655,
+            "peak_bytes": 2165428224
           }
         },
         {
@@ -106,42 +106,42 @@
           "measurement": {
             "runs": [
               {
-                "seconds": 1.6932641,
-                "peak_bytes": 1879785472,
+                "seconds": 1.3801923,
+                "peak_bytes": 1644032000,
                 "code": 0
               },
               {
-                "seconds": 1.6925245,
-                "peak_bytes": 1879740416,
+                "seconds": 1.5348242,
+                "peak_bytes": 1644072960,
                 "code": 0
               },
               {
-                "seconds": 1.7690774999999999,
-                "peak_bytes": 1879769088,
+                "seconds": 1.7259563999999998,
+                "peak_bytes": 1644068864,
                 "code": 0
               }
             ],
-            "median_seconds": 1.6932641,
-            "peak_bytes": 1879785472
+            "median_seconds": 1.5348242,
+            "peak_bytes": 1644072960
           }
         }
       ],
       "delphi": {
         "runs": [
           {
-            "seconds": 4.252,
+            "seconds": 5.351,
             "code": 0
           },
           {
-            "seconds": 4.211,
+            "seconds": 4.99,
             "code": 0
           },
           {
-            "seconds": 4.228,
+            "seconds": 5.344,
             "code": 0
           }
         ],
-        "median_seconds": 4.228
+        "median_seconds": 5.344
       },
       "delphi_limitation": "the Delphi column is the load of the game master by xDump.exe, which is the plugin with the string tables in its archive; the port's column loads the game master and the DLC, so the two columns are not the same work"
     },
@@ -159,23 +159,23 @@
           "measurement": {
             "runs": [
               {
-                "seconds": 2.2587217,
-                "peak_bytes": 2765504512,
+                "seconds": 2.0939254,
+                "peak_bytes": 2497339392,
                 "code": 0
               },
               {
-                "seconds": 2.1557091,
-                "peak_bytes": 2745786368,
+                "seconds": 1.809831,
+                "peak_bytes": 2490990592,
                 "code": 0
               },
               {
-                "seconds": 2.1631202,
-                "peak_bytes": 2771046400,
+                "seconds": 1.9633682000000001,
+                "peak_bytes": 2482331648,
                 "code": 0
               }
             ],
-            "median_seconds": 2.1631202,
-            "peak_bytes": 2771046400
+            "median_seconds": 1.9633682000000001,
+            "peak_bytes": 2497339392
           }
         },
         {
@@ -186,23 +186,23 @@
           "measurement": {
             "runs": [
               {
-                "seconds": 2.4818028,
-                "peak_bytes": 2530213888,
+                "seconds": 2.5713898,
+                "peak_bytes": 2242801664,
                 "code": 0
               },
               {
-                "seconds": 2.4711203,
-                "peak_bytes": 2530152448,
+                "seconds": 2.1129705,
+                "peak_bytes": 2242355200,
                 "code": 0
               },
               {
-                "seconds": 2.4937215999999998,
-                "peak_bytes": 2530172928,
+                "seconds": 2.195256,
+                "peak_bytes": 2242797568,
                 "code": 0
               }
             ],
-            "median_seconds": 2.4818028,
-            "peak_bytes": 2530213888
+            "median_seconds": 2.195256,
+            "peak_bytes": 2242801664
           }
         },
         {
@@ -213,23 +213,23 @@
           "measurement": {
             "runs": [
               {
-                "seconds": 2.1810301,
-                "peak_bytes": 2764013568,
+                "seconds": 1.7713299,
+                "peak_bytes": 2492227584,
                 "code": 0
               },
               {
-                "seconds": 2.2073636,
-                "peak_bytes": 2743902208,
+                "seconds": 1.6571263,
+                "peak_bytes": 2501165056,
                 "code": 0
               },
               {
-                "seconds": 2.2038256,
-                "peak_bytes": 2757767168,
+                "seconds": 1.8261749,
+                "peak_bytes": 2520170496,
                 "code": 0
               }
             ],
-            "median_seconds": 2.2038256,
-            "peak_bytes": 2764013568
+            "median_seconds": 1.7713299,
+            "peak_bytes": 2520170496
           }
         },
         {
@@ -240,42 +240,42 @@
           "measurement": {
             "runs": [
               {
-                "seconds": 2.4626381999999998,
-                "peak_bytes": 2530193408,
+                "seconds": 2.4078116,
+                "peak_bytes": 2242834432,
                 "code": 0
               },
               {
-                "seconds": 2.5204247,
-                "peak_bytes": 2530189312,
+                "seconds": 2.1622311,
+                "peak_bytes": 2242928640,
                 "code": 0
               },
               {
-                "seconds": 2.4918696000000002,
-                "peak_bytes": 2530156544,
+                "seconds": 2.1736407,
+                "peak_bytes": 2242879488,
                 "code": 0
               }
             ],
-            "median_seconds": 2.4918696000000002,
-            "peak_bytes": 2530193408
+            "median_seconds": 2.1736407,
+            "peak_bytes": 2242928640
           }
         }
       ],
       "delphi": {
         "runs": [
           {
-            "seconds": 3.935,
+            "seconds": 5.521,
             "code": 0
           },
           {
-            "seconds": 3.852,
+            "seconds": 5.458,
             "code": 0
           },
           {
-            "seconds": 3.828,
+            "seconds": 5.327,
             "code": 0
           }
         ],
-        "median_seconds": 3.852
+        "median_seconds": 5.458
       },
       "delphi_limitation": "the Delphi build has no ten plugin load order in the corpus: the column is the load of the game master alone, so the two columns are not the same work",
       "notes": "7 plugins"
@@ -294,23 +294,23 @@
           "measurement": {
             "runs": [
               {
-                "seconds": 0.8606128,
-                "peak_bytes": 1338232832,
+                "seconds": 0.9140399,
+                "peak_bytes": 1283940352,
                 "code": 0
               },
               {
-                "seconds": 0.7642451,
-                "peak_bytes": 1324511232,
+                "seconds": 0.850337,
+                "peak_bytes": 1309425664,
                 "code": 0
               },
               {
-                "seconds": 0.7829921,
-                "peak_bytes": 1344700416,
+                "seconds": 0.8102184,
+                "peak_bytes": 1307017216,
                 "code": 0
               }
             ],
-            "median_seconds": 0.7829921,
-            "peak_bytes": 1344700416
+            "median_seconds": 0.850337,
+            "peak_bytes": 1309425664
           }
         },
         {
@@ -321,23 +321,23 @@
           "measurement": {
             "runs": [
               {
-                "seconds": 0.9135061,
-                "peak_bytes": 1110249472,
+                "seconds": 1.0037239,
+                "peak_bytes": 997232640,
                 "code": 0
               },
               {
-                "seconds": 0.8970869,
-                "peak_bytes": 1110261760,
+                "seconds": 1.0892371,
+                "peak_bytes": 997265408,
                 "code": 0
               },
               {
-                "seconds": 0.9125836,
-                "peak_bytes": 1110298624,
+                "seconds": 1.0042266,
+                "peak_bytes": 997306368,
                 "code": 0
               }
             ],
-            "median_seconds": 0.9125836,
-            "peak_bytes": 1110298624
+            "median_seconds": 1.0042266,
+            "peak_bytes": 997306368
           }
         },
         {
@@ -348,23 +348,23 @@
           "measurement": {
             "runs": [
               {
-                "seconds": 0.7606989,
-                "peak_bytes": 1312317440,
+                "seconds": 0.7630016,
+                "peak_bytes": 1288151040,
                 "code": 0
               },
               {
-                "seconds": 0.7660094,
-                "peak_bytes": 1329815552,
+                "seconds": 0.8208355,
+                "peak_bytes": 1303543808,
                 "code": 0
               },
               {
-                "seconds": 0.7744356,
-                "peak_bytes": 1338470400,
+                "seconds": 0.7802841,
+                "peak_bytes": 1303777280,
                 "code": 0
               }
             ],
-            "median_seconds": 0.7660094,
-            "peak_bytes": 1338470400
+            "median_seconds": 0.7802841,
+            "peak_bytes": 1303777280
           }
         },
         {
@@ -375,42 +375,42 @@
           "measurement": {
             "runs": [
               {
-                "seconds": 0.9099185,
-                "peak_bytes": 1110257664,
+                "seconds": 0.9340203,
+                "peak_bytes": 997347328,
                 "code": 0
               },
               {
-                "seconds": 0.9101317,
-                "peak_bytes": 1110310912,
+                "seconds": 0.8773333,
+                "peak_bytes": 997269504,
                 "code": 0
               },
               {
-                "seconds": 0.913737,
-                "peak_bytes": 1110339584,
+                "seconds": 0.9694478,
+                "peak_bytes": 997302272,
                 "code": 0
               }
             ],
-            "median_seconds": 0.9101317,
-            "peak_bytes": 1110339584
+            "median_seconds": 0.9340203,
+            "peak_bytes": 997347328
           }
         }
       ],
       "delphi": {
         "runs": [
           {
-            "seconds": 2.405,
+            "seconds": 3.17,
             "code": 0
           },
           {
-            "seconds": 2.367,
+            "seconds": 3.033,
             "code": 0
           },
           {
-            "seconds": 2.35,
+            "seconds": 3.026,
             "code": 0
           }
         ],
-        "median_seconds": 2.367
+        "median_seconds": 3.033
       },
       "delphi_limitation": "the Delphi column is the load of Update.esm by xDump.exe, which loads the game master with it; the port's column loads the game master and Update.esm, so the two columns are the same work"
     },
@@ -428,23 +428,23 @@
           "measurement": {
             "runs": [
               {
-                "seconds": 7.7146779,
-                "peak_bytes": 1931898880,
+                "seconds": 9.7336909,
+                "peak_bytes": 1774858240,
                 "code": 0
               },
               {
-                "seconds": 7.8203987999999995,
-                "peak_bytes": 1919492096,
+                "seconds": 9.2001129,
+                "peak_bytes": 1844822016,
                 "code": 0
               },
               {
-                "seconds": 7.875869,
-                "peak_bytes": 1915027456,
+                "seconds": 9.0723692,
+                "peak_bytes": 1737433088,
                 "code": 0
               }
             ],
-            "median_seconds": 7.8203987999999995,
-            "peak_bytes": 1931898880
+            "median_seconds": 9.2001129,
+            "peak_bytes": 1844822016
           }
         },
         {
@@ -455,23 +455,23 @@
           "measurement": {
             "runs": [
               {
-                "seconds": 30.8314129,
-                "peak_bytes": 1544278016,
+                "seconds": 33.9265072,
+                "peak_bytes": 1420546048,
                 "code": 0
               },
               {
-                "seconds": 30.7864282,
-                "peak_bytes": 1544404992,
+                "seconds": 38.7344226,
+                "peak_bytes": 1420570624,
                 "code": 0
               },
               {
-                "seconds": 30.8487268,
-                "peak_bytes": 1544392704,
+                "seconds": 41.8184362,
+                "peak_bytes": 1424982016,
                 "code": 0
               }
             ],
-            "median_seconds": 30.8314129,
-            "peak_bytes": 1544404992
+            "median_seconds": 38.7344226,
+            "peak_bytes": 1424982016
           }
         },
         {
@@ -482,23 +482,23 @@
           "measurement": {
             "runs": [
               {
-                "seconds": 7.7328235,
-                "peak_bytes": 1905405952,
+                "seconds": 10.2192834,
+                "peak_bytes": 1780002816,
                 "code": 0
               },
               {
-                "seconds": 7.7676902,
-                "peak_bytes": 1918001152,
+                "seconds": 10.1122184,
+                "peak_bytes": 1827577856,
                 "code": 0
               },
               {
-                "seconds": 7.7509702,
-                "peak_bytes": 1899433984,
+                "seconds": 10.2666015,
+                "peak_bytes": 1781927936,
                 "code": 0
               }
             ],
-            "median_seconds": 7.7509702,
-            "peak_bytes": 1918001152
+            "median_seconds": 10.2192834,
+            "peak_bytes": 1827577856
           }
         },
         {
@@ -509,46 +509,46 @@
           "measurement": {
             "runs": [
               {
-                "seconds": 30.7880153,
-                "peak_bytes": 1543933952,
+                "seconds": 40.7428315,
+                "peak_bytes": 1425035264,
                 "code": 0
               },
               {
-                "seconds": 30.8220095,
-                "peak_bytes": 1544265728,
+                "seconds": 39.4184945,
+                "peak_bytes": 1425002496,
                 "code": 0
               },
               {
-                "seconds": 30.8092789,
-                "peak_bytes": 1542672384,
+                "seconds": 37.9382675,
+                "peak_bytes": 1424027648,
                 "code": 0
               }
             ],
-            "median_seconds": 30.8092789,
-            "peak_bytes": 1544265728
+            "median_seconds": 39.4184945,
+            "peak_bytes": 1425035264
           }
         }
       ],
       "delphi": {
         "runs": [
           {
-            "seconds": 111.8180325,
-            "peak_bytes": 1171759104,
+            "seconds": 178.1865646,
+            "peak_bytes": 1171353600,
             "code": 0
           },
           {
-            "seconds": 111.2280264,
-            "peak_bytes": 1171779584,
+            "seconds": 192.9543703,
+            "peak_bytes": 1171230720,
             "code": 0
           },
           {
-            "seconds": 113.0239951,
-            "peak_bytes": 1172152320,
+            "seconds": 190.6631887,
+            "peak_bytes": 1171349504,
             "code": 0
           }
         ],
-        "median_seconds": 111.8180325,
-        "peak_bytes": 1172152320
+        "median_seconds": 190.6631887,
+        "peak_bytes": 1171353600
       },
       "delphi_limitation": "the Delphi column is the GUI build in its script mode: it includes the start of the program and the load of the plugins, so it is larger than the reference build alone"
     },
@@ -566,23 +566,23 @@
           "measurement": {
             "runs": [
               {
-                "seconds": 4.0161116,
-                "peak_bytes": 1501024256,
+                "seconds": 3.4434712,
+                "peak_bytes": 1446481920,
                 "code": 0
               },
               {
-                "seconds": 3.9587726,
-                "peak_bytes": 1548652544,
+                "seconds": 2.9685133,
+                "peak_bytes": 1444782080,
                 "code": 0
               },
               {
-                "seconds": 3.9695655,
-                "peak_bytes": 1568890880,
+                "seconds": 3.1321045,
+                "peak_bytes": 1417793536,
                 "code": 0
               }
             ],
-            "median_seconds": 3.9695655,
-            "peak_bytes": 1568890880
+            "median_seconds": 3.1321045,
+            "peak_bytes": 1446481920
           }
         },
         {
@@ -593,23 +593,23 @@
           "measurement": {
             "runs": [
               {
-                "seconds": 12.1171425,
-                "peak_bytes": 1260597248,
+                "seconds": 15.4495595,
+                "peak_bytes": 1145303040,
                 "code": 0
               },
               {
-                "seconds": 12.1347585,
-                "peak_bytes": 1260597248,
+                "seconds": 15.2703641,
+                "peak_bytes": 1145413632,
                 "code": 0
               },
               {
-                "seconds": 12.1449636,
-                "peak_bytes": 1260535808,
+                "seconds": 17.8685205,
+                "peak_bytes": 1149095936,
                 "code": 0
               }
             ],
-            "median_seconds": 12.1347585,
-            "peak_bytes": 1260597248
+            "median_seconds": 15.4495595,
+            "peak_bytes": 1149095936
           }
         },
         {
@@ -620,23 +620,23 @@
           "measurement": {
             "runs": [
               {
-                "seconds": 3.9638909,
-                "peak_bytes": 1516171264,
+                "seconds": 3.6167354,
+                "peak_bytes": 1442463744,
                 "code": 0
               },
               {
-                "seconds": 3.9013,
-                "peak_bytes": 1491693568,
+                "seconds": 3.758959,
+                "peak_bytes": 1395605504,
                 "code": 0
               },
               {
-                "seconds": 3.9653461,
-                "peak_bytes": 1501429760,
+                "seconds": 3.9586863,
+                "peak_bytes": 1390993408,
                 "code": 0
               }
             ],
-            "median_seconds": 3.9638909,
-            "peak_bytes": 1516171264
+            "median_seconds": 3.758959,
+            "peak_bytes": 1442463744
           }
         },
         {
@@ -647,46 +647,46 @@
           "measurement": {
             "runs": [
               {
-                "seconds": 12.190362,
-                "peak_bytes": 1260642304,
+                "seconds": 17.2674513,
+                "peak_bytes": 1149124608,
                 "code": 0
               },
               {
-                "seconds": 12.3963639,
-                "peak_bytes": 1260965888,
+                "seconds": 16.7141394,
+                "peak_bytes": 1149046784,
                 "code": 0
               },
               {
-                "seconds": 12.134063,
-                "peak_bytes": 1260630016,
+                "seconds": 16.2797217,
+                "peak_bytes": 1145339904,
                 "code": 0
               }
             ],
-            "median_seconds": 12.190362,
-            "peak_bytes": 1260965888
+            "median_seconds": 16.7141394,
+            "peak_bytes": 1149124608
           }
         }
       ],
       "delphi": {
         "runs": [
           {
-            "seconds": 84.7816674,
-            "peak_bytes": 1226354688,
+            "seconds": 143.3283782,
+            "peak_bytes": 1226072064,
             "code": 0
           },
           {
-            "seconds": 84.3739424,
-            "peak_bytes": 1225064448,
+            "seconds": 150.4752564,
+            "peak_bytes": 1233641472,
             "code": 0
           },
           {
-            "seconds": 84.466466,
-            "peak_bytes": 1222082560,
+            "seconds": 125.8757095,
+            "peak_bytes": 1225052160,
             "code": 0
           }
         ],
-        "median_seconds": 84.466466,
-        "peak_bytes": 1226354688
+        "median_seconds": 143.3283782,
+        "peak_bytes": 1233641472
       },
       "delphi_limitation": "the Delphi column is the GUI build in its script mode: it includes the start of the program and the load of the plugins, so it is larger than the conflict scan alone"
     },
@@ -704,23 +704,23 @@
           "measurement": {
             "runs": [
               {
-                "seconds": 10.0511213,
-                "peak_bytes": 1430507520,
+                "seconds": 11.3387882,
+                "peak_bytes": 1367810048,
                 "code": 0
               },
               {
-                "seconds": 10.0441791,
-                "peak_bytes": 1431240704,
+                "seconds": 10.390872,
+                "peak_bytes": 1360187392,
                 "code": 0
               },
               {
-                "seconds": 10.0252377,
-                "peak_bytes": 1434419200,
+                "seconds": 10.7384653,
+                "peak_bytes": 1379921920,
                 "code": 0
               }
             ],
-            "median_seconds": 10.0441791,
-            "peak_bytes": 1434419200
+            "median_seconds": 10.7384653,
+            "peak_bytes": 1379921920
           }
         },
         {
@@ -731,23 +731,23 @@
           "measurement": {
             "runs": [
               {
-                "seconds": 10.1840723,
-                "peak_bytes": 1236471808,
+                "seconds": 11.7779735,
+                "peak_bytes": 1126273024,
                 "code": 0
               },
               {
-                "seconds": 10.1730527,
-                "peak_bytes": 1236369408,
+                "seconds": 10.7312626,
+                "peak_bytes": 1130426368,
                 "code": 0
               },
               {
-                "seconds": 10.1949427,
-                "peak_bytes": 1236443136,
+                "seconds": 10.7630096,
+                "peak_bytes": 1126248448,
                 "code": 0
               }
             ],
-            "median_seconds": 10.1840723,
-            "peak_bytes": 1236471808
+            "median_seconds": 10.7630096,
+            "peak_bytes": 1130426368
           }
         },
         {
@@ -758,23 +758,23 @@
           "measurement": {
             "runs": [
               {
-                "seconds": 10.0419388,
-                "peak_bytes": 1438461952,
+                "seconds": 10.6060789,
+                "peak_bytes": 1307123712,
                 "code": 0
               },
               {
-                "seconds": 10.0235529,
-                "peak_bytes": 1425670144,
+                "seconds": 10.6062122,
+                "peak_bytes": 1319100416,
                 "code": 0
               },
               {
-                "seconds": 10.0383914,
-                "peak_bytes": 1430134784,
+                "seconds": 10.8766351,
+                "peak_bytes": 1369231360,
                 "code": 0
               }
             ],
-            "median_seconds": 10.0383914,
-            "peak_bytes": 1438461952
+            "median_seconds": 10.6062122,
+            "peak_bytes": 1369231360
           }
         },
         {
@@ -785,46 +785,46 @@
           "measurement": {
             "runs": [
               {
-                "seconds": 10.1821623,
-                "peak_bytes": 1236389888,
+                "seconds": 12.2182945,
+                "peak_bytes": 1126215680,
                 "code": 0
               },
               {
-                "seconds": 10.1706791,
-                "peak_bytes": 1236488192,
+                "seconds": 14.5478475,
+                "peak_bytes": 1129816064,
                 "code": 0
               },
               {
-                "seconds": 10.1726562,
-                "peak_bytes": 1236480000,
+                "seconds": 15.5553417,
+                "peak_bytes": 1129775104,
                 "code": 0
               }
             ],
-            "median_seconds": 10.1726562,
-            "peak_bytes": 1236488192
+            "median_seconds": 14.5478475,
+            "peak_bytes": 1129816064
           }
         }
       ],
       "delphi": {
         "runs": [
           {
-            "seconds": 35.8063794,
-            "peak_bytes": 1026670592,
+            "seconds": 73.6707818,
+            "peak_bytes": 1026445312,
             "code": 0
           },
           {
-            "seconds": 35.9041538,
-            "peak_bytes": 1027063808,
+            "seconds": 58.55377,
+            "peak_bytes": 1027272704,
             "code": 0
           },
           {
-            "seconds": 35.8977865,
-            "peak_bytes": 1026801664,
+            "seconds": 61.0143836,
+            "peak_bytes": 1026641920,
             "code": 0
           }
         ],
-        "median_seconds": 35.8977865,
-        "peak_bytes": 1027063808
+        "median_seconds": 61.0143836,
+        "peak_bytes": 1027272704
       },
       "delphi_limitation": "the Delphi column is the GUI build in its quick auto clean mode: it includes the start of the program, the load of the plugins and the save of the cleaned plugin, so it is larger than the dry run alone"
     },
@@ -842,23 +842,23 @@
           "measurement": {
             "runs": [
               {
-                "seconds": 3.2326956,
-                "peak_bytes": 3905228800,
+                "seconds": 4.2322903,
+                "peak_bytes": 2968047616,
                 "code": 0
               },
               {
-                "seconds": 3.2362963,
-                "peak_bytes": 4111790080,
+                "seconds": 4.0443099,
+                "peak_bytes": 2958000128,
                 "code": 0
               },
               {
-                "seconds": 3.1900259,
-                "peak_bytes": 3771482112,
+                "seconds": 3.8146223,
+                "peak_bytes": 3048476672,
                 "code": 0
               }
             ],
-            "median_seconds": 3.2326956,
-            "peak_bytes": 4111790080
+            "median_seconds": 4.0443099,
+            "peak_bytes": 3048476672
           }
         },
         {
@@ -869,23 +869,23 @@
           "measurement": {
             "runs": [
               {
-                "seconds": 8.1340251,
-                "peak_bytes": 2276855808,
+                "seconds": 12.8397375,
+                "peak_bytes": 2047332352,
                 "code": 0
               },
               {
-                "seconds": 8.108516,
-                "peak_bytes": 2276769792,
+                "seconds": 13.5520582,
+                "peak_bytes": 2033606656,
                 "code": 0
               },
               {
-                "seconds": 8.1084886,
-                "peak_bytes": 2276827136,
+                "seconds": 14.0640436,
+                "peak_bytes": 2033577984,
                 "code": 0
               }
             ],
-            "median_seconds": 8.108516,
-            "peak_bytes": 2276855808
+            "median_seconds": 13.5520582,
+            "peak_bytes": 2047332352
           }
         },
         {
@@ -896,23 +896,23 @@
           "measurement": {
             "runs": [
               {
-                "seconds": 3.2190339,
-                "peak_bytes": 4174274560,
+                "seconds": 4.3101078,
+                "peak_bytes": 2902761472,
                 "code": 0
               },
               {
-                "seconds": 3.1566754,
-                "peak_bytes": 3218915328,
+                "seconds": 4.6072303,
+                "peak_bytes": 3195928576,
                 "code": 0
               },
               {
-                "seconds": 3.2364426,
-                "peak_bytes": 4111679488,
+                "seconds": 4.4605851,
+                "peak_bytes": 2886225920,
                 "code": 0
               }
             ],
-            "median_seconds": 3.2190339,
-            "peak_bytes": 4174274560
+            "median_seconds": 4.4605851,
+            "peak_bytes": 3195928576
           }
         },
         {
@@ -923,46 +923,46 @@
           "measurement": {
             "runs": [
               {
-                "seconds": 8.1097439,
-                "peak_bytes": 2276810752,
+                "seconds": 13.4217672,
+                "peak_bytes": 2047430656,
                 "code": 0
               },
               {
-                "seconds": 8.1271972,
-                "peak_bytes": 2276806656,
+                "seconds": 13.3413033,
+                "peak_bytes": 2047406080,
                 "code": 0
               },
               {
-                "seconds": 8.0951978,
-                "peak_bytes": 2276765696,
+                "seconds": 13.6749293,
+                "peak_bytes": 2033635328,
                 "code": 0
               }
             ],
-            "median_seconds": 8.1097439,
-            "peak_bytes": 2276810752
+            "median_seconds": 13.4217672,
+            "peak_bytes": 2047430656
           }
         }
       ],
       "delphi": {
         "runs": [
           {
-            "seconds": 30.5981652,
-            "peak_bytes": 1441800192,
+            "seconds": 51.8268742,
+            "peak_bytes": 1441812480,
             "code": 0
           },
           {
-            "seconds": 31.0125659,
-            "peak_bytes": 1441431552,
+            "seconds": 55.2917055,
+            "peak_bytes": 1441239040,
             "code": 0
           },
           {
-            "seconds": 31.268181,
-            "peak_bytes": 1441599488,
+            "seconds": 56.804394,
+            "peak_bytes": 1441939456,
             "code": 0
           }
         ],
-        "median_seconds": 31.0125659,
-        "peak_bytes": 1441800192
+        "median_seconds": 55.2917055,
+        "peak_bytes": 1441939456
       },
       "delphi_limitation": "the Delphi column is the GUI build in its quick auto clean mode: it includes the start of the program, the load of the plugins and the save of the cleaned plugin, so it is larger than the dry run alone"
     },
@@ -980,23 +980,23 @@
           "measurement": {
             "runs": [
               {
-                "seconds": 0.0124167,
-                "peak_bytes": 11874304,
+                "seconds": 0.2690947,
+                "peak_bytes": 11526144,
                 "code": 0
               },
               {
-                "seconds": 0.0114612,
-                "peak_bytes": 11841536,
+                "seconds": 0.1353526,
+                "peak_bytes": 11534336,
                 "code": 0
               },
               {
-                "seconds": 0.0114191,
-                "peak_bytes": 11870208,
+                "seconds": 0.0589882,
+                "peak_bytes": 11423744,
                 "code": 0
               }
             ],
-            "median_seconds": 0.0114612,
-            "peak_bytes": 11874304
+            "median_seconds": 0.1353526,
+            "peak_bytes": 11534336
           }
         },
         {
@@ -1007,46 +1007,46 @@
           "measurement": {
             "runs": [
               {
-                "seconds": 0.0111102,
-                "peak_bytes": 11837440,
+                "seconds": 0.1350337,
+                "peak_bytes": 11427840,
                 "code": 0
               },
               {
-                "seconds": 0.0114298,
-                "peak_bytes": 11857920,
+                "seconds": 0.0352479,
+                "peak_bytes": 11444224,
                 "code": 0
               },
               {
-                "seconds": 0.0112249,
-                "peak_bytes": 11878400,
+                "seconds": 0.0404121,
+                "peak_bytes": 11366400,
                 "code": 0
               }
             ],
-            "median_seconds": 0.0112249,
-            "peak_bytes": 11878400
+            "median_seconds": 0.0404121,
+            "peak_bytes": 11444224
           }
         }
       ],
       "delphi": {
         "runs": [
           {
-            "seconds": 0.5722562,
-            "peak_bytes": 15265792,
+            "seconds": 0.6208116,
+            "peak_bytes": 15179776,
             "code": 0
           },
           {
-            "seconds": 0.8106901,
-            "peak_bytes": 15327232,
+            "seconds": 0.8390013,
+            "peak_bytes": 15323136,
             "code": 0
           },
           {
-            "seconds": 0.8074294,
-            "peak_bytes": 15343616,
+            "seconds": 0.8593592,
+            "peak_bytes": 15306752,
             "code": 0
           }
         ],
-        "median_seconds": 0.8074294,
-        "peak_bytes": 15343616
+        "median_seconds": 0.8390013,
+        "peak_bytes": 15323136
       }
     },
     {
@@ -1063,23 +1063,23 @@
           "measurement": {
             "runs": [
               {
-                "seconds": 0.0122463,
-                "peak_bytes": 11874304,
+                "seconds": 0.2798083,
+                "peak_bytes": 11526144,
                 "code": 0
               },
               {
-                "seconds": 0.0126461,
-                "peak_bytes": 11837440,
+                "seconds": 0.0399863,
+                "peak_bytes": 11337728,
                 "code": 0
               },
               {
-                "seconds": 0.0115355,
-                "peak_bytes": 11882496,
+                "seconds": 0.0572085,
+                "peak_bytes": 11407360,
                 "code": 0
               }
             ],
-            "median_seconds": 0.0122463,
-            "peak_bytes": 11882496
+            "median_seconds": 0.0572085,
+            "peak_bytes": 11526144
           }
         },
         {
@@ -1090,46 +1090,46 @@
           "measurement": {
             "runs": [
               {
-                "seconds": 0.0114638,
-                "peak_bytes": 11845632,
+                "seconds": 0.0397566,
+                "peak_bytes": 11304960,
                 "code": 0
               },
               {
-                "seconds": 0.0583785,
-                "peak_bytes": 11882496,
+                "seconds": 0.0575342,
+                "peak_bytes": 11333632,
                 "code": 0
               },
               {
-                "seconds": 0.0110707,
-                "peak_bytes": 11882496,
+                "seconds": 0.0756043,
+                "peak_bytes": 11309056,
                 "code": 0
               }
             ],
-            "median_seconds": 0.0114638,
-            "peak_bytes": 11882496
+            "median_seconds": 0.0575342,
+            "peak_bytes": 11333632
           }
         }
       ],
       "delphi": {
         "runs": [
           {
-            "seconds": 0.8145505,
-            "peak_bytes": 15163392,
+            "seconds": 0.9192673,
+            "peak_bytes": 15106048,
             "code": 0
           },
           {
-            "seconds": 0.8059485,
-            "peak_bytes": 15167488,
+            "seconds": 0.95107,
+            "peak_bytes": 15101952,
             "code": 0
           },
           {
-            "seconds": 0.8111532,
-            "peak_bytes": 15167488,
+            "seconds": 0.9863401,
+            "peak_bytes": 15114240,
             "code": 0
           }
         ],
-        "median_seconds": 0.8111532,
-        "peak_bytes": 15167488
+        "median_seconds": 0.95107,
+        "peak_bytes": 15114240
       }
     },
     {
@@ -1146,23 +1146,23 @@
           "measurement": {
             "runs": [
               {
-                "seconds": 0.0132852,
-                "peak_bytes": 12464128,
+                "seconds": 0.0656491,
+                "peak_bytes": 11636736,
                 "code": 0
               },
               {
-                "seconds": 0.0118344,
-                "peak_bytes": 12480512,
+                "seconds": 0.0692047,
+                "peak_bytes": 11685888,
                 "code": 0
               },
               {
-                "seconds": 0.0118792,
-                "peak_bytes": 12791808,
+                "seconds": 0.103261,
+                "peak_bytes": 11833344,
                 "code": 0
               }
             ],
-            "median_seconds": 0.0118792,
-            "peak_bytes": 12791808
+            "median_seconds": 0.0692047,
+            "peak_bytes": 11833344
           }
         },
         {
@@ -1173,46 +1173,46 @@
           "measurement": {
             "runs": [
               {
-                "seconds": 0.0123448,
-                "peak_bytes": 12226560,
+                "seconds": 0.0886074,
+                "peak_bytes": 11763712,
                 "code": 0
               },
               {
-                "seconds": 0.0128527,
-                "peak_bytes": 12177408,
+                "seconds": 0.1225243,
+                "peak_bytes": 12005376,
                 "code": 0
               },
               {
-                "seconds": 0.0117323,
-                "peak_bytes": 12972032,
+                "seconds": 0.0526046,
+                "peak_bytes": 11710464,
                 "code": 0
               }
             ],
-            "median_seconds": 0.0123448,
-            "peak_bytes": 12972032
+            "median_seconds": 0.0886074,
+            "peak_bytes": 12005376
           }
         }
       ],
       "delphi": {
         "runs": [
           {
-            "seconds": 0.6655868,
-            "peak_bytes": 16547840,
+            "seconds": 0.8279817,
+            "peak_bytes": 16531456,
             "code": 0
           },
           {
-            "seconds": 0.6654272,
-            "peak_bytes": 16666624,
+            "seconds": 0.8265571,
+            "peak_bytes": 15822848,
             "code": 0
           },
           {
-            "seconds": 0.663997,
-            "peak_bytes": 16248832,
+            "seconds": 0.6836402,
+            "peak_bytes": 16461824,
             "code": 0
           }
         ],
-        "median_seconds": 0.6654272,
-        "peak_bytes": 16666624
+        "median_seconds": 0.8265571,
+        "peak_bytes": 16531456
       }
     },
     {
@@ -1229,23 +1229,23 @@
           "measurement": {
             "runs": [
               {
-                "seconds": 0.0084327,
-                "peak_bytes": 10625024,
-                "code": 2
+                "seconds": 0.0757074,
+                "peak_bytes": 11415552,
+                "code": 0
               },
               {
-                "seconds": 0.0083866,
-                "peak_bytes": 10592256,
-                "code": 2
+                "seconds": 0.0493362,
+                "peak_bytes": 11624448,
+                "code": 0
               },
               {
-                "seconds": 0.0077197,
-                "peak_bytes": 10579968,
-                "code": 2
+                "seconds": 0.0908024,
+                "peak_bytes": 11649024,
+                "code": 0
               }
             ],
-            "median_seconds": 0.0083866,
-            "peak_bytes": 10625024
+            "median_seconds": 0.0757074,
+            "peak_bytes": 11649024
           }
         },
         {
@@ -1256,48 +1256,48 @@
           "measurement": {
             "runs": [
               {
-                "seconds": 0.0091861,
-                "peak_bytes": 10637312,
-                "code": 2
+                "seconds": 0.0294115,
+                "peak_bytes": 12349440,
+                "code": 0
               },
               {
-                "seconds": 0.0090874,
-                "peak_bytes": 10641408,
-                "code": 2
+                "seconds": 0.0273536,
+                "peak_bytes": 12046336,
+                "code": 0
               },
               {
-                "seconds": 0.007752,
-                "peak_bytes": 10592256,
-                "code": 2
+                "seconds": 0.0362377,
+                "peak_bytes": 11665408,
+                "code": 0
               }
             ],
-            "median_seconds": 0.0090874,
-            "peak_bytes": 10641408
+            "median_seconds": 0.0294115,
+            "peak_bytes": 12349440
           }
         }
       ],
       "delphi": {
         "runs": [
           {
-            "seconds": 0.8096468,
-            "peak_bytes": 15966208,
-            "code": 0
-          },
-          {
-            "seconds": 0.5685769,
+            "seconds": 0.6268318,
             "peak_bytes": 15626240,
             "code": 0
           },
           {
-            "seconds": 0.5694465,
-            "peak_bytes": 15482880,
+            "seconds": 0.9428242,
+            "peak_bytes": 15183872,
+            "code": 0
+          },
+          {
+            "seconds": 0.9941494,
+            "peak_bytes": 15175680,
             "code": 0
           }
         ],
-        "median_seconds": 0.5694465,
-        "peak_bytes": 15966208
+        "median_seconds": 0.9428242,
+        "peak_bytes": 15626240
       }
     }
   ],
-  "notes": "The numbers are provisional: the run shared the machine with other builds, so they are a proof that the runner works and not a baseline. The final numbers are taken with `--final` on a quiet machine and replace this file. The Delphi column of these cases is not the same work as the port's column: the Delphi column is the load of the game master by xDump.exe, which is the plugin with the string tables in its archive; the port's column loads the game master and the DLC, so the two columns are not the same work; the Delphi build has no ten plugin load order in the corpus: the column is the load of the game master alone, so the two columns are not the same work; the Delphi column is the load of Update.esm by xDump.exe, which loads the game master with it; the port's column loads the game master and Update.esm, so the two columns are the same work; the Delphi column is the GUI build in its script mode: it includes the start of the program and the load of the plugins, so it is larger than the reference build alone; the Delphi column is the GUI build in its script mode: it includes the start of the program and the load of the plugins, so it is larger than the conflict scan alone; the Delphi column is the GUI build in its quick auto clean mode: it includes the start of the program, the load of the plugins and the save of the cleaned plugin, so it is larger than the dry run alone; the Delphi column is the GUI build in its quick auto clean mode: it includes the start of the program, the load of the plugins and the save of the cleaned plugin, so it is larger than the dry run alone."
+  "notes": "The numbers are final: the machine was quiet while the run was measured. The Delphi column of these cases is not the same work as the port's column: the Delphi column is the load of the game master by xDump.exe, which is the plugin with the string tables in its archive; the port's column loads the game master and the DLC, so the two columns are not the same work; the Delphi build has no ten plugin load order in the corpus: the column is the load of the game master alone, so the two columns are not the same work; the Delphi column is the load of Update.esm by xDump.exe, which loads the game master with it; the port's column loads the game master and Update.esm, so the two columns are the same work; the Delphi column is the GUI build in its script mode: it includes the start of the program and the load of the plugins, so it is larger than the reference build alone; the Delphi column is the GUI build in its script mode: it includes the start of the program and the load of the plugins, so it is larger than the conflict scan alone; the Delphi column is the GUI build in its quick auto clean mode: it includes the start of the program, the load of the plugins and the save of the cleaned plugin, so it is larger than the dry run alone; the Delphi column is the GUI build in its quick auto clean mode: it includes the start of the program, the load of the plugins and the save of the cleaned plugin, so it is larger than the dry run alone."
 }
