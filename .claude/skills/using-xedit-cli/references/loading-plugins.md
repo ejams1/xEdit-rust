@@ -7,7 +7,7 @@ xedit --game sse --load "<Data>\Skyrim.esm" --load "<Data>\Update.esm" <command>
 xedit --game fo4 --load "<Data>\DLCRobot.esm" <command>
 ```
 
-- `--compare-to <path>` is the navigation tree's "Compare to...": the file at `<path>` loads in the place of the last `--load` plugin, takes its load order slot and is compared with it record by record (`wbFile` with `aCompareTo`, `AddMaster(flCompareTo)`, `fsCompareToHasSameMasters`, `IsCompareToSame`).
+- `--compare-to <path>` is the navigation tree's "Compare to...": the file at `<path>` loads in the place of the last `--load` plugin, takes its load order slot and is compared with it record by record (`wbFile` with `aCompareTo`, `AddMaster(flCompareTo)`, `fsCompareToHasSameMasters`, `IsCompareToSame`). It has to sit in the folder of that plugin, as the GUI copies the chosen file into the data folder. The flag is not global: it belongs to the startup load, before the command (`xedit --game G --compare-to F --load P ...`); `session load --compare-to` names the compare file of the load that command makes instead. It is not editable (a save refuses it as `[TES4:00000000] can not be edited`, as the release does). A record both files hold shows 2 columns where one is the compare load, identical records use the fast `ContentEquals` path (`caNoConflict`, the original `ctMaster`, the compare load `ctIdenticalToMaster`).
 
 It has to sit in the folder of that plugin, as the GUI copies the chosen file into the data folder; it is not editable (a save refuses it as `[TES4:00000000] can not be edited`, as the release does).
 

@@ -391,6 +391,7 @@ pub fn generate_lod_tes4(env: &LodEnv, worldspace: &MainRecordRef, elapsed: &dyn
         let (mut min_x, mut max_x) = (f32::MAX, -f32::MAX);
         let (mut min_y, mut max_y) = (f32::MAX, -f32::MAX);
         for refr in &refrs {
+            super::check_cancel()?;
             let Some(base) = refr
                 .get_record_by_signature(Signature::new(b"NAME"))
                 .and_then(|name| name.get_links_to())
@@ -1732,6 +1733,7 @@ pub fn generate_lod_fo4(env: &LodEnv, worldspace: &MainRecordRef) -> LodResult<(
             bgsm: StringList::sorted(),
         };
         for refr in &refrs {
+            super::check_cancel()?;
             state.process_reference(refr, 0, 0, false);
         }
         if state.refs.is_empty() {

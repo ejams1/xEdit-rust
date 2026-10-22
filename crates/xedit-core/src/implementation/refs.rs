@@ -772,6 +772,11 @@ pub fn build_or_load_refs(files: &[Arc<FileImpl>], only_load: bool) -> Result<Ve
     let mut to_build: Vec<(usize, Option<std::path::PathBuf>)> = Vec::new();
     let mut loaded: Vec<(usize, Vec<refcache::CachedRecord>)> = Vec::new();
     for (index, file) in files.iter().enumerate() {
+        // `BuildOrLoadRef` of the loader polls `wbForceTerminate` once per
+        // file: the operation stops at the next file once it was cancelled.
+        if crate::interface::wait_form::is_canceled() {
+            return Err("cancelled: the operation was cancelled".to_owned());
+        }
         let states = file.get_file_states();
         let modified = file.base.has_state(ElementState::esModified);
         let internal = file.base.has_state(ElementState::esInternalModified);

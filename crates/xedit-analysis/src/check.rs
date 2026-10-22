@@ -83,6 +83,10 @@ pub struct CheckReport {
     /// The lines the GUI adds to its message log, without the times and
     /// without the elapsed time of the last line.
     pub messages: Vec<String>,
+    /// Whether the check was cancelled: the `Abort` of `GeneralProgress`
+    /// that the wait form's cancel raised, which stopped the walk. The
+    /// report holds what was checked until then.
+    pub cancelled: bool,
 }
 
 impl CheckReport {
@@ -272,6 +276,18 @@ struct Walker<'a> {
 
 impl Walker<'_> {
     fn visit(&mut self, element: &ElementRef) {
+        if self.linear.report.cancelled {
+            return;
+        }
+        // `CheckForErrorsLinear` reports every element that has an error
+        // and ticks for the others, and `GeneralProgress` turns that into
+        // an `Abort` once the user cancelled. The check is before the
+        // element is looked at, so a cancelled check stops at the next
+        // element and the report holds what was found until then.
+        if xedit_core::interface::wait_form::poll_cancel().is_err() {
+            self.linear.report.cancelled = true;
+            return;
+        }
         let element_impl = element.as_element_impl();
         if let Some(record) = element_impl.and_then(ElementImpl::main_record_impl) {
             // `recSkipped`: a record the load skipped for its duplicate
@@ -310,7 +326,7 @@ impl Walker<'_> {
 
     /// Checks the records collected so far and adds their errors in order.
     fn flush(&mut self) {
-        if self.pending.is_empty() {
+        if self.pending.is_empty() || self.linear.report.cancelled {
             return;
         }
         let records = std::mem::take(&mut self.pending);
@@ -350,10 +366,19 @@ pub fn check_for_errors(targets: &[CheckTarget]) -> CheckReport {
     let mut report = CheckReport::default();
     report.messages.push("Start: Checking for Errors".to_owned());
     for target in targets {
+        if report.cancelled {
+            break;
+        }
         report
             .messages
             .push(format!("Checking for Errors in {}", element_display_name(target)));
         check_for_errors_linear(target, &mut report);
+    }
+    if report.cancelled {
+        // `PerformLongAction` reports the abort of the action and raises it
+        // again, so the check of the GUI ends there.
+        report.messages.push("Aborted: Checking for Errors".to_owned());
+        return report;
     }
     report.messages.push(format!(
         "Done: Checking for Errors, Processed Records: {}, Errors found: {}",

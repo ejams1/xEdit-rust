@@ -20,7 +20,7 @@ Overall: 7 of 10 phases merged.
 | 4 | Analysis and tool modes | `[##########]` 10 of 10 steps | Merged (PR #13) |
 | 5 | Archives, assets and LOD | `[##########]` | Merged (PR #14) |
 | 6 | Scripting | `[##########]` 11 of 11 steps | Merged (PR #20) |
-| 7 | GUI | `[..........]` | Not started |
+| 7 | GUI | `[########..]` 8 of 9 steps | In progress, draft PR #101 |
 | 8 | Performance | `[..........]` | Not started |
 | 9 | Release and cutover | `[..........]` | Not started |
 
@@ -61,6 +61,9 @@ The progress bar above counts merged phases of [docs/PLAN.md](docs/PLAN.md); it 
 - **Analysis**: conflict status and the view (`xedit conflicts`, `xedit compare`, `--compare-to`), the reference index and its cache files (`xedit refs`), the filter of the navigation tree with its presets and the scripted filter (`xedit filter`), the quick auto clean and its steps with the Cleaning options (`xedit clean`), mod groups and their presets (`xedit modgroups`), the merged patch (`xedit patch merged`), and the tool modes and legacy switches of `xeInit.pas` (`xedit tool modes|run`, and the command line a mod manager passes to xEdit).
 - **Assets**: BSA and BA2 archives (`xedit archive`, the `bsarch` binary, BSArchPro's XBox target), NIF, KF, materials and the other asset formats (`xedit assets`), Sniff's 50 batch operations (`xedit sniff`, the `sniff` binary) and LODGen (`xedit lodgen`).
 - **Scripting**: the JvInterpreter Pascal of the `Edit Scripts` folder (`xedit script list|check|run` and `script.resume`), with the script API of `xEditAPI.pas` and the JVCL units bound, and a headless VCL object model that runs forms and dialogs from recorded answers.
+- **GUI shell and view** (phase 7 steps 1 and 3): `cargo run -p xedit-gui` (binary `xedit-gui`) opens the main form of `xeMainForm` with the per-game window title and icon, the hamburger `pmuMain` menu and the form's popup menus, the navigation pane with its splitter, the tabbed view with the Messages page and the View tab's record grid (one column per record version or per selected record, definition-ordered rows with their folds, the conflict colours and in-place edits through `elements.set`, with the `pmuView`/`pmuViewHeader` items and the view filter), the status bar with the load gauge, and the game select -> module select -> load startup flow, all through the same command registry as the CLI. The dialogs of steps 5-7 are in place (see below).
+- **GUI record panes** (phase 7 step 4): the Referenced By list with its filter strip and `pmuRefBy`, the Messages log with its Clear/Save selected/Autoscroll menu, the Information memo verbatim from the DFM, the localization view of the selected record, and the Weapon/Armor/Ammo spreadsheets with the DFM's columns and per-game element mapping (shown for Oblivion and Skyrim only), plus the element detail editor of `xeElementDetailForm`'s rules (value types, flags checkboxes, FormID conversion) with every commit through `elements set`. The rows come from `refs get`, `localization get` and `records list/get`; the dialogs of steps 5-7 are in place (see below).
+- **GUI dialogs and tools** (phase 7 steps 5, 6 and 7): the selection dialogs (the game, module, file, filter options, mod group and FormID pickers), the viewers and editors (the log analyzer, the script editor with the Pascal highlighter, the element viewer with its page tabs, the rich text viewer with its table of contents, the localization editor, the developer message and the tip), and the modal tools (the options form with its General, View, Cleaning, UI Settings and UI Theme pages, the LOD generator, the legend, the edit warning, the worldspace cell details and the wait form's progress and cancel). Long operations run on a worker thread through the job runner, so the window keeps repainting and Cancel works.
 - **One command layer**: the same typed commands drive the CLI, `xedit batch`, `xedit serve` (JSON-RPC over stdio or a named pipe) and `xedit mcp` (MCP tools), with `--json` output and `xedit schema`; a test checks that the three list the same commands. The skills under `.claude/skills` describe how to use them.
 
 ### Verified against the release
@@ -120,7 +123,7 @@ The port reproduces upstream's quirks (`UPSTREAM-QUIRK` in the code). An upstrea
 - **The scale the cleaning's scale step leaves behind** (parity #35): the release keeps a scale where the port removes it, data the release loses; the clean case is `known-difference` for that file.
 - **`Find textures` prints an uninitialised `XBOX` flag on BA2 DDS archives**: the release's local record in `ProcessFile` is never assigned in the BA2 DDS branch, and its report prints `XBOX` from whatever the stack holds (every line of a DDS-type BA2 archive on the corpus). The port prints nothing. No saved bytes differ; the log of `sniff --case find-textures` and `-filter` counts as a log difference on those archives, never a failing output.
 
-Later phases (GUI, performance, release) have not started.
+Later phases (performance and release) have not started; the GUI is at phase 7 step 9 of 9, the gate (the shell, the view and the dialogs above; the ledger is closed and the menus are walked through against the 4.1.5q build, see `docs/history/phase-7.md`). The parity harness rerun at the phase tip covered the `dump`, `check` and `clean` steps; its `saves` step and the rest of the chain continue separately.
 
 ## License
 

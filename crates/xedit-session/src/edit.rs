@@ -52,6 +52,11 @@ fn edit_failed(error: String) -> CommandError {
     CommandError::new("edit_failed", error)
 }
 
+/// The `Abort` of `GeneralProgress` once the wait form was cancelled.
+fn cancelled() -> CommandError {
+    CommandError::new("cancelled", "the operation was cancelled")
+}
+
 /// `elements.add`: the request.
 #[derive(Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -902,6 +907,11 @@ fn files_mark_modified_headers(
     session.mode()?;
     let mut files = Vec::new();
     for file in &session.files {
+        // UPSTREAM-QUIRK: the release's item marks the headers of every
+        // plugin in a loop without a progress message, so the check is the
+        // port's own. It is before the header is marked, so a cancelled
+        // command leaves the files after it as they were.
+        xedit_core::interface::wait_form::poll_cancel().map_err(|_| cancelled())?;
         if !with_edit_allowed(|| file.get_is_editable()) || file.get_is_not_plugin() {
             continue;
         }
@@ -1124,6 +1134,11 @@ fn elements_copy_to_records(
     });
     let mut targets = Vec::new();
     for name in &request.targets {
+        // UPSTREAM-QUIRK: the release's item copies the element into every
+        // selected record in a loop without a progress message, so the check
+        // is the port's own. It is before the target is changed, so a
+        // cancelled command leaves the targets after it as they were.
+        xedit_core::interface::wait_form::poll_cancel().map_err(|_| cancelled())?;
         let Some(target) = target_record(session, form_id, name)? else {
             targets.push(CopyToRecordTarget {
                 file: name.clone(),
@@ -1284,6 +1299,11 @@ fn elements_remove_from_records(
     let form_id = source_record.get_load_order_form_id();
     let mut targets = Vec::new();
     for name in &request.targets {
+        // UPSTREAM-QUIRK: the release's item removes the element from every
+        // selected record in a loop without a progress message, so the check
+        // is the port's own. It is before the element is removed, so a
+        // cancelled command leaves the targets after it as they were.
+        xedit_core::interface::wait_form::poll_cancel().map_err(|_| cancelled())?;
         let Some(target) = target_record(session, form_id, name)? else {
             targets.push(CopyToRecordTarget {
                 file: name.clone(),

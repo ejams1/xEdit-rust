@@ -22,12 +22,97 @@
 
 use std::path::{Path, PathBuf};
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 
 /// The name of the harness's own desktop.
 #[cfg(windows)]
 fn desktop_name() -> String {
     format!("xedit-parity-{}", std::process::id())
+}
+
+/// Opens the desktop `name` of the current window station, creating it when
+/// it does not exist yet.
+///
+/// The screen-check sessions of `cargo xtask gui` name their desktop and
+/// reopen it from a later process. Windows destroys a desktop when its last
+/// handle closes, even while a program runs on it (the program keeps running
+/// with its windows gone), so the session's helper process holds a handle to
+/// the desktop for the session's whole life.
+#[cfg(windows)]
+pub fn open_or_create_desktop(name: &str) -> Result<windows_sys::Win32::System::StationsAndDesktops::HDESK> {
+    use windows_sys::Win32::Foundation::GENERIC_ALL;
+    use windows_sys::Win32::System::StationsAndDesktops::{
+        CreateDesktopW, DESKTOP_CREATEWINDOW, DESKTOP_ENUMERATE, DESKTOP_READOBJECTS, DESKTOP_WRITEOBJECTS,
+        OpenDesktopW,
+    };
+    let wide: Vec<u16> = name.encode_utf16().chain([0]).collect();
+    // The rights the screen-check commands need: enumerate the windows,
+    // read their objects (the menu of one is a user object of its desktop)
+    // and post to them. The keeper also asks for every right, because a
+    // desktop is destroyed with its last handle: a handle with only these
+    // rights has to count as a reference as well, and GENERIC_ALL is what
+    // the creator got.
+    let access = GENERIC_ALL;
+    // SAFETY: the name is NUL-terminated, and the other arguments are null.
+    let existing = unsafe { OpenDesktopW(wide.as_ptr(), 0, 0, access) };
+    let existing = if existing.is_null() {
+        // SAFETY: as above.
+        unsafe {
+            OpenDesktopW(
+                wide.as_ptr(),
+                0,
+                0,
+                DESKTOP_ENUMERATE | DESKTOP_READOBJECTS | DESKTOP_CREATEWINDOW | DESKTOP_WRITEOBJECTS,
+            )
+        }
+    } else {
+        existing
+    };
+    if !existing.is_null() {
+        return Ok(existing);
+    }
+    // SAFETY: as above; a null security descriptor gives the creator access.
+    let created = unsafe {
+        CreateDesktopW(
+            wide.as_ptr(),
+            std::ptr::null(),
+            std::ptr::null(),
+            0,
+            GENERIC_ALL,
+            std::ptr::null(),
+        )
+    };
+    if created.is_null() {
+        return Err(std::io::Error::last_os_error()).with_context(|| format!("opening or creating the desktop {name}"));
+    }
+    Ok(created)
+}
+
+/// The name of the desktop object `handle` refers to, for diagnostics.
+#[cfg(windows)]
+pub fn desktop_object_name(handle: windows_sys::Win32::System::StationsAndDesktops::HDESK) -> String {
+    use windows_sys::Win32::System::StationsAndDesktops::{GetUserObjectInformationW, UOI_NAME};
+    if handle.is_null() {
+        return String::new();
+    }
+    let mut buffer = [0u16; 256];
+    let mut len = 0u32;
+    // SAFETY: the handle is the caller's; the buffer is valid.
+    unsafe {
+        if GetUserObjectInformationW(handle, UOI_NAME, buffer.as_mut_ptr() as *mut _, 512, &raw mut len) == 0 {
+            return String::new();
+        }
+    }
+    let units = len as usize / 2;
+    String::from_utf16_lossy(&buffer[..units.saturating_sub(1).min(buffer.len())])
+}
+
+/// Closes a desktop handle of [`open_or_create_desktop`].
+#[cfg(windows)]
+pub fn close_desktop(handle: windows_sys::Win32::System::StationsAndDesktops::HDESK) {
+    // SAFETY: the handle was opened or created by the caller and is not used
+    // afterwards.
+    unsafe { windows_sys::Win32::System::StationsAndDesktops::CloseDesktop(handle) };
 }
 
 /// The handle of the harness's own desktop, created at the first call and
@@ -67,6 +152,15 @@ pub struct HiddenCommand {
     /// autopacking mode starts no work on a desktop nothing displays
     /// (parity #41; the finding was parity #38's).
     visible: bool,
+    /// Start the program on this named desktop, shown. The desktop is not
+    /// the one the user sees, so nothing reaches the screen, and a shown
+    /// window paints on its own desktop for the screen-check tooling to
+    /// capture (`cargo xtask gui`).
+    desktop: Option<String>,
+    /// Start the program without a console of its own, detached from the
+    /// caller's console, so that it outlives the command that started it
+    /// (the desktop keeper of `cargo xtask gui`). No handle is inherited.
+    detached: bool,
 }
 
 impl HiddenCommand {
@@ -77,12 +171,29 @@ impl HiddenCommand {
             dir: None,
             env: Vec::new(),
             visible: false,
+            desktop: None,
+            detached: false,
         }
     }
 
     /// Starts the program on the caller's desktop, shown.
     pub fn visible(mut self) -> HiddenCommand {
         self.visible = true;
+        self
+    }
+
+    /// Starts the program detached from the caller's console, hidden.
+    pub fn detached(mut self) -> HiddenCommand {
+        self.detached = true;
+        self
+    }
+
+    /// Starts the program on the named desktop, shown ([`open_or_create_desktop`]
+    /// must have created it first). The desktop is not displayed, so no
+    /// window reaches the user's screen; a window that shows still paints on
+    /// its own desktop, which `PrintWindow` captures.
+    pub fn on_desktop(mut self, name: impl Into<String>) -> HiddenCommand {
+        self.desktop = Some(name.into());
         self
     }
 
@@ -151,7 +262,8 @@ impl HiddenCommand {
     pub fn spawn(&self) -> Result<HiddenChild> {
         use std::os::windows::ffi::OsStrExt;
         use windows_sys::Win32::System::Threading::{
-            CREATE_UNICODE_ENVIRONMENT, CreateProcessW, PROCESS_INFORMATION, STARTF_USESHOWWINDOW, STARTUPINFOW,
+            CREATE_UNICODE_ENVIRONMENT, CreateProcessW, DETACHED_PROCESS, PROCESS_INFORMATION, STARTF_USESHOWWINDOW,
+            STARTF_USESTDHANDLES, STARTUPINFOW,
         };
         use windows_sys::Win32::UI::WindowsAndMessaging::SW_HIDE;
 
@@ -160,27 +272,55 @@ impl HiddenCommand {
         let mut line = wide(std::ffi::OsStr::new(&self.command_line()));
         let dir = self.dir.as_ref().map(|dir| wide(dir.as_os_str()));
         let mut environment = self.environment_block();
-        let mut desktop_name: Vec<u16> = desktop_name().encode_utf16().chain([0]).collect();
+        // The desktop the child starts on: the named one of a screen-check
+        // session (shown there), else the harness's own (hidden). The name
+        // buffer has to live until `CreateProcessW` returns.
+        let mut desktop_name: Option<Vec<u16>> = match (&self.desktop, self.visible) {
+            (Some(name), _) => Some(name.encode_utf16().chain([0]).collect()),
+            (None, false) if desktop().is_some() => Some(desktop_name().encode_utf16().chain([0]).collect()),
+            _ => None,
+        };
         // SAFETY: plain data structures, zero is a valid value of each field.
         let mut startup: STARTUPINFOW = unsafe { std::mem::zeroed() };
         startup.cb = size_of::<STARTUPINFOW>() as u32;
-        if self.visible {
+        if self.visible || self.desktop.is_some() {
+            // Shown. On a session's own desktop nothing reaches the user's
+            // screen, and a shown window paints for `PrintWindow`.
             startup.dwFlags = 0;
         } else {
             startup.dwFlags = STARTF_USESHOWWINDOW;
             startup.wShowWindow = SW_HIDE as u16;
-            if desktop().is_some() {
-                startup.lpDesktop = desktop_name.as_mut_ptr();
-            }
+        }
+        if let Some(name) = desktop_name.as_mut() {
+            startup.lpDesktop = name.as_mut_ptr();
+        }
+        if self.desktop.is_some() || self.detached {
+            // The program inherits the session's desktop handle, and it must
+            // not inherit the caller's stdio with it: a caller that captures
+            // the command's output reads until every writer closes, and a
+            // program that outlives the command would hold that pipe open
+            // (or, once the caller closes it, fail every write to stdout or
+            // stderr). A detached program gets null handles for the same
+            // reason, even when it keeps the caller's desktop.
+            startup.dwFlags |= STARTF_USESTDHANDLES;
+            startup.hStdInput = std::ptr::null_mut();
+            startup.hStdOutput = std::ptr::null_mut();
+            startup.hStdError = std::ptr::null_mut();
         }
         let mut info: PROCESS_INFORMATION = unsafe { std::mem::zeroed() };
         // A Unicode environment block needs `CREATE_UNICODE_ENVIRONMENT`,
-        // without which `CreateProcessW` refuses the call.
-        let flags = if environment.is_empty() {
+        // without which `CreateProcessW` refuses the call. A program of a
+        // screen-check session is detached from the caller's console: the
+        // session's program has to outlive the command that started it, and
+        // a console child is ended when the console closes.
+        let mut flags = if environment.is_empty() {
             0
         } else {
             CREATE_UNICODE_ENVIRONMENT
         };
+        if self.desktop.is_some() || self.detached {
+            flags |= DETACHED_PROCESS;
+        }
         // SAFETY: the strings are NUL-terminated and outlive the call; the
         // command line buffer is mutable as the function requires.
         let ok = unsafe {

@@ -92,7 +92,8 @@ pub fn set_language_on_load(language: Option<&str>) {
 
 /// The `--compare-to` file of the next load (the GUI's "Compare to..."): the
 /// file loads as a compare load of the last plugin of `--load`, takes its
-/// load order, and is compared with it record by record.
+/// load order, and is compared with it record by record. A `compare_to` of
+/// [`SessionLoadRequest`] takes precedence over it (`Session::load`).
 static COMPARE_TO_ON_LOAD: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
 
 /// Sets the path of the compare load of the sessions loaded afterwards.
@@ -115,8 +116,10 @@ pub(crate) fn refuse_in_translate_mode(command: &str) -> Result<(), CommandError
 
 impl Session {
     /// Loads the plugins of a game in the order given, with their masters.
+    /// The compare load is the `--compare-to` file of the process, if one
+    /// was set (`set_compare_to_on_load`).
     pub fn load(game: &str, plugins: &[String]) -> Result<Self, String> {
-        Self::load_with(game, |_mode| Ok(plugins.to_vec()))
+        Self::load_with_compare_to(game, None, |_mode| Ok(plugins.to_vec()))
     }
 
     /// Port of the module selection of a legacy command line: the plugins
@@ -125,12 +128,31 @@ impl Session {
     /// `wbLoadModules` needs its tables (the game master, the official DLC,
     /// the Creation Club list, `Plugins.txt`).
     pub fn load_legacy(game: &str) -> Result<Self, String> {
-        Self::load_with(game, |_mode| crate::tool_modes::legacy_load_order())
+        Self::load_with_compare_to(game, None, |_mode| crate::tool_modes::legacy_load_order())
+    }
+
+    /// [`Self::load`] with the compare file of the request: a compare file
+    /// the request names takes precedence over the `--compare-to` file of
+    /// the process (which is consumed then).
+    fn load_with_compare_to(
+        game: &str,
+        compare_to: Option<String>,
+        plugins: impl FnOnce(GameMode) -> Result<Vec<String>, String>,
+    ) -> Result<Self, String> {
+        // The process's `--compare-to` file is consumed either way: the
+        // request's own compare file takes precedence (upstream has no
+        // compare-to switch; the GUI's dialog is per load).
+        let pending = COMPARE_TO_ON_LOAD.lock().unwrap().take();
+        Self::load_with(game, compare_to.or(pending), plugins)
     }
 
     /// [`Self::load`] with the plugin list computed once the game is set
     /// up (`wbLoadModules`).
-    fn load_with(game: &str, plugins: impl FnOnce(GameMode) -> Result<Vec<String>, String>) -> Result<Self, String> {
+    fn load_with(
+        game: &str,
+        compare_to: Option<String>,
+        plugins: impl FnOnce(GameMode) -> Result<Vec<String>, String>,
+    ) -> Result<Self, String> {
         // `xeInit.pas` sets `wbStartTime := Now` right before the loader
         // thread starts: the `[mm:ss]` prefixes of the message log count
         // from the load's start.
@@ -237,6 +259,11 @@ impl Session {
         clear_files();
         let mut files = Vec::new();
         for path in &plugins {
+            // `TLoaderThread.Execute` polls `wbForceTerminate` while it adds
+            // the modules: a cancelled load stops at the next plugin.
+            if xedit_core::interface::wait_form::is_canceled() {
+                return Err("cancelled: the operation was cancelled".to_owned());
+            }
             // Each plugin takes the next free slot after its masters.
             let file = wb_file(path, i32::MAX, FileStates::empty()).map_err(|error| error.to_string())?;
             files.push(file);
@@ -247,7 +274,7 @@ impl Session {
         // file into the data folder, the compare load has to sit in the
         // folder of that plugin, so that the masters resolve to the same
         // files.
-        if let Some(path) = COMPARE_TO_ON_LOAD.lock().unwrap().take() {
+        if let Some(path) = compare_to {
             let compare_to = files
                 .last()
                 .ok_or_else(|| "--compare-to needs a plugin loaded with --load".to_owned())?;
@@ -294,12 +321,17 @@ impl Session {
     pub(crate) fn file(&self, name: Option<&str>) -> Result<Arc<FileImpl>, CommandError> {
         self.mode()?;
         match name {
-            Some(name) => self
+            Some(name) => match self
                 .files
                 .iter()
                 .find(|file| file.get_name().eq_ignore_ascii_case(name))
-                .cloned()
-                .ok_or_else(|| CommandError::new("unknown_file", format!("{name} is not loaded"))),
+            {
+                Some(file) => Ok(file.clone()),
+                // The masters of the loaded plugins are kept by the file
+                // registry, not in the session's own list (`files.list`
+                // shows them), and a command names them like any plugin.
+                None => crate::formids::any_file(name),
+            },
             None => match self.files.as_slice() {
                 [file] => Ok(file.clone()),
                 [] => Err(CommandError::new("no_session", "no plugin loaded: pass --load")),
@@ -338,7 +370,7 @@ pub(crate) fn parse_form_id(text: &str) -> Result<FormID, CommandError> {
 }
 
 /// `session.info`.
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 pub struct SessionInfo {
     /// Game tag as given to `--game`.
     pub game: String,
@@ -348,26 +380,54 @@ pub struct SessionInfo {
     pub data_path: String,
     /// Names of the loaded plugins in load order.
     pub files: Vec<String>,
+    /// The load order file id of each file of `files`: the high byte of the
+    /// load order FormID of its records. `-1` for the hardcoded game
+    /// executable, which holds no slot of the load order. A file's header
+    /// record (`_File.Elements[0]`) is the record with a local FormID of
+    /// zero under its id (`record_by_load_order_form_id`).
+    pub file_ids: Vec<i32>,
 }
 
 fn session_info(session: &mut Session, _: NoParams) -> Result<SessionInfo, CommandError> {
     let mode = session.mode()?;
+    let loaded = all_files(session);
+    let file_ids = loaded
+        .iter()
+        .map(|file| {
+            if file
+                .get_file_states()
+                .contains(xedit_core::interface::types::FileState::fsIsHardcoded)
+            {
+                -1
+            } else {
+                i32::from(file.get_load_order_file_id().full_slot())
+            }
+        })
+        .collect();
     Ok(SessionInfo {
         game: game_tag(mode).to_owned(),
         game_name: game_name(),
         data_path: data_path(),
-        files: all_files(session).iter().map(|file| file.get_name()).collect(),
+        files: loaded.iter().map(|file| file.get_name()).collect(),
+        file_ids,
     })
 }
 
 /// `session.load`: the request.
-#[derive(Deserialize, JsonSchema)]
+#[derive(Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct SessionLoadRequest {
     /// The plugins to load, in load order, as full paths (a name resolves
     /// against the data folder of the session). Masters load with them, as
     /// they do for `--load`.
     pub plugins: Vec<String>,
+    /// Load this file as a compare load of the last plugin, as the
+    /// navigation tree's "Compare to..." does (`mniNavCompareToClick`,
+    /// `wbFileCompareTo`): it takes that plugin's load order and is
+    /// compared with it record by record. It has to sit in the folder of
+    /// that plugin (the GUI copies a chosen file there first). Takes
+    /// precedence over the process's `--compare-to`.
+    pub compare_to: Option<String>,
     /// The tool mode whose load settings apply, as `xeInit.pas` applies them
     /// before anything loads (`quickclean`, `quickautoclean`,
     /// `checkforerrors`, `translate`, `edit`). The settings of the mode are
@@ -385,17 +445,21 @@ pub struct SessionLoadRequest {
 }
 
 /// `session.load`: the response.
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 pub struct SessionLoadResponse {
     /// The game tag of the session, which a load does not change.
     pub game: String,
     /// The tool mode the load applies, when `mode` named one.
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub mode: Option<String>,
     pub dry_run: bool,
     /// The plugins the load would put in the session, in load order, with
     /// their masters.
     pub files: Vec<String>,
+    /// The compare file the load used (the request's, or the process's
+    /// `--compare-to`), the file the last plugin is compared with.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub compare_to: Option<String>,
     /// The plugins whose unsaved changes the reload discards.
     pub discarded: Vec<String>,
     /// The load settings the mode applies, as `xeInit.pas` sets them
@@ -403,7 +467,7 @@ pub struct SessionLoadResponse {
     /// `wbSimpleRecords` and the rest).
     pub settings: Vec<String>,
     /// What the load does not do in this build.
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub note: Option<String>,
 }
 
@@ -494,6 +558,7 @@ fn session_load(session: &mut Session, request: SessionLoadRequest) -> Result<Se
                         .map_or_else(|| path.clone(), |name| name.to_string_lossy().into_owned())
                 })
                 .collect(),
+            compare_to: request.compare_to.clone(),
             discarded,
             settings,
             note: None,
@@ -510,19 +575,28 @@ fn session_load(session: &mut Session, request: SessionLoadRequest) -> Result<Se
     crate::commands::set_translate_on_load(translate);
     crate::commands::set_check_on_load(check);
     let edit_allowed = session.edit_allowed;
-    let reloaded = match Session::load(crate::dump::game_tag(game), &request.plugins) {
-        Ok(reloaded) => reloaded,
-        Err(message) => {
-            // `Session::load` clears the process-wide file list before it
-            // loads, so a failed load leaves the session with no plugin at
-            // all; the caller has to load again.
-            session.files.clear();
-            return Err(CommandError::new(
-                "load_failed",
-                format!("{message} (the session has no plugins now)"),
-            ));
-        }
-    };
+    let reloaded =
+        match Session::load_with_compare_to(crate::dump::game_tag(game), request.compare_to.clone(), |_mode| {
+            Ok(request.plugins.clone())
+        }) {
+            Ok(reloaded) => reloaded,
+            Err(message) => {
+                // `Session::load` clears the process-wide file list before it
+                // loads, so a failed load leaves the session with no plugin at
+                // all; the caller has to load again.
+                session.files.clear();
+                if message.starts_with("cancelled") {
+                    return Err(CommandError::new(
+                        "cancelled",
+                        "the operation was cancelled (the session has no plugins now)",
+                    ));
+                }
+                return Err(CommandError::new(
+                    "load_failed",
+                    format!("{message} (the session has no plugins now)"),
+                ));
+            }
+        };
     let files: Vec<String> = reloaded.files.iter().map(|file| file.get_name()).collect();
     *session = reloaded;
     session.edit_allowed = edit_allowed;
@@ -531,6 +605,7 @@ fn session_load(session: &mut Session, request: SessionLoadRequest) -> Result<Se
         mode: request.mode.clone(),
         dry_run: false,
         files,
+        compare_to: request.compare_to,
         discarded,
         settings,
         note: None,
@@ -699,7 +774,7 @@ fn records_set_hidden(
 }
 
 /// A record in a list.
-#[derive(Serialize, JsonSchema)]
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct RecordSummary {
     /// Load order FormID as eight hexadecimal digits.
     pub form_id: String,
@@ -721,7 +796,7 @@ pub(crate) fn summary_of(record: &MainRecordRef) -> RecordSummary {
     }
 }
 
-#[derive(Deserialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct RecordsListRequest {
     /// Name of the loaded plugin; the only loaded plugin when omitted.
@@ -735,7 +810,7 @@ pub struct RecordsListRequest {
     pub limit: Option<usize>,
 }
 
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 pub struct RecordList {
     pub records: Vec<RecordSummary>,
     /// Records that match before `offset` and `limit` apply.
@@ -798,7 +873,7 @@ fn records_find(session: &mut Session, request: RecordsFindRequest) -> Result<Re
     Ok(RecordList { records, total })
 }
 
-#[derive(Deserialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct RecordsGetRequest {
     /// Load order FormID as hexadecimal digits.
@@ -810,21 +885,32 @@ pub struct RecordsGetRequest {
 }
 
 /// An element of the tree.
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema, Clone, Debug)]
 pub struct ElementNode {
     pub name: String,
     /// Name as xEdit displays it, when it differs from `name`.
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub display_name: Option<String>,
+    /// Signature of a record or subrecord (`IwbHasSignature.Signature`),
+    /// absent for the elements without one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub signature: Option<String>,
     /// Value as xEdit displays it; empty for a container.
     pub value: String,
     /// Summary of a container, as the `[S]:` text of a dump.
-    #[serde(skip_serializing_if = "String::is_empty")]
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub summary: String,
     /// Native value: number, boolean, string or bytes as hexadecimal.
-    #[serde(skip_serializing_if = "Value::is_null")]
+    #[serde(default, skip_serializing_if = "Value::is_null")]
     pub native: Value,
-    #[serde(skip_serializing_if = "Vec::is_empty")]
+    /// Whether the element can be edited (`Element.IsEditable`).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub editable: bool,
+    /// The text the in-place editor starts with (`Element.EditValue`); the
+    /// display value for the elements without one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub edit_value: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub children: Vec<ElementNode>,
 }
 
@@ -872,15 +958,23 @@ pub(crate) fn node_of(element: &ElementRef, depth: Option<usize>) -> ElementNode
     };
     ElementNode {
         display_name: (display_name != name).then_some(display_name),
+        signature: element.get_has_signature().map(|signature| signature.to_string()),
         name,
         value,
         summary,
         native: native_json(element.get_native_value()),
+        // `Element.IsEditable` and `Element.EditValue`: the in-place
+        // editors of the view and of the spreadsheets use them.
+        editable: element.get_is_editable(),
+        edit_value: {
+            let edit_value = element.get_edit_value();
+            (!edit_value.is_empty()).then_some(edit_value)
+        },
         children,
     }
 }
 
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema, Clone, Debug)]
 pub struct RecordDetail {
     #[serde(flatten)]
     pub summary: RecordSummary,
@@ -900,7 +994,7 @@ fn records_get(session: &mut Session, request: RecordsGetRequest) -> Result<Reco
     })
 }
 
-#[derive(Deserialize, JsonSchema)]
+#[derive(Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ElementsGetRequest {
     /// Load order FormID of the record as hexadecimal digits.
@@ -914,7 +1008,7 @@ pub struct ElementsGetRequest {
     pub depth: Option<usize>,
 }
 
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 pub struct ElementDetail {
     /// Full path of the element, in the upstream `FullPath` shape
     /// (`wbImplementation.pas:19641-19652`).
@@ -938,7 +1032,7 @@ fn elements_get(session: &mut Session, request: ElementsGetRequest) -> Result<El
 }
 
 /// `elements.set`: the request.
-#[derive(Deserialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ElementsSetRequest {
     /// Load order FormID of the record as hexadecimal digits.
@@ -960,7 +1054,7 @@ pub struct ElementsSetRequest {
 }
 
 /// `elements.set`: the response.
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 pub struct ElementsSetResponse {
     /// Full path of the element, in the upstream `FullPath` shape
     /// (`wbImplementation.pas:19641-19652`).
@@ -1011,9 +1105,12 @@ fn elements_set(session: &mut Session, request: ElementsSetRequest) -> Result<El
             ElementNode {
                 name: String::new(),
                 display_name: None,
+                signature: None,
                 value: String::new(),
                 summary: String::new(),
                 native: Value::Null,
+                editable: false,
+                edit_value: None,
                 children: Vec::new(),
             }
         }

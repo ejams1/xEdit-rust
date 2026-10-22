@@ -36,8 +36,8 @@ struct Cli {
     #[arg(long, global = true)]
     load: Vec<String>,
 
-    /// Load this file as a compare load of the last --load plugin, as the navigation tree's "Compare to..." does: it takes that plugin's load order and is compared with it record by record. The file has to sit in the folder of that plugin (the GUI copies it into the data folder).
-    #[arg(long, global = true)]
+    /// Load this file as a compare load of the last --load plugin, as the navigation tree's "Compare to..." does: it takes that plugin's load order and is compared with it record by record. The file has to sit in the folder of that plugin (the GUI copies it into the data folder). The flag of the startup load, before the command; `session load --compare-to` names the compare file of the load that command makes.
+    #[arg(long)]
     compare_to: Option<String>,
     /// The definitions the session loads, plugins (the default) or saves, as xEdit's -plugins and -saves. A saves session reads no plugin and has the save definitions ready for `tool run export --source saves`.
     #[arg(long, global = true)]
@@ -331,10 +331,20 @@ enum Action {
         #[command(subcommand)]
         action: ModgroupsAction,
     },
-    /// The selection presets of the module selection dialog: modules.presets, modules.preset_load, modules.preset_save, modules.preset_delete.
+    /// The modules of the module selection dialog and the mod group editor, and the selection presets of the module selection dialog.
     Modules {
         #[command(subcommand)]
         action: ModulesAction,
+    },
+    /// The record and base-record signatures of the game's definitions (the filter options dialog's lists).
+    Signatures {
+        #[command(subcommand)]
+        action: SignaturesAction,
+    },
+    /// xEdit's settings file (xEdit.ini): the GUI's window, splitter, colour and view keys.
+    Settings {
+        #[command(subcommand)]
+        action: SettingsAction,
     },
     /// String tables of localized plugins (the localization editor), the language, and localizing or delocalizing a plugin.
     Localization {
@@ -775,6 +785,34 @@ enum ScriptAction {
         /// The scripts folder (xEdit's -S:). Default: the XEDIT_SCRIPTS environment variable, else the oracle's Edit Scripts (XEDIT_ORACLE_DIR), else the Edit Scripts folder beside xedit.exe.
         #[arg(long)]
         scripts: Option<String>,
+        /// List the scripts of the subdirectories too, as the form's "Include scripts from subdirectories" does; the names are relative to the folder, with a backslash between the parts.
+        #[arg(long)]
+        subdirectories: bool,
+    },
+    /// Read a script and print its text (script.read), as the script editor opens it.
+    Read {
+        /// Path of the script, or a name below the scripts folder.
+        file: String,
+        /// The scripts folder (xEdit's -S:), which a relative script name resolves against. Default: the XEDIT_SCRIPTS environment variable, else the oracle's Edit Scripts.
+        #[arg(long)]
+        scripts: Option<String>,
+    },
+    /// Write a script (script.save), as the script editor's Save does: the tabs become two spaces, the previous file is copied to a timestamped .backup name, and the text is written with CR LF line ends.
+    Save {
+        /// Path of the script, or a name below the scripts folder.
+        file: String,
+        /// The text to write. Pass it as an argument, or read it from a file with --from.
+        #[arg(long = "text", value_name = "TEXT")]
+        text: Option<String>,
+        /// Read the text from this file instead of --text.
+        #[arg(long = "from", value_name = "FILE")]
+        from: Option<String>,
+        /// The scripts folder (xEdit's -S:), which a relative script name resolves against. Default: the XEDIT_SCRIPTS environment variable, else the oracle's Edit Scripts.
+        #[arg(long)]
+        scripts: Option<String>,
+        /// Report the target, write nothing.
+        #[arg(long)]
+        dry_run: bool,
     },
     /// Compile the given scripts and the units they use (script.check, read-only); exit 0 when all compile, non-zero listing each failure as `file:line: message` (with --json the failures as JSON).
     Check {
@@ -1070,6 +1108,9 @@ enum SessionAction {
         /// The tool mode whose load settings apply: quickclean, quickautoclean, checkforerrors, translate, edit. None by default.
         #[arg(long)]
         mode: Option<String>,
+        /// Load this file as a compare load of the last --plugin, as the tree's "Compare to..." does (the request's compare_to; it wins over the global --compare-to). It has to sit in the folder of that plugin.
+        #[arg(long)]
+        compare_to: Option<String>,
         /// Load although a loaded plugin has unsaved changes, which the load discards.
         #[arg(long)]
         force: bool,
@@ -1107,6 +1148,17 @@ enum FilesAction {
         #[arg(long)]
         name: Option<String>,
         /// Report the patch file, write and load nothing.
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Copy a file into the data folder and load it in the place of a plugin, at that plugin's load order, as a compare load (files.compare_to, Compare to...). Needs --edit unless --dry-run.
+    CompareTo {
+        /// The loaded plugin the file is compared to.
+        file: String,
+        /// The file to compare to, on the disk.
+        #[arg(long)]
+        path: String,
+        /// Report the copy the command would make, load nothing.
         #[arg(long)]
         dry_run: bool,
     },
@@ -1759,6 +1811,18 @@ enum ModgroupsAction {
 
 #[derive(Subcommand)]
 enum ModulesAction {
+    /// List the modules the module selection dialog and the mod group editor's Insert list show, with their flags, masters and file facts (modules.list).
+    List {
+        /// List every module of the data folder, including the game's executable and a plugin whose header did not read (the dialogs list only the valid ones).
+        #[arg(long)]
+        all: bool,
+        /// Keep only the active modules.
+        #[arg(long)]
+        active: bool,
+        /// Keep only the modules whose masters are in the data folder.
+        #[arg(long)]
+        masters_present: bool,
+    },
     /// List the presets of the module selection dialog and the filtered modules the current selection would save (modules.presets).
     Presets,
     /// Load a selection preset and report the filtered modules (modules.preset_load).
@@ -1797,6 +1861,49 @@ enum ModulesAction {
         #[arg(long, conflicts_with = "confirm")]
         no_confirm: bool,
         /// Report what would be deleted, but write nothing.
+        #[arg(long)]
+        dry_run: bool,
+    },
+}
+
+#[derive(Subcommand)]
+enum SignaturesAction {
+    /// List the record and base-record signatures of the game's definitions (signatures.list; the filter options dialog's two lists, wbRecordDefs).
+    List,
+}
+
+#[derive(Subcommand)]
+enum SettingsAction {
+    /// Read xEdit's settings file: the section names, a section's keys or one key (settings.get).
+    Get {
+        /// The section, such as Options, View, Nav, ColorConflictThis, ColorConflictAll or a form's name (frmMain); omit for the section names.
+        #[arg(long)]
+        section: Option<String>,
+        /// The key; omit for every key of the section.
+        #[arg(long)]
+        key: Option<String>,
+        /// The TMemIniFile type the value is read with: string (the default), integer, bool, float or double.
+        #[arg(long = "type")]
+        value_type: Option<String>,
+        /// The value of a missing section or key, read with --type as --value is (a string with no type).
+        #[arg(long)]
+        default: Option<String>,
+    },
+    /// Write one value of xEdit's settings file, as the GUI writes its window, splitter, colour and view keys (settings.set). Needs --edit unless --dry-run.
+    Set {
+        /// The section, such as frmMain, ColorConflictThis or View; a missing one is added.
+        #[arg(long)]
+        section: String,
+        /// The key to write.
+        #[arg(long)]
+        key: String,
+        /// The value: a string, a number or a boolean.
+        #[arg(long)]
+        value: String,
+        /// The TMemIniFile type it is written with: string (the default), integer, bool, float or double. A bool takes true/false or 1/0, an integer or a float a decimal number.
+        #[arg(long = "type")]
+        value_type: Option<String>,
+        /// Report the change, but write nothing.
         #[arg(long)]
         dry_run: bool,
     },
@@ -2635,6 +2742,51 @@ fn script_answers(answer: Vec<String>, answers: Option<String>) -> Result<Value,
     Ok(Value::Array(stored))
 }
 
+/// The text of a `script save`: the `--text` argument, or the content of the
+/// `--from` file. One of the two is required.
+fn script_text(text: Option<String>, from: Option<String>) -> Result<String, CommandError> {
+    match (text, from) {
+        (Some(text), None) => Ok(text),
+        (None, Some(path)) => {
+            std::fs::read_to_string(&path).map_err(|error| CommandError::new("io", format!("--from {path}: {error}")))
+        }
+        (Some(_), Some(_)) => Err(CommandError::new(
+            "invalid_params",
+            "give the text as --text or in a file with --from, not both",
+        )),
+        (None, None) => Err(CommandError::new(
+            "invalid_params",
+            "give the text as --text or in a file with --from",
+        )),
+    }
+}
+
+/// A `settings get`/`settings set` value as the JSON the request carries:
+/// the text as a string, or the number or boolean its type names.
+fn setting_value(text: String, value_type: Option<&str>) -> Result<Value, CommandError> {
+    match value_type.map(str::to_ascii_lowercase).as_deref() {
+        Some("bool" | "boolean") => match text.to_ascii_lowercase().as_str() {
+            "true" | "1" => Ok(Value::from(true)),
+            "false" | "0" => Ok(Value::from(false)),
+            _ => Err(CommandError::new(
+                "invalid_params",
+                format!("{text} is not a boolean: use true or false (1 or 0)"),
+            )),
+        },
+        Some("integer" | "int") => text
+            .parse::<i64>()
+            .map(Value::from)
+            .map_err(|_| CommandError::new("invalid_params", format!("{text} is not an integer"))),
+        Some("float" | "double") => text
+            .parse::<f64>()
+            .ok()
+            .and_then(serde_json::Number::from_f64)
+            .map(Value::Number)
+            .ok_or_else(|| CommandError::new("invalid_params", format!("{text} is not a number"))),
+        _ => Ok(Value::String(text)),
+    }
+}
+
 fn command_of(action: Action) -> Result<(String, Value), CommandError> {
     Ok(match action {
         Action::Dump { .. }
@@ -2653,12 +2805,16 @@ fn command_of(action: Action) -> Result<(String, Value), CommandError> {
                 SessionAction::Load {
                     plugin,
                     mode,
+                    compare_to,
                     force,
                     dry_run,
                 },
         } => (
             "session.load".to_owned(),
-            json!({ "plugins": plugin, "mode": mode, "force": force, "dry_run": dry_run }),
+            json!({
+                "plugins": plugin, "mode": mode, "compare_to": compare_to,
+                "force": force, "dry_run": dry_run
+            }),
         ),
         Action::Files {
             action: FilesAction::List { name_filter, regex },
@@ -2680,6 +2836,12 @@ fn command_of(action: Action) -> Result<(String, Value), CommandError> {
         } => (
             "files.create_delta_patch".to_owned(),
             json!({ "file": file, "newer": newer, "name": name, "dry_run": dry_run }),
+        ),
+        Action::Files {
+            action: FilesAction::CompareTo { file, path, dry_run },
+        } => (
+            "files.compare_to".to_owned(),
+            json!({ "file": file, "path": path, "dry_run": dry_run }),
         ),
         Action::Files {
             action:
@@ -2986,6 +3148,14 @@ fn command_of(action: Action) -> Result<(String, Value), CommandError> {
             ),
         },
         Action::Modules { action } => match action {
+            ModulesAction::List {
+                all,
+                active,
+                masters_present,
+            } => (
+                "modules.list".to_owned(),
+                json!({ "valid": !all, "active": active, "masters_present": masters_present }),
+            ),
             ModulesAction::Presets => ("modules.presets".to_owned(), json!({})),
             ModulesAction::PresetLoad { preset } => ("modules.preset_load".to_owned(), json!({ "preset": preset })),
             ModulesAction::PresetSave {
@@ -3018,6 +3188,42 @@ fn command_of(action: Action) -> Result<(String, Value), CommandError> {
                     "dry_run": dry_run
                 }),
             ),
+        },
+        Action::Signatures {
+            action: SignaturesAction::List,
+        } => ("signatures.list".to_owned(), json!({})),
+        Action::Settings { action } => match action {
+            SettingsAction::Get {
+                section,
+                key,
+                value_type,
+                default,
+            } => {
+                let default = match default {
+                    Some(text) => Some(setting_value(text, value_type.as_deref())?),
+                    None => None,
+                };
+                (
+                    "settings.get".to_owned(),
+                    json!({ "section": section, "key": key, "value_type": value_type, "default": default }),
+                )
+            }
+            SettingsAction::Set {
+                section,
+                key,
+                value,
+                value_type,
+                dry_run,
+            } => {
+                let value = setting_value(value, value_type.as_deref())?;
+                (
+                    "settings.set".to_owned(),
+                    json!({
+                        "section": section, "key": key, "value": value,
+                        "value_type": value_type, "dry_run": dry_run
+                    }),
+                )
+            }
         },
         Action::Bsarchpro { action } => match action {
             BsarchproAction::ListLoad { list } => ("bsarchpro.list_load".to_owned(), json!({ "list": list })),
@@ -3654,7 +3860,28 @@ fn command_of(action: Action) -> Result<(String, Value), CommandError> {
             )
         }
         Action::Script { action } => match action {
-            ScriptAction::List { scripts } => ("script.list".to_owned(), json!({ "scripts": scripts })),
+            ScriptAction::List {
+                scripts,
+                subdirectories,
+            } => (
+                "script.list".to_owned(),
+                json!({ "scripts": scripts, "subdirectories": subdirectories }),
+            ),
+            ScriptAction::Read { file, scripts } => {
+                ("script.read".to_owned(), json!({ "file": file, "scripts": scripts }))
+            }
+            ScriptAction::Save {
+                file,
+                text,
+                from,
+                scripts,
+                dry_run,
+            } => (
+                "script.save".to_owned(),
+                json!({
+                    "file": file, "text": script_text(text, from)?, "scripts": scripts, "dry_run": dry_run
+                }),
+            ),
             ScriptAction::Check { files } => ("script.check".to_owned(), json!({ "files": files })),
             ScriptAction::Run {
                 file,

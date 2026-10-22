@@ -16,6 +16,7 @@ pub mod bsarchpro;
 pub mod check;
 pub mod clean;
 pub mod commands;
+pub mod compare_to;
 pub mod conflicts;
 pub mod delta_patch;
 pub mod dump;
@@ -51,6 +52,7 @@ pub mod script_rtl;
 pub mod script_strings;
 pub(crate) mod script_units;
 pub mod script_vcl;
+pub mod settings;
 pub mod sniff;
 pub mod tool_modes;
 
@@ -161,6 +163,7 @@ impl Registry {
         let mut registry = Self::default();
         registry.register("system.version", "Report the xEdit version.", false, version);
         commands::register(&mut registry);
+        compare_to::register(&mut registry);
         conflicts::register(&mut registry);
         edit::register(&mut registry);
         assign::register(&mut registry);
@@ -182,6 +185,7 @@ impl Registry {
         check::register(&mut registry);
         modgroups::register(&mut registry);
         module_select::register(&mut registry);
+        settings::register(&mut registry);
         bsarchpro::register(&mut registry);
         localization::register(&mut registry);
         new_file::register(&mut registry);
@@ -275,11 +279,11 @@ impl Registry {
 }
 
 /// A request without parameters.
-#[derive(Deserialize, JsonSchema)]
+#[derive(Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct NoParams {}
 
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 pub struct Version {
     /// Version of xEdit-rust.
     pub version: String,

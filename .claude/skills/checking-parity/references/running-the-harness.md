@@ -37,3 +37,15 @@ An oracle assertion failure while loading (`EAssertionFailed` in `wbImplementati
 The oracle is slow on large masters: it writes about 80 MB of dump per minute and needs more than ten minutes for `Fallout4.esm`. `--oracle-only` fills the cache without running the port.
 
 The port output is compared while the port writes it; it is kept only for a file that differs, as `.port.txt.zst` up to the first difference (`zstd -dc` reads it), next to the port's log `.port.log`.
+
+## The full chain
+
+The full corpus rerun is a sequence of modes, each with its own report in `target/parity/<mode>.json`:
+
+```
+dump, check, clean, saves, roundtrip, oracle-save, oracle-edit, conflicts, refs, modgroups, merged, filter, tool-modes, clean-scenarios, resources, discovery, lodgen, bsarch
+```
+
+Run them from a script that logs the exit code and the summary line of each mode, and keep the logs outside the repository. Two modes need care on a live save folder: `saves` needs `--oracle-timeout` (the oracle can crash on a save and then never exit, see [running the oracle](running-the-oracle.md)), and `bsarch` is the long one (1472 archives).
+
+The phase-7 chain of 2026-10-21 covered `dump`, `check` and `clean` at the phase tip; its `saves` step and the rest of the chain were continued separately, and `docs/history/phase-7.md` says which numbers belong to which tip.

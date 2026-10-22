@@ -41,5 +41,6 @@ Read [running the oracle](references/running-the-oracle.md) before invoking a GU
 - [Checks](references/checks.md)
 - [Investigating a difference](references/investigating-a-difference.md)
 - [Quirks found and reproduced](references/quirks-found-and-reproduced.md)
+- [Screen checks](references/screen-checks.md)
 
 - [Background and compatibility scope](references/background.md)

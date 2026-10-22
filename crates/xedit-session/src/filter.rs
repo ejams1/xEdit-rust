@@ -5,9 +5,10 @@
 // Ported from xEdit: xEdit/xeFilterOptionsForm.pas (FormCreate,
 // FilterListPresets, FilterLoadPreset, FilterSavePreset,
 // FilterHasPresetChanged, btnFilterDelClick, mniSelectionClick,
-// cmbPresetSelect, the RecordSignatures and BaseRecordSignatures properties)
-// and xEdit/xeMainForm.pas (mniNavFilterApplyClick, mniNavFilterRemoveClick,
-// ReInitTree)
+// cmbPresetSelect, the RecordSignatures and BaseRecordSignatures properties,
+// the wbRecordDefs loop that fills clbRecordSignatures and
+// clbBaseRecordSignatures) and xEdit/xeMainForm.pas (mniNavFilterApplyClick,
+// mniNavFilterRemoveClick, ReInitTree)
 
 //! `filter.apply`, `filter.remove` and the filter presets of the options
 //! dialog (`TfrmFilterOptions`).
@@ -57,7 +58,7 @@ fn io_error(error: std::io::Error, path: &Path) -> CommandError {
 
 /// The options of the dialog as the request gives them: `None` is a
 /// checkbox that is off, `Some` one that is on with that value.
-#[derive(Serialize, Deserialize, JsonSchema, Clone, Default)]
+#[derive(Serialize, Deserialize, JsonSchema, Clone, Default, PartialEq, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct FilterRequestOptions {
     /// `cbConflictAll` with `clbConflictAll`: keep the records whose
@@ -224,7 +225,7 @@ impl FilterRequestOptions {
 }
 
 /// `filter.apply`: the request.
-#[derive(Deserialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct FilterApplyRequest {
     /// The files of the tree in load order; every loaded file when omitted
@@ -266,7 +267,7 @@ pub struct FilterApplyRequest {
 }
 
 /// One file of the response.
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 pub struct FilterFile {
     pub name: String,
     pub load_order: i32,
@@ -280,7 +281,7 @@ pub struct FilterFile {
 }
 
 /// `filter.apply`: the response.
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 pub struct FilterApplyResponse {
     /// The options the filter ran with, after the sets and the signatures
     /// were resolved (`FilterPreset` after the dialog).
@@ -303,11 +304,31 @@ pub struct FilterApplyResponse {
     pub messages: Vec<String>,
     /// The records the tree still shows, per file, when `list_records` was
     /// asked for: the record names in the order of the tree.
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub records: Option<Vec<String>>,
     /// The activated mod groups.
-    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub mod_groups: Vec<String>,
+    /// The elements of the nodes the filtered tree keeps, in tree order, as
+    /// `Element::get_element_id` numbers them. The identities are
+    /// process-local and serve an in-process client (the GUI, which
+    /// installs the filtered tree); a client that serialises the response
+    /// between processes cannot use them.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub nodes: Vec<usize>,
+    /// The conflict status the filter left on its nodes (`NodeData.ConflictAll`
+    /// and `ConflictThis` after `InheritStateFromChildren`), by element id.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub node_conflicts: Vec<FilterNodeConflict>,
+}
+
+/// The status of one node of the filtered tree.
+#[derive(Serialize, Deserialize, JsonSchema)]
+pub struct FilterNodeConflict {
+    /// The element id of the node's element (`Element::get_element_id`).
+    pub element: usize,
+    pub conflict_all: ConflictAllName,
+    pub conflict_this: ConflictThisName,
 }
 
 fn default_options() -> FilterRequestOptions {
@@ -510,20 +531,38 @@ pub(crate) fn filter_apply_scripted(
     let mut tree = NavTree::new(&tree_files);
     let mut report = apply_filter_scripted(&mut tree, &options, &files, active.filter.clone(), script_filter)
         .map_err(FilterApplyFailure::Scripted)?;
+    // `GeneralProgress` aborted the walk: the handler stops here and the
+    // tree keeps the nodes the walk reached.
+    if report.cancelled {
+        return Err(FilterApplyFailure::Command(cancelled()));
+    }
     report.files.retain(|file| {
         tree_files
             .iter()
             .any(|kept| kept.get_name().eq_ignore_ascii_case(&file.name))
     });
-    let nodes = tree
+    let nodes: Vec<xedit_core::interface::ElementRef> = tree
         .roots()
         .into_iter()
         .flat_map(|root| node_elements_below(&tree, root))
         .collect();
     let conflicts = node_conflicts(&tree);
     let walk = filtered_walk(&mut tree);
+    let mut response = response_of(&tree, &options, request.list_records, report, &active);
+    // The filtered tree for the in-process client (the GUI installs it as
+    // the Conflicted and Filter views); a script run leaves them out of its
+    // response, which the run serialises between processes.
+    response.nodes = nodes.iter().map(|element| element.get_element_id()).collect();
+    response.node_conflicts = conflicts
+        .iter()
+        .map(|(element, all, this)| FilterNodeConflict {
+            element: *element,
+            conflict_all: (*all).into(),
+            conflict_this: (*this).into(),
+        })
+        .collect();
     Ok(AppliedFilter {
-        response: response_of(&tree, &options, request.list_records, report, &active),
+        response,
         nodes,
         conflicts,
         walk,
@@ -566,6 +605,8 @@ fn response_of(
         messages,
         records,
         mod_groups: active.names.clone(),
+        nodes: Vec::new(),
+        node_conflicts: Vec::new(),
     }
 }
 
@@ -573,13 +614,18 @@ fn edit_failed(message: String) -> CommandError {
     CommandError::new("edit_failed", message)
 }
 
+/// The `Abort` of `GeneralProgress` once the wait form was cancelled.
+fn cancelled() -> CommandError {
+    CommandError::new("cancelled", "the operation was cancelled")
+}
+
 /// `filter.remove`: the request.
-#[derive(Deserialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct FilterRemoveRequest {}
 
 /// `filter.remove`: the response.
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 pub struct FilterRemoveResponse {
     /// The tree without a filter: one node per loaded file (`ReInitTree`).
     pub files: Vec<FilterFile>,
@@ -616,12 +662,12 @@ pub(crate) fn filter_remove(
 }
 
 /// `filter.presets`: the request.
-#[derive(Deserialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct FilterPresetsRequest {}
 
 /// `filter.presets`: the response.
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 pub struct FilterPresetsResponse {
     /// The names of the `[Filter <name>]` sections, sorted, with the empty
     /// name first (`FilterListPresets`).
@@ -728,7 +774,7 @@ fn pascal_enum_name<T: PascalEnum + std::fmt::Debug>(value: T) -> String {
 }
 
 /// `filter.preset.save`: the request.
-#[derive(Deserialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct FilterPresetSaveRequest {
     /// The name of the preset to write; the empty name is the defaults
@@ -744,7 +790,7 @@ pub struct FilterPresetSaveRequest {
 }
 
 /// `filter.preset.save`: the response.
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 pub struct FilterPresetSaveResponse {
     pub name: String,
     pub settings: String,
@@ -893,7 +939,7 @@ fn write_preset(ini: &mut MemIniFile, name: &str, options: &FilterOptions) {
 }
 
 /// `filter.preset.delete`: the request.
-#[derive(Deserialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct FilterPresetDeleteRequest {
     /// The name of the preset to remove; the empty name is the defaults
@@ -905,7 +951,7 @@ pub struct FilterPresetDeleteRequest {
 }
 
 /// `filter.preset.delete`: the response.
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 pub struct FilterPresetDeleteResponse {
     pub name: String,
     pub section: String,
@@ -938,7 +984,7 @@ fn filter_preset_delete(
 }
 
 /// `refs.build_reachable`: the request.
-#[derive(Deserialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct BuildReachableRequest {
     /// Build the references of the files that have none first
@@ -952,7 +998,7 @@ fn default_true() -> bool {
 }
 
 /// `refs.build_reachable`: the response.
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 pub struct BuildReachableResponse {
     /// `ReachableBuild` of the session.
     pub reachable_build: bool,
@@ -1003,7 +1049,82 @@ fn refs_build_reachable(
     })
 }
 
+/// One entry of the dialog's signature lists: `DefaultSignature + ' - ' +
+/// GetName` as the list holds it, with the parts.
+#[derive(Serialize, Deserialize, JsonSchema)]
+pub struct SignatureEntry {
+    /// `DefaultSignature`: the signature of the record as text (`WEAP`).
+    pub signature: String,
+    /// `GetName`: the name of the record definition (`Weapon`).
+    pub name: String,
+    /// The entry as the list holds it, `SIGNATURE - Name`.
+    pub text: String,
+    /// `ReferenceSignatureCount`: the reference records that can have this
+    /// record as their base. The base-record list holds the entries above 0.
+    pub reference_signature_count: i32,
+}
+
+/// `signatures.list`: the response.
+#[derive(Serialize, Deserialize, JsonSchema)]
+pub struct SignaturesListResponse {
+    /// `clbRecordSignatures`: every record definition of the game,
+    /// `SIGNATURE - Name`, sorted as the list sorts them.
+    pub records: Vec<SignatureEntry>,
+    /// `clbBaseRecordSignatures`: the definitions whose
+    /// `ReferenceSignatureCount` is above 0 (a record that a reference can
+    /// name as its base), in the same shape and order.
+    pub base_records: Vec<SignatureEntry>,
+}
+
+/// `signatures.list`: the signatures of the record definitions of the
+/// active game (`wbRecordDefs`), the two lists `TfrmFilterOptions.FormCreate`
+/// fills (`clbRecordSignatures` and `clbBaseRecordSignatures`).
+#[derive(Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct SignaturesListRequest {}
+
+fn signatures_list(session: &mut Session, _: SignaturesListRequest) -> Result<SignaturesListResponse, CommandError> {
+    use xedit_core::interface::{NamedDef, SignatureDef, record_defs};
+    session.mode()?;
+    let mut entries: Vec<SignatureEntry> = record_defs()
+        .iter()
+        .map(|(_, def)| {
+            let signature = def.get_default_signature().to_string();
+            let name = def.get_name().to_owned();
+            SignatureEntry {
+                text: format!("{signature} - {name}"),
+                signature,
+                name,
+                reference_signature_count: def.get_reference_signature_count(),
+            }
+        })
+        .collect();
+    // `clbRecordSignatures.Sorted := True`: by the text, without regard to
+    // case (the signature prefix alone tells two entries apart).
+    entries.sort_by(|a, b| xedit_loadorder::mod_groups::compare_text(&a.text, &b.text));
+    let base_records = entries
+        .iter()
+        .filter(|entry| entry.reference_signature_count > 0)
+        .map(|entry| SignatureEntry {
+            signature: entry.signature.clone(),
+            name: entry.name.clone(),
+            text: entry.text.clone(),
+            reference_signature_count: entry.reference_signature_count,
+        })
+        .collect();
+    Ok(SignaturesListResponse {
+        records: entries,
+        base_records,
+    })
+}
+
 pub fn register(registry: &mut Registry) {
+    registry.register(
+        "signatures.list",
+        "List the record and base-record signatures of the game's definitions (wbRecordDefs), the two lists of the filter options dialog.",
+        false,
+        signatures_list,
+    );
     registry.register(
         "filter.apply",
         "Apply a filter to the navigation tree of the loaded files (mniNavFilterApplyClick, with the options of TfrmFilterOptions in the request or in a preset of the settings file) and report the nodes it left.",

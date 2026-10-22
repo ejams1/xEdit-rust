@@ -20,11 +20,13 @@ use std::sync::atomic::Ordering;
 use std::sync::{Arc, RwLock, Weak};
 
 use crate::interface::def::Def;
-use crate::interface::element::{Container, Element, ElementRef, File, MainRecord};
+use crate::interface::element::{Container, Element, ElementRef, File, MainRecord, MainRecordRef};
 use crate::interface::form_id::FormID;
 use crate::interface::globals::{
-    GameMode, cell_size_factor, edit_allowed, fill_inoa, fill_inom, game_mode, is_internal_edit,
-    size_of_main_record_struct, sort_sub_records, vwd_as_quest_children, wb_get_group_order,
+    GameMode, cell_size_factor, edit_allowed, fill_inoa, fill_inom, game_mode,
+    has_get_cell_details_for_worldspace_callback, has_get_form_id_callback, is_internal_edit,
+    size_of_main_record_struct, sort_sub_records, vwd_as_quest_children, wb_get_cell_details_for_worldspace,
+    wb_get_form_id, wb_get_group_order,
 };
 use crate::interface::misc::{EditError, Variant};
 use crate::interface::sub_record_group::RecordDef;
@@ -335,10 +337,40 @@ impl GroupRecordImpl {
                     }
                 }
                 None => {
-                    // The editor asks for the cell here
-                    // (`wbGetCellDetailsForWorldspace`); without a user the
-                    // add needs the parameters, as a silent add does.
-                    return Err("To add a Worldspace CELL silently, parameters must be specified: CELL[P] for persistent world cell or CELL[x,y] for temporary cell".to_owned());
+                    // `if aSilent then raise ... ; if not
+                    // wbGetCellDetailsForWorldspace(GetChildrenOf,
+                    // Persistent, GridCell) then Exit;`.
+                    if silent {
+                        return Err("To add a Worldspace CELL silently, parameters must be specified: CELL[P] for persistent world cell or CELL[x,y] for temporary cell".to_owned());
+                    }
+                    let world = self
+                        .children_of()
+                        .ok_or_else(|| "Can't find MainRecord for group".to_owned())?;
+                    if world.get_signature() != Signature::new(b"WRLD") {
+                        return Err(format!("Expected WRLD record, but found: {}", world.get_signature()));
+                    }
+                    let world_ref: MainRecordRef = world.clone();
+                    match wb_get_cell_details_for_worldspace(&world_ref) {
+                        Some((world_persistent, x, y)) => {
+                            persistent = world_persistent;
+                            if persistent {
+                                // `if Persistent then begin GridCell.x := 0;
+                                // GridCell.y := 0; end;`.
+                                grid_cell = (0, 0);
+                            } else {
+                                grid_cell = (x, y);
+                            }
+                        }
+                        // The dialog was cancelled: upstream `Exit` with no
+                        // record.
+                        None if has_get_cell_details_for_worldspace_callback() => return Ok(None),
+                        // No callback is installed: the headless default,
+                        // which is today's error (the add needs the
+                        // parameters, as a silent add does).
+                        None => {
+                            return Err("To add a Worldspace CELL silently, parameters must be specified: CELL[P] for persistent world cell or CELL[x,y] for temporary cell".to_owned());
+                        }
+                    }
                 }
             }
             let world = self
@@ -366,13 +398,32 @@ impl GroupRecordImpl {
                 }
             }
         }
-        // UPSTREAM-QUIRK: a non-silent add asks for the FormID
-        // (`wbGetFormID`); without a user every add takes a new FormID.
-        let _ = silent;
-        let form_id = if is(b"PLYR") {
-            FormID::from_cardinal(0x14)
+        // `if aSilent then if Signature = 'PLYR' then FormID :=
+        // FromCardinal($14) else FormID := _File.NewFormID else FormID :=
+        // _File.LoadOrderFormIDtoFileFormID(wbGetFormID(Self), True); if
+        // FormID.IsNull then Exit;`.
+        //
+        // UPSTREAM-QUIRK: without an installed `wbGetFormIDCallback`
+        // (`has_get_form_id_callback`) there is no user to ask, and the add
+        // takes a new FormID as the silent add does, which is what every
+        // headless front end expects; the GUI installs the prompt
+        // (`GetFormIDCallback`), which also restores `NextObjectID` when the
+        // user cancels, so a refused add leaves the file as it was.
+        let form_id = if silent || !has_get_form_id_callback() {
+            if is(b"PLYR") {
+                FormID::from_cardinal(0x14)
+            } else {
+                file.new_form_id()?
+            }
         } else {
-            file.new_form_id()?
+            let container: ElementRef = self.clone();
+            let given = wb_get_form_id(&container);
+            if given.is_null() {
+                FormID::null()
+            } else {
+                file.load_order_form_id_to_file_form_id(given)
+                    .unwrap_or_else(FormID::null)
+            }
         };
         if form_id.is_null() {
             return Ok(None);

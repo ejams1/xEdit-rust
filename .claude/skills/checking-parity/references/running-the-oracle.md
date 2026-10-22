@@ -27,4 +27,6 @@ Treat the oracle output of a crashed run as valid up to the last complete record
 
 Skyrim SE files dump completely.
 
+**A crashed oracle can hang instead of exit.** On a Fallout 4 save the oracle can raise `EAccessViolation` and then stay alive without ever exiting, spinning on nothing: the harness waits on its output forever and the step never ends. The `xDump.exe` process is then the thing to stop, and `--oracle-timeout <minutes>` is the harness's own remedy: it stops the oracle after that long, keeps its partial output as `<file>.<hash>.oracle.timeout.txt.zst` and compares it as a prefix (`equal-prefix`), which is the same evidence a crashed run gives. Give the saves mode a timeout whenever the corpus is a live save folder, because the folder grows and a new save is a new hang.
+
 The `xEdit-llm` automation build is a secondary oracle for conflict, reference and cleaning results as JSON. It is a fork at a different upstream commit: use it to cross-check, never to close a gate.

@@ -180,6 +180,22 @@ fn marks_the_headers_of_files_without_onam() {
     assert!(modified(&(header as ElementRef)));
 }
 
+#[test]
+fn a_cancelled_run_leaves_the_headers_as_they_were() {
+    let _guard = test_lock();
+    let files = gmst_files();
+    let (registry, mut session) = session(&files);
+    // The user cancelled: the headers are not marked.
+    xedit_core::interface::globals::set_force_terminate(true);
+    let error = registry
+        .call(&mut session, "files.mark_modified_headers", json!({}))
+        .unwrap_err();
+    xedit_core::interface::globals::set_force_terminate(false);
+    assert_eq!(error.code, "cancelled");
+    let header = files[1].header().expect("the header");
+    assert!(!modified(&(header.clone() as ElementRef)));
+}
+
 /// Skyrim: a cell of the plugin with the water current velocities, whose
 /// "Velocity Count" is a union member of a subrecord structure.
 fn cell_files() -> Vec<Arc<FileImpl>> {

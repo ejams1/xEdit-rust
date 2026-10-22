@@ -168,6 +168,31 @@ fn elements_set_changes_and_adds() {
 }
 
 #[test]
+fn a_cancelled_save_leaves_the_output_file_unwritten() {
+    let _guard = test_lock();
+    let file = load("RoundTripCancel.esp", plugin(2));
+    let registry = Registry::standard();
+    let mut session = Session::with_files(GameMode::gmSSE, vec![file]);
+    session.allow_edit(true);
+    // The user cancelled: `GeneralProgress` aborts the save before the
+    // plugin is written.
+    xedit_core::interface::globals::set_force_terminate(true);
+    let error = registry
+        .call(
+            &mut session,
+            "files.save",
+            json!({ "output": "RoundTripCancelOut.esp" }),
+        )
+        .unwrap_err();
+    xedit_core::interface::globals::set_force_terminate(false);
+    assert_eq!(error.code, "cancelled");
+    // The file was not written, and not left half written.
+    let written = std::path::Path::new("RoundTripCancelOut.esp").exists();
+    let _ = std::fs::remove_file("RoundTripCancelOut.esp");
+    assert!(!written, "the cancelled save wrote the file");
+}
+
+#[test]
 fn mutating_command_needs_the_edit_flag() {
     let _guard = test_lock();
     let registry = Registry::standard();

@@ -204,6 +204,21 @@ fn checks_one_record_and_a_light_module() {
 }
 
 #[test]
+fn a_cancelled_check_stops_at_the_next_element() {
+    let _lock = test_lock();
+    let (_files, mut session) = load(("Plugin.esp", plugin_bytes()));
+    // The references are built before the cancel, so the check of the
+    // elements is the one that stops.
+    session.ensure_refs().unwrap();
+    xedit_core::interface::globals::set_force_terminate(true);
+    let error = Registry::standard()
+        .call(&mut session, "files.check", json!({}))
+        .unwrap_err();
+    xedit_core::interface::globals::set_force_terminate(false);
+    assert_eq!(error.code, "cancelled");
+}
+
+#[test]
 fn an_unknown_file_is_an_error() {
     let _lock = test_lock();
     let (_files, mut session) = load(("Plugin.esp", plugin_bytes()));

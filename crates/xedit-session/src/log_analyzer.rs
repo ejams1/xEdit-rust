@@ -33,7 +33,7 @@ pub enum LogType {
 }
 
 /// `logs.analyze`: the request.
-#[derive(Deserialize, JsonSchema)]
+#[derive(Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct LogsAnalyzeRequest {
     /// The log to read.
@@ -49,7 +49,7 @@ pub struct LogsAnalyzeRequest {
 }
 
 /// One form of the log.
-#[derive(Serialize, JsonSchema)]
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct LogEntryResult {
     /// The load order FormID as eight hexadecimal digits.
     pub form_id: String,
@@ -75,7 +75,7 @@ pub struct LogEntryResult {
 }
 
 /// One plugin of the log, the totals of its forms.
-#[derive(Serialize, JsonSchema)]
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct LogPluginResult {
     /// The load order slot of the plugin.
     pub load_order: u8,
@@ -93,7 +93,7 @@ pub struct LogPluginResult {
 }
 
 /// `logs.analyze`: the response.
-#[derive(Serialize, JsonSchema)]
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct LogsAnalyzeResponse {
     /// The log read.
     pub log: LogType,

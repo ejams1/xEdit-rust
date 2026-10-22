@@ -843,6 +843,9 @@ pub struct FilterReport {
     pub messages: Vec<String>,
     /// The records the filter took out of each loaded file, in load order.
     pub files: Vec<FilteredFile>,
+    /// The walk stopped at a cancellation poll point (`GeneralProgress`'s
+    /// `Abort`); the counts are the ones it reached.
+    pub cancelled: bool,
 }
 
 impl FilterReport {
@@ -1571,6 +1574,11 @@ pub fn apply_filter_scripted(
     } else {
         ConflictResults::default()
     };
+    // `GeneralProgress` aborts the handler at the next progress message.
+    if xedit_core::interface::wait_form::poll_cancel().is_err() || results.cancelled {
+        report.cancelled = true;
+        return Ok(report);
+    }
 
     // `TopLevelGroups`: the top level groups of the signatures asked for
     // stay, the others go.
@@ -1607,6 +1615,12 @@ pub fn apply_filter_scripted(
     }
     while let Some(id) = current {
         report.pass1 += 1;
+        // `GeneralProgress`'s abort check (`wbForceTerminate` after the
+        // progress message of the walk).
+        if xedit_core::interface::wait_form::poll_cancel().is_err() {
+            report.cancelled = true;
+            break;
+        }
         // `NextNode := vstNav.GetPrevious(Node)` initialises the next node
         // before the conflict check of this one.
         let mut next = tree.get_previous(id);
@@ -1674,6 +1688,10 @@ pub fn apply_filter_scripted(
                 // the record when there is one.
                 if statuses_as_walked && !results.has_status(&record) {
                     let found = conflict_statuses_of(std::slice::from_ref(&record), files, &conflict_options);
+                    if found.cancelled {
+                        report.cancelled = true;
+                        return Ok(report);
+                    }
                     results.statuses.extend(found.statuses);
                     results.messages.extend(found.messages);
                 }
@@ -1793,6 +1811,10 @@ pub fn apply_filter_scripted(
     }
 
     report.messages = results.messages.clone();
+    if report.cancelled {
+        tree.applied = Some(options.clone());
+        return Ok(report);
+    }
 
     // ----- Pass 2: `CheckFilterNode(True)` on the nodes without children
     // and the records left per file. -----
@@ -1802,6 +1824,10 @@ pub fn apply_filter_scripted(
     while let Some(id) = current {
         let next = tree.get_previous(id);
         report.pass2 += 1;
+        if xedit_core::interface::wait_form::poll_cancel().is_err() {
+            report.cancelled = true;
+            break;
+        }
         let is_file = tree
             .data(id)
             .element

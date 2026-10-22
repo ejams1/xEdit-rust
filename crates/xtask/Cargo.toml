@@ -9,6 +9,7 @@ publish = false
 
 [dependencies]
 anyhow = "1.0.104"
+flate2 = { version = "1.1.10", default-features = false, features = ["zlib"] }
 lz4_flex = "0.14.0"
 regex = "1.13.1"
 serde = { version = "1.0.229", features = ["derive"] }
@@ -20,4 +21,4 @@ xedit-io = { path = "../xedit-io" }
 zstd = "0.14.0"
 
 [target."cfg(windows)".dependencies]
-windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_Security", "Win32_System_DataExchange", "Win32_System_JobObjects", "Win32_System_Memory", "Win32_System_Ole", "Win32_System_Threading", "Win32_System_StationsAndDesktops", "Win32_System_SystemInformation", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_WindowsAndMessaging"] }
+windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_Security", "Win32_Storage_Xps", "Win32_System_DataExchange", "Win32_System_JobObjects", "Win32_System_LibraryLoader", "Win32_System_Memory", "Win32_System_Ole", "Win32_System_Threading", "Win32_System_StationsAndDesktops", "Win32_System_SystemInformation", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_WindowsAndMessaging"] }

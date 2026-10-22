@@ -84,7 +84,7 @@ fn the_oracle_corpus_has_150_scripts() {
         return;
     };
     let folder = std::path::PathBuf::from(oracle).join("Edit Scripts");
-    let scripts = xedit_session::script::list_scripts(&folder).unwrap();
+    let scripts = xedit_session::script::list_scripts(&folder, false).unwrap();
     assert_eq!(scripts.len(), 150);
     assert!(scripts.iter().any(|script| script.name == "xEditAPI.pas"));
     let api = scripts.iter().find(|script| script.name == "xEditAPI.pas").unwrap();
@@ -265,11 +265,65 @@ fn the_loop_runs_initialize_process_and_finalize() {
     assert_eq!(lines[6], "process fOverride [GMST:01000800]");
     assert_eq!(lines[7], "process [TES4:00000000]");
     assert_eq!(lines[8], "finalize");
-    assert_eq!(
-        lines[9],
-        "Done: Applying script \"Loop\", Processed Records: 6, Elapsed Time: 00:00"
+    // The elapsed time is the wall clock of the run, so it is a `hh:mm`
+    // that may cross a minute boundary: the run of a script is not what
+    // the assertion is about, the records it processed are.
+    assert!(
+        lines[9].starts_with("Done: Applying script \"Loop\", Processed Records: 6, Elapsed Time: "),
+        "unexpected summary: {}",
+        lines[9]
+    );
+    let elapsed = lines[9]
+        .rsplit_once("Elapsed Time: ")
+        .map(|(_, time)| time)
+        .unwrap_or("");
+    assert_eq!(elapsed.len(), 5, "unexpected elapsed time: {}", elapsed);
+    assert!(
+        elapsed
+            .chars()
+            .enumerate()
+            .all(|(index, c)| { if index == 2 { c == ':' } else { c.is_ascii_digit() } }),
+        "unexpected elapsed time: {}",
+        elapsed
     );
     assert_eq!(lines[10], "You can close this application now.");
+}
+
+#[test]
+fn a_cancelled_run_stops_the_walk() {
+    let _guard = test_lock();
+    // The user cancelled: the walk stops at its first poll point, the
+    // `wbTick` of `ApplyScriptToSelection`.
+    let folder = script_folder(
+        "cancelled",
+        "Cancelled.pas",
+        "unit Cancelled;
+         function Initialize: Integer;
+         begin
+           AddMessage('initialize');
+         end;
+         function Process(e: IInterface): Integer;
+         begin
+           AddMessage('process ' + Name(e));
+         end;
+         end.
+",
+    );
+    let mut session = open_session();
+    xedit_core::interface::globals::set_force_terminate(true);
+    let params = json!({
+        "file": "Cancelled.pas",
+        "scripts": folder.display().to_string(),
+        "save": false,
+    });
+    let result = Registry::standard()
+        .call(&mut session, "script.run", params)
+        .unwrap_or_else(|error| panic!("{error}"));
+    xedit_core::interface::globals::set_force_terminate(false);
+    assert_eq!(result["aborted"], true);
+    // The walk processed no record: the cancel stopped it before the first
+    // element.
+    assert_eq!(result["processed"], 0);
 }
 
 #[test]
@@ -3085,4 +3139,133 @@ fn the_host_dialogs_take_the_recorded_answers() {
             "checked HostAsk25b.esp"
         ]
     );
+}
+
+#[test]
+fn list_with_subdirectories_reports_the_relative_names() {
+    let dir = temp_dir("list-subdirs");
+    std::fs::write(dir.join("top.pas"), "begin\nend.\n").unwrap();
+    std::fs::create_dir_all(dir.join("sub")).unwrap();
+    std::fs::write(dir.join("sub").join("nested.pas"), "begin\nend.\n").unwrap();
+
+    let result = Registry::standard()
+        .call(
+            &mut Session::default(),
+            "script.list",
+            json!({ "scripts": dir.display().to_string(), "subdirectories": true }),
+        )
+        .unwrap();
+    let names: Vec<&str> = result["scripts"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|script| script["name"].as_str().unwrap())
+        .collect();
+    assert_eq!(names, ["sub\\nested.pas", "top.pas"]);
+}
+
+#[test]
+fn read_reports_the_text_and_the_unit_name() {
+    let dir = temp_dir("read");
+    std::fs::write(dir.join("hello.pas"), "unit hello;\nbegin\nend.\n").unwrap();
+    let result = Registry::standard()
+        .call(
+            &mut Session::default(),
+            "script.read",
+            json!({ "file": "hello.pas", "scripts": dir.display().to_string() }),
+        )
+        .unwrap();
+    assert_eq!(result["text"], "unit hello;\r\nbegin\r\nend.\r\n");
+    assert_eq!(result["script"], "hello");
+    assert_eq!(result["lines"], 3);
+    let error = Registry::standard()
+        .call(
+            &mut Session::default(),
+            "script.read",
+            json!({ "file": "missing.pas", "scripts": dir.display().to_string() }),
+        )
+        .unwrap_err();
+    assert_eq!(error.code, "io");
+}
+
+#[test]
+fn save_replaces_tabs_backs_the_old_file_up_and_writes_crlf() {
+    let dir = temp_dir("save");
+    let target = dir.join("edit.pas");
+    std::fs::write(&target, "old\n").unwrap();
+    let mut session = Session::default();
+    session.allow_edit(true);
+    let result = Registry::standard()
+        .call(
+            &mut session,
+            "script.save",
+            json!({
+                "file": "edit.pas",
+                "text": "begin\n\tx := 1;\nend.",
+                "scripts": dir.display().to_string()
+            }),
+        )
+        .unwrap();
+    assert_eq!(result["written"], true);
+    assert!(result["backup"].as_str().unwrap().contains(".backup."));
+    let written = std::fs::read_to_string(&target).unwrap();
+    assert_eq!(written, "begin\r\n  x := 1;\r\nend.\r\n");
+    // The backup holds the previous text.
+    let backup = std::fs::read_to_string(result["backup"].as_str().unwrap()).unwrap();
+    assert_eq!(backup, "old\n");
+    // A fresh file is written without a backup.
+    let nested = Registry::standard()
+        .call(
+            &mut session,
+            "script.save",
+            json!({
+                "file": "fresh.pas",
+                "text": "",
+                "scripts": dir.display().to_string()
+            }),
+        )
+        .unwrap();
+    assert!(nested["backup"].is_null());
+    assert_eq!(std::fs::read_to_string(dir.join("fresh.pas")).unwrap(), "");
+}
+
+#[test]
+fn a_dry_run_writes_neither_the_file_nor_the_backup() {
+    let dir = temp_dir("save-dry-run");
+    let target = dir.join("edit.pas");
+    std::fs::write(
+        &target, "old
+",
+    )
+    .unwrap();
+    let mut session = Session::default();
+    session.allow_edit(true);
+    let result = Registry::standard()
+        .call(
+            &mut session,
+            "script.save",
+            json!({
+                "file": "edit.pas",
+                "text": "begin
+            end.",
+                "scripts": dir.display().to_string(),
+                "dry_run": true
+            }),
+        )
+        .unwrap();
+    assert_eq!(result["written"], false);
+    assert!(result["backup"].is_null());
+    // The file is untouched and no backup copy was left behind.
+    assert_eq!(
+        std::fs::read_to_string(&target).unwrap(),
+        "old
+"
+    );
+    let leftovers: Vec<String> = std::fs::read_dir(&dir)
+        .unwrap()
+        .filter_map(|entry| entry.ok())
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .filter(|name| name.contains(".backup."))
+        .collect();
+    assert!(leftovers.is_empty(), "the dry run left backups: {leftovers:?}");
 }

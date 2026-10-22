@@ -6,13 +6,18 @@
 // wbModuleByName, wbModulesByLoadOrder, _ModulesLoadOrderCompare,
 // GetCRC32, HasCRC32)
 
-//! The module information of `wbLoadOrder.pas` as far as the mod groups
-//! read it: a module for every plugin of the data folder (and the game's
-//! executable, the hardcoded file), the loaded file of a module with its
-//! load order, the CRC32 of a module's file, and the keys of upstream's
-//! load order (`miOfficialIndex`, `miCCIndex`, `miPluginsTxtIndex`,
+//! The module information of `wbLoadOrder.pas` as far as the mod groups,
+//! the module selection and the mod group editor read it: a module for
+//! every plugin of the data folder (and the game's executable, the
+//! hardcoded file), the loaded file of a module with its load order, the
+//! file header flags the dialogs show (`mfHasESMFlag`, `mfHasLightFlag`,
+//! `mfHasMediumFlag`, `mfHasUpdateFlag`, `mfHasLocalizedFlag`, `mfGhost`),
+//! the CRC32 of a module's file, and the keys of upstream's load order
+//! (`miOfficialIndex`, `miCCIndex`, `miPluginsTxtIndex`, `miLoadOrder`,
 //! `miDateTime`, the ESM flag), so that the modules are ordered as
-//! `wbModulesByLoadOrder` orders them.
+//! `wbModulesByLoadOrder` orders them and `modules.list` reports the parts
+//! of `LoadOrderDescription` (`miLoadOrder`, `miFileID`, the indices) for
+//! the dialogs to render.
 //!
 //! [`Modules::load_data_folder`] is `wbLoadModules` without loaded files:
 //! the modules of the data folder, the masters of each (a module whose
@@ -64,6 +69,27 @@ pub struct ModuleInfo {
     /// `mfIsESM`: the ESM extension of the later games or the header flag
     /// (`esm_by_extension`).
     pub is_esm: bool,
+    /// `mfHasESMFlag`: the ESM flag of the file header. The module
+    /// selection dialog shows `ESM` for it.
+    pub has_esm_flag: bool,
+    /// `mfHasESMExtension`: the module's extension is `.esm` or `.esl` in
+    /// the games from Fallout 4 on (where the extension alone makes it an
+    /// ESM).
+    pub has_esm_extension: bool,
+    /// `mfHasLightFlag`: the light (ESL) flag of the file header, or an
+    /// `.esl` extension the header does not flag.
+    pub is_light: bool,
+    /// `mfHasMediumFlag`: the medium flag of the file header (Starfield).
+    pub is_medium: bool,
+    /// `mfHasUpdateFlag`: the update (overlay) flag of the file header.
+    pub is_update: bool,
+    /// `mfHasLocalizedFlag`: the localized flag of the file header.
+    pub is_localized: bool,
+    /// `mfGhost`: a `.ghost` file whose original is not in the data folder.
+    pub is_ghost: bool,
+    /// `mfIsHardcoded`: the game's executable, which the hardcoded file
+    /// loads as.
+    pub is_hardcoded: bool,
     /// `mfHasBlueprintFlag`: the header flag 11, a Starfield blueprint.
     pub has_blueprint: bool,
     /// `miOfficialIndex`: the place of the game master, the game's
@@ -171,11 +197,15 @@ fn is_skyrim() -> bool {
     matches!(game_mode(), gmTES5 | gmEnderal | gmTES5VR | gmSSE | gmEnderalSE)
 }
 
-/// What the load order reads of a file header: the ESM flag of the games
-/// that take it from the header, the Starfield blueprint flag, and the
-/// masters (`TwbFile.GetMasters`).
+/// What the load order and the module selection read of a file header: the
+/// header flags (`TwbFile.IsESM`, `IsLight`, `IsMedium`, `IsUpdate`,
+/// `IsLocalized`, `IsBlueprint`) and the masters (`TwbFile.GetMasters`).
 struct ModuleHeader {
     is_esm: bool,
+    is_light: bool,
+    is_medium: bool,
+    is_update: bool,
+    is_localized: bool,
     has_blueprint: bool,
     masters: Vec<String>,
 }
@@ -217,13 +247,19 @@ fn read_module_header(path: &Path) -> Option<ModuleHeader> {
     let mut data = vec![0u8; data_size];
     file.read_exact(&mut data).ok()?;
     // The record flags are at offset 8 in a TES4 header and at 12 in a
-    // Morrowind one (`TwbMainRecordStruct`). The ESM bit is 0x1 in both;
-    // the blueprint bit of Starfield is 0x800.
+    // Morrowind one (`TwbMainRecordStruct`). `TwbMainRecordStructFlags`
+    // reads the bits, as `TwbFile.IsESM` and the other flags do.
     let flags_at = if game_mode() == GameMode::gmTES3 { 12 } else { 8 };
-    let flags = u32::from_le_bytes(head[flags_at..flags_at + 4].try_into().ok()?);
+    let flags = xedit_core::implementation::structs::MainRecordStructFlags(u32::from_le_bytes(
+        head[flags_at..flags_at + 4].try_into().ok()?,
+    ));
     Some(ModuleHeader {
-        is_esm: flags & 0x1 != 0,
-        has_blueprint: game_mode() == GameMode::gmSF1 && flags & 0x800 != 0,
+        is_esm: flags.is_esm(),
+        is_light: flags.is_light(),
+        is_medium: flags.is_medium(),
+        is_update: flags.is_update(),
+        is_localized: flags.is_localized(),
+        has_blueprint: flags.is_blueprint(),
         masters: header_masters(&data, game_mode() == GameMode::gmTES3),
     })
 }
@@ -599,6 +635,14 @@ fn scan_modules(data_path: &str) -> Vec<ModuleInfo> {
         load_order: i32::MAX,
         valid: false,
         is_esm: true,
+        has_esm_flag: true,
+        has_esm_extension: false,
+        is_light: false,
+        is_medium: false,
+        is_update: false,
+        is_localized: false,
+        is_ghost: false,
+        is_hardcoded: true,
         has_blueprint: false,
         official_index: i32::MAX,
         cc_index: i32::MAX,
@@ -616,15 +660,15 @@ fn scan_modules(data_path: &str) -> Vec<ModuleInfo> {
     });
     for original_name in names {
         let lower = original_name.to_ascii_lowercase();
-        let name = if lower.ends_with(".ghost") {
+        let (name, is_ghost) = if lower.ends_with(".ghost") {
             let name = original_name[..original_name.len() - ".ghost".len()].to_owned();
             // A ghost is ignored when the original exists.
             if modules.last().is_some_and(|last| same_text(&last.name, &name)) {
                 continue;
             }
-            name
+            (name, true)
         } else {
-            original_name.clone()
+            (original_name.clone(), false)
         };
         if !is_module_name(&name) {
             continue;
@@ -636,6 +680,10 @@ fn scan_modules(data_path: &str) -> Vec<ModuleInfo> {
         let extension = name
             .rsplit_once('.')
             .map(|(_, extension)| extension.to_ascii_lowercase());
+        let has_esm_extension = esm_by_extension() && matches!(extension.as_deref(), Some("esm") | Some("esl"));
+        // `if miExtension in [meESL] then Include(miFlags, mfHasLightFlag)`
+        // (when the update flag is not set), then the header's own flags.
+        let is_light = (extension.as_deref() == Some("esl") && !header.is_update) || header.is_light;
         modules.push(ModuleInfo {
             name,
             original_name,
@@ -644,7 +692,15 @@ fn scan_modules(data_path: &str) -> Vec<ModuleInfo> {
             valid: true,
             // The extension of the later games, the header flag of the
             // others (`mfIsESM`).
-            is_esm: (esm_by_extension() && matches!(extension.as_deref(), Some("esm") | Some("esl"))) || header.is_esm,
+            is_esm: has_esm_extension || header.is_esm,
+            has_esm_flag: header.is_esm,
+            has_esm_extension,
+            is_light,
+            is_medium: header.is_medium,
+            is_update: header.is_update,
+            is_localized: header.is_localized,
+            is_ghost,
+            is_hardcoded: false,
             has_blueprint: header.has_blueprint,
             official_index: i32::MAX,
             cc_index: i32::MAX,
@@ -685,6 +741,14 @@ fn attach_files(modules: &mut Vec<ModuleInfo>, data_path: &str, files: &[Arc<Fil
                     load_order: i32::MAX,
                     valid: true,
                     is_esm: matches!(lower.rsplit_once('.').map(|(_, ext)| ext), Some("esm") | Some("esl")),
+                    has_esm_flag: false,
+                    has_esm_extension: false,
+                    is_light: false,
+                    is_medium: false,
+                    is_update: false,
+                    is_localized: false,
+                    is_ghost: false,
+                    is_hardcoded: false,
                     has_blueprint: false,
                     official_index: i32::MAX,
                     cc_index: i32::MAX,
@@ -827,6 +891,13 @@ impl ModuleInfo {
     /// separator (`wbDataPath + miOriginalName`).
     pub fn file_path(&self) -> String {
         format!("{}{}", self.data_path, self.original_name)
+    }
+
+    /// The size of the module's file in the data folder, in bytes; `None`
+    /// for a module whose file can not be read (the game's executable has
+    /// no plugin file).
+    pub fn file_size(&self) -> Option<u64> {
+        std::fs::metadata(self.file_path()).ok().map(|metadata| metadata.len())
     }
 
     /// `TwbModuleInfo.HasIndex`: a valid module with one of the indices the

@@ -98,7 +98,7 @@ pub struct LodgenRequest {
 }
 
 /// A worldspace of the LODGen form's list.
-#[derive(Serialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct LodgenWorldspace {
     pub editor_id: String,
     /// The name as the list shows it.
@@ -108,7 +108,7 @@ pub struct LodgenWorldspace {
 }
 
 /// `lodgen.generate`: the response.
-#[derive(Serialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct LodgenResponse {
     /// The worldspaces of the list, in its order.
     pub worldspaces: Vec<LodgenWorldspace>,
@@ -164,18 +164,20 @@ fn combo(items: &[String], value: &str) -> String {
         .clone()
 }
 
-/// The form's lists (`FormCreate`).
-struct Lists {
-    atlas_size: Vec<String>,
-    texture_size: Vec<String>,
-    uv_range: Vec<String>,
-    brightness: Vec<String>,
-    lod_level: Vec<String>,
-    compression: Vec<String>,
-    alpha_threshold: Vec<String>,
+/// The form's lists (`FormCreate`), which the GUI's LODGen dialog draws.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Lists {
+    pub atlas_size: Vec<String>,
+    pub texture_size: Vec<String>,
+    pub uv_range: Vec<String>,
+    pub brightness: Vec<String>,
+    pub lod_level: Vec<String>,
+    pub compression: Vec<String>,
+    pub alpha_threshold: Vec<String>,
 }
 
-fn lists() -> Lists {
+/// The combo boxes of `TfrmLODGen.FormCreate`.
+pub fn form_lists() -> Lists {
     let mut uv_range = Vec::new();
     let mut v = 1.0f64;
     while v <= 10.0 {
@@ -197,7 +199,7 @@ fn lists() -> Lists {
 }
 
 /// `ImageFormatToStr`.
-fn image_format_to_str(format: ImageFormat) -> &'static str {
+pub fn image_format_to_str(format: ImageFormat) -> &'static str {
     match format {
         ImageFormat::R8G8B8 => "888",
         ImageFormat::A8R8G8B8 => "8888",
@@ -211,8 +213,14 @@ fn image_format_to_str(format: ImageFormat) -> &'static str {
     }
 }
 
+/// `ImageFormatToStr(ImageFormat(ordinal))`, the name a combo box shows for
+/// the ordinal the settings file holds.
+pub fn image_format_name(ordinal: i64) -> String {
+    image_format_to_str(ImageFormat::from_ordinal(ordinal)).to_owned()
+}
+
 /// `StrToImageFormat`.
-fn str_to_image_format(name: &str) -> ImageFormat {
+pub fn str_to_image_format(name: &str) -> ImageFormat {
     match name {
         "888" => ImageFormat::R8G8B8,
         "8888" => ImageFormat::A8R8G8B8,
@@ -293,7 +301,7 @@ fn form_options(
             .map(|(_, value)| value.as_str())
     };
     let section = format!("{} LOD Options", app_name());
-    let lists = lists();
+    let lists = form_lists();
     let read_string = |settings: &MemIniFile, name: &str, default: &str| settings.read_string(&section, name, default);
     let bool_option = |settings: &MemIniFile, name: &str, default: bool| -> Result<bool, CommandError> {
         match given(name) {
@@ -436,11 +444,20 @@ fn elapsed_since(start: std::time::Instant) -> String {
     if hours > 0 { format!("{hours}:{text}") } else { text }
 }
 
+/// The `Abort` of `GeneralProgress` once the wait form was cancelled.
+fn cancelled() -> CommandError {
+    CommandError::new("cancelled", "the operation was cancelled")
+}
+
 fn lodgen_generate(session: &mut Session, request: LodgenRequest) -> Result<LodgenResponse, CommandError> {
     session.mode()?;
     if is_fallout76() || is_starfield() {
         return Err(CommandError::new("unsupported", "LOD generation not supported."));
     }
+    // `wbLOD.pas` polls `wbForceTerminate` at its loops; the command polls
+    // at the same points (per worldspace) and the generator polls per
+    // reference where its errors propagate (Fallout 4 and Oblivion).
+    xedit_core::interface::wait_form::poll_cancel().map_err(|_| cancelled())?;
     // the tmLODgen overrides of `xeInit`
     set_tool_mode(ToolMode::tmLODgen);
     set_allow_internal_edit(false);
@@ -563,6 +580,7 @@ fn lodgen_generate(session: &mut Session, request: LodgenRequest) -> Result<Lodg
         if request.split_trees {
             for (ws, checked) in list.iter().zip(&checked) {
                 if *checked {
+                    xedit_core::interface::wait_form::poll_cancel().map_err(|_| cancelled())?;
                     split_tree_lod(&env, ws, &files).map_err(|error| CommandError::new("edit_failed", error.0))?;
                 }
             }
@@ -584,6 +602,7 @@ fn lodgen_generate(session: &mut Session, request: LodgenRequest) -> Result<Lodg
         if oblivion {
             progress(&format!("[{}] LOD Generator: starting", elapsed_since(start)));
             for (ws, checked) in list.iter().zip(&checked) {
+                xedit_core::interface::wait_form::poll_cancel().map_err(|_| cancelled())?;
                 if *checked && let Err(error) = generate_lod_tes4(&env, ws, &|| elapsed_since(start)) {
                     progress(&format!("[{}] LOD Generator: <Error: {}>", elapsed_since(start), error));
                     return Err(failed(error));
@@ -595,6 +614,7 @@ fn lodgen_generate(session: &mut Session, request: LodgenRequest) -> Result<Lodg
             ));
         } else {
             for (ws, checked) in list.iter().zip(&checked) {
+                xedit_core::interface::wait_form::poll_cancel().map_err(|_| cancelled())?;
                 if !*checked {
                     continue;
                 }

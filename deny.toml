@@ -18,7 +18,20 @@ allow = [
     "ISC",
     "Zlib",
     "BSL-1.0",
-    "CC0-1.0",
     "Unicode-3.0",
 ]
 confidence-threshold = 0.9
+
+# The advisories of the dependency tree. The three ignored ids are the `zbus`
+# family of crates, which only the Linux accessibility stack of the GUI pulls
+# in (`eframe` -> `egui-winit` -> `accesskit` -> `atspi` -> `zbus`). Those
+# crates are unmaintained as standalone crates since `zbus` 6.0.0 merged their
+# code into it; the advisories report no vulnerability and name no safe
+# upgrade, so there is nothing the port can do about them. The Windows
+# binary the port ships does not carry those crates at all.
+[advisories]
+ignore = [
+    { id = "RUSTSEC-2026-0370", reason = "zvariant is unmaintained as a standalone crate; it is merged into zbus 6.0.0 and no safe upgrade exists" },
+    { id = "RUSTSEC-2026-0371", reason = "zbus_names is unmaintained as a standalone crate; it is merged into zbus 6.0.0 and no safe upgrade exists" },
+    { id = "RUSTSEC-2026-0372", reason = "zvariant_derive is unmaintained as a standalone crate; it is merged into zbus 6.0.0 and no safe upgrade exists" },
+]

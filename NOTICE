@@ -62,3 +62,58 @@ JsonDataObjects, ImagingLib, FileContainer, vcl-styles-utils,
 delphi-detours-library, libdeflate-pas, lz4-delphi) are not ported. Rust crates
 replace them. The license of each crate dependency is checked against the
 allow list in deny.toml.
+
+Upstream resources carried over into the port
+---------------------------------------------
+
+The GUI ships a few files that upstream keeps as binary resources or as data
+files. They are upstream's own work under MPL-2.0, and they are carried over
+unchanged, so they stay under MPL-2.0 with the rest of the project. Each one
+names its origin below.
+
+  crates/xedit-gui/resources/dev_message.rtf
+  crates/xedit-gui/resources/dev_message_thanks.rtf
+  crates/xedit-gui/resources/dev_image.bmp
+
+    The `fcMessage`, `fcMessageThanks` and `fcImage` `TFileContainer` components
+    of xEdit/xeDeveloperMessageForm.dfm, decompressed from the `CompressedData`
+    of the form's DFM. The three files are byte-identical to the containers the
+    4.1.5q release binary xFOEdit.exe holds (md5 a3493ab32de7c408411696afefe1ba1d,
+    12432bf7c116a8964352c87aa44c395c and 0f6d63155516321d857c56c9fd9f6c6e).
+
+    `dev_message_thanks.rtf` is also byte-identical to the loose
+    xEdit/devmessagethanks.rtf of the source tree. `dev_message.rtf` is not: the
+    loose xEdit/devmessage.rtf is 48,801 bytes (md5
+    604266030f66a8d5157c6b5735bbeac2) and differs from the DFM's container in
+    more than its line endings, so the DFM's copy is the one carried over. The
+    release is the parity oracle and its copy is the DFM's.
+
+  crates/xedit-gui/resources/whats_new.rtf
+
+    The `fcWhatsNew` `TFileContainer` component of xEdit/xeMainForm.dfm as the
+    4.1.5q release binary xFOEdit.exe holds it, byte-identical (md5
+    f6c29601155ee1a7c23b34094664598b). The container of the source form is
+    larger (607,671 bytes, md5 0d255a9980f54ff08dd26d8f703011e4), because the
+    release was rebuilt after the source form was written; the release is the
+    parity oracle, so its copy is the one carried over.
+
+  crates/xedit-gui/resources/tips.txt
+
+    The `fcEditTips` `TFileContainer` component of xEdit/xeTipForm.dfm,
+    byte-identical (md5 5daad2a86321866f330df3c8b3fdd4e0), and the same text as
+    the loose xEdit/EditTips.txt of the source tree.
+
+  crates/xedit-gui/assets/icons/xEdit_TES_Icon.ico
+  crates/xedit-gui/assets/icons/xEdit_FO_Icon.ico
+  crates/xedit-gui/assets/icons/xEdit_SF_Icon.ico
+
+    The three icon files of xEdit/xeIcons.rc (xTESICON, xFOICON, xSFICON),
+    byte-identical to the source tree.
+
+  crates/xedit-gui/src/information_text.txt
+
+    The text of the `Memo1` control of xEdit/xeMainForm.dfm, taken from its
+    `Lines.Strings` list, and checked against the same list as the 4.1.5q
+    release binary xFOEdit.exe holds it: the 216 lines are the same, and the
+    file differs from the binary's copy only in its line endings (LF here,
+    CRLF there). The port shows the same text as upstream's Information tab.

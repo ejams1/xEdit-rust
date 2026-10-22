@@ -1,0 +1,1694 @@
+# The audit of the covered `gui.*` bindings of `coverage/ledger.toml`.
+#
+# One row per covered binding: the DFM control upstream renders, the
+# Rust module of `crates/xedit-gui/src` that draws it, the name the
+# port gives that control and the session command the control calls.
+# `cargo xtask check` verifies the table against the ledger and against
+# the sources of the port.
+#
+# `reach` is one of:
+#   reachable    - the control of the port calls the command;
+#   reimplemented - the port does the work by another route, so the
+#                  command of the ledger is not called from the control;
+#   unreachable  - the port renders no control for the binding.
+# The rows that are not `reachable` name the reason, and the ledger
+# entry repeats it.
+
+[gui."BSArch/frmArchiveInfo.dfm:mniSaveAs:OnClick"]
+control = "mniSaveAs"
+command = "archive.list"
+reach = "unreachable"
+reason = "The port has no BSArch window: upstream-map.toml keeps the BSArch forms pending (the GUI itself is not ported), so no control of the port reaches this command."
+
+[gui."BSArch/frmMain.dfm:btnPack:OnClick"]
+control = "btnPack"
+command = "archive.pack"
+reach = "unreachable"
+reason = "The port has no BSArch window: upstream-map.toml keeps the BSArch forms pending (the GUI itself is not ported), so no control of the port reaches this command."
+
+[gui."BSArch/frmMain.dfm:mniArchiveInfo:OnClick"]
+control = "mniArchiveInfo"
+command = "archive.list"
+reach = "unreachable"
+reason = "The port has no BSArch window: upstream-map.toml keeps the BSArch forms pending (the GUI itself is not ported), so no control of the port reaches this command."
+
+[gui."BSArch/frmMain.dfm:mniAssetCompress:OnClick"]
+control = "mniAssetCompress"
+command = "bsarchpro.compress"
+reach = "unreachable"
+reason = "The port has no BSArch window: upstream-map.toml keeps the BSArch forms pending (the GUI itself is not ported), so no control of the port reaches this command."
+
+[gui."BSArch/frmMain.dfm:mniAssetEdit:OnClick"]
+control = "mniAssetEdit"
+command = "bsarchpro.edit"
+reach = "unreachable"
+reason = "The port has no BSArch window: upstream-map.toml keeps the BSArch forms pending (the GUI itself is not ported), so no control of the port reaches this command."
+
+[gui."BSArch/frmMain.dfm:mniAssetFindIdentical:OnClick"]
+control = "mniAssetFindIdentical"
+command = "bsarchpro.find_identical"
+reach = "unreachable"
+reason = "The port has no BSArch window: upstream-map.toml keeps the BSArch forms pending (the GUI itself is not ported), so no control of the port reaches this command."
+
+[gui."BSArch/frmMain.dfm:mniAssetPack:OnClick"]
+control = "mniAssetPack"
+command = "archive.pack"
+reach = "unreachable"
+reason = "The port has no BSArch window: upstream-map.toml keeps the BSArch forms pending (the GUI itself is not ported), so no control of the port reaches this command."
+
+[gui."BSArch/frmMain.dfm:mniAssetRemoveSelected:OnClick"]
+control = "mniAssetRemoveSelected"
+command = "bsarchpro.remove_selected"
+reach = "unreachable"
+reason = "The port has no BSArch window: upstream-map.toml keeps the BSArch forms pending (the GUI itself is not ported), so no control of the port reaches this command."
+
+[gui."BSArch/frmMain.dfm:mniAssetRemoveUnselected:OnClick"]
+control = "mniAssetRemoveUnselected"
+command = "bsarchpro.remove_unselected"
+reach = "unreachable"
+reason = "The port has no BSArch window: upstream-map.toml keeps the BSArch forms pending (the GUI itself is not ported), so no control of the port reaches this command."
+
+[gui."BSArch/frmMain.dfm:mniAssetReplace:OnClick"]
+control = "mniAssetReplace"
+command = "bsarchpro.replace"
+reach = "unreachable"
+reason = "The port has no BSArch window: upstream-map.toml keeps the BSArch forms pending (the GUI itself is not ported), so no control of the port reaches this command."
+
+[gui."BSArch/frmMain.dfm:mniAssetUnpack:OnClick"]
+control = "mniAssetUnpack"
+command = "archive.extract"
+reach = "unreachable"
+reason = "The port has no BSArch window: upstream-map.toml keeps the BSArch forms pending (the GUI itself is not ported), so no control of the port reaches this command."
+
+[gui."BSArch/frmMain.dfm:mniAssetUnpackSaveAs:OnClick"]
+control = "mniAssetUnpackSaveAs"
+command = "archive.extract"
+reach = "unreachable"
+reason = "The port has no BSArch window: upstream-map.toml keeps the BSArch forms pending (the GUI itself is not ported), so no control of the port reaches this command."
+
+[gui."BSArch/frmMain.dfm:mniLoadList:OnClick"]
+control = "mniLoadList"
+command = "bsarchpro.list_load"
+reach = "unreachable"
+reason = "The port has no BSArch window: upstream-map.toml keeps the BSArch forms pending (the GUI itself is not ported), so no control of the port reaches this command."
+
+[gui."BSArch/frmMain.dfm:mniSaveList:OnClick"]
+control = "mniSaveList"
+command = "bsarchpro.list_save"
+reach = "unreachable"
+reason = "The port has no BSArch window: upstream-map.toml keeps the BSArch forms pending (the GUI itself is not ported), so no control of the port reaches this command."
+
+[gui."BSArch/frmPack.dfm:chkAutodetectFlags:OnClick"]
+control = "chkAutodetectFlags"
+command = "archive.pack"
+reach = "unreachable"
+reason = "The port has no BSArch window: upstream-map.toml keeps the BSArch forms pending (the GUI itself is not ported), so no control of the port reaches this command."
+
+[gui."Sniff/Proc/ProcConvertRootNode.dfm:cmbNodeFrom:OnSelect"]
+control = "cmbNodeFrom"
+command = "sniff.run"
+reach = "unreachable"
+reason = "The port has no Sniff window: upstream-map.toml keeps the Sniff forms pending (the GUI itself is not ported), so no control of the port reaches this command."
+
+[gui."Sniff/Proc/ProcFindTextures.dfm:lvFormat:OnItemChecked"]
+control = "lvFormat"
+command = "sniff.run"
+reach = "unreachable"
+reason = "The port has no Sniff window: upstream-map.toml keeps the Sniff forms pending (the GUI itself is not ported), so no control of the port reaches this command."
+
+[gui."Sniff/Proc/ProcHavokSearchMaterial.dfm:edReplace:OnChange"]
+control = "edReplace"
+command = "sniff.run"
+reach = "unreachable"
+reason = "The port has no Sniff window: upstream-map.toml keeps the Sniff forms pending (the GUI itself is not ported), so no control of the port reaches this command."
+
+[gui."Sniff/Proc/ProcHavokSearchMaterial.dfm:edSearch:OnChange"]
+control = "edSearch"
+command = "sniff.run"
+reach = "unreachable"
+reason = "The port has no Sniff window: upstream-map.toml keeps the Sniff forms pending (the GUI itself is not ported), so no control of the port reaches this command."
+
+[gui."Sniff/Proc/ProcHavokSearchMaterial.dfm:rbFO3:OnClick"]
+control = "rbFO3"
+command = "sniff.run"
+reach = "unreachable"
+reason = "The port has no Sniff window: upstream-map.toml keeps the Sniff forms pending (the GUI itself is not ported), so no control of the port reaches this command."
+
+[gui."Sniff/Proc/ProcHavokSearchMaterial.dfm:rbTES4:OnClick"]
+control = "rbTES4"
+command = "sniff.run"
+reach = "unreachable"
+reason = "The port has no Sniff window: upstream-map.toml keeps the Sniff forms pending (the GUI itself is not ported), so no control of the port reaches this command."
+
+[gui."Sniff/Proc/ProcHavokSearchMaterial.dfm:rbTES5:OnClick"]
+control = "rbTES5"
+command = "sniff.run"
+reach = "unreachable"
+reason = "The port has no Sniff window: upstream-map.toml keeps the Sniff forms pending (the GUI itself is not ported), so no control of the port reaches this command."
+
+[gui."Sniff/Proc/ProcOptimize.dfm:chkStripify:OnClick"]
+control = "chkStripify"
+command = "sniff.run"
+reach = "unreachable"
+reason = "The port has no Sniff window: upstream-map.toml keeps the Sniff forms pending (the GUI itself is not ported), so no control of the port reaches this command."
+
+[gui."Sniff/Proc/ProcOptimize.dfm:chkTriangulate:OnClick"]
+control = "chkTriangulate"
+command = "sniff.run"
+reach = "unreachable"
+reason = "The port has no Sniff window: upstream-map.toml keeps the Sniff forms pending (the GUI itself is not ported), so no control of the port reaches this command."
+
+[gui."Sniff/Proc/ProcShaderFlagsUpdate.dfm:cmbGame:OnSelect"]
+control = "cmbGame"
+command = "sniff.run"
+reach = "unreachable"
+reason = "The port has no Sniff window: upstream-map.toml keeps the Sniff forms pending (the GUI itself is not ported), so no control of the port reaches this command."
+
+[gui."Sniff/Proc/ProcVertexPaint.dfm:rbAdjustColors:OnClick"]
+control = "rbAdjustColors"
+command = "sniff.run"
+reach = "unreachable"
+reason = "The port has no Sniff window: upstream-map.toml keeps the Sniff forms pending (the GUI itself is not ported), so no control of the port reaches this command."
+
+[gui."Sniff/Proc/ProcVertexPaint.dfm:rbRemoveColors:OnClick"]
+control = "rbRemoveColors"
+command = "sniff.run"
+reach = "unreachable"
+reason = "The port has no Sniff window: upstream-map.toml keeps the Sniff forms pending (the GUI itself is not ported), so no control of the port reaches this command."
+
+[gui."Sniff/Proc/ProcVertexPaint.dfm:rbReplaceColor:OnClick"]
+control = "rbReplaceColor"
+command = "sniff.run"
+reach = "unreachable"
+reason = "The port has no Sniff window: upstream-map.toml keeps the Sniff forms pending (the GUI itself is not ported), so no control of the port reaches this command."
+
+[gui."Sniff/Proc/ProcVertexPaint.dfm:rbSetColors:OnClick"]
+control = "rbSetColors"
+command = "sniff.run"
+reach = "unreachable"
+reason = "The port has no Sniff window: upstream-map.toml keeps the Sniff forms pending (the GUI itself is not ported), so no control of the port reaches this command."
+
+[gui."Sniff/frmMain.dfm:FormMain:OnCreate"]
+control = "FormMain"
+command = "sniff.run"
+reach = "unreachable"
+reason = "The port has no Sniff window: upstream-map.toml keeps the Sniff forms pending (the GUI itself is not ported), so no control of the port reaches this command."
+
+[gui."Sniff/frmMain.dfm:btnProcess:OnClick"]
+control = "btnProcess"
+command = "sniff.run"
+reach = "unreachable"
+reason = "The port has no Sniff window: upstream-map.toml keeps the Sniff forms pending (the GUI itself is not ported), so no control of the port reaches this command."
+
+[gui."Sniff/frmMain.dfm:cmbProcGame:OnClick"]
+control = "cmbProcGame"
+command = "sniff.list"
+reach = "unreachable"
+reason = "The port has no Sniff window: upstream-map.toml keeps the Sniff forms pending (the GUI itself is not ported), so no control of the port reaches this command."
+
+[gui."Sniff/frmMain.dfm:edProcFilter:OnChange"]
+control = "edProcFilter"
+command = "sniff.list"
+reach = "unreachable"
+reason = "The port has no Sniff window: upstream-map.toml keeps the Sniff forms pending (the GUI itself is not ported), so no control of the port reaches this command."
+
+[gui."Sniff/frmMain.dfm:lblProcessedFiles:OnClick"]
+control = "lblProcessedFiles"
+command = "sniff.run"
+reach = "unreachable"
+reason = "The port has no Sniff window: upstream-map.toml keeps the Sniff forms pending (the GUI itself is not ported), so no control of the port reaches this command."
+
+[gui."Sniff/frmMain.dfm:lblProcessedFilesTitle:OnClick"]
+control = "lblProcessedFilesTitle"
+command = "sniff.run"
+reach = "unreachable"
+reason = "The port has no Sniff window: upstream-map.toml keeps the Sniff forms pending (the GUI itself is not ported), so no control of the port reaches this command."
+
+[gui."Sniff/frmMain.dfm:lvProcs:OnSelectItem"]
+control = "lvProcs"
+command = "sniff.run"
+reach = "unreachable"
+reason = "The port has no Sniff window: upstream-map.toml keeps the Sniff forms pending (the GUI itself is not ported), so no control of the port reaches this command."
+
+[gui."xEdit/xeFilterOptionsForm.dfm:btnFilterDel:OnClick"]
+control = "btnFilterDel"
+module = "dialogs/filter_options_form.rs"
+command_module = "main_form.rs"
+port_control = "DeletePreset"
+command = "filter.preset.delete"
+reach = "reachable"
+
+[gui."xEdit/xeFilterOptionsForm.dfm:btnFilterSave:OnClick"]
+control = "btnFilterSave"
+module = "dialogs/filter_options_form.rs"
+port_control = "SavePreset"
+command = "filter.preset.save"
+reach = "reachable"
+
+[gui."xEdit/xeFilterOptionsForm.dfm:cmbPreset:OnSelect"]
+control = "cmbPreset"
+module = "dialogs/filter_options_form.rs"
+port_control = "filter-preset"
+command = "filter.apply"
+reach = "reachable"
+
+[gui."xEdit/xeFilterOptionsForm.dfm:frmFilterOptions:OnClose"]
+control = "frmFilterOptions"
+module = "dialogs/filter_options_form.rs"
+port_control = "Commit"
+command = "filter.preset.save"
+reach = "reachable"
+
+[gui."xEdit/xeFilterOptionsForm.dfm:frmFilterOptions:OnCreate"]
+control = "frmFilterOptions"
+module = "dialogs/filter_options_form.rs"
+port_control = "record_signatures"
+command = "signatures.list"
+reach = "reachable"
+
+[gui."xEdit/xeFilterOptionsForm.dfm:frmFilterOptions:OnShow"]
+control = "frmFilterOptions"
+module = "dialogs/filter_options_form.rs"
+port_control = "FilterOptionsState"
+command = "filter.presets"
+reach = "reachable"
+
+[gui."xEdit/xeLODGenForm.dfm:SelectAll1:OnClick"]
+control = "SelectAll1"
+module = "dialogs/lodgen_form.rs"
+port_control = "lodgen-worldspaces"
+command = "lodgen.generate"
+reach = "reachable"
+note = "The port's worldspace list checks the worldspaces; upstream's Select All button has no control of its own in the port."
+
+[gui."xEdit/xeLODGenForm.dfm:SelectNone1:OnClick"]
+control = "SelectNone1"
+module = "dialogs/lodgen_form.rs"
+port_control = "lodgen-worldspaces"
+command = "lodgen.generate"
+reach = "reachable"
+note = "The port's worldspace list checks the worldspaces; upstream's Select None button has no control of its own in the port."
+
+[gui."xEdit/xeLODGenForm.dfm:btnSplitTreesLOD:OnClick"]
+control = "btnSplitTreesLOD"
+module = "dialogs/lodgen_form.rs"
+port_control = "SplitTrees"
+command = "lodgen.generate"
+reach = "reachable"
+
+[gui."xEdit/xeLODGenForm.dfm:cbBuildAtlas:OnClick"]
+control = "cbBuildAtlas"
+module = "dialogs/lodgen_form.rs"
+port_control = "build_atlas"
+command = "lodgen.generate"
+reach = "reachable"
+
+[gui."xEdit/xeLODGenForm.dfm:frmLODGen:OnClose"]
+control = "frmLODGen"
+module = "dialogs/lodgen_form.rs"
+port_control = "LodgenAction"
+command = "lodgen.generate"
+reach = "reachable"
+
+[gui."xEdit/xeLODGenForm.dfm:frmLODGen:OnCreate"]
+control = "frmLODGen"
+module = "dialogs/lodgen_form.rs"
+port_control = "LodgenState"
+command = "lodgen.generate"
+reach = "reachable"
+
+[gui."xEdit/xeLODGenForm.dfm:frmLODGen:OnShow"]
+control = "frmLODGen"
+module = "dialogs/lodgen_form.rs"
+port_control = "LodgenState"
+command = "lodgen.generate"
+reach = "reachable"
+
+[gui."xEdit/xeLocalizationForm.dfm:btnSave:OnClick"]
+control = "btnSave"
+module = "dialogs/localization_form.rs"
+port_control = "Set"
+command = "localization.set"
+reach = "reachable"
+
+[gui."xEdit/xeLocalizationForm.dfm:frmLocalization:OnCreate"]
+control = "frmLocalization"
+module = "dialogs/localization_form.rs"
+port_control = "Files"
+command = "localization.files"
+reach = "reachable"
+
+[gui."xEdit/xeLocalizationForm.dfm:mniFileExport:OnClick"]
+control = "mniFileExport"
+module = "dialogs/localization_form.rs"
+port_control = "Export"
+command = "localization.export"
+reach = "reachable"
+
+[gui."xEdit/xeLocalizationForm.dfm:vetStrings:OnChange"]
+control = "vetStrings"
+module = "dialogs/localization_form.rs"
+port_control = "LocalizationState"
+command = "localization.get"
+reach = "reimplemented"
+reason = "The port's strings grid reads the text of the focused string from the strings response (`localization.strings`); `localization.get` is the element pane's read of a localized element, so no control of the port reaches the command."
+
+[gui."xEdit/xeLocalizationForm.dfm:vetStrings:OnGetText"]
+control = "vetStrings"
+module = "dialogs/localization_form.rs"
+port_control = "LocalizationState"
+command = "localization.strings"
+reach = "reachable"
+
+[gui."xEdit/xeLocalizationForm.dfm:vetStrings:OnInitChildren"]
+control = "vetStrings"
+module = "dialogs/localization_form.rs"
+port_control = "apply_strings"
+command = "localization.strings"
+reach = "reachable"
+
+[gui."xEdit/xeLocalizationForm.dfm:vetStrings:OnInitNode"]
+control = "vetStrings"
+module = "dialogs/localization_form.rs"
+port_control = "rows"
+command = "localization.strings"
+reach = "reachable"
+
+[gui."xEdit/xeLocalizePluginForm.dfm:frmLocalizePlugin:OnClose"]
+control = "frmLocalizePlugin"
+module = "dialogs/localize_plugin_form.rs"
+port_control = "Localize"
+command = "localization.localize"
+reach = "reachable"
+
+[gui."xEdit/xeLogAnalyzerForm.dfm:btnAnalyze:OnClick"]
+control = "btnAnalyze"
+module = "dialogs/log_analyzer_form.rs"
+port_control = "Analyze"
+command = "logs.analyze"
+reach = "reachable"
+
+[gui."xEdit/xeLogAnalyzerForm.dfm:frmLogAnalyzer:OnClose"]
+control = "frmLogAnalyzer"
+module = "dialogs/log_analyzer_form.rs"
+port_control = "Closed"
+command = "logs.analyze"
+reach = "reachable"
+
+[gui."xEdit/xeLogAnalyzerForm.dfm:frmLogAnalyzer:OnCreate"]
+control = "frmLogAnalyzer"
+module = "dialogs/log_analyzer_form.rs"
+port_control = "LogAnalyzerState"
+command = "logs.analyze"
+reach = "reachable"
+
+[gui."xEdit/xeLogAnalyzerForm.dfm:frmLogAnalyzer:OnShow"]
+control = "frmLogAnalyzer"
+module = "dialogs/log_analyzer_form.rs"
+port_control = "LogAnalyzerState"
+command = "logs.analyze"
+reach = "reachable"
+
+[gui."xEdit/xeLogAnalyzerForm.dfm:vstForms:OnChange"]
+control = "vstForms"
+module = "dialogs/log_analyzer_form.rs"
+port_control = "LogAnalyzerState"
+command = "logs.analyze"
+reach = "reachable"
+
+[gui."xEdit/xeLogAnalyzerForm.dfm:vstForms:OnCompareNodes"]
+control = "vstForms"
+module = "dialogs/log_analyzer_form.rs"
+port_control = "LogAnalyzerState"
+command = "logs.analyze"
+reach = "reachable"
+
+[gui."xEdit/xeLogAnalyzerForm.dfm:vstForms:OnDblClick"]
+control = "vstForms"
+module = "dialogs/log_analyzer_form.rs"
+port_control = "JumpTo"
+command = "logs.analyze"
+reach = "reachable"
+
+[gui."xEdit/xeLogAnalyzerForm.dfm:vstForms:OnFreeNode"]
+control = "vstForms"
+module = "dialogs/log_analyzer_form.rs"
+port_control = "LogAnalyzerState"
+command = "logs.analyze"
+reach = "reachable"
+
+[gui."xEdit/xeLogAnalyzerForm.dfm:vstForms:OnGetText"]
+control = "vstForms"
+module = "dialogs/log_analyzer_form.rs"
+port_control = "LogRow"
+command = "logs.analyze"
+reach = "reachable"
+
+[gui."xEdit/xeLogAnalyzerForm.dfm:vstForms:OnHeaderClick"]
+control = "vstForms"
+module = "dialogs/log_analyzer_form.rs"
+port_control = "LogAnalyzerState"
+command = "logs.analyze"
+reach = "reachable"
+
+[gui."xEdit/xeLogAnalyzerForm.dfm:vstForms:OnInitChildren"]
+control = "vstForms"
+module = "dialogs/log_analyzer_form.rs"
+port_control = "LogAnalyzerState"
+command = "logs.analyze"
+reach = "reachable"
+
+[gui."xEdit/xeLogAnalyzerForm.dfm:vstForms:OnInitNode"]
+control = "vstForms"
+module = "dialogs/log_analyzer_form.rs"
+port_control = "LogAnalyzerState"
+command = "logs.analyze"
+reach = "reachable"
+
+[gui."xEdit/xeLegendForm.dfm:frmLegend:OnCreate"]
+control = "frmLegend"
+module = "dialogs/legend_form.rs"
+port_control = "LegendState"
+command = "settings.get"
+reach = "reachable"
+
+[gui."xEdit/xeLegendForm.dfm:frmLegend:OnHide"]
+control = "frmLegend"
+module = "dialogs/legend_form.rs"
+port_control = "LegendState"
+command = "settings.set"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:acScript:OnExecute"]
+control = "acScript"
+module = "dialogs/script_form.rs"
+port_control = "ScriptFormAction::Ok"
+command = "script.run"
+reach = "reachable"
+note = "Upstream's `acScript` is a hot-key action that runs a script file; the port runs a script from the script dialog's OK."
+
+[gui."xEdit/xeMainForm.dfm:cbRegExFilter:OnClick"]
+control = "cbRegExFilter"
+module = "main_form.rs"
+port_control = "cbRegExFilter"
+command = "files.list"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:cbViewFilterKeepChildren:OnClick"]
+control = "cbViewFilterKeepChildren"
+module = "view_grid.rs"
+port_control = "cbViewFilterKeepChildren"
+command = "records.compare"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:cbViewFilterKeepParentsSiblings:OnClick"]
+control = "cbViewFilterKeepParentsSiblings"
+module = "view_grid.rs"
+port_control = "cbViewFilterKeepParentsSiblings"
+command = "records.compare"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:cbViewFilterKeepSiblings:OnClick"]
+control = "cbViewFilterKeepSiblings"
+module = "view_grid.rs"
+port_control = "cbViewFilterKeepSiblings"
+command = "records.compare"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:cobReferencedByFilter:OnChange"]
+control = "cobReferencedByFilter"
+module = "panes.rs"
+port_control = "cobReferencedByFilter"
+command = "refs.get"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:cobViewFilter:OnChange"]
+control = "cobViewFilter"
+module = "main_form.rs"
+port_control = "cobViewFilter"
+command = "records.compare"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:edEditorIDSearch:OnChange"]
+control = "edEditorIDSearch"
+module = "main_form.rs"
+port_control = "edEditorIDSearch"
+command = "records.find"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:edEditorIDSearch:OnKeyDown"]
+control = "edEditorIDSearch"
+module = "main_form.rs"
+port_control = "edEditorIDSearch"
+command = "records.find"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:edFileNameFilter:OnChange"]
+control = "edFileNameFilter"
+module = "main_form.rs"
+port_control = "edFileNameFilter"
+command = "files.list"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:edFormIDSearch:OnChange"]
+control = "edFormIDSearch"
+module = "main_form.rs"
+port_control = "edFormIDSearch"
+command = "records.get"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:edFormIDSearch:OnKeyDown"]
+control = "edFormIDSearch"
+module = "main_form.rs"
+port_control = "edFormIDSearch"
+command = "records.get"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:edReferencedByFilterFileName:OnChange"]
+control = "edReferencedByFilterFileName"
+module = "panes.rs"
+port_control = "ReferencedByFilter"
+command = "refs.get"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:edReferencedByFilterName:OnChange"]
+control = "edReferencedByFilterName"
+module = "panes.rs"
+port_control = "ReferencedByFilter"
+command = "refs.get"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:edReferencedByFilterSignature:OnChange"]
+control = "edReferencedByFilterSignature"
+module = "panes.rs"
+port_control = "ReferencedByFilter"
+command = "refs.get"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:edViewFilterName:OnChange"]
+control = "edViewFilterName"
+module = "view_grid.rs"
+port_control = "edViewFilterName"
+command = "records.compare"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:edViewFilterValue:OnChange"]
+control = "edViewFilterValue"
+module = "view_grid.rs"
+port_control = "edViewFilterValue"
+command = "records.compare"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:frmMain:OnClose"]
+control = "frmMain"
+module = "main_form.rs"
+port_control = "frmMain"
+command = "files.save"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:lvReferencedBy:OnData"]
+control = "lvReferencedBy"
+module = "panes.rs"
+port_control = "lvReferencedBy"
+command = "refs.get"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:lvReferencedBy:OnKeyDown"]
+control = "lvReferencedBy"
+module = "panes.rs"
+port_control = "lvReferencedBy"
+command = "records.delete"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniCreateNewFile:OnClick"]
+control = "mniCreateNewFile"
+module = "main_form.rs"
+port_control = "NavFlow::NewFile"
+command = "files.new"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniMainLocalizationEditor:OnClick"]
+control = "mniMainLocalizationEditor"
+module = "menu_model.rs"
+port_control = "mniMainLocalizationEditor"
+command = "localization.files"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniMainLocalizationLanguage:OnClick"]
+control = "mniMainLocalizationLanguage"
+module = "main_form.rs"
+port_control = "switch_language"
+command = "localization.language"
+reach = "reachable"
+note = "The item of the run-time list: each radio item runs the command with the language as its parameter."
+
+[gui."xEdit/xeMainForm.dfm:mniMainLocalizationLanguage:OnPopup"]
+control = "mniMainLocalizationLanguage"
+module = "main_form.rs"
+port_control = "refresh_language_menu"
+command = "localization.languages"
+reach = "reachable"
+note = "The DFM gives the item no event: upstream fills it when the main menu's popup opens (`pmuMainPopup`), and the port asks the session for the languages when it builds the list."
+
+[gui."xEdit/xeMainForm.dfm:mniMainSave:OnClick"]
+control = "mniMainSave"
+module = "menu_model.rs"
+port_control = "mniMainSave"
+command = "files.save"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniMarkallfileswithoutONAMasmodified:OnClick"]
+control = "mniMarkallfileswithoutONAMasmodified"
+module = "menu_model.rs"
+port_control = "mniMarkallfileswithoutONAMasmodified"
+command = "files.mark_modified_headers"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniMasterAndLeafsDisabled:OnClick"]
+control = "mniMasterAndLeafsDisabled"
+module = "menu_model.rs"
+port_control = "mniMasterAndLeafsDisabled"
+command = "records.compare"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniMasterAndLeafsEnabled:OnClick"]
+control = "mniMasterAndLeafsEnabled"
+module = "menu_model.rs"
+port_control = "mniMasterAndLeafsEnabled"
+command = "records.compare"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniModGroupsDisabled:OnClick"]
+control = "mniModGroupsDisabled"
+module = "menu_model.rs"
+port_control = "mniModGroupsDisabled"
+command = "conflicts.list"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniModGroupsEnabled:OnClick"]
+control = "mniModGroupsEnabled"
+module = "menu_model.rs"
+port_control = "mniModGroupsEnabled"
+command = "conflicts.list"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniNavAdd:OnClick"]
+control = "mniNavAdd"
+module = "menu_model.rs"
+port_control = "mniNavAdd"
+command = "elements.add"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniNavAddMasters:OnClick"]
+control = "mniNavAddMasters"
+module = "main_form.rs"
+port_control = "NavFlow::AddMasters"
+command = "masters.add"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniNavApplyScript:OnClick"]
+control = "mniNavApplyScript"
+module = "main_form.rs"
+port_control = "NavDialog::Script"
+command = "script.run"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniNavBanditFix:OnClick"]
+control = "mniNavBanditFix"
+module = "menu_model.rs"
+port_control = "mniNavBanditFix"
+command = "records.bandit_fix"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniNavBatchChangeReferencingRecords:OnClick"]
+control = "mniNavBatchChangeReferencingRecords"
+module = "main_form.rs"
+port_control = "NavFlow::BatchChange"
+command = "references.change_batch"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniNavBuildReachable:OnClick"]
+control = "mniNavBuildReachable"
+module = "menu_model.rs"
+port_control = "mniNavBuildReachable"
+command = "refs.build_reachable"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniNavBuildRef:OnClick"]
+control = "mniNavBuildRef"
+module = "main_form.rs"
+port_control = "NavFlow::BuildRef"
+command = "refs.build"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniNavCellChildNotVWD:OnClick"]
+control = "mniNavCellChildNotVWD"
+module = "menu_model.rs"
+port_control = "mniNavCellChildNotVWD"
+command = "records.set_visible_when_distant"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniNavCellChildPers:OnClick"]
+control = "mniNavCellChildPers"
+module = "menu_model.rs"
+port_control = "mniNavCellChildPers"
+command = "records.set_persistent"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniNavCellChildTemp:OnClick"]
+control = "mniNavCellChildTemp"
+module = "menu_model.rs"
+port_control = "mniNavCellChildTemp"
+command = "records.set_persistent"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniNavCellChildVWD:OnClick"]
+control = "mniNavCellChildVWD"
+module = "menu_model.rs"
+port_control = "mniNavCellChildVWD"
+command = "records.set_visible_when_distant"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniNavChangeFormID:OnClick"]
+control = "mniNavChangeFormID"
+module = "main_form.rs"
+port_control = "NavFlow::ChangeFormId"
+command = "formids.change"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniNavChangeReferencingRecords:OnClick"]
+control = "mniNavChangeReferencingRecords"
+module = "main_form.rs"
+port_control = "NavFlow::ChangeReferencingRecords"
+command = "references.change"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniNavCheckForCircularLeveledLists:OnClick"]
+control = "mniNavCheckForCircularLeveledLists"
+module = "menu_model.rs"
+port_control = "mniNavCheckForCircularLeveledLists"
+command = "leveled_lists.check_circular"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniNavCheckForErrors:OnClick"]
+control = "mniNavCheckForErrors"
+module = "menu_model.rs"
+port_control = "mniNavCheckForErrors"
+command = "files.check"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniNavCleanMasters:OnClick"]
+control = "mniNavCleanMasters"
+module = "menu_model.rs"
+port_control = "mniNavCleanMasters"
+command = "masters.clean"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniNavCleanupInjected:OnClick"]
+control = "mniNavCleanupInjected"
+module = "menu_model.rs"
+port_control = "mniNavCleanupInjected"
+command = "records.cleanup_injected"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniNavCompactFormIDs:OnClick"]
+control = "mniNavCompactFormIDs"
+module = "menu_model.rs"
+port_control = "mniNavCompactFormIDs"
+command = "formids.renumber"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniNavCompareSelected:OnClick"]
+control = "mniNavCompareSelected"
+module = "menu_model.rs"
+port_control = "mniNavCompareSelected"
+command = "records.compare_selected"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniNavCompareTo:OnClick"]
+control = "mniNavCompareTo"
+module = "main_form.rs"
+port_control = "NavFlow::CompareTo"
+command = "files.compare_to"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniNavCopyAsNewRecord:OnClick"]
+control = "mniNavCopyAsNewRecord"
+module = "main_form.rs"
+port_control = "NavFlow::CopyInto"
+command = "records.copy"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniNavCopyAsOverride:OnClick"]
+control = "mniNavCopyAsOverride"
+module = "main_form.rs"
+port_control = "NavFlow::CopyInto"
+command = "records.copy"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniNavCopyAsOverrideWithOverwrite:OnClick"]
+control = "mniNavCopyAsOverrideWithOverwrite"
+module = "main_form.rs"
+port_control = "NavFlow::CopyInto"
+command = "records.copy"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniNavCopyAsSpawnRateOverride:OnClick"]
+control = "mniNavCopyAsSpawnRateOverride"
+module = "main_form.rs"
+port_control = "NavFlow::CopyInto"
+command = "records.copy"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniNavCopyAsWrapper:OnClick"]
+control = "mniNavCopyAsWrapper"
+module = "main_form.rs"
+port_control = "NavFlow::CopyInto"
+command = "records.copy"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniNavCopyIdle:OnClick"]
+control = "mniNavCopyIdle"
+module = "main_form.rs"
+port_control = "NavFlow::CopyIdle"
+command = "records.copy_idles"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniNavCreateDeltaPatch:OnClick"]
+control = "mniNavCreateDeltaPatch"
+module = "main_form.rs"
+port_control = "NavFlow::DeltaPatch"
+command = "files.create_delta_patch"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniNavCreateMergedPatch:OnClick"]
+control = "mniNavCreateMergedPatch"
+module = "main_form.rs"
+port_control = "NavFlow::MergedPatch"
+command = "patch.merged"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniNavCreateModGroup:OnClick"]
+control = "mniNavCreateModGroup"
+module = "main_form.rs"
+port_control = "NavFlow::CreateModGroup"
+command = "modgroups.create"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniNavCreateSEQFile:OnClick"]
+control = "mniNavCreateSEQFile"
+module = "menu_model.rs"
+port_control = "mniNavCreateSEQFile"
+command = "tool.run"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniNavDeepCopyAsOverride:OnClick"]
+control = "mniNavDeepCopyAsOverride"
+module = "main_form.rs"
+port_control = "NavFlow::CopyInto"
+command = "records.copy"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniNavDeepCopyAsOverrideWithOverwriting:OnClick"]
+control = "mniNavDeepCopyAsOverrideWithOverwriting"
+module = "main_form.rs"
+port_control = "NavFlow::CopyInto"
+command = "records.copy"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniNavDeleteModGroups:OnClick"]
+control = "mniNavDeleteModGroups"
+module = "main_form.rs"
+port_control = "NavFlow::DeleteModGroups"
+command = "modgroups.delete"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniNavEditModGroup:OnClick"]
+control = "mniNavEditModGroup"
+module = "main_form.rs"
+port_control = "NavDialog::EditModGroup"
+command = "modgroups.edit"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniNavFilterApply:OnClick"]
+control = "mniNavFilterApply"
+module = "main_form.rs"
+port_control = "NavDialog::FilterOptions"
+command = "filter.apply"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniNavFilterApplySelected:OnClick"]
+control = "mniNavFilterApplySelected"
+module = "main_form.rs"
+port_control = "NavFlow::FilterApply"
+command = "filter.apply"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniNavFilterConflicts:OnClick"]
+control = "mniNavFilterConflicts"
+module = "menu_model.rs"
+port_control = "mniNavFilterConflicts"
+command = "filter.apply"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniNavFilterConflictsSelected:OnClick"]
+control = "mniNavFilterConflictsSelected"
+module = "main_form.rs"
+port_control = "NavFlow::FilterApply"
+command = "filter.apply"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniNavFilterForCleaning:OnClick"]
+control = "mniNavFilterForCleaning"
+module = "menu_model.rs"
+port_control = "mniNavFilterForCleaning"
+command = "files.clean"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniNavFilterForCleaningSelected:OnClick"]
+control = "mniNavFilterForCleaningSelected"
+module = "menu_model.rs"
+port_control = "mniNavFilterForCleaningSelected"
+command = "files.clean"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniNavFilterRemove:OnClick"]
+control = "mniNavFilterRemove"
+module = "menu_model.rs"
+port_control = "mniNavFilterRemove"
+command = "filter.remove"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniNavGenerateLOD:OnClick"]
+control = "mniNavGenerateLOD"
+module = "main_form.rs"
+port_control = "NavDialog::Lodgen"
+command = "lodgen.generate"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniNavHidden:OnClick"]
+control = "mniNavHidden"
+module = "menu_model.rs"
+port_control = "mniNavHidden"
+command = "records.set_hidden"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniNavLOManagersDirtyInfo:OnClick"]
+control = "mniNavLOManagersDirtyInfo"
+module = "menu_model.rs"
+port_control = "mniNavLOManagersDirtyInfo"
+command = "files.dirty_info"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniNavLocalizationSwitch:OnClick"]
+control = "mniNavLocalizationSwitch"
+module = "main_form.rs"
+port_control = "NavDialog::LocalizePlugin"
+command = "localization.localize"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniNavMarkModified:OnClick"]
+control = "mniNavMarkModified"
+module = "menu_model.rs"
+port_control = "mniNavMarkModified"
+command = "elements.mark_modified"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniNavRaceLVLIs:OnClick"]
+control = "mniNavRaceLVLIs"
+module = "menu_model.rs"
+port_control = "mniNavRaceLVLIs"
+command = "records.race_leveled_lists"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniNavRemove:OnClick"]
+control = "mniNavRemove"
+module = "menu_model.rs"
+port_control = "mniNavRemove"
+command = "records.delete"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniNavRemoveIdenticalToMaster:OnClick"]
+control = "mniNavRemoveIdenticalToMaster"
+module = "menu_model.rs"
+port_control = "mniNavRemoveIdenticalToMaster"
+command = "files.clean"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniNavRenumberFormIDsFrom:OnClick"]
+control = "mniNavRenumberFormIDsFrom"
+module = "main_form.rs"
+port_control = "NavFlow::RenumberFrom"
+command = "formids.renumber"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniNavRenumberFormIDsInject:OnClick"]
+control = "mniNavRenumberFormIDsInject"
+module = "main_form.rs"
+port_control = "NavFlow::RenumberInject"
+command = "formids.renumber"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniNavSetVWDAuto:OnClick"]
+control = "mniNavSetVWDAuto"
+module = "menu_model.rs"
+port_control = "mniNavSetVWDAuto"
+command = "references.set_vwd_auto"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniNavSetVWDAutoInto:OnClick"]
+control = "mniNavSetVWDAutoInto"
+module = "main_form.rs"
+port_control = "NavFlow::SetVwdInto"
+command = "references.copy_vwd_auto"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniNavSortMasters:OnClick"]
+control = "mniNavSortMasters"
+module = "menu_model.rs"
+port_control = "mniNavSortMasters"
+command = "masters.sort"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniNavUndeleteAndDisableReferences:OnClick"]
+control = "mniNavUndeleteAndDisableReferences"
+module = "menu_model.rs"
+port_control = "mniNavUndeleteAndDisableReferences"
+command = "files.clean"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniNavUpdateCRCModGroups:OnClick"]
+control = "mniNavUpdateCRCModGroups"
+module = "main_form.rs"
+port_control = "NavFlow::UpdateCrc"
+command = "modgroups.update_crcs"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniRefByApplyScript:OnClick"]
+control = "mniRefByApplyScript"
+module = "menu_model.rs"
+port_control = "mniRefByApplyScript"
+command = "script.run"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniRefByCompareSelected:OnClick"]
+control = "mniRefByCompareSelected"
+module = "menu_model.rs"
+port_control = "mniRefByCompareSelected"
+command = "records.compare_selected"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniRefByCopyAsNewInto:OnClick"]
+control = "mniRefByCopyAsNewInto"
+module = "menu_model.rs"
+port_control = "mniRefByCopyAsNewInto"
+command = "records.copy"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniRefByCopyDisabledOverrideInto:OnClick"]
+control = "mniRefByCopyDisabledOverrideInto"
+module = "menu_model.rs"
+port_control = "mniRefByCopyDisabledOverrideInto"
+command = "records.copy"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniRefByCopyOverrideInto:OnClick"]
+control = "mniRefByCopyOverrideInto"
+module = "menu_model.rs"
+port_control = "mniRefByCopyOverrideInto"
+command = "records.copy"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniRefByCopyOverrideIntoWithOverwriting:OnClick"]
+control = "mniRefByCopyOverrideIntoWithOverwriting"
+module = "menu_model.rs"
+port_control = "mniRefByCopyOverrideIntoWithOverwriting"
+command = "records.copy"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniRefByDeepCopyOverrideInto:OnClick"]
+control = "mniRefByDeepCopyOverrideInto"
+module = "menu_model.rs"
+port_control = "mniRefByDeepCopyOverrideInto"
+command = "records.copy"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniRefByDeepCopyOverrideIntoWithOverwriting:OnClick"]
+control = "mniRefByDeepCopyOverrideIntoWithOverwriting"
+module = "menu_model.rs"
+port_control = "mniRefByDeepCopyOverrideIntoWithOverwriting"
+command = "records.copy"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniRefByMarkModified:OnClick"]
+control = "mniRefByMarkModified"
+module = "menu_model.rs"
+port_control = "mniRefByMarkModified"
+command = "elements.mark_modified"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniRefByNotVWD:OnClick"]
+control = "mniRefByNotVWD"
+module = "menu_model.rs"
+port_control = "mniRefByNotVWD"
+command = "records.set_visible_when_distant"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniRefByRemove:OnClick"]
+control = "mniRefByRemove"
+module = "menu_model.rs"
+port_control = "mniRefByRemove"
+command = "records.delete"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniRefByVWD:OnClick"]
+control = "mniRefByVWD"
+module = "menu_model.rs"
+port_control = "mniRefByVWD"
+command = "records.set_visible_when_distant"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniSpreadsheetCompareSelected:OnClick"]
+control = "mniSpreadsheetCompareSelected"
+module = "menu_model.rs"
+port_control = "mniSpreadsheetCompareSelected"
+command = "records.compare_selected"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniViewAdd:OnClick"]
+control = "mniViewAdd"
+module = "menu_model.rs"
+port_control = "mniViewAdd"
+command = "elements.add"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniViewClear:OnClick"]
+control = "mniViewClear"
+module = "menu_model.rs"
+port_control = "mniViewClear"
+command = "elements.clear"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniViewCompareReferencedRow:OnClick"]
+control = "mniViewCompareReferencedRow"
+module = "menu_model.rs"
+port_control = "mniViewCompareReferencedRow"
+command = "records.compare_selected"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniViewCopyMultipleToSelectedRecords:OnClick"]
+control = "mniViewCopyMultipleToSelectedRecords"
+module = "menu_model.rs"
+port_control = "mniViewCopyMultipleToSelectedRecords"
+command = "elements.copy_to_records"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniViewCopyToSelectedRecords:OnClick"]
+control = "mniViewCopyToSelectedRecords"
+module = "menu_model.rs"
+port_control = "mniViewCopyToSelectedRecords"
+command = "elements.copy_to_records"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniViewCreateModGroup:OnClick"]
+control = "mniViewCreateModGroup"
+module = "menu_model.rs"
+port_control = "mniViewCreateModGroup"
+command = "modgroups.create"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniViewEdit:OnClick"]
+control = "mniViewEdit"
+module = "menu_model.rs"
+port_control = "mniViewEdit"
+command = "elements.set"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniViewHeaderCopyAsNewRecord:OnClick"]
+control = "mniViewHeaderCopyAsNewRecord"
+module = "menu_model.rs"
+port_control = "mniViewHeaderCopyAsNewRecord"
+command = "records.copy"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniViewHeaderCopyAsOverride:OnClick"]
+control = "mniViewHeaderCopyAsOverride"
+module = "menu_model.rs"
+port_control = "mniViewHeaderCopyAsOverride"
+command = "records.copy"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniViewHeaderCopyAsOverrideWithOverwriting:OnClick"]
+control = "mniViewHeaderCopyAsOverrideWithOverwriting"
+module = "menu_model.rs"
+port_control = "mniViewHeaderCopyAsOverrideWithOverwriting"
+command = "records.copy"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniViewHeaderCopyAsWrapper:OnClick"]
+control = "mniViewHeaderCopyAsWrapper"
+module = "menu_model.rs"
+port_control = "mniViewHeaderCopyAsWrapper"
+command = "records.copy"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniViewHeaderDeepCopyAsOverride:OnClick"]
+control = "mniViewHeaderDeepCopyAsOverride"
+module = "menu_model.rs"
+port_control = "mniViewHeaderDeepCopyAsOverride"
+command = "records.copy"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniViewHeaderDeepCopyAsOverrideWithOverwriting:OnClick"]
+control = "mniViewHeaderDeepCopyAsOverrideWithOverwriting"
+module = "menu_model.rs"
+port_control = "mniViewHeaderDeepCopyAsOverrideWithOverwriting"
+command = "records.copy"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniViewHeaderHidden:OnClick"]
+control = "mniViewHeaderHidden"
+module = "menu_model.rs"
+port_control = "mniViewHeaderHidden"
+command = "records.set_hidden"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniViewHeaderRemove:OnClick"]
+control = "mniViewHeaderRemove"
+module = "menu_model.rs"
+port_control = "mniViewHeaderRemove"
+command = "records.delete"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniViewHeaderUnhideAll:OnClick"]
+control = "mniViewHeaderUnhideAll"
+module = "menu_model.rs"
+port_control = "mniViewHeaderUnhideAll"
+command = "records.set_hidden"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniViewHideNoConflict:OnClick"]
+control = "mniViewHideNoConflict"
+module = "menu_model.rs"
+port_control = "mniViewHideNoConflict"
+command = "records.compare"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniViewModGroupsReload:OnClick"]
+control = "mniViewModGroupsReload"
+module = "menu_model.rs"
+port_control = "mniViewModGroupsReload"
+command = "modgroups.select"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniViewMoveDown:OnClick"]
+control = "mniViewMoveDown"
+module = "menu_model.rs"
+port_control = "mniViewMoveDown"
+command = "elements.move"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniViewMoveUp:OnClick"]
+control = "mniViewMoveUp"
+module = "menu_model.rs"
+port_control = "mniViewMoveUp"
+command = "elements.move"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniViewNextMember:OnClick"]
+control = "mniViewNextMember"
+module = "menu_model.rs"
+port_control = "mniViewNextMember"
+command = "elements.change_member"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniViewPreviousMember:OnClick"]
+control = "mniViewPreviousMember"
+module = "menu_model.rs"
+port_control = "mniViewPreviousMember"
+command = "elements.change_member"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniViewRemove:OnClick"]
+control = "mniViewRemove"
+module = "menu_model.rs"
+port_control = "mniViewRemove"
+command = "elements.remove"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniViewRemoveFromSelected:OnClick"]
+control = "mniViewRemoveFromSelected"
+module = "menu_model.rs"
+port_control = "mniViewRemoveFromSelected"
+command = "elements.remove_from_records"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:mniViewSetToDefault:OnClick"]
+control = "mniViewSetToDefault"
+module = "menu_model.rs"
+port_control = "mniViewSetToDefault"
+command = "elements.set"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:tmrGenerator:OnTimer"]
+control = "tmrGenerator"
+module = "menu_model.rs"
+port_control = "mniNavCreateSEQFile"
+command = "tool.run"
+reach = "reimplemented"
+reason = "The port has no start-up timer: the tool modes run from their menu items (`tool.run`), so no control of the port reaches the timer."
+
+[gui."xEdit/xeMainForm.dfm:tmrStartup:OnTimer"]
+control = "tmrStartup"
+module = "main_form.rs"
+port_control = "start_load"
+command = "session.load"
+reach = "reimplemented"
+reason = "The port has no start-up timer: the load starts when the module dialog is confirmed (`start_load`), which calls `Session::load` of the session directly and not the command of the ledger."
+
+[gui."xEdit/xeMainForm.dfm:vstSpreadSheetAmmo:OnDragAllowed"]
+control = "vstSpreadSheetAmmo"
+module = "panes.rs"
+port_control = "vstSpreadSheetAmmo"
+command = "elements.assign"
+reach = "unreachable"
+reason = "The port's view and spreadsheets have no drag and drop: the assign of a drop is the copy of the element into the other column (`elements.copy_to_records` with `mode: \"assign\"`), so no control of the port reaches `elements.assign`."
+
+[gui."xEdit/xeMainForm.dfm:vstSpreadSheetAmmo:OnDragDrop"]
+control = "vstSpreadSheetAmmo"
+module = "panes.rs"
+port_control = "vstSpreadSheetAmmo"
+command = "elements.assign"
+reach = "unreachable"
+reason = "The port's view and spreadsheets have no drag and drop: the assign of a drop is the copy of the element into the other column (`elements.copy_to_records` with `mode: \"assign\"`), so no control of the port reaches `elements.assign`."
+
+[gui."xEdit/xeMainForm.dfm:vstSpreadSheetAmmo:OnDragOver"]
+control = "vstSpreadSheetAmmo"
+module = "panes.rs"
+port_control = "vstSpreadSheetAmmo"
+command = "elements.assign"
+reach = "unreachable"
+reason = "The port's view and spreadsheets have no drag and drop: the assign of a drop is the copy of the element into the other column (`elements.copy_to_records` with `mode: \"assign\"`), so no control of the port reaches `elements.assign`."
+
+[gui."xEdit/xeMainForm.dfm:vstSpreadSheetAmmo:OnNewText"]
+control = "vstSpreadSheetAmmo"
+module = "panes.rs"
+port_control = "vstSpreadSheetAmmo"
+command = "elements.set"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:vstSpreadSheetWeapon:OnDragAllowed"]
+control = "vstSpreadSheetWeapon"
+module = "panes.rs"
+port_control = "vstSpreadSheetWeapon"
+command = "elements.assign"
+reach = "unreachable"
+reason = "The port's view and spreadsheets have no drag and drop: the assign of a drop is the copy of the element into the other column (`elements.copy_to_records` with `mode: \"assign\"`), so no control of the port reaches `elements.assign`."
+
+[gui."xEdit/xeMainForm.dfm:vstSpreadSheetWeapon:OnDragDrop"]
+control = "vstSpreadSheetWeapon"
+module = "panes.rs"
+port_control = "vstSpreadSheetWeapon"
+command = "elements.assign"
+reach = "unreachable"
+reason = "The port's view and spreadsheets have no drag and drop: the assign of a drop is the copy of the element into the other column (`elements.copy_to_records` with `mode: \"assign\"`), so no control of the port reaches `elements.assign`."
+
+[gui."xEdit/xeMainForm.dfm:vstSpreadSheetWeapon:OnDragOver"]
+control = "vstSpreadSheetWeapon"
+module = "panes.rs"
+port_control = "vstSpreadSheetWeapon"
+command = "elements.assign"
+reach = "unreachable"
+reason = "The port's view and spreadsheets have no drag and drop: the assign of a drop is the copy of the element into the other column (`elements.copy_to_records` with `mode: \"assign\"`), so no control of the port reaches `elements.assign`."
+
+[gui."xEdit/xeMainForm.dfm:vstSpreadSheetWeapon:OnNewText"]
+control = "vstSpreadSheetWeapon"
+module = "panes.rs"
+port_control = "vstSpreadSheetWeapon"
+command = "elements.set"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:vstSpreadsheetArmor:OnDragAllowed"]
+control = "vstSpreadsheetArmor"
+module = "panes.rs"
+port_control = "vstSpreadsheetArmor"
+command = "elements.assign"
+reach = "unreachable"
+reason = "The port's view and spreadsheets have no drag and drop: the assign of a drop is the copy of the element into the other column (`elements.copy_to_records` with `mode: \"assign\"`), so no control of the port reaches `elements.assign`."
+
+[gui."xEdit/xeMainForm.dfm:vstSpreadsheetArmor:OnDragDrop"]
+control = "vstSpreadsheetArmor"
+module = "panes.rs"
+port_control = "vstSpreadsheetArmor"
+command = "elements.assign"
+reach = "unreachable"
+reason = "The port's view and spreadsheets have no drag and drop: the assign of a drop is the copy of the element into the other column (`elements.copy_to_records` with `mode: \"assign\"`), so no control of the port reaches `elements.assign`."
+
+[gui."xEdit/xeMainForm.dfm:vstSpreadsheetArmor:OnDragOver"]
+control = "vstSpreadsheetArmor"
+module = "panes.rs"
+port_control = "vstSpreadsheetArmor"
+command = "elements.assign"
+reach = "unreachable"
+reason = "The port's view and spreadsheets have no drag and drop: the assign of a drop is the copy of the element into the other column (`elements.copy_to_records` with `mode: \"assign\"`), so no control of the port reaches `elements.assign`."
+
+[gui."xEdit/xeMainForm.dfm:vstSpreadsheetArmor:OnNewText"]
+control = "vstSpreadsheetArmor"
+module = "panes.rs"
+port_control = "vstSpreadsheetArmor"
+command = "elements.set"
+reach = "reachable"
+
+[gui."xEdit/xeMainForm.dfm:vstView:OnDragAllowed"]
+control = "vstView"
+module = "view_grid.rs"
+port_control = "vstView"
+command = "elements.assign"
+reach = "unreachable"
+reason = "The port's view and spreadsheets have no drag and drop: the assign of a drop is the copy of the element into the other column (`elements.copy_to_records` with `mode: \"assign\"`), so no control of the port reaches `elements.assign`."
+
+[gui."xEdit/xeMainForm.dfm:vstView:OnDragDrop"]
+control = "vstView"
+module = "view_grid.rs"
+port_control = "vstView"
+command = "elements.assign"
+reach = "unreachable"
+reason = "The port's view and spreadsheets have no drag and drop: the assign of a drop is the copy of the element into the other column (`elements.copy_to_records` with `mode: \"assign\"`), so no control of the port reaches `elements.assign`."
+
+[gui."xEdit/xeMainForm.dfm:vstView:OnDragOver"]
+control = "vstView"
+module = "view_grid.rs"
+port_control = "vstView"
+command = "elements.assign"
+reach = "unreachable"
+reason = "The port's view and spreadsheets have no drag and drop: the assign of a drop is the copy of the element into the other column (`elements.copy_to_records` with `mode: \"assign\"`), so no control of the port reaches `elements.assign`."
+
+[gui."xEdit/xeMainForm.dfm:vstView:OnNewText"]
+control = "vstView"
+module = "view_grid.rs"
+port_control = "vstViewNewText"
+command = "elements.set"
+reach = "reachable"
+
+[gui."xEdit/xeModGroupEditForm.dfm:edName:OnChange"]
+control = "edName"
+module = "dialogs/mod_group_edit_form.rs"
+port_control = "ModGroupEditState"
+command = "modgroups.edit"
+reach = "reachable"
+
+[gui."xEdit/xeModGroupEditForm.dfm:frmModGroupEdit:OnClose"]
+control = "frmModGroupEdit"
+module = "dialogs/mod_group_edit_form.rs"
+port_control = "ModGroupEditAction"
+command = "modgroups.edit"
+reach = "reachable"
+
+[gui."xEdit/xeModGroupEditForm.dfm:vstModGroupItems:OnKeyDown"]
+control = "vstModGroupItems"
+module = "dialogs/mod_group_edit_form.rs"
+port_control = "ModGroupEditState"
+command = "modgroups.edit"
+reach = "reachable"
+
+[gui."xEdit/xeModGroupEditForm.dfm:vstModGroupItems:OnNodeClick"]
+control = "vstModGroupItems"
+module = "dialogs/mod_group_edit_form.rs"
+port_control = "ModGroupEditState"
+command = "modgroups.edit"
+reach = "reachable"
+
+[gui."xEdit/xeModGroupSelectForm.dfm:acPresetDelete:OnExecute"]
+control = "acPresetDelete"
+module = "dialogs/mod_group_select_form.rs"
+command_module = "main_form.rs"
+port_control = "PresetDelete"
+command = "modgroups.preset_delete"
+reach = "reachable"
+
+[gui."xEdit/xeModGroupSelectForm.dfm:acPresetLoad:OnExecute"]
+control = "acPresetLoad"
+module = "dialogs/mod_group_select_form.rs"
+port_control = "PresetLoad"
+command = "modgroups.preset_load"
+reach = "reimplemented"
+reason = "The port's mod group dialog loads a preset from the settings file (`settings.get`) and applies it to the selection, so no control of the port reaches `modgroups.preset_load`."
+
+[gui."xEdit/xeModGroupSelectForm.dfm:acPresetSave:OnExecute"]
+control = "acPresetSave"
+module = "dialogs/mod_group_select_form.rs"
+command_module = "main_form.rs"
+port_control = "PresetSave"
+command = "modgroups.preset_save"
+reach = "reachable"
+
+[gui."xEdit/xeModGroupSelectForm.dfm:mniInvertSelection:OnClick"]
+control = "mniInvertSelection"
+module = "dialogs/mod_group_select_form.rs"
+port_control = "ModGroupSelectState"
+command = "modgroups.select"
+reach = "reachable"
+
+[gui."xEdit/xeModGroupSelectForm.dfm:mniSelectAll:OnClick"]
+control = "mniSelectAll"
+module = "dialogs/mod_group_select_form.rs"
+port_control = "ModGroupSelectState"
+command = "modgroups.select"
+reach = "reachable"
+
+[gui."xEdit/xeModGroupSelectForm.dfm:mniSelectNone:OnClick"]
+control = "mniSelectNone"
+module = "dialogs/mod_group_select_form.rs"
+port_control = "ModGroupSelectState"
+command = "modgroups.select"
+reach = "reachable"
+
+[gui."xEdit/xeModGroupSelectForm.dfm:vstModGroups:OnChecked"]
+control = "vstModGroups"
+module = "dialogs/mod_group_select_form.rs"
+port_control = "ModGroupSelectState"
+command = "modgroups.select"
+reach = "reachable"
+
+[gui."xEdit/xeModGroupSelectForm.dfm:vstModGroups:OnNodeDblClick"]
+control = "vstModGroups"
+module = "dialogs/mod_group_select_form.rs"
+port_control = "ModGroupSelectState"
+command = "modgroups.select"
+reach = "reachable"
+
+[gui."xEdit/xeModuleSelectForm.dfm:acPresetDelete:OnExecute"]
+control = "acPresetDelete"
+module = "dialogs/module_select_form.rs"
+command_module = "main_form.rs"
+port_control = "PresetDelete"
+command = "modules.preset_delete"
+reach = "reachable"
+
+[gui."xEdit/xeModuleSelectForm.dfm:acPresetLoad:OnExecute"]
+control = "acPresetLoad"
+module = "dialogs/module_select_form.rs"
+command_module = "main_form.rs"
+port_control = "PresetLoad"
+command = "modules.preset_load"
+reach = "reachable"
+
+[gui."xEdit/xeModuleSelectForm.dfm:acPresetSave:OnExecute"]
+control = "acPresetSave"
+module = "dialogs/module_select_form.rs"
+command_module = "main_form.rs"
+port_control = "PresetSave"
+command = "modules.preset_save"
+reach = "reachable"
+
+[gui."xEdit/xeModuleSelectForm.dfm:btnOK:OnClick"]
+control = "btnOK"
+module = "dialogs/module_select_form.rs"
+port_control = "ModuleSelectAction::Ok"
+command = "session.load"
+reach = "reimplemented"
+reason = "The port's module dialog loads the checked modules with `start_load`, which calls `Session::load` of the session directly and not the command of the ledger."
+
+[gui."xEdit/xeModuleSelectForm.dfm:vstModules:OnBeforeGetCheckState"]
+control = "vstModules"
+module = "dialogs/module_select_form.rs"
+port_control = "ModuleSelectState"
+command = "session.load"
+reach = "reimplemented"
+reason = "The port's module list checks the modules and the masters a checked module needs; the load follows when the dialog is confirmed (`start_load`), which calls `Session::load` of the session directly and not the command of the ledger."
+
+[gui."xEdit/xeModuleSelectForm.dfm:vstModules:OnChecked"]
+control = "vstModules"
+module = "dialogs/module_select_form.rs"
+port_control = "ModuleSelectState"
+command = "session.load"
+reach = "reimplemented"
+reason = "The port's module list checks the modules and the masters a checked module needs; the load follows when the dialog is confirmed (`start_load`), which calls `Session::load` of the session directly and not the command of the ledger."
+
+[gui."xEdit/xeModuleSelectForm.dfm:vstModules:OnGetText"]
+control = "vstModules"
+module = "dialogs/module_select_form.rs"
+command_module = "main_form.rs"
+port_control = "TreeCell::new"
+command = "modules.list"
+reach = "reachable"
+
+[gui."xEdit/xeModuleSelectForm.dfm:vstModules:OnInitChildren"]
+control = "vstModules"
+module = "dialogs/module_select_form.rs"
+command_module = "main_form.rs"
+port_control = "has_children"
+command = "modules.list"
+reach = "reachable"
+
+[gui."xEdit/xeModuleSelectForm.dfm:vstModules:OnInitNode"]
+control = "vstModules"
+module = "dialogs/module_select_form.rs"
+command_module = "main_form.rs"
+port_control = "ModuleSelectState"
+command = "modules.list"
+reach = "reachable"
+
+[gui."xEdit/xeOptionsForm.dfm:frmOptions:OnClose"]
+control = "frmOptions"
+module = "dialogs/options_form.rs"
+port_control = "OptionsAction::Ok"
+command = "settings.set"
+reach = "reachable"
+
+[gui."xEdit/xeScriptForm.dfm:btnSave:OnClick"]
+control = "btnSave"
+module = "dialogs/script_form.rs"
+port_control = "ScriptFormAction::Save"
+command = "script.save"
+reach = "reachable"
+
+[gui."xEdit/xeScriptForm.dfm:chkScriptsSubDir:OnClick"]
+control = "chkScriptsSubDir"
+module = "dialogs/script_form.rs"
+port_control = "ScriptFormAction::List"
+command = "script.list"
+reach = "reachable"
+
+[gui."xEdit/xeScriptForm.dfm:cmbScripts:OnSelect"]
+control = "cmbScripts"
+module = "dialogs/script_form.rs"
+port_control = "ScriptFormAction::Read"
+command = "script.read"
+reach = "reachable"
+
+[gui."xEdit/xeWorldspaceCellDetailsForm.dfm:frmWorldspaceCellDetails:OnCreate"]
+control = "frmWorldspaceCellDetails"
+module = "dialogs/worldspace_cell_details_form.rs"
+command_module = "main_form.rs"
+port_control = "WorldspaceCellDetailsState"
+command = "elements.add"
+reach = "reachable"
+
+[gui."xEdit/xeWorldspaceCellDetailsForm.dfm:rbTemporary:OnClick"]
+control = "rbTemporary"
+module = "dialogs/worldspace_cell_details_form.rs"
+command_module = "main_form.rs"
+port_control = "persistent"
+command = "elements.add"
+reach = "reachable"

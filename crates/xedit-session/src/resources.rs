@@ -355,9 +355,14 @@ pub fn load_gui_resources(
         }
     }
 
-    // Load archives associated with plugins
+    // Load archives associated with plugins. `TLoaderThread.Execute`
+    // checks `wbForceTerminate` once per module: a cancelled load stops
+    // here.
     let exact = matches!(game_mode(), GameMode::gmTES5 | GameMode::gmEnderal);
     for module in modules {
+        if xedit_core::interface::wait_form::is_canceled() {
+            return Err("cancelled: the operation was cancelled".to_owned());
+        }
         let (mut found, mut missing) = (Vec::new(), Vec::new());
         // all games except old Skyrim load BSA files with partial matching,
         // Skyrim requires exact names match and can use a private ini to
@@ -394,8 +399,14 @@ pub fn load_gui_resources(
     add_folder(Path::new(data_path));
 
     if decode_texture_hashes() {
+        if xedit_core::interface::wait_form::is_canceled() {
+            return Err("cancelled: the operation was cancelled".to_owned());
+        }
         progress("Start building resources cache...");
         ensure_cache();
+        if xedit_core::interface::wait_form::is_canceled() {
+            return Err("cancelled: the operation was cancelled".to_owned());
+        }
         progress("...resources cache finished building");
     }
     wb_resources_loaded();

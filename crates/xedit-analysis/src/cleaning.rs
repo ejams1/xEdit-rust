@@ -462,6 +462,10 @@ pub fn quick_clean_pass(
 ) -> Result<QuickCleanPass, String> {
     let mut tree = NavTree::new(std::slice::from_ref(target));
     let filter = apply_filter(&mut tree, &FilterOptions::for_cleaning(), files).map_err(|error| error.message)?;
+    // The filter walk stopped at its cancellation poll point.
+    if filter.cancelled {
+        return Err("cancelled".to_owned());
+    }
     let start = tree
         .file_node(target)
         .ok_or_else(|| format!("{} has no node", target.get_name()))?;
