@@ -52,6 +52,12 @@ impl Element for TemplateElement {
         self.def.get_name().to_owned()
     }
 
+    /// The name of the template element without building it: the name of
+    /// its definition.
+    fn name_matches(&self, name: &str) -> bool {
+        crate::interface::element::name_equals_ignore_case(self.def.get_name(), name)
+    }
+
     /// `TwbElement.GetFullPath` of an element without a container.
     fn get_full_path(&self) -> String {
         format!(" \\ {}", self.get_name())
