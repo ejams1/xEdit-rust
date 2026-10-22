@@ -22,6 +22,80 @@ use super::types::{ConflictPriority, ElementType, FileState, FileStates, Signatu
 /// A reference to an element, upstream `IwbElement`.
 pub type ElementRef = Arc<dyn Element>;
 
+/// Whether `name` is `text`, ignoring the case of the ASCII letters, the
+/// comparison `SameText` of Delphi does for the names of the elements.
+///
+/// The name of an element is built from a definition and a suffix, and the
+/// definitions hold their names as `&str`; the comparison therefore reads
+/// the bytes of the name without copying it.
+pub fn name_equals_ignore_case(text: &str, name: &str) -> bool {
+    text.eq_ignore_ascii_case(name)
+}
+
+/// A part of a name: a text, or the characters of a signature.
+#[derive(Clone, Copy)]
+pub enum NamePart<'a> {
+    Text(&'a str),
+    Chars(&'a [char]),
+}
+
+/// The rest of `name` after `prefix`, ignoring the case of the ASCII
+/// letters, or `None` when `name` does not start with `prefix`.
+///
+/// The comparison is by character, so it never splits a character of a
+/// name that is not ASCII.
+pub fn strip_prefix_ignore_case<'a>(name: &'a str, prefix: &str) -> Option<&'a str> {
+    let mut rest = name;
+    for wanted in prefix.chars() {
+        let mut chars = rest.chars();
+        let found = chars.next()?;
+        if !found.eq_ignore_ascii_case(&wanted) {
+            return None;
+        }
+        rest = chars.as_str();
+    }
+    Some(rest)
+}
+
+/// The rest of `name` after the characters of `prefix`, ignoring the case
+/// of the ASCII letters, or `None` when `name` does not start with them.
+pub fn strip_chars_ignore_case<'a>(name: &'a str, prefix: &[char]) -> Option<&'a str> {
+    let mut rest = name;
+    for wanted in prefix {
+        let mut chars = rest.chars();
+        let found = chars.next()?;
+        if !found.eq_ignore_ascii_case(wanted) {
+            return None;
+        }
+        rest = chars.as_str();
+    }
+    Some(rest)
+}
+
+/// Whether `name` is the parts joined, ignoring the case of the ASCII
+/// letters: the parts are compared one after the other, and the name must
+/// hold exactly them.
+///
+/// The name of an element is built from parts (the signature, the name of
+/// the definition, the suffix); the comparison reads them without joining
+/// them into a string.
+pub fn equals_joined_ignore_case(name: &str, parts: &[NamePart<'_>]) -> bool {
+    let mut rest = name;
+    for part in parts {
+        rest = match part {
+            NamePart::Text(text) => match strip_prefix_ignore_case(rest, text) {
+                Some(rest) => rest,
+                None => return false,
+            },
+            NamePart::Chars(chars) => match strip_chars_ignore_case(rest, chars) {
+                Some(rest) => rest,
+                None => return false,
+            },
+        };
+    }
+    rest.is_empty()
+}
+
 /// An element argument that upstream allows to be `nil`.
 pub type ElementArg<'a> = Option<&'a ElementRef>;
 
@@ -41,6 +115,26 @@ pub trait Element: Send + Sync {
     fn get_element_id(&self) -> usize;
 
     fn get_name(&self) -> String;
+
+    /// Whether the name of the element is `name`, ignoring case, without
+    /// building the name.
+    ///
+    /// The default compares the name the element builds, so it is the same
+    /// answer as `get_name().eq_ignore_ascii_case(name)`; an element whose
+    /// name comes from a definition overrides it and compares the name of
+    /// the definition, without the copy of it.
+    fn name_matches(&self, name: &str) -> bool {
+        self.get_name().eq_ignore_ascii_case(name)
+    }
+
+    /// Whether the display name of the element is `name`, ignoring case,
+    /// without building the name.
+    ///
+    /// The default compares the display name the element builds, so it is
+    /// the same answer as `get_display_name(true).eq_ignore_ascii_case(name)`.
+    fn display_name_matches(&self, name: &str) -> bool {
+        self.get_display_name(true).eq_ignore_ascii_case(name)
+    }
 
     fn get_full_path(&self) -> String;
 

@@ -99,6 +99,12 @@ impl Element for FlagImpl {
         self.flags_def.get_flag(self.index as usize, false)
     }
 
+    /// The name of the flag without building it: the name of the flag in
+    /// the flags definition.
+    fn name_matches(&self, name: &str) -> bool {
+        crate::interface::element::name_equals_ignore_case(&self.flags_def.get_flag(self.index as usize, false), name)
+    }
+
     fn get_full_path(&self) -> String {
         // `TwbElement.GetFullPath` (`wbImplementation.pas:19641-19652`), the
         // same body as the `element_common!` macro.

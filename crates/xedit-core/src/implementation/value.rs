@@ -165,6 +165,27 @@ impl ValueBase {
             format!("{name} {}", self.e_name_suffix)
         }
     }
+
+    /// The name of the value without building it: the name of the
+    /// definition, a space and the suffix of the element.
+    fn name_matches(&self, name: &str) -> bool {
+        let def_name = self.vb_value_def.get_name();
+        if self.e_name_suffix.is_empty() {
+            return crate::interface::element::name_equals_ignore_case(def_name, name);
+        }
+        if def_name.is_empty() {
+            // `TwbValueBase.GetName`: the space only after a name.
+            return crate::interface::element::name_equals_ignore_case(&self.e_name_suffix, name);
+        }
+        crate::interface::element::equals_joined_ignore_case(
+            name,
+            &[
+                crate::interface::element::NamePart::Text(def_name),
+                crate::interface::element::NamePart::Text(" "),
+                crate::interface::element::NamePart::Text(&self.e_name_suffix),
+            ],
+        )
+    }
 }
 
 /// The position of the next element while the children of a container are
@@ -1339,6 +1360,12 @@ impl Element for ValueImpl {
         self.vb.name()
     }
 
+    /// The name of the value without building it: the name of the
+    /// definition, and the suffix of the element.
+    fn name_matches(&self, name: &str) -> bool {
+        self.vb.name_matches(name)
+    }
+
     /// Port of `TwbValueBase.GetBaseName`: the name of the definition.
     fn get_base_name(&self) -> String {
         self.vb.vb_value_def.get_name().to_owned()
@@ -1363,6 +1390,35 @@ impl Element for ValueImpl {
             result.push_str(&self.vb.e_name_suffix);
         }
         result
+    }
+
+    /// The display name of the value without building it: the name of the
+    /// resolved definition, unless that is a container type different from
+    /// the definition of the element, and the suffix of the element.
+    fn display_name_matches(&self, name: &str) -> bool {
+        let self_ref = self.element_ref();
+        let resolved = resolve(self.vb.vb_value_def.clone(), self.data(), Some(&self_ref));
+        let same = std::ptr::addr_eq(Arc::as_ptr(&resolved), Arc::as_ptr(&self.vb.vb_value_def));
+        let def_name = if !same && dt_non_values().contains(resolved.get_def_type()) {
+            self.vb.vb_value_def.get_name()
+        } else {
+            resolved.get_name()
+        };
+        let suffix = &self.vb.e_name_suffix;
+        if suffix.is_empty() {
+            return crate::interface::element::name_equals_ignore_case(def_name, name);
+        }
+        if def_name.is_empty() {
+            return crate::interface::element::name_equals_ignore_case(suffix, name);
+        }
+        crate::interface::element::equals_joined_ignore_case(
+            name,
+            &[
+                crate::interface::element::NamePart::Text(def_name),
+                crate::interface::element::NamePart::Text(" "),
+                crate::interface::element::NamePart::Text(suffix),
+            ],
+        )
     }
 
     /// Port of `TwbValueBase.GetDataSize` over `TwbDataContainer.GetDataSize`:
