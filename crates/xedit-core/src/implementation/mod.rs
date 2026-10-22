@@ -611,6 +611,32 @@ impl ElementBase {
         }
     }
 
+    /// The display name of an element whose name is `name`, without
+    /// building it: the name with the suffix of the element.
+    pub(crate) fn display_name_matches(&self, name: &str, wanted: &str) -> bool {
+        if let Some(container) = self.container()
+            && let Some(container) = container.as_element_impl()
+        {
+            container.update_name_suffixes();
+        }
+        let suffix = self.name_suffix();
+        if suffix.is_empty() {
+            return crate::interface::element::name_equals_ignore_case(name, wanted);
+        }
+        if name.is_empty() {
+            return crate::interface::element::name_equals_ignore_case(&suffix, wanted);
+        }
+        // The display name is the name, a space and the suffix.
+        crate::interface::element::equals_joined_ignore_case(
+            wanted,
+            &[
+                crate::interface::element::NamePart::Text(name),
+                crate::interface::element::NamePart::Text(" "),
+                crate::interface::element::NamePart::Text(&suffix),
+            ],
+        )
+    }
+
     /// The container this element is an element of (`eContainer`). Public
     /// for the script walk of `xedit-session`, which steps over the live
     /// tree (`vstNav.GetPrevious`).
@@ -783,6 +809,21 @@ impl ContainerBase {
     /// The element at `index`, without copying the list.
     pub fn element_at(&self, index: usize) -> Option<ElementRef> {
         self.cnt_elements.read().unwrap().get(index).cloned()
+    }
+
+    /// The elements in memory order, under the read lock of the list, for
+    /// the callers that only read them.
+    ///
+    /// The closure runs while the lock is held: it must not call anything
+    /// that takes the same lock for writing (a change of the element list,
+    /// `add_element`, `insert_element`, `remove_element`, `release_elements`
+    /// or a sort of the list), or the lock is taken twice and the thread
+    /// deadlocks. Reading the elements of another container is fine; reading
+    /// the elements of the same container from a callback that runs inside
+    /// the closure is not.
+    pub fn with_elements<R>(&self, read: impl FnOnce(&[ElementRef]) -> R) -> R {
+        let elements = self.cnt_elements.read().unwrap();
+        read(&elements)
     }
 
     /// Port of `TwbContainer.SetIsSortedBySortOrder(aForce)`: sorted by sort
@@ -4518,6 +4559,12 @@ impl Element for FileImpl {
 
     fn get_name(&self) -> String {
         path_file_name(&self.fl_file_name).to_owned()
+    }
+
+    /// The name of the file without building it: the file name without its
+    /// path.
+    fn name_matches(&self, name: &str) -> bool {
+        crate::interface::element::name_equals_ignore_case(path_file_name(&self.fl_file_name), name)
     }
 
     fn get_data_size(&self) -> i32 {
