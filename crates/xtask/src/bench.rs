@@ -959,9 +959,10 @@ fn measure_port_variant(
                     .arg("archive")
                     .arg("extract")
                     .arg(&archive)
-                    .arg("--output")
                     .arg(&output);
-                timed(command, variant)?
+                let extracted = timed(command, variant)?;
+                ensure!(extracted.code == Some(0), "extracting the archive failed");
+                extracted
             }
         };
         runs.push(run);
