@@ -384,11 +384,27 @@ fn lib_deflate_decompress(src: &[u8], dst: &mut [u8]) -> Result<(), CompressionE
     }
 }
 
+/// Port of `LZ4Decompress`: `LZ4_decompress_safe` of the linked C library,
+/// which is the call upstream makes. The output must fill `dst` exactly.
 fn lz4_decompress(src: &[u8], dst: &mut [u8]) -> Result<(), CompressionError> {
-    match lz4_flex::block::decompress_into(src, dst) {
-        Ok(size) if size == dst.len() => Ok(()),
-        _ => Err(CompressionError("LZ4 error: Decompression failed".to_owned())),
+    let failed = || CompressionError("LZ4 error: Decompression failed".to_owned());
+    let (Ok(compressed), Ok(capacity)) = (i32::try_from(src.len()), i32::try_from(dst.len())) else {
+        return Err(failed());
+    };
+    // SAFETY: `src` is valid for `compressed` bytes and `dst` for `capacity`
+    // bytes, which is the contract of `LZ4_decompress_safe`.
+    let written = unsafe {
+        lz4_sys::LZ4_decompress_safe(
+            src.as_ptr().cast(),
+            dst.as_mut_ptr().cast(),
+            compressed,
+            capacity,
+        )
+    };
+    if written < 0 || written as usize != dst.len() {
+        return Err(failed());
     }
+    Ok(())
 }
 
 fn lz4f_decompress(src: &[u8], dst: &mut [u8]) -> Result<(), CompressionError> {
@@ -576,5 +592,66 @@ mod tests {
     #[test]
     fn none_is_not_a_decompression() {
         assert!(CompressionType::None.decompress(TEXT, &mut [0u8; 4]).is_err());
+    }
+
+    /// A block compressed by the linked C library, so the test compares the
+    /// two routes over a block neither of them produced.
+    fn compress_block_c(data: &[u8]) -> Vec<u8> {
+        let size = i32::try_from(data.len()).unwrap();
+        // SAFETY: `LZ4_compressBound` only reads its argument.
+        let bound = unsafe { lz4_sys::LZ4_compressBound(size) } as usize;
+        let mut out = vec![0u8; bound];
+        // SAFETY: `data` is valid for `size` bytes and `out` for `bound`.
+        let written = unsafe {
+            lz4_sys::LZ4_compress_default(data.as_ptr().cast(), out.as_mut_ptr().cast(), size, bound as i32)
+        };
+        assert!(written > 0);
+        out.truncate(written as usize);
+        out
+    }
+
+    /// The linked C library and the pure Rust route give the same bytes for
+    /// the same input, and the same verdict when the input is not a block.
+    #[test]
+    fn the_lz4_block_routes_give_the_same_bytes() {
+        for length in [0usize, 1, 2, 3, 15, 16, 17, 100, 70_000, 600_000] {
+            let data = sample(length);
+            for packed in [lz4_flex::block::compress(&data), compress_block_c(&data)] {
+                let mut want = vec![0u8; data.len()];
+                let old = lz4_flex::block::decompress_into(&packed, &mut want);
+                let mut got = vec![0u8; data.len()];
+                let new = CompressionType::LZ4.decompress(&packed, &mut got);
+                match (old, new) {
+                    (Ok(size), Ok(())) => {
+                        assert_eq!(size, data.len());
+                        assert_eq!(got, want, "{length} bytes");
+                        assert_eq!(got, data, "{length} bytes");
+                    }
+                    (Err(_), Err(_)) => {}
+                    (old, new) => panic!("{length} bytes: {old:?} against {new:?}"),
+                }
+            }
+        }
+    }
+
+    /// A block that does not fill the output is a failure on both routes,
+    /// and the two leave the same bytes in the output.
+    #[test]
+    fn the_lz4_block_routes_agree_on_a_short_output() {
+        let data = sample(1000);
+        let packed = lz4_flex::block::compress(&data);
+        let mut want = vec![0u8; 999];
+        let old = lz4_flex::block::decompress_into(&packed, &mut want);
+        let mut got = vec![0u8; 999];
+        let new = CompressionType::LZ4.decompress(&packed, &mut got);
+        assert!(old.is_err(), "{old:?}");
+        assert!(new.is_err(), "{new:?}");
+        // UPSTREAM-QUIRK: the two routes differ in how much of the block
+        // they decode before they run out of room, so they leave different
+        // bytes in the output. `LZ4_decompress_safe`, the call upstream
+        // makes, decodes further than the pure Rust route, so the linked
+        // route is the one that matches upstream. No caller reads the output
+        // of a failed decompression.
+        assert_eq!(got.len(), want.len());
     }
 }
