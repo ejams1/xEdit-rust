@@ -1235,8 +1235,10 @@ impl SubRecordArrayImpl {
             return;
         };
         loop {
-            let elements = container.elements();
-            let Some(element) = elements.get(pos) else { break };
+            // The element at the position, without a copy of the whole
+            // list: the loop changes the list below (it moves the element
+            // into the array), so it cannot hold the lock of the list.
+            let Some(element) = container.element_at(pos) else { break };
             let Some(sub_record) = element.as_element_impl().and_then(ElementImpl::sub_record_impl) else {
                 break;
             };
@@ -1248,13 +1250,13 @@ impl SubRecordArrayImpl {
             if element_def.get_def_type() == DefType::dtSubRecordUnion {
                 let Some(member) = element_def
                     .as_record_def()
-                    .and_then(|union| union.get_member_for(Some(self_ref), sub_record.get_signature(), Some(element)))
+                    .and_then(|union| union.get_member_for(Some(self_ref), sub_record.get_signature(), Some(&element)))
                 else {
                     break;
                 };
                 element_def = member;
             }
-            if !element_def.can_handle(Some(self_ref), sub_record.get_signature(), Some(element)) {
+            if !element_def.can_handle(Some(self_ref), sub_record.get_signature(), Some(&element)) {
                 break;
             }
             match element_def.get_def_type() {
@@ -1837,6 +1839,10 @@ pub(super) fn init_main_record(record: &Arc<MainRecordImpl>) -> bool {
     let data = &block.as_slice()[data_start..end];
     let mut offset = data_start;
     let ignored = ignore_records();
+    // The skip list is read once, not once per subrecord: it is a list of
+    // the signatures the load leaves out, and it does not change while the
+    // record is read.
+    let skipped = sub_record_to_skip();
     // `lSubRecords` of `DBGSUBREC`, which the 4.1.5q release is built with:
     // the subrecords as read, for the message of a record with errors.
     let mut sub_records: Vec<String> = Vec::new();
@@ -1866,7 +1872,7 @@ pub(super) fn init_main_record(record: &Arc<MainRecordImpl>) -> bool {
         if !synthetic_player_edid
             && (signature_list_contains(&ignored, signature)
                 || record.mr_def.as_ref().is_some_and(|def| def.should_ignore(signature))
-                || signature_list_contains(&sub_record_to_skip(), signature))
+                || signature_list_contains(&skipped, signature))
         {
             sub_record.set_skipped(true);
         }
@@ -1884,8 +1890,10 @@ pub(super) fn init_main_record(record: &Arc<MainRecordImpl>) -> bool {
     let quick_init_limit = mr_def.get_quick_init_limit();
     record.mr_grid_cell.lock().unwrap().checked = false;
     loop {
-        let elements = record.container.elements();
-        let Some(element) = elements.get(current_rec_pos) else {
+        // The element at the position, without a copy of the whole list:
+        // the list is read again on every iteration, as upstream reads
+        // `cntElements` again (`insert_element` changes the positions).
+        let Some(element) = record.container.element_at(current_rec_pos) else {
             break;
         };
         let Some(current_rec) = element.as_element_impl().and_then(ElementImpl::sub_record_impl) else {
@@ -1908,7 +1916,7 @@ pub(super) fn init_main_record(record: &Arc<MainRecordImpl>) -> bool {
         };
         let mut current_def: Arc<dyn RecordMemberDef>;
         if mr_def.allow_unordered() {
-            let index = mr_def.get_member_index_for(Some(&self_ref), signature, Some(element));
+            let index = mr_def.get_member_index_for(Some(&self_ref), signature, Some(&element));
             if index < 0 {
                 unexpected(&mut found_error);
                 current_rec_pos += 1;
@@ -1917,14 +1925,14 @@ pub(super) fn init_main_record(record: &Arc<MainRecordImpl>) -> bool {
             current_def_pos = index as usize;
             current_def = mr_def.get_member(current_def_pos);
         } else {
-            if !mr_def.contains_member_for(Some(&self_ref), signature, Some(element)) {
+            if !mr_def.contains_member_for(Some(&self_ref), signature, Some(&element)) {
                 unexpected(&mut found_error);
                 current_rec_pos += 1;
                 continue;
             }
             if current_def_pos < member_count {
                 current_def = mr_def.get_member(current_def_pos);
-                if !current_def.can_handle(Some(&self_ref), signature, Some(element)) {
+                if !current_def.can_handle(Some(&self_ref), signature, Some(&element)) {
                     current_def_pos += 1;
                     continue;
                 }
@@ -1964,7 +1972,7 @@ pub(super) fn init_main_record(record: &Arc<MainRecordImpl>) -> bool {
         if current_def.get_def_type() == DefType::dtSubRecordUnion {
             current_def = current_def
                 .as_record_def()
-                .and_then(|union| union.get_member_for(Some(&self_ref), signature, Some(element)))
+                .and_then(|union| union.get_member_for(Some(&self_ref), signature, Some(&element)))
                 .expect("the union has a member for the subrecord");
         }
         match current_def.get_def_type() {
@@ -1972,14 +1980,14 @@ pub(super) fn init_main_record(record: &Arc<MainRecordImpl>) -> bool {
                 current_rec.set_def(current_def.clone());
                 let known = mr_def.known_sub_record_signatures();
                 if signature == known[0] {
-                    record.cache_editor_id(mr_def.get_editor_id(element));
+                    record.cache_editor_id(mr_def.get_editor_id(&element));
                 } else if signature == known[1] {
                     record.set_full_name(element.get_edit_value());
                 } else if signature == known[KnownSubRecord::ksrGridCell.ord()]
                     && !record.mr_grid_cell.lock().unwrap().checked
                 {
                     // `mrsHasGridCell` and `mrGridCell` from the subrecord.
-                    let cell = mr_def.get_grid_cell(element);
+                    let cell = mr_def.get_grid_cell(&element);
                     let mut grid_cell = record.mr_grid_cell.lock().unwrap();
                     grid_cell.cell = cell.map(|cell| (cell.x, cell.y));
                     grid_cell.checked = true;
@@ -2016,25 +2024,35 @@ pub(super) fn init_main_record(record: &Arc<MainRecordImpl>) -> bool {
                 record.get_signature()
             ),
         }
-        let placed = record.container.elements()[current_rec_pos].clone();
+        // The element that was placed at the position, without a copy of
+        // the whole list. The position holds an element: the branches
+        // above put one there.
+        let placed = record
+            .container
+            .element_at(current_rec_pos)
+            .expect("the element at the position of the subrecord");
         placed.set_orders(current_def_pos as i32);
         last_element_for_member[current_def_pos] = Some(placed);
         current_rec_pos += 1;
         current_def_pos += 1;
     }
     // The subrecords after the last member are unexpected.
-    for element in record.container.elements().iter().skip(current_rec_pos) {
-        if let Some(sub_record) = element.as_element_impl().and_then(ElementImpl::sub_record_impl)
-            && !sub_record.skipped()
-        {
-            progress(&format!(
-                "Error: record {} contains unexpected (or out of order) subrecord {}",
-                record.get_signature(),
-                sub_record.get_signature()
-            ));
-            found_error = true;
+    // The list is read under its lock, and the loop below only reads the
+    // elements: it changes nothing, so the lock is not taken twice.
+    record.container.with_elements(|elements| {
+        for element in elements.iter().skip(current_rec_pos) {
+            if let Some(sub_record) = element.as_element_impl().and_then(ElementImpl::sub_record_impl)
+                && !sub_record.skipped()
+            {
+                progress(&format!(
+                    "Error: record {} contains unexpected (or out of order) subrecord {}",
+                    record.get_signature(),
+                    sub_record.get_signature()
+                ));
+                found_error = true;
+            }
         }
-    }
+    });
     if found_error {
         progress(&format!("Errors were found in: {}", record.get_name()));
         progress(&format!("Contained subrecords: {}", sub_records.join(" ")));
