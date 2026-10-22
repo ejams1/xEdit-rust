@@ -378,20 +378,35 @@ impl DataBlock {
 
 /// Port of `TwbContainer.GetElementByName`: by name, then by display name,
 /// ignoring case.
+///
+/// The comparison does not build the name of every child: the elements
+/// whose name comes from a definition compare it without a copy, and only
+/// the others build theirs.
 pub(crate) fn element_by_name(container: &dyn Container, name: &str) -> Option<ElementRef> {
-    let elements: Vec<ElementRef> = (0..container.get_element_count())
-        .filter_map(|index| container.get_element(index))
-        .collect();
-    elements
-        .iter()
-        .find(|element| element.get_name().eq_ignore_ascii_case(name))
-        .or_else(|| {
-            elements
-                .iter()
-                .find(|element| element.get_display_name(true).eq_ignore_ascii_case(name))
-        })
-        .cloned()
-        .or_else(|| flag_by_name(container, name))
+    let count = container.get_element_count();
+    let mut found = None;
+    for index in 0..count {
+        let Some(element) = container.get_element(index) else {
+            continue;
+        };
+        if element.name_matches(name) {
+            found = Some(element);
+            break;
+        }
+    }
+    if found.is_some() {
+        return found;
+    }
+    for index in 0..count {
+        let Some(element) = container.get_element(index) else {
+            continue;
+        };
+        if element.display_name_matches(name) {
+            found = Some(element);
+            break;
+        }
+    }
+    found.or_else(|| flag_by_name(container, name))
 }
 
 /// The flag of a flags value under `wbFlagsAsArray`, which upstream holds as
@@ -400,7 +415,7 @@ pub(crate) fn element_by_name(container: &dyn Container, name: &str) -> Option<E
 fn flag_by_name(container: &dyn Container, name: &str) -> Option<ElementRef> {
     let container = container.as_container_ref()?;
     flag::flags_as_array_of(&container)?.into_iter().find(|flag| {
-        flag.get_name().eq_ignore_ascii_case(name) || flag.get_display_name(true).eq_ignore_ascii_case(name)
+        flag.name_matches(name) || flag.display_name_matches(name)
     })
 }
 

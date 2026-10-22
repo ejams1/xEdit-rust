@@ -212,6 +212,16 @@ impl SubRecordImpl {
             .collect()
     }
 
+    /// The characters of the name signature: the signature with its control
+    /// characters shown as the letters from `a`.
+    pub(super) fn name_signature_chars(&self) -> [char; 4] {
+        let mut result = [' '; 4];
+        for (slot, byte) in result.iter_mut().zip(self.sr_struct.signature.0) {
+            *slot = if byte < 32 { char::from(b'a' + byte) } else { char::from(byte) };
+        }
+        result
+    }
+
     /// Port of `GetDataBasePtr` up to `GetDataEndPtr`: the data, rebuilt
     /// from the elements first when a child changed.
     pub fn data(&self) -> DataPtr<'_> {
@@ -2106,6 +2116,26 @@ impl Element for SubRecordImpl {
         }
     }
 
+    /// The name of the subrecord without building it: the signature with
+    /// its control characters shown as the letters from `a`, and the name
+    /// of the definition.
+    fn name_matches(&self, name: &str) -> bool {
+        let Some(def) = self.def() else {
+            return crate::interface::element::name_equals_ignore_case(&self.get_name_signature(), name);
+        };
+        // `get_name` is the signature, a ` - ` and the name of the
+        // definition: the comparison is the same as the one of the built
+        // name, without the copy of it.
+        crate::interface::element::equals_joined_ignore_case(
+            name,
+            &[
+                crate::interface::element::NamePart::Chars(&self.name_signature_chars()),
+                crate::interface::element::NamePart::Text(" - "),
+                crate::interface::element::NamePart::Text(def.get_name()),
+            ],
+        )
+    }
+
     /// Port of `TwbSubRecord.GetDataSize` over `TwbDataContainer.GetDataSize`.
     fn get_data_size(&self) -> i32 {
         self.do_init();
@@ -2156,6 +2186,36 @@ impl Element for SubRecordImpl {
         self.base.display_name(result, use_suffix)
     }
 
+    /// The display name of the subrecord without building it: the
+    /// signature with the name of the resolved value, or of the definition,
+    /// and the suffix of the element.
+    fn display_name_matches(&self, wanted: &str) -> bool {
+        let signature = self.name_signature_chars();
+        // Upstream reads `srValueDef` as it is: a subrecord that was not
+        // initialised yet has none, and asking for its display name (as
+        // `ElementByName` does for every member it compares) does not
+        // build its elements, which would sort a sorted array of them.
+        let value_def = self.sr_value_def.read().unwrap().clone();
+        if let Some(value_def) = value_def
+            && !value_def.get_name().is_empty()
+        {
+            // The port returns the name of the resolved value without the
+            // suffix of the element, as `get_display_name` does.
+            return self.matches_signature_and_name(&signature, Some(value_def.get_name()), wanted, false);
+        }
+        match self.def() {
+            Some(def) => self.matches_signature_and_name(&signature, Some(def.get_name()), wanted, true),
+            None => {
+                // Without a definition the display name is the signature
+                // with the suffix of the element.
+                self.matches_signature_and_name(&signature, None, wanted, true)
+            }
+        }
+    }
+
+    /// Whether the display name of the subrecord is `wanted`: the signature,
+    /// a ` - ` and the name of the definition, with the suffix of the
+    /// element when `with_suffix` holds.
     fn get_record_signature(&self) -> Option<Signature> {
         Some(self.sr_struct.signature)
     }
@@ -2251,6 +2311,36 @@ impl Element for SubRecordImpl {
 
     fn as_data_container(&self) -> Option<&dyn DataContainer> {
         Some(self)
+    }
+}
+
+impl SubRecordImpl {
+    /// Whether the display name of the subrecord is `wanted`: the signature,
+    /// a ` - ` and the name of the definition, with the suffix of the
+    /// element when `with_suffix` holds.
+    ///
+    /// A subrecord without a definition has no ` - ` and no name of a
+    /// definition: its display name is the signature alone.
+    fn matches_signature_and_name(
+        &self,
+        signature: &[char; 4],
+        def_name: Option<&str>,
+        wanted: &str,
+        with_suffix: bool,
+    ) -> bool {
+        let suffix = if with_suffix { self.base.name_suffix() } else { String::new() };
+        let mut parts = vec![crate::interface::element::NamePart::Chars(signature)];
+        if let Some(def_name) = def_name {
+            parts.push(crate::interface::element::NamePart::Text(" - "));
+            parts.push(crate::interface::element::NamePart::Text(def_name));
+        }
+        if !suffix.is_empty() {
+            // The suffix is appended to the name, with a space between the
+            // two.
+            parts.push(crate::interface::element::NamePart::Text(" "));
+            parts.push(crate::interface::element::NamePart::Text(&suffix));
+        }
+        crate::interface::element::equals_joined_ignore_case(wanted, &parts)
     }
 }
 
@@ -2647,6 +2737,18 @@ impl Element for SubRecordArrayImpl {
         self.arc_def.get_name().to_owned()
     }
 
+    /// The name of the array without building it: the name of its
+    /// definition.
+    fn name_matches(&self, name: &str) -> bool {
+        crate::interface::element::name_equals_ignore_case(self.arc_def.get_name(), name)
+    }
+
+    /// The display name of the array without building it: the name of its
+    /// definition, with the suffix of the element.
+    fn display_name_matches(&self, name: &str) -> bool {
+        self.element_base().display_name_matches(self.arc_def.get_name(), name)
+    }
+
     fn get_data_size(&self) -> i32 {
         self.container
             .elements()
@@ -2867,6 +2969,18 @@ impl Element for SubRecordStructImpl {
 
     fn get_name(&self) -> String {
         self.src_def.get_name().to_owned()
+    }
+
+    /// The name of the structure without building it: the name of its
+    /// definition.
+    fn name_matches(&self, name: &str) -> bool {
+        crate::interface::element::name_equals_ignore_case(self.src_def.get_name(), name)
+    }
+
+    /// The display name of the structure without building it: the name of
+    /// its definition, with the suffix of the element.
+    fn display_name_matches(&self, name: &str) -> bool {
+        self.element_base().display_name_matches(self.src_def.get_name(), name)
     }
 
     fn get_data_size(&self) -> i32 {
