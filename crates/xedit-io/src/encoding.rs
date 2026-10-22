@@ -123,6 +123,12 @@ impl Encoding {
         }
         match self {
             Encoding::Utf8 => std::str::from_utf8(bytes).map(str::to_owned).map_err(|_| EncodingError),
+            // A byte below 0x80 is its own code point in every ANSI and DBCS
+            // code page xEdit uses, so such a string needs no call to
+            // `MultiByteToWideChar` and one allocation instead of two.
+            Encoding::Mbcs(_code_page) if crate::simd::is_ascii(bytes) => {
+                Ok(String::from_utf8_lossy(bytes).into_owned())
+            }
             Encoding::Mbcs(code_page) => platform::get_string(code_page, bytes),
         }
     }
@@ -131,6 +137,10 @@ impl Encoding {
     pub fn get_bytes(self, text: &str) -> Vec<u8> {
         match self {
             Encoding::Utf8 => text.as_bytes().to_vec(),
+            // A character below 0x80 is one byte of its own in every ANSI and
+            // DBCS code page xEdit uses, so such a string needs no call to
+            // `WideCharToMultiByte` and one allocation instead of two.
+            Encoding::Mbcs(_code_page) if crate::simd::is_ascii(text.as_bytes()) => text.as_bytes().to_vec(),
             Encoding::Mbcs(code_page) => platform::get_bytes(code_page, text),
         }
     }
@@ -416,5 +426,111 @@ mod tests {
         assert_eq!(Encoding::Utf8.get_string("Café".as_bytes()).unwrap(), "Café");
         assert_eq!(Encoding::Utf8.get_string(b"Caf\xE9"), Err(EncodingError));
         assert_eq!(Encoding::Utf8.get_bytes("Café"), "Café".as_bytes());
+    }
+
+    /// The code pages the port uses: the languages of
+    /// `wbAddDefaultLEncodingsIfMissing` (`wbInterface.pas`), the code pages
+    /// the non-Windows route knows, and the two the system calls use.
+    const CODE_PAGES: [u32; 15] = [
+        0,     // the system ANSI code page (`CP_ACP`).
+        1,     // the system OEM code page (`CP_OEMCP`).
+        1250,  // Central European (Polish, Czech, Hungarian).
+        1251,  // Cyrillic (Russian).
+        1252,  // Western European (English, French, German, ...).
+        1253,  // Greek.
+        1254,  // Turkish.
+        1256,  // Arabic.
+        932,   // Japanese (Shift-JIS).
+        936,   // Simplified Chinese (GBK).
+        949,   // Korean (EUC-KR).
+        950,   // Traditional Chinese (Big5).
+        866,   // Cyrillic (IBM).
+        874,   // Thai.
+        65001, // UTF-8.
+    ];
+
+    /// The fast path of `get_string` gives the same string as the platform
+    /// route for every ASCII byte on its own.
+    #[test]
+    fn the_ascii_fast_path_gives_the_platform_result() {
+        for code_page in CODE_PAGES {
+            let encoding = Encoding::Mbcs(code_page);
+            for byte in 0u8..0x80 {
+                let bytes = [byte];
+                let fast = encoding.get_string(&bytes).unwrap();
+                let platform = super::platform::get_string(code_page, &bytes).unwrap();
+                assert_eq!(fast, platform, "code page {code_page}, byte {byte:#04x}");
+            }
+        }
+    }
+
+    /// The fast path of `get_string` gives the same string as the platform
+    /// route for mixed strings, for a high byte at the first, the middle and
+    /// the last position, and at the block boundaries of the kernel.
+    #[test]
+    fn the_ascii_fast_path_gives_the_platform_result_for_strings() {
+        for code_page in CODE_PAGES {
+            let encoding = Encoding::Mbcs(code_page);
+            for length in [0usize, 1, 2, 15, 16, 17, 31, 32, 33, 63, 64, 65] {
+                let ascii: Vec<u8> = (0..length).map(|i| (i % 0x80) as u8).collect();
+                let fast = encoding.get_string(&ascii).unwrap();
+                if length == 0 {
+                    // The platform route needs a byte to work out the size,
+                    // so the public route answers the empty string itself.
+                    assert_eq!(fast, "");
+                    continue;
+                }
+                let platform = super::platform::get_string(code_page, &ascii);
+                let platform = platform.unwrap_or_else(|_| {
+                    panic!("code page {code_page}, {length} bytes: the platform route failed")
+                });
+                assert_eq!(fast, platform, "code page {code_page}, {length} bytes");
+                // A high byte sends the string to the platform route, which
+                // must give the same answer as before.
+                for position in [0usize, length / 2, length - 1] {
+                    let mut bytes = ascii.clone();
+                    bytes[position] = 0x80;
+                    assert!(!crate::simd::is_ascii(&bytes));
+                    let fast = encoding.get_string(&bytes).unwrap();
+                    let platform = super::platform::get_string(code_page, &bytes).unwrap();
+                    assert_eq!(fast, platform, "code page {code_page}, {length} bytes, high byte at {position}");
+                }
+            }
+        }
+    }
+
+    /// The fast path of `get_bytes` gives the same bytes as the platform
+    /// route for every ASCII character on its own and for ASCII strings.
+    #[test]
+    fn the_ascii_fast_path_gives_the_platform_bytes() {
+        for code_page in CODE_PAGES {
+            let encoding = Encoding::Mbcs(code_page);
+            for byte in 0u8..0x80 {
+                let text = char::from(byte).to_string();
+                let fast = encoding.get_bytes(&text);
+                let platform = super::platform::get_bytes(code_page, &text);
+                assert_eq!(fast, platform, "code page {code_page}, byte {byte:#04x}");
+            }
+            for length in [0usize, 1, 2, 15, 16, 17, 31, 32, 33] {
+                let text: String = (0..length).map(|i| char::from((i % 0x80) as u8)).collect();
+                let fast = encoding.get_bytes(&text);
+                let platform = super::platform::get_bytes(code_page, &text);
+                assert_eq!(fast, platform, "code page {code_page}, {length} characters");
+            }
+        }
+    }
+
+    /// A string with a character above 0x7F still goes to the platform
+    /// route, which gives the same bytes as before.
+    #[test]
+    fn a_string_above_ascii_goes_to_the_platform_route() {
+        for code_page in CODE_PAGES {
+            let encoding = Encoding::Mbcs(code_page);
+            for text in ["Caf\u{e9}", "\u{4e2d}", "a\u{80}b"] {
+                let fast = encoding.get_bytes(text);
+                let platform = super::platform::get_bytes(code_page, text);
+                assert_eq!(fast, platform, "code page {code_page}, {text:?}");
+            }
+        }
     }
 }
