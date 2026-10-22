@@ -155,6 +155,12 @@ pub(crate) fn files_check(session: &mut Session, request: CheckRequest) -> Resul
     set_display_shorter_names(shorter_names);
     set_edit_allowed(allowed);
     let report = report?;
+    // `PerformLongAction` raises the `Abort` of the cancelled check, so the
+    // command ends with the error of the cancel and not with a report of
+    // the records that were checked until then.
+    if report.cancelled {
+        return Err(CommandError::new("cancelled", "the operation was cancelled"));
+    }
     Ok(CheckResponse {
         checked: report.checked,
         errors_found: report.errors_found,
@@ -222,6 +228,11 @@ fn elements_check(session: &mut Session, request: ElementCheckRequest) -> Result
     })?;
     set_display_shorter_names(shorter_names);
     set_edit_allowed(allowed);
+    // As in `files.check`: a cancelled check ends with the error of the
+    // cancel.
+    if report.cancelled {
+        return Err(CommandError::new("cancelled", "the operation was cancelled"));
+    }
     Ok(ElementCheckResponse {
         path: element.get_full_path(),
         has_errors: !check.trim().is_empty(),

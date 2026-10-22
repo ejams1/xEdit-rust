@@ -65,7 +65,7 @@ mod conflicts;
 mod discovery;
 mod filter;
 mod gui;
-mod hidden;
+pub(crate) mod hidden;
 mod lodgen;
 mod merged;
 mod modgroups;

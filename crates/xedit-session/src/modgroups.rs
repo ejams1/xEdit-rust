@@ -150,7 +150,7 @@ fn tagged(mod_groups: &ModGroups, list: &[ModGroupRef], names: &[String]) -> Vec
 }
 
 /// Which mod groups a comparison activates.
-#[derive(Deserialize, JsonSchema, Default, Clone)]
+#[derive(Serialize, Deserialize, JsonSchema, Default, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct ModGroupChoice {
     /// Activate the valid mod groups of these names (the GUI's "Which
@@ -207,7 +207,7 @@ fn unknown_group(name: &str, valid: bool) -> CommandError {
 }
 
 /// The records a module hides while mod groups are active.
-#[derive(Serialize, JsonSchema, Clone)]
+#[derive(Serialize, Deserialize, JsonSchema, Clone)]
 pub struct ModGroupHides {
     /// The module whose records hide.
     pub file: String,
@@ -298,7 +298,7 @@ pub fn activate(session: &Session, choice: &ModGroupChoice) -> Result<ActiveModG
 }
 
 /// One item of a mod group.
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema, Clone)]
 pub struct ItemInfo {
     /// The item as the file has it (`TwbModGroupItem.ToString`).
     pub line: String,
@@ -331,7 +331,7 @@ pub struct ItemInfo {
 }
 
 /// One mod group.
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema, Clone)]
 pub struct ModGroupInfo {
     pub name: String,
     /// The `.modgroups` file it is in.
@@ -383,7 +383,7 @@ fn group_info(mod_groups: &ModGroups, group: ModGroupRef, selection: &[String]) 
     }
 }
 
-#[derive(Deserialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ListRequest {
     /// Also list the invalid mod groups and those of files whose modules
@@ -392,7 +392,7 @@ pub struct ListRequest {
     pub all: bool,
 }
 
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 pub struct ListResponse {
     /// The mod groups by name.
     pub mod_groups: Vec<ModGroupInfo>,
@@ -420,7 +420,7 @@ fn modgroups_list(session: &mut Session, request: ListRequest) -> Result<ListRes
     })
 }
 
-#[derive(Deserialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ShowRequest {
     /// The name of the mod group.
@@ -430,7 +430,7 @@ pub struct ShowRequest {
     pub file: Option<String>,
 }
 
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 pub struct ShowResponse {
     pub mod_group: ModGroupInfo,
     /// The section as the file would have it (`ToStrings`).
@@ -471,7 +471,7 @@ fn modgroups_show(session: &mut Session, request: ShowRequest) -> Result<ShowRes
 
 /// What the reload after a change leaves (`mniViewModGroupsReloadClick`
 /// with its dialog confirmed).
-#[derive(Serialize, JsonSchema, Default)]
+#[derive(Serialize, Deserialize, JsonSchema, Default)]
 pub struct Reload {
     /// The lines the reload writes to the message log
     /// (`ShowValidationMessages`): each mod group with messages, and its
@@ -510,7 +510,7 @@ fn reload(session: &Session, new_name: Option<&str>, dry_run: bool) -> Result<Re
     })
 }
 
-#[derive(Deserialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct SelectRequest {
     /// Select the valid mod groups of these names.
@@ -552,7 +552,7 @@ fn modgroups_select(session: &mut Session, request: SelectRequest) -> Result<Rel
 }
 
 /// The response of a command that changes mod group files.
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 pub struct ChangeResponse {
     /// The files written (or that a dry run would write).
     pub files: Vec<String>,
@@ -610,7 +610,7 @@ fn check_state(group: &ModGroup) -> Result<(), CommandError> {
     Ok(())
 }
 
-#[derive(Deserialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct CreateRequest {
     /// The name of the new mod group.
@@ -739,7 +739,7 @@ fn change_file_ext(name: &str, extension: &str) -> String {
     }
 }
 
-#[derive(Deserialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct EditRequest {
     /// The name of the mod group.
@@ -802,7 +802,7 @@ fn modgroups_edit(session: &mut Session, request: EditRequest) -> Result<ChangeR
     })
 }
 
-#[derive(Deserialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct DeleteRequest {
     /// The names of the mod groups to delete; every group of a name.
@@ -923,12 +923,12 @@ fn is_preset_different(selected: &[String], value: &str) -> bool {
     current.len() != preset.len() || !same_text(&comma_text(&current), &comma_text(&preset))
 }
 
-#[derive(Deserialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct PresetsRequest {}
 
 /// The presets of the selection dialog (`PresetsUpdate`).
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 pub struct PresetsResponse {
     /// The preset names in the order the combo box holds them
     /// (`ReadSection`).
@@ -965,7 +965,7 @@ fn unknown_preset(preset: &str) -> CommandError {
 /// names tag the valid mod groups (`LoadModGroupsSelection`'s tagging for
 /// the preset's names), the selection is saved
 /// (`SaveModGroupsSelection`) and activated.
-#[derive(Deserialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct PresetLoadRequest {
     /// The name of the preset, or `<Last>` for the saved selection.
@@ -975,7 +975,7 @@ pub struct PresetLoadRequest {
     pub dry_run: bool,
 }
 
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 pub struct PresetLoadResponse {
     /// The preset that was loaded (`LoadedPreset`).
     pub preset: String,
@@ -1032,7 +1032,7 @@ fn modgroups_preset_load(
 /// preset ... with your new selection?" with `after_modal`); `confirm` is
 /// its answer, its default button when omitted (Yes, No with
 /// `after_modal`).
-#[derive(Deserialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct PresetSaveRequest {
     /// The name of the preset to write.
@@ -1050,7 +1050,7 @@ pub struct PresetSaveRequest {
     pub dry_run: bool,
 }
 
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 pub struct PresetSaveResponse {
     pub preset: String,
     /// The value written, the names of the selection as a comma text.
@@ -1118,7 +1118,7 @@ fn modgroups_preset_save(
 /// `PresetDelete`: the question "Are you sure you want to delete preset
 /// ...?", then `DeleteKey` and `UpdateFile` (`PresetsUpdate` follows,
 /// which the next `modgroups.presets` shows).
-#[derive(Deserialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct PresetDeleteRequest {
     /// The name of the preset to delete.
@@ -1131,7 +1131,7 @@ pub struct PresetDeleteRequest {
     pub dry_run: bool,
 }
 
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 pub struct PresetDeleteResponse {
     pub preset: String,
     /// Whether the preset was deleted (the question can stop it).
@@ -1183,7 +1183,7 @@ fn default_true() -> bool {
     true
 }
 
-#[derive(Deserialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct UpdateCrcsRequest {
     /// Add the current CRC32 to items that have no CRC32s ("Do you wish to

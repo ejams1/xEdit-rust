@@ -19,6 +19,7 @@ use serde::{Deserialize, Serialize};
 use xedit_analysis::conflict::{
     self, ConflictContext, ConflictOptions, ConflictResults, ConflictStatus, ViewNode, files_in_load_order,
 };
+use xedit_core::implementation::write::ElementState;
 use xedit_core::implementation::{ElementImpl, FileImpl, MainRecordImpl};
 use xedit_core::interface::types::{ConflictAll, ConflictThis, PascalEnum};
 use xedit_core::interface::{Container, Element, ElementRef, MainRecord};
@@ -135,6 +136,14 @@ pub struct ConflictsRequest {
     /// settings file.
     #[serde(default)]
     pub saved_mod_groups: bool,
+    /// The records to classify, each as its node of the navigation tree (a
+    /// load order FormID and the plugin whose version is shown); the GUI
+    /// asks for the rows it paints. When non-empty only the FormID groups of
+    /// these records are compared (`conflict_statuses_of`) and only they are
+    /// listed; the file entries keep their record counts and report what
+    /// that comparison classified.
+    #[serde(default)]
+    pub records: Vec<SelectedRecord>,
     /// Listed records to skip.
     #[serde(default)]
     pub offset: usize,
@@ -144,7 +153,7 @@ pub struct ConflictsRequest {
 
 /// The conflicts of one loaded file, as the navigation tree shows the file:
 /// the highest status of its records (`InheritStateFromChildren`).
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 pub struct FileConflicts {
     pub name: String,
     pub load_order: i32,
@@ -163,7 +172,7 @@ pub struct FileConflicts {
 }
 
 /// The conflict status of one record.
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 pub struct RecordConflict {
     /// File that holds this version of the record.
     pub file: String,
@@ -177,7 +186,7 @@ pub struct RecordConflict {
     pub conflict_this: ConflictThisName,
 }
 
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 pub struct ConflictsResponse {
     /// Every loaded file in load order, with the counts of its records.
     pub files: Vec<FileConflicts>,
@@ -185,14 +194,14 @@ pub struct ConflictsResponse {
     pub total: usize,
     pub records: Vec<RecordConflict>,
     /// The warnings xEdit writes to its message log while it compares.
-    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub messages: Vec<String>,
     /// The activated mod groups.
-    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub mod_groups: Vec<String>,
     /// What the activated mod groups hide: for each module, the modules
     /// whose records its records hide.
-    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub mod_group_hides: Vec<ModGroupHides>,
 }
 
@@ -232,10 +241,80 @@ fn conflicts_list(session: &mut Session, request: ConflictsRequest) -> Result<Co
         mod_groups: active.filter,
         ..Default::default()
     };
-    let results = conflict::conflict_statuses(&files, &options);
-    let mut response = list(&files, &results, &request);
+    let mut resolved = Vec::new();
+    for selected in &request.records {
+        let record = session.record(&selected.form_id, selected.file.as_deref())?;
+        let record = record
+            .as_element_impl()
+            .and_then(ElementImpl::main_record_impl)
+            .ok_or_else(|| CommandError::new("internal", "the record is not a main record of a file"))?;
+        resolved.push(record);
+    }
+    let results = if resolved.is_empty() {
+        conflict::conflict_statuses(&files, &options)
+    } else {
+        conflict::conflict_statuses_of(&resolved, &files, &options)
+    };
+    // The comparison was cancelled: upstream aborts the load it does the
+    // comparison in, so the command ends with the error of the cancel.
+    if results.cancelled {
+        return Err(CommandError::new("cancelled", "the operation was cancelled"));
+    }
+    let mut response = if resolved.is_empty() {
+        list(&files, &results, &request)?
+    } else {
+        list_requested(&files, &resolved, &results, &request)?
+    };
     response.mod_groups = active.names;
     response.mod_group_hides = active.hides;
+    Ok(response)
+}
+
+/// [`list`] for the `records` of the request: those records alone, in the
+/// order given, with the file entries built from the record counts and the
+/// statuses the comparison classified.
+fn list_requested(
+    files: &[Arc<FileImpl>],
+    records: &[Arc<MainRecordImpl>],
+    results: &ConflictResults,
+    request: &ConflictsRequest,
+) -> Result<ConflictsResponse, CommandError> {
+    let mut response = ConflictsResponse {
+        files: files
+            .iter()
+            .map(|file| FileConflicts {
+                name: file.get_name(),
+                load_order: file.load_order(),
+                records: file.records().len(),
+                single: 0,
+                conflict_all: ConflictAllName::caUnknown,
+                conflict_this: ConflictThisName::ctUnknown,
+                by_conflict_all: BTreeMap::new(),
+                by_conflict_this: BTreeMap::new(),
+            })
+            .collect(),
+        total: 0,
+        records: Vec::new(),
+        messages: results.messages.clone(),
+        mod_groups: Vec::new(),
+        mod_group_hides: Vec::new(),
+    };
+    let limit = request.limit.unwrap_or(usize::MAX);
+    for record in records {
+        // The check is before the record is put into the list, so a
+        // cancelled command stops at the next record.
+        if xedit_core::interface::wait_form::poll_cancel().is_err() {
+            return Err(CommandError::new("cancelled", "the operation was cancelled"));
+        }
+        let status = results.status(record);
+        if !matches(record, status, request) {
+            continue;
+        }
+        response.total += 1;
+        if response.total > request.offset && response.records.len() < limit {
+            response.records.push(record_conflict(record, status));
+        }
+    }
     Ok(response)
 }
 
@@ -243,7 +322,11 @@ fn is_single(status: ConflictStatus) -> bool {
     status.all == ConflictAll::caOnlyOne && status.this == ConflictThis::ctOnlyOne
 }
 
-fn list(files: &[Arc<FileImpl>], results: &ConflictResults, request: &ConflictsRequest) -> ConflictsResponse {
+fn list(
+    files: &[Arc<FileImpl>],
+    results: &ConflictResults,
+    request: &ConflictsRequest,
+) -> Result<ConflictsResponse, CommandError> {
     let mut response = ConflictsResponse {
         files: Vec::new(),
         total: 0,
@@ -274,6 +357,11 @@ fn list(files: &[Arc<FileImpl>], results: &ConflictResults, request: &ConflictsR
         };
         let listed = listed_file(file);
         for record in &records {
+            // The check is before the record is counted into the summary,
+            // so a cancelled command stops at the next record.
+            if xedit_core::interface::wait_form::poll_cancel().is_err() {
+                return Err(CommandError::new("cancelled", "the operation was cancelled"));
+            }
             let status = results.status(record);
             if is_single(status) {
                 summary.single += 1;
@@ -298,7 +386,7 @@ fn list(files: &[Arc<FileImpl>], results: &ConflictResults, request: &ConflictsR
         }
         response.files.push(summary);
     }
-    response
+    Ok(response)
 }
 
 fn matches(record: &MainRecordImpl, status: ConflictStatus, request: &ConflictsRequest) -> bool {
@@ -330,7 +418,7 @@ fn record_conflict(record: &Arc<MainRecordImpl>, status: ConflictStatus) -> Reco
     }
 }
 
-#[derive(Deserialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct CompareRequest {
     /// Load order FormID of the record as hexadecimal digits.
@@ -389,7 +477,7 @@ pub struct CompareRequest {
 }
 
 /// One record compared: a column of the view.
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 pub struct CompareColumn {
     /// File that holds this version of the record.
     pub file: String,
@@ -398,37 +486,81 @@ pub struct CompareColumn {
 }
 
 /// One cell of the view: the element of one record in a row.
-#[derive(Serialize, JsonSchema, Clone)]
+#[derive(Serialize, Deserialize, JsonSchema, Clone)]
 pub struct CompareCell {
     /// The value as the view shows it (the summary of an element without a
     /// value); `null` when this record has no element in the row.
     pub value: Option<String>,
     pub conflict_this: ConflictThisName,
+    /// `NodeDatas[Column].ConflictAll`, the cell's own conflict, which the
+    /// view's `vstViewBeforeCellPaint` fills a cell without an element with.
+    pub conflict_all: ConflictAllName,
+    /// Path of the element inside its record, with `\` between the names,
+    /// as `elements.get` and `elements.set` take it; absent when this record
+    /// has no element in the row. The view edits the element itself; the
+    /// port names it the way `ElementByPath` resolves it, first by name and
+    /// then by position where names repeat.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub path: Option<String>,
+    /// `Element.IsEditable`: a double click starts an in-place editor.
+    #[serde(default)]
+    pub editable: bool,
+    /// `Element.EditValue`, the text the in-place editor starts with; absent
+    /// without an element.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub edit_value: Option<String>,
+    /// `Element.DisplayName[True]`, which the label column shows while this
+    /// column has the focus (`vstViewGetText`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub display_name: Option<String>,
+    /// `Element.Name`, for the view's clipboard items.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    /// `Element.Summary`, which a cell shows when its value is empty and
+    /// the row is collapsed (`vstViewGetText`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub summary: Option<String>,
+    /// `DisplaySortKey[True]`, compared between the columns of a sibling
+    /// comparison to paint the other columns (`vstViewPaintText`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sort_key: Option<String>,
+    /// `Element.Modified`, painted in bold.
+    #[serde(default)]
+    pub modified: bool,
 }
 
 /// One row of the view: the same element in each record.
-#[derive(Serialize, JsonSchema, Clone)]
+#[derive(Serialize, Deserialize, JsonSchema, Clone)]
 pub struct CompareRow {
     /// The name the view shows for the row, with " (sorted)" or
     /// " (aligned)" when the entries of arrays were matched by their sort
     /// keys or aligned.
     pub name: String,
+    /// `Node.Index`: the position of the row below its parent, as the
+    /// definitions index it (the Add target of `GetAddElement`).
+    #[serde(default)]
+    pub index: usize,
+    /// The name of the definition member the row is below a record or a
+    /// subrecord structure, for a row that has no element to name it
+    /// (`InitNodes`); the name `elements.add` takes (`SetMemberEditValue`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub member_name: Option<String>,
     pub conflict_all: ConflictAllName,
     /// Whether the view shows the row; only with `include_hidden` false
     /// rows are listed.
-    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub hidden: bool,
     /// Whether the row filter hides the row (`IsViewNodeFiltered`); the row
     /// is left out unless `include_hidden` lists it.
-    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub filtered: bool,
     /// One cell per column.
     pub cells: Vec<CompareCell>,
-    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub children: Vec<CompareRow>,
 }
 
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 pub struct CompareResponse {
     /// Load order FormID as eight hexadecimal digits.
     pub form_id: String,
@@ -440,14 +572,14 @@ pub struct CompareResponse {
     pub rows: Vec<CompareRow>,
     /// The view filter of the request and what it did, when one was asked
     /// for (`ApplyViewFilter`).
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub view_filter: Option<ViewFilterReport>,
-    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub messages: Vec<String>,
 }
 
 /// `ApplyViewFilter`: the rows of the view tab that the filter hides.
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 pub struct ViewFilterReport {
     /// `IsFiltered` of every row of the view.
     pub rows: usize,
@@ -538,10 +670,11 @@ fn records_compare(session: &mut Session, request: CompareRequest) -> Result<Com
             conflict_this: data.conflict_this.into(),
         })
         .collect();
+    let column_records = view_column_records(&view);
     let mut rows: Vec<CompareRow> = view
         .children
         .iter()
-        .filter_map(|child| compare_row(child, &view, request.include_hidden))
+        .filter_map(|child| compare_row(child, &view, &column_records, request.include_hidden, false))
         .collect();
     let view_filter = apply_view_filter(&mut rows, &request.view_filter());
     let conflict_all = view
@@ -560,12 +693,109 @@ fn records_compare(session: &mut Session, request: CompareRequest) -> Result<Com
     })
 }
 
-fn compare_row(node: &ViewNode, parent: &ViewNode, include_hidden: bool) -> Option<CompareRow> {
+/// The definition member a row without an element stands for (`vstViewGetText`
+/// of the label column): the member of the record or subrecord structure of
+/// the parent container at the row's index, after the additional elements.
+fn member_name_of(node: &ViewNode, parent: &ViewNode) -> Option<String> {
+    let container = parent.datas.iter().find_map(|data| data.container.as_ref())?;
+    let element = container.element();
+    if !matches!(
+        element.get_element_type(),
+        xedit_core::interface::types::ElementType::etMainRecord
+            | xedit_core::interface::types::ElementType::etSubRecordStruct
+    ) {
+        return None;
+    }
+    let additional = container.additional_element_count();
+    let member = i32::try_from(node.index).ok()? - additional;
+    if member < 0 {
+        return None;
+    }
+    let def = element.get_def()?;
+    let record_def = def.as_record_def()?;
+    (member < record_def.get_member_count()).then(|| record_def.get_member(member as usize).get_name().to_owned())
+}
+
+/// The records of a view's columns: the root node data (`ActiveRecords`).
+fn view_column_records(view: &ViewNode) -> Vec<Option<ElementRef>> {
+    view.datas.iter().map(|data| data.element.clone()).collect()
+}
+
+/// The path `elements.get` and `elements.set` take for `element` when it
+/// sits in `record`: the names from the record down, with `[position]` where
+/// a name does not identify the element (an entry of an array). Upstream's
+/// view edits the element object directly; the port has to name it, so the
+/// name is resolved back to the element before it is reported and a row the
+/// path interface cannot address reports no path (and is not editable).
+fn element_relative_path(record: &ElementRef, element: &ElementRef) -> Option<String> {
+    if record.get_element_id() == element.get_element_id() {
+        return None;
+    }
+    // The element and its containers up to, but not including, the record.
+    let mut chain: Vec<ElementRef> = vec![element.clone()];
+    let mut current = element.get_container();
+    while let Some(container) = current.clone() {
+        if container.get_element_id() == record.get_element_id() {
+            break;
+        }
+        chain.push(container.clone());
+        current = container.get_container();
+    }
+    if current?.get_element_id() != record.get_element_id() {
+        return None;
+    }
+    chain.reverse();
+    let resolves = |path: &str| {
+        record
+            .as_container()
+            .and_then(|container| container.get_element_by_path(path))
+            .is_some_and(|found| found.get_element_id() == element.get_element_id())
+    };
+    // The names first: the path the view's rows name.
+    let path = chain
+        .iter()
+        .map(|child| child.get_name())
+        .collect::<Vec<_>>()
+        .join("\\");
+    if resolves(&path) {
+        return Some(path);
+    }
+    // Then the position of each level, which an array needs when entries
+    // repeat a name. The position is the one `get_element` resolves: the
+    // definition's order for the containers that apply an element map, the
+    // storage order for the record and the subrecords.
+    let mut by_position: Vec<String> = Vec::with_capacity(chain.len());
+    for (index, child) in chain.iter().enumerate() {
+        let parent = if index == 0 { record } else { &chain[index - 1] };
+        let position = parent.as_container().and_then(|container| {
+            (0..container.get_element_count())
+                .filter_map(|position| container.get_element(position).map(|found| (position, found)))
+                .find(|(_, found)| found.get_element_id() == child.get_element_id())
+                .map(|(position, _)| position)
+        });
+        match position {
+            Some(position) => by_position.push(format!("[{position}]")),
+            None => by_position.push(child.get_name()),
+        }
+    }
+    let path = by_position.join("\\");
+    resolves(&path).then_some(path)
+}
+
+fn compare_row(
+    node: &ViewNode,
+    parent: &ViewNode,
+    column_records: &[Option<ElementRef>],
+    include_hidden: bool,
+    sort_keys: bool,
+) -> Option<CompareRow> {
     if !node.visible && !include_hidden {
         return None;
     }
     Some(CompareRow {
         name: node.name(Some(parent)),
+        index: node.index,
+        member_name: member_name_of(node, parent),
         conflict_all: node
             .datas
             .first()
@@ -576,15 +806,41 @@ fn compare_row(node: &ViewNode, parent: &ViewNode, include_hidden: bool) -> Opti
             .datas
             .iter()
             .enumerate()
-            .map(|(column, data)| CompareCell {
-                value: data.element.as_ref().map(|_| node.cell_text(column)),
-                conflict_this: data.conflict_this.into(),
+            .map(|(column, data)| {
+                let record = column_records.get(column).and_then(Option::as_ref);
+                let element = data.element.as_ref();
+                CompareCell {
+                    value: element.map(|_| node.cell_text(column)),
+                    conflict_this: data.conflict_this.into(),
+                    conflict_all: data.conflict_all.into(),
+                    path: match (record, element) {
+                        (Some(record), Some(element)) => element_relative_path(record, element),
+                        _ => None,
+                    },
+                    editable: element.is_some_and(|element| element.get_is_editable()),
+                    edit_value: element.map(|element| element.get_edit_value()),
+                    display_name: element.map(|element| element.get_display_name(true)),
+                    name: element.map(|element| element.get_name()),
+                    summary: element
+                        .map(|element| element.get_summary())
+                        .filter(|summary| !summary.is_empty()),
+                    sort_key: if sort_keys {
+                        element.map(|element| xedit_core::implementation::sortable::display_sort_key(element, true))
+                    } else {
+                        None
+                    },
+                    modified: element.is_some_and(|element| {
+                        element
+                            .as_element_impl()
+                            .is_some_and(|element| element.element_base().has_state(ElementState::esModified))
+                    }),
+                }
             })
             .collect(),
         children: node
             .children
             .iter()
-            .filter_map(|child| compare_row(child, node, include_hidden))
+            .filter_map(|child| compare_row(child, node, column_records, include_hidden, sort_keys))
             .collect(),
     })
 }
@@ -761,7 +1017,7 @@ impl CompareRequest {
 }
 
 /// One record of a `records.compare_selected` request.
-#[derive(Deserialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct SelectedRecord {
     /// Load order FormID of the record as hexadecimal digits.
@@ -770,7 +1026,7 @@ pub struct SelectedRecord {
     pub file: Option<String>,
 }
 
-#[derive(Deserialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct CompareSelectedRequest {
     /// The records to compare, in the order of the view's columns; two at
@@ -828,7 +1084,7 @@ pub struct CompareSelectedRequest {
 }
 
 /// One column of a sibling comparison: a selected record.
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 pub struct CompareSelectedColumn {
     /// File that holds the record.
     pub file: String,
@@ -840,16 +1096,16 @@ pub struct CompareSelectedColumn {
     pub name: String,
 }
 
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 pub struct CompareSelectedResponse {
     /// The compared records in the order given (the columns of the view).
     pub records: Vec<CompareSelectedColumn>,
     pub rows: Vec<CompareRow>,
     /// The view filter of the request and what it did, when one was asked
     /// for (`ApplyViewFilter`).
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub view_filter: Option<ViewFilterReport>,
-    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub messages: Vec<String>,
 }
 
@@ -892,10 +1148,11 @@ fn records_compare_selected(
     };
     let mut context = ConflictContext::new(&options, &files);
     let view = context.view_for_sibling_records(&records);
+    let column_records = view_column_records(&view);
     let mut rows: Vec<CompareRow> = view
         .children
         .iter()
-        .filter_map(|child| compare_row(child, &view, request.include_hidden))
+        .filter_map(|child| compare_row(child, &view, &column_records, request.include_hidden, true))
         .collect();
     let view_filter = apply_view_filter(
         &mut rows,

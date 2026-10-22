@@ -14,15 +14,19 @@
 //!
 //! `cargo xtask parity dump` and `parity saves` compare the port with the oracle. See `parity`.
 //!
+//! `cargo xtask gui launch|windows|shot|keys|click|menus|close` drives a GUI
+//! program on a private desktop (a session) for the phase-7 screen checks.
+//!
 //! `cargo xtask pascal-check <file>...` parses upstream Pascal units with the
 //! reader of the definition transpiler and reports the files that fail.
 
+mod gui;
 mod memory;
 mod parity;
 mod pascal;
 mod portdefs;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -33,6 +37,9 @@ use walkdir::WalkDir;
 
 const MAP_FILE: &str = "upstream-map.toml";
 const LEDGER_FILE: &str = "coverage/ledger.toml";
+const AUDIT_FILE: &str = "coverage/gui_audit.toml";
+const GUI_SRC: &str = "crates/xedit-gui/src";
+const SESSION_SRC: &str = "crates/xedit-session/src";
 const HEADER: &str = "Mozilla Public";
 
 /// Upstream directories whose Pascal units are tracked in the map.
@@ -139,6 +146,42 @@ impl Entry {
     }
 }
 
+/// The audit of the covered `gui.*` bindings: the control of the port that
+/// reaches the command of the ledger.
+#[derive(Serialize, Deserialize, Default)]
+struct Audit {
+    /// One row per covered binding, keyed like the ledger's `gui` entries.
+    gui: BTreeMap<String, AuditRow>,
+}
+
+/// One row of the audit.
+#[derive(Serialize, Deserialize)]
+struct AuditRow {
+    /// The DFM component upstream renders.
+    control: String,
+    /// The module of `crates/xedit-gui/src` that draws the control.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    module: Option<String>,
+    /// The name the port gives the control.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    port_control: Option<String>,
+    /// The module of `crates/xedit-gui/src` that calls the command, when it
+    /// is not the module that draws the control: a dialog hands its action
+    /// to the shell and the shell calls the command.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    command_module: Option<String>,
+    /// The session command the control calls.
+    command: String,
+    /// `reachable`, `reimplemented` or `unreachable`.
+    reach: String,
+    /// Why the row is not `reachable`; the ledger note repeats it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    reason: Option<String>,
+    /// A remark about the mapping.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    note: Option<String>,
+}
+
 fn main() -> Result<()> {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let args: Vec<&str> = args.iter().map(String::as_str).collect();
@@ -154,6 +197,7 @@ fn main() -> Result<()> {
             sync(&upstream, rest.first().copied())
         }
         ["port-defs", rest @ ..] => portdefs::run(rest),
+        ["gui", rest @ ..] => gui::run(rest),
         ["pascal-check", files @ ..] if !files.is_empty() => {
             let files: Vec<String> = files.iter().map(|file| (*file).to_owned()).collect();
             pascal::parser::check_files(&files)
@@ -165,7 +209,7 @@ fn main() -> Result<()> {
             parity::run(&root, &map.upstream.tag, rest)
         }
         _ => bail!(
-            "usage: cargo xtask check | cargo xtask sync <upstream checkout> [commit] | cargo xtask parity dump|saves [options]"
+            "usage: cargo xtask check | cargo xtask sync <upstream checkout> [commit] | cargo xtask parity <mode> [options] | cargo xtask gui help"
         ),
     }
 }
@@ -252,11 +296,173 @@ fn check() -> Result<()> {
     let open = map.units.values().filter(|u| u.status == "pending").count();
     println!("units: {} tracked, {open} pending", map.units.len());
 
+    check_audit(&ledger, &mut problems);
+
     for problem in &problems {
         eprintln!("{problem}");
     }
     ensure!(problems.is_empty(), "{} problem(s) found", problems.len());
     Ok(())
+}
+
+/// Checks the audit of the covered `gui.*` bindings against the ledger and
+/// against the sources of the port.
+///
+/// A covered binding without a row, a row whose control names a module that
+/// no longer exists or a control the module does not draw, a command that is
+/// not a session command and a table that disagrees with the ledger about
+/// the covered bindings are all problems. A binding the port does not reach
+/// with the ledger's command says so, and the ledger note repeats it.
+fn check_audit(ledger: &Ledger, problems: &mut Vec<String>) {
+    let audit: Audit = match load(AUDIT_FILE) {
+        Ok(audit) => audit,
+        Err(error) => {
+            problems.push(format!("{AUDIT_FILE}: {error}"));
+            return;
+        }
+    };
+    let gui_sources = read_sources(GUI_SRC);
+    let session_sources = read_sources(SESSION_SRC);
+    let registered = registered_commands(&session_sources);
+    for (key, entry) in &ledger.gui {
+        if entry.status != "covered" {
+            continue;
+        }
+        let Some(row) = audit.gui.get(key) else {
+            problems.push(format!("{AUDIT_FILE}: {key}: no row for a covered binding"));
+            continue;
+        };
+        let command = entry.command.clone().unwrap_or_default();
+        if row.control.is_empty() {
+            problems.push(format!("{AUDIT_FILE}: {key}: the row names no control"));
+        }
+        if row.command != command {
+            problems.push(format!(
+                "{AUDIT_FILE}: {key}: the row calls {}, the ledger {command}",
+                row.command
+            ));
+        }
+        if !registered.contains(&row.command) {
+            problems.push(format!("{AUDIT_FILE}: {key}: {} is not a session command", row.command));
+        }
+        match row.reach.as_str() {
+            "reachable" => {
+                // The command has to be called by the module the row names,
+                // or by the module the row names as the caller: a call
+                // somewhere else in the GUI does not make the control of
+                // this row reach it.
+                let caller = row.command_module.as_deref().or(row.module.as_deref());
+                match caller {
+                    Some(module) => {
+                        let path = Path::new(GUI_SRC).join(module);
+                        match fs::read_to_string(&path) {
+                            Ok(text) => {
+                                if !text.contains(&row.command) {
+                                    problems.push(format!(
+                                        "{AUDIT_FILE}: {key}: {} is called nowhere in {module}",
+                                        row.command
+                                    ));
+                                }
+                            }
+                            Err(_) => problems.push(format!("{AUDIT_FILE}: {key}: {module} does not exist")),
+                        }
+                    }
+                    None => problems.push(format!("{AUDIT_FILE}: {key}: the row names no module")),
+                }
+                check_audit_control(key, row, problems);
+            }
+            "reimplemented" => {
+                check_audit_control(key, row, problems);
+                check_audit_reason(key, row, entry, problems);
+            }
+            "unreachable" => {
+                // The control the port would have to grow may be named (the
+                // view's grid, the spreadsheet's list), but the command is
+                // called nowhere in the GUI.
+                if row.module.is_some() {
+                    check_audit_control(key, row, problems);
+                }
+                if gui_sources.iter().any(|text| text.contains(&row.command)) {
+                    problems.push(format!(
+                        "{AUDIT_FILE}: {key}: {} is called in {GUI_SRC}, the row is unreachable",
+                        row.command
+                    ));
+                }
+                check_audit_reason(key, row, entry, problems);
+            }
+            other => problems.push(format!("{AUDIT_FILE}: {key}: unknown reach {other}")),
+        }
+    }
+    for key in audit.gui.keys() {
+        if ledger.gui.get(key).map(|entry| entry.status.as_str()) != Some("covered") {
+            problems.push(format!(
+                "{AUDIT_FILE}: {key}: the row is not a covered binding of the ledger"
+            ));
+        }
+    }
+    let reachable = audit.gui.values().filter(|row| row.reach == "reachable").count();
+    println!(
+        "audit: {} rows, {reachable} reachable, {} reimplemented, {} unreachable",
+        audit.gui.len(),
+        audit.gui.values().filter(|row| row.reach == "reimplemented").count(),
+        audit.gui.values().filter(|row| row.reach == "unreachable").count(),
+    );
+}
+
+/// Checks that the control of a row is drawn by the module the row names.
+fn check_audit_control(key: &str, row: &AuditRow, problems: &mut Vec<String>) {
+    let (Some(module), Some(port_control)) = (&row.module, &row.port_control) else {
+        problems.push(format!("{AUDIT_FILE}: {key}: the row names no control of the port"));
+        return;
+    };
+    let path = Path::new(GUI_SRC).join(module);
+    let Ok(text) = fs::read_to_string(&path) else {
+        problems.push(format!("{AUDIT_FILE}: {key}: {module} does not exist"));
+        return;
+    };
+    if !text.contains(port_control) {
+        problems.push(format!("{AUDIT_FILE}: {key}: {module} does not draw {port_control}"));
+    }
+}
+
+/// Checks that the reason of a row the port does not reach is in the note
+/// of the ledger entry, so the two say the same.
+fn check_audit_reason(key: &str, row: &AuditRow, entry: &Entry, problems: &mut Vec<String>) {
+    let Some(reason) = row.reason.as_deref().filter(|reason| !reason.is_empty()) else {
+        problems.push(format!("{AUDIT_FILE}: {key}: the row names no reason"));
+        return;
+    };
+    if !entry.note.as_deref().is_some_and(|note| note.contains(reason)) {
+        problems.push(format!(
+            "{LEDGER_FILE}: gui {key}: the note does not repeat the reason of the audit"
+        ));
+    }
+}
+
+/// The text of every Rust source under a directory.
+fn read_sources(dir: &str) -> Vec<String> {
+    let mut texts = Vec::new();
+    for entry in WalkDir::new(dir).into_iter().filter_map(|entry| entry.ok()) {
+        let path = entry.path();
+        if path.extension().is_some_and(|extension| extension == "rs")
+            && let Ok(text) = fs::read_to_string(path)
+        {
+            texts.push(text);
+        }
+    }
+    texts
+}
+
+/// The names the session registry registers.
+fn registered_commands(sources: &[String]) -> BTreeSet<String> {
+    let pattern = Regex::new(r#"register\(\s*"([a-z0-9_.]+)""#).expect("the register pattern");
+    let mut names = BTreeSet::new();
+    for text in sources {
+        for capture in pattern.captures_iter(text) {
+            names.insert(capture[1].to_owned());
+        }
+    }
+    names
 }
 
 /// Whether a ledger note names the owner of an open entry: an issue

@@ -30,7 +30,7 @@ note = "Window and text view of the archive information dialog."
 status = "covered"
 command = "archive.list"
 source = "mniSaveAsClick"
-note = "Saves the archive information text; archive.list gives it."
+note = "Saves the archive information text; archive.list gives it. The port has no BSArch window: upstream-map.toml keeps the BSArch forms pending (the GUI itself is not ported), so no control of the port reaches this command."
 
 [gui."BSArch/frmArchiveInfo.dfm:vtText:OnGetText"]
 status = "presentation"
@@ -76,7 +76,7 @@ note = "Window, list display, filter and selection of BSArchPro's asset list; th
 status = "covered"
 command = "archive.pack"
 source = "btnPackClick"
-note = "Packs the checked assets of the list into an archive (TFormPack): the format, compression, split and flags are the parameters; cargo xtask parity bsarchpro drives the GUI route."
+note = "Packs the checked assets of the list into an archive (TFormPack): the format, compression, split and flags are the parameters; cargo xtask parity bsarchpro drives the GUI route. The port has no BSArch window: upstream-map.toml keeps the BSArch forms pending (the GUI itself is not ported), so no control of the port reaches this command."
 
 [gui."BSArch/frmMain.dfm:edFilter:OnKeyPress"]
 status = "presentation"
@@ -92,25 +92,25 @@ note = "Window, list display, filter and selection of BSArchPro's asset list; th
 status = "covered"
 command = "archive.list"
 source = "mniArchiveInfoClick"
-note = "The information of an archive (its format, flags and files)."
+note = "The information of an archive (its format, flags and files). The port has no BSArch window: upstream-map.toml keeps the BSArch forms pending (the GUI itself is not ported), so no control of the port reaches this command."
 
 [gui."BSArch/frmMain.dfm:mniAssetCompress:OnClick"]
 status = "covered"
 command = "bsarchpro.compress"
 source = "mniAssetCompressClick"
-note = "Every asset's Compressed flag is set from TwbAsset.DoNotCompress (the sound, voice, music and strings folders, except .fuz and .hkx) and written to the list, or only reported with dry_run."
+note = "Every asset's Compressed flag is set from TwbAsset.DoNotCompress (the sound, voice, music and strings folders, except .fuz and .hkx) and written to the list, or only reported with dry_run. The port has no BSArch window: upstream-map.toml keeps the BSArch forms pending (the GUI itself is not ported), so no control of the port reaches this command."
 
 [gui."BSArch/frmMain.dfm:mniAssetEdit:OnClick"]
 status = "covered"
 command = "bsarchpro.edit"
 source = "mniAssetEditClick"
-note = "The edited name of exactly one selected asset (the InputQuery's OK), trimmed; empty text keeps the name. The asset is the index into the list's assets."
+note = "The edited name of exactly one selected asset (the InputQuery's OK), trimmed; empty text keeps the name. The asset is the index into the list's assets. The port has no BSArch window: upstream-map.toml keeps the BSArch forms pending (the GUI itself is not ported), so no control of the port reaches this command."
 
 [gui."BSArch/frmMain.dfm:mniAssetFindIdentical:OnClick"]
 status = "covered"
 command = "bsarchpro.find_identical"
 source = "mniAssetFindIdenticalClick"
-note = "UPSTREAM-QUIRK: TwbSameData.Add groups on DataSize and LookupHash alone (wbBSArchive.pas:813-822), with no byte compare, so a hash collision between equal-sized assets counts as identical; the port follows it. The whole list is compared; the duplicate count, size and FormatSize report are the dialog's title and lines. The dialog's options (sort duplicates first 100, filter them 101, archive info 102) are presentation; the command is read-only."
+note = "UPSTREAM-QUIRK: TwbSameData.Add groups on DataSize and LookupHash alone (wbBSArchive.pas:813-822), with no byte compare, so a hash collision between equal-sized assets counts as identical; the port follows it. The whole list is compared; the duplicate count, size and FormatSize report are the dialog's title and lines. The dialog's options (sort duplicates first 100, filter them 101, archive info 102) are presentation; the command is read-only. The port has no BSArch window: upstream-map.toml keeps the BSArch forms pending (the GUI itself is not ported), so no control of the port reaches this command."
 
 [gui."BSArch/frmMain.dfm:mniAssetOpen:OnClick"]
 status = "presentation"
@@ -121,49 +121,49 @@ note = "Opens an asset with the program the shell associates with it."
 status = "covered"
 command = "archive.pack"
 source = "mniAssetPackClick"
-note = "Packs the checked assets of the list into an archive (TFormPack): the format, compression, split and flags are the parameters; cargo xtask parity bsarchpro drives the GUI route."
+note = "Packs the checked assets of the list into an archive (TFormPack): the format, compression, split and flags are the parameters; cargo xtask parity bsarchpro drives the GUI route. The port has no BSArch window: upstream-map.toml keeps the BSArch forms pending (the GUI itself is not ported), so no control of the port reaches this command."
 
 [gui."BSArch/frmMain.dfm:mniAssetRemoveSelected:OnClick"]
 status = "covered"
 command = "bsarchpro.remove_selected"
 source = "mniAssetRemoveSelectedClick"
-note = "The 'Remove N selected asset(s)?' question (default Yes) is confirm; when the selection is the whole list the second 'Clear assets list?' question is clear_confirm (default Yes). The remaining assets are written to the list."
+note = "The 'Remove N selected asset(s)?' question (default Yes) is confirm; when the selection is the whole list the second 'Clear assets list?' question is clear_confirm (default Yes). The remaining assets are written to the list. The port has no BSArch window: upstream-map.toml keeps the BSArch forms pending (the GUI itself is not ported), so no control of the port reaches this command."
 
 [gui."BSArch/frmMain.dfm:mniAssetRemoveUnselected:OnClick"]
 status = "covered"
 command = "bsarchpro.remove_unselected"
 source = "mniAssetRemoveUnselectedClick"
-note = "The 'Remove N unselected asset(s)?' question (default Yes) is confirm; the selected assets are kept and the rest written to the list."
+note = "The 'Remove N unselected asset(s)?' question (default Yes) is confirm; the selected assets are kept and the rest written to the list. The port has no BSArch window: upstream-map.toml keeps the BSArch forms pending (the GUI itself is not ported), so no control of the port reaches this command."
 
 [gui."BSArch/frmMain.dfm:mniAssetReplace:OnClick"]
 status = "covered"
 command = "bsarchpro.replace"
 source = "mniAssetReplaceClick"
-note = "TfrmSearchReplace's SearchText, ReplaceText and radio mode are search, replace_text and mode; replace is StringReplace with rfReplaceAll and rfIgnoreCase and refuses an empty search (the form's OnClose), prepend and append put the search text around the name."
+note = "TfrmSearchReplace's SearchText, ReplaceText and radio mode are search, replace_text and mode; replace is StringReplace with rfReplaceAll and rfIgnoreCase and refuses an empty search (the form's OnClose), prepend and append put the search text around the name. The port has no BSArch window: upstream-map.toml keeps the BSArch forms pending (the GUI itself is not ported), so no control of the port reaches this command."
 
 [gui."BSArch/frmMain.dfm:mniAssetUnpack:OnClick"]
 status = "covered"
 command = "archive.extract"
 source = "mniAssetUnpackClick"
-note = "Unpacks the selected assets into a folder."
+note = "Unpacks the selected assets into a folder. The port has no BSArch window: upstream-map.toml keeps the BSArch forms pending (the GUI itself is not ported), so no control of the port reaches this command."
 
 [gui."BSArch/frmMain.dfm:mniAssetUnpackSaveAs:OnClick"]
 status = "covered"
 command = "archive.extract"
 source = "mniAssetUnpackSaveAsClick"
-note = "Unpacks the selected assets into a folder."
+note = "Unpacks the selected assets into a folder. The port has no BSArch window: upstream-map.toml keeps the BSArch forms pending (the GUI itself is not ported), so no control of the port reaches this command."
 
 [gui."BSArch/frmMain.dfm:mniLoadList:OnClick"]
 status = "covered"
 command = "bsarchpro.list_load"
 source = "mniLoadListClick"
-note = "LoadList reads the zip's assets.json (or the plain JSON file) into Packing and Assets; a Packing key the object lacks gets LoadList's defaults (baNone the highest archive type, missing Split -1, booleans false, strings empty), and no Packing at all gets FormCreate's defaults. The dialog and Settings.ListFileName are presentation."
+note = "LoadList reads the zip's assets.json (or the plain JSON file) into Packing and Assets; a Packing key the object lacks gets LoadList's defaults (baNone the highest archive type, missing Split -1, booleans false, strings empty), and no Packing at all gets FormCreate's defaults. The dialog and Settings.ListFileName are presentation. The port has no BSArch window: upstream-map.toml keeps the BSArch forms pending (the GUI itself is not ported), so no control of the port reaches this command."
 
 [gui."BSArch/frmMain.dfm:mniSaveList:OnClick"]
 status = "covered"
 command = "bsarchpro.list_save"
 source = "mniSaveListClick"
-note = "SaveList writes the zip with assets.json holding Packing and Assets; mniSaveListClick gives the path the .bsarch extension. The settings (ListFileName and the packing defaults) are presentation."
+note = "SaveList writes the zip with assets.json holding Packing and Assets; mniSaveListClick gives the path the .bsarch extension. The settings (ListFileName and the packing defaults) are presentation. The port has no BSArch window: upstream-map.toml keeps the BSArch forms pending (the GUI itself is not ported), so no control of the port reaches this command."
 
 [gui."BSArch/frmMain.dfm:rbAll:OnClick"]
 status = "presentation"
@@ -254,7 +254,7 @@ note = "Window and browse dialog of the pack options dialog; archive.pack takes 
 status = "covered"
 command = "archive.pack"
 source = "chkAutodetectFlagsClick"
-note = "TwbBSArchive.DetectFlags: archive.pack detects the flags unless archive_flags/file_flags override them."
+note = "TwbBSArchive.DetectFlags: archive.pack detects the flags unless archive_flags/file_flags override them. The port has no BSArch window: upstream-map.toml keeps the BSArch forms pending (the GUI itself is not ported), so no control of the port reaches this command."
 
 [gui."BSArch/frmSearchReplace.dfm:FormSearchReplace:OnClose"]
 status = "presentation"
@@ -335,7 +335,7 @@ note = "Enables, fills or browses controls of the frame; sniff.run takes the set
 status = "covered"
 command = "sniff.run"
 source = "cmbNodeFromSelect"
-note = "The types a block type converts to (sNodeFrom, sNodeTo)."
+note = "The types a block type converts to (sNodeFrom, sNodeTo). The port has no Sniff window: upstream-map.toml keeps the Sniff forms pending (the GUI itself is not ported), so no control of the port reaches this command."
 
 [gui."Sniff/Proc/ProcCopyControlledBlocks.dfm:btnBrowse:OnClick"]
 status = "presentation"
@@ -361,7 +361,7 @@ note = "Filters the format list of the frame; the checked formats are the sForma
 status = "covered"
 command = "sniff.run"
 source = "lvFormatItemChecked"
-note = "The DXGI formats the report keeps (sFormats)."
+note = "The DXGI formats the report keeps (sFormats). The port has no Sniff window: upstream-map.toml keeps the Sniff forms pending (the GUI itself is not ported), so no control of the port reaches this command."
 
 [gui."Sniff/Proc/ProcFindTextures.dfm:mniCheckAll:OnClick"]
 status = "presentation"
@@ -377,31 +377,31 @@ note = "Checks or unchecks every format of the list; sniff.run takes the checked
 status = "covered"
 command = "sniff.run"
 source = "rbTES5Click"
-note = "The materials of the game (iGame) and the filters (sFilterSearch, sFilterReplace) that bound the chosen materials."
+note = "The materials of the game (iGame) and the filters (sFilterSearch, sFilterReplace) that bound the chosen materials. The port has no Sniff window: upstream-map.toml keeps the Sniff forms pending (the GUI itself is not ported), so no control of the port reaches this command."
 
 [gui."Sniff/Proc/ProcHavokSearchMaterial.dfm:edSearch:OnChange"]
 status = "covered"
 command = "sniff.run"
 source = "rbTES5Click"
-note = "The materials of the game (iGame) and the filters (sFilterSearch, sFilterReplace) that bound the chosen materials."
+note = "The materials of the game (iGame) and the filters (sFilterSearch, sFilterReplace) that bound the chosen materials. The port has no Sniff window: upstream-map.toml keeps the Sniff forms pending (the GUI itself is not ported), so no control of the port reaches this command."
 
 [gui."Sniff/Proc/ProcHavokSearchMaterial.dfm:rbFO3:OnClick"]
 status = "covered"
 command = "sniff.run"
 source = "rbTES5Click"
-note = "The materials of the game (iGame) and the filters (sFilterSearch, sFilterReplace) that bound the chosen materials."
+note = "The materials of the game (iGame) and the filters (sFilterSearch, sFilterReplace) that bound the chosen materials. The port has no Sniff window: upstream-map.toml keeps the Sniff forms pending (the GUI itself is not ported), so no control of the port reaches this command."
 
 [gui."Sniff/Proc/ProcHavokSearchMaterial.dfm:rbTES4:OnClick"]
 status = "covered"
 command = "sniff.run"
 source = "rbTES5Click"
-note = "The materials of the game (iGame) and the filters (sFilterSearch, sFilterReplace) that bound the chosen materials."
+note = "The materials of the game (iGame) and the filters (sFilterSearch, sFilterReplace) that bound the chosen materials. The port has no Sniff window: upstream-map.toml keeps the Sniff forms pending (the GUI itself is not ported), so no control of the port reaches this command."
 
 [gui."Sniff/Proc/ProcHavokSearchMaterial.dfm:rbTES5:OnClick"]
 status = "covered"
 command = "sniff.run"
 source = "rbTES5Click"
-note = "The materials of the game (iGame) and the filters (sFilterSearch, sFilterReplace) that bound the chosen materials."
+note = "The materials of the game (iGame) and the filters (sFilterSearch, sFilterReplace) that bound the chosen materials. The port has no Sniff window: upstream-map.toml keeps the Sniff forms pending (the GUI itself is not ported), so no control of the port reaches this command."
 
 [gui."Sniff/Proc/ProcHavokSettingsUpdate.dfm:edSettings:OnGetPickList"]
 status = "presentation"
@@ -422,13 +422,13 @@ note = "Enables, fills or browses controls of the frame; sniff.run takes the set
 status = "covered"
 command = "sniff.run"
 source = "chkStripifyClick"
-note = "Stripify and triangulate exclude each other as the settings are read."
+note = "Stripify and triangulate exclude each other as the settings are read. The port has no Sniff window: upstream-map.toml keeps the Sniff forms pending (the GUI itself is not ported), so no control of the port reaches this command."
 
 [gui."Sniff/Proc/ProcOptimize.dfm:chkTriangulate:OnClick"]
 status = "covered"
 command = "sniff.run"
 source = "chkTriangulateClick"
-note = "Stripify and triangulate exclude each other as the settings are read."
+note = "Stripify and triangulate exclude each other as the settings are read. The port has no Sniff window: upstream-map.toml keeps the Sniff forms pending (the GUI itself is not ported), so no control of the port reaches this command."
 
 [gui."Sniff/Proc/ProcOptimize.dfm:lblInfo:OnClick"]
 status = "presentation"
@@ -439,7 +439,7 @@ note = "Opens a web page."
 status = "covered"
 command = "sniff.run"
 source = "cmbGameSelect"
-note = "The flag lists of the game (iGame) that bound iFlags and iFlags2."
+note = "The flag lists of the game (iGame) that bound iFlags and iFlags2. The port has no Sniff window: upstream-map.toml keeps the Sniff forms pending (the GUI itself is not ported), so no control of the port reaches this command."
 
 [gui."Sniff/Proc/ProcUniversalFixer.dfm:btnBrowse:OnClick"]
 status = "presentation"
@@ -490,25 +490,25 @@ note = "Opens a help form of the frame."
 status = "covered"
 command = "sniff.run"
 source = "rbSetColorsClick"
-note = "Selects the mode of the operation (iMode)."
+note = "Selects the mode of the operation (iMode). The port has no Sniff window: upstream-map.toml keeps the Sniff forms pending (the GUI itself is not ported), so no control of the port reaches this command."
 
 [gui."Sniff/Proc/ProcVertexPaint.dfm:rbRemoveColors:OnClick"]
 status = "covered"
 command = "sniff.run"
 source = "rbSetColorsClick"
-note = "Selects the mode of the operation (iMode)."
+note = "Selects the mode of the operation (iMode). The port has no Sniff window: upstream-map.toml keeps the Sniff forms pending (the GUI itself is not ported), so no control of the port reaches this command."
 
 [gui."Sniff/Proc/ProcVertexPaint.dfm:rbReplaceColor:OnClick"]
 status = "covered"
 command = "sniff.run"
 source = "rbSetColorsClick"
-note = "Selects the mode of the operation (iMode)."
+note = "Selects the mode of the operation (iMode). The port has no Sniff window: upstream-map.toml keeps the Sniff forms pending (the GUI itself is not ported), so no control of the port reaches this command."
 
 [gui."Sniff/Proc/ProcVertexPaint.dfm:rbSetColors:OnClick"]
 status = "covered"
 command = "sniff.run"
 source = "rbSetColorsClick"
-note = "Selects the mode of the operation (iMode)."
+note = "Selects the mode of the operation (iMode). The port has no Sniff window: upstream-map.toml keeps the Sniff forms pending (the GUI itself is not ported), so no control of the port reaches this command."
 
 [gui."Sniff/frmMain.dfm:FormMain:OnClose"]
 status = "presentation"
@@ -519,7 +519,7 @@ note = "Window, browse dialogs and tabs of the GUI."
 status = "covered"
 command = "sniff.run"
 source = "FormCreate"
-note = "The automation mode: the list of operations (sniff.list), the settings and the command line."
+note = "The automation mode: the list of operations (sniff.list), the settings and the command line. The port has no Sniff window: upstream-map.toml keeps the Sniff forms pending (the GUI itself is not ported), so no control of the port reaches this command."
 
 [gui."Sniff/frmMain.dfm:FormMain:OnShow"]
 status = "presentation"
@@ -545,37 +545,37 @@ note = "Window, browse dialogs and tabs of the GUI."
 status = "covered"
 command = "sniff.run"
 source = "btnProcessClick"
-note = "The run of the automation mode; the confirmation dialog and the drag and drop are presentation."
+note = "The run of the automation mode; the confirmation dialog and the drag and drop are presentation. The port has no Sniff window: upstream-map.toml keeps the Sniff forms pending (the GUI itself is not ported), so no control of the port reaches this command."
 
 [gui."Sniff/frmMain.dfm:cmbProcGame:OnClick"]
 status = "covered"
 command = "sniff.list"
 source = "edProcFilterChange"
-note = "The filter of the list by game and name; sniff.list returns the games of each operation."
+note = "The filter of the list by game and name; sniff.list returns the games of each operation. The port has no Sniff window: upstream-map.toml keeps the Sniff forms pending (the GUI itself is not ported), so no control of the port reaches this command."
 
 [gui."Sniff/frmMain.dfm:edProcFilter:OnChange"]
 status = "covered"
 command = "sniff.list"
 source = "edProcFilterChange"
-note = "The filter of the list by game and name; sniff.list returns the games of each operation."
+note = "The filter of the list by game and name; sniff.list returns the games of each operation. The port has no Sniff window: upstream-map.toml keeps the Sniff forms pending (the GUI itself is not ported), so no control of the port reaches this command."
 
 [gui."Sniff/frmMain.dfm:lblProcessedFiles:OnClick"]
 status = "covered"
 command = "sniff.run"
 source = "lblProcessedFilesTitleClick"
-note = "The file masks are the ProcessedFiles setting of the operation."
+note = "The file masks are the ProcessedFiles setting of the operation. The port has no Sniff window: upstream-map.toml keeps the Sniff forms pending (the GUI itself is not ported), so no control of the port reaches this command."
 
 [gui."Sniff/frmMain.dfm:lblProcessedFilesTitle:OnClick"]
 status = "covered"
 command = "sniff.run"
 source = "lblProcessedFilesTitleClick"
-note = "The file masks are the ProcessedFiles setting of the operation."
+note = "The file masks are the ProcessedFiles setting of the operation. The port has no Sniff window: upstream-map.toml keeps the Sniff forms pending (the GUI itself is not ported), so no control of the port reaches this command."
 
 [gui."Sniff/frmMain.dfm:lvProcs:OnSelectItem"]
 status = "covered"
 command = "sniff.run"
 source = "lvProcsSelectItem"
-note = "Choosing the operation and reading its settings section (ProcessedFiles, OnShow)."
+note = "Choosing the operation and reading its settings section (ProcessedFiles, OnShow). The port has no Sniff window: upstream-map.toml keeps the Sniff forms pending (the GUI itself is not ported), so no control of the port reaches this command."
 
 [gui."Sniff/frmMain.dfm:mniInputArchive:OnClick"]
 status = "presentation"
@@ -742,9 +742,10 @@ source = "FormClose"
 note = "Writes View|LastUsedFilter and, when the checkboxes differ from the preset (FilterHasPresetChanged, which the response's changed reports), asks to save them over it; the settings hint itself is presentation."
 
 [gui."xEdit/xeFilterOptionsForm.dfm:frmFilterOptions:OnCreate"]
-status = "presentation"
+status = "covered"
+command = "signatures.list"
 source = "FormCreate"
-note = "Fills the checklists with the conflict statuses and the signatures of the loaded definitions; filter.apply takes the names and signatures directly."
+note = "Fills the checklists with the conflict statuses (`clbConflictAll`/`clbConflictThis`, the enum names as upstream builds them) and with the signatures of the loaded definitions (`clbRecordSignatures`/`clbBaseRecordSignatures`): `signatures.list` is that list (`SIGNATURE - Name`, both lists, the base list only for the definitions with a reference signature). filter.apply takes the names and signatures directly."
 
 [gui."xEdit/xeFilterOptionsForm.dfm:frmFilterOptions:OnKeyDown"]
 status = "presentation"
@@ -870,9 +871,10 @@ source = "FormClose"
 note = "The legend of the conflict colours."
 
 [gui."xEdit/xeLegendForm.dfm:frmLegend:OnCreate"]
-status = "presentation"
+status = "covered"
+command = "settings.get"
 source = "FormCreate"
-note = "The legend of the conflict colours."
+note = "The legend of the conflict colours; the placement the form reads (`[frmLegend] Left`, `Top`, `Width`, `Height`, `WindowState`) is `settings.get`."
 
 [gui."xEdit/xeLegendForm.dfm:frmLegend:OnDestroy"]
 status = "presentation"
@@ -880,9 +882,10 @@ source = "FormDestroy"
 note = "The legend of the conflict colours."
 
 [gui."xEdit/xeLegendForm.dfm:frmLegend:OnHide"]
-status = "presentation"
+status = "covered"
+command = "settings.set"
 source = "FormHide"
-note = "The legend of the conflict colours."
+note = "The legend of the conflict colours; the placement the form writes (`[frmLegend] Left`, `Top`, `Width`, `Height`, `WindowState`) is `settings.set`."
 
 [gui."xEdit/xeLegendForm.dfm:frmLegend:OnShow"]
 status = "presentation"
@@ -921,7 +924,7 @@ note = "Shows the export item on a table node."
 status = "covered"
 command = "localization.get"
 source = "vetStringsChange"
-note = "The text of the focused string."
+note = "The text of the focused string. The port's strings grid reads the text of the focused string from the strings response (`localization.strings`); `localization.get` is the element pane's read of a localized element, so no control of the port reaches the command."
 
 [gui."xEdit/xeLocalizationForm.dfm:vetStrings:OnGetText"]
 status = "covered"
@@ -1319,7 +1322,7 @@ note = "FormClose asks to save the changed modules (SaveChanged); files.save sav
 [gui."xEdit/xeMainForm.dfm:frmMain:OnCreate"]
 status = "presentation"
 source = "FormCreate"
-note = "Window setup and keyboard handling of the main form; the session settings FormCreate sets (wbDisplayShorterNames, the settings file) are the editor session's defaults."
+note = "Window setup and keyboard handling of the main form; the session settings FormCreate sets (wbDisplayShorterNames, the settings file) are the editor session's defaults. The placement, splitter and column keys it reads (`[frmMain] Left`, `Top`, `Width`, `Height`, `WindowState`, `pnlNavWidth`, `vstNavColumnWidth<i>`) and FormClose writes are `settings.get`/`settings.set`."
 
 [gui."xEdit/xeMainForm.dfm:frmMain:OnKeyDown"]
 status = "presentation"
@@ -1473,7 +1476,19 @@ note = "AddNewFileWithDialog: the name and the module template of the dialog (fi
 status = "covered"
 command = "localization.files"
 source = "mniMainLocalizationEditorClick"
-note = "The localization editor: localization.files, localization.strings, localization.get, localization.set and localization.export."
+note = "Opens the localization editor on the localized files; localization.files lists them and localization.strings reads the tables."
+
+[gui."xEdit/xeMainForm.dfm:mniMainLocalizationLanguage:OnClick"]
+status = "covered"
+command = "localization.language"
+source = "mniMainLocalizationLanguageClick"
+note = "The language of the string tables: every item of the run-time list runs the command with the language as its parameter; the tables are dropped and read again and the tree and the view are invalidated. The DFM gives the item no event of its own: upstream binds the handler to the items it adds when the main menu's popup opens."
+
+[gui."xEdit/xeMainForm.dfm:mniMainLocalizationLanguage:OnPopup"]
+status = "covered"
+command = "localization.languages"
+source = "pmuMainPopup"
+note = "The list of the languages of the session: upstream fills the item when the main menu's popup opens (`pmuMainPopup` asks the handler for the available languages), one radio item per language with the language of the session checked. The DFM gives the item no event of its own, so the key names the item and the popup event that fills it."
 
 [gui."xEdit/xeMainForm.dfm:mniMainOptions:OnClick"]
 status = "presentation"
@@ -1481,34 +1496,34 @@ source = "mniNavOptionsClick"
 note = "Opens the options dialog; the settings it writes are the settings file each command reads, and the load settings are the CLI's flags."
 
 [gui."xEdit/xeMainForm.dfm:mniMainPluggyLinkBaseObject:OnClick"]
-status = "excluded"
+status = "presentation"
 source = "mniMainPluggyLinkClick"
-note = "The Pluggy game link of Oblivion needs the Pluggy DLLs and a running game (the -agl switch is classified the same way); not a file operation."
+note = "The port draws the item and hides it outside Oblivion, like the release; the upstream action starts the game with the Pluggy DLLs, which is not a file operation."
 
 [gui."xEdit/xeMainForm.dfm:mniMainPluggyLinkDisabled:OnClick"]
-status = "excluded"
+status = "presentation"
 source = "mniMainPluggyLinkClick"
-note = "The Pluggy game link of Oblivion needs the Pluggy DLLs and a running game (the -agl switch is classified the same way); not a file operation."
+note = "The port draws the item and hides it outside Oblivion, like the release; the upstream action starts the game with the Pluggy DLLs, which is not a file operation."
 
 [gui."xEdit/xeMainForm.dfm:mniMainPluggyLinkEnchantment:OnClick"]
-status = "excluded"
+status = "presentation"
 source = "mniMainPluggyLinkClick"
-note = "The Pluggy game link of Oblivion needs the Pluggy DLLs and a running game (the -agl switch is classified the same way); not a file operation."
+note = "The port draws the item and hides it outside Oblivion, like the release; the upstream action starts the game with the Pluggy DLLs, which is not a file operation."
 
 [gui."xEdit/xeMainForm.dfm:mniMainPluggyLinkInventory:OnClick"]
-status = "excluded"
+status = "presentation"
 source = "mniMainPluggyLinkClick"
-note = "The Pluggy game link of Oblivion needs the Pluggy DLLs and a running game (the -agl switch is classified the same way); not a file operation."
+note = "The port draws the item and hides it outside Oblivion, like the release; the upstream action starts the game with the Pluggy DLLs, which is not a file operation."
 
 [gui."xEdit/xeMainForm.dfm:mniMainPluggyLinkReference:OnClick"]
-status = "excluded"
+status = "presentation"
 source = "mniMainPluggyLinkClick"
-note = "The Pluggy game link of Oblivion needs the Pluggy DLLs and a running game (the -agl switch is classified the same way); not a file operation."
+note = "The port draws the item and hides it outside Oblivion, like the release; the upstream action starts the game with the Pluggy DLLs, which is not a file operation."
 
 [gui."xEdit/xeMainForm.dfm:mniMainPluggyLinkSpell:OnClick"]
-status = "excluded"
+status = "presentation"
 source = "mniMainPluggyLinkClick"
-note = "The Pluggy game link of Oblivion needs the Pluggy DLLs and a running game (the -agl switch is classified the same way); not a file operation."
+note = "The port draws the item and hides it outside Oblivion, like the release; the upstream action starts the game with the Pluggy DLLs, which is not a file operation."
 
 [gui."xEdit/xeMainForm.dfm:mniMainSave:OnClick"]
 status = "covered"
@@ -1676,9 +1691,9 @@ note = "The selected records are the request's records; the GUI's own limit of f
 
 [gui."xEdit/xeMainForm.dfm:mniNavCompareTo:OnClick"]
 status = "covered"
-command = "records.compare"
+command = "files.compare_to"
 source = "mniNavCompareToClick"
-note = "`--compare-to <path>` loads the file in the place of the last `--load` plugin (wbFile with aCompareTo, AddMaster(flCompareTo), fsCompareToHasSameMasters); the GUI's copy into the data folder is the requirement that both files sit in one folder."
+note = "The item opens a path prompt for the file to compare to, and `files.compare_to` copies it into the folder of the focused plugin and loads it in the place of that plugin, at the plugin's load order, as a compare load (TLoaderThread.Create(CompareFile, _File.FileName, _File.LoadOrder, States)): the compare file takes the load order of the plugin it compares to and the plugin becomes its last master (AddMaster(flCompareTo), fsCompareToHasSameMasters), and records.compare and conflicts.list then compare it. The copy into the data folder is the requirement that both files sit in one folder."
 
 [gui."xEdit/xeMainForm.dfm:mniNavCopyAsNewRecord:OnClick"]
 status = "covered"
@@ -1873,9 +1888,9 @@ source = "mniNavOptionsClick"
 note = "Opens the options dialog; the settings it writes are the settings file each command reads, and the load settings are the CLI's flags."
 
 [gui."xEdit/xeMainForm.dfm:mniNavOtherCodeSiteLogging:OnClick"]
-status = "excluded"
+status = "presentation"
 source = "mniNavOtherCodeSiteLoggingClick"
-note = "Turns on CodeSite debug logging of the Delphi build (Raize CodeSite); a developer tool of the release with no output of its own."
+note = "The port draws the item; the upstream action turns on the debug logging of the Delphi build (Raize CodeSite), which has no output of its own."
 
 [gui."xEdit/xeMainForm.dfm:mniNavRaceLVLIs:OnClick"]
 status = "covered"
@@ -1930,9 +1945,9 @@ source = "mniNavSortMastersClick"
 note = "One file per call."
 
 [gui."xEdit/xeMainForm.dfm:mniNavTest:OnClick"]
-status = "excluded"
+status = "presentation"
 source = "mniNavTestClick"
-note = "A developer test item of the release (hidden unless DEBUG); no user operation."
+note = "The port draws the item and answers with a message; the upstream handler is commented out and the item is only shown in a debug build."
 
 [gui."xEdit/xeMainForm.dfm:mniNavUndeleteAndDisableReferences:OnClick"]
 status = "covered"
@@ -2313,7 +2328,7 @@ note = "A timer of the GUI: the unsaved-changes hint, the flush of the queued lo
 status = "covered"
 command = "tool.run"
 source = "tmrGeneratorTimer"
-note = "The dispatch of the auto modes after the load (quick clean, check, the tool modes); tool.run runs a mode."
+note = "The dispatch of the auto modes after the load (quick clean, check, the tool modes); tool.run runs a mode. The port has no start-up timer: the tool modes run from their menu items (`tool.run`), so no control of the port reaches the timer."
 
 [gui."xEdit/xeMainForm.dfm:tmrMessages:OnTimer"]
 status = "presentation"
@@ -2339,7 +2354,7 @@ note = "The -autoexit close of the GUI after an auto mode; a CLI command ends wh
 status = "covered"
 command = "session.load"
 source = "tmrStartupTimer"
-note = "The start of the load (the module selection, TLoaderThread); session.load and the --load options load a plugin list."
+note = "The start of the load (the module selection, TLoaderThread); session.load and the --load options load a plugin list. The port has no start-up timer: the load starts when the module dialog is confirmed (`start_load`), which calls `Session::load` of the session directly and not the command of the ledger."
 
 [gui."xEdit/xeMainForm.dfm:tmrUpdateColumnWidths:OnTimer"]
 status = "presentation"
@@ -2450,19 +2465,19 @@ note = "Display, sort and in-place editors of a spreadsheet tab; the edit is OnN
 status = "covered"
 command = "elements.assign"
 source = "vstSpreadSheetDragAllowed"
-note = "The spreadsheet's drag and drop assigns the dragged element to the row's record (Assign)."
+note = "The spreadsheet's drag and drop assigns the dragged element to the row's record (Assign). The port's view and spreadsheets have no drag and drop: the assign of a drop is the copy of the element into the other column (`elements.copy_to_records` with `mode: \"assign\"`), so no control of the port reaches `elements.assign`."
 
 [gui."xEdit/xeMainForm.dfm:vstSpreadSheetAmmo:OnDragDrop"]
 status = "covered"
 command = "elements.assign"
 source = "vstSpreadSheetDragDrop"
-note = "The spreadsheet's drag and drop assigns the dragged element to the row's record (Assign)."
+note = "The spreadsheet's drag and drop assigns the dragged element to the row's record (Assign). The port's view and spreadsheets have no drag and drop: the assign of a drop is the copy of the element into the other column (`elements.copy_to_records` with `mode: \"assign\"`), so no control of the port reaches `elements.assign`."
 
 [gui."xEdit/xeMainForm.dfm:vstSpreadSheetAmmo:OnDragOver"]
 status = "covered"
 command = "elements.assign"
 source = "vstSpreadSheetDragOver"
-note = "The spreadsheet's drag and drop assigns the dragged element to the row's record (Assign)."
+note = "The spreadsheet's drag and drop assigns the dragged element to the row's record (Assign). The port's view and spreadsheets have no drag and drop: the assign of a drop is the copy of the element into the other column (`elements.copy_to_records` with `mode: \"assign\"`), so no control of the port reaches `elements.assign`."
 
 [gui."xEdit/xeMainForm.dfm:vstSpreadSheetAmmo:OnEditing"]
 status = "presentation"
@@ -2524,19 +2539,19 @@ note = "Display, sort and in-place editors of a spreadsheet tab; the edit is OnN
 status = "covered"
 command = "elements.assign"
 source = "vstSpreadSheetDragAllowed"
-note = "The spreadsheet's drag and drop assigns the dragged element to the row's record (Assign)."
+note = "The spreadsheet's drag and drop assigns the dragged element to the row's record (Assign). The port's view and spreadsheets have no drag and drop: the assign of a drop is the copy of the element into the other column (`elements.copy_to_records` with `mode: \"assign\"`), so no control of the port reaches `elements.assign`."
 
 [gui."xEdit/xeMainForm.dfm:vstSpreadSheetWeapon:OnDragDrop"]
 status = "covered"
 command = "elements.assign"
 source = "vstSpreadSheetDragDrop"
-note = "The spreadsheet's drag and drop assigns the dragged element to the row's record (Assign)."
+note = "The spreadsheet's drag and drop assigns the dragged element to the row's record (Assign). The port's view and spreadsheets have no drag and drop: the assign of a drop is the copy of the element into the other column (`elements.copy_to_records` with `mode: \"assign\"`), so no control of the port reaches `elements.assign`."
 
 [gui."xEdit/xeMainForm.dfm:vstSpreadSheetWeapon:OnDragOver"]
 status = "covered"
 command = "elements.assign"
 source = "vstSpreadSheetDragOver"
-note = "The spreadsheet's drag and drop assigns the dragged element to the row's record (Assign)."
+note = "The spreadsheet's drag and drop assigns the dragged element to the row's record (Assign). The port's view and spreadsheets have no drag and drop: the assign of a drop is the copy of the element into the other column (`elements.copy_to_records` with `mode: \"assign\"`), so no control of the port reaches `elements.assign`."
 
 [gui."xEdit/xeMainForm.dfm:vstSpreadSheetWeapon:OnEditing"]
 status = "presentation"
@@ -2598,19 +2613,19 @@ note = "Display, sort and in-place editors of a spreadsheet tab; the edit is OnN
 status = "covered"
 command = "elements.assign"
 source = "vstSpreadSheetDragAllowed"
-note = "The spreadsheet's drag and drop assigns the dragged element to the row's record (Assign)."
+note = "The spreadsheet's drag and drop assigns the dragged element to the row's record (Assign). The port's view and spreadsheets have no drag and drop: the assign of a drop is the copy of the element into the other column (`elements.copy_to_records` with `mode: \"assign\"`), so no control of the port reaches `elements.assign`."
 
 [gui."xEdit/xeMainForm.dfm:vstSpreadsheetArmor:OnDragDrop"]
 status = "covered"
 command = "elements.assign"
 source = "vstSpreadSheetDragDrop"
-note = "The spreadsheet's drag and drop assigns the dragged element to the row's record (Assign)."
+note = "The spreadsheet's drag and drop assigns the dragged element to the row's record (Assign). The port's view and spreadsheets have no drag and drop: the assign of a drop is the copy of the element into the other column (`elements.copy_to_records` with `mode: \"assign\"`), so no control of the port reaches `elements.assign`."
 
 [gui."xEdit/xeMainForm.dfm:vstSpreadsheetArmor:OnDragOver"]
 status = "covered"
 command = "elements.assign"
 source = "vstSpreadSheetDragOver"
-note = "The spreadsheet's drag and drop assigns the dragged element to the row's record (Assign)."
+note = "The spreadsheet's drag and drop assigns the dragged element to the row's record (Assign). The port's view and spreadsheets have no drag and drop: the assign of a drop is the copy of the element into the other column (`elements.copy_to_records` with `mode: \"assign\"`), so no control of the port reaches `elements.assign`."
 
 [gui."xEdit/xeMainForm.dfm:vstSpreadsheetArmor:OnEditing"]
 status = "presentation"
@@ -2697,19 +2712,19 @@ note = "Display, focus, in-place editors and keyboard handling of the view tab; 
 status = "covered"
 command = "elements.assign"
 source = "vstViewDragAllowed"
-note = "The view's drag and drop assigns the dragged element (Assign); elements.assign is the drop."
+note = "The view's drag and drop assigns the dragged element (Assign); elements.assign is the drop. The port's view and spreadsheets have no drag and drop: the assign of a drop is the copy of the element into the other column (`elements.copy_to_records` with `mode: \"assign\"`), so no control of the port reaches `elements.assign`."
 
 [gui."xEdit/xeMainForm.dfm:vstView:OnDragDrop"]
 status = "covered"
 command = "elements.assign"
 source = "vstViewDragDrop"
-note = "The drop position and the sort order the view gives the dragged entry are the index parameter; a drop on an array is an aligned position, for which records.compare (the view showing the record) writes the alignment first."
+note = "The drop position and the sort order the view gives the dragged entry are the index parameter; a drop on an array is an aligned position, for which records.compare (the view showing the record) writes the alignment first. The port's view and spreadsheets have no drag and drop: the assign of a drop is the copy of the element into the other column (`elements.copy_to_records` with `mode: \"assign\"`), so no control of the port reaches `elements.assign`."
 
 [gui."xEdit/xeMainForm.dfm:vstView:OnDragOver"]
 status = "covered"
 command = "elements.assign"
 source = "vstViewDragOver"
-note = "The view's drag and drop assigns the dragged element (Assign); elements.assign is the drop."
+note = "The view's drag and drop assigns the dragged element (Assign); elements.assign is the drop. The port's view and spreadsheets have no drag and drop: the assign of a drop is the copy of the element into the other column (`elements.copy_to_records` with `mode: \"assign\"`), so no control of the port reaches `elements.assign`."
 
 [gui."xEdit/xeMainForm.dfm:vstView:OnEditing"]
 status = "presentation"
@@ -2868,7 +2883,7 @@ note = "Display and keyboard handling of the edit dialog."
 status = "covered"
 command = "modgroups.edit"
 source = "vstModGroupItemsKeyDown"
-note = "Adding, removing and moving items, their flags and CRC32s: the items parameter, each item as a line of a mod group file."
+note = "Adding, removing and moving items, their flags and CRC32s: the items parameter, each item as a line of a mod group file. Insert opens the module selection over the valid modules that are not in the group (mfEphemeralModGroupTagged); modules.list is that list."
 
 [gui."xEdit/xeModGroupEditForm.dfm:vstModGroupItems:OnNodeClick"]
 status = "covered"
@@ -2891,7 +2906,7 @@ note = "The enabled state of the Delete button (Settings assigned and the preset
 status = "covered"
 command = "modgroups.preset_load"
 source = "acPresetLoadExecute"
-note = "PresetLoad and the dialog confirmation that ends it (SaveModGroupsSelection and Activate); IsPresetDifferent is the response's preset_differs, the question on close is modgroups.preset_save with after_modal."
+note = "PresetLoad and the dialog confirmation that ends it (SaveModGroupsSelection and Activate); IsPresetDifferent is the response's preset_differs, the question on close is modgroups.preset_save with after_modal. The port's mod group dialog loads a preset from the settings file (`settings.get`) and applies it to the selection, so no control of the port reaches `modgroups.preset_load`."
 
 [gui."xEdit/xeModGroupSelectForm.dfm:acPresetLoad:OnUpdate"]
 status = "presentation"
@@ -3066,7 +3081,7 @@ note = "The enabled state of Save (Text equals Trim(Replace('=', '')), non-empty
 status = "covered"
 command = "session.load"
 source = "btnOKClick"
-note = "The module selection: the checked modules and the masters a checked module needs (vstModulesChecked checks them) are the plugins session.load and --load load, masters with them."
+note = "The module selection: the checked modules and the masters a checked module needs (vstModulesChecked checks them) are the plugins session.load and --load load, masters with them. The port's module dialog loads the checked modules with `start_load`, which calls `Session::load` of the session directly and not the command of the ledger."
 
 [gui."xEdit/xeModuleSelectForm.dfm:cbPreset:OnKeyPress"]
 status = "presentation"
@@ -3106,7 +3121,7 @@ note = "Display, filter, selection helpers and keyboard handling of the module s
 [gui."xEdit/xeModuleSelectForm.dfm:frmModuleSelect:OnShow"]
 status = "presentation"
 source = "FormShow"
-note = "Display, filter, selection helpers and keyboard handling of the module selection dialog; session.load takes the list."
+note = "Display, filter, selection helpers and keyboard handling of the module selection dialog; modules.list is the tree's data (wbModulesByLoadOrder with the flags the check states read) and session.load takes the list."
 
 [gui."xEdit/xeModuleSelectForm.dfm:mniInvertSelection:OnClick"]
 status = "presentation"
@@ -3132,13 +3147,13 @@ note = "Display, filter, selection helpers and keyboard handling of the module s
 status = "covered"
 command = "session.load"
 source = "vstModulesBeforeGetCheckState"
-note = "The module selection: the checked modules and the masters a checked module needs (vstModulesChecked checks them) are the plugins session.load and --load load, masters with them."
+note = "The module selection: the checked modules and the masters a checked module needs (vstModulesChecked checks them) are the plugins session.load and --load load, masters with them. The port's module list checks the modules and the masters a checked module needs; the load follows when the dialog is confirmed (`start_load`), which calls `Session::load` of the session directly and not the command of the ledger."
 
 [gui."xEdit/xeModuleSelectForm.dfm:vstModules:OnChecked"]
 status = "covered"
 command = "session.load"
 source = "vstModulesChecked"
-note = "The module selection: the checked modules and the masters a checked module needs (vstModulesChecked checks them) are the plugins session.load and --load load, masters with them."
+note = "The module selection: the checked modules and the masters a checked module needs (vstModulesChecked checks them) are the plugins session.load and --load load, masters with them. The port's module list checks the modules and the masters a checked module needs; the load follows when the dialog is confirmed (`start_load`), which calls `Session::load` of the session directly and not the command of the ledger."
 
 [gui."xEdit/xeModuleSelectForm.dfm:vstModules:OnCompareNodes"]
 status = "presentation"
@@ -3151,9 +3166,10 @@ source = "vstModulesFreeNode"
 note = "Display, filter, selection helpers and keyboard handling of the module selection dialog; session.load takes the list."
 
 [gui."xEdit/xeModuleSelectForm.dfm:vstModules:OnGetText"]
-status = "presentation"
+status = "covered"
+command = "modules.list"
 source = "vstModulesGetText"
-note = "Display, filter, selection helpers and keyboard handling of the module selection dialog; session.load takes the list."
+note = "The tree cells (name, the load order and FileID columns, the ESM, light, update and medium columns) are the fields of the `modules.list` entry of each module (`miName`, `miLoadOrder`, `miFileID` and the header flags); the masters as children come from the same command's `masters`."
 
 [gui."xEdit/xeModuleSelectForm.dfm:vstModules:OnHeaderClick"]
 status = "presentation"
@@ -3166,14 +3182,16 @@ source = "vstModulesIncrementalSearch"
 note = "Display, filter, selection helpers and keyboard handling of the module selection dialog; session.load takes the list."
 
 [gui."xEdit/xeModuleSelectForm.dfm:vstModules:OnInitChildren"]
-status = "presentation"
+status = "covered"
+command = "modules.list"
 source = "vstModulesInitChildren"
-note = "Display, filter, selection helpers and keyboard handling of the module selection dialog; session.load takes the list."
+note = "The child count of a module row is the length of its `masters`, the field the `modules.list` entry carries; the port draws the master rows under their module."
 
 [gui."xEdit/xeModuleSelectForm.dfm:vstModules:OnInitNode"]
-status = "presentation"
+status = "covered"
+command = "modules.list"
 source = "vstModulesInitNode"
-note = "Display, filter, selection helpers and keyboard handling of the module selection dialog; session.load takes the list."
+note = "The node's module, its name, its check box and its disabled and hidden states are the `modules.list` entry's fields (`name`, `valid`, `masters_missing`, the header flags); the port resolves the masters of a node against the same list."
 
 [gui."xEdit/xeModuleSelectForm.dfm:vstModules:OnKeyDown"]
 status = "presentation"
@@ -3231,9 +3249,10 @@ source = "clbConflictThisChange"
 note = "The options dialog: themes, fonts and the conflict colours; the settings that change behaviour are the settings file and the CLI flags."
 
 [gui."xEdit/xeOptionsForm.dfm:frmOptions:OnClose"]
-status = "presentation"
+status = "covered"
+command = "settings.set"
 source = "FormClose"
-note = "The options dialog: themes, fonts and the conflict colours; the settings that change behaviour are the settings file and the CLI flags."
+note = "The options dialog: themes, fonts and the conflict colours. The write of the options the form holds is settings.set (the [Options], [ColorConflictThis], [ColorConflictAll] and [UI] keys of the settings file), and settings.get reads them back."
 
 [gui."xEdit/xeOptionsForm.dfm:frmOptions:OnCreate"]
 status = "presentation"
@@ -3356,14 +3375,16 @@ source = "EditorMouseUp"
 note = "The script selection and editor dialog: choosing, filtering, editing and saving a script's text; running it is script.run and script.list lists the scripts folder."
 
 [gui."xEdit/xeScriptForm.dfm:btnSave:OnClick"]
-status = "presentation"
+status = "covered"
+command = "script.save"
 source = "btnSaveClick"
-note = "The script selection and editor dialog: choosing, filtering, editing and saving a script's text; running it is script.run and script.list lists the scripts folder."
+note = "Saves the edited script with `script.save`: the tabs become two spaces, the previous file is copied to a timestamped .backup name and the text is written with CR LF line ends."
 
 [gui."xEdit/xeScriptForm.dfm:chkScriptsSubDir:OnClick"]
-status = "presentation"
+status = "covered"
+command = "script.list"
 source = "chkScriptsSubDirClick"
-note = "The script selection and editor dialog: choosing, filtering, editing and saving a script's text; running it is script.run and script.list lists the scripts folder."
+note = "Relists the scripts folder with `script.list`: the checkbox's `subdirectories` flag is `ReadScriptsList`'s `soAllDirectories`, so the scripts of the subdirectories join the combo."
 
 [gui."xEdit/xeScriptForm.dfm:cmbScripts:OnChange"]
 status = "presentation"
@@ -3396,9 +3417,10 @@ source = "cmbScriptsKeyDown"
 note = "The script selection and editor dialog: choosing, filtering, editing and saving a script's text; running it is script.run and script.list lists the scripts folder."
 
 [gui."xEdit/xeScriptForm.dfm:cmbScripts:OnSelect"]
-status = "presentation"
+status = "covered"
+command = "script.read"
 source = "cmbScriptsSelect"
-note = "The script selection and editor dialog: choosing, filtering, editing and saving a script's text; running it is script.run and script.list lists the scripts folder."
+note = "`cmbScriptsSelect` runs `DoScriptSelectionChange`, which loads the chosen script's file with `script.read` (the tabs become two spaces and the caret goes to the start)."
 
 [gui."xEdit/xeScriptForm.dfm:edFilter:OnChange"]
 status = "presentation"
@@ -3514,13 +3536,13 @@ note = "The wait window of a long action and its Cancel button."
 status = "covered"
 command = "elements.add"
 source = "FormCreate"
-note = "wbGetCellDetailsForWorldspace asks whether a world cell added to a worldspace is persistent or which grid cell it takes; elements.add takes CELL[P] or CELL[x,y] (add.rs), the silent form of the same Add."
+note = "The form is installed as `wbGetCellDetailsForWorldspaceCallback` (`interface::globals`); its answer is the grid cell the add of a world cell uses. The headless default keeps the error (the add needs CELL[P] or CELL[x,y]), which elements.add takes as the silent form of the same Add."
 
 [gui."xEdit/xeWorldspaceCellDetailsForm.dfm:rbTemporary:OnClick"]
 status = "covered"
 command = "elements.add"
 source = "rbTemporaryClick"
-note = "wbGetCellDetailsForWorldspace asks whether a world cell added to a worldspace is persistent or which grid cell it takes; elements.add takes CELL[P] or CELL[x,y] (add.rs), the silent form of the same Add."
+note = "The form is installed as `wbGetCellDetailsForWorldspaceCallback` (`interface::globals`); its answer is the grid cell the add of a world cell uses. The headless default keeps the error (the add needs CELL[P] or CELL[x,y]), which elements.add takes as the silent form of the same Add."
 
 [switch."?"]
 status = "presentation"

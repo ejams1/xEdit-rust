@@ -61,6 +61,11 @@ fn edit_failed(message: String) -> CommandError {
     CommandError::new("edit_failed", message)
 }
 
+/// The `Abort` of `GeneralProgress` once the wait form was cancelled.
+fn cancelled() -> CommandError {
+    CommandError::new("cancelled", "the operation was cancelled")
+}
+
 pub(crate) fn record_impl(record: &MainRecordRef) -> Result<Arc<MainRecordImpl>, CommandError> {
     record
         .as_element_impl()
@@ -75,7 +80,7 @@ fn file_impl_of(record: &MainRecordImpl) -> Option<Arc<FileImpl>> {
 }
 
 /// Any loaded file by name, masters included.
-fn any_file(name: &str) -> Result<Arc<FileImpl>, CommandError> {
+pub(crate) fn any_file(name: &str) -> Result<Arc<FileImpl>, CommandError> {
     xedit_core::interface::files()
         .into_iter()
         .find(|file| file.get_name().eq_ignore_ascii_case(name))
@@ -89,12 +94,15 @@ pub(crate) fn record_editable(record: &MainRecordImpl) -> bool {
 }
 
 /// A record that was or would be updated.
-#[derive(Serialize, JsonSchema, Clone)]
+#[derive(Serialize, Deserialize, JsonSchema, Clone, Debug)]
 pub struct RecordRef {
     /// Load order FormID as eight hexadecimal digits.
     pub form_id: String,
     pub signature: String,
     pub editor_id: String,
+    /// The record as xEdit displays it (`MainRecord.Name`), which the
+    /// Referenced By list shows in its Record column.
+    pub name: String,
     /// File that holds this version of the record.
     pub file: String,
 }
@@ -104,6 +112,7 @@ pub(crate) fn record_ref(record: &MainRecordImpl) -> RecordRef {
         form_id: record.get_load_order_form_id().to_string(false),
         signature: record.get_signature().to_string(),
         editor_id: record.get_editor_id(),
+        name: record.get_name(),
         file: record.get_file().map(|file| file.get_name()).unwrap_or_default(),
     }
 }
@@ -140,12 +149,18 @@ fn update_referencing(
     referenced_by: &[Arc<MainRecordImpl>],
     silent: bool,
     errors: &mut Vec<String>,
-) -> usize {
+) -> Result<usize, CommandError> {
     if !referenced_by.iter().any(|record| record_editable(record)) {
-        return 0;
+        return Ok(0);
     }
     let mut count = 0;
     for record in referenced_by {
+        // `ShowChangeReferencedBy` updates the records in a long action and
+        // ticks for every one of them, which `GeneralProgress` turns into an
+        // `Abort` when the user cancelled. The check is before the record is
+        // updated, so a cancelled update leaves the records after it as they
+        // were.
+        xedit_core::interface::wait_form::poll_cancel().map_err(|_| cancelled())?;
         if !silent && !record_editable(record) {
             continue;
         }
@@ -159,7 +174,7 @@ fn update_referencing(
             )),
         }
     }
-    count
+    Ok(count)
 }
 
 #[derive(Deserialize, JsonSchema)]
@@ -319,6 +334,12 @@ fn formids_change(session: &mut Session, request: FormIdsChangeRequest) -> Resul
             changed: false,
         });
     }
+    // `mniNavChangeFormIDClick` changes the FormID of a record in a long
+    // action and reports every record it changes, which `GeneralProgress`
+    // turns into an `Abort` when the user cancelled. The check is before
+    // the record is changed, so a cancelled change leaves the record as it
+    // was.
+    xedit_core::interface::wait_form::poll_cancel().map_err(|_| cancelled())?;
     record.set_load_order_form_id(new).map_err(edit_failed)?;
     change.renumbered.push(file.get_name());
     for override_record in &follow {
@@ -337,7 +358,7 @@ fn formids_change(session: &mut Session, request: FormIdsChangeRequest) -> Resul
             )),
         }
     }
-    change.references_updated = update_referencing(old, new, &referenced_by, target.is_some(), &mut change.errors);
+    change.references_updated = update_referencing(old, new, &referenced_by, target.is_some(), &mut change.errors)?;
     Ok(FormIdsChangeResponse {
         change,
         masters_added,
@@ -626,6 +647,11 @@ fn formids_renumber(
 
     session.ensure_refs()?;
     for (record, new) in plan.records.iter().zip(&plan.targets) {
+        // As in `mniNavChangeFormIDClick`: the change of every record is
+        // reported in the long action, and `GeneralProgress` aborts it when
+        // the user cancelled. The check is before the record is changed, so
+        // a cancelled renumbering leaves the records after it as they were.
+        xedit_core::interface::wait_form::poll_cancel().map_err(|_| cancelled())?;
         let old = record.get_load_order_form_id();
         // Read before the change, as upstream: the change moves the list.
         let referenced_by = record.master_or_self_impl().referenced_by();
@@ -656,7 +682,7 @@ fn formids_renumber(
                     }
                     if !referenced_by.is_empty() {
                         change.references_updated =
-                            update_referencing(old, *new, &referenced_by, true, &mut change.errors);
+                            update_referencing(old, *new, &referenced_by, true, &mut change.errors)?;
                     }
                 }
                 Err(error) => change.errors.push(format!("Error: {error}")),

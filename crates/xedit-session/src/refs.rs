@@ -113,7 +113,15 @@ impl Session {
 
 /// `BuildOrLoadRef` of `files`, reported per file.
 fn build(files: &[std::sync::Arc<FileImpl>], only_load: bool) -> Result<Vec<FileRefs>, CommandError> {
-    let results = build_or_load_refs(files, only_load).map_err(|message| CommandError::new("refs_failed", message))?;
+    let results = build_or_load_refs(files, only_load).map_err(|message| {
+        // `cancelled:` is the wait form's stop (`GeneralProgress`), not a
+        // failure of the build.
+        if message.starts_with("cancelled") {
+            CommandError::new("cancelled", "the operation was cancelled")
+        } else {
+            CommandError::new("refs_failed", message)
+        }
+    })?;
     Ok(files
         .iter()
         .zip(results)
@@ -161,10 +169,16 @@ fn refs_build(session: &mut Session, request: RefsBuildRequest) -> Result<RefsBu
             ref_files()
         }
     };
+    // `GeneralProgress`: the operation stops at its next poll point once the
+    // wait form was cancelled.
+    xedit_core::interface::wait_form::poll_cancel()
+        .map_err(|_| CommandError::new("cancelled", "the operation was cancelled"))?;
     let files = if request.file.is_some() && !request.only_load {
         // `TwbFile.BuildRef`.
         let mut results = Vec::new();
         for file in &files {
+            xedit_core::interface::wait_form::poll_cancel()
+                .map_err(|_| CommandError::new("cancelled", "the operation was cancelled"))?;
             let result = file
                 .build_ref()
                 .map_err(|message| CommandError::new("refs_failed", message))?;
@@ -186,7 +200,7 @@ fn refs_build(session: &mut Session, request: RefsBuildRequest) -> Result<RefsBu
 }
 
 /// `refs.get`: the request.
-#[derive(Deserialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct RefsGetRequest {
     /// Load order FormID of the record as hexadecimal digits.
@@ -214,7 +228,7 @@ pub struct RefsGetRequest {
 }
 
 /// A FormID a record refers to.
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema, Clone, Debug)]
 pub struct Reference {
     /// The FormID as the file of the record stores it.
     pub file_form_id: String,
@@ -225,7 +239,7 @@ pub struct Reference {
 }
 
 /// `refs.get`: the response.
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema, Clone, Debug)]
 pub struct RefsGetResponse {
     /// The record as `file` sees it.
     pub record: RecordRef,
@@ -453,6 +467,13 @@ fn references_change(
     let mut errors = Vec::new();
     let mut updated = 0;
     for referrer in &selected {
+        // `ShowChangeReferencedBy` updates the records in a long action and
+        // ticks for every one of them, which `GeneralProgress` turns into an
+        // `Abort` when the user cancelled. The check is before the record is
+        // updated, so a cancelled update leaves the records after it as they
+        // were.
+        xedit_core::interface::wait_form::poll_cancel()
+            .map_err(|_| CommandError::new("cancelled", "the operation was cancelled"))?;
         if request.dry_run {
             continue;
         }
@@ -552,6 +573,12 @@ fn references_change_batch(
     session.ensure_refs()?;
     let mut results = Vec::new();
     for pair in &request.pairs {
+        // The batch changes the referencing records pair by pair, and every
+        // pair is a `ShowChangeReferencedBy` of the release, which aborts
+        // when the user cancelled. The check is before the pair is worked
+        // out, so a cancelled batch leaves the pairs after it as they were.
+        xedit_core::interface::wait_form::poll_cancel()
+            .map_err(|_| CommandError::new("cancelled", "the operation was cancelled"))?;
         let old_form_id = crate::commands::parse_form_id(&pair.old_form_id)?;
         let new_form_id = crate::commands::parse_form_id(&pair.new_form_id)?;
         let skipped = |reason: String| BatchChangeResult {
@@ -613,6 +640,10 @@ fn references_change_batch(
                     .map_err(|error| CommandError::new("edit_failed", error))?;
             }
             for referrer in &referenced_by {
+                // The check is before the record is updated, as in
+                // `references.change`.
+                xedit_core::interface::wait_form::poll_cancel()
+                    .map_err(|_| CommandError::new("cancelled", "the operation was cancelled"))?;
                 if with_edit_allowed(|| crate::formids::record_editable(referrer))
                     && referrer
                         .compare_exchange_form_id(old_form_id, new_form_id)
@@ -783,6 +814,12 @@ fn references_set_vwd_auto(
     let mut changed = Vec::new();
     let mut skipped = Vec::new();
     for (record, base) in candidates {
+        // UPSTREAM-QUIRK: the release's item only updates its caption every
+        // 500 ms and never checks the cancel, so the check is the port's own.
+        // It is before the record is changed, so a cancelled command leaves
+        // the references after it as they were.
+        xedit_core::interface::wait_form::poll_cancel()
+            .map_err(|_| CommandError::new("cancelled", "the operation was cancelled"))?;
         if !with_edit_allowed(|| record.get_is_editable()) {
             skipped.push(VwdRecord {
                 record: record_ref_of(record),
@@ -861,6 +898,13 @@ fn references_copy_vwd_auto(
     let mut copied = Vec::new();
     let mut skipped = Vec::new();
     for (record, base) in vwd_candidates(&records, true) {
+        // `CopyInto` copies the elements of a record in a long action and
+        // reports every element it copies, which `GeneralProgress` turns
+        // into an `Abort` when the user cancelled. The check is before the
+        // reference is copied, so a cancelled command leaves the references
+        // after it uncopied.
+        xedit_core::interface::wait_form::poll_cancel()
+            .map_err(|_| CommandError::new("cancelled", "the operation was cancelled"))?;
         let source: ElementRef = record.clone();
         let required = xedit_core::implementation::copy::required_masters(&source, false);
         if let Err(error) = xedit_core::implementation::copy::missing_masters(&required, &target) {
@@ -930,6 +974,7 @@ fn record_ref_of(record: &MainRecordRef) -> RecordRef {
             form_id: record.get_load_order_form_id().to_string(false),
             signature: record.get_signature().to_string(),
             editor_id: record.get_editor_id(),
+            name: record.get_name(),
             file: record.get_file().map(|file| file.get_name()).unwrap_or_default(),
         },
     }

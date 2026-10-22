@@ -62,7 +62,7 @@ use xedit_script::{ExecError, Interpreter};
 use crate::{CommandError, Registry, Session};
 
 /// `script.list`: the request.
-#[derive(Deserialize, JsonSchema)]
+#[derive(Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ScriptListRequest {
     /// The folder with the `*.pas` scripts: the `Edit Scripts` folder. When
@@ -70,10 +70,16 @@ pub struct ScriptListRequest {
     /// `Edit Scripts` (the `XEDIT_ORACLE_DIR` folder), else the `Edit
     /// Scripts` folder beside this program.
     pub scripts: Option<String>,
+    /// List the scripts of the subdirectories too, as the form's
+    /// "Include scripts from subdirectories" does
+    /// (`chkScriptsSubDirClick`): names are relative to the folder, with a
+    /// backslash between the parts (`Sub\Script`).
+    #[serde(default)]
+    pub subdirectories: bool,
 }
 
 /// One script of the folder.
-#[derive(Serialize, JsonSchema)]
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct ScriptInfo {
     /// File name of the script, `<Unit>.pas`: a script's unit name matches
     /// its file name, so the file name is the unit a `uses` of another
@@ -85,7 +91,7 @@ pub struct ScriptInfo {
 }
 
 /// `script.list`: the response.
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 pub struct ScriptListResponse {
     /// The folder that was listed.
     pub folder: String,
@@ -113,18 +119,34 @@ pub fn scripts_folder(explicit: Option<&str>) -> PathBuf {
 }
 
 /// Lists the `*.pas` scripts of `folder` as `ReadScriptsList` fills the
-/// script combo box: the top folder only, sorted as a `TStringList`. Unlike
-/// the combo box, the `_newscript_` placeholder of the form is listed too:
-/// it is one of the shipped scripts of the corpus (`script.check` parses
-/// every file of the folder).
-pub fn list_scripts(folder: &Path) -> Result<Vec<ScriptInfo>, CommandError> {
+/// script combo box: sorted as a `TStringList`, the top folder only unless
+/// `subdirectories` is set (`soAllDirectories`). Unlike the combo box, the
+/// `_newscript_` placeholder of the form is listed too: it is one of the
+/// shipped scripts of the corpus (`script.check` parses every file of the
+/// folder).
+pub fn list_scripts(folder: &Path, subdirectories: bool) -> Result<Vec<ScriptInfo>, CommandError> {
+    let mut scripts = Vec::new();
+    list_scripts_into(folder, folder, subdirectories, &mut scripts)?;
+    scripts.sort_by(|a, b| ansi_compare_text(&a.name, &b.name));
+    Ok(scripts)
+}
+
+/// `TDirectory.GetFiles(Path, '*.pas', soTopDirectoryOnly|soAllDirectories)`.
+fn list_scripts_into(
+    root: &Path,
+    folder: &Path,
+    subdirectories: bool,
+    scripts: &mut Vec<ScriptInfo>,
+) -> Result<(), CommandError> {
     let entries =
         std::fs::read_dir(folder).map_err(|error| CommandError::new("io", format!("{}: {error}", folder.display())))?;
-    let mut scripts = Vec::new();
     for entry in entries {
         let entry = entry.map_err(|error| CommandError::new("io", format!("{}: {error}", folder.display())))?;
         let path = entry.path();
-        if !path.is_file() {
+        if path.is_dir() {
+            if subdirectories {
+                list_scripts_into(root, &path, subdirectories, scripts)?;
+            }
             continue;
         }
         if !path
@@ -133,12 +155,19 @@ pub fn list_scripts(folder: &Path) -> Result<Vec<ScriptInfo>, CommandError> {
         {
             continue;
         }
-        let name = match entry.file_name().into_string() {
-            Ok(name) => name,
-            // A name the file system holds that is not valid UTF-8 is not a
-            // unit name the parser accepts either.
+        // The name is the file's path below the folder, as `Copy(f,
+        // Length(Path) + 1, Length(f))` of `ReadScriptsList` gives it.
+        let name = match path.strip_prefix(root) {
+            Ok(relative) => relative
+                .components()
+                .map(|component| component.as_os_str().to_string_lossy().into_owned())
+                .collect::<Vec<_>>()
+                .join("\\"),
             Err(_) => continue,
         };
+        if name.is_empty() {
+            continue;
+        }
         let text =
             std::fs::read(&path).map_err(|error| CommandError::new("io", format!("{}: {error}", path.display())))?;
         let lines = String::from_utf8_lossy(&text).lines().count();
@@ -147,16 +176,151 @@ pub fn list_scripts(folder: &Path) -> Result<Vec<ScriptInfo>, CommandError> {
             lines: u32::try_from(lines).unwrap_or(u32::MAX),
         });
     }
-    scripts.sort_by(|a, b| ansi_compare_text(&a.name, &b.name));
-    Ok(scripts)
+    Ok(())
 }
 
 fn script_list(_session: &mut Session, request: ScriptListRequest) -> Result<ScriptListResponse, CommandError> {
     let folder = scripts_folder(request.scripts.as_deref());
-    let scripts = list_scripts(&folder)?;
+    let scripts = list_scripts(&folder, request.subdirectories)?;
     Ok(ScriptListResponse {
         folder: folder.display().to_string(),
         scripts,
+    })
+}
+
+/// Where a script path resolves: an absolute path as given, a path that
+/// exists as given, else below the scripts folder, as `DoRunScript` resolves
+/// a script (`xeMainForm.pas:5060`).
+pub fn resolve_script(file: &str, scripts: Option<&str>) -> PathBuf {
+    let path = PathBuf::from(file);
+    if path.is_absolute() || path.is_file() {
+        return path;
+    }
+    scripts_folder(scripts).join(file)
+}
+
+/// `script.read`: the request.
+#[derive(Deserialize, Serialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ScriptReadRequest {
+    /// The script: a path, or a name below the scripts folder
+    /// (`Sub\Script.pas` as `script.list` gives it).
+    pub file: String,
+    /// The scripts folder the name resolves against (`-S:`).
+    pub scripts: Option<String>,
+}
+
+/// `script.read`: the response.
+#[derive(Serialize, Deserialize, JsonSchema)]
+pub struct ScriptReadResponse {
+    /// The path that was read.
+    pub file: String,
+    /// The file name without its extension: the unit name
+    /// (`ChangeFileExt(ExtractFileName(f), '')`).
+    pub script: String,
+    /// The text, as `TStringList.LoadFromFile` reads it (a byte order mark
+    /// selects the encoding, else the ANSI code page).
+    pub text: String,
+    /// The lines of the text (`TStringList.Count`).
+    pub lines: u32,
+}
+
+/// `script.read`: the script the editor shows (`DoScriptSelectionChange`'s
+/// `LoadFromFile`).
+fn script_read(_session: &mut Session, request: ScriptReadRequest) -> Result<ScriptReadResponse, CommandError> {
+    let path = resolve_script(&request.file, request.scripts.as_deref());
+    let bytes =
+        std::fs::read(&path).map_err(|error| CommandError::new("io", format!("{}: {error}", path.display())))?;
+    let text = String::from_utf8_lossy(&xedit_script::host::source_text(&bytes)).into_owned();
+    Ok(ScriptReadResponse {
+        file: path.display().to_string(),
+        script: path
+            .file_stem()
+            .map(|stem| stem.to_string_lossy().into_owned())
+            .unwrap_or_default(),
+        lines: u32::try_from(text.lines().count()).unwrap_or(u32::MAX),
+        text,
+    })
+}
+
+/// `script.save`: the request.
+#[derive(Deserialize, Serialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ScriptSaveRequest {
+    /// The script to write: a path, or a name below the scripts folder.
+    pub file: String,
+    /// The editor's text. Every tab becomes two spaces, as
+    /// `btnSaveClick`'s `Text.Replace(#9, #32#32)`.
+    pub text: String,
+    /// The scripts folder the name resolves against (`-S:`).
+    pub scripts: Option<String>,
+    /// Report the target, write nothing.
+    #[serde(default)]
+    pub dry_run: bool,
+}
+
+/// `script.save`: the response.
+#[derive(Serialize, Deserialize, JsonSchema)]
+pub struct ScriptSaveResponse {
+    /// The path written.
+    pub file: String,
+    /// The copy of the previous file (`<file>.backup.<yyyy_mm_dd_hh_nn_ss>`),
+    /// when there was one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub backup: Option<String>,
+    /// The bytes written.
+    pub bytes: u64,
+    pub written: bool,
+    /// `TStringList.Text` of the saved text, after the tabs became spaces.
+    pub text: String,
+}
+
+/// `script.save`: the form's Save (`btnSaveClick`): the tabs to two spaces,
+/// the previous file copied to a timestamped `.backup` name, then the text
+/// written.
+fn script_save(_session: &mut Session, request: ScriptSaveRequest) -> Result<ScriptSaveResponse, CommandError> {
+    let text = request.text.replace('\t', "  ");
+    let path = resolve_script(&request.file, request.scripts.as_deref());
+    // The dry run reports the target and writes nothing, so the backup copy
+    // is inside the guard with the save itself. Upstream's `btnSaveClick`
+    // always copies the backup, but upstream has no dry run; the port added
+    // the contract, so the port honours it.
+    let backup = if !request.dry_run && path.is_file() {
+        let mut name = path.as_os_str().to_owned();
+        name.push(format!(".backup.{}", crate::save::timestamp()));
+        let backup = PathBuf::from(name);
+        std::fs::copy(&path, &backup)
+            .map_err(|error| CommandError::new("io", format!("{}: {error}", backup.display())))?;
+        Some(backup.display().to_string())
+    } else {
+        None
+    };
+    if !request.dry_run
+        && let Some(folder) = path.parent().filter(|folder| !folder.as_os_str().is_empty())
+    {
+        std::fs::create_dir_all(folder)
+            .map_err(|error| CommandError::new("io", format!("{}: {error}", folder.display())))?;
+    }
+    // `TStringList.Text := ...` parses the lines (CR LF, CR or LF) and
+    // `SaveToFile` writes them as CR LF with a trailing line break.
+    let mut saved = String::new();
+    if !text.is_empty() {
+        let body = text.strip_suffix('\n').unwrap_or(&text);
+        for line in body.split('\n') {
+            saved.push_str(line.strip_suffix('\r').unwrap_or(line));
+            saved.push_str("\r\n");
+        }
+    }
+    if !request.dry_run {
+        std::fs::write(&path, &saved)
+            .map_err(|error| CommandError::new("io", format!("{}: {error}", path.display())))?;
+    }
+    Ok(ScriptSaveResponse {
+        file: path.display().to_string(),
+        backup,
+        bytes: saved.len() as u64,
+        written: !request.dry_run,
+        text,
     })
 }
 
@@ -259,6 +423,18 @@ pub fn register(registry: &mut Registry) {
         script_list,
     );
     registry.register(
+        "script.read",
+        "Read a script of the scripts folder as the Apply Script dialog shows it (DoScriptSelectionChange's LoadFromFile).",
+        false,
+        script_read,
+    );
+    registry.register(
+        "script.save",
+        "Save a script as the Apply Script dialog's Save does (btnSaveClick): tabs to two spaces, the previous file copied to a .backup.<timestamp> name, then written.",
+        true,
+        script_save,
+    );
+    registry.register(
         "script.check",
         "Compile scripts and the units they use, as TJvInterpreterUnit.Compile does (JvInterpreterParser/JvInterpreter), resolved from the scripts folder; reports each failure as file:line: message.",
         false,
@@ -281,7 +457,7 @@ pub fn register(registry: &mut Registry) {
 //=== script.run: the run loop ================================================
 
 /// `script.run`: the request.
-#[derive(Deserialize, JsonSchema)]
+#[derive(Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ScriptRunRequest {
     /// The script to run: a path, or a name below the scripts folder. A
@@ -292,6 +468,11 @@ pub struct ScriptRunRequest {
     /// else the oracle's `Edit Scripts`. A `-script:` run reads the units a
     /// script uses from the script's own folder instead, whatever this names.
     pub scripts: Option<String>,
+    /// The text to run instead of the file's, as the Apply Script dialog's
+    /// editor passes its text to `ApplyScript(aScriptName, aScript)`. `file`
+    /// still names the script and its folder; the file does not have to
+    /// exist (a new script can run before it is saved).
+    pub source: Option<String>,
     /// Save every plugin the script changed at the end, as the GUI does when
     /// it closes (`SaveChanged` at the end of an auto mode, silently; an
     /// existing file is moved to the backup folder, the dialog's default).
@@ -371,7 +552,7 @@ pub struct ScriptAnswer {
 /// The dialog a run stopped on, reported as `script.run`'s
 /// `pending_interaction`: answer it by re-invoking with the answers
 /// accumulated plus one for this question.
-#[derive(Clone, Debug, Serialize, JsonSchema)]
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 pub struct ScriptInteraction {
     /// `message` (`MessageDlg`/`MessageBox`/`ShowMessage`), `input`
     /// (`InputQuery`/`InputBox`), `file` (`TOpenDialog`/`TSaveDialog`) or
@@ -399,7 +580,7 @@ fn default_true() -> bool {
 pub use crate::tool_modes::ToolModeFile as ScriptRunFile;
 
 /// `script.run`: the response.
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 pub struct ScriptRunResponse {
     /// The script file that ran.
     pub file: String,
@@ -2681,17 +2862,24 @@ pub fn run_script(
     if !path.is_file() {
         path = folder.join(&request.file);
     }
-    if !path.is_file() {
-        return Err(CommandError::new(
-            "io",
-            format!("Could not open script: {}", path.display()),
-        ));
-    }
     // `DoRunScript` loads the script with `TStringList.LoadFromFile`: a byte
-    // order mark selects the encoding, else the ANSI code page.
-    let text = std::fs::read(&path)
-        .map(|bytes| xedit_script::host::source_text(&bytes))
-        .map_err(|error| CommandError::new("io", format!("{}: {error}", path.display())))?;
+    // order mark selects the encoding, else the ANSI code page. The
+    // editor's text wins over the file when it is given (the GUI's Apply
+    // Script runs the text it shows).
+    let text: Vec<u8> = match request.source.as_deref() {
+        Some(source) => source.as_bytes().to_vec(),
+        None => {
+            if !path.is_file() {
+                return Err(CommandError::new(
+                    "io",
+                    format!("Could not open script: {}", path.display()),
+                ));
+            }
+            std::fs::read(&path)
+                .map(|bytes| xedit_script::host::source_text(&bytes))
+                .map_err(|error| CommandError::new("io", format!("{}: {error}", path.display())))?
+        }
+    };
     let script_folder = path.parent().unwrap_or(&folder).to_path_buf();
     let name = path
         .file_stem()
@@ -2967,6 +3155,13 @@ pub fn run_script(
                             response.processed += 1;
                             processed_progress = Some(response.processed);
                         }
+                        // `wbTick` of `ApplyScriptToSelection` (xeMainForm.pas:9131):
+                        // the walk's per-node tick, whose `GeneralProgress`
+                        // aborts when the operation was terminated.
+                        if xedit_core::interface::wait_form::poll_cancel().is_err() {
+                            response.aborted = true;
+                            break 'run;
+                        }
                         if at_root {
                             break;
                         }
@@ -3030,6 +3225,14 @@ pub fn run_script(
                     }
                     response.processed += 1;
                     processed_progress = Some(response.processed);
+                    // `wbTick` of `ApplyScriptToSelection`'s element
+                    // overload (xeMainForm.pas:9168): the per-element tick,
+                    // whose `GeneralProgress` aborts when the operation was
+                    // terminated.
+                    if xedit_core::interface::wait_form::poll_cancel().is_err() {
+                        response.aborted = true;
+                        break 'run;
+                    }
                 }
             }
         }
@@ -3155,6 +3358,13 @@ pub fn run_script(
             // queued for renaming; a file the script made
             // (`AddNewFileName`) is not on disk yet and is saved under its
             // own name at once.
+            // `wbProgress('Saving: ...')` of `DoRename` is a
+            // `GeneralProgress`, so it aborts the save when the operation
+            // was terminated.
+            if xedit_core::interface::wait_form::poll_cancel().is_err() {
+                response.aborted = true;
+                break;
+            }
             if !Path::new(&format!("{data_path}{name}")).exists() {
                 state.borrow_mut().progress(&format!("Saving: {name}"), false);
                 let saved = crate::save::save_file(file, None, false, false)?;
@@ -3422,5 +3632,43 @@ mod tests {
         // No `Mode:` at all; a window that does not say Silent.
         assert!(!is_silent(b"unit u;\nend.\n"));
         assert!(!is_silent(b"Mode: Verbose\n"));
+    }
+
+    /// A dry run of `script.save` writes nothing: not the script, and not
+    /// the timestamped backup copy of the previous file. Upstream's
+    /// `btnSaveClick` always copies the backup, but upstream has no dry
+    /// run; the port added the contract, so the port honours it.
+    #[test]
+    fn a_dry_run_of_the_save_writes_neither_the_script_nor_the_backup() {
+        let folder = std::env::temp_dir().join(format!("xedit-script-save-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&folder);
+        std::fs::create_dir_all(&folder).expect("the folder");
+        let script = folder.join("t.pas");
+        std::fs::write(&script, "begin\nend.\n").expect("the script");
+
+        let response = super::script_save(
+            &mut crate::Session::default(),
+            super::ScriptSaveRequest {
+                file: script.display().to_string(),
+                text: "begin\nend.".to_owned(),
+                scripts: None,
+                dry_run: true,
+            },
+        )
+        .expect("the dry run");
+
+        assert!(!response.written);
+        assert!(response.backup.is_none());
+        // The script still holds its old text and no backup was left.
+        assert_eq!(std::fs::read_to_string(&script).expect("the script"), "begin\nend.\n");
+        let leftovers: Vec<String> = std::fs::read_dir(&folder)
+            .expect("the folder")
+            .filter_map(|entry| entry.ok())
+            .map(|entry| entry.file_name().to_string_lossy().into_owned())
+            .filter(|name| name.contains(".backup."))
+            .collect();
+        assert!(leftovers.is_empty(), "the dry run left {leftovers:?}");
+
+        let _ = std::fs::remove_dir_all(&folder);
     }
 }

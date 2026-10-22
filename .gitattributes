@@ -9,3 +9,6 @@ crates/xtask/oracle/scripts/probes/*.pas text eol=lf
 
 # Fixture text files are hashed into the oracle cache keys; keep their bytes.
 tests/fixtures/parity/**/*.sclp -text
+
+# The Information tab text is the DFM memo verbatim, one line per LF.
+crates/xedit-gui/src/information_text.txt text eol=lf

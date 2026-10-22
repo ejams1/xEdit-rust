@@ -1299,6 +1299,15 @@ pub fn conflict_statuses_of(
     let mut seen: HashSet<usize> = HashSet::new();
     {
         for record in records.iter().cloned() {
+            // Upstream compares the records while it loads them, where
+            // `LoaderProgress` aborts the load once the user cancelled.
+            // The port compares them on demand, so the check is here: it is
+            // before the record is put into a group, so a cancelled
+            // comparison stops at the next record.
+            if xedit_core::interface::wait_form::poll_cancel().is_err() {
+                results.cancelled = true;
+                return results;
+            }
             let signature = record.get_signature();
             if is_gmst_or_dfob(signature) || signature.0 == *b"NAVI" || signature.0 == *b"TES4" {
                 serial.push(record);
@@ -1322,6 +1331,12 @@ pub fn conflict_statuses_of(
     }
 
     for batch in groups.chunks(GROUPS_PER_BATCH) {
+        // The check is before the batch is compared, so a cancelled
+        // comparison leaves the groups of the batches before it compared.
+        if xedit_core::interface::wait_form::poll_cancel().is_err() {
+            results.cancelled = true;
+            return results;
+        }
         let cycles = threads::init_cycles();
         let pool = if fill_pnam() { None } else { threads::pool() };
         let classified: Vec<(HashMap<usize, ConflictStatus>, Vec<String>)> = match pool {
@@ -1369,6 +1384,12 @@ pub fn conflict_statuses_of(
 
     let mut context = ConflictContext::new(options, files);
     for record in &serial {
+        // The check is before the record is compared, as in the batches
+        // above.
+        if xedit_core::interface::wait_form::poll_cancel().is_err() {
+            results.cancelled = true;
+            return results;
+        }
         let _read = threads::read_guard();
         context.conflict_level_for_main_record(record);
         record.reset();
@@ -1417,6 +1438,11 @@ pub struct ConflictResults {
     pub statuses: HashMap<usize, ConflictStatus>,
     /// The messages upstream would log while it compares.
     pub messages: Vec<String>,
+    /// Whether the comparison was cancelled: the `Abort` of
+    /// `LoaderProgress` that the wait form's cancel raised, which stopped
+    /// the comparison. The result holds the statuses of the records that
+    /// were compared until then.
+    pub cancelled: bool,
 }
 
 impl ConflictResults {

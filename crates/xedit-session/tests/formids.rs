@@ -380,6 +380,34 @@ fn flags_set_the_light_flag() {
 }
 
 #[test]
+fn a_cancelled_renumbering_leaves_the_records_as_they_were() {
+    let _guard = test_lock();
+    let (_dir, _master, plugin) = setup("cancel");
+    let mut session = session(vec![plugin.clone()]);
+    let registry = Registry::standard();
+    // The references are built before the cancel, so the check of the
+    // renumbering is the one that stops it.
+    session.ensure_refs().unwrap();
+    xedit_core::interface::globals::set_force_terminate(true);
+    let error = registry
+        .call(&mut session, "formids.renumber", json!({ "start": "000D00" }))
+        .unwrap_err();
+    xedit_core::interface::globals::set_force_terminate(false);
+    assert_eq!(error.code, "cancelled");
+    // The records kept their FormIDs.
+    assert!(
+        plugin
+            .contained_record_by_load_order_form_id(FormID::from_cardinal(0x0100_0900))
+            .is_some()
+    );
+    assert!(
+        plugin
+            .contained_record_by_load_order_form_id(FormID::from_cardinal(0x0100_0D00))
+            .is_none()
+    );
+}
+
+#[test]
 fn renumber_needs_the_edit_flag() {
     let _guard = test_lock();
     let (_dir, _master, plugin) = setup("gate");

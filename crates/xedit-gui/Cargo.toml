@@ -1,0 +1,33 @@
+[package]
+name = "xedit-gui"
+version = "0.1.0"
+description = "The xEdit graphical editor: the main form, its dialogs and the widgets of the Delphi GUI"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "xedit-gui"
+path = "src/main.rs"
+
+[lib]
+name = "xedit_gui"
+path = "src/lib.rs"
+
+[target.'cfg(windows)'.dependencies]
+# `XEDIT_GUI_DPI_UNAWARE` (the screen-check harness): the private desktop
+# reports a 250% system scale whose window sizing does not match its own
+# surface; the process runs DPI unaware there, as a 96 DPI program.
+windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_UI_HiDpi"] }
+
+[dependencies]
+eframe = { workspace = true }
+# `--screenshot`: the app writes its own captured frame as PNG. The crate is
+# already in the tree (epaint's text rasteriser), MIT OR Apache-2.0.
+png = "0.18.1"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+xedit-core = { path = "../xedit-core" }
+xedit-loadorder = { path = "../xedit-loadorder" }
+xedit-script = { path = "../xedit-script" }
+xedit-session = { path = "../xedit-session" }

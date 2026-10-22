@@ -2,14 +2,18 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-// Ported from xEdit: xEdit/xeModuleSelectForm.pas (PresetLoad, PresetSave,
+// Ported from xEdit: xEdit/xeModuleSelectForm.pas (FormCreate, ShowModal,
+// vstModulesInitNode, vstModulesGetText, PresetLoad, PresetSave,
 // PresetDelete, PresetsUpdate, GetPresetsSection, IsPresetDifferent,
 // SimulateLoad and the OnUpdate handlers of the preset actions),
-// xeMainForm.pas (PresetCategory := 'ActiveModules' of the module selection)
+// xeMainForm.pas (PresetCategory := 'ActiveModules' of the module selection),
+// Core/wbLoadOrder.pas (wbModulesByLoadOrder of the two dialogs)
 
-//! `modules.*`: the selection presets of the module selection dialog
-//! (`TfrmModuleSelect` with `PresetCategory = 'ActiveModules'`) kept in
-//! xEdit's settings file. The dialog's check state is a parameter: the
+//! `modules.*`: the modules the module selection dialog and the mod group
+//! editor's Insert list show (`wbModulesByLoadOrder`, each with the flags
+//! the dialogs read), and the selection presets of the module selection
+//! dialog (`TfrmModuleSelect` with `PresetCategory = 'ActiveModules'`) kept
+//! in xEdit's settings file. The dialog's check state is a parameter: the
 //! modules its tree has checked, the active ones when a command omits it.
 //! `SimulateLoad` derives the filtered modules the preset commands write —
 //! the checked valid modules in simulated load order, with the masters they
@@ -22,9 +26,70 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use xedit_core::interface::globals::data_path;
 use xedit_loadorder::ini_files::{MemIniFile, comma_text, parse_comma_text, same_text};
-use xedit_loadorder::load_order::Modules;
+pub use xedit_loadorder::load_order::{ModuleInfo, Modules};
 
 use crate::{CommandError, Registry, Session};
+
+/// The modules the selection dialog lists, and the data folder
+/// `DoInitPath` found them in.
+///
+/// Port of `wbLoadModules` as the GUI's dialog reads it before a session
+/// exists: the game is set up (`xeInit.pas` `_DoInitPath` and the
+/// definitions), the data folder is found (`CheckAppPath`, the Steam
+/// library, the registry), the game's own plugin list and settings file are
+/// set, and the modules of the data folder are scanned. The dialog's check
+/// state and `SimulateLoad` are the GUI's; this only opens the list.
+///
+/// This is not a command: it is the data source of a dialog, as
+/// [`Modules::load`] is for a loaded session.
+pub struct SelectableModules {
+    pub game: xedit_core::interface::globals::GameMode,
+    /// The data folder with its trailing separator.
+    pub data_path: String,
+    /// The module list (not `Debug`: it holds the loaded files).
+    pub modules: Modules,
+}
+
+/// Opens the module list of a game for the selection dialog.
+pub fn selectable_modules(game: &str) -> Result<SelectableModules, CommandError> {
+    use xedit_core::interface::globals;
+    let mode =
+        crate::dump::setup_game_for_edit(game).map_err(|message| CommandError::new("invalid_params", message))?;
+    let folder = crate::game_paths::discover_game_folder(mode);
+    if folder.is_empty() {
+        return Err(CommandError::new(
+            "game_folder",
+            crate::game_paths::missing_install_message(mode),
+        ));
+    }
+    let data_path = crate::game_paths::data_path_of(&folder, mode);
+    if !Path::new(&data_path).is_dir() {
+        return Err(CommandError::new("game_folder", format!("{data_path} is not a folder")));
+    }
+    // `DoInitPath`: the data folder, the game's own plugin list (unless a
+    // command line named one), the inis of `My Games` and the settings
+    // file, which the module scan and the dialog read.
+    if globals::data_path().is_empty() {
+        globals::set_data_path(&data_path);
+    }
+    if globals::plugins_file_name().is_empty() {
+        globals::set_plugins_file_name(&crate::game_paths::default_plugins_file(mode, &data_path));
+    }
+    crate::resources::init_game_paths(mode, &data_path);
+    let settings = crate::game_paths::settings_file_name(
+        crate::game_paths::app_name(mode),
+        "Edit",
+        &globals::program_path(),
+        &globals::plugins_file_name(),
+    );
+    globals::set_settings_file_name(&settings);
+    let modules = Modules::load_data_folder(&data_path);
+    Ok(SelectableModules {
+        game: mode,
+        data_path,
+        modules,
+    })
+}
 
 /// Port of `TfrmModuleSelect.GetPresetsSection` for the module selection
 /// menu item: `Name + '_' + PresetCategory + '_Presets'`.
@@ -102,6 +167,199 @@ fn filtered_modules(modules: &Modules, checked: &[bool]) -> Result<Vec<usize>, C
         .collect())
 }
 
+/// One module of the dialogs' trees: `TwbModuleInfo` with the fields the
+/// module selection's columns read (`vstModulesGetText`) and the flags the
+/// mod group editor's Insert filters on.
+#[derive(Serialize, Deserialize, JsonSchema, Clone)]
+pub struct ModuleEntry {
+    /// The position of the module in `wbModulesByLoadOrder`, the order the
+    /// dialog lists its nodes; the positions are of the whole list, so a
+    /// filter leaves gaps.
+    pub index: usize,
+    /// `miName`: the file name without `.ghost`.
+    pub name: String,
+    /// `miOriginalName`: the name of the file in the data folder (with
+    /// `.ghost`).
+    pub original_name: String,
+    /// `miLoadOrder`: the load order of the module's loaded file, `None`
+    /// when it is not loaded (upstream `High(Integer)`), which the dialog's
+    /// load order column shows only below 10000.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub load_order: Option<i32>,
+    /// `miFileID`: the load order FileID of the loaded module (`01`,
+    /// `FE 003`), `None` for a module that is not loaded.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub file_id: Option<String>,
+    /// `wbDataPath + miOriginalName`, the module's file.
+    pub path: String,
+    /// The size of the module's file in bytes.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub size: Option<u64>,
+    /// `mfValid`: the module's header could be read (a plugin; the game's
+    /// executable is not valid).
+    pub valid: bool,
+    /// `mfHasFile`/`mfLoaded`: the module's file is loaded in the session.
+    pub loaded: bool,
+    /// `mfHasESMFlag`: the ESM flag of the file header (the dialog's `ESM`
+    /// column).
+    pub has_esm_flag: bool,
+    /// `mfIsESM`: the ESM extension of the games from Fallout 4 on, or the
+    /// ESM flag (how the load order sorts the module).
+    pub is_esm: bool,
+    /// `mfHasESMExtension`: the module's extension is `.esm` or `.esl` in
+    /// the games from Fallout 4 on.
+    pub has_esm_extension: bool,
+    /// `mfHasLightFlag`: the light (ESL) flag, or an `.esl` extension (the
+    /// dialog's light column, `wbLightName`).
+    pub is_light: bool,
+    /// `mfHasMediumFlag`: the medium flag (Starfield).
+    pub is_medium: bool,
+    /// `mfHasUpdateFlag`: the update (overlay) flag.
+    pub is_update: bool,
+    /// `mfHasLocalizedFlag`: the localized flag of the file header.
+    pub is_localized: bool,
+    /// `mfHasBlueprintFlag`: the Starfield blueprint flag.
+    pub has_blueprint: bool,
+    /// `mfGhost`: a `.ghost` file whose original is not in the data folder.
+    pub is_ghost: bool,
+    /// `mfIsHardcoded`: the game's executable, which the hardcoded file
+    /// loads as.
+    pub is_hardcoded: bool,
+    /// `mfMastersMissing`: one of the module's masters is not in the data
+    /// folder (or lacks masters itself). The dialog disables such a node.
+    pub masters_missing: bool,
+    /// `mfActive`: the module is active (`mfActiveInPluginsTxt` or one of
+    /// `wbLoadModules`' implicit actives), the check of the dialog's
+    /// `mfActive` selection.
+    pub active: bool,
+    /// `mfActiveInPluginsTxt`: the plugin list names the module active.
+    pub active_in_plugins_txt: bool,
+    /// `mfHasIndex`: the module has an index the load order sort reads.
+    pub has_index: bool,
+    /// `miDateTime`: the write time of the module's file as a Delphi
+    /// `TDateTime` (days since 1899-12-30), which the dialogs' `[Time:...]`
+    /// text of `LoadOrderDescription` formats and the load order sorts by.
+    pub date_time: f64,
+    /// `miOfficialIndex`: the place of the game master, the game's
+    /// executable and its official DLC, `None` for every other module
+    /// (upstream `High(Integer)`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub official_index: Option<i32>,
+    /// `miCCIndex`: the place of the module in the game's Creation Club
+    /// list from 1, `None` otherwise (upstream `High(Integer)`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cc_index: Option<i32>,
+    /// `miPluginsTxtIndex`: the module's line in the plugin list, `None`
+    /// when the list does not name it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub plugins_txt_index: Option<i32>,
+    /// `miLoadOrderTxtIndex`: the module's line in `loadorder.txt`, `None`
+    /// when the file does not name it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub load_order_txt_index: Option<i32>,
+    /// `miMasterNames`: the file names the module's file header lists.
+    pub masters: Vec<String>,
+    /// `GetCRC32`: the module's CRC32, `None` when the file can not be
+    /// read or its value is not valid (`TwbCRC32.IsValid`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub crc32: Option<u32>,
+}
+
+/// An index that upstream keeps at `High(Integer)` for a module it does not
+/// assign.
+fn index_or_none(value: i32) -> Option<i32> {
+    (value != i32::MAX).then_some(value)
+}
+
+fn module_entry(index: usize, module: &xedit_loadorder::load_order::ModuleInfo) -> ModuleEntry {
+    use xedit_core::interface::File;
+    ModuleEntry {
+        index,
+        name: module.name.clone(),
+        original_name: module.original_name.clone(),
+        load_order: (module.load_order < 10000).then_some(module.load_order),
+        file_id: module
+            .file
+            .as_ref()
+            .map(|file| file.get_load_order_file_id().to_string()),
+        path: module.file_path(),
+        size: module.file_size(),
+        valid: module.valid,
+        loaded: module.has_file(),
+        has_esm_flag: module.has_esm_flag,
+        is_esm: module.is_esm,
+        has_esm_extension: module.has_esm_extension,
+        is_light: module.is_light,
+        is_medium: module.is_medium,
+        is_update: module.is_update,
+        is_localized: module.is_localized,
+        has_blueprint: module.has_blueprint,
+        is_ghost: module.is_ghost,
+        is_hardcoded: module.is_hardcoded,
+        masters_missing: module.masters_missing,
+        active: module.active,
+        active_in_plugins_txt: module.active_in_plugins_txt,
+        has_index: module.has_index,
+        date_time: module.date_time,
+        official_index: index_or_none(module.official_index),
+        cc_index: index_or_none(module.cc_index),
+        plugins_txt_index: index_or_none(module.plugins_txt_index),
+        load_order_txt_index: index_or_none(module.load_order_txt_index),
+        masters: module.master_names.clone(),
+        crc32: module.get_crc32(),
+    }
+}
+
+/// `modules.list`: the modules the module selection dialog and the mod
+/// group editor's Insert list build their trees from
+/// (`wbModulesByLoadOrder`), in the load order the dialogs list them.
+#[derive(Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ModulesListRequest {
+    /// Keep only the valid modules, as both dialogs do
+    /// (`FilteredByFlag(mfValid)`): false lists every module of the data
+    /// folder, including the game's executable and a plugin whose header
+    /// did not read.
+    #[serde(default = "default_true")]
+    pub valid: bool,
+    /// Keep only the active modules (`FilteredByFlag(mfActive)`).
+    #[serde(default)]
+    pub active: bool,
+    /// Keep only the modules whose masters are in the data folder
+    /// (`not mfMastersMissing`); the dialogs disable the others instead.
+    #[serde(default)]
+    pub masters_present: bool,
+}
+
+fn default_true() -> bool {
+    true
+}
+
+/// `modules.list`: the response.
+#[derive(Serialize, Deserialize, JsonSchema, Clone)]
+pub struct ModulesListResponse {
+    /// The data folder the modules were read from (`wbDataPath`, with its
+    /// trailing separator).
+    pub data_path: String,
+    /// `wbModulesByLoadOrder` in load order, filtered by the request.
+    pub modules: Vec<ModuleEntry>,
+}
+
+fn modules_list(session: &mut Session, request: ModulesListRequest) -> Result<ModulesListResponse, CommandError> {
+    let modules = load_modules(session)?;
+    let data_path = data_path();
+    let modules = modules
+        .modules
+        .iter()
+        .enumerate()
+        .filter(|(_, module)| !request.valid || module.valid)
+        .filter(|(_, module)| !request.active || module.active)
+        .filter(|(_, module)| !request.masters_present || !module.masters_missing)
+        .map(|(index, module)| module_entry(index, module))
+        .collect();
+    Ok(ModulesListResponse { data_path, modules })
+}
+
 fn module_names(modules: &Modules, filtered: &[usize]) -> Vec<String> {
     filtered
         .iter()
@@ -128,12 +386,12 @@ fn unknown_preset(preset: &str) -> CommandError {
     CommandError::new("unknown_preset", format!("there is no preset named \"{preset}\""))
 }
 
-#[derive(Deserialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct PresetsRequest {}
 
 /// The presets of the module selection dialog (`PresetsUpdate`).
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 pub struct PresetsResponse {
     /// The preset names in the order the combo box holds them: the settings
     /// section's keys with `<plugins.txt>` first.
@@ -164,7 +422,7 @@ fn modules_presets(session: &mut Session, _: PresetsRequest) -> Result<PresetsRe
 /// `PresetLoad`: the preset's modules checked, then `SimulateLoad`. The
 /// command is read-only: the dialog only changes its in-memory check state
 /// and `LoadedPreset`; nothing is written to the settings file.
-#[derive(Deserialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct PresetLoadRequest {
     /// The name of the preset, or `<plugins.txt>` for the modules the plugin
@@ -172,7 +430,7 @@ pub struct PresetLoadRequest {
     pub preset: String,
 }
 
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 pub struct PresetLoadResponse {
     /// The preset that was loaded (`LoadedPreset`; empty for
     /// `<plugins.txt>`, which `IsPresetDifferent` skips).
@@ -241,7 +499,7 @@ fn modules_preset_load(session: &mut Session, request: PresetLoadRequest) -> Res
 /// ...?", or the changed-selection question with `after_modal`); `confirm`
 /// is its answer, its default button when omitted (Yes, No with
 /// `after_modal`).
-#[derive(Deserialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct PresetSaveRequest {
     /// The name of the preset to write.
@@ -262,7 +520,7 @@ pub struct PresetSaveRequest {
     pub dry_run: bool,
 }
 
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 pub struct PresetSaveResponse {
     pub preset: String,
     /// The value written, the filtered modules as a comma text.
@@ -329,7 +587,7 @@ fn modules_preset_save(session: &mut Session, request: PresetSaveRequest) -> Res
 /// `PresetDelete`: the question "Are you sure you want to delete preset
 /// ...?", then `DeleteKey` and `UpdateFile` (the combo box is refilled from
 /// the section, which the next `modules.presets` shows).
-#[derive(Deserialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct PresetDeleteRequest {
     /// The name of the preset to delete.
@@ -342,7 +600,7 @@ pub struct PresetDeleteRequest {
     pub dry_run: bool,
 }
 
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 pub struct PresetDeleteResponse {
     pub preset: String,
     /// Whether the preset was deleted (the question can stop it).
@@ -391,6 +649,12 @@ fn modules_preset_delete(
 }
 
 pub fn register(registry: &mut Registry) {
+    registry.register(
+        "modules.list",
+        "List the modules the module selection dialog and the mod group editor's Insert list show (wbModulesByLoadOrder) with their header flags, masters, load order and file facts.",
+        false,
+        modules_list,
+    );
     registry.register(
         "modules.presets",
         "List the selection presets of the module selection dialog and what the current selection would save (PresetsUpdate).",

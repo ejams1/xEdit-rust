@@ -141,6 +141,17 @@ pub fn message(text: &str) {
     }
 }
 
+/// The `wbForceTerminate` check of the `wbLOD.pas` loops: the generator
+/// stops at its next record once the operation's wait form was cancelled
+/// (`GeneralProgress`'s `Abort`).
+pub fn check_cancel() -> LodResult<()> {
+    if xedit_core::interface::wait_form::is_canceled() {
+        Err(LodError::new("cancelled"))
+    } else {
+        Ok(())
+    }
+}
+
 /// `wbLODExtraOptionsFileName`.
 pub fn lod_extra_options_file_name(plugin_name: &str, worldspace_id: &str) -> String {
     format!("{}LODGen_{plugin_name}_{worldspace_id}_Options.txt", app_name())

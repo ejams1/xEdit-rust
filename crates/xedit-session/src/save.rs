@@ -190,6 +190,11 @@ pub struct StringsSaved {
     pub backup: Option<String>,
 }
 
+/// The `Abort` of `GeneralProgress` once the wait form was cancelled.
+fn cancelled() -> CommandError {
+    CommandError::new("cancelled", "the operation was cancelled")
+}
+
 /// The `SaveChanged` part for the localization files: every modified table
 /// of the plugin is written (`WriteToStream`) and is no longer modified.
 /// Upstream writes a table where it was read from or made,
@@ -210,6 +215,12 @@ fn save_tables(
     let folder = output.parent().map(Path::to_path_buf).unwrap_or_default();
     let mut saved = Vec::new();
     for index in crate::localization::modified_tables_of(&file.get_name()) {
+        // `SaveChanged` writes every table of the list and renames it over
+        // the old one through `DoRenameModule`, whose `wbProgress` calls
+        // `GeneralProgress` and aborts when the user cancelled. The check is
+        // before the write of the table, so a cancelled save leaves the
+        // table as it was.
+        xedit_core::interface::wait_form::poll_cancel().map_err(|_| cancelled())?;
         let Some((name, bytes)) = handler.with_file(index, |table| (table.name().to_owned(), table.write_to_bytes()))
         else {
             continue;
@@ -290,6 +301,11 @@ pub(crate) fn save_file(
     // `SaveChanged`: a save over the loaded file that did not change it is
     // removed again; its string tables are saved all the same.
     if !(to_loaded_path && !changed) {
+        // `DoRenameModule` of the save of a plugin reports its progress,
+        // which `GeneralProgress` turns into an `Abort` when the user
+        // cancelled. The check is before the write of the plugin, so a
+        // cancelled save leaves the file as it was.
+        xedit_core::interface::wait_form::poll_cancel().map_err(|_| cancelled())?;
         if request.backup && output.is_file() {
             response.backup = Some(backup(&output)?);
         }

@@ -15,6 +15,23 @@ repository = "https://github.com/ejams1/xEdit-rust"
 # Debug information is the largest per-crate cost of a debug or test build,
 # and the parity work rarely needs more than line tables for a backtrace.
 # Dependencies get none: their frames are not what a failing port test reads.
+[workspace.dependencies]
+# Decision 1 of `docs/PLAN.md`: the GUI toolkit. An egui application with a
+# custom virtualised tree and grid; MIT OR Apache-2.0, so the licence gate
+# stays green. The `default_fonts` feature is off: egui's bundled fonts are
+# OFL-1.1 and Ubuntu-font-1.0, which the licence gate does not allow, and
+# the GUI loads the fonts of the settings file itself (the records and the
+# messages fonts), so it needs no bundled fallback.
+eframe = { version = "0.37", default-features = false, features = [
+    "accesskit",
+    "clipboard",
+    "links",
+    "system_fonts",
+    "wayland",
+    "wgpu",
+    "x11",
+] }
+
 [profile.dev]
 debug = 1
 

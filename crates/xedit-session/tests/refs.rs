@@ -301,6 +301,33 @@ fn form_id_change_moves_the_list() {
 }
 
 #[test]
+fn a_cancelled_change_leaves_the_referencing_records_as_they_were() {
+    let _guard = test_lock();
+    no_cache();
+    let (_dir, _master, plugin) = setup("cancel");
+    let mut session = session(vec![plugin.clone()]);
+    // The references are built before the cancel, so the check of the
+    // change is the one that stops it.
+    session.ensure_refs().unwrap();
+    let registry = Registry::standard();
+    xedit_core::interface::globals::set_force_terminate(true);
+    let error = registry
+        .call(
+            &mut session,
+            "references.change",
+            json!({ "form_id": "00000800", "new_form_id": "00000850" }),
+        )
+        .unwrap_err();
+    xedit_core::interface::globals::set_force_terminate(false);
+    assert_eq!(error.code, "cancelled");
+    // The referencing records still refer to the old FormID.
+    assert_eq!(
+        referenced_by(&record(&plugin, 0x0100_0900)),
+        ["00000801@Plugin.esp", "01000901@Plugin.esp"]
+    );
+}
+
+#[test]
 fn lists_do_not_depend_on_the_thread_count() {
     let _guard = test_lock();
     no_cache();

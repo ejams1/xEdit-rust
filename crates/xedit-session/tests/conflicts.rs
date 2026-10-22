@@ -150,6 +150,21 @@ fn status(result: &Value, file: &str, form_id: &str) -> String {
 }
 
 #[test]
+fn a_cancelled_comparison_stops_before_the_records_are_compared() {
+    let _lock = test_lock();
+    let files = load();
+    let mut session = Session::with_files(GameMode::gmSSE, files);
+    // The user cancelled: the comparison of the records stops at the first
+    // one, as `LoaderProgress` aborts the load upstream compares in.
+    xedit_core::interface::globals::set_force_terminate(true);
+    let error = Registry::standard()
+        .call(&mut session, "conflicts.list", json!({}))
+        .unwrap_err();
+    xedit_core::interface::globals::set_force_terminate(false);
+    assert_eq!(error.code, "cancelled");
+}
+
+#[test]
 fn statuses_of_the_records() {
     let _lock = test_lock();
     let result = conflicts(1);

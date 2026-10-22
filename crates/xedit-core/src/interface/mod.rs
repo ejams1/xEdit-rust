@@ -31,6 +31,7 @@ pub mod struct_def;
 pub mod sub_record;
 pub mod sub_record_group;
 pub mod types;
+pub mod wait_form;
 
 pub use array::*;
 pub use builders::*;

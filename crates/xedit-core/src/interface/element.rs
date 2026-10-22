@@ -543,8 +543,15 @@ pub fn record_by_load_order_form_id(form_id: FormID, seen_from_file: Option<&Fil
         .iter()
         .find(|file| file.get_load_order_file_id() == file_id)
         .cloned()?;
-    // Upstream lets an exception of the lookup pass to the caller.
-    let result = file.get_record_by_form_id(form_id, true, false).ok().flatten()?;
+    // Upstream lets an exception of the lookup pass to the caller. A local
+    // FormID of zero is the file's header (`Elements[0]`), which the group
+    // index does not hold: the GUI addresses a file by it
+    // (`Supports(aElement, IwbFile) and _File.Elements[0]`).
+    let result = if form_id.object_id() == 0 {
+        file.get_element(0).and_then(|element| element.into_main_record())
+    } else {
+        file.get_record_by_form_id(form_id, true, false).ok().flatten()
+    }?;
     match seen_from_file.and_then(|seen_from| result.get_highest_override_visible_for_file(seen_from)) {
         Some(visible) => Some(visible),
         None => Some(result),

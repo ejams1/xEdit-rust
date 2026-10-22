@@ -955,9 +955,70 @@ pub fn clear_resources_loaded_handlers() {
     RESOURCES_LOADED_HANDLERS.lock().unwrap().clear();
 }
 
+/// Upstream `wbGetFormIDCallback`: the prompt for the load order FormID of a
+/// new record, which the GUI's "New FormID" input box asks
+/// (`GetFormIDCallback`, `xeMainForm.pas`). `None` (upstream unassigned)
+/// means there is no user to ask.
+pub type GetFormIDCallback = std::sync::Arc<dyn Fn(&super::ElementRef) -> super::FormID + Send + Sync>;
+
+/// Upstream `wbGetCellDetailsForWorldspaceCallback`: the prompt that says
+/// whether a world cell added to a worldspace is persistent, or which grid
+/// cell it takes (`TfrmWorldspaceCellDetails`). `None` (upstream
+/// unassigned) means there is no user to ask; an installed callback returns
+/// `None` when its dialog was cancelled (upstream `False`).
+pub type GetCellDetailsForWorldspaceCallback =
+    std::sync::Arc<dyn Fn(&super::MainRecordRef) -> Option<(bool, i32, i32)> + Send + Sync>;
+
+static GET_FORM_ID_CALLBACK: RwLock<Option<GetFormIDCallback>> = RwLock::new(None);
+static GET_CELL_DETAILS_FOR_WORLDSPACE_CALLBACK: RwLock<Option<GetCellDetailsForWorldspaceCallback>> =
+    RwLock::new(None);
+
+/// Sets upstream `wbGetFormIDCallback`; the GUI installs its input box,
+/// `None` restores the headless default (a new record takes a new FormID).
+pub fn set_get_form_id_callback(callback: Option<GetFormIDCallback>) {
+    *GET_FORM_ID_CALLBACK.write().unwrap() = callback;
+}
+
+/// Whether upstream `wbGetFormIDCallback` is assigned. Without it the edit
+/// path assigns the FormID as a silent add does.
+pub fn has_get_form_id_callback() -> bool {
+    GET_FORM_ID_CALLBACK.read().unwrap().is_some()
+}
+
+/// Port of `wbGetFormID`: the FormID the callback gives, `TwbFormID.Null`
+/// when it is unassigned (or the user cancelled).
+pub fn wb_get_form_id(element: &super::ElementRef) -> super::FormID {
+    match GET_FORM_ID_CALLBACK.read().unwrap().as_ref() {
+        Some(callback) => callback(element),
+        None => super::FormID::null(),
+    }
+}
+
+/// Sets upstream `wbGetCellDetailsForWorldspaceCallback`; the GUI installs
+/// its dialog, `None` restores the headless default (an add without
+/// parameters fails as a silent add).
+pub fn set_get_cell_details_for_worldspace_callback(callback: Option<GetCellDetailsForWorldspaceCallback>) {
+    *GET_CELL_DETAILS_FOR_WORLDSPACE_CALLBACK.write().unwrap() = callback;
+}
+
+/// Whether upstream `wbGetCellDetailsForWorldspaceCallback` is assigned.
+pub fn has_get_cell_details_for_worldspace_callback() -> bool {
+    GET_CELL_DETAILS_FOR_WORLDSPACE_CALLBACK.read().unwrap().is_some()
+}
+
+/// Port of `wbGetCellDetailsForWorldspace`: the persistent flag and the
+/// grid cell the callback returns (`persistent`, `x`, `y`), `None` when it
+/// is unassigned (`False`) or its dialog was cancelled.
+pub fn wb_get_cell_details_for_worldspace(worldspace: &super::MainRecordRef) -> Option<(bool, i32, i32)> {
+    let callback = GET_CELL_DETAILS_FOR_WORLDSPACE_CALLBACK.read().unwrap().clone();
+    callback.and_then(|callback| callback(worldspace))
+}
+
 /// Restores every setting of this module to its upstream default.
 pub fn reset() {
     clear_resources_loaded_handlers();
+    set_get_form_id_callback(None);
+    set_get_cell_details_for_worldspace_callback(None);
     *KNOWN_SUB_RECORD_SIGNATURES_NOW.write().unwrap() = KNOWN_SUB_RECORD_SIGNATURES;
     set_encoding(Encoding::Mbcs(1252));
     set_encoding_trans(Encoding::Mbcs(1252));

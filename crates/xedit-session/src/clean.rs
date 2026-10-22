@@ -522,9 +522,14 @@ pub fn clean_targets(
         1
     };
     for pass_index in 0..passes {
+        // `GeneralProgress`: the operation stops at its next poll point once
+        // the wait form was cancelled (between passes, and inside the filter
+        // walk of a pass).
+        xedit_core::interface::wait_form::poll_cancel()
+            .map_err(|_| CommandError::new("cancelled", "the operation was cancelled"))?;
         let pass = if request.quick {
             cleaning::quick_clean_pass(first, loaded, request.dry_run, &settings, allow_make_partial)
-                .map_err(edit_failed)?
+                .map_err(clean_error)?
         } else {
             selection_pass(targets, loaded, request, &settings, allow_make_partial)?
         };
@@ -634,6 +639,11 @@ fn selection_pass(
     let mut tree = NavTree::new(loaded);
     let filter =
         apply_filter(&mut tree, &FilterOptions::for_cleaning(), loaded).map_err(|error| edit_failed(error.message))?;
+    // The filter walk stopped at its cancellation poll point: the cleaning
+    // stops with it (`GeneralProgress`'s `Abort`).
+    if filter.cancelled {
+        return Err(CommandError::new("cancelled", "the operation was cancelled"));
+    }
     let mut starts = Vec::new();
     for target in targets {
         let start = tree
@@ -664,6 +674,16 @@ fn selection_pass(
 
 fn edit_failed(message: String) -> CommandError {
     CommandError::new("edit_failed", message)
+}
+
+/// A cleaning error: `cancelled` keeps the wait form's code (`GeneralProgress`
+/// stops the handler as an exception of its own upstream).
+fn clean_error(message: String) -> CommandError {
+    if message == "cancelled" {
+        CommandError::new("cancelled", "the operation was cancelled")
+    } else {
+        edit_failed(message)
+    }
 }
 
 /// `files.clean` for the quick auto clean mode on `file`, the entry point
