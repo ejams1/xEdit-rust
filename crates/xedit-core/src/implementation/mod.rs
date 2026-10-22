@@ -3448,6 +3448,23 @@ impl MainRecordImpl {
     /// two builds needed each other (`init_cycles`), it sees the elements
     /// built so far, as upstream does.
     fn read_built<T>(&self, read: impl Fn(&[ElementRef]) -> T) -> T {
+        // The fast path: the record is built, so its elements are read
+        // under the lock of the list, without the upgrade of the weak
+        // reference to the record and the init check that follows it.
+        //
+        // The check of the init runs under the read lock of the list, and
+        // `reset` undoes the init under the write lock of the same list
+        // (it takes the write lock first, then resets the init), so the
+        // fast path never sees the elements of a record that another thread
+        // reset in the meantime: a reset that waits for the write lock
+        // finds the init done, and a reset that already undid it makes the
+        // check fail, so the slow path builds the record again.
+        {
+            let elements = self.container.cnt_elements.read().unwrap();
+            if self.mr_init.is_done() {
+                return read(&elements);
+            }
+        }
         let this = self.self_arc();
         loop {
             let cycles = crate::threads::init_cycles();
