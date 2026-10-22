@@ -1,0 +1,1303 @@
+{
+  "schema": 1,
+  "date": "2026-10-22",
+  "commit": "874fb30a4f5d6a0c5813d1ef6ad686a409a97851",
+  "profile": "release",
+  "provisional": true,
+  "machine": {
+    "cpu": "AMD Ryzen 7 9800X3D 8-Core Processor",
+    "logical_cpus": 16,
+    "simd": "Avx2",
+    "os": "windows x86_64"
+  },
+  "cases": [
+    {
+      "name": "load-fo4",
+      "workload": "load",
+      "description": "load Fallout4.esm with the DLC that has BA2 string tables",
+      "game": "fo4",
+      "port": [
+        {
+          "variant": {
+            "simd": "default",
+            "threads": "default"
+          },
+          "measurement": {
+            "runs": [
+              {
+                "seconds": 1.4485248,
+                "peak_bytes": 2241105920,
+                "code": 0
+              },
+              {
+                "seconds": 1.4809098,
+                "peak_bytes": 2260426752,
+                "code": 0
+              },
+              {
+                "seconds": 1.435815,
+                "peak_bytes": 2150137856,
+                "code": 0
+              }
+            ],
+            "median_seconds": 1.4485248,
+            "peak_bytes": 2260426752
+          }
+        },
+        {
+          "variant": {
+            "simd": "default",
+            "threads": "1"
+          },
+          "measurement": {
+            "runs": [
+              {
+                "seconds": 1.7418794,
+                "peak_bytes": 1879773184,
+                "code": 0
+              },
+              {
+                "seconds": 1.7234646,
+                "peak_bytes": 1879789568,
+                "code": 0
+              },
+              {
+                "seconds": 1.6703691,
+                "peak_bytes": 1879777280,
+                "code": 0
+              }
+            ],
+            "median_seconds": 1.7234646,
+            "peak_bytes": 1879789568
+          }
+        },
+        {
+          "variant": {
+            "simd": "off",
+            "threads": "default"
+          },
+          "measurement": {
+            "runs": [
+              {
+                "seconds": 1.4526414,
+                "peak_bytes": 2206031872,
+                "code": 0
+              },
+              {
+                "seconds": 1.4406504,
+                "peak_bytes": 2211741696,
+                "code": 0
+              },
+              {
+                "seconds": 1.4494862,
+                "peak_bytes": 2239287296,
+                "code": 0
+              }
+            ],
+            "median_seconds": 1.4494862,
+            "peak_bytes": 2239287296
+          }
+        },
+        {
+          "variant": {
+            "simd": "off",
+            "threads": "1"
+          },
+          "measurement": {
+            "runs": [
+              {
+                "seconds": 1.6932641,
+                "peak_bytes": 1879785472,
+                "code": 0
+              },
+              {
+                "seconds": 1.6925245,
+                "peak_bytes": 1879740416,
+                "code": 0
+              },
+              {
+                "seconds": 1.7690774999999999,
+                "peak_bytes": 1879769088,
+                "code": 0
+              }
+            ],
+            "median_seconds": 1.6932641,
+            "peak_bytes": 1879785472
+          }
+        }
+      ],
+      "delphi": {
+        "runs": [
+          {
+            "seconds": 4.252,
+            "code": 0
+          },
+          {
+            "seconds": 4.211,
+            "code": 0
+          },
+          {
+            "seconds": 4.228,
+            "code": 0
+          }
+        ],
+        "median_seconds": 4.228
+      },
+      "delphi_limitation": "the Delphi column is the load of the game master by xDump.exe, which is the plugin with the string tables in its archive; the port's column loads the game master and the DLC, so the two columns are not the same work"
+    },
+    {
+      "name": "load-fo4-order10",
+      "workload": "load",
+      "description": "load a ten plugin load order of Fallout 4",
+      "game": "fo4",
+      "port": [
+        {
+          "variant": {
+            "simd": "default",
+            "threads": "default"
+          },
+          "measurement": {
+            "runs": [
+              {
+                "seconds": 2.2587217,
+                "peak_bytes": 2765504512,
+                "code": 0
+              },
+              {
+                "seconds": 2.1557091,
+                "peak_bytes": 2745786368,
+                "code": 0
+              },
+              {
+                "seconds": 2.1631202,
+                "peak_bytes": 2771046400,
+                "code": 0
+              }
+            ],
+            "median_seconds": 2.1631202,
+            "peak_bytes": 2771046400
+          }
+        },
+        {
+          "variant": {
+            "simd": "default",
+            "threads": "1"
+          },
+          "measurement": {
+            "runs": [
+              {
+                "seconds": 2.4818028,
+                "peak_bytes": 2530213888,
+                "code": 0
+              },
+              {
+                "seconds": 2.4711203,
+                "peak_bytes": 2530152448,
+                "code": 0
+              },
+              {
+                "seconds": 2.4937215999999998,
+                "peak_bytes": 2530172928,
+                "code": 0
+              }
+            ],
+            "median_seconds": 2.4818028,
+            "peak_bytes": 2530213888
+          }
+        },
+        {
+          "variant": {
+            "simd": "off",
+            "threads": "default"
+          },
+          "measurement": {
+            "runs": [
+              {
+                "seconds": 2.1810301,
+                "peak_bytes": 2764013568,
+                "code": 0
+              },
+              {
+                "seconds": 2.2073636,
+                "peak_bytes": 2743902208,
+                "code": 0
+              },
+              {
+                "seconds": 2.2038256,
+                "peak_bytes": 2757767168,
+                "code": 0
+              }
+            ],
+            "median_seconds": 2.2038256,
+            "peak_bytes": 2764013568
+          }
+        },
+        {
+          "variant": {
+            "simd": "off",
+            "threads": "1"
+          },
+          "measurement": {
+            "runs": [
+              {
+                "seconds": 2.4626381999999998,
+                "peak_bytes": 2530193408,
+                "code": 0
+              },
+              {
+                "seconds": 2.5204247,
+                "peak_bytes": 2530189312,
+                "code": 0
+              },
+              {
+                "seconds": 2.4918696000000002,
+                "peak_bytes": 2530156544,
+                "code": 0
+              }
+            ],
+            "median_seconds": 2.4918696000000002,
+            "peak_bytes": 2530193408
+          }
+        }
+      ],
+      "delphi": {
+        "runs": [
+          {
+            "seconds": 3.935,
+            "code": 0
+          },
+          {
+            "seconds": 3.852,
+            "code": 0
+          },
+          {
+            "seconds": 3.828,
+            "code": 0
+          }
+        ],
+        "median_seconds": 3.852
+      },
+      "delphi_limitation": "the Delphi build has no ten plugin load order in the corpus: the column is the load of the game master alone, so the two columns are not the same work",
+      "notes": "7 plugins"
+    },
+    {
+      "name": "load-sse",
+      "workload": "load",
+      "description": "load Skyrim.esm and Update.esm",
+      "game": "sse",
+      "port": [
+        {
+          "variant": {
+            "simd": "default",
+            "threads": "default"
+          },
+          "measurement": {
+            "runs": [
+              {
+                "seconds": 0.8606128,
+                "peak_bytes": 1338232832,
+                "code": 0
+              },
+              {
+                "seconds": 0.7642451,
+                "peak_bytes": 1324511232,
+                "code": 0
+              },
+              {
+                "seconds": 0.7829921,
+                "peak_bytes": 1344700416,
+                "code": 0
+              }
+            ],
+            "median_seconds": 0.7829921,
+            "peak_bytes": 1344700416
+          }
+        },
+        {
+          "variant": {
+            "simd": "default",
+            "threads": "1"
+          },
+          "measurement": {
+            "runs": [
+              {
+                "seconds": 0.9135061,
+                "peak_bytes": 1110249472,
+                "code": 0
+              },
+              {
+                "seconds": 0.8970869,
+                "peak_bytes": 1110261760,
+                "code": 0
+              },
+              {
+                "seconds": 0.9125836,
+                "peak_bytes": 1110298624,
+                "code": 0
+              }
+            ],
+            "median_seconds": 0.9125836,
+            "peak_bytes": 1110298624
+          }
+        },
+        {
+          "variant": {
+            "simd": "off",
+            "threads": "default"
+          },
+          "measurement": {
+            "runs": [
+              {
+                "seconds": 0.7606989,
+                "peak_bytes": 1312317440,
+                "code": 0
+              },
+              {
+                "seconds": 0.7660094,
+                "peak_bytes": 1329815552,
+                "code": 0
+              },
+              {
+                "seconds": 0.7744356,
+                "peak_bytes": 1338470400,
+                "code": 0
+              }
+            ],
+            "median_seconds": 0.7660094,
+            "peak_bytes": 1338470400
+          }
+        },
+        {
+          "variant": {
+            "simd": "off",
+            "threads": "1"
+          },
+          "measurement": {
+            "runs": [
+              {
+                "seconds": 0.9099185,
+                "peak_bytes": 1110257664,
+                "code": 0
+              },
+              {
+                "seconds": 0.9101317,
+                "peak_bytes": 1110310912,
+                "code": 0
+              },
+              {
+                "seconds": 0.913737,
+                "peak_bytes": 1110339584,
+                "code": 0
+              }
+            ],
+            "median_seconds": 0.9101317,
+            "peak_bytes": 1110339584
+          }
+        }
+      ],
+      "delphi": {
+        "runs": [
+          {
+            "seconds": 2.405,
+            "code": 0
+          },
+          {
+            "seconds": 2.367,
+            "code": 0
+          },
+          {
+            "seconds": 2.35,
+            "code": 0
+          }
+        ],
+        "median_seconds": 2.367
+      },
+      "delphi_limitation": "the Delphi column is the load of Update.esm by xDump.exe, which loads the game master with it; the port's column loads the game master and Update.esm, so the two columns are the same work"
+    },
+    {
+      "name": "refs-build-sse",
+      "workload": "reference build",
+      "description": "build the reference index of Skyrim.esm and Update.esm with the cache off",
+      "game": "sse",
+      "port": [
+        {
+          "variant": {
+            "simd": "default",
+            "threads": "default"
+          },
+          "measurement": {
+            "runs": [
+              {
+                "seconds": 7.7146779,
+                "peak_bytes": 1931898880,
+                "code": 0
+              },
+              {
+                "seconds": 7.8203987999999995,
+                "peak_bytes": 1919492096,
+                "code": 0
+              },
+              {
+                "seconds": 7.875869,
+                "peak_bytes": 1915027456,
+                "code": 0
+              }
+            ],
+            "median_seconds": 7.8203987999999995,
+            "peak_bytes": 1931898880
+          }
+        },
+        {
+          "variant": {
+            "simd": "default",
+            "threads": "1"
+          },
+          "measurement": {
+            "runs": [
+              {
+                "seconds": 30.8314129,
+                "peak_bytes": 1544278016,
+                "code": 0
+              },
+              {
+                "seconds": 30.7864282,
+                "peak_bytes": 1544404992,
+                "code": 0
+              },
+              {
+                "seconds": 30.8487268,
+                "peak_bytes": 1544392704,
+                "code": 0
+              }
+            ],
+            "median_seconds": 30.8314129,
+            "peak_bytes": 1544404992
+          }
+        },
+        {
+          "variant": {
+            "simd": "off",
+            "threads": "default"
+          },
+          "measurement": {
+            "runs": [
+              {
+                "seconds": 7.7328235,
+                "peak_bytes": 1905405952,
+                "code": 0
+              },
+              {
+                "seconds": 7.7676902,
+                "peak_bytes": 1918001152,
+                "code": 0
+              },
+              {
+                "seconds": 7.7509702,
+                "peak_bytes": 1899433984,
+                "code": 0
+              }
+            ],
+            "median_seconds": 7.7509702,
+            "peak_bytes": 1918001152
+          }
+        },
+        {
+          "variant": {
+            "simd": "off",
+            "threads": "1"
+          },
+          "measurement": {
+            "runs": [
+              {
+                "seconds": 30.7880153,
+                "peak_bytes": 1543933952,
+                "code": 0
+              },
+              {
+                "seconds": 30.8220095,
+                "peak_bytes": 1544265728,
+                "code": 0
+              },
+              {
+                "seconds": 30.8092789,
+                "peak_bytes": 1542672384,
+                "code": 0
+              }
+            ],
+            "median_seconds": 30.8092789,
+            "peak_bytes": 1544265728
+          }
+        }
+      ],
+      "delphi": {
+        "runs": [
+          {
+            "seconds": 111.8180325,
+            "peak_bytes": 1171759104,
+            "code": 0
+          },
+          {
+            "seconds": 111.2280264,
+            "peak_bytes": 1171779584,
+            "code": 0
+          },
+          {
+            "seconds": 113.0239951,
+            "peak_bytes": 1172152320,
+            "code": 0
+          }
+        ],
+        "median_seconds": 111.8180325,
+        "peak_bytes": 1172152320
+      },
+      "delphi_limitation": "the Delphi column is the GUI build in its script mode: it includes the start of the program and the load of the plugins, so it is larger than the reference build alone"
+    },
+    {
+      "name": "conflicts-sse",
+      "workload": "conflict scan",
+      "description": "list the conflicts of Skyrim.esm, Update.esm and Dawnguard.esm",
+      "game": "sse",
+      "port": [
+        {
+          "variant": {
+            "simd": "default",
+            "threads": "default"
+          },
+          "measurement": {
+            "runs": [
+              {
+                "seconds": 4.0161116,
+                "peak_bytes": 1501024256,
+                "code": 0
+              },
+              {
+                "seconds": 3.9587726,
+                "peak_bytes": 1548652544,
+                "code": 0
+              },
+              {
+                "seconds": 3.9695655,
+                "peak_bytes": 1568890880,
+                "code": 0
+              }
+            ],
+            "median_seconds": 3.9695655,
+            "peak_bytes": 1568890880
+          }
+        },
+        {
+          "variant": {
+            "simd": "default",
+            "threads": "1"
+          },
+          "measurement": {
+            "runs": [
+              {
+                "seconds": 12.1171425,
+                "peak_bytes": 1260597248,
+                "code": 0
+              },
+              {
+                "seconds": 12.1347585,
+                "peak_bytes": 1260597248,
+                "code": 0
+              },
+              {
+                "seconds": 12.1449636,
+                "peak_bytes": 1260535808,
+                "code": 0
+              }
+            ],
+            "median_seconds": 12.1347585,
+            "peak_bytes": 1260597248
+          }
+        },
+        {
+          "variant": {
+            "simd": "off",
+            "threads": "default"
+          },
+          "measurement": {
+            "runs": [
+              {
+                "seconds": 3.9638909,
+                "peak_bytes": 1516171264,
+                "code": 0
+              },
+              {
+                "seconds": 3.9013,
+                "peak_bytes": 1491693568,
+                "code": 0
+              },
+              {
+                "seconds": 3.9653461,
+                "peak_bytes": 1501429760,
+                "code": 0
+              }
+            ],
+            "median_seconds": 3.9638909,
+            "peak_bytes": 1516171264
+          }
+        },
+        {
+          "variant": {
+            "simd": "off",
+            "threads": "1"
+          },
+          "measurement": {
+            "runs": [
+              {
+                "seconds": 12.190362,
+                "peak_bytes": 1260642304,
+                "code": 0
+              },
+              {
+                "seconds": 12.3963639,
+                "peak_bytes": 1260965888,
+                "code": 0
+              },
+              {
+                "seconds": 12.134063,
+                "peak_bytes": 1260630016,
+                "code": 0
+              }
+            ],
+            "median_seconds": 12.190362,
+            "peak_bytes": 1260965888
+          }
+        }
+      ],
+      "delphi": {
+        "runs": [
+          {
+            "seconds": 84.7816674,
+            "peak_bytes": 1226354688,
+            "code": 0
+          },
+          {
+            "seconds": 84.3739424,
+            "peak_bytes": 1225064448,
+            "code": 0
+          },
+          {
+            "seconds": 84.466466,
+            "peak_bytes": 1222082560,
+            "code": 0
+          }
+        ],
+        "median_seconds": 84.466466,
+        "peak_bytes": 1226354688
+      },
+      "delphi_limitation": "the Delphi column is the GUI build in its script mode: it includes the start of the program and the load of the plugins, so it is larger than the conflict scan alone"
+    },
+    {
+      "name": "clean-sse",
+      "workload": "clean",
+      "description": "quick clean dry run of Dawnguard.esm on Skyrim SE",
+      "game": "sse",
+      "port": [
+        {
+          "variant": {
+            "simd": "default",
+            "threads": "default"
+          },
+          "measurement": {
+            "runs": [
+              {
+                "seconds": 10.0511213,
+                "peak_bytes": 1430507520,
+                "code": 0
+              },
+              {
+                "seconds": 10.0441791,
+                "peak_bytes": 1431240704,
+                "code": 0
+              },
+              {
+                "seconds": 10.0252377,
+                "peak_bytes": 1434419200,
+                "code": 0
+              }
+            ],
+            "median_seconds": 10.0441791,
+            "peak_bytes": 1434419200
+          }
+        },
+        {
+          "variant": {
+            "simd": "default",
+            "threads": "1"
+          },
+          "measurement": {
+            "runs": [
+              {
+                "seconds": 10.1840723,
+                "peak_bytes": 1236471808,
+                "code": 0
+              },
+              {
+                "seconds": 10.1730527,
+                "peak_bytes": 1236369408,
+                "code": 0
+              },
+              {
+                "seconds": 10.1949427,
+                "peak_bytes": 1236443136,
+                "code": 0
+              }
+            ],
+            "median_seconds": 10.1840723,
+            "peak_bytes": 1236471808
+          }
+        },
+        {
+          "variant": {
+            "simd": "off",
+            "threads": "default"
+          },
+          "measurement": {
+            "runs": [
+              {
+                "seconds": 10.0419388,
+                "peak_bytes": 1438461952,
+                "code": 0
+              },
+              {
+                "seconds": 10.0235529,
+                "peak_bytes": 1425670144,
+                "code": 0
+              },
+              {
+                "seconds": 10.0383914,
+                "peak_bytes": 1430134784,
+                "code": 0
+              }
+            ],
+            "median_seconds": 10.0383914,
+            "peak_bytes": 1438461952
+          }
+        },
+        {
+          "variant": {
+            "simd": "off",
+            "threads": "1"
+          },
+          "measurement": {
+            "runs": [
+              {
+                "seconds": 10.1821623,
+                "peak_bytes": 1236389888,
+                "code": 0
+              },
+              {
+                "seconds": 10.1706791,
+                "peak_bytes": 1236488192,
+                "code": 0
+              },
+              {
+                "seconds": 10.1726562,
+                "peak_bytes": 1236480000,
+                "code": 0
+              }
+            ],
+            "median_seconds": 10.1726562,
+            "peak_bytes": 1236488192
+          }
+        }
+      ],
+      "delphi": {
+        "runs": [
+          {
+            "seconds": 35.8063794,
+            "peak_bytes": 1026670592,
+            "code": 0
+          },
+          {
+            "seconds": 35.9041538,
+            "peak_bytes": 1027063808,
+            "code": 0
+          },
+          {
+            "seconds": 35.8977865,
+            "peak_bytes": 1026801664,
+            "code": 0
+          }
+        ],
+        "median_seconds": 35.8977865,
+        "peak_bytes": 1027063808
+      },
+      "delphi_limitation": "the Delphi column is the GUI build in its quick auto clean mode: it includes the start of the program, the load of the plugins and the save of the cleaned plugin, so it is larger than the dry run alone"
+    },
+    {
+      "name": "clean-fo4",
+      "workload": "clean",
+      "description": "quick clean dry run of DLCCoast.esm on Fallout 4",
+      "game": "fo4",
+      "port": [
+        {
+          "variant": {
+            "simd": "default",
+            "threads": "default"
+          },
+          "measurement": {
+            "runs": [
+              {
+                "seconds": 3.2326956,
+                "peak_bytes": 3905228800,
+                "code": 0
+              },
+              {
+                "seconds": 3.2362963,
+                "peak_bytes": 4111790080,
+                "code": 0
+              },
+              {
+                "seconds": 3.1900259,
+                "peak_bytes": 3771482112,
+                "code": 0
+              }
+            ],
+            "median_seconds": 3.2326956,
+            "peak_bytes": 4111790080
+          }
+        },
+        {
+          "variant": {
+            "simd": "default",
+            "threads": "1"
+          },
+          "measurement": {
+            "runs": [
+              {
+                "seconds": 8.1340251,
+                "peak_bytes": 2276855808,
+                "code": 0
+              },
+              {
+                "seconds": 8.108516,
+                "peak_bytes": 2276769792,
+                "code": 0
+              },
+              {
+                "seconds": 8.1084886,
+                "peak_bytes": 2276827136,
+                "code": 0
+              }
+            ],
+            "median_seconds": 8.108516,
+            "peak_bytes": 2276855808
+          }
+        },
+        {
+          "variant": {
+            "simd": "off",
+            "threads": "default"
+          },
+          "measurement": {
+            "runs": [
+              {
+                "seconds": 3.2190339,
+                "peak_bytes": 4174274560,
+                "code": 0
+              },
+              {
+                "seconds": 3.1566754,
+                "peak_bytes": 3218915328,
+                "code": 0
+              },
+              {
+                "seconds": 3.2364426,
+                "peak_bytes": 4111679488,
+                "code": 0
+              }
+            ],
+            "median_seconds": 3.2190339,
+            "peak_bytes": 4174274560
+          }
+        },
+        {
+          "variant": {
+            "simd": "off",
+            "threads": "1"
+          },
+          "measurement": {
+            "runs": [
+              {
+                "seconds": 8.1097439,
+                "peak_bytes": 2276810752,
+                "code": 0
+              },
+              {
+                "seconds": 8.1271972,
+                "peak_bytes": 2276806656,
+                "code": 0
+              },
+              {
+                "seconds": 8.0951978,
+                "peak_bytes": 2276765696,
+                "code": 0
+              }
+            ],
+            "median_seconds": 8.1097439,
+            "peak_bytes": 2276810752
+          }
+        }
+      ],
+      "delphi": {
+        "runs": [
+          {
+            "seconds": 30.5981652,
+            "peak_bytes": 1441800192,
+            "code": 0
+          },
+          {
+            "seconds": 31.0125659,
+            "peak_bytes": 1441431552,
+            "code": 0
+          },
+          {
+            "seconds": 31.268181,
+            "peak_bytes": 1441599488,
+            "code": 0
+          }
+        ],
+        "median_seconds": 31.0125659,
+        "peak_bytes": 1441800192
+      },
+      "delphi_limitation": "the Delphi column is the GUI build in its quick auto clean mode: it includes the start of the program, the load of the plugins and the save of the cleaned plugin, so it is larger than the dry run alone"
+    },
+    {
+      "name": "pack-ba2-gnrl",
+      "workload": "archive pack",
+      "description": "pack a folder into a BA2 in the general format",
+      "game": "fo4",
+      "port": [
+        {
+          "variant": {
+            "simd": "default",
+            "threads": "default"
+          },
+          "measurement": {
+            "runs": [
+              {
+                "seconds": 0.0124167,
+                "peak_bytes": 11874304,
+                "code": 0
+              },
+              {
+                "seconds": 0.0114612,
+                "peak_bytes": 11841536,
+                "code": 0
+              },
+              {
+                "seconds": 0.0114191,
+                "peak_bytes": 11870208,
+                "code": 0
+              }
+            ],
+            "median_seconds": 0.0114612,
+            "peak_bytes": 11874304
+          }
+        },
+        {
+          "variant": {
+            "simd": "off",
+            "threads": "default"
+          },
+          "measurement": {
+            "runs": [
+              {
+                "seconds": 0.0111102,
+                "peak_bytes": 11837440,
+                "code": 0
+              },
+              {
+                "seconds": 0.0114298,
+                "peak_bytes": 11857920,
+                "code": 0
+              },
+              {
+                "seconds": 0.0112249,
+                "peak_bytes": 11878400,
+                "code": 0
+              }
+            ],
+            "median_seconds": 0.0112249,
+            "peak_bytes": 11878400
+          }
+        }
+      ],
+      "delphi": {
+        "runs": [
+          {
+            "seconds": 0.5722562,
+            "peak_bytes": 15265792,
+            "code": 0
+          },
+          {
+            "seconds": 0.8106901,
+            "peak_bytes": 15327232,
+            "code": 0
+          },
+          {
+            "seconds": 0.8074294,
+            "peak_bytes": 15343616,
+            "code": 0
+          }
+        ],
+        "median_seconds": 0.8074294,
+        "peak_bytes": 15343616
+      }
+    },
+    {
+      "name": "pack-ba2-dx10",
+      "workload": "archive pack",
+      "description": "pack a folder of textures into a BA2 in the DX10 format",
+      "game": "fo4",
+      "port": [
+        {
+          "variant": {
+            "simd": "default",
+            "threads": "default"
+          },
+          "measurement": {
+            "runs": [
+              {
+                "seconds": 0.0122463,
+                "peak_bytes": 11874304,
+                "code": 0
+              },
+              {
+                "seconds": 0.0126461,
+                "peak_bytes": 11837440,
+                "code": 0
+              },
+              {
+                "seconds": 0.0115355,
+                "peak_bytes": 11882496,
+                "code": 0
+              }
+            ],
+            "median_seconds": 0.0122463,
+            "peak_bytes": 11882496
+          }
+        },
+        {
+          "variant": {
+            "simd": "off",
+            "threads": "default"
+          },
+          "measurement": {
+            "runs": [
+              {
+                "seconds": 0.0114638,
+                "peak_bytes": 11845632,
+                "code": 0
+              },
+              {
+                "seconds": 0.0583785,
+                "peak_bytes": 11882496,
+                "code": 0
+              },
+              {
+                "seconds": 0.0110707,
+                "peak_bytes": 11882496,
+                "code": 0
+              }
+            ],
+            "median_seconds": 0.0114638,
+            "peak_bytes": 11882496
+          }
+        }
+      ],
+      "delphi": {
+        "runs": [
+          {
+            "seconds": 0.8145505,
+            "peak_bytes": 15163392,
+            "code": 0
+          },
+          {
+            "seconds": 0.8059485,
+            "peak_bytes": 15167488,
+            "code": 0
+          },
+          {
+            "seconds": 0.8111532,
+            "peak_bytes": 15167488,
+            "code": 0
+          }
+        ],
+        "median_seconds": 0.8111532,
+        "peak_bytes": 15167488
+      }
+    },
+    {
+      "name": "pack-bsa-sse",
+      "workload": "archive pack",
+      "description": "pack a folder into a compressed SSE BSA",
+      "game": "sse",
+      "port": [
+        {
+          "variant": {
+            "simd": "default",
+            "threads": "default"
+          },
+          "measurement": {
+            "runs": [
+              {
+                "seconds": 0.0132852,
+                "peak_bytes": 12464128,
+                "code": 0
+              },
+              {
+                "seconds": 0.0118344,
+                "peak_bytes": 12480512,
+                "code": 0
+              },
+              {
+                "seconds": 0.0118792,
+                "peak_bytes": 12791808,
+                "code": 0
+              }
+            ],
+            "median_seconds": 0.0118792,
+            "peak_bytes": 12791808
+          }
+        },
+        {
+          "variant": {
+            "simd": "off",
+            "threads": "default"
+          },
+          "measurement": {
+            "runs": [
+              {
+                "seconds": 0.0123448,
+                "peak_bytes": 12226560,
+                "code": 0
+              },
+              {
+                "seconds": 0.0128527,
+                "peak_bytes": 12177408,
+                "code": 0
+              },
+              {
+                "seconds": 0.0117323,
+                "peak_bytes": 12972032,
+                "code": 0
+              }
+            ],
+            "median_seconds": 0.0123448,
+            "peak_bytes": 12972032
+          }
+        }
+      ],
+      "delphi": {
+        "runs": [
+          {
+            "seconds": 0.6655868,
+            "peak_bytes": 16547840,
+            "code": 0
+          },
+          {
+            "seconds": 0.6654272,
+            "peak_bytes": 16666624,
+            "code": 0
+          },
+          {
+            "seconds": 0.663997,
+            "peak_bytes": 16248832,
+            "code": 0
+          }
+        ],
+        "median_seconds": 0.6654272,
+        "peak_bytes": 16666624
+      }
+    },
+    {
+      "name": "extract-bsa-sse",
+      "workload": "archive extract",
+      "description": "unpack a compressed SSE BSA",
+      "game": "sse",
+      "port": [
+        {
+          "variant": {
+            "simd": "default",
+            "threads": "default"
+          },
+          "measurement": {
+            "runs": [
+              {
+                "seconds": 0.0084327,
+                "peak_bytes": 10625024,
+                "code": 2
+              },
+              {
+                "seconds": 0.0083866,
+                "peak_bytes": 10592256,
+                "code": 2
+              },
+              {
+                "seconds": 0.0077197,
+                "peak_bytes": 10579968,
+                "code": 2
+              }
+            ],
+            "median_seconds": 0.0083866,
+            "peak_bytes": 10625024
+          }
+        },
+        {
+          "variant": {
+            "simd": "off",
+            "threads": "default"
+          },
+          "measurement": {
+            "runs": [
+              {
+                "seconds": 0.0091861,
+                "peak_bytes": 10637312,
+                "code": 2
+              },
+              {
+                "seconds": 0.0090874,
+                "peak_bytes": 10641408,
+                "code": 2
+              },
+              {
+                "seconds": 0.007752,
+                "peak_bytes": 10592256,
+                "code": 2
+              }
+            ],
+            "median_seconds": 0.0090874,
+            "peak_bytes": 10641408
+          }
+        }
+      ],
+      "delphi": {
+        "runs": [
+          {
+            "seconds": 0.8096468,
+            "peak_bytes": 15966208,
+            "code": 0
+          },
+          {
+            "seconds": 0.5685769,
+            "peak_bytes": 15626240,
+            "code": 0
+          },
+          {
+            "seconds": 0.5694465,
+            "peak_bytes": 15482880,
+            "code": 0
+          }
+        ],
+        "median_seconds": 0.5694465,
+        "peak_bytes": 15966208
+      }
+    }
+  ],
+  "notes": "The numbers are provisional: the run shared the machine with other builds, so they are a proof that the runner works and not a baseline. The final numbers are taken with `--final` on a quiet machine and replace this file. The Delphi column of these cases is not the same work as the port's column: the Delphi column is the load of the game master by xDump.exe, which is the plugin with the string tables in its archive; the port's column loads the game master and the DLC, so the two columns are not the same work; the Delphi build has no ten plugin load order in the corpus: the column is the load of the game master alone, so the two columns are not the same work; the Delphi column is the load of Update.esm by xDump.exe, which loads the game master with it; the port's column loads the game master and Update.esm, so the two columns are the same work; the Delphi column is the GUI build in its script mode: it includes the start of the program and the load of the plugins, so it is larger than the reference build alone; the Delphi column is the GUI build in its script mode: it includes the start of the program and the load of the plugins, so it is larger than the conflict scan alone; the Delphi column is the GUI build in its quick auto clean mode: it includes the start of the program, the load of the plugins and the save of the cleaned plugin, so it is larger than the dry run alone; the Delphi column is the GUI build in its quick auto clean mode: it includes the start of the program, the load of the plugins and the save of the cleaned plugin, so it is larger than the dry run alone."
+}

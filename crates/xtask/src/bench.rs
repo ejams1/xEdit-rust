@@ -360,7 +360,7 @@ fn run_notes(cases: &[Case], final_numbers: bool) -> String {
         notes.push_str("The numbers are final: the machine was quiet while the run was measured.");
     } else {
         notes.push_str(
-            "The numbers are provisional: the run shared the machine with other builds, so they are a              proof that the runner works and not a baseline. The final numbers are taken with              `--final` on a quiet machine and replace this file.",
+            "The numbers are provisional: the run shared the machine with other builds, so they are a proof that the runner works and not a baseline. The final numbers are taken with `--final` on a quiet machine and replace this file.",
         );
     }
     let limited: Vec<&str> = cases
