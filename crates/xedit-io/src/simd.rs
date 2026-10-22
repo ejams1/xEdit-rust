@@ -162,6 +162,77 @@ unsafe fn rgb_to_bgrx_avx2(src: &[u8], dst: &mut [u8]) {
     unsafe { rgb_to_bgrx_ssse3(&src[pixels * 3..], &mut dst[pixels * 4..]) }
 }
 
+/// Whether every byte of `bytes` is below `0x80` (ASCII).
+///
+/// A byte below `0x80` is its own code point in every ANSI and DBCS code
+/// page xEdit uses, so a string of such bytes decodes without a call to
+/// `MultiByteToWideChar`. The scalar version is the definition; the vector
+/// versions only look for the first byte with the high bit set.
+pub fn is_ascii(bytes: &[u8]) -> bool {
+    is_ascii_at(level(), bytes)
+}
+
+/// `is_ascii` on the given level, which is lowered to what the machine can
+/// run.
+pub fn is_ascii_at(level: Level, bytes: &[u8]) -> bool {
+    #[cfg(target_arch = "x86_64")]
+    {
+        let level = level.min(detect());
+        // SAFETY: the instruction set was detected on this machine.
+        unsafe {
+            match level {
+                Level::Avx2 => return is_ascii_avx2(bytes),
+                Level::Ssse3 => return is_ascii_sse2(bytes),
+                Level::Scalar => {}
+            }
+        }
+    }
+    let _ = level;
+    is_ascii_scalar(bytes)
+}
+
+/// The definition of `is_ascii`.
+pub fn is_ascii_scalar(bytes: &[u8]) -> bool {
+    bytes.iter().all(|byte| *byte < 0x80)
+}
+
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "sse2")]
+unsafe fn is_ascii_sse2(bytes: &[u8]) -> bool {
+    use std::arch::x86_64::{__m128i, _mm_loadu_si128, _mm_movemask_epi8};
+    let mut offset = 0usize;
+    while offset + 16 <= bytes.len() {
+        // SAFETY: 16 bytes are read from `bytes` at `offset`.
+        let chunk = unsafe { _mm_loadu_si128(bytes.as_ptr().add(offset).cast::<__m128i>()) };
+        // The sign mask of the chunk has a bit for every byte with the high
+        // bit set, so the chunk is ASCII when the mask is zero.
+        if _mm_movemask_epi8(chunk) != 0 {
+            return false;
+        }
+        offset += 16;
+    }
+    is_ascii_scalar(&bytes[offset..])
+}
+
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "avx2")]
+unsafe fn is_ascii_avx2(bytes: &[u8]) -> bool {
+    use std::arch::x86_64::{__m256i, _mm256_loadu_si256, _mm256_movemask_epi8};
+    let mut offset = 0usize;
+    while offset + 32 <= bytes.len() {
+        // SAFETY: 32 bytes are read from `bytes` at `offset`.
+        let chunk = unsafe { _mm256_loadu_si256(bytes.as_ptr().add(offset).cast::<__m256i>()) };
+        // The sign mask of the chunk has a bit for every byte with the high
+        // bit set, so the chunk is ASCII when the mask is zero.
+        if _mm256_movemask_epi8(chunk) != 0 {
+            return false;
+        }
+        offset += 32;
+    }
+    // SAFETY: AVX2 implies SSE2, which this function enables too.
+    unsafe { is_ascii_sse2(&bytes[offset..]) }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -208,5 +279,31 @@ mod tests {
         let mut out = [0u8; 8];
         rgb_to_bgrx_scalar(&[1, 2, 3, 4, 5, 6], &mut out);
         assert_eq!(out, [1, 2, 3, 0xFF, 4, 5, 6, 0xFF]);
+    }
+
+    /// Every level tells ASCII from non-ASCII the same way, at every length
+    /// around the block boundaries of the kernels.
+    #[test]
+    fn every_level_finds_the_same_high_bit() {
+        for length in 0..=70usize {
+            let ascii: Vec<u8> = (0..length).map(|i| (i % 0x80) as u8).collect();
+            for level in [Level::Scalar, Level::Ssse3, Level::Avx2] {
+                assert!(is_ascii_at(level, &ascii), "{level:?} of {length} ASCII bytes");
+            }
+            if length == 0 {
+                continue;
+            }
+            // A high byte at the first, the middle and the last position.
+            for position in [0usize, length / 2, length - 1] {
+                let mut bytes = ascii.clone();
+                bytes[position] = 0x80;
+                for level in [Level::Scalar, Level::Ssse3, Level::Avx2] {
+                    assert!(
+                        !is_ascii_at(level, &bytes),
+                        "{level:?} of {length} bytes with a high byte at {position}"
+                    );
+                }
+            }
+        }
     }
 }
