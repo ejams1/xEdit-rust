@@ -282,7 +282,17 @@ pub(crate) fn container_write_to_stream(
         container.get_element_count();
     }
     if let Some(base) = element.container_base() {
-        for child in base.elements() {
+        // The elements are read one at a time, without a copy of the whole
+        // list: the write of a child may init it (which adds the elements
+        // of the child to its own list), and a read guard of this list
+        // held across that write would block the change of the list and
+        // deadlock. The count is taken before the writes, as upstream
+        // evaluates the bounds of the loop once.
+        let count = base.element_count();
+        for index in 0..count {
+            let Some(child) = base.element_at(index) else {
+                break;
+            };
             child
                 .as_element_impl()
                 .ok_or_else(|| SaveError::Internal(format!("{} has no write path", child.get_full_path())))?
@@ -301,7 +311,17 @@ pub(crate) fn container_prepare_save(element: &dyn ElementImpl) -> Result<(), Sa
         return Ok(());
     }
     if let Some(base) = element.container_base() {
-        for child in base.elements().iter().rev() {
+        // The elements are read one at a time, in reverse order, without a
+        // copy of the whole list: the prepare of a child may change the
+        // list of its container (a group that empties leaves it), and a
+        // read guard of this list held across that change would deadlock.
+        // The count is taken before the preparations, as upstream evaluates
+        // the bounds of the loop once.
+        let count = base.element_count();
+        for index in (0..count).rev() {
+            let Some(child) = base.element_at(index) else {
+                continue;
+            };
             if let Some(child) = child.as_element_impl() {
                 child.prepare_save()?;
             }
@@ -317,10 +337,15 @@ pub(crate) fn container_counted_record_count(element: &dyn ElementImpl) -> u32 {
         container.get_element_count();
     }
     element.container_base().map_or(0, |base| {
-        base.elements()
-            .iter()
-            .filter_map(|child| child.as_element_impl().map(ElementImpl::get_counted_record_count))
-            .sum()
+        // The count of a child only reads its own container, so the list of
+        // this container can be read under its read guard for the whole
+        // sum: no child takes this list for writing here.
+        base.with_elements(|elements| {
+            elements
+                .iter()
+                .filter_map(|child| child.as_element_impl().map(ElementImpl::get_counted_record_count))
+                .sum()
+        })
     })
 }
 
@@ -482,17 +507,32 @@ impl GroupRecordImpl {
         if !self.base.has_state(ElementState::esModified)
             && !self.gr_storage_invalid.load(Ordering::Relaxed)
             && let Some((file, range)) = self.loaded_data()
-            && !self.container.elements().iter().any(|child| {
-                child
-                    .as_element_impl()
-                    .is_some_and(|child| child.element_base().has_state(ElementState::esModified))
+            // The check of the children only reads the state of each of
+            // them, so the read guard of the list is held for it: nothing
+            // here changes the list of the group.
+            && !self.container.with_elements(|elements| {
+                elements.iter().any(|child| {
+                    child
+                        .as_element_impl()
+                        .is_some_and(|child| child.element_base().has_state(ElementState::esModified))
+                })
             })
         {
             out.extend_from_slice(&file.fl_bytes.as_slice()[range]);
             self.base.reset_modified(reset);
             return Ok(());
         }
-        for child in self.container.elements() {
+        // The elements are read one at a time, without a copy of the whole
+        // list: the write of a child may init it (which adds the elements
+        // of the child to its own list), and a read guard of this list held
+        // across that write would block the change of the list and
+        // deadlock. The count is taken before the writes, as upstream
+        // evaluates the bounds of the loop once.
+        let count = self.container.element_count();
+        for index in 0..count {
+            let Some(child) = self.container.element_at(index) else {
+                break;
+            };
             child
                 .as_element_impl()
                 .ok_or_else(|| SaveError::Internal(format!("{} has no write path", child.get_full_path())))?
@@ -503,34 +543,37 @@ impl GroupRecordImpl {
                 .map_err(|_| SaveError::Refused(format!("{} is too large for a group", self.get_name())))?;
             out[start + 4..start + 8].copy_from_slice(&size.to_le_bytes());
         } else if out.len() - start != self.gr_struct().group_size as usize {
-            let modified = self
-                .container
-                .elements()
-                .iter()
-                .filter(|child| {
-                    child
-                        .as_element_impl()
-                        .is_some_and(|child| child.element_base().has_state(ElementState::esModified))
-                })
-                .map(|child| child.get_name())
-                .take(5)
-                .collect::<Vec<_>>();
-            let children = self.container.elements();
-            let header_sum: usize = children
-                .iter()
-                .filter_map(|child| child.as_element_impl()?.main_record_impl())
-                .map(|record| size_of_main_record_struct() as usize + record.mr_struct().data_size as usize)
-                .sum();
-            let groups = children
-                .iter()
-                .filter(|child| child.get_element_type() == ElementType::etGroupRecord)
-                .count();
+            // The message is built from one pass over the list, under its
+            // read guard: the names and the sizes are read, nothing here
+            // changes the list of the group.
+            let (modified, child_count, groups, header_sum) = self.container.with_elements(|children| {
+                let modified = children
+                    .iter()
+                    .filter(|child| {
+                        child
+                            .as_element_impl()
+                            .is_some_and(|child| child.element_base().has_state(ElementState::esModified))
+                    })
+                    .map(|child| child.get_name())
+                    .take(5)
+                    .collect::<Vec<_>>();
+                let header_sum: usize = children
+                    .iter()
+                    .filter_map(|child| child.as_element_impl()?.main_record_impl())
+                    .map(|record| size_of_main_record_struct() as usize + record.mr_struct().data_size as usize)
+                    .sum();
+                let groups = children
+                    .iter()
+                    .filter(|child| child.get_element_type() == ElementType::etGroupRecord)
+                    .count();
+                (modified, children.len(), groups, header_sum)
+            });
             return Err(SaveError::Internal(format!(
                 "{}: wrote {} bytes for a group of {} while the group is not modified; {} children ({} groups), record headers sum to {}; modified records: {}",
                 self.get_full_path(),
                 out.len() - start,
                 self.gr_struct().group_size,
-                children.len(),
+                child_count,
                 groups,
                 header_sum,
                 modified.join(", ")
@@ -862,8 +905,9 @@ impl FileImpl {
     /// replaces those checks with the edits.
     pub(crate) fn prepare_save_impl(self: &Arc<Self>) -> Result<(), SaveError> {
         let name = self.get_name();
-        let elements = self.container.elements();
-        let Some(first) = elements.first() else {
+        // The header is the first element of the file: it is read by its
+        // index, without a copy of the whole list of the top level groups.
+        let Some(first) = self.container.element_at(0) else {
             return Err(SaveError::Refused(format!("File {name} has no file header")));
         };
         let header = first
@@ -914,6 +958,10 @@ impl FileImpl {
         // An edit that fails is the exception upstream's `PrepareSave` raises
         // (a Starfield official module is not editable, `GetIsEditable`).
         let edit_error = SaveError::Refused;
+        // The top level groups are a snapshot, taken before the prepare of
+        // the children below (as upstream walks the list it had): the list
+        // of a file holds the header and the top level groups only, so the
+        // copy is small.
         let elements = self.container.elements();
         if extension == ".esm" {
             header.set_is_esm(true);
@@ -1019,7 +1067,17 @@ impl FileImpl {
             // Every worldspace is initialized, so that its offsets are
             // dropped and its child groups sorted.
             if group.gr_struct().label_signature() == Signature::new(b"WRLD") {
-                for child in group.container.elements() {
+                // The children are read one at a time, without a copy of
+                // the whole list: the init of a child may change the list
+                // of the record, not the list of the group, so the read
+                // guard of the group's list could be held; the index walk
+                // keeps the copy of the list out of a group with thousands
+                // of children.
+                let count = group.container.element_count();
+                for index in 0..count {
+                    let Some(child) = group.container.element_at(index) else {
+                        break;
+                    };
                     if let Some(record) = child.as_element_impl().and_then(ElementImpl::main_record_impl) {
                         record.get_element_count();
                     }
