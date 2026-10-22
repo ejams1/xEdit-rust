@@ -40,3 +40,35 @@ debug = 0
 
 [profile.test]
 debug = 0
+
+# The release profile of the shipped binaries. `lto = "fat"` and one codegen
+# unit let the optimizer see the whole program, which is what the phase 8
+# gate measures against the Delphi build.
+#
+# `panic` stays "unwind" on purpose: a worker panic is turned into a
+# DfError with catch_unwind in `xedit-assets/src/sniff/main_form.rs:545`,
+# `xedit-cli/src/main.rs:4067` uses resume_unwind, and rayon propagates
+# worker panics by unwinding. A profile that aborts would turn those
+# into a process kill.
+#
+# No `target-cpu` anywhere: the binaries ship to users and the output must
+# not depend on the CPU. The runtime dispatch in `xedit-io`'s `simd.rs` is
+# the route to the vector kernels.
+[profile.release]
+lto = "fat"
+codegen-units = 1
+
+# The release profile with line tables, for a profiler that needs the
+# frames of the port's own code.
+[profile.profiling]
+inherits = "release"
+debug = 1
+strip = false
+
+# The release profile for the parity harness, which links the whole
+# program anyway but does not need the optimizer's last percent: thin LTO
+# and more codegen units keep the dev loop short.
+[profile.harness]
+inherits = "release"
+lto = "thin"
+codegen-units = 16

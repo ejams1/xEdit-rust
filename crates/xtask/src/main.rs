@@ -20,6 +20,7 @@
 //! `cargo xtask pascal-check <file>...` parses upstream Pascal units with the
 //! reader of the definition transpiler and reports the files that fail.
 
+mod bench;
 mod gui;
 mod memory;
 mod parity;
@@ -208,8 +209,16 @@ fn main() -> Result<()> {
             let map: UpstreamMap = load(MAP_FILE)?;
             parity::run(&root, &map.upstream.tag, rest)
         }
+        ["bench", rest @ ..] => {
+            // The root is not canonicalized: the canonical form of a
+            // Windows path carries the extended-length prefix, and the Delphi
+            // build reads its paths from the command line without it, so a
+            // GUI oracle started with one can not open its data folder.
+            std::env::set_current_dir(&root)?;
+            bench::run(&root, rest)
+        }
         _ => bail!(
-            "usage: cargo xtask check | cargo xtask sync <upstream checkout> [commit] | cargo xtask parity <mode> [options] | cargo xtask gui help"
+            "usage: cargo xtask check | cargo xtask sync <upstream checkout> [commit] | cargo xtask parity <mode> [options] | cargo xtask gui help | cargo xtask bench [--list] [--case <name>]"
         ),
     }
 }
