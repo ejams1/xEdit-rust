@@ -275,7 +275,7 @@ impl NavTree {
                     })
                     // The emptiness of the group is read from its count,
                     // without collecting its elements.
-                    .filter(|group| has_elements(group))
+                    .filter(has_elements)
             } else {
                 // The emptiness of the element is read from its count,
                 // without collecting its elements.
