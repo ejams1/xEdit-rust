@@ -180,7 +180,7 @@ Status: started 2026-10-18 from `main` `6d9646d` (`phase-7-gui`). Steps 1, 1b, 2
 - **Model:** Fable 5.1. SIMD, `unsafe` and concurrency changes must keep output identical, and errors here are silent.
 - **Work:** Profile with the benchmarks collected since phase 1. Add SIMD with runtime dispatch (SSE2 baseline, AVX2, AVX-512 where the CPU supports it) to hot loops: byte comparison in conflict detection, string and signature scanning, checksums, decompression, numeric conversion. Tune allocation with arenas and string interning. Parallelise remaining serial stages.
 - **Rule:** Every optimisation keeps a scalar fallback and must pass the full parity harness. Output never depends on thread count or CPU features.
-- **Gate:** Load, reference build, conflict scan, clean and archive pack are each faster than the Delphi build on the corpus, with numbers published in the repository.
+- **Gate:** Load, reference build, conflict scan, clean and archive pack are each faster than the Delphi build on the corpus, with numbers published in the repository. The numbers come from `cargo xtask bench`, which times the release build of the port and the Delphi build on the same corpus.
 
 ### Phase 9: Release and cutover
 

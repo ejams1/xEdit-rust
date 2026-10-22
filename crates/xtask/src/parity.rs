@@ -64,7 +64,7 @@ mod clean_scenarios;
 mod conflicts;
 mod discovery;
 mod filter;
-mod gui;
+pub(crate) mod gui;
 pub(crate) mod hidden;
 mod lodgen;
 mod merged;
@@ -1555,11 +1555,24 @@ fn is_vanilla(game: &Game, lower_name: &str) -> bool {
     })
 }
 
+/// Builds the port's CLI and returns the path of the binary.
+///
+/// The parity harness runs the `harness` profile, not `release`: the
+/// harness links the whole program on every run, and fat LTO with one
+/// codegen unit costs minutes of build time for output the comparison
+/// cannot tell apart. The published numbers use `release`, which the bench
+/// runner builds itself.
 pub(super) fn build_port(root: &Path) -> Result<PathBuf> {
+    build_port_with_profile(root, "harness")
+}
+
+/// [`build_port`] with a named cargo profile.
+pub(crate) fn build_port_with_profile(root: &Path, profile: &str) -> Result<PathBuf> {
     let mut child = Command::new(env!("CARGO"))
         .args([
             "build",
-            "--release",
+            "--profile",
+            profile,
             "--package",
             "xedit-cli",
             "--message-format=json-render-diagnostics",
