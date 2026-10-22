@@ -261,16 +261,35 @@ fn lz4f_compress_stream(src: &mut dyn Read, dst: &mut dyn Write, level: i32) -> 
 }
 
 /// Port of `LibDeflateCompress`.
+///
+/// The compressor is kept per thread and per level, so the allocation of
+/// its workspace is paid once. The library starts every call with a fresh
+/// block, so nothing of an earlier call carries over into the next one.
 fn lib_deflate_compress(src: &[u8], level: i32) -> Result<Vec<u8>, CompressionError> {
     let level =
         CompressionLvl::new(level).map_err(|_| CompressionError(format!("LibDeflate error: invalid level {level}")))?;
-    let mut compressor = Compressor::new(level);
-    let mut out = vec![0u8; compressor.zlib_compress_bound(src.len())];
-    let size = compressor
-        .zlib_compress(src, &mut out)
-        .map_err(|_| CompressionError("LibDeflate error: Compression failed".to_owned()))?;
-    out.truncate(size);
-    Ok(out)
+    let level_number = i32::from(level);
+    thread_local! {
+        static COMPRESSORS: RefCell<Vec<(i32, Compressor)>> = const { RefCell::new(Vec::new()) };
+    }
+    COMPRESSORS.with(|cell| {
+        let mut compressors = cell.borrow_mut();
+        let index = compressors.iter().position(|(level_, _)| *level_ == level_number);
+        let index = match index {
+            Some(index) => index,
+            None => {
+                compressors.push((level_number, Compressor::new(level)));
+                compressors.len() - 1
+            }
+        };
+        let (_, compressor) = &mut compressors[index];
+        let mut out = vec![0u8; compressor.zlib_compress_bound(src.len())];
+        let size = compressor
+            .zlib_compress(src, &mut out)
+            .map_err(|_| CompressionError("LibDeflate error: Compression failed".to_owned()))?;
+        out.truncate(size);
+        Ok(out)
+    })
 }
 
 /// Port of `ZLibCompress`: zlib's `compress2`, the deflate stream of the C
@@ -292,6 +311,11 @@ fn zlib_compress(src: &[u8], level: i32) -> Result<Vec<u8>, CompressionError> {
 }
 
 /// Port of `LZ4Compress`: `LZ4_compress_HC`.
+///
+/// The workspace of the compressor is kept per thread, so its allocation is
+/// paid once. `LZ4_compress_HC_extStateHC` initializes the whole state
+/// before every call, so the tables of an earlier call cannot change the
+/// bytes of the next one.
 fn lz4_compress(src: &[u8], level: i32) -> Result<Vec<u8>, CompressionError> {
     let failed = || CompressionError("LZ4 error: Compression failed".to_owned());
     let size = i32::try_from(src.len()).map_err(|_| failed())?;
@@ -301,8 +325,25 @@ fn lz4_compress(src: &[u8], level: i32) -> Result<Vec<u8>, CompressionError> {
     // Upstream: LZ4_compress_HC crashes on a null source of size 0, so an
     // empty source points into the allocated output.
     let source = if src.is_empty() { out.as_ptr() } else { src.as_ptr() };
-    // SAFETY: `source` is valid for `size` bytes and `out` for `bound` bytes.
-    let written = unsafe { lz4_sys::LZ4_compress_HC(source.cast(), out.as_mut_ptr().cast(), size, bound, level) };
+    thread_local! {
+        static STATE: RefCell<Lz4HcState> = RefCell::new(Lz4HcState::new());
+    }
+    let written = STATE.with(|cell| {
+        let mut state = cell.borrow_mut();
+        // SAFETY: the state is valid for `size` bytes, `source` is valid for
+        // `size` bytes and `out` for `bound` bytes, which is the contract of
+        // `LZ4_compress_HC_extStateHC`.
+        unsafe {
+            LZ4_compress_HC_extStateHC(
+                state.as_mut_ptr().cast(),
+                source.cast(),
+                out.as_mut_ptr().cast(),
+                size,
+                bound,
+                level,
+            )
+        }
+    });
     if written <= 0 {
         return Err(failed());
     }
@@ -310,20 +351,65 @@ fn lz4_compress(src: &[u8], level: i32) -> Result<Vec<u8>, CompressionError> {
     Ok(out)
 }
 
+/// The workspace of the LZ4 HC compressor, of the size the library asks
+/// for and aligned the way it asks for.
+///
+/// The library asks for an alignment of eight bytes, which the elements of
+/// the vector give.
+struct Lz4HcState {
+    words: Vec<u64>,
+}
+
+impl Lz4HcState {
+    fn new() -> Self {
+        // SAFETY: `LZ4_sizeofStateHC` only reads its argument.
+        let size = unsafe { LZ4_sizeofStateHC() } as usize;
+        let words = size.div_ceil(std::mem::size_of::<u64>()) + 1;
+        Lz4HcState { words: vec![0u64; words] }
+    }
+
+    /// The state, at the start of the buffer.
+    fn as_mut_ptr(&mut self) -> *mut u8 {
+        // SAFETY: the vector holds the state, and the library writes no more
+        // than the size it asked for.
+        self.words.as_mut_ptr().cast()
+    }
+}
+
+unsafe extern "C" {
+    // Part of the lz4 library that `lz4-sys` builds; the crate does not declare it.
+    fn LZ4_sizeofStateHC() -> i32;
+    fn LZ4_compress_HC_extStateHC(
+        state: *mut std::ffi::c_void,
+        src: *const std::ffi::c_char,
+        dst: *mut std::ffi::c_char,
+        src_size: i32,
+        max_dst_size: i32,
+        compression_level: i32,
+    ) -> i32;
+}
+
 unsafe extern "C" {
     // Part of the lz4 library that `lz4-sys` builds; the crate does not declare it.
     fn LZ4F_compressFrameBound(src_size: usize, preferences: *const lz4_sys::LZ4FPreferences) -> usize;
-    fn LZ4F_compressFrame(
+    fn LZ4F_compressFrame_usingCDict(
+        cctx: *mut std::ffi::c_void,
         dst: *mut std::ffi::c_void,
         dst_capacity: usize,
         src: *const std::ffi::c_void,
         src_size: usize,
+        cdict: *const std::ffi::c_void,
         preferences: *const lz4_sys::LZ4FPreferences,
     ) -> usize;
 }
 
 /// Port of `LZ4FCompress`: `LZ4F_compressFrame` with independent 4 MB
 /// blocks, auto flush and no checksums.
+///
+/// The context of the compressor is kept per thread, so the allocation of
+/// its workspace is paid once. The library starts every frame with a fresh
+/// block and no dictionary, so nothing of an earlier frame carries over
+/// into the next one.
 fn lz4f_compress(src: &[u8], level: i32) -> Result<Vec<u8>, CompressionError> {
     use lz4_sys::{BlockChecksum, BlockMode, BlockSize, ContentChecksum, FrameType, LZ4FFrameInfo, LZ4FPreferences};
     let preferences = LZ4FPreferences {
@@ -349,34 +435,60 @@ fn lz4f_compress(src: &[u8], level: i32) -> Result<Vec<u8>, CompressionError> {
     // SAFETY: `preferences` is a valid LZ4F_preferences_t.
     let bound = unsafe { LZ4F_compressFrameBound(src.len(), &preferences) };
     let mut out = vec![0u8; bound];
-    // SAFETY: `src` is valid for its length, `out` for `bound` bytes.
-    let written = unsafe {
-        LZ4F_compressFrame(
-            out.as_mut_ptr().cast(),
-            out.len(),
-            src.as_ptr().cast(),
-            src.len(),
-            &preferences,
-        )
-    };
-    // SAFETY: `LZ4F_isError` only reads its argument.
-    if unsafe { lz4_sys::LZ4F_isError(written) } != 0 {
-        return Err(failed(written));
+    thread_local! {
+        static CONTEXT: RefCell<Option<lz4_sys::LZ4FCompressionContext>> = const { RefCell::new(None) };
     }
-    out.truncate(written);
-    Ok(out)
+    CONTEXT.with(|cell| {
+        let mut slot = cell.borrow_mut();
+        if slot.is_none() {
+            let mut context = lz4_sys::LZ4FCompressionContext(std::ptr::null_mut());
+            // SAFETY: the context is written by the call.
+            let code = unsafe { lz4_sys::LZ4F_createCompressionContext(&mut context, lz4_sys::LZ4F_VERSION) };
+            if lz4f_is_error(code) {
+                return Err(lz4f_error("LZ4F compression context error: %s", code));
+            }
+            *slot = Some(context);
+        }
+        let context = slot.expect("the context was just created");
+        // SAFETY: `src` is valid for its length, `out` for `bound` bytes,
+        // and the context is a live compression context.
+        let written = unsafe {
+            LZ4F_compressFrame_usingCDict(
+                context.0,
+                out.as_mut_ptr().cast(),
+                out.len(),
+                src.as_ptr().cast(),
+                src.len(),
+                std::ptr::null(),
+                &preferences,
+            )
+        };
+        if lz4f_is_error(written) {
+            return Err(failed(written));
+        }
+        out.truncate(written);
+        Ok(out)
+    })
 }
 
+/// The decompression of the zlib stream of libdeflate.
+///
+/// The decompressor is kept per thread, so the allocation of its workspace
+/// is paid once. The library starts every call with a fresh stream, so
+/// nothing of an earlier call carries over into the next one.
 fn lib_deflate_decompress(src: &[u8], dst: &mut [u8]) -> Result<(), CompressionError> {
     let expected = dst.len();
-    match Decompressor::new().zlib_decompress(src, dst) {
+    thread_local! {
+        static DECOMPRESSOR: RefCell<Decompressor> = RefCell::new(Decompressor::new());
+    }
+    DECOMPRESSOR.with(|cell| match cell.borrow_mut().zlib_decompress(src, dst) {
         Ok(size) if size == expected => Ok(()),
         Ok(_) => Err(CompressionError("LibDeflate error: Short output".to_owned())),
         Err(DecompressionError::BadData) => Err(CompressionError("LibDeflate error: Bad data".to_owned())),
         Err(DecompressionError::InsufficientSpace) => {
             Err(CompressionError("LibDeflate error: Insufficient space".to_owned()))
         }
-    }
+    })
 }
 
 /// Port of `LZ4Decompress`: `LZ4_decompress_safe` of the linked C library,
@@ -826,6 +938,21 @@ mod tests {
         let mut out = vec![0u8; first.len()];
         CompressionType::LZ4F.decompress(&first_frame, &mut out).unwrap();
         assert_eq!(out, first);
+    }
+
+    /// The compressor of the C library gives the same bytes after it was
+    /// used for another frame, so no state of the earlier frame carries
+    /// over.
+    #[test]
+    fn the_compressor_carries_nothing_over() {
+        let first = sample(70_000);
+        let second = sample(1000);
+        let first_frame = CompressionType::LZ4F.compress(&first).unwrap();
+        let second_frame = CompressionType::LZ4F.compress(&second).unwrap();
+        // The second frame is the same whatever came before it.
+        assert_eq!(second_frame, CompressionType::LZ4F.compress(&second).unwrap());
+        // The first frame is the same after the second one.
+        assert_eq!(first_frame, CompressionType::LZ4F.compress(&first).unwrap());
     }
 
     #[test]
