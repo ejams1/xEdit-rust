@@ -21,10 +21,12 @@ Overall: 7 of 10 phases merged.
 | 5 | Archives, assets and LOD | `[##########]` | Merged (PR #14) |
 | 6 | Scripting | `[##########]` 11 of 11 steps | Merged (PR #20) |
 | 7 | GUI | `[########..]` 8 of 9 steps | In progress, draft PR #101 |
-| 8 | Performance | `[..........]` | Not started |
+| 8 | Performance | `[##........]` 2 of 10 steps | In progress (steps 2a and 2b) |
 | 9 | Release and cutover | `[..........]` | Not started |
 
 The overall bar counts merged phases only: 2 cells per phase out of 20. A phase on a draft pull request counts once it merges. Per-phase bars have 10 cells and show completed steps as a share of the phase's steps, as listed in [docs/PLAN.md](docs/PLAN.md).
+
+Phase 8 (Performance) step 2 (issue #113, step 2b) takes the non-cloning element access through `xedit-core`: the element trait gains a `name_matches` that compares a name without building a `String`, a container gains `with_elements` that reads its list under the read lock and `element_at` that reads one element by its index, `element_by_name` and `init_main_record` use them, `read_built` skips the upgrade of the weak reference when the record is already built, the writer and the navigation tree build read the children one at a time instead of copying the whole list, and the regex VM decodes the character of the subject without validating the rest of it. The output of every command is the same as before.
 
 **Keep this section current.** Update it in the same pull request whenever a step lands, a phase starts or a phase merges: redraw the bars, change the step counts and the state column, and update the overall percentage.
 
@@ -123,7 +125,7 @@ The port reproduces upstream's quirks (`UPSTREAM-QUIRK` in the code). An upstrea
 - **The scale the cleaning's scale step leaves behind** (parity #35): the release keeps a scale where the port removes it, data the release loses; the clean case is `known-difference` for that file.
 - **`Find textures` prints an uninitialised `XBOX` flag on BA2 DDS archives**: the release's local record in `ProcessFile` is never assigned in the BA2 DDS branch, and its report prints `XBOX` from whatever the stack holds (every line of a DDS-type BA2 archive on the corpus). The port prints nothing. No saved bytes differ; the log of `sniff --case find-textures` and `-filter` counts as a log difference on those archives, never a failing output.
 
-Later phases (performance and release) have not started; the GUI is at phase 7 step 9 of 9, the gate (the shell, the view and the dialogs above; the ledger is closed and the menus are walked through against the 4.1.5q build, see `docs/history/phase-7.md`). The parity harness rerun at the phase tip covered the `dump`, `check` and `clean` steps; its `saves` step and the rest of the chain continue separately.
+Later phases (release and cutover) have not started; the GUI is at phase 7 step 9 of 9, the gate (the shell, the view and the dialogs above; the ledger is closed and the menus are walked through against the 4.1.5q build, see `docs/history/phase-7.md`). The parity harness rerun at the phase tip covered the `dump`, `check` and `clean` steps; its `saves` step and the rest of the chain continue separately. The performance phase is at step 2 of 10 (the cheap, safe and broad fast paths).
 
 ## License
 
