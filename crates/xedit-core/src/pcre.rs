@@ -2657,8 +2657,8 @@ mod tests {
         let (long_time, long_found) = measure(&long);
         let (short_time, short_found) = measure(&short);
         // The match is the same, at the end of the subject.
-        assert_eq!(long_found.map(|(start, end)| (start, end)), Some((0, 200_006)));
-        assert_eq!(short_found.map(|(start, end)| (start, end)), Some((0, 20_006)));
+        assert_eq!(long_found, Some((0, 200_006)));
+        assert_eq!(short_found, Some((0, 20_006)));
         // The search of the long subject may not take the hundred times
         // the work of the short one: the quadratic search would.
         assert!(
