@@ -481,9 +481,8 @@ mod tests {
                     continue;
                 }
                 let platform = super::platform::get_string(code_page, &ascii);
-                let platform = platform.unwrap_or_else(|_| {
-                    panic!("code page {code_page}, {length} bytes: the platform route failed")
-                });
+                let platform = platform
+                    .unwrap_or_else(|_| panic!("code page {code_page}, {length} bytes: the platform route failed"));
                 assert_eq!(fast, platform, "code page {code_page}, {length} bytes");
                 // A high byte sends the string to the platform route, which
                 // must give the same answer as before.
@@ -493,7 +492,10 @@ mod tests {
                     assert!(!crate::simd::is_ascii(&bytes));
                     let fast = encoding.get_string(&bytes).unwrap();
                     let platform = super::platform::get_string(code_page, &bytes).unwrap();
-                    assert_eq!(fast, platform, "code page {code_page}, {length} bytes, high byte at {position}");
+                    assert_eq!(
+                        fast, platform,
+                        "code page {code_page}, {length} bytes, high byte at {position}"
+                    );
                 }
             }
         }

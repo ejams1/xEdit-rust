@@ -365,7 +365,9 @@ impl Lz4HcState {
         // SAFETY: `LZ4_sizeofStateHC` only reads its argument.
         let size = unsafe { LZ4_sizeofStateHC() } as usize;
         let words = size.div_ceil(std::mem::size_of::<u64>()) + 1;
-        Lz4HcState { words: vec![0u64; words] }
+        Lz4HcState {
+            words: vec![0u64; words],
+        }
     }
 
     /// The state, at the start of the buffer.
@@ -500,14 +502,8 @@ fn lz4_decompress(src: &[u8], dst: &mut [u8]) -> Result<(), CompressionError> {
     };
     // SAFETY: `src` is valid for `compressed` bytes and `dst` for `capacity`
     // bytes, which is the contract of `LZ4_decompress_safe`.
-    let written = unsafe {
-        lz4_sys::LZ4_decompress_safe(
-            src.as_ptr().cast(),
-            dst.as_mut_ptr().cast(),
-            compressed,
-            capacity,
-        )
-    };
+    let written =
+        unsafe { lz4_sys::LZ4_decompress_safe(src.as_ptr().cast(), dst.as_mut_ptr().cast(), compressed, capacity) };
     if written < 0 || written as usize != dst.len() {
         return Err(failed());
     }
@@ -968,9 +964,8 @@ mod tests {
         let bound = unsafe { lz4_sys::LZ4_compressBound(size) } as usize;
         let mut out = vec![0u8; bound];
         // SAFETY: `data` is valid for `size` bytes and `out` for `bound`.
-        let written = unsafe {
-            lz4_sys::LZ4_compress_default(data.as_ptr().cast(), out.as_mut_ptr().cast(), size, bound as i32)
-        };
+        let written =
+            unsafe { lz4_sys::LZ4_compress_default(data.as_ptr().cast(), out.as_mut_ptr().cast(), size, bound as i32) };
         assert!(written > 0);
         out.truncate(written as usize);
         out
