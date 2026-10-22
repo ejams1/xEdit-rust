@@ -217,7 +217,11 @@ impl SubRecordImpl {
     pub(super) fn name_signature_chars(&self) -> [char; 4] {
         let mut result = [' '; 4];
         for (slot, byte) in result.iter_mut().zip(self.sr_struct.signature.0) {
-            *slot = if byte < 32 { char::from(b'a' + byte) } else { char::from(byte) };
+            *slot = if byte < 32 {
+                char::from(b'a' + byte)
+            } else {
+                char::from(byte)
+            };
         }
         result
     }
@@ -1238,7 +1242,9 @@ impl SubRecordArrayImpl {
             // The element at the position, without a copy of the whole
             // list: the loop changes the list below (it moves the element
             // into the array), so it cannot hold the lock of the list.
-            let Some(element) = container.element_at(pos) else { break };
+            let Some(element) = container.element_at(pos) else {
+                break;
+            };
             let Some(sub_record) = element.as_element_impl().and_then(ElementImpl::sub_record_impl) else {
                 break;
             };
@@ -2346,7 +2352,11 @@ impl SubRecordImpl {
         wanted: &str,
         with_suffix: bool,
     ) -> bool {
-        let suffix = if with_suffix { self.base.name_suffix() } else { String::new() };
+        let suffix = if with_suffix {
+            self.base.name_suffix()
+        } else {
+            String::new()
+        };
         let mut parts = vec![crate::interface::element::NamePart::Chars(signature)];
         if let Some(def_name) = def_name {
             parts.push(crate::interface::element::NamePart::Text(" - "));

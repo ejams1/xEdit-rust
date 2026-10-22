@@ -2649,7 +2649,10 @@ mod tests {
             };
             let start = std::time::Instant::now();
             let found = regex.exec(bytes, 0, bytes.len(), exec);
-            (start.elapsed(), found.map(|captures| captures[0].expect("the whole match")))
+            (
+                start.elapsed(),
+                found.map(|captures| captures[0].expect("the whole match")),
+            )
         };
         let (long_time, long_found) = measure(&long);
         let (short_time, short_found) = measure(&short);

@@ -414,9 +414,9 @@ pub(crate) fn element_by_name(container: &dyn Container, name: &str) -> Option<E
 /// flag with the name, found as the other elements are.
 fn flag_by_name(container: &dyn Container, name: &str) -> Option<ElementRef> {
     let container = container.as_container_ref()?;
-    flag::flags_as_array_of(&container)?.into_iter().find(|flag| {
-        flag.name_matches(name) || flag.display_name_matches(name)
-    })
+    flag::flags_as_array_of(&container)?
+        .into_iter()
+        .find(|flag| flag.name_matches(name) || flag.display_name_matches(name))
 }
 
 /// Port of `ElementByPath` with `ResolveElementName`: the names separated by
