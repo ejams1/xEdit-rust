@@ -8,10 +8,10 @@
 //! and the compression of record data and archive files for the write path:
 //! zlib (libdeflate, and zlib itself beyond 8 MiB), LZ4 (HC) and LZ4F.
 
+use std::cell::RefCell;
 use std::io::{Read, Write};
 
 use libdeflater::{CompressionLvl, Compressor, DecompressionError, Decompressor};
-use lz4_flex::frame::FrameDecoder;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CompressionType {
@@ -132,12 +132,7 @@ impl CompressionType {
     /// the other types are `Not implemented` upstream.
     pub fn decompress_stream(self, src: &mut dyn Read, dst: &mut dyn Write) -> Result<(), CompressionError> {
         match self {
-            CompressionType::LZ4F => {
-                let mut decoder = FrameDecoder::new(src);
-                std::io::copy(&mut decoder, dst)
-                    .map(|_| ())
-                    .map_err(|error| CompressionError(format!("LZ4F decompression error: {error}")))
-            }
+            CompressionType::LZ4F => lz4f_decompress_stream(src, dst),
             _ => Err(CompressionError("Not implemented".to_owned())),
         }
     }
@@ -407,20 +402,179 @@ fn lz4_decompress(src: &[u8], dst: &mut [u8]) -> Result<(), CompressionError> {
     Ok(())
 }
 
-fn lz4f_decompress(src: &[u8], dst: &mut [u8]) -> Result<(), CompressionError> {
-    let mut decoder = FrameDecoder::new(src);
-    decoder
-        .read_exact(dst)
-        .map_err(|error| CompressionError(format!("LZ4F decompression error: {error}")))?;
-    // Upstream requires that the frame ends exactly where the output is full.
-    let mut rest = [0u8; 1];
-    match decoder.read(&mut rest) {
-        Ok(0) if decoder.into_inner().is_empty() => Ok(()),
-        Ok(_) => Err(CompressionError(
-            "LZ4F decompression error: processed bytes don't match".to_owned(),
-        )),
-        Err(error) => Err(CompressionError(format!("LZ4F decompression error: {error}"))),
+/// The decompression context of the linked C library, kept per thread.
+///
+/// The context is reset before every frame, so no state of an earlier frame
+/// carries over into the next one.
+fn lz4f_context() -> Result<lz4_sys::LZ4FDecompressionContext, CompressionError> {
+    thread_local! {
+        static CONTEXT: RefCell<Option<lz4_sys::LZ4FDecompressionContext>> = const { RefCell::new(None) };
     }
+    CONTEXT.with(|cell| {
+        let mut slot = cell.borrow_mut();
+        if slot.is_none() {
+            let mut context = lz4_sys::LZ4FDecompressionContext(std::ptr::null_mut());
+            // SAFETY: the context is written by the call.
+            let code = unsafe { lz4_sys::LZ4F_createDecompressionContext(&mut context, lz4_sys::LZ4F_VERSION) };
+            if lz4f_is_error(code) {
+                return Err(lz4f_error("LZ4F decompression context error: %s", code));
+            }
+            *slot = Some(context);
+        }
+        let context = slot.expect("the context was just created");
+        // SAFETY: the context was created by `LZ4F_createDecompressionContext`.
+        unsafe { lz4_sys::LZ4F_resetDecompressionContext(context) };
+        Ok(context)
+    })
+}
+
+/// Whether the code of the frame library is an error, and its name.
+fn lz4f_is_error(code: usize) -> bool {
+    // SAFETY: `LZ4F_isError` only reads its argument.
+    unsafe { lz4_sys::LZ4F_isError(code) != 0 }
+}
+
+/// The error of the frame library, with the name the library gives.
+fn lz4f_error(message: &str, code: usize) -> CompressionError {
+    // SAFETY: the error name is a static C string.
+    let name = unsafe { std::ffi::CStr::from_ptr(lz4_sys::LZ4F_getErrorName(code)) };
+    CompressionError(message.replace("%s", &name.to_string_lossy()))
+}
+
+/// Port of `LZ4FDecompress`: the linked C library decodes the frame into
+/// the output directly, in a thread-local context.
+///
+/// The "processed bytes don't match" rule of upstream is reproduced: the
+/// frame must consume the whole source and fill the whole output.
+fn lz4f_decompress(src: &[u8], dst: &mut [u8]) -> Result<(), CompressionError> {
+    let context = lz4f_context()?;
+    // Pledges that the last 64 KB of the output is still there before the
+    // destination pointer, which is what upstream asks for.
+    let options = lz4_sys::LZ4FDecompressOptions {
+        stable_dst: 1,
+        reserved: [0; 3],
+    };
+    let mut compressed_total = 0usize;
+    let mut decompressed_total = 0usize;
+    loop {
+        let mut compressed = src.len() - compressed_total;
+        let mut decompressed = dst.len() - decompressed_total;
+        // SAFETY: the context is a live decompression context, `dst` is valid
+        // for `decompressed` bytes from `dst[decompressed_total..]`, and
+        // `src` is valid for `compressed` bytes from `src[compressed_total..]`.
+        let result = unsafe {
+            lz4_sys::LZ4F_decompress(
+                context,
+                dst.as_mut_ptr().add(decompressed_total),
+                &mut decompressed,
+                src.as_ptr().add(compressed_total),
+                &mut compressed,
+                &options,
+            )
+        };
+        if lz4f_is_error(result) {
+            return Err(lz4f_error("LZ4F decompression error: %s", result));
+        }
+        let before = (compressed_total, decompressed_total);
+        compressed_total += compressed;
+        decompressed_total += decompressed;
+        if result == 0 {
+            break;
+        }
+        // The library asks for more room in the output than there is, so it
+        // consumed nothing and decoded nothing. The frame does not fit into
+        // the output, which the rule below reports.
+        if (compressed_total, decompressed_total) == before {
+            break;
+        }
+    }
+    if compressed_total != src.len() || decompressed_total != dst.len() {
+        return Err(CompressionError(
+            "LZ4F decompression error: processed bytes don't match".to_owned(),
+        ));
+    }
+    Ok(())
+}
+
+/// Port of `TLZ4.Stream_Decode`: the frames of the source are decoded to
+/// their end and written to the destination.
+///
+/// The frame library writes into the output buffer as it decodes, so the
+/// output is the buffer the library is given.
+fn lz4f_decompress_stream(src: &mut dyn Read, dst: &mut dyn Write) -> Result<(), CompressionError> {
+    let context = lz4f_context()?;
+    let options = lz4_sys::LZ4FDecompressOptions {
+        stable_dst: 1,
+        reserved: [0; 3],
+    };
+    // The library consumes the source only as far as it needs it, so the rest
+    // of the source stays for the next round.
+    let mut input = vec![0u8; 64 * 1024];
+    let mut pending = 0usize;
+    let mut output = vec![0u8; 4 * 1024 * 1024];
+    let mut at_end = false;
+    loop {
+        if pending == input.len() {
+            // The library took nothing of the last read, so the buffer is
+            // full of a block it wants whole: give it a larger one.
+            let mut grown = vec![0u8; input.len() * 4];
+            grown[..pending].copy_from_slice(&input[..pending]);
+            input = grown;
+        }
+        if !at_end {
+            let read = src.read(&mut input[pending..]).map_err(stream_error)?;
+            if read == 0 {
+                at_end = true;
+            }
+            pending += read;
+        }
+        if pending == 0 {
+            break;
+        }
+        let mut compressed = pending;
+        let mut decompressed = output.len();
+        // SAFETY: the context is a live decompression context, `output` is
+        // valid for `decompressed` bytes and `input` for `compressed` bytes.
+        let result = unsafe {
+            lz4_sys::LZ4F_decompress(
+                context,
+                output.as_mut_ptr(),
+                &mut decompressed,
+                input.as_ptr(),
+                &mut compressed,
+                &options,
+            )
+        };
+        if lz4f_is_error(result) {
+            return Err(lz4f_error("LZ4F decompression error: %s", result));
+        }
+        let consumed = compressed;
+        pending -= consumed;
+        if consumed > 0 {
+            input.copy_within(consumed..pending + consumed, 0);
+        }
+        dst.write_all(&output[..decompressed]).map_err(stream_error)?;
+        if result == 0 {
+            // The frame is done. Another frame may follow, so the context
+            // starts over with the rest of the source.
+            // SAFETY: the context was created by `LZ4F_createDecompressionContext`.
+            unsafe { lz4_sys::LZ4F_resetDecompressionContext(context) };
+            continue;
+        }
+        if consumed == 0 && decompressed == 0 {
+            if at_end {
+                // The source ends in the middle of a frame.
+                return Err(CompressionError(
+                    "LZ4F decompression error: processed bytes don't match".to_owned(),
+                ));
+            }
+            // The library wants more of the source than the buffer holds.
+            let mut grown = vec![0u8; input.len() * 4];
+            grown[..pending].copy_from_slice(&input[..pending]);
+            input = grown;
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -587,6 +741,91 @@ mod tests {
         assert_eq!(out, TEXT);
         let mut short = vec![0u8; TEXT.len() - 1];
         assert!(CompressionType::LZ4F.decompress(&packed, &mut short).is_err());
+    }
+
+    /// The frame of the C library, decoded by the route of `lz4_flex`, the
+    /// route the port used before.
+    fn lz4f_decompress_old(packed: &[u8], out: &mut [u8]) -> Result<(), CompressionError> {
+        let mut decoder = lz4_flex::frame::FrameDecoder::new(packed);
+        decoder
+            .read_exact(out)
+            .map_err(|error| CompressionError(format!("LZ4F decompression error: {error}")))?;
+        let mut rest = [0u8; 1];
+        match decoder.read(&mut rest) {
+            Ok(0) if decoder.into_inner().is_empty() => Ok(()),
+            Ok(_) => Err(CompressionError(
+                "LZ4F decompression error: processed bytes don't match".to_owned(),
+            )),
+            Err(error) => Err(CompressionError(format!("LZ4F decompression error: {error}"))),
+        }
+    }
+
+    /// The two routes of the frame decode give the same bytes.
+    ///
+    /// The frames come from both compressors, so the test covers a frame
+    /// neither route produced.
+    #[test]
+    fn the_lz4_frame_routes_give_the_same_bytes() {
+        for length in [0usize, 1, 100, 70_000, 600_000, 5_000_000] {
+            let data = sample(length);
+            for packed in [CompressionType::LZ4F.compress(&data).unwrap(), {
+                use std::io::Write;
+                let mut encoder = lz4_flex::frame::FrameEncoder::new(Vec::new());
+                encoder.write_all(&data).unwrap();
+                encoder.finish().unwrap()
+            }] {
+                let mut want = vec![0u8; data.len()];
+                lz4f_decompress_old(&packed, &mut want).unwrap();
+                let mut got = vec![0u8; data.len()];
+                CompressionType::LZ4F.decompress(&packed, &mut got).unwrap();
+                assert_eq!(got, want, "the routes differ at {length} bytes");
+                assert_eq!(got, data, "the frame of {length} bytes");
+            }
+        }
+    }
+
+    /// The two routes of the frame stream decode give the same bytes.
+    #[test]
+    fn the_lz4_frame_stream_routes_give_the_same_bytes() {
+        for length in [0usize, 1, 100, 70_000, 600_000] {
+            let data = sample(length);
+            for packed in [CompressionType::LZ4F.compress(&data).unwrap(), {
+                let mut out = Vec::new();
+                CompressionType::LZ4F
+                    .compress_stream(&mut data.as_slice(), &mut out, true)
+                    .unwrap();
+                out
+            }] {
+                let mut want = Vec::new();
+                let mut decoder = lz4_flex::frame::FrameDecoder::new(packed.as_slice());
+                std::io::copy(&mut decoder, &mut want).unwrap();
+                let mut got = Vec::new();
+                CompressionType::LZ4F
+                    .decompress_stream(&mut packed.as_slice(), &mut got)
+                    .unwrap();
+                assert_eq!(got, want, "the stream routes differ at {length} bytes");
+                assert_eq!(got, data, "the stream of {length} bytes");
+            }
+        }
+    }
+
+    /// The frame of the C library decodes the same after the route was used
+    /// for another frame, so no state of the earlier frame carries over.
+    #[test]
+    fn the_frame_route_carries_nothing_over() {
+        let first = sample(70_000);
+        let second = sample(1000);
+        let first_frame = CompressionType::LZ4F.compress(&first).unwrap();
+        let second_frame = CompressionType::LZ4F.compress(&second).unwrap();
+        let mut out = vec![0u8; first.len()];
+        CompressionType::LZ4F.decompress(&first_frame, &mut out).unwrap();
+        assert_eq!(out, first);
+        let mut out = vec![0u8; second.len()];
+        CompressionType::LZ4F.decompress(&second_frame, &mut out).unwrap();
+        assert_eq!(out, second);
+        let mut out = vec![0u8; first.len()];
+        CompressionType::LZ4F.decompress(&first_frame, &mut out).unwrap();
+        assert_eq!(out, first);
     }
 
     #[test]
