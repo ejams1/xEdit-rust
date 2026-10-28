@@ -36,6 +36,10 @@ struct Cli {
     #[arg(long, global = true)]
     load: Vec<String>,
 
+    /// Folder to look for a master in when the folder of the plugin that needs it does not have it, such as the game's Data folder or another Mod Organizer mod folder; repeat for several, searched in the order given. Not an xEdit switch: xEdit reads every plugin from one data folder.
+    #[arg(long = "master-path", global = true)]
+    master_path: Vec<String>,
+
     /// Load this file as a compare load of the last --load plugin, as the navigation tree's "Compare to..." does: it takes that plugin's load order and is compared with it record by record. The file has to sit in the folder of that plugin (the GUI copies it into the data folder). The flag of the startup load, before the command; `session load --compare-to` names the compare file of the load that command makes.
     #[arg(long)]
     compare_to: Option<String>,
@@ -546,6 +550,15 @@ enum Action {
         /// cbViewFilterKeepParentsSiblings: also keep the rows beside the parent of a matching one.
         #[arg(long)]
         keep_parents_siblings: bool,
+        /// Rows to list at most, counted over the whole tree (a row before its children); the response's truncated reports the total.
+        #[arg(long)]
+        limit: Option<usize>,
+        /// Levels of rows to list; 1 lists the members of the record without their children.
+        #[arg(long)]
+        depth: Option<usize>,
+        /// Give each cell only its value and conflict statuses (no path, edit value, names, summary or sort key).
+        #[arg(long)]
+        compact: bool,
     },
     /// Compare records of different FormIDs side by side, as the GUI compares the selected navigation tree nodes (records.compare_selected): the records are the columns, their members the rows.
     CompareSelected {
@@ -2113,7 +2126,7 @@ enum RecordsAction {
     Get {
         /// Load order FormID as hexadecimal digits.
         form_id: String,
-        /// Plugin the record is seen from; the last loaded plugin when omitted.
+        /// Plugin whose own version of the record is read (not_in_file when it has none); without it, the version the last loaded plugin sees.
         #[arg(long)]
         file: Option<String>,
         /// Levels of child elements to include; all when omitted.
@@ -2284,7 +2297,7 @@ enum ElementsAction {
         form_id: String,
         /// Path of the element inside the record, with \\ between the names.
         path: String,
-        /// Plugin the record is seen from; the last loaded plugin when omitted.
+        /// Plugin whose own version of the record is read (not_in_file when it has none); without it, the version the last loaded plugin sees.
         #[arg(long)]
         file: Option<String>,
         /// Levels of child elements to include; all when omitted.
@@ -2309,7 +2322,7 @@ enum ElementsAction {
         path: String,
         /// The edit value, as xEdit shows it in its editor. Omit with --default.
         value: Option<String>,
-        /// Plugin the record is seen from; the last loaded plugin when omitted.
+        /// Plugin whose own version of the record is changed (not_in_file when it has none); without it, the version the last loaded plugin sees.
         #[arg(long)]
         file: Option<String>,
         /// Set the value as a native value: a JSON number or boolean.
@@ -2331,7 +2344,7 @@ enum ElementsAction {
         /// Path of the container inside the record to add to; the record itself when omitted.
         #[arg(long)]
         path: Option<String>,
-        /// Plugin the record is seen from; the last loaded plugin when omitted.
+        /// Plugin whose own version of the record is changed (not_in_file when it has none); without it, the version the last loaded plugin sees.
         #[arg(long)]
         file: Option<String>,
         /// Report the container, but add nothing.
@@ -2344,7 +2357,7 @@ enum ElementsAction {
         form_id: String,
         /// Path of the element inside the record, with \\ between the names.
         path: String,
-        /// Plugin the record is seen from; the last loaded plugin when omitted.
+        /// Plugin whose own version of the record is changed (not_in_file when it has none); without it, the version the last loaded plugin sees.
         #[arg(long)]
         file: Option<String>,
         /// Report the element, but remove nothing.
@@ -2447,7 +2460,7 @@ enum ElementsAction {
         /// Path of the element to assign to; the record itself when omitted.
         #[arg(long)]
         path: Option<String>,
-        /// Plugin whose version of the record is changed; the last loaded plugin when omitted.
+        /// Plugin whose own version of the record is changed (not_in_file when it has none); without it, the version the last loaded plugin sees.
         #[arg(long)]
         file: Option<String>,
         /// Where the source goes: this (the element takes its value), add (a new array entry) or a position (a member, or an aligned position of an array records compare aligned).
@@ -2498,7 +2511,7 @@ enum ElementsAction {
         /// The position to put the entry at, in place of --direction.
         #[arg(long)]
         position: Option<i32>,
-        /// Plugin whose version of the record is changed; the last loaded plugin when omitted.
+        /// Plugin whose own version of the record is changed (not_in_file when it has none); without it, the version the last loaded plugin sees.
         #[arg(long)]
         file: Option<String>,
         /// Report whether the entry can move, but move nothing.
@@ -3953,6 +3966,9 @@ fn command_of(action: Action) -> Result<(String, Value), CommandError> {
             keep_children,
             keep_siblings,
             keep_parents_siblings,
+            limit,
+            depth,
+            compact,
         } => (
             "records.compare".to_owned(),
             json!({
@@ -3962,7 +3978,8 @@ fn command_of(action: Action) -> Result<(String, Value), CommandError> {
                 "mod_groups": modgroups, "all_mod_groups": all_modgroups, "saved_mod_groups": saved_modgroups,
                 "view_filter_name": view_filter_name, "view_filter_value": view_filter_value,
                 "view_filter_or": view_filter_or, "keep_children": keep_children,
-                "keep_siblings": keep_siblings, "keep_parents_siblings": keep_parents_siblings
+                "keep_siblings": keep_siblings, "keep_parents_siblings": keep_parents_siblings,
+                "limit": limit, "depth": depth, "compact": compact
             }),
         ),
         Action::CompareSelected {
@@ -4376,6 +4393,7 @@ fn real_main() -> ExitCode {
     };
     xedit_session::tool_modes::set_on_load(cli.switches.to_load_switches(tool_mode, tool_source));
     xedit_session::modgroups::set_file_options(cli.modgroups_file.as_deref(), cli.settings.as_deref());
+    xedit_core::interface::globals::set_master_search_paths(cli.master_path.clone());
     // `-P:`: the plugin list the module order reads (`wbPluginsFileName`).
     if let Some(path) = &cli.plugins_list {
         xedit_core::interface::globals::set_plugins_file_name(path);

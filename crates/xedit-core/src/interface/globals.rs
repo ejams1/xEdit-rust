@@ -598,6 +598,21 @@ pub fn set_strip_masters_file_names(value: Vec<String>) {
     *STRIP_MASTERS_FILE_NAMES.write().unwrap() = value;
 }
 
+static MASTER_SEARCH_PATHS: RwLock<Vec<String>> = RwLock::new(Vec::new());
+
+/// The folders a master is looked for in when the folder of the plugin that
+/// needs it does not have it, in order (the CLI's `--master-path`). Not an
+/// upstream setting: xEdit reads every plugin from its one data folder,
+/// which Mod Organizer's virtual file system fills from the mod folders.
+pub fn master_search_paths() -> Vec<String> {
+    MASTER_SEARCH_PATHS.read().unwrap().clone()
+}
+
+/// Sets the folders of [`master_search_paths`].
+pub fn set_master_search_paths(value: Vec<String>) {
+    *MASTER_SEARCH_PATHS.write().unwrap() = value;
+}
+
 /// Upstream `wbAllowDirectSaveFor`: the plugins `-AllowDirectSaves:<names>`
 /// lets the GUI save into the game's data folder without asking. Empty while
 /// the switch named no plugin, which `wbAllowDirectSave` covers then.

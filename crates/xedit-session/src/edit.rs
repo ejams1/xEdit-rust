@@ -72,7 +72,9 @@ pub struct ElementsAddRequest {
     /// Path of the container inside the record to add to, with `\` between
     /// the names; the record itself when omitted.
     pub path: Option<String>,
-    /// Plugin the record is seen from; the last loaded plugin when omitted.
+    /// Plugin whose own version of the record is changed (`not_in_file`
+    /// when it has none); the version the last loaded plugin sees when
+    /// omitted.
     pub file: Option<String>,
     /// Report the container, but add nothing.
     #[serde(default)]
@@ -98,7 +100,7 @@ pub struct ElementsAddResponse {
 
 fn elements_add(session: &mut Session, request: ElementsAddRequest) -> Result<ElementsAddResponse, CommandError> {
     crate::commands::refuse_in_translate_mode("elements.add")?;
-    let record = session.record(&request.form_id, request.file.as_deref())?;
+    let record = session.record_in_file(&request.form_id, request.file.as_deref())?;
     let record_ref: ElementRef = record.clone();
     let container: ElementRef = match request.path.as_deref().filter(|path| !path.is_empty()) {
         Some(path) => record.get_element_by_path(path).ok_or_else(|| {
@@ -149,7 +151,9 @@ pub struct ElementsRemoveRequest {
     pub form_id: String,
     /// Path of the element inside the record, with `\` between the names.
     pub path: String,
-    /// Plugin the record is seen from; the last loaded plugin when omitted.
+    /// Plugin whose own version of the record is changed (`not_in_file`
+    /// when it has none); the version the last loaded plugin sees when
+    /// omitted.
     pub file: Option<String>,
     /// Report the element, but remove nothing.
     #[serde(default)]
@@ -174,7 +178,7 @@ fn elements_remove(
     request: ElementsRemoveRequest,
 ) -> Result<ElementsRemoveResponse, CommandError> {
     crate::commands::refuse_in_translate_mode("elements.remove")?;
-    let record = session.record(&request.form_id, request.file.as_deref())?;
+    let record = session.record_in_file(&request.form_id, request.file.as_deref())?;
     let element = record.get_element_by_path(&request.path).ok_or_else(|| {
         CommandError::new(
             "unknown_element",

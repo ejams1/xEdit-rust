@@ -74,6 +74,9 @@ fn compare_request(record: &ViewRecord) -> CompareRequest {
         keep_children: false,
         keep_siblings: false,
         keep_parents_siblings: false,
+        limit: None,
+        depth: None,
+        compact: false,
     }
 }
 

@@ -308,6 +308,25 @@ impl MainRecordImpl {
             .map(|value| value as u32)
             .unwrap_or(0);
         let new = owner.get_load_order_form_id().to_cardinal();
+        // The element holds the label of the record's group, a FormID of
+        // the record's own file, and the owner is named by its load order
+        // FormID: compared in the same terms (as upstream compares two file
+        // FormIDs), a record copied into its owner's group, such as a
+        // reference of a light plugin's cell, does not move.
+        let old_load_order = self
+            .file_impl()
+            .and_then(|file| {
+                File::file_form_id_to_load_order_form_id(
+                    &*file,
+                    crate::interface::form_id::FormID::from_cardinal(old),
+                    false,
+                )
+                .ok()
+            })
+            .map(|form_id| form_id.to_cardinal());
+        if old_load_order == Some(new) {
+            return false;
+        }
         let moved = relocate_contained_in(self, element.as_ref(), old, new);
         if moved && let Some(element) = &element {
             refresh_contained_in_label(self, element);
@@ -482,6 +501,11 @@ fn relocate_contained_in(record: &Arc<MainRecordImpl>, element: Option<&ElementR
             let group = new_group
                 .find_child_group(correct, new_owner.mr_struct().form_id.to_cardinal())
                 .unwrap_or_else(|| super::GroupRecordImpl::create_child(&new_group, correct, &new_owner));
+            // The record is in that group already: taken out, the group
+            // would be left empty and removed with the record in it.
+            if Arc::ptr_eq(&group, &old_group) {
+                return false;
+            }
             old_group.container.remove_element_by_identity(&self_ref);
             if old_group.container.element_count() == 0 {
                 old_group.remove();

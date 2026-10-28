@@ -343,6 +343,32 @@ impl Session {
         }
     }
 
+    /// The version of the record that `file` holds itself, for the commands
+    /// that read or change one plugin's version: a record the plugin does
+    /// not hold is an error (`not_in_file`) rather than the version of a
+    /// master the plugin sees. Without a file, the record the last loaded
+    /// plugin sees, as [`Self::record`].
+    pub(crate) fn record_in_file(&self, form_id: &str, file: Option<&str>) -> Result<MainRecordRef, CommandError> {
+        let Some(name) = file else {
+            return self.record(form_id, None);
+        };
+        let holder = self.file(Some(name))?;
+        // The version a file sees is its own when it holds one.
+        let seen = self.record(form_id, Some(name))?;
+        let owner = seen.get_file().map(|file| file.get_name()).unwrap_or_default();
+        if owner.eq_ignore_ascii_case(&holder.get_name()) {
+            return Ok(seen);
+        }
+        Err(CommandError::new(
+            "not_in_file",
+            format!(
+                "{} has no version of {}; the version it sees is in {owner} (copy it with records.copy first, or name that file)",
+                holder.get_name(),
+                seen.get_name()
+            ),
+        ))
+    }
+
     pub(crate) fn record(&self, form_id: &str, file: Option<&str>) -> Result<MainRecordRef, CommandError> {
         let form_id = parse_form_id(form_id)?;
         let seen_from: Option<FileRef> = match file {
@@ -625,7 +651,14 @@ fn all_files(session: &Session) -> Vec<FileRef> {
 #[derive(Serialize, JsonSchema)]
 pub struct FileInfo {
     pub name: String,
+    /// The position of the file in the load order (`GetLoadOrder`), which
+    /// counts every file, light ones included.
     pub load_order: i32,
+    /// The load order slot the navigation tree shows before the file name
+    /// (`LoadOrderFileID.ToString`): `05` for a full slot, `FE 001` for a
+    /// light one, `FD 01` for a medium one; empty for the hardcoded game
+    /// executable, which holds no slot.
+    pub file_id: String,
     /// Master files in the order of the file header.
     pub masters: Vec<String>,
     pub record_count: usize,
@@ -674,6 +707,18 @@ fn name_filter_matches(filter: &str, regex: bool, name: &str) -> Result<bool, Co
     }
 }
 
+/// The slot of a file as xEdit shows it (`[FE 001] Plugin.esp`); empty for
+/// the hardcoded records, which hold none.
+pub(crate) fn file_id_text(file: &FileRef) -> String {
+    if file
+        .get_file_states()
+        .contains(xedit_core::interface::types::FileState::fsIsHardcoded)
+    {
+        return String::new();
+    }
+    file.get_load_order_file_id().to_string()
+}
+
 fn files_list(session: &mut Session, request: FilesListRequest) -> Result<FileList, CommandError> {
     session.mode()?;
     let filter = request.name_filter.as_deref().unwrap_or_default();
@@ -685,6 +730,7 @@ fn files_list(session: &mut Session, request: FilesListRequest) -> Result<FileLi
         files.push(FileInfo {
             name: file.get_name(),
             load_order: file.get_load_order(),
+            file_id: file_id_text(&file),
             masters: (0..file.get_master_count(false))
                 .filter_map(|index| file.get_master(index, false))
                 .map(|master| master.get_name())
@@ -878,7 +924,8 @@ fn records_find(session: &mut Session, request: RecordsFindRequest) -> Result<Re
 pub struct RecordsGetRequest {
     /// Load order FormID as hexadecimal digits.
     pub form_id: String,
-    /// Plugin the record is seen from; the last loaded plugin when omitted.
+    /// Plugin whose own version of the record is read (`not_in_file` when it
+    /// has none); without it, the version the last loaded plugin sees.
     pub file: Option<String>,
     /// Levels of child elements to include; every level when omitted.
     pub depth: Option<usize>,
@@ -983,7 +1030,7 @@ pub struct RecordDetail {
 }
 
 fn records_get(session: &mut Session, request: RecordsGetRequest) -> Result<RecordDetail, CommandError> {
-    let record = session.record(&request.form_id, request.file.as_deref())?;
+    let record = session.record_in_file(&request.form_id, request.file.as_deref())?;
     let elements = (0..record.get_element_count())
         .filter_map(|index| record.get_element(index))
         .map(|element| node_of(&element, request.depth))
@@ -1002,7 +1049,8 @@ pub struct ElementsGetRequest {
     /// Path of the element inside the record, with `\` between the names,
     /// such as `DATA\Health` or `ACBS\Flags\Female`.
     pub path: String,
-    /// Plugin the record is seen from; the last loaded plugin when omitted.
+    /// Plugin whose own version of the record is read (`not_in_file` when it
+    /// has none); the version the last loaded plugin sees when omitted.
     pub file: Option<String>,
     /// Levels of child elements to include; every level when omitted.
     pub depth: Option<usize>,
@@ -1018,7 +1066,7 @@ pub struct ElementDetail {
 }
 
 fn elements_get(session: &mut Session, request: ElementsGetRequest) -> Result<ElementDetail, CommandError> {
-    let record = session.record(&request.form_id, request.file.as_deref())?;
+    let record = session.record_in_file(&request.form_id, request.file.as_deref())?;
     let element = record.get_element_by_path(&request.path).ok_or_else(|| {
         CommandError::new(
             "unknown_element",
@@ -1041,7 +1089,9 @@ pub struct ElementsSetRequest {
     /// A missing last element is added when the record's definition has it
     /// (`ElementEditValues`), and a flag of a flags value is set by its name.
     pub path: String,
-    /// Plugin the record is seen from; the last loaded plugin when omitted.
+    /// Plugin whose own version of the record is changed (`not_in_file`
+    /// when it has none); the version the last loaded plugin sees when
+    /// omitted.
     pub file: Option<String>,
     /// The value: a string is set as the edit value (the text xEdit shows
     /// in its editor, such as `1.5`, `Dawnguard "Dawnguard" [QUST:0200C97A]`
@@ -1072,7 +1122,7 @@ pub struct ElementsSetResponse {
 }
 
 fn elements_set(session: &mut Session, request: ElementsSetRequest) -> Result<ElementsSetResponse, CommandError> {
-    let record = session.record(&request.form_id, request.file.as_deref())?;
+    let record = session.record_in_file(&request.form_id, request.file.as_deref())?;
     let existing = record.get_element_by_path(&request.path);
     // The translate mode shows (and so edits) only the translatable
     // elements: the others are ignored (`GetConflictPriority`) and hidden
@@ -1143,9 +1193,11 @@ fn elements_set(session: &mut Session, request: ElementsSetRequest) -> Result<El
         (Some(element), Value::Null) => element.set_to_default().map_err(edit)?,
         (Some(element), Value::String(text)) => element.set_edit_value(text).map_err(edit)?,
         (Some(element), value) => element.set_native_value(native_of(value)?).map_err(edit)?,
-        (None, Value::String(text)) => record.set_element_edit_value(&request.path, text).map_err(edit)?,
+        (None, Value::String(text)) => record
+            .set_element_edit_value(&member_path_for_add(&request.path), text)
+            .map_err(edit)?,
         (None, value) => record
-            .set_element_native_value(&request.path, native_of(value)?)
+            .set_element_native_value(&member_path_for_add(&request.path), native_of(value)?)
             .map_err(edit)?,
     }
     let element = record.get_element_by_path(&request.path).ok_or_else(|| {
@@ -1163,6 +1215,33 @@ fn elements_set(session: &mut Session, request: ElementsSetRequest) -> Result<El
         new,
         file,
     })
+}
+
+/// A path whose last name may name a member to add: a subrecord's display
+/// name (`PFRN - Power Armor Stand`, the name `records.get` shows and
+/// `ElementByPath` finds once the element exists) becomes its signature,
+/// which xEdit's `Add` takes (it matches a member's name or signature
+/// only), so the path that reads an element also adds it.
+pub(crate) fn member_path_for_add(path: &str) -> String {
+    let (parent, last) = match path.rsplit_once('\\') {
+        Some((parent, last)) => (Some(parent), last),
+        None => (None, path),
+    };
+    let last = match last.split_once(" - ") {
+        Some((signature, _))
+            if signature.len() == 4
+                && signature
+                    .bytes()
+                    .all(|byte| byte.is_ascii_uppercase() || byte.is_ascii_digit() || byte == b'_') =>
+        {
+            signature
+        }
+        _ => last,
+    };
+    match parent {
+        Some(parent) => format!("{parent}\\{last}"),
+        None => last.to_owned(),
+    }
 }
 
 /// A JSON value as the native value of an element.

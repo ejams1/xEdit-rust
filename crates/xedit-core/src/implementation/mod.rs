@@ -1036,6 +1036,32 @@ fn find_in_files_map(file_name: &str) -> Option<Arc<FileImpl>> {
         .cloned()
 }
 
+/// A master the folder of the plugin that needs it does not have
+/// (`path`): the file of that name loaded from another folder already, else
+/// the first of the master search paths
+/// ([`crate::interface::globals::master_search_paths`]) that has it. `None`
+/// when the folder has the file or nothing else does, so the load reads
+/// (or fails on) `path` as before.
+fn master_elsewhere(path: &str, name: &str) -> Option<Result<Arc<FileImpl>, LoadError>> {
+    if Path::new(path).exists() {
+        return None;
+    }
+    if let Some(loaded) = FILES_MAP
+        .read()
+        .unwrap()
+        .iter()
+        .find(|file| path_file_name(&file.fl_file_name).eq_ignore_ascii_case(name))
+        .cloned()
+    {
+        return Some(Ok(loaded));
+    }
+    crate::interface::globals::master_search_paths()
+        .iter()
+        .map(|folder| Path::new(folder).join(name))
+        .find(|candidate| candidate.exists())
+        .map(|candidate| wb_file(&candidate.to_string_lossy(), i32::MAX, FileStates::empty()))
+}
+
 impl FileImpl {
     fn self_arc(&self) -> Arc<Self> {
         self.self_ref.upgrade().expect("a file is alive while it is used")
@@ -1459,7 +1485,10 @@ impl FileImpl {
         progress(&format!("[{}] Adding master \"{name}\"", self.get_name()));
         let master = match find_in_files_map(&path) {
             Some(master) => master,
-            None => wb_file(&path, i32::MAX, FileStates::empty())?,
+            None => match master_elsewhere(&path, name) {
+                Some(master) => master?,
+                None => wb_file(&path, i32::MAX, FileStates::empty())?,
+            },
         };
         self.fl_masters.write().unwrap().push(master);
         Ok(())

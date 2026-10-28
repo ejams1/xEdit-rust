@@ -51,19 +51,31 @@ pub fn batch_from_value(value: Value) -> Result<Vec<BatchCommand>, CommandError>
 impl Registry {
     /// Runs the commands in order against the one session, so an edit is
     /// visible to the commands after it and a save at the end writes it.
-    /// Returns one envelope per command that ran: `{"ok": true, "command",
-    /// "result"}` or `{"ok": false, "command", "error"}`. Stops after the
-    /// first failure unless `keep_going`.
+    /// Returns one envelope per command: `{"ok": true, "command",
+    /// "result"}` or `{"ok": false, "command", "error"}`. A command that
+    /// fails stops the batch unless `keep_going`, and the commands after it
+    /// are reported as not run (`"skipped": true`), so the results always
+    /// line up with the commands. A command name the registry does not know
+    /// changed nothing, so it fails alone and the batch goes on.
     pub fn run_batch(&self, session: &mut Session, commands: Vec<BatchCommand>, keep_going: bool) -> Value {
         let mut results = Vec::with_capacity(commands.len());
+        let mut stopped_by: Option<String> = None;
         for command in commands {
+            if let Some(failed) = &stopped_by {
+                let error = CommandError::new(
+                    "skipped",
+                    format!("not run: the batch stopped at the failure of {failed}"),
+                );
+                results.push(json!({ "ok": false, "command": command.command, "skipped": true, "error": error }));
+                continue;
+            }
             match self.call(session, &command.command, command.params) {
                 Ok(result) => results.push(json!({ "ok": true, "command": command.command, "result": result })),
                 Err(error) => {
-                    results.push(json!({ "ok": false, "command": command.command, "error": error }));
-                    if !keep_going {
-                        break;
+                    if !keep_going && error.code != "unknown_command" {
+                        stopped_by = Some(command.command.clone());
                     }
+                    results.push(json!({ "ok": false, "command": command.command, "error": error }));
                 }
             }
         }
@@ -78,16 +90,35 @@ mod tests {
     #[test]
     fn batch_stops_at_the_first_failure_unless_told_to_go_on() {
         let registry = Registry::standard();
+        // A command that fails (an unloaded session) stops the batch; the
+        // commands after it are reported as skipped.
         let commands = parse_batch(
-            r#"[{"command":"system.version"},{"command":"no.such"},{"command":"system.version","params":{}}]"#,
+            r#"[{"command":"system.version"},{"command":"files.list"},{"command":"system.version","params":{}}]"#,
         )
         .unwrap();
         let stopped = registry.run_batch(&mut Session::default(), commands.clone(), false);
-        assert_eq!(stopped.as_array().unwrap().len(), 2);
-        assert_eq!(stopped[1]["error"]["code"], "unknown_command");
+        assert_eq!(stopped.as_array().unwrap().len(), 3);
+        assert_eq!(stopped[1]["ok"], false);
+        assert_eq!(stopped[2]["ok"], false);
+        assert_eq!(stopped[2]["skipped"], true);
+        assert_eq!(stopped[2]["error"]["code"], "skipped");
         let all = registry.run_batch(&mut Session::default(), commands, true);
         assert_eq!(all.as_array().unwrap().len(), 3);
         assert_eq!(all[2]["ok"], true);
+    }
+
+    #[test]
+    fn an_unknown_command_fails_alone() {
+        let registry = Registry::standard();
+        let commands =
+            parse_batch(r#"[{"command":"compare"},{"command":"system.version"},{"command":"system.version"}]"#)
+                .unwrap();
+        let results = registry.run_batch(&mut Session::default(), commands, false);
+        assert_eq!(results.as_array().unwrap().len(), 3);
+        assert_eq!(results[0]["ok"], false);
+        assert_eq!(results[0]["error"]["code"], "unknown_command");
+        assert_eq!(results[1]["ok"], true);
+        assert_eq!(results[2]["ok"], true);
     }
 
     #[test]
