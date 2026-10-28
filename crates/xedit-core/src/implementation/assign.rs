@@ -286,9 +286,50 @@ pub(crate) fn container_assign_internal(
             let Some(source_child) = source_container.get_element(i as i32) else {
                 continue;
             };
-            let Some(child) = element.container_base().and_then(|base| base.element_at(j)) else {
+            let Some(mut child) = element.container_base().and_then(|base| base.element_at(j)) else {
                 continue;
             };
+            // Deviation from upstream: a structure whose data ends before
+            // its optional members (a new subrecord has only its default
+            // size) shows them as empty placeholders, which can not take a
+            // value, so upstream's assign drops the members the source has
+            // there (the 108 trailing bytes of a Fallout 4 `PHWT` vanish
+            // from a race copied as an override). The data is grown by the
+            // source's bytes of those members first, and the members are
+            // then assigned as the others, so FormIDs are still mapped.
+            if !has_map
+                && super::sortable::is_optional_and_missing(&child)
+                && !source_child
+                    .get_value_def()
+                    .is_some_and(|def| def.as_empty_def().is_some())
+                && element.storage().is_some()
+            {
+                let children = element.container_base().map(|base| base.elements()).unwrap_or_default();
+                let our_size: usize = children[..j]
+                    .iter()
+                    .map(|child| usize::try_from(child.get_data_size()).unwrap_or(0))
+                    .sum();
+                let tail: Vec<u8> = (i..count as usize)
+                    .filter_map(|k| source_container.get_element(k as i32))
+                    .filter_map(|source| {
+                        source
+                            .as_data_container()
+                            .and_then(|data| data.get_data().map(<[u8]>::to_vec))
+                    })
+                    .flatten()
+                    .collect();
+                if !tail.is_empty()
+                    && let Some(mut bytes) = element.request_storage_change_impl(our_size + tail.len())
+                {
+                    bytes[our_size..].copy_from_slice(&tail);
+                    element.commit_storage_impl(bytes);
+                    element.reset_and_init();
+                    match element.container_base().and_then(|base| base.element_at(j)) {
+                        Some(grown) => child = grown,
+                        None => continue,
+                    }
+                }
+            }
             // A union is decided again, from the elements assigned before it.
             if source_child.get_element_type() == ElementType::etUnion
                 && let Some(value) = child.as_element_impl().and_then(ElementImpl::value_impl)

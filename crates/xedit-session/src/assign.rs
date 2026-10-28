@@ -89,14 +89,27 @@ fn element_at(record: &MainRecordRef, path: Option<&str>) -> Result<ElementRef, 
     }
 }
 
+/// The missing last element of `path` added to the record (`Add`), when
+/// the container above it is there and its definition has the member.
+fn add_missing_member(record: &MainRecordRef, path: &str) -> Option<ElementRef> {
+    let path = crate::commands::member_path_for_add(path);
+    let (parent, name) = match path.rsplit_once('\\') {
+        Some((parent, name)) => (element_at(record, Some(parent)).ok()?, name.to_owned()),
+        None => (record.clone() as ElementRef, path.clone()),
+    };
+    let container = parent.as_container()?;
+    container.add(&name, true).ok().flatten()
+}
+
 /// `elements.assign`: the request.
 #[derive(Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ElementsAssignRequest {
     /// Load order FormID of the record to change as hexadecimal digits.
     pub form_id: String,
-    /// Plugin whose version of the record is changed; the last loaded
-    /// plugin when omitted.
+    /// Plugin whose own version of the record is changed (`not_in_file`
+    /// when it has none); the version the last loaded plugin sees when
+    /// omitted.
     pub file: Option<String>,
     /// Path of the element to assign to, with `\` between the names; the
     /// record itself when omitted.
@@ -155,9 +168,18 @@ fn elements_assign(
             "give a source or a template, not both",
         ));
     }
-    let record = session.record(&request.form_id, request.file.as_deref())?;
-    let target = element_at(&record, request.path.as_deref())?;
+    let record = session.record_in_file(&request.form_id, request.file.as_deref())?;
     let index = request.index.value();
+    let target = match element_at(&record, request.path.as_deref()) {
+        Ok(target) => target,
+        // A member the record lacks takes the source as the view's drop on
+        // its empty row does: the member is added first (`Add`, by the
+        // signature of a `SIG - Name` path), then assigned.
+        Err(error) if !request.dry_run && index == ASSIGN_THIS && request.source.is_some() => {
+            add_missing_member(&record, request.path.as_deref().unwrap_or_default()).ok_or(error)?
+        }
+        Err(error) => return Err(error),
+    };
     let file = record.get_file().map(|file| file.get_name()).unwrap_or_default();
     let mut missing = Vec::new();
     let source = match (&request.source, &request.template) {
@@ -285,8 +307,9 @@ pub enum MoveDirection {
 pub struct ElementsMoveRequest {
     /// Load order FormID of the record as hexadecimal digits.
     pub form_id: String,
-    /// Plugin whose version of the record is changed; the last loaded
-    /// plugin when omitted.
+    /// Plugin whose own version of the record is changed (`not_in_file`
+    /// when it has none); the version the last loaded plugin sees when
+    /// omitted.
     pub file: Option<String>,
     /// Path of the element to move, with `\` between the names.
     pub path: String,
@@ -319,7 +342,7 @@ pub struct ElementsMoveResponse {
 
 fn elements_move(session: &mut Session, request: ElementsMoveRequest) -> Result<ElementsMoveResponse, CommandError> {
     crate::commands::refuse_in_translate_mode("elements.move")?;
-    let record = session.record(&request.form_id, request.file.as_deref())?;
+    let record = session.record_in_file(&request.form_id, request.file.as_deref())?;
     let element = element_at(&record, Some(&request.path))?;
     let file = record.get_file().map(|file| file.get_name()).unwrap_or_default();
     let can_move_up = with_edit_allowed(|| moving::can_move_up(&element));

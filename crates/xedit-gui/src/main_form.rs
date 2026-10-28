@@ -1034,6 +1034,9 @@ impl TfrmMain {
             keep_children: self.view_filter.keep_children,
             keep_siblings: self.view_filter.keep_siblings,
             keep_parents_siblings: self.view_filter.keep_parents_siblings,
+            limit: None,
+            depth: None,
+            compact: false,
         }
     }
 

@@ -474,6 +474,18 @@ pub struct CompareRequest {
     /// parent of a matching one.
     #[serde(default)]
     pub keep_parents_siblings: bool,
+    /// Rows to list at most, counted over the whole tree in the order the
+    /// view shows them (a row before its children); all when omitted. The
+    /// response's `truncated` says how many rows there were.
+    pub limit: Option<usize>,
+    /// Levels of rows to list: 1 lists the top rows (the members of the
+    /// record) without their children; all when omitted.
+    pub depth: Option<usize>,
+    /// Give each cell only its value and conflict statuses, leaving out the
+    /// path, edit value, names, summary and sort key, which make most of the
+    /// size of a large comparison.
+    #[serde(default)]
+    pub compact: bool,
 }
 
 /// One record compared: a column of the view.
@@ -574,8 +586,73 @@ pub struct CompareResponse {
     /// for (`ApplyViewFilter`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub view_filter: Option<ViewFilterReport>,
+    /// What `limit` and `depth` left out, when either was given.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub truncated: Option<RowsTruncation>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub messages: Vec<String>,
+}
+
+/// The rows `limit` and `depth` of a `records.compare` request left out.
+#[derive(Serialize, Deserialize, JsonSchema)]
+pub struct RowsTruncation {
+    /// The rows of the comparison, at every level.
+    pub total_rows: usize,
+    /// The rows listed.
+    pub listed_rows: usize,
+    /// Whether rows were left out.
+    pub truncated: bool,
+}
+
+/// The rows of a comparison bounded as `limit`, `depth` and `compact` ask.
+fn bound_rows(
+    rows: &mut Vec<CompareRow>,
+    limit: Option<usize>,
+    depth: Option<usize>,
+    compact: bool,
+) -> Option<RowsTruncation> {
+    fn count(rows: &[CompareRow]) -> usize {
+        rows.iter().map(|row| 1 + count(&row.children)).sum()
+    }
+    fn cut(rows: &mut Vec<CompareRow>, level: usize, depth: usize, budget: &mut usize, compact: bool) {
+        let mut kept = 0;
+        for row in rows.iter_mut() {
+            if *budget == 0 {
+                break;
+            }
+            *budget -= 1;
+            kept += 1;
+            if compact {
+                row.member_name = None;
+                for cell in &mut row.cells {
+                    cell.path = None;
+                    cell.edit_value = None;
+                    cell.display_name = None;
+                    cell.name = None;
+                    cell.summary = None;
+                    cell.sort_key = None;
+                }
+            }
+            if level + 1 >= depth {
+                row.children.clear();
+            } else {
+                cut(&mut row.children, level + 1, depth, budget, compact);
+            }
+        }
+        rows.truncate(kept);
+    }
+    let total = count(rows);
+    let mut budget = limit.unwrap_or(usize::MAX);
+    cut(rows, 0, depth.unwrap_or(usize::MAX), &mut budget, compact);
+    if limit.is_none() && depth.is_none() {
+        return None;
+    }
+    let listed = count(rows);
+    Some(RowsTruncation {
+        total_rows: total,
+        listed_rows: listed,
+        truncated: listed < total,
+    })
 }
 
 /// `ApplyViewFilter`: the rows of the view tab that the filter hides.
@@ -677,6 +754,7 @@ fn records_compare(session: &mut Session, request: CompareRequest) -> Result<Com
         .filter_map(|child| compare_row(child, &view, &column_records, request.include_hidden, false))
         .collect();
     let view_filter = apply_view_filter(&mut rows, &request.view_filter());
+    let truncated = bound_rows(&mut rows, request.limit, request.depth, request.compact);
     let conflict_all = view
         .datas
         .first()
@@ -689,6 +767,7 @@ fn records_compare(session: &mut Session, request: CompareRequest) -> Result<Com
         columns,
         rows,
         view_filter,
+        truncated,
         messages,
     })
 }

@@ -907,6 +907,7 @@ mod tests {
                 },
             ],
             view_filter: None,
+            truncated: None,
             messages: Vec::new(),
         }
     }
