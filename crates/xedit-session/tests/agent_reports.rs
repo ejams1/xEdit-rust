@@ -454,3 +454,72 @@ fn masters_load_from_the_master_search_paths() {
     assert_eq!(master.get_name(), "Fallout4.esm");
     xedit_core::implementation::clear_files_map();
 }
+
+fn write_ba2(path: &std::path::Path) {
+    let files = [xedit_io::archive::PackFile {
+        name: "meshes\\a.nif".to_owned(),
+        file_object: 0,
+        compress: false,
+    }];
+    let mut archive = xedit_io::Archive::new();
+    archive
+        .create_archive(&path.to_string_lossy(), xedit_io::ArchiveType::Fo4, &files)
+        .unwrap();
+    archive.pack("meshes\\a.nif", b"mesh").unwrap();
+    archive.save().unwrap();
+}
+
+/// With `--master-path`, the archives the game ini names load from the
+/// master search path that holds them, and a plugin's own archives from
+/// the plugin's folder, not only from the folder of the last plugin.
+#[test]
+fn archives_load_from_the_master_search_paths() {
+    let _guard = test_lock();
+    let data = xedit_io::temp::TempDir::new("xedit-agent-reports-archives-data");
+    let mods = xedit_io::temp::TempDir::new("xedit-agent-reports-archives-mod");
+    let game = mods.path().join("Game");
+    std::fs::create_dir_all(&game).unwrap();
+    std::fs::write(data.path().join("Fallout4.esm"), header(1, 1, 0x800, &[])).unwrap();
+    std::fs::write(data.path().join("DLC.esm"), header(1, 1, 0x800, &["Fallout4.esm"])).unwrap();
+    write_ba2(&data.path().join("Fallout4 - Meshes.ba2"));
+    write_ba2(&data.path().join("DLC - Main.ba2"));
+    write_ba2(&mods.path().join("Mod - Main.ba2"));
+    let ini = game.join("Fallout4.ini");
+    std::fs::write(
+        &ini,
+        "[Archive]\r\nsResourceArchiveList=Fallout4 - Meshes.ba2, Missing.ba2\r\n",
+    )
+    .unwrap();
+    let plugin_path = mods.path().join("Mod.esp");
+    std::fs::write(&plugin_path, header(0, 0, 0x800, &["Fallout4.esm", "DLC.esm"])).unwrap();
+    load_game(Vec::new());
+    let data_folder = format!("{}\\", data.path().to_string_lossy());
+    let mod_folder = format!("{}\\", mods.path().to_string_lossy());
+    xedit_core::interface::globals::set_master_search_paths(vec![data.path().to_string_lossy().into_owned()]);
+    let loaded = xedit_core::implementation::wb_file(&plugin_path.to_string_lossy(), i32::MAX, FileStates::empty());
+    let containers = loaded.map_err(|error| error.to_string()).and_then(|_| {
+        xedit_session::resources::load_gui_resources(
+            &mod_folder,
+            &["Fallout4.esm".to_owned(), "DLC.esm".to_owned(), "Mod.esp".to_owned()],
+            &ini.to_string_lossy(),
+            "",
+            true,
+        )
+    });
+    xedit_core::interface::globals::set_master_search_paths(Vec::new());
+    xedit_core::container_handler::clear_containers();
+    xedit_core::implementation::clear_files_map();
+    let containers: Vec<String> = containers.unwrap().iter().map(|name| name.to_lowercase()).collect();
+    for expected in [
+        format!("{data_folder}Fallout4 - Meshes.ba2"),
+        format!("{data_folder}DLC - Main.ba2"),
+        format!("{mod_folder}Mod - Main.ba2"),
+        mod_folder.clone(),
+    ] {
+        assert!(
+            containers.contains(&expected.to_lowercase()),
+            "{expected} in {containers:?}"
+        );
+    }
+    assert_eq!(containers.len(), 4, "{containers:?}");
+}

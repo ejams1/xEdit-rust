@@ -45,7 +45,7 @@ use std::sync::Mutex;
 use xedit_core::container_handler::{
     add_archive, add_folder, clear_containers, container_list, ensure_cache, set_loader_done,
 };
-use xedit_core::delphi::{change_file_ext, extract_file_path};
+use xedit_core::delphi::{change_file_ext, extract_file_path, path_file_name};
 use xedit_core::helpers::{archive_extension, find_bsas, find_bsas_custom, has_bsas, make_data_file_name};
 use xedit_core::implementation::FileImpl;
 use xedit_core::interface::globals::{
@@ -334,13 +334,18 @@ pub fn load_gui_resources(
         };
     }
     if count > 0 {
-        for name in &found {
+        // Upstream reads them from the game's data folder. Here the plugins
+        // can come from other folders: an archive the plugin's folder does
+        // not have is looked for in the master search paths, where the
+        // game's own masters are.
+        let (found, missing) = archives_elsewhere(data_path, found, missing);
+        for (name, path) in &found {
             if load {
                 progress(&format!("[{name}] Loading Resources."));
                 // UPSTREAM-QUIRK: no `try` around these, unlike the
                 // archives of the plugins: an archive of the game ini that
                 // can not be read ends the whole load.
-                let version = add_archive(Path::new(&make_data_file_name(name, data_path))).map_err(|error| {
+                let version = add_archive(Path::new(path)).map_err(|error| {
                     let message = format!("Fatal: <Exception: {error}>");
                     progress(&message);
                     message
@@ -364,6 +369,10 @@ pub fn load_gui_resources(
             return Err("cancelled: the operation was cancelled".to_owned());
         }
         let (mut found, mut missing) = (Vec::new(), Vec::new());
+        // Upstream's plugins all sit in the data folder; here a plugin's
+        // archives are the ones beside it.
+        let folder = module_folder(module, data_path);
+        let data_path = folder.as_str();
         // all games except old Skyrim load BSA files with partial matching,
         // Skyrim requires exact names match and can use a private ini to
         // specify the bsa to use.
@@ -412,6 +421,61 @@ pub fn load_gui_resources(
     wb_resources_loaded();
     install_localization_handler();
     Ok(container_list())
+}
+
+/// The archives of the game inis that the plugin's folder (`data_path`)
+/// does not have, looked for in the master search paths
+/// ([`globals::master_search_paths`]), the first folder that has one
+/// winning: the archives found with the path each is read from, and those
+/// still missing. Not upstream: xEdit reads them from its one data folder.
+fn archives_elsewhere(
+    data_path: &str,
+    found: Vec<String>,
+    missing: Vec<String>,
+) -> (Vec<(String, String)>, Vec<String>) {
+    let mut found: Vec<(String, String)> = found
+        .into_iter()
+        .map(|name| {
+            let path = make_data_file_name(&name, data_path);
+            (name, path)
+        })
+        .collect();
+    let folders = globals::master_search_paths();
+    let mut still_missing = Vec::new();
+    for name in missing {
+        let elsewhere = folders
+            .iter()
+            .map(|folder| make_data_file_name(&name, &with_separator(folder)))
+            .filter(|path| !path.is_empty())
+            .find(|path| Path::new(path).is_file());
+        match elsewhere {
+            Some(path) if xedit_core::container_handler::container_exists(&path) => {}
+            Some(path) => found.push((name, path)),
+            None => still_missing.push(name),
+        }
+    }
+    (found, still_missing)
+}
+
+/// A folder with a trailing separator, as the data path has one.
+fn with_separator(folder: &str) -> String {
+    if folder.ends_with(['\\', '/']) {
+        folder.to_owned()
+    } else {
+        format!("{folder}\\")
+    }
+}
+
+/// The folder of the loaded plugin named `module` with a trailing
+/// separator: the folder its own archives sit in. `data_path` when no
+/// loaded plugin has the name.
+fn module_folder(module: &str, data_path: &str) -> String {
+    xedit_core::implementation::masters::loaded_files()
+        .iter()
+        .find(|file| path_file_name(file.file_name()).eq_ignore_ascii_case(module))
+        .map(|file| extract_file_path(file.file_name()))
+        .filter(|folder| !folder.is_empty())
+        .unwrap_or_else(|| data_path.to_owned())
 }
 
 /// The modules of the load order, as the GUI's load list names them: every
