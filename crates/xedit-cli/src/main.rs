@@ -36,7 +36,7 @@ struct Cli {
     #[arg(long, global = true)]
     load: Vec<String>,
 
-    /// Folder to look for a master in when the folder of the plugin that needs it does not have it, such as the game's Data folder or another Mod Organizer mod folder; repeat for several, searched in the order given. Not an xEdit switch: xEdit reads every plugin from one data folder.
+    /// Folder to look for a master in when the folder of the plugin that needs it does not have it, such as the game's Data folder or another Mod Organizer mod folder; repeat for several, searched in the order given. The archives the game inis name are looked for there too, and each plugin's own archives load from its folder. Not an xEdit switch: xEdit reads every plugin from one data folder.
     #[arg(long = "master-path", global = true)]
     master_path: Vec<String>,
 
